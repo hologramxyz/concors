@@ -6,6 +6,10 @@ import type { WorkspaceOperation } from "@concors/protocol";
 import { Server } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
+import { api } from "@/auth/api";
+import { AuthScreen } from "@/auth/auth-screen";
+import { describeAuthError } from "@/auth/auth-state";
+import { useAuth } from "@/auth/use-auth";
 import { AppSidebar } from "@/components/app-sidebar";
 import { CommandPalette } from "@/components/command-palette";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -44,6 +48,7 @@ export function App() {
   const [endpoint, setEndpoint] = useState<DaemonEndpoint | null>(null);
   const connection = useDaemonConnection(endpoint);
   const theme = useTheme();
+  const auth = useAuth(api);
   const machines = localEndpoint
     ? [{ id: LOCAL_ID, name: "This computer", url: localEndpoint.url }, ...bookmarks]
     : bookmarks;
@@ -69,6 +74,20 @@ export function App() {
   }, []);
 
   const openPalette = useCallback(() => setPaletteOpen(true), []);
+  const signOut = () => void auth.signOut();
+
+  // Nothing but the sign-in screen exists for a signed-out user. All hooks run above this line.
+  if (auth.state.status !== "signed-in") {
+    return (
+      <AuthScreen
+        state={auth.state}
+        onSignIn={auth.signIn}
+        onSignUp={auth.signUp}
+        onRetry={() => void auth.refresh()}
+      />
+    );
+  }
+  const account = auth.state;
   const execute = async (operation: WorkspaceOperation) => {
     setPending(true);
     try {
@@ -136,6 +155,8 @@ export function App() {
                 setSelectedMachineId(machine.id);
                 setView("projects");
               }}
+              auth={account}
+              onSignOut={signOut}
             />
             <div className="my-2 mr-2 flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-background shadow-xs">
               <header className="flex h-11 shrink-0 items-center justify-between gap-3 border-b px-4">
@@ -171,6 +192,14 @@ export function App() {
                     state={connection.state}
                     theme={theme.preference}
                     onSetTheme={theme.setPreference}
+                    auth={account}
+                    onSignOut={signOut}
+                    onSetActiveOrganization={(organizationId) => {
+                      setError(null);
+                      void auth
+                        .setActiveOrganization(organizationId)
+                        .catch((cause: unknown) => setError(describeAuthError(cause)));
+                    }}
                   />
                 ) : view === "projects" ? (
                   workspace ? (
@@ -234,6 +263,7 @@ export function App() {
               connection.state.status === "disconnected" || connection.state.status === "error"
             }
             onSetTheme={theme.setPreference}
+            onSignOut={signOut}
           />
         </TooltipProvider>
       </AgentsProvider>
