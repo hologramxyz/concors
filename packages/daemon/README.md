@@ -73,3 +73,9 @@ End users must not need Node installed. The plan is:
 
 This is why `DAEMON_VERSION` is inlined at build time, why relative imports use explicit `.ts`
 extensions, and why nothing in the daemon reads its own `package.json` at runtime.
+
+## Workspace persistence
+
+The CLI stores workspace metadata in `~/.concors/workspace.sqlite`; set `CONCORS_DATA_DIR`
+to use another directory. Embedded/test servers remain in-memory unless given `workspacePath`.
+See [workspace synchronization](../../docs/workspace-sync.md) for supported operations and limits.

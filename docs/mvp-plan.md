@@ -36,14 +36,14 @@ Retain these boundaries rather than rebuild the foundation.
 
 Use [Paseo](https://github.com/getpaseo/paseo) and [Herdr](https://github.com/herdrdev/herdr) as implementation references, not just visual inspiration. Review their relevant source and tests before implementing each corresponding feature, record the reference revision, and adapt their established behavior to Concors' protocol and synchronized workspace model.
 
-| MVP feature | Reference and intended behavior |
-| --- | --- |
-| Unified chat UI | Follow Paseo's provider adapters and shared timeline: streamed messages, tool summaries with expandable details, permission/input requests, queued prompts, cancellation, turn timing, and history/reconnect continuity. |
-| Agent profiles | Follow Paseo's provider configuration approach: named reusable profiles selecting provider, model, supported mode/permission options, and launch configuration. Expose provider capabilities accurately. Store portable profile configuration on the machine for synchronized use; keep credentials on the machine and out of client state. |
-| Terminals and terminal profiles | Review Paseo's terminal/session implementation and Herdr's persistent terminal attachment behavior. Provide a normal shell plus one-click Codex, Claude Code, and OpenCode profiles, using the project's directory and stable session bindings. Distinguish a launch profile from a running session. |
-| Agent status and progress tracking | Follow Paseo's structured turn lifecycle and Herdr's agent detection/attention model. Track working, needs input, done/unseen, idle/seen, failed, and unknown where necessary; show current action and elapsed time when available. Keep status consistent across chat, terminal-backed agents, and the global agent list. |
-| Spaces/project layout and agent navigation | Follow Herdr's spaces, tabs, split panes, agent overview, and attention rollups. In Concors, Projects occupy this organizational role, with tabs independent of tasks/worktrees and layouts synchronized across clients. |
-| Completion and input notifications | Follow Herdr's distinct completion/input sounds, attention indicators, and focus-aware notification handling; use authoritative events and deduplication across reconnects. Add Concors desktop notifications and iOS and Android push integration. |
+| MVP feature                                | Reference and intended behavior                                                                                                                                                                                                                                                                                                             |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unified chat UI                            | Follow Paseo's provider adapters and shared timeline: streamed messages, tool summaries with expandable details, permission/input requests, queued prompts, cancellation, turn timing, and history/reconnect continuity.                                                                                                                    |
+| Agent profiles                             | Follow Paseo's provider configuration approach: named reusable profiles selecting provider, model, supported mode/permission options, and launch configuration. Expose provider capabilities accurately. Store portable profile configuration on the machine for synchronized use; keep credentials on the machine and out of client state. |
+| Terminals and terminal profiles            | Review Paseo's terminal/session implementation and Herdr's persistent terminal attachment behavior. Provide a normal shell plus one-click Codex, Claude Code, and OpenCode profiles, using the project's directory and stable session bindings. Distinguish a launch profile from a running session.                                        |
+| Agent status and progress tracking         | Follow Paseo's structured turn lifecycle and Herdr's agent detection/attention model. Track working, needs input, done/unseen, idle/seen, failed, and unknown where necessary; show current action and elapsed time when available. Keep status consistent across chat, terminal-backed agents, and the global agent list.                  |
+| Spaces/project layout and agent navigation | Follow Herdr's spaces, tabs, split panes, agent overview, and attention rollups. In Concors, Projects occupy this organizational role, with tabs independent of tasks/worktrees and layouts synchronized across clients.                                                                                                                    |
+| Completion and input notifications         | Follow Herdr's distinct completion/input sounds, attention indicators, and focus-aware notification handling; use authoritative events and deduplication across reconnects. Add Concors desktop notifications and iOS and Android push integration.                                                                                         |
 
 Source entry points are recorded in [reference-notes.md](reference-notes.md). Validate feature behavior against reference scenarios and tests, including completion followed immediately by another turn, pending approvals, reconnect during streaming, and multiple clients viewing one session. If reusing source or assets, preserve the applicable license and attribution requirements. Adapt implementation details to React/Tauri, React Native, and the existing daemon boundary; do not assume upstream components can be dropped in unchanged.
 
@@ -57,13 +57,13 @@ The server inventory above describes the initial review, not a permanent assumpt
 
 ## 3. Architecture and ownership
 
-| Component | Owns |
-| --- | --- |
-| Machine daemon | Projects, ordered tabs, pane trees, session bindings, terminal/agent processes, conversation history, server discovery, durable workspace state |
-| Desktop client | Rendering, keyboard/mouse interactions, native notifications, local daemon installation/lifecycle integration |
-| iOS/Android client | Mobile presentation of the same state, remote interaction, push registration and notification navigation |
-| Shared client packages | Protocol, command transport, state replica, reconnect logic, provider-independent presentation/domain helpers |
-| Concors Cloud control plane | Accounts/organizations, machine inventory/provisioning, access grants, connectivity coordination, preview routing, push delivery |
+| Component                   | Owns                                                                                                                                            |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Machine daemon              | Projects, ordered tabs, pane trees, session bindings, terminal/agent processes, conversation history, server discovery, durable workspace state |
+| Desktop client              | Rendering, keyboard/mouse interactions, native notifications, local daemon installation/lifecycle integration                                   |
+| iOS/Android client          | Mobile presentation of the same state, remote interaction, push registration and notification navigation                                        |
+| Shared client packages      | Protocol, command transport, state replica, reconnect logic, provider-independent presentation/domain helpers                                   |
+| Concors Cloud control plane | Accounts/organizations, machine inventory/provisioning, access grants, connectivity coordination, preview routing, push delivery                |
 
 **Recommendation: the machine daemon is authoritative for that machine's workspace.** Both local and cloud machines use the same implementation. Cloud does not keep a competing writable layout database. This makes local-only mode a complete mode of operation, and makes all clients of a machine converge on the same state.
 
@@ -75,19 +75,19 @@ Cloud caches may expose machine metadata/status while a daemon is offline. Last-
 
 Suggested domain records:
 
-| Record | Key fields / responsibilities |
-| --- | --- |
-| Machine | Stable ID, display name, local/self-managed/cloud kind, connection/provisioning state |
-| Project | Machine ID, name, canonical directory, optional repository origin, ordering |
-| Tab | Project ID, title, ordering, root pane-layout node |
-| Layout node | Split axis, normalized ratio, child IDs; or a leaf pane ID |
-| Pane | Presentation kind, stable session binding; independent of process lifetime |
-| Session | Project ID, runtime/provider type, process or provider-session identity, lifecycle |
-| Agent profile | Machine ID, name, provider, optional model/mode, validated provider options, launch configuration; no credential payloads |
-| Agent | Session ID, project ID, display name, provider, activity, attention reason, current turn |
-| Dev server | Machine/project association, port/protocol, observed process identity, reachability, preview route |
-| View preference | User ID and machine/project scope, shared selected project/tab; device-specific overrides where explicitly allowed |
-| Notification event | Stable event ID, agent/turn ID, completion or input/error reason, creation time |
+| Record             | Key fields / responsibilities                                                                                             |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| Machine            | Stable ID, display name, local/self-managed/cloud kind, connection/provisioning state                                     |
+| Project            | Machine ID, name, canonical directory, optional repository origin, ordering                                               |
+| Tab                | Project ID, title, ordering, root pane-layout node                                                                        |
+| Layout node        | Split axis, normalized ratio, child IDs; or a leaf pane ID                                                                |
+| Pane               | Presentation kind, stable session binding; independent of process lifetime                                                |
+| Session            | Project ID, runtime/provider type, process or provider-session identity, lifecycle                                        |
+| Agent profile      | Machine ID, name, provider, optional model/mode, validated provider options, launch configuration; no credential payloads |
+| Agent              | Session ID, project ID, display name, provider, activity, attention reason, current turn                                  |
+| Dev server         | Machine/project association, port/protocol, observed process identity, reachability, preview route                        |
+| View preference    | User ID and machine/project scope, shared selected project/tab; device-specific overrides where explicitly allowed        |
+| Notification event | Stable event ID, agent/turn ID, completion or input/error reason, creation time                                           |
 
 Use stable IDs rather than array positions or process IDs as identity. A project is a directory, not necessarily a Git repo. Worktree automation is outside the initial MVP; existing worktree folders can still be opened as projects.
 
@@ -151,15 +151,15 @@ Free local mode works without cloud for workspaces, terminals, agents, and foreg
 
 ## 8. Delivery sequence and review gates
 
-| Phase | Deliverable | Acceptance gate |
-| --- | --- | --- |
-| 0 — Contract and UX | Agree on this plan, state ownership, navigation rules, desktop/mobile wireframes, command/event schema | Walk through one project with two tabs and split panes on laptop and phone; agree on close vs stop semantics |
-| 1 — Durable synchronized workspace | Machine connection abstraction, persisted projects/tabs/layouts/bindings, snapshot/events, replica/reconnect logic, functioning sidebar | Two clients converge after create/split/reorder/delete; reconnect and daemon restart retain structure; command retries do not duplicate records |
-| 2 — Local working environment | Local project creation/open/clone, real PTYs, shell and provider terminal profiles informed by Paseo/Herdr, terminal replay and ownership | Run commands in split panes; launch Codex/Claude Code/OpenCode profiles; disconnect/reconnect without duplicate shells; test shell/resize behavior on all desktop OSes |
-| 3 — Unified chat and agent overview | Paseo-style unified chat and reusable agent profiles; first structured provider adapter, then remaining providers; Herdr-style agent tracking/attention and desktop sounds/notifications | Real turns stream tools/text, request input, queue prompts, cancel, finish, fail, and resume where supported; profile selections persist; sidebar and chat agree |
-| 4 — Mobile client | Expo/React Native app, shared replica, machine switcher, project/tab/pane navigation, chat and terminal interaction | Desktop, iPhone, and Android control the same sessions and layout; phone navigation does not destroy split structure; app resume resynchronizes |
-| 5 — Cloud and servers | Client/daemon integration with Pierre's server APIs for authenticated remote access, machine inventory/create/connect, private previews, and iOS/Android pushes; daemon-side server discovery | Against Pierre's available backend: provision a machine, clone a repo, run an agent and dev server, open preview from desktop/iPhone/Android, receive background notification and return to agent; missing server contracts remain explicit dependencies |
-| 6 — MVP release | Installable desktop packages, signed iOS/Android builds, TestFlight/Google Play testing, store submission packages, local service lifecycle, migrations, failure recovery, onboarding | Clean local install works without login; full cloud scenario passes on iOS and Android; platform and multi-client regression suite passes; both mobile apps are ready for store submission |
+| Phase                               | Deliverable                                                                                                                                                                                   | Acceptance gate                                                                                                                                                                                                                                          |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0 — Contract and UX                 | Agree on this plan, state ownership, navigation rules, desktop/mobile wireframes, command/event schema                                                                                        | Walk through one project with two tabs and split panes on laptop and phone; agree on close vs stop semantics                                                                                                                                             |
+| 1 — Durable synchronized workspace  | Machine connection abstraction, persisted projects/tabs/layouts/bindings, snapshot/events, replica/reconnect logic, functioning sidebar                                                       | Two clients converge after create/split/reorder/delete; reconnect and daemon restart retain structure; command retries do not duplicate records                                                                                                          |
+| 2 — Local working environment       | Local project creation/open/clone, real PTYs, shell and provider terminal profiles informed by Paseo/Herdr, terminal replay and ownership                                                     | Run commands in split panes; launch Codex/Claude Code/OpenCode profiles; disconnect/reconnect without duplicate shells; test shell/resize behavior on all desktop OSes                                                                                   |
+| 3 — Unified chat and agent overview | Paseo-style unified chat and reusable agent profiles; first structured provider adapter, then remaining providers; Herdr-style agent tracking/attention and desktop sounds/notifications      | Real turns stream tools/text, request input, queue prompts, cancel, finish, fail, and resume where supported; profile selections persist; sidebar and chat agree                                                                                         |
+| 4 — Mobile client                   | Expo/React Native app, shared replica, machine switcher, project/tab/pane navigation, chat and terminal interaction                                                                           | Desktop, iPhone, and Android control the same sessions and layout; phone navigation does not destroy split structure; app resume resynchronizes                                                                                                          |
+| 5 — Cloud and servers               | Client/daemon integration with Pierre's server APIs for authenticated remote access, machine inventory/create/connect, private previews, and iOS/Android pushes; daemon-side server discovery | Against Pierre's available backend: provision a machine, clone a repo, run an agent and dev server, open preview from desktop/iPhone/Android, receive background notification and return to agent; missing server contracts remain explicit dependencies |
+| 6 — MVP release                     | Installable desktop packages, signed iOS/Android builds, TestFlight/Google Play testing, store submission packages, local service lifecycle, migrations, failure recovery, onboarding         | Clean local install works without login; full cloud scenario passes on iOS and Android; platform and multi-client regression suite passes; both mobile apps are ready for store submission                                                               |
 
 Mobile and cloud contracts are designed in phase 0 and exercised with representative clients in phase 1. Their full UI/infrastructure arrives later; they must not require replacing the workspace model.
 

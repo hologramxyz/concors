@@ -16,8 +16,8 @@ import {
  *
  *   <sender>.<event>   e.g. "client.hello", "daemon.ready"
  *
- * Only the connection handshake is defined today. Agent/session messages will be added as new
- * `type` variants without changing the envelope shape.
+ * The handshake precedes workspace subscriptions and commands. New runtime messages extend
+ * the same discriminated envelope.
  *
  *   client                                 daemon
  *     │ ── client.hello ──────────────────▶ │  validate + negotiate protocol version
