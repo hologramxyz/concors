@@ -7,6 +7,9 @@ import {
   type DaemonInfo,
   type ProtocolError,
   type ProtocolVersion,
+  type WorkspaceSnapshot,
+  type WorkspaceCommand,
+  type WorkspaceResult,
 } from "@concors/protocol";
 
 import type { DaemonEndpoint } from "./endpoint.ts";
@@ -75,6 +78,16 @@ export class DaemonConnection {
   #socket: WebSocketLike | null = null;
   /** Rejects the in-flight `connect()` promise, if any. */
   #abortPending: ((error: ProtocolError) => void) | null = null;
+  #workspace: WorkspaceSnapshot | null = null;
+  readonly #workspaceListeners = new Set<(snapshot: WorkspaceSnapshot) => void>();
+  readonly #commands = new Map<
+    string,
+    {
+      resolve: (result: WorkspaceResult) => void;
+      reject: (error: Error) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
+  >();
   readonly #listeners = new Set<ConnectionStateListener>();
   readonly #client: ClientInfo;
   readonly #protocolVersion: ProtocolVersion;
@@ -91,6 +104,44 @@ export class DaemonConnection {
 
   get state(): ConnectionState {
     return this.#state;
+  }
+
+  get workspace(): WorkspaceSnapshot | null {
+    return this.#workspace;
+  }
+
+  /** A subscription always refreshes from the daemon; cached state is never a write authority. */
+  subscribeWorkspace(listener: (snapshot: WorkspaceSnapshot) => void): () => void {
+    const first = this.#workspaceListeners.size === 0;
+    this.#workspaceListeners.add(listener);
+    if (this.#workspace) listener(this.#workspace);
+    if (first && this.#state.status === "ready")
+      this.#socket?.send(JSON.stringify({ type: "workspace.subscribe" }));
+    return () => {
+      this.#workspaceListeners.delete(listener);
+    };
+  }
+
+  /** Retrying an uncertain outcome must reuse this exact command, including its ID. */
+  executeWorkspace(command: WorkspaceCommand): Promise<WorkspaceResult> {
+    if (this.#state.status !== "ready" || !this.#workspace || this.#workspaceListeners.size === 0)
+      return Promise.reject(new Error("Workspace is not connected"));
+    if (this.#commands.has(command.commandId))
+      return Promise.reject(new Error("Command is already pending"));
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.#commands.delete(command.commandId);
+        reject(new Error("Workspace command timed out; refresh or retry the same command ID"));
+      }, 10_000);
+      this.#commands.set(command.commandId, { resolve, reject, timer });
+      try {
+        this.#socket?.send(JSON.stringify(command));
+      } catch (error) {
+        clearTimeout(timer);
+        this.#commands.delete(command.commandId);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
   }
 
   /** Subscribe to state changes. Returns an unsubscribe function. */
@@ -192,10 +243,31 @@ export class DaemonConnection {
               status: message.status,
             };
             this.#setState({ status: "ready", daemon });
+            if (this.#workspaceListeners.size > 0)
+              socket?.send(JSON.stringify({ type: "workspace.subscribe" }));
             if (!settled) {
               settled = true;
               this.#abortPending = null;
               resolve(daemon);
+            }
+            break;
+          }
+          case "workspace.snapshot":
+            if (this.#state.status !== "ready") break;
+            if (
+              this.#workspace?.epoch === message.snapshot.epoch &&
+              this.#workspace.revision > message.snapshot.revision
+            )
+              break;
+            this.#workspace = message.snapshot;
+            for (const listener of this.#workspaceListeners) listener(message.snapshot);
+            break;
+          case "workspace.result": {
+            const pending = this.#commands.get(message.commandId);
+            if (pending) {
+              clearTimeout(pending.timer);
+              this.#commands.delete(message.commandId);
+              pending.resolve(message);
             }
             break;
           }
@@ -265,6 +337,18 @@ export class DaemonConnection {
 
   #setState(state: ConnectionState): void {
     this.#state = state;
+    if (state.status !== "ready") {
+      this.#workspace = null;
+      for (const pending of this.#commands.values()) {
+        clearTimeout(pending.timer);
+        pending.reject(
+          new Error(
+            "Connection lost; command outcome may be unknown. Retry with the same command ID.",
+          ),
+        );
+      }
+      this.#commands.clear();
+    }
     for (const listener of this.#listeners) {
       listener(state);
     }
