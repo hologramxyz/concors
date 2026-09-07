@@ -3,12 +3,27 @@ import type { z } from "zod";
 import { ApiError, ApiNetworkError } from "./errors.ts";
 import {
   AuthResponseSchema,
+  BillingStatusSchema,
   ErrorBodySchema,
+  InvoiceListSchema,
+  MachineCatalogSchema,
+  MachineCostsSchema,
+  MachineListSchema,
+  MachineResponseSchema,
   MeSchema,
   OrganizationListSchema,
+  RedirectSchema,
+  SshKeyListSchema,
+  SshKeyResponseSchema,
   type ApiUser,
+  type BillingStatus,
+  type Invoice,
+  type Machine,
+  type MachineCatalog,
+  type MachineCosts,
   type Me,
   type Organization,
+  type SshKey,
 } from "./schemas.ts";
 import { memoryTokenStore, type TokenStore } from "./token-store.ts";
 
@@ -30,6 +45,29 @@ export interface SignUpInput {
 export interface SignInInput {
   readonly email: string;
   readonly password: string;
+}
+
+/**
+ * Organization a request acts on. Every machine, key and billing call is scoped to one; when
+ * omitted the API uses the session's active organization (see `setActiveOrganization`).
+ */
+export interface OrganizationScope {
+  readonly organizationId?: string;
+}
+
+export interface CreateMachineInput extends OrganizationScope {
+  /** Lowercase letters, digits and hyphens; unique among the organization's live machines. */
+  readonly name: string;
+  /** Region id from the catalog. */
+  readonly region: string;
+  /** Size id from the catalog. */
+  readonly size: string;
+}
+
+export interface AddSshKeyInput extends OrganizationScope {
+  readonly name: string;
+  /** OpenSSH public key line (`ssh-ed25519 AAAA… comment`). */
+  readonly publicKey: string;
 }
 
 /** Response header the API uses to hand out a bearer token alongside the session cookie. */
@@ -121,13 +159,132 @@ export class ApiClient {
     });
   }
 
+  // --- machines -------------------------------------------------------------
+
+  /** Regions, sizes (with monthly prices when billing is on) and the OS image of new machines. */
+  async getMachineCatalog(): Promise<MachineCatalog> {
+    const { data } = await this.#request("GET", "/api/v1/machines/catalog", {
+      schema: MachineCatalogSchema,
+    });
+    return data;
+  }
+
+  /** Machines of an organization, newest first; destroyed ones are left out. */
+  async listMachines(scope: OrganizationScope = {}): Promise<Machine[]> {
+    const { data } = await this.#request("GET", withScope("/api/v1/machines", scope), {
+      schema: MachineListSchema,
+    });
+    return data.machines;
+  }
+
+  /**
+   * Creates a machine: charges the first month (402 without a card on file or when it is
+   * declined), then orders or reuses a VPS. Poll `getMachine` until `status` is `running`.
+   */
+  async createMachine(input: CreateMachineInput): Promise<Machine> {
+    const { data } = await this.#request("POST", "/api/v1/machines", {
+      body: input,
+      schema: MachineResponseSchema,
+    });
+    return data.machine;
+  }
+
+  /** One machine, refreshed from OVH. 404 for machines of other organizations. */
+  async getMachine(id: string): Promise<Machine> {
+    const { data } = await this.#request("GET", `/api/v1/machines/${encodeURIComponent(id)}`, {
+      schema: MachineResponseSchema,
+    });
+    return data.machine;
+  }
+
+  /** Destroys a machine and stops billing it; no refund for the rest of the month. */
+  async deleteMachine(id: string): Promise<Machine> {
+    const { data } = await this.#request("DELETE", `/api/v1/machines/${encodeURIComponent(id)}`, {
+      schema: MachineResponseSchema,
+    });
+    return data.machine;
+  }
+
+  /** What an organization pays per month for its machines. */
+  async getMachineCosts(scope: OrganizationScope = {}): Promise<MachineCosts> {
+    const { data } = await this.#request("GET", withScope("/api/v1/machines/costs", scope), {
+      schema: MachineCostsSchema,
+    });
+    return data;
+  }
+
+  // --- ssh keys -------------------------------------------------------------
+
+  /** SSH public keys installed on the organization's machines, oldest first. */
+  async listSshKeys(scope: OrganizationScope = {}): Promise<SshKey[]> {
+    const { data } = await this.#request("GET", withScope("/api/v1/ssh-keys", scope), {
+      schema: SshKeyListSchema,
+    });
+    return data.sshKeys;
+  }
+
+  /** Registers a key (422 when it does not parse, 409 when already registered). */
+  async addSshKey(input: AddSshKeyInput): Promise<SshKey> {
+    const { data } = await this.#request("POST", "/api/v1/ssh-keys", {
+      body: input,
+      schema: SshKeyResponseSchema,
+    });
+    return data.sshKey;
+  }
+
+  /** Removes a key; machines already installed with it keep it. */
+  async removeSshKey(id: string): Promise<void> {
+    await this.#request("DELETE", `/api/v1/ssh-keys/${encodeURIComponent(id)}`, {
+      schema: null,
+    });
+  }
+
+  // --- billing --------------------------------------------------------------
+
+  /** Card on file, payment trouble and machine prices for an organization. */
+  async getBillingStatus(scope: OrganizationScope = {}): Promise<BillingStatus> {
+    const { data } = await this.#request("GET", withScope("/api/v1/billing", scope), {
+      schema: BillingStatusSchema,
+    });
+    return data;
+  }
+
+  /**
+   * URL of a hosted Stripe Checkout page where the user saves a card for the organization. Open
+   * it in the system browser; the API learns about the card through Stripe's webhook.
+   */
+  async createBillingSetupUrl(scope: OrganizationScope = {}): Promise<string> {
+    const { data } = await this.#request("POST", "/api/v1/billing/setup", {
+      body: scope,
+      schema: RedirectSchema,
+    });
+    return data.url;
+  }
+
+  /** URL of the Stripe customer portal (change card, download invoices). 404 before any card. */
+  async createBillingPortalUrl(scope: OrganizationScope = {}): Promise<string> {
+    const { data } = await this.#request("POST", "/api/v1/billing/portal", {
+      body: scope,
+      schema: RedirectSchema,
+    });
+    return data.url;
+  }
+
+  /** Invoices of an organization, newest first. */
+  async listInvoices(scope: OrganizationScope = {}): Promise<Invoice[]> {
+    const { data } = await this.#request("GET", withScope("/api/v1/billing/invoices", scope), {
+      schema: InvoiceListSchema,
+    });
+    return data.invoices;
+  }
+
   #rememberToken(response: Response, bodyToken: string | null): void {
     const token = response.headers.get(AUTH_TOKEN_HEADER) ?? bodyToken;
     if (token !== null && token !== "") this.tokens.set(token);
   }
 
   async #request<T>(
-    method: "GET" | "POST",
+    method: "GET" | "POST" | "DELETE",
     path: string,
     options: { readonly body?: unknown; readonly schema: z.ZodType<T> | null },
   ): Promise<{ data: T; response: Response }> {
@@ -164,6 +321,12 @@ export class ApiClient {
 
 export function createApiClient(options: ApiClientOptions): ApiClient {
   return new ApiClient(options);
+}
+
+/** Appends `?organizationId=…` when a scope names one. */
+function withScope(path: string, scope: OrganizationScope): string {
+  if (scope.organizationId === undefined) return path;
+  return `${path}?${new URLSearchParams({ organizationId: scope.organizationId }).toString()}`;
 }
 
 async function readJson(response: Response): Promise<unknown> {
