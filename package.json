@@ -25,10 +25,12 @@
     "daemon:dev": "pnpm --filter @concors/daemon dev",
     "daemon:build": "pnpm --filter @concors/daemon build",
     "daemon:start": "pnpm --filter @concors/daemon start",
-    "daemon:test": "pnpm --filter @concors/daemon test"
+    "daemon:test": "pnpm --filter @concors/daemon test",
+    "test:workspace:e2e": "playwright test"
   },
   "devDependencies": {
     "@concors/config": "workspace:*",
+    "@playwright/test": "1.63.0",
     "eslint": "^10.10.0",
     "prettier": "^3.9.6",
     "typescript": "^5.9.3"
