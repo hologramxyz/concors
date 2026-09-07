@@ -3,12 +3,15 @@ import websocket from "@fastify/websocket";
 import Fastify, { type FastifyInstance } from "fastify";
 
 import type { DaemonConfig } from "./config.ts";
+import { WorkspaceStore } from "./workspace/store.ts";
 import { DaemonState } from "./state.ts";
 import { registerProtocolEndpoint } from "./ws/protocol-endpoint.ts";
 
 export interface DaemonServerOptions {
   /** Overrides for tests; production always uses the defaults. */
   readonly handshakeTimeoutMs?: number;
+  /** In-memory by default for embedded/test servers. The CLI supplies a durable file. */
+  readonly workspacePath?: string;
 }
 
 export interface DaemonServer {
@@ -31,6 +34,7 @@ export function createDaemonServer(
   options: DaemonServerOptions = {},
 ): DaemonServer {
   const state = new DaemonState();
+  const workspace = new WorkspaceStore(options.workspacePath);
 
   const app = Fastify({
     logger: config.logLevel === "silent" ? false : { level: config.logLevel },
@@ -50,6 +54,7 @@ export function createDaemonServer(
   app.register(async (instance) => {
     closeConnections = registerProtocolEndpoint(instance, {
       state,
+      workspace,
       ...(options.handshakeTimeoutMs === undefined
         ? {}
         : { handshakeTimeoutMs: options.handshakeTimeoutMs }),
@@ -57,6 +62,10 @@ export function createDaemonServer(
   });
 
   app.get(HEALTH_PATH, async (): Promise<HealthResponse> => ({ status: "ok" }));
+
+  app.addHook("onClose", () => {
+    workspace.close();
+  });
 
   let closing: Promise<void> | null = null;
 

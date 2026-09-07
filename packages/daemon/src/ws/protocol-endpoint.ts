@@ -10,10 +10,13 @@ import {
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import type { WebSocket } from "ws";
 
+import type { WorkspaceStore } from "../workspace/store.ts";
+
 import type { DaemonState } from "../state.ts";
 
 export interface ProtocolEndpointOptions {
   readonly state: DaemonState;
+  readonly workspace: WorkspaceStore;
   /** How long a freshly-opened socket may stay silent before we drop it. */
   readonly handshakeTimeoutMs?: number;
 }
@@ -30,9 +33,8 @@ const DEFAULT_HANDSHAKE_TIMEOUT_MS = 5_000;
  *
  *   client.hello  →  validate  →  daemon.ready | error (+ close)
  *
- * Nothing beyond the handshake is implemented yet. Post-handshake messages are answered with a
- * structured error so clients get feedback instead of silence. Returns a function that closes
- * every open connection, used during graceful shutdown.
+ * Workspace subscriptions receive ordered authoritative snapshots. Returns a function that
+ * closes every open connection during graceful shutdown.
  */
 export function registerProtocolEndpoint(
   app: FastifyInstance,
@@ -40,13 +42,76 @@ export function registerProtocolEndpoint(
 ): () => void {
   const handshakeTimeoutMs = options.handshakeTimeoutMs ?? DEFAULT_HANDSHAKE_TIMEOUT_MS;
   const connections = new Set<WebSocket>();
+  const subscribers = new Set<WebSocket>();
+  const send = (socket: WebSocket, message: DaemonMessage): void => {
+    if (socket.readyState !== socket.OPEN) return;
+    if (socket.bufferedAmount > 2 * 1024 * 1024) {
+      socket.close(1013, "Client must reconnect to catch up");
+      return;
+    }
+    socket.send(JSON.stringify(message));
+  };
 
   app.get(WS_PATH, { websocket: true }, (socket, request) => {
+    const origin = request.headers.origin;
+    // Native/CLI clients do not send Origin. Browser clients must use a known local UI.
+    if (
+      origin &&
+      ![
+        "http://localhost:1420",
+        "http://127.0.0.1:1420",
+        "tauri://localhost",
+        "http://tauri.localhost",
+        "https://tauri.localhost",
+      ].includes(origin)
+    ) {
+      socket.close(1008, "Origin is not allowed");
+      return;
+    }
     const log = request.log.child({ connection: request.id });
     connections.add(socket);
-    socket.on("close", () => connections.delete(socket));
+    socket.on("close", () => {
+      connections.delete(socket);
+      subscribers.delete(socket);
+    });
 
-    void new ConnectionHandler(socket, log, options.state, handshakeTimeoutMs).run();
+    new ConnectionHandler(socket, log, options.state, handshakeTimeoutMs, (message) => {
+      if (message.type === "workspace.subscribe") {
+        subscribers.add(socket);
+        send(socket, { type: "workspace.snapshot", snapshot: options.workspace.snapshot() });
+      } else if (message.type === "workspace.command") {
+        if (!subscribers.has(socket)) {
+          send(socket, {
+            type: "error",
+            error: createProtocolError(
+              "INVALID_MESSAGE",
+              "Subscribe to the workspace before editing",
+            ),
+          });
+          return;
+        }
+        try {
+          const { result, snapshot, changed } = options.workspace.execute(message);
+          // State is delivered before settlement, including fresh state after a conflict/retry.
+          if (changed)
+            for (const target of subscribers)
+              send(target, { type: "workspace.snapshot", snapshot });
+          else send(socket, { type: "workspace.snapshot", snapshot });
+          send(socket, result);
+        } catch (error) {
+          log.error({ err: error }, "workspace command failed");
+          send(socket, {
+            type: "workspace.result",
+            commandId: message.commandId,
+            outcome: {
+              status: "rejected",
+              code: "INTERNAL_ERROR",
+              message: "Could not save workspace",
+            },
+          });
+        }
+      }
+    }).run();
   });
 
   return () => {
@@ -63,17 +128,20 @@ class ConnectionHandler {
   private readonly log: FastifyBaseLogger;
   private readonly state: DaemonState;
   private readonly handshakeTimeoutMs: number;
+  private readonly workspaceMessage: (message: ClientMessage) => void;
 
   constructor(
     socket: WebSocket,
     log: FastifyBaseLogger,
     state: DaemonState,
     handshakeTimeoutMs: number,
+    workspaceMessage: (message: ClientMessage) => void,
   ) {
     this.socket = socket;
     this.log = log;
     this.state = state;
     this.handshakeTimeoutMs = handshakeTimeoutMs;
+    this.workspaceMessage = workspaceMessage;
   }
 
   run(): void {
@@ -125,6 +193,12 @@ class ConnectionHandler {
   }
 
   private handle(message: ClientMessage): void {
+    if (message.type !== "client.hello") {
+      if (!this.#handshakeComplete)
+        this.fail(createProtocolError("HANDSHAKE_REQUIRED", "Send client.hello first"));
+      else this.workspaceMessage(message);
+      return;
+    }
     switch (message.type) {
       case "client.hello": {
         if (this.#handshakeComplete) {

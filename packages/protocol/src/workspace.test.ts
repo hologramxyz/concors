@@ -1,0 +1,205 @@
+import { describe, expect, it } from "vitest";
+import { applyWorkspaceOperation, validateLayout } from "./workspace-reducer.ts";
+import {
+  WorkspaceCommandSchema,
+  type WorkspaceOperation,
+  type WorkspaceSnapshot,
+} from "./workspace.ts";
+
+let sequence = 0;
+const id = () => `00000000-0000-4000-8000-${String(++sequence).padStart(12, "0")}`;
+function fixture() {
+  const projectId = id(),
+    tabId = id(),
+    paneId = id();
+  const initial: WorkspaceSnapshot = {
+    schemaVersion: 1,
+    machineId: id(),
+    epoch: id(),
+    revision: 0,
+    projects: [],
+    selection: null,
+  };
+  const project = applyWorkspaceOperation(initial, {
+    kind: "project.add",
+    projectId,
+    name: "Concors",
+    directory: "/projects/concors",
+  });
+  const state = applyWorkspaceOperation(project, {
+    kind: "tab.create",
+    projectId,
+    expectedVersion: 0,
+    tabId,
+    paneId,
+    name: "Build",
+    profile: "shell",
+  });
+  return { initial, state, projectId, tabId, paneId };
+}
+
+describe("workspace commands", () => {
+  it("splits, resizes and collapses a nested tree without changing the input", () => {
+    const { state, projectId, tabId, paneId } = fixture();
+    const second = id(),
+      third = id(),
+      split = id(),
+      nested = id();
+    let next = applyWorkspaceOperation(state, {
+      kind: "pane.split",
+      projectId,
+      tabId,
+      expectedVersion: 1,
+      paneId,
+      newPaneId: second,
+      splitId: split,
+      axis: "horizontal",
+      profile: "chat",
+    });
+    next = applyWorkspaceOperation(next, {
+      kind: "pane.split",
+      projectId,
+      tabId,
+      expectedVersion: 2,
+      paneId: second,
+      newPaneId: third,
+      splitId: nested,
+      axis: "vertical",
+      profile: "codex",
+    });
+    next = applyWorkspaceOperation(next, {
+      kind: "pane.resize",
+      projectId,
+      tabId,
+      expectedVersion: 3,
+      splitId: split,
+      ratio: 0.7,
+    });
+    next = applyWorkspaceOperation(next, {
+      kind: "pane.close",
+      projectId,
+      tabId,
+      expectedVersion: 4,
+      paneId: second,
+    });
+    expect(next.projects[0]!.tabs[0]!.nodes).toEqual(
+      expect.arrayContaining([
+        { id: split, kind: "split", axis: "horizontal", ratio: 0.7, first: paneId, second: third },
+      ]),
+    );
+    expect(next.projects[0]!.tabs[0]!.nodes).toHaveLength(3);
+    expect(state.projects[0]!.tabs[0]!.nodes).toHaveLength(1);
+  });
+
+  it("rejects concurrent edits to one project while permitting unrelated project edits", () => {
+    const { state, projectId, tabId } = fixture();
+    const other = applyWorkspaceOperation(state, {
+      kind: "project.add",
+      projectId: id(),
+      name: "Other",
+      directory: "/other",
+    });
+    const op: WorkspaceOperation = {
+      kind: "tab.rename",
+      projectId,
+      tabId,
+      expectedVersion: 1,
+      name: "Review",
+    };
+    const next = applyWorkspaceOperation(other, op);
+    expect(next.projects[0]!.tabs[0]!.name).toBe("Review");
+    expect(() => applyWorkspaceOperation(next, op)).toThrow("another client");
+  });
+
+  it("moves tabs, repairs selection on close, and removes the final pane's tab", () => {
+    const { state, projectId, tabId, paneId } = fixture();
+    const anotherTab = id();
+    let next = applyWorkspaceOperation(state, {
+      kind: "tab.create",
+      projectId,
+      expectedVersion: 1,
+      tabId: anotherTab,
+      paneId: id(),
+      name: "Review",
+      profile: "chat",
+    });
+    next = applyWorkspaceOperation(next, {
+      kind: "tab.move",
+      projectId,
+      tabId: anotherTab,
+      expectedVersion: 2,
+      index: 0,
+    });
+    expect(next.projects[0]!.tabs.map((t) => t.id)).toEqual([anotherTab, tabId]);
+    next = applyWorkspaceOperation(next, {
+      kind: "tab.close",
+      projectId,
+      tabId: anotherTab,
+      expectedVersion: 3,
+    });
+    expect(next.selection).toEqual({ projectId, tabId });
+    next = applyWorkspaceOperation(next, {
+      kind: "pane.close",
+      projectId,
+      tabId,
+      paneId,
+      expectedVersion: 4,
+    });
+    expect(next.selection).toEqual({ projectId, tabId: null });
+    expect(next.projects[0]!.tabs).toHaveLength(0);
+    next = applyWorkspaceOperation(next, { kind: "project.remove", projectId, expectedVersion: 5 });
+    expect(next.selection).toBeNull();
+  });
+
+  it("rejects missing targets, colliding IDs, invalid ratios and cyclic layouts", () => {
+    const { state, projectId, tabId, paneId } = fixture();
+    expect(() =>
+      applyWorkspaceOperation(state, { kind: "selection.set", projectId, tabId: id() }),
+    ).toThrow("no longer exists");
+    expect(() =>
+      applyWorkspaceOperation(state, {
+        kind: "pane.split",
+        projectId,
+        tabId,
+        expectedVersion: 1,
+        paneId,
+        newPaneId: paneId,
+        splitId: id(),
+        axis: "horizontal",
+        profile: "shell",
+      }),
+    ).toThrow("ID already exists");
+    expect(
+      WorkspaceCommandSchema.safeParse({
+        type: "workspace.command",
+        commandId: id(),
+        epoch: state.epoch,
+        operation: {
+          kind: "pane.resize",
+          projectId,
+          tabId,
+          expectedVersion: 1,
+          splitId: id(),
+          ratio: 1,
+        },
+      }).success,
+    ).toBe(false);
+    expect(() =>
+      validateLayout({
+        id: tabId,
+        name: "Bad",
+        root: paneId,
+        nodes: [
+          {
+            id: paneId,
+            kind: "split",
+            axis: "horizontal",
+            ratio: 0.5,
+            first: paneId,
+            second: paneId,
+          },
+        ],
+      }),
+    ).toThrow("cycle");
+  });
+});

@@ -13,3 +13,5 @@ export * from "./daemon.ts";
 export * from "./client.ts";
 export * from "./messages.ts";
 export * from "./transport.ts";
+export * from "./workspace.ts";
+export * from "./workspace-reducer.ts";

@@ -196,3 +196,44 @@ describe("DaemonConnection", () => {
     expect(states.filter((s) => s === "ready")).toHaveLength(2);
   });
 });
+
+describe("workspace replica lifecycle", () => {
+  const snapshot = {
+    schemaVersion: 1 as const,
+    machineId: "00000000-0000-4000-8000-000000000001",
+    epoch: "00000000-0000-4000-8000-000000000002",
+    revision: 2,
+    projects: [],
+    selection: null,
+  };
+
+  it("ignores stale snapshots and rejects pending commands on disconnect", async () => {
+    const { connection, socket, ready } = startConnection();
+    const listener = vi.fn();
+    connection.subscribeWorkspace(listener);
+    socket.serverOpen();
+    socket.serverSend(READY);
+    await ready;
+    expect(JSON.parse(socket.sent[1]!)).toEqual({ type: "workspace.subscribe" });
+    socket.serverSend({ type: "workspace.snapshot", snapshot });
+    socket.serverSend({ type: "workspace.snapshot", snapshot: { ...snapshot, revision: 1 } });
+    expect(connection.workspace?.revision).toBe(2);
+    expect(listener).toHaveBeenCalledTimes(1);
+    const pending = connection.executeWorkspace({
+      type: "workspace.command",
+      commandId: "00000000-0000-4000-8000-000000000003",
+      epoch: snapshot.epoch,
+      operation: {
+        kind: "project.add",
+        projectId: "00000000-0000-4000-8000-000000000004",
+        name: "Test",
+        directory: "/test",
+      },
+    });
+    const rejection = expect(pending).rejects.toThrow("outcome may be unknown");
+    socket.serverClose();
+    await rejection;
+    expect(connection.workspace).toBeNull();
+    connection.disconnect();
+  });
+});

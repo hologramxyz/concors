@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import { mkdirSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { parseArgs } from "node:util";
 
 import { DaemonConfigError, loadDaemonConfig } from "./config.ts";
@@ -58,7 +61,9 @@ export function parseCli(argv: readonly string[]): ParsedCli {
 
 async function serve(cli: ParsedCli): Promise<number> {
   const config = loadDaemonConfig({ host: cli.host, port: cli.port, logLevel: cli.logLevel });
-  const server = createDaemonServer(config);
+  const dataDir = process.env["CONCORS_DATA_DIR"] ?? join(homedir(), ".concors");
+  mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+  const server = createDaemonServer(config, { workspacePath: join(dataDir, "workspace.sqlite") });
 
   const url = await server.listen();
   server.app.log.info({ url, version: DAEMON_VERSION }, "concors-daemon ready");
