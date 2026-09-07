@@ -1,9 +1,19 @@
 # Project setup
 
-**Add project** offers three sources on the selected daemon machine:
+**Add project** offers three sources on the selected daemon machine. For a new folder or clone,
+enter a project name and the destination fills in as `~/repos/<name>`. Spaces and punctuation in
+the name become hyphens in the suggested folder name. You can edit the destination if needed.
 
-- **Open existing folder** validates an existing absolute directory and registers its canonical path.
-- **Create new folder** creates a new directory beneath an existing parent.
+A bare folder name such as `test` resolves to `~/repos/test` on the daemon machine. `~/` expands to
+that machine user's home directory, not your browser computer's home. The daemon creates `~/repos`
+automatically for new projects when needed. For example, on a VPS running as `ubuntu`, `test`
+becomes `/home/ubuntu/repos/test`. `/home/repos` is a separate, usually unwritable location.
+Absolute paths remain supported for custom locations.
+
+Sources:
+
+- **Open existing folder** validates an existing directory and registers its canonical path.
+- **Create new folder** creates a new directory in repos or beneath an existing custom parent.
 - **Clone repository** clones an HTTPS URL, SSH URL/scp-style address, or absolute local repository
   path into a new directory. Git must already be installed on the daemon machine.
 
@@ -15,7 +25,8 @@ Project removal remains metadata-only and never deletes files.
 Setup is a durable daemon job. Closing the dialog or disconnecting a browser does not cancel it.
 Reopen **Add project** to view recent setup status, bounded Git progress, and **Cancel setup**. Cancel
 terminates the active clone's process group on Unix or process tree on Windows. A cancelled or failed
-setup does not register a project. Remaining destination files are preserved for inspection; choose
+setup does not register a project. Permission errors suggest a writable location. A preservation
+message is shown only if setup actually created the destination. Remaining destination files are preserved for inspection; choose
 a new destination for another attempt or handle the old folder explicitly on the machine.
 
 The SQLite database migrates from user_version 2 to 3. A job receipt is saved before filesystem work.

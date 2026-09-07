@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
+import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DaemonConnection, describeDaemonEndpoint } from "@concors/daemon-client";
@@ -15,7 +16,7 @@ afterEach(async () => {
   for (const connection of connections.splice(0)) connection.disconnect();
   await server?.close();
   for (const directory of directories.splice(0))
-    rmSync(directory, { recursive: true, force: true });
+    await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 });
 async function open(url: string) {
   const connection = new DaemonConnection({

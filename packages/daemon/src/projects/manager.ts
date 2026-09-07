@@ -1,3 +1,5 @@
+import { homedir } from "node:os";
+import { projectDirectory, projectDirectoryError } from "./directories.ts";
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdir, realpath, stat } from "node:fs/promises";
 import { isAbsolute, dirname, basename, join } from "node:path";
@@ -31,7 +33,9 @@ export class ProjectManager {
   readonly #children = new Map<string, ChildProcess>();
   readonly #cancelled = new Set<string>();
   #closed = false;
-  constructor(store: WorkspaceStore, changed: () => void) {
+  readonly #home: string;
+  constructor(store: WorkspaceStore, changed: () => void, home = homedir()) {
+    this.#home = home;
     this.#store = store;
     this.#changed = changed;
     for (const setup of store.projectSetups())
@@ -61,8 +65,7 @@ export class ProjectManager {
       } else {
         if (op.epoch !== this.#store.snapshot().epoch)
           throw new Error("Workspace was replaced; refresh before starting");
-        if (!isAbsolute(op.directory))
-          throw new Error("Use an absolute destination on this machine");
+        const directory = projectDirectory(op.directory, this.#home);
         if (op.mode === "clone") validateRepository(op.repository);
         const existing = this.#store.projectSetups();
         if (
@@ -74,7 +77,7 @@ export class ProjectManager {
           id: op.id,
           mode: op.mode,
           name: op.name,
-          directory: op.directory,
+          directory,
           repository: op.repository,
           status: "working",
           progress: "Preparing project…",
@@ -103,10 +106,10 @@ export class ProjectManager {
     }
   }
   private check(id: string): void {
-    if (this.#closed || this.#cancelled.has(id))
-      throw new Error("Setup cancelled. Any destination files have been preserved.");
+    if (this.#closed || this.#cancelled.has(id)) throw new Error("Setup cancelled.");
   }
   private async run(setup: ProjectSetup, epoch: string): Promise<void> {
+    let created = false;
     try {
       let directory: string;
       if (setup.mode === "open") {
@@ -114,11 +117,15 @@ export class ProjectManager {
         if (!(await stat(directory)).isDirectory())
           throw new Error("Project path must be a directory");
       } else {
+        this.check(setup.id);
+        if (dirname(setup.directory) === join(this.#home, "repos"))
+          await mkdir(join(this.#home, "repos"), { recursive: true });
         const parent = await realpath(dirname(setup.directory));
         directory = join(parent, basename(setup.directory));
         this.check(setup.id);
         // Exclusive creation never overwrites an existing folder, even an empty one.
         await mkdir(directory);
+        created = true;
       }
       this.check(setup.id);
       setup = { ...setup, directory };
@@ -140,11 +147,7 @@ export class ProjectManager {
       this.save({
         ...setup,
         status: this.#cancelled.has(setup.id) ? "cancelled" : "failed",
-        progress:
-          (error instanceof Error ? error.message : "Project setup failed").slice(-3500) +
-          (setup.mode === "open"
-            ? ""
-            : "\nAny destination files have been preserved; inspect the folder before retrying."),
+        progress: projectDirectoryError(error, setup.directory, created),
       });
     } finally {
       this.#cancelled.delete(setup.id);
