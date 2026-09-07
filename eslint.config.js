@@ -36,6 +36,15 @@ export default [
   // Desktop app (React + Vite)
   ...react.map((cfg) => ({ ...cfg, files: ["apps/desktop/src/**/*.{ts,tsx}"] })),
 
+  // shadcn/ui primitives are generated code owned by the CLI: they export `*Variants` helpers next
+  // to components, which Fast Refresh tolerates but the lint rule flags.
+  {
+    files: ["apps/desktop/src/components/ui/**/*.tsx"],
+    rules: {
+      "react-refresh/only-export-components": "off",
+    },
+  },
+
   // Boundary: clients must not import daemon internals.
   {
     files: ["apps/**/*.{ts,tsx}", "packages/daemon-client/**/*.ts", "packages/protocol/**/*.ts"],

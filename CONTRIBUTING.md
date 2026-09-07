@@ -48,6 +48,19 @@ Please read the [architecture section of the README](README.md#architecture) fir
 - Only erasable TypeScript syntax (no `enum`, `namespace`, parameter properties) — the daemon
   sources run directly under Node's type stripping.
 - Formatting is Prettier's job; linting is ESLint's. Run `pnpm format` and `pnpm lint:fix`.
+
+## Desktop UI
+
+The desktop client uses Tailwind CSS v4 with [shadcn/ui](https://ui.shadcn.com) primitives
+(Radix-based). Design tokens live in `apps/desktop/src/styles.css`; light and dark themes are
+driven by the `.dark` class on `<html>`.
+
+- Add a primitive with `cd apps/desktop && pnpm shadcn add <component>`. Generated files land in
+  `src/components/ui/` and are ours to edit, but keep them close to upstream so they stay
+  re-generatable.
+- App-level components go in `src/components/`, screens in `src/views/`. Import via the `@/` alias.
+- Prefer semantic tokens (`bg-background`, `text-muted-foreground`, `border-border`, …) over raw
+  colours so dark mode keeps working.
 - Prefer small modules and plain functions over frameworks and abstractions.
 - Tests live next to the code as `*.test.ts` and run with Vitest.
 

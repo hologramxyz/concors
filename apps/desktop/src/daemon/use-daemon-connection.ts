@@ -6,7 +6,8 @@ import {
 import type { ClientInfo } from "@concors/protocol";
 import { useEffect, useRef, useState } from "react";
 
-import { APP_VERSION } from "../version.ts";
+import { detectPlatform } from "@/lib/platform";
+import { APP_VERSION } from "@/version";
 
 const CLIENT_INFO: ClientInfo = {
   kind: "desktop",
@@ -90,12 +91,4 @@ export function useDaemonConnection(endpoint: DaemonEndpoint | null): DaemonConn
   }, [endpoint]);
 
   return { state, reconnectNow: () => retryNow.current() };
-}
-
-function detectPlatform(): string {
-  const ua = typeof navigator === "undefined" ? "" : navigator.userAgent;
-  if (/Mac/i.test(ua)) return "macos";
-  if (/Win/i.test(ua)) return "windows";
-  if (/Linux/i.test(ua)) return "linux";
-  return "unknown";
 }
