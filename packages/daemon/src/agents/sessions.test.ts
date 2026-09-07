@@ -196,8 +196,10 @@ it("syncs attention acknowledgements, rejects stale reads, and preserves unread 
   providers[0]!.finish();
   await action(b, { kind: "read", sessionId: id });
   expect(b.agents[0]!.attention!.id).toBe(first.id);
+  const finishedAt = a.agents[0]!.updatedAt;
   await action(b, { kind: "seen", sessionId: id, attentionId: first.id });
   await expect.poll(() => a.agents[0]?.attention?.seen).toBe(true);
+  expect(a.agents[0]!.updatedAt).toBe(finishedAt);
 
   await action(a, { kind: "send", sessionId: id, text: "hold again" });
   await expect.poll(() => b.agents[0]?.attention).toBeNull();
