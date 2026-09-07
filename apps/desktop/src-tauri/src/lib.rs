@@ -18,6 +18,8 @@ pub fn run() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
     tauri::Builder::default()
+        // Opens links (Stripe Checkout, invoices) in the system browser instead of the webview.
+        .plugin(tauri_plugin_opener::init())
         .manage(daemon::LocalDaemon::default())
         .invoke_handler(tauri::generate_handler![
             daemon::local_daemon_status,

@@ -14,6 +14,7 @@ import { useAuth } from "@/auth/use-auth";
 import { AppSidebar } from "@/components/app-sidebar";
 import { CommandPalette } from "@/components/command-palette";
 import { ConnectionStatus } from "@/components/connection-status";
+import { MachinesView } from "@/machines/machines-view";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { resolveStartupEndpoint } from "@/daemon/resolve-endpoint";
 import { useDaemonConnection } from "@/daemon/use-daemon-connection";
@@ -235,6 +236,8 @@ export function App() {
                       </button>
                     </div>
                   )
+                ) : view === "machines" ? (
+                  <MachinesView auth={account} />
                 ) : view === "agents" ? (
                   <AgentsView
                     selectedId={selectedAgent}
