@@ -150,10 +150,11 @@ export class TerminalRuntime {
     }
   }
 
-  resize(viewerId: string, cols: number, rows: number, claim: boolean): void {
+  resize(viewerId: string, cols: number, rows: number, claim: boolean, ifUnowned = false): void {
     if (!this.#viewers.has(viewerId)) throw new Error("Attach before controlling this terminal");
     if (this.info.status !== "running") throw new Error("Terminal is not running");
     // Paseo's claim/update contract: passive views never steal size ownership.
+    if (claim && ifUnowned && this.#owner !== null && this.#owner !== viewerId) return;
     if (claim) this.#owner = viewerId;
     if (this.#owner !== viewerId)
       throw new Error("Another client controls this terminal; take control first");

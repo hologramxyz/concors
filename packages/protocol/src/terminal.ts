@@ -29,7 +29,7 @@ export const TerminalOperationSchema = z.discriminatedUnion("kind", [
   }),
   z.object({ kind: z.literal("attach"), sessionId: Id }),
   z.object({ kind: z.literal("detach"), sessionId: Id }),
-  z.object({ kind: z.literal("claim"), sessionId: Id, ...Size }),
+  z.object({ kind: z.literal("claim"), sessionId: Id, ifUnowned: z.boolean().optional(), ...Size }),
   z.object({ kind: z.literal("resize"), sessionId: Id, ...Size }),
   z.object({ kind: z.literal("stop"), sessionId: Id }),
   z.object({ kind: z.literal("list") }),
