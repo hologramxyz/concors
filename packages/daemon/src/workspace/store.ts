@@ -1,6 +1,9 @@
 import { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
 import {
+  TerminalInfoSchema,
+  type TerminalInfo,
+  type TerminalRequest,
   applyWorkspaceOperation,
   WorkspaceOperationError,
   WorkspaceSnapshotSchema,
@@ -22,12 +25,13 @@ export class WorkspaceStore {
         "PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL; PRAGMA busy_timeout = 5000;",
       );
       const version = this.#db.prepare("PRAGMA user_version").get()?.["user_version"];
-      if (version !== 0 && version !== 1)
+      if (version !== 0 && version !== 1 && version !== 2)
         throw new Error(`Unsupported workspace database version: ${String(version)}`);
       this.#db.exec(`
         CREATE TABLE IF NOT EXISTS workspace (id INTEGER PRIMARY KEY CHECK (id = 1), snapshot TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS commands (id TEXT PRIMARY KEY, payload TEXT NOT NULL, result TEXT NOT NULL);
-        PRAGMA user_version = 1;
+        CREATE TABLE IF NOT EXISTS terminals (id TEXT PRIMARY KEY, request_id TEXT UNIQUE NOT NULL, request TEXT NOT NULL, info TEXT NOT NULL);
+        PRAGMA user_version = 2;
       `);
       const initial: WorkspaceSnapshot = {
         schemaVersion: 1,
@@ -110,6 +114,110 @@ export class WorkspaceStore {
       this.#db.exec("ROLLBACK");
       throw error;
     }
+  }
+
+  terminals(): TerminalInfo[] {
+    return this.#db
+      .prepare("SELECT info FROM terminals ORDER BY rowid")
+      .all()
+      .map((row) => TerminalInfoSchema.parse(JSON.parse(String(row["info"]))));
+  }
+
+  terminal(id: string): TerminalInfo {
+    const row = this.#db.prepare("SELECT info FROM terminals WHERE id = ?").get(id);
+    if (!row) throw new Error("Terminal session no longer exists");
+    return TerminalInfoSchema.parse(JSON.parse(String(row["info"])));
+  }
+
+  terminalRequest(request: TerminalRequest): TerminalInfo | null {
+    const row = this.#db
+      .prepare("SELECT request, info FROM terminals WHERE request_id = ?")
+      .get(request.requestId);
+    if (!row) return null;
+    if (row["request"] !== JSON.stringify(request))
+      throw new Error("Request ID was already used for another terminal launch");
+    return TerminalInfoSchema.parse(JSON.parse(String(row["info"])));
+  }
+
+  /** Reserve the launch and bind its pane before spawning, so crashes never duplicate a launch. */
+  reserveTerminal(request: TerminalRequest, info: TerminalInfo): WorkspaceSnapshot {
+    const op = request.operation;
+    if (op.kind !== "start") throw new Error("Expected a terminal start request");
+    this.#db.exec("BEGIN IMMEDIATE");
+    try {
+      const state = this.snapshot();
+      if (state.epoch !== op.epoch)
+        throw new Error("Workspace was replaced; refresh before starting a session");
+      const project = state.projects.find((p) => p.id === op.projectId);
+      const tab = project?.tabs.find((t) => t.id === op.tabId);
+      const pane = tab?.nodes.find((n) => n.id === op.paneId);
+      if (!project || !pane || pane.kind !== "pane") throw new Error("Pane no longer exists");
+      if (project.version !== op.expectedVersion || pane.sessionId !== op.expectedSessionId)
+        throw new Error("Pane changed on another client; refresh before starting");
+      if (pane.profile === "chat" || pane.profile !== info.profile)
+        throw new Error("Select a terminal profile before starting");
+      if (pane.sessionId && ["running", "starting"].includes(this.terminal(pane.sessionId).status))
+        throw new Error("This pane already has a running session");
+      if (this.terminals().length >= 256)
+        throw new Error("Terminal history limit reached (256 sessions)");
+      pane.sessionId = info.id;
+      project.version++;
+      state.revision++;
+      this.#db
+        .prepare("INSERT INTO terminals (id, request_id, request, info) VALUES (?, ?, ?, ?)")
+        .run(info.id, request.requestId, JSON.stringify(request), JSON.stringify(info));
+      this.#db.prepare("UPDATE workspace SET snapshot = ? WHERE id = 1").run(JSON.stringify(state));
+      this.#db.exec("COMMIT");
+      return state;
+    } catch (error) {
+      this.#db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  bindTerminal(request: TerminalRequest): void {
+    const op = request.operation;
+    if (op.kind !== "bind") throw new Error("Expected bind");
+    this.#db.exec("BEGIN IMMEDIATE");
+    try {
+      const state = this.snapshot();
+      const session = this.terminal(op.sessionId);
+      if (session.projectId !== op.projectId) throw new Error("Session belongs to another project");
+      const project = state.projects.find((p) => p.id === op.projectId);
+      const pane = project?.tabs
+        .find((t) => t.id === op.tabId)
+        ?.nodes.find((n) => n.id === op.paneId);
+      if (!project || !pane || pane.kind !== "pane") throw new Error("Pane no longer exists");
+      if (pane.sessionId === session.id) {
+        this.#db.exec("COMMIT");
+        return;
+      }
+      if (project.version !== op.expectedVersion || pane.sessionId !== null)
+        throw new Error("Use an empty pane to attach this session");
+      if (
+        state.projects.some((p) =>
+          p.tabs.some((t) => t.nodes.some((n) => n.kind === "pane" && n.sessionId === session.id)),
+        )
+      )
+        throw new Error(
+          "Session is already open in another pane; select that pane or close it before reattaching",
+        );
+      pane.sessionId = session.id;
+      pane.profile = session.profile;
+      project.version++;
+      state.revision++;
+      this.#db.prepare("UPDATE workspace SET snapshot = ? WHERE id = 1").run(JSON.stringify(state));
+      this.#db.exec("COMMIT");
+    } catch (error) {
+      this.#db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  saveTerminal(info: TerminalInfo): void {
+    this.#db
+      .prepare("UPDATE terminals SET info = ? WHERE id = ?")
+      .run(JSON.stringify(TerminalInfoSchema.parse(info)), info.id);
   }
 
   private reject(

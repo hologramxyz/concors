@@ -1,4 +1,10 @@
 import { z } from "zod";
+import {
+  TerminalRequestSchema,
+  TerminalInputSchema,
+  TerminalResultSchema,
+  TerminalEventSchema,
+} from "./terminal.ts";
 
 import { ClientInfoSchema } from "./client.ts";
 import { DaemonInfoSchema } from "./daemon.ts";
@@ -38,6 +44,8 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
   ClientHelloMessageSchema,
   WorkspaceSubscribeSchema,
   WorkspaceCommandSchema,
+  TerminalRequestSchema,
+  TerminalInputSchema,
 ]);
 export type ClientMessage = z.infer<typeof ClientMessageSchema>;
 
@@ -59,6 +67,8 @@ export const DaemonMessageSchema = z.discriminatedUnion("type", [
   ErrorMessageSchema,
   WorkspaceSnapshotMessageSchema,
   WorkspaceResultSchema,
+  TerminalResultSchema,
+  ...TerminalEventSchema.options,
 ]);
 export type DaemonMessage = z.infer<typeof DaemonMessageSchema>;
 

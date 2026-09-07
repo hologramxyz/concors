@@ -1,5 +1,10 @@
 import {
   PROTOCOL_VERSION,
+  TerminalRequestSchema,
+  TerminalInputSchema,
+  type TerminalEvent,
+  type TerminalOperation,
+  type TerminalResult,
   createProtocolError,
   parseDaemonMessage,
   type ClientHelloMessage,
@@ -79,6 +84,15 @@ export class DaemonConnection {
   /** Rejects the in-flight `connect()` promise, if any. */
   #abortPending: ((error: ProtocolError) => void) | null = null;
   #workspace: WorkspaceSnapshot | null = null;
+  readonly #terminalListeners = new Set<(event: TerminalEvent) => void>();
+  readonly #terminalRequests = new Map<
+    string,
+    {
+      resolve: (result: TerminalResult) => void;
+      reject: (error: Error) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
+  >();
   readonly #workspaceListeners = new Set<(snapshot: WorkspaceSnapshot) => void>();
   readonly #commands = new Map<
     string,
@@ -142,6 +156,42 @@ export class DaemonConnection {
         reject(error instanceof Error ? error : new Error(String(error)));
       }
     });
+  }
+
+  onTerminal(listener: (event: TerminalEvent) => void): () => void {
+    this.#terminalListeners.add(listener);
+    return () => {
+      this.#terminalListeners.delete(listener);
+    };
+  }
+
+  requestTerminal(operation: TerminalOperation, requestId: string): Promise<TerminalResult> {
+    if (this.#state.status !== "ready" || !this.#workspace)
+      return Promise.reject(new Error("Workspace is not connected"));
+    const request = TerminalRequestSchema.parse({ type: "terminal.request", requestId, operation });
+    if (this.#terminalRequests.has(requestId))
+      return Promise.reject(new Error("Request is already pending"));
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.#terminalRequests.delete(requestId);
+        reject(new Error("Terminal request timed out; retry launches with the same request ID"));
+      }, 10_000);
+      this.#terminalRequests.set(requestId, { resolve, reject, timer });
+      try {
+        this.#socket?.send(JSON.stringify(request));
+      } catch (error) {
+        clearTimeout(timer);
+        this.#terminalRequests.delete(requestId);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
+  }
+
+  sendTerminalInput(sessionId: string, data: string): void {
+    if (this.#state.status !== "ready") throw new Error("Terminal is disconnected");
+    this.#socket?.send(
+      JSON.stringify(TerminalInputSchema.parse({ type: "terminal.input", sessionId, data })),
+    );
   }
 
   /** Subscribe to state changes. Returns an unsubscribe function. */
@@ -252,6 +302,23 @@ export class DaemonConnection {
             }
             break;
           }
+          case "terminal.result": {
+            const pending = this.#terminalRequests.get(message.requestId);
+            if (pending) {
+              clearTimeout(pending.timer);
+              this.#terminalRequests.delete(message.requestId);
+              pending.resolve(message);
+            }
+            break;
+          }
+          case "terminal.snapshot":
+          case "terminal.output":
+          case "terminal.state":
+          case "terminal.owner":
+          case "terminal.error":
+            if (this.#state.status === "ready")
+              for (const listener of this.#terminalListeners) listener(message);
+            break;
           case "workspace.snapshot":
             if (this.#state.status !== "ready") break;
             if (
@@ -348,6 +415,11 @@ export class DaemonConnection {
         );
       }
       this.#commands.clear();
+      for (const pending of this.#terminalRequests.values()) {
+        clearTimeout(pending.timer);
+        pending.reject(new Error("Connection lost; terminal launch outcome may be unknown"));
+      }
+      this.#terminalRequests.clear();
     }
     for (const listener of this.#listeners) {
       listener(state);

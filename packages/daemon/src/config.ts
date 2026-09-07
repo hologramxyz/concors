@@ -5,7 +5,7 @@ import { z } from "zod";
  * Runtime configuration for one daemon process.
  *
  * Precedence: CLI flags > environment variables > defaults. Defaults are tuned for the bundled
- * local daemon (loopback only). A VPS deployment overrides host/port explicitly.
+ * local daemon (loopback only). VPS development uses an SSH tunnel until remote auth is available.
  */
 export const DaemonConfigSchema = z.object({
   /** Interface to bind. Loopback by default so a local daemon is never exposed accidentally. */
