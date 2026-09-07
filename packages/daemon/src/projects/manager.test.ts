@@ -1,3 +1,4 @@
+import { realpath } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import {
   mkdtempSync,
@@ -5,7 +6,6 @@ import {
   mkdirSync,
   writeFileSync,
   readFileSync,
-  realpathSync,
   rmSync,
   existsSync,
 } from "node:fs";
@@ -157,7 +157,7 @@ it("creates repos automatically and resolves simple names and tilde on the daemo
   await expect.poll(() => store.projectSetups()[0]?.status).toBe("done");
   expect(existsSync(join(root, "repos", "first-project"))).toBe(true);
   expect(store.snapshot().projects[0]?.directory).toBe(
-    realpathSync(join(root, "repos", "first-project")),
+    await realpath(join(root, "repos", "first-project")),
   );
   manager.request(request("create", "~/repos/second-project"));
   await expect.poll(() => store.projectSetups()[1]?.status).toBe("done");
