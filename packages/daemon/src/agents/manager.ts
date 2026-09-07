@@ -1,3 +1,4 @@
+import { normalizeCommandExecutionCommand } from "./codex/command-display.ts";
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { stat } from "node:fs/promises";
@@ -122,6 +123,7 @@ export class AgentManager {
       sessionId: id,
       turnId,
       position: previous?.position ?? 0,
+      revision: previous?.revision ?? 0,
       createdAt: previous?.createdAt ?? new Date().toISOString(),
     });
     this.#emit({ type: "agent.item", item });
@@ -259,6 +261,7 @@ export class AgentManager {
         const turnId = `pending:${request.requestId}`;
         const next = {
           ...info,
+          name: info.name === "Codex" ? op.text.split("\n")[0]?.slice(0, 80) || "Codex" : info.name,
           status: "working" as const,
           turnId,
           turnStartedAt: new Date().toISOString(),
@@ -411,6 +414,34 @@ export class AgentManager {
         for (const p of runtime.pending.values()) p.reject(new Error("Turn ended"));
         runtime.pending.clear();
       }
+      if (turn.status !== "completed")
+        for (const item of this.#store.agentTurnItems(id, turn.id))
+          if (item.status === "running")
+            this.item(id, turn.id, {
+              ...item,
+              status: turn.status === "interrupted" ? "interrupted" : "failed",
+            });
+      const duration = info.turnStartedAt
+        ? Math.max(0, Math.round((Date.now() - Date.parse(info.turnStartedAt)) / 1000))
+        : 0;
+      this.item(id, turn.id, {
+        id: `turn:${turn.id}`,
+        kind: "system",
+        title:
+          turn.status === "completed"
+            ? "Completed"
+            : turn.status === "interrupted"
+              ? "Interrupted"
+              : "Failed",
+        text: turn.error?.message ?? `${duration}s`,
+        detail: "",
+        status:
+          turn.status === "completed"
+            ? "completed"
+            : turn.status === "interrupted"
+              ? "interrupted"
+              : "failed",
+      });
       this.update(id, {
         status:
           turn.status === "completed"
@@ -495,6 +526,17 @@ export class AgentManager {
         : method.includes("fileChange")
           ? "Allow file changes?"
           : "Allow command execution?",
+      summary: [
+        normalizeCommandExecutionCommand(params["command"]),
+        typeof params["reason"] === "string" ? params["reason"] : "",
+        typeof params["grantRoot"] === "string" ? `Folder: ${params["grantRoot"]}` : "",
+        params["networkApprovalContext"]
+          ? `Network access: ${JSON.stringify(params["networkApprovalContext"])}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n")
+        .slice(0, 4000),
       detail: JSON.stringify(params, null, 2).slice(0, 16000),
       decisions: questions ? [] : ["accept", "decline", "cancel"],
       questions: questions ? z.array(AgentQuestionSchema).max(3).parse(params["questions"]) : [],
