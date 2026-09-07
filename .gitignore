@@ -8,6 +8,8 @@ build/
 
 # Test output
 coverage/
+playwright-report/
+test-results/
 
 # Environment files (commit only the *.example variants)
 .env
