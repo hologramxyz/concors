@@ -73,3 +73,174 @@ export const ErrorBodySchema = z.object({
   message: z.string(),
   code: z.string().optional(),
 });
+
+// --- machines ---------------------------------------------------------------
+
+/** An amount in a currency's major units, e.g. `{ amount: 6.99, currency: "USD" }`. */
+export const MoneySchema = z.object({
+  amount: z.number(),
+  currency: z.string(),
+});
+export type Money = z.infer<typeof MoneySchema>;
+
+export const MACHINE_STATUSES = [
+  "provisioning",
+  "running",
+  "stopped",
+  "error",
+  "deleting",
+  "deleted",
+  "unknown",
+] as const;
+export const MachineStatusSchema = z.enum(MACHINE_STATUSES);
+export type MachineStatus = z.infer<typeof MachineStatusSchema>;
+
+export const MachineSchema = z.object({
+  id: z.string(),
+  organizationId: z.string(),
+  createdByUserId: z.string().nullable(),
+  name: z.string(),
+  /** Catalog region id, e.g. `US-EAST-VA`. */
+  region: z.string(),
+  /** Catalog size id, e.g. `small`. */
+  size: z.string(),
+  /** OVH service name once the VPS exists. */
+  serviceName: z.string().nullable(),
+  /** OVH order that bought the VPS; null for a reused one. */
+  orderId: z.string().nullable(),
+  /** `provisioning` until the machine accepts SSH, even once the VPS runs. */
+  status: MachineStatusSchema,
+  /** Raw OVH state; `order:<status>` while the order is in flight. */
+  ovhState: z.string().nullable(),
+  lastError: z.string().nullable(),
+  ipv4: z.string().nullable(),
+  ipv6: z.string().nullable(),
+  /** Login user; connect with `ssh <sshUser>@<ipv4>`. */
+  sshUser: z.string(),
+  /** Set once the machine accepts SSH. */
+  accessReadyAt: z.string().nullable(),
+  reinstallTaskId: z.string().nullable(),
+  /** What the organization pays per month; null when the server has no billing. */
+  monthlyPrice: MoneySchema.nullable(),
+  paidUntil: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  deletedAt: z.string().nullable(),
+});
+export type Machine = z.infer<typeof MachineSchema>;
+
+/** `GET /api/v1/machines/:id`, `POST /api/v1/machines`, `DELETE /api/v1/machines/:id` */
+export const MachineResponseSchema = z.object({ machine: MachineSchema });
+
+/** `GET /api/v1/machines` */
+export const MachineListSchema = z.object({ machines: z.array(MachineSchema) });
+
+export const MachineRegionSchema = z.object({
+  id: z.string(),
+  location: z.string(),
+  countryCode: z.string(),
+});
+export type MachineRegion = z.infer<typeof MachineRegionSchema>;
+
+export const MachineSizeSchema = z.object({
+  id: z.string(),
+  vcpus: z.number(),
+  ramGb: z.number(),
+  diskGb: z.number(),
+  monthlyPrice: MoneySchema.nullable(),
+});
+export type MachineSize = z.infer<typeof MachineSizeSchema>;
+
+/** `GET /api/v1/machines/catalog` */
+export const MachineCatalogSchema = z.object({
+  regions: z.array(MachineRegionSchema),
+  sizes: z.array(MachineSizeSchema),
+  /** OS image every machine runs. */
+  image: z.string(),
+  sshUser: z.string(),
+});
+export type MachineCatalog = z.infer<typeof MachineCatalogSchema>;
+
+/** `GET /api/v1/machines/costs` */
+export const MachineCostsSchema = z.object({
+  machines: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      region: z.string(),
+      size: z.string(),
+      status: MachineStatusSchema,
+      monthlyPrice: MoneySchema.nullable(),
+      createdAt: z.string(),
+    }),
+  ),
+  /** Sum of the known monthly prices; null when nothing is priced. */
+  monthlyTotal: MoneySchema.nullable(),
+  unpricedMachines: z.number(),
+});
+export type MachineCosts = z.infer<typeof MachineCostsSchema>;
+
+// --- ssh keys ---------------------------------------------------------------
+
+export const SshKeySchema = z.object({
+  id: z.string(),
+  organizationId: z.string(),
+  createdByUserId: z.string().nullable(),
+  name: z.string(),
+  /** `ssh-ed25519`, `ssh-rsa`, `ecdsa-sha2-nistp256`, … */
+  type: z.string(),
+  /** `<type> <base64>`, comment stripped. */
+  publicKey: z.string(),
+  /** `SHA256:…` as printed by `ssh-keygen -lf`. */
+  fingerprint: z.string(),
+  createdAt: z.string(),
+});
+export type SshKey = z.infer<typeof SshKeySchema>;
+
+/** `POST /api/v1/ssh-keys` */
+export const SshKeyResponseSchema = z.object({ sshKey: SshKeySchema });
+
+/** `GET /api/v1/ssh-keys` */
+export const SshKeyListSchema = z.object({ sshKeys: z.array(SshKeySchema) });
+
+// --- billing ----------------------------------------------------------------
+
+export const CardSummarySchema = z.object({
+  brand: z.string(),
+  last4: z.string(),
+  expMonth: z.number(),
+  expYear: z.number(),
+});
+export type CardSummary = z.infer<typeof CardSummarySchema>;
+
+/** `GET /api/v1/billing` */
+export const BillingStatusSchema = z.object({
+  /** False when the server runs without Stripe: machines are then free. */
+  configured: z.boolean(),
+  hasPaymentMethod: z.boolean(),
+  card: CardSummarySchema.nullable(),
+  /** Set while the last invoice payment failed. */
+  paymentFailedAt: z.string().nullable(),
+  prices: z.array(z.object({ size: z.string(), monthlyPrice: MoneySchema })),
+});
+export type BillingStatus = z.infer<typeof BillingStatusSchema>;
+
+/** `POST /api/v1/billing/setup`, `POST /api/v1/billing/portal` */
+export const RedirectSchema = z.object({ url: z.string() });
+
+export const InvoiceSchema = z.object({
+  id: z.string(),
+  number: z.string().nullable(),
+  status: z.string().nullable(),
+  amountDue: MoneySchema,
+  amountPaid: MoneySchema,
+  createdAt: z.string(),
+  periodStart: z.string(),
+  periodEnd: z.string(),
+  hostedInvoiceUrl: z.string().nullable(),
+  invoicePdf: z.string().nullable(),
+});
+export type Invoice = z.infer<typeof InvoiceSchema>;
+
+/** `GET /api/v1/billing/invoices` */
+export const InvoiceListSchema = z.object({ invoices: z.array(InvoiceSchema) });
