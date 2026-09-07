@@ -20,6 +20,14 @@ export function ProjectSetupDialog({
 }) {
   const connection = useContext(TerminalConnectionContext);
   const [mode, setMode] = useState<ProjectSetup["mode"]>("open");
+  const [name, setName] = useState("");
+  const [customDirectory, setCustomDirectory] = useState<string | null>(null);
+  const folderName = name
+    .trim()
+    .replace(/[^\p{L}\p{N}_-]+/gu, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 100);
+  const defaultDirectory = mode === "open" ? "" : folderName ? `~/repos/${folderName}` : "";
   const [setups, setSetups] = useState<ProjectSetup[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -92,7 +100,10 @@ export function ProjectSetupDialog({
               aria-label="Project source"
               value={mode}
               disabled={busy}
-              onChange={(e) => setMode(e.target.value as ProjectSetup["mode"])}
+              onChange={(e) => {
+                setMode(e.target.value as ProjectSetup["mode"]);
+                setCustomDirectory(null);
+              }}
               className="w-full rounded border bg-background px-3 py-2"
             >
               <option value="open">Open existing folder</option>
@@ -102,7 +113,14 @@ export function ProjectSetupDialog({
           </label>
           <label className="block space-y-2 text-sm">
             <span>Project name</span>
-            <Input name="name" required maxLength={120} disabled={busy} />
+            <Input
+              name="name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              required
+              maxLength={120}
+              disabled={busy}
+            />
           </label>
           {mode === "clone" && (
             <label className="block space-y-2 text-sm">
@@ -125,13 +143,17 @@ export function ProjectSetupDialog({
               name="directory"
               required
               maxLength={4096}
-              placeholder="/home/me/projects/my-project"
+              value={customDirectory ?? defaultDirectory}
+              onChange={(event) => setCustomDirectory(event.target.value)}
+              placeholder={
+                mode === "open" ? "my-project or ~/repos/my-project" : "~/repos/my-project"
+              }
               disabled={busy}
             />
             <span className="text-xs text-muted-foreground">
               {mode === "open"
-                ? "Use an existing absolute folder path."
-                : "Use a new absolute folder path inside an existing parent. Existing folders are never overwritten."}
+                ? "Enter a folder name inside repos, or a path to an existing folder on this machine."
+                : "Defaults to this machine’s ~/repos folder. You can enter just a folder name, or choose another path."}
             </span>
           </label>
           {error && (
