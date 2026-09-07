@@ -10,7 +10,7 @@ The CLI saves `workspace.sqlite` beneath `CONCORS_DATA_DIR`, defaulting to `~/.c
 
 Limits: 64 projects, 32 tabs per project, 32 panes per tab, and 512 KiB of workspace metadata. Slow subscribers over the send-buffer limit are disconnected and must refresh. Layout nodes form an explicitly validated binary tree. Closing a pane collapses its parent split; closing the final pane closes its tab. Selected-tab deletion picks a neighboring tab. Project removal only removes workspace metadata.
 
-Project registration saves directory metadata; it does not create or clone folders. Terminal launch validates an existing absolute directory and atomically binds the new session to its pane. See [terminal sessions](terminal-sessions.md) for runtime behavior. Structured agent status and server discovery arrive in subsequent PRs.
+The Add project dialog opens an existing directory, creates a new folder, or clones a repository through durable machine-side setup jobs. Terminal launch validates an existing absolute directory and atomically binds the new session to its pane. See [terminal sessions](terminal-sessions.md) for runtime behavior. Structured agent status and server discovery arrive in subsequent PRs.
 
 Browser WebSockets are limited to the existing local Vite and Tauri origins. Native/CLI callers can omit Origin. This is not authentication: use loopback or an independently protected connection only. Do not expose this daemon to an untrusted network until machine access grants are implemented with Pierre's server. Remote connection support in the transport is not a claim that cloud access is ready.
 
@@ -20,7 +20,7 @@ Validation covers two actual WebSocket clients, stale edits, duplicate retries, 
 
 Run `pnpm daemon:dev` and `pnpm desktop:web:dev`, then open `http://localhost:1420` in two browser windows. Add a project, create tabs, split panes, change profiles, rename/reorder tabs, and drag split boundaries (or use arrow keys on a focused separator). The other window receives each saved change. Reload either window to verify restoration. Disconnecting from the daemon leaves the last snapshot visible and disables edits until a fresh snapshot arrives. Internet loss does not disable the loopback daemon.
 
-The machine switcher supports this computer and saved connection bookmarks. Bookmarks are device-local until cloud inventory is integrated; each connected daemon owns its independent projects and layout. Cloud provisioning, Agents, and Servers are explicitly marked as future milestones. Adding a project registers directory metadata; it does not create or clone files yet. Shell, Codex, Claude Code and OpenCode profiles can launch real terminal sessions. Unified chat remains a placeholder.
+The machine switcher supports this computer and saved connection bookmarks. Bookmarks are device-local until cloud inventory is integrated; each connected daemon owns its independent projects and layout. Cloud provisioning, Agents, and Servers are explicitly marked as future milestones. Adding a project supports existing folders, new folders, and Git clones; see [project setup](project-setup.md). Shell, Codex, Claude Code and OpenCode profiles can launch real terminal sessions. Unified chat remains a placeholder.
 
 Automated browser acceptance test:
 

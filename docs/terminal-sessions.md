@@ -1,7 +1,7 @@
 # Terminal sessions
 
 Run `pnpm daemon:dev` and `pnpm desktop:web:dev`, then open http://localhost:1420.
-Register an **existing absolute directory on the daemon machine**, create a tab, select a profile,
+Open an existing folder, create a folder, or clone a repository with **Add project**. Then create a tab, select a profile,
 and click **Start terminal** (or **Start codex/claude/opencode**). Click **Take control** to type.
 Agent CLIs must already be installed and authenticated on the daemon machine; the client does not
 install them or move credentials. This milestone provides their interactive terminals, not unified

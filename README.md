@@ -7,7 +7,7 @@ own machine or on a persistent VPS, and drive them from one desktop client (with
 follow).
 
 > **Status: early-stage.** This repository currently contains the project foundation — the
-> synchronized workspace UI and real terminal sessions with shell/Codex/Claude Code/OpenCode
+> synchronized workspace UI, project opening/creation/cloning, and real terminal sessions with shell/Codex/Claude Code/OpenCode
 > profiles. Unified chat, structured agent tracking, mobile and cloud integration remain planned.
 > Expect breaking changes.
 
