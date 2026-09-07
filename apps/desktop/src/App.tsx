@@ -1,7 +1,6 @@
 import { AgentsProvider } from "@/agents/state";
 import { AgentsView } from "@/agents/list";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
-import { SessionList } from "@/terminal/session-list";
 import { describeDaemonEndpoint, type DaemonEndpoint } from "@concors/daemon-client";
 import type { WorkspaceOperation } from "@concors/protocol";
 import { Server } from "lucide-react";
@@ -9,7 +8,6 @@ import { useCallback, useEffect, useState } from "react";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { CommandPalette } from "@/components/command-palette";
-import { ConnectionStatus } from "@/components/connection-status";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { resolveStartupEndpoint } from "@/daemon/resolve-endpoint";
 import { useDaemonConnection } from "@/daemon/use-daemon-connection";
@@ -102,7 +100,7 @@ export function App() {
     <TerminalConnectionContext value={connection.transport}>
       <AgentsProvider connection={connection.transport}>
         <TooltipProvider>
-          <div className="flex h-dvh w-full overflow-hidden">
+          <div className="flex h-dvh w-full overflow-hidden bg-sidebar">
             <AppSidebar
               onSelectAgent={(id) => {
                 setSelectedAgent(id);
@@ -139,21 +137,13 @@ export function App() {
                 setView("projects");
               }}
             />
-            <div className="flex min-w-0 flex-1 flex-col">
+            <div className="my-2 mr-2 flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-background shadow-xs">
               <header className="flex h-11 shrink-0 items-center justify-between gap-3 border-b px-4">
                 <h1 className="truncate text-[13px] font-medium">
                   {view === "projects" && activeProject
                     ? activeProject.name
                     : navItemFor(view).label}
                 </h1>
-                <div className="flex items-center gap-3">
-                  <SessionList />
-                  <ConnectionStatus
-                    state={connection.state}
-                    endpoint={endpoint}
-                    onReconnect={connection.reconnectNow}
-                  />
-                </div>
               </header>
               {error && (
                 <div
