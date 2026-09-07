@@ -13,6 +13,8 @@ export default defineConfig({
   format: ["esm"],
   platform: "node",
   target: "node24",
+  // node:sqlite is a prefix-only builtin; stripping node: turns it into an npm import.
+  removeNodeProtocol: false,
   outDir: "dist",
   sourcemap: true,
   clean: true,
