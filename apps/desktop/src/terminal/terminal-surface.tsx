@@ -157,8 +157,9 @@ export function TerminalSurface({
     const input = terminal.onData((data) => {
       if (disposed || !running) return;
       try {
-        if (owner) sendInput(data);
-        else if (claiming && queuedInput.length + data.length <= 16384) queuedInput += data;
+        // Ownership can arrive before the claim reply. Keep later keys behind buffered keys.
+        if (claiming && queuedInput.length + data.length <= 16384) queuedInput += data;
+        else if (owner && !claiming) sendInput(data);
       } catch (cause) {
         report(cause);
       }
