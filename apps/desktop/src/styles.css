@@ -155,3 +155,72 @@
     @apply select-text;
   }
 }
+
+/* xterm owns scrollback; the surrounding pane must never add another scroll area. */
+.concors-terminal .xterm {
+  height: 100%;
+}
+.concors-terminal .xterm-scrollable-element > .scrollbar.vertical > .slider {
+  border-radius: 8px;
+  width: 6px !important;
+  margin-left: 4px;
+}
+
+.chat-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--muted-foreground) 35%, transparent) transparent;
+}
+.chat-markdown > * + * {
+  margin-top: 0.75rem;
+}
+.chat-markdown pre {
+  overflow-x: auto;
+  padding: 0.85rem;
+  border-radius: 0.5rem;
+  background: var(--muted);
+  font-size: 0.75rem;
+}
+.chat-markdown code {
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
+}
+.chat-markdown :not(pre) > code {
+  border-radius: 0.2rem;
+  background: var(--muted);
+  padding: 0.1rem 0.25rem;
+}
+.chat-markdown ul,
+.chat-markdown ol {
+  padding-left: 1.4rem;
+}
+.chat-markdown ul {
+  list-style: disc;
+}
+.chat-markdown ol {
+  list-style: decimal;
+}
+.chat-markdown a {
+  color: var(--primary);
+  text-decoration: underline;
+}
+.chat-markdown h1,
+.chat-markdown h2,
+.chat-markdown h3 {
+  font-weight: 600;
+  margin-top: 1rem;
+}
+.chat-markdown blockquote {
+  border-left: 2px solid var(--border);
+  padding-left: 0.8rem;
+  color: var(--muted-foreground);
+}
+.chat-markdown table {
+  display: block;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+.chat-markdown th,
+.chat-markdown td {
+  border: 1px solid var(--border);
+  padding: 0.4rem 0.6rem;
+}

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowLeft, ArrowRight, FolderOpen, Pencil, Plus, Trash2, X } from "lucide-react";
+import { FolderOpen, Pencil, Plus, Trash2, X } from "lucide-react";
 import type { WorkspaceOperation, WorkspaceSnapshot } from "@concors/protocol";
 import { Button } from "@/components/ui/button";
 import { FormDialog } from "./form-dialog";
@@ -18,6 +18,8 @@ export function ProjectWorkspace({
   execute: (operation: WorkspaceOperation) => Promise<void>;
   onAddProject: () => void;
 }) {
+  const [dragging, setDragging] = useState<{ projectId: string; tabId: string } | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const project = workspace.projects.find((p) => p.id === workspace.selection?.projectId);
   if (!project)
@@ -49,11 +51,66 @@ export function ProjectWorkspace({
           {project.tabs.map((tab, index) => (
             <div
               key={tab.id}
+              data-tab-id={tab.id}
+              draggable={canEdit}
+              onDragStart={(event) => {
+                event.dataTransfer.effectAllowed = "move";
+                event.dataTransfer.setData("text/plain", tab.id);
+                setDragging({ projectId: project.id, tabId: tab.id });
+              }}
+              onDragOver={(event) => {
+                if (!canEdit || dragging?.projectId !== project.id) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+                setDropTarget(tab.id);
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                setDropTarget(null);
+                setDragging(null);
+                if (!canEdit || dragging?.projectId !== project.id || dragging.tabId === tab.id)
+                  return;
+                onCommand({
+                  kind: "tab.move",
+                  projectId: project.id,
+                  expectedVersion: project.version,
+                  tabId: dragging.tabId,
+                  index,
+                });
+              }}
+              onDragEnd={() => {
+                setDragging(null);
+                setDropTarget(null);
+              }}
+              style={{
+                opacity: dragging?.tabId === tab.id ? 0.5 : 1,
+                outline: dropTarget === tab.id ? "2px solid var(--primary)" : undefined,
+              }}
               className={`group flex shrink-0 items-center rounded-md border ${selected?.id === tab.id ? "border-border bg-background shadow-xs" : "border-transparent"}`}
             >
               <button
                 type="button"
                 aria-pressed={selected?.id === tab.id}
+                title="Drag to reorder. Alt+Shift+Arrow keys also move this tab."
+                onKeyDown={(event) => {
+                  if (
+                    !canEdit ||
+                    !event.altKey ||
+                    !event.shiftKey ||
+                    !["ArrowLeft", "ArrowRight"].includes(event.key)
+                  )
+                    return;
+                  event.preventDefault();
+                  const next = index + (event.key === "ArrowLeft" ? -1 : 1);
+                  if (next >= 0 && next < project.tabs.length)
+                    onCommand({
+                      kind: "tab.move",
+                      projectId: project.id,
+                      expectedVersion: project.version,
+                      tabId: tab.id,
+                      index: next,
+                    });
+                }}
                 disabled={!canEdit}
                 onClick={() =>
                   onCommand({ kind: "selection.set", projectId: project.id, tabId: tab.id })
@@ -64,42 +121,6 @@ export function ProjectWorkspace({
               </button>
               {selected?.id === tab.id && (
                 <>
-                  <button
-                    type="button"
-                    aria-label="Move tab left"
-                    title="Move tab left"
-                    disabled={!canEdit || index === 0}
-                    className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-20"
-                    onClick={() =>
-                      onCommand({
-                        kind: "tab.move",
-                        projectId: project.id,
-                        expectedVersion: project.version,
-                        tabId: tab.id,
-                        index: index - 1,
-                      })
-                    }
-                  >
-                    <ArrowLeft className="size-3" />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Move tab right"
-                    title="Move tab right"
-                    disabled={!canEdit || index === project.tabs.length - 1}
-                    className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-20"
-                    onClick={() =>
-                      onCommand({
-                        kind: "tab.move",
-                        projectId: project.id,
-                        expectedVersion: project.version,
-                        tabId: tab.id,
-                        index: index + 1,
-                      })
-                    }
-                  >
-                    <ArrowRight className="size-3" />
-                  </button>
                   <button
                     type="button"
                     aria-label="Rename tab"
@@ -172,7 +193,7 @@ export function ProjectWorkspace({
           <Trash2 className="size-3.5" />
         </button>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
         {selected ? (
           <PaneLayout
             key={selected.id}
