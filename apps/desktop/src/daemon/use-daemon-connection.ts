@@ -71,6 +71,11 @@ export function useDaemonConnection(endpoint: DaemonEndpoint | null): DaemonConn
     const attempt = (): void => {
       if (disposed) return;
       dropCurrent();
+      if (!navigator.onLine && endpoint.kind === "remote") {
+        setWorkspaceReady(false);
+        setState({ status: "disconnected", reason: "Device is offline" });
+        return;
+      }
       const next = new DaemonConnection({ endpoint, client: CLIENT_INFO });
       connection = next;
       activeConnection.current = next;
@@ -97,10 +102,25 @@ export function useDaemonConnection(endpoint: DaemonEndpoint | null): DaemonConn
       attempt();
     };
 
+    const offline = (): void => {
+      // Loss of internet must not disable a daemon on this computer.
+      if (endpoint.kind === "local") return;
+      clearTimeout(retryTimer);
+      dropCurrent();
+      setWorkspaceReady(false);
+      setState({ status: "disconnected", reason: "Device is offline" });
+    };
+    const online = (): void => {
+      retryNow.current();
+    };
+    window.addEventListener("offline", offline);
+    window.addEventListener("online", online);
     attempt();
 
     return () => {
       disposed = true;
+      window.removeEventListener("offline", offline);
+      window.removeEventListener("online", online);
       clearTimeout(retryTimer);
       dropCurrent();
       retryNow.current = () => undefined;
