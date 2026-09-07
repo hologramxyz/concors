@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -57,8 +58,11 @@ test("notifications deduplicate across windows, open chat, and sync unread witho
     await page.getByLabel("Pane profile").selectOption("chat");
     await page.getByRole("button", { name: "Start Codex chat", exact: true }).click();
     await expect(page.getByLabel("Agent status: Ready").first()).toBeVisible();
-    const project = control.workspace!.projects.find((p) => p.directory === directory)!;
-    const id = control.agents.find((a) => a.projectId === project.id)!.id;
+    const project = control.workspace?.projects.find((p) => p.directory === directory);
+    assert(project);
+    const agent = control.agents.find((a) => a.projectId === project.id);
+    assert(agent);
+    const id = agent.id;
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     await page.getByLabel("Desktop notifications", { exact: true }).check();
     const second = await context.newPage();
@@ -91,11 +95,13 @@ test("notifications deduplicate across windows, open chat, and sync unread witho
     await second.getByRole("button", { name: "Settings", exact: true }).click();
     await expect.poll(count).toBe(0);
     // A new turn invalidates the old attention and closes any outstanding browser notice.
+    const pending = control.agents.find((a) => a.id === id)?.pending[0];
+    assert(pending);
     await control.requestAgent(
       {
         kind: "respond",
         sessionId: id,
-        pendingId: control.agents.find((a) => a.id === id)!.pending[0]!.id,
+        pendingId: pending.id,
         answers: { color: ["Blue"] },
       },
       randomUUID(),

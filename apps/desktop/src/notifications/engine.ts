@@ -42,7 +42,10 @@ export class AttentionEngine {
     )
       return;
     this.#consumed.add(attention.id);
-    if (this.#consumed.size > 2048) this.#consumed.delete(this.#consumed.values().next().value!);
+    if (this.#consumed.size > 2048) {
+      const oldest = this.#consumed.values().next().value;
+      if (oldest) this.#consumed.delete(oldest);
+    }
     // Initial snapshots update badges, but never replay old sounds or desktop alerts.
     if (!live) return;
     const focused = this.#sink.focused(agent.id);
