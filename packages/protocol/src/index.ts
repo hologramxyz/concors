@@ -18,3 +18,5 @@ export * from "./workspace-reducer.ts";
 export * from "./terminal.ts";
 
 export * from "./projects.ts";
+
+export * from "./agents.ts";

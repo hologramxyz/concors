@@ -1,3 +1,11 @@
+import {
+  AgentInfoSchema,
+  AgentItemSchema,
+  type AgentInfo,
+  type AgentItem,
+  type AgentRequest,
+  type AgentConversation,
+} from "@concors/protocol";
 import { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
 import {
@@ -28,14 +36,17 @@ export class WorkspaceStore {
         "PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL; PRAGMA busy_timeout = 5000;",
       );
       const version = this.#db.prepare("PRAGMA user_version").get()?.["user_version"];
-      if (version !== 0 && version !== 1 && version !== 2 && version !== 3)
+      if (version !== 0 && version !== 1 && version !== 2 && version !== 3 && version !== 4)
         throw new Error(`Unsupported workspace database version: ${String(version)}`);
       this.#db.exec(`
         CREATE TABLE IF NOT EXISTS workspace (id INTEGER PRIMARY KEY CHECK (id = 1), snapshot TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS commands (id TEXT PRIMARY KEY, payload TEXT NOT NULL, result TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS terminals (id TEXT PRIMARY KEY, request_id TEXT UNIQUE NOT NULL, request TEXT NOT NULL, info TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS project_setups (id TEXT PRIMARY KEY, request TEXT NOT NULL, setup TEXT NOT NULL);
-        PRAGMA user_version = 3;
+        CREATE TABLE IF NOT EXISTS agents (id TEXT PRIMARY KEY, info TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS agent_items (position INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, item_id TEXT NOT NULL, item TEXT NOT NULL, UNIQUE(session_id, item_id));
+        CREATE TABLE IF NOT EXISTS agent_requests (id TEXT PRIMARY KEY, request TEXT NOT NULL, session_id TEXT NOT NULL);
+        PRAGMA user_version = 4;
       `);
       const initial: WorkspaceSnapshot = {
         schemaVersion: 1,
@@ -252,6 +263,131 @@ export class WorkspaceStore {
     this.#db
       .prepare("UPDATE terminals SET info = ? WHERE id = ?")
       .run(JSON.stringify(TerminalInfoSchema.parse(info)), info.id);
+  }
+
+  agents(): AgentInfo[] {
+    return this.#db
+      .prepare("SELECT info FROM agents ORDER BY rowid")
+      .all()
+      .map((row) => AgentInfoSchema.parse(JSON.parse(String(row["info"]))));
+  }
+  agent(id: string): AgentInfo {
+    const row = this.#db.prepare("SELECT info FROM agents WHERE id = ?").get(id);
+    if (!row) throw new Error("Agent session no longer exists");
+    return AgentInfoSchema.parse(JSON.parse(String(row["info"])));
+  }
+  saveAgent(info: AgentInfo): void {
+    this.#db
+      .prepare("UPDATE agents SET info = ? WHERE id = ?")
+      .run(JSON.stringify(AgentInfoSchema.parse(info)), info.id);
+  }
+  agentReceipt(request: AgentRequest): string | null {
+    const row = this.#db
+      .prepare("SELECT request, session_id FROM agent_requests WHERE id = ?")
+      .get(request.requestId);
+    if (!row) return null;
+    if (row["request"] !== JSON.stringify(request))
+      throw new Error("Request ID already used with different parameters");
+    return String(row["session_id"]);
+  }
+  reserveAgentAction(request: AgentRequest, info: AgentInfo): void {
+    this.#db.exec("BEGIN IMMEDIATE");
+    try {
+      this.#db
+        .prepare("INSERT INTO agent_requests (id, request, session_id) VALUES (?, ?, ?)")
+        .run(request.requestId, JSON.stringify(request), info.id);
+      this.saveAgent(info);
+      this.#db.exec("COMMIT");
+    } catch (error) {
+      this.#db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+  reserveAgent(request: AgentRequest, info: AgentInfo): void {
+    const op = request.operation;
+    if (op.kind !== "start") throw new Error("Expected agent start");
+    this.#db.exec("BEGIN IMMEDIATE");
+    try {
+      const state = this.snapshot();
+      const project = state.projects.find((p) => p.id === op.projectId);
+      const pane = project?.tabs
+        .find((t) => t.id === op.tabId)
+        ?.nodes.find((n) => n.id === op.paneId);
+      if (state.epoch !== op.epoch || project?.version !== op.expectedVersion)
+        throw new Error("Workspace changed; refresh before starting");
+      if (!pane || pane.kind !== "pane" || pane.profile !== "chat" || pane.sessionId !== null)
+        throw new Error("Select an empty chat pane");
+      if (this.agents().length >= 128) throw new Error("Agent session limit reached (128)");
+      pane.sessionId = info.id;
+      project.version++;
+      state.revision++;
+      this.#db
+        .prepare("INSERT INTO agents (id, info) VALUES (?, ?)")
+        .run(info.id, JSON.stringify(info));
+      this.#db
+        .prepare("INSERT INTO agent_requests (id, request, session_id) VALUES (?, ?, ?)")
+        .run(request.requestId, JSON.stringify(request), info.id);
+      this.#db.prepare("UPDATE workspace SET snapshot = ? WHERE id = 1").run(JSON.stringify(state));
+      this.#db.exec("COMMIT");
+    } catch (error) {
+      this.#db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+  agentItem(sessionId: string, id: string): AgentItem | null {
+    const row = this.#db
+      .prepare("SELECT position, item FROM agent_items WHERE session_id = ? AND item_id = ?")
+      .get(sessionId, id);
+    return row
+      ? AgentItemSchema.parse({
+          ...JSON.parse(String(row["item"])),
+          position: Number(row["position"]),
+        })
+      : null;
+  }
+  saveAgentItem(item: AgentItem): AgentItem {
+    // Keep individual frames bounded, while retaining older items in the paginated history.
+    const bound = (text: string, limit: number) =>
+      text.length > limit ? text.slice(0, limit) + "\n[Display truncated]" : text;
+    const value = AgentItemSchema.parse({
+      ...item,
+      text: bound(item.text, 16000),
+      detail: bound(item.detail, 16000),
+      title: bound(item.title, 240),
+    });
+    this.#db
+      .prepare(
+        "INSERT INTO agent_items (session_id, item_id, item) VALUES (?, ?, ?) ON CONFLICT(session_id, item_id) DO UPDATE SET item=excluded.item",
+      )
+      .run(item.sessionId, item.id, JSON.stringify(value));
+    const saved = this.agentItem(item.sessionId, item.id);
+    if (!saved) throw new Error("Agent item was not saved");
+    return saved;
+  }
+  agentConversation(id: string, before = Number.MAX_SAFE_INTEGER): AgentConversation {
+    const rows = this.#db
+      .prepare(
+        "SELECT position, item FROM agent_items WHERE session_id = ? AND position < ? ORDER BY position DESC LIMIT 80",
+      )
+      .all(id, before);
+    const items: AgentItem[] = [];
+    let bytes = 0;
+    for (const row of rows) {
+      const item = AgentItemSchema.parse({
+        ...JSON.parse(String(row["item"])),
+        position: Number(row["position"]),
+      });
+      bytes += Buffer.byteLength(JSON.stringify(item));
+      if (bytes > 384 * 1024 && items.length) break;
+      items.unshift(item);
+    }
+    const first = items[0]?.position;
+    const hasMore =
+      first !== undefined &&
+      !!this.#db
+        .prepare("SELECT 1 FROM agent_items WHERE session_id = ? AND position < ? LIMIT 1")
+        .get(id, first);
+    return { agent: this.agent(id), items, hasMore };
   }
 
   private reject(
