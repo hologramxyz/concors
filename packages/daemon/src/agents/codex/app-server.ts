@@ -8,7 +8,11 @@ const Frame = z.object({
   result: z.unknown().optional(),
   error: z.object({ code: z.number().optional(), message: z.string() }).passthrough().optional(),
 });
-type RequestHandler = (method: string, params: unknown) => Promise<unknown>;
+type RequestHandler = (
+  method: string,
+  params: unknown,
+  requestId: string | number,
+) => Promise<unknown>;
 interface Pending {
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
@@ -23,6 +27,7 @@ export class CodexAppServer {
   readonly #pending = new Map<number, Pending>();
   readonly #notifications = new Set<(method: string, params: unknown) => void>();
   readonly #requestHandler: RequestHandler | undefined;
+  readonly #failures = new Set<(error: Error) => void>();
   #nextId = 0;
   #buffer = "";
   #stderr = "";
@@ -54,6 +59,9 @@ export class CodexAppServer {
       );
       this.#resolveExit();
     });
+  }
+  onFailure(listener: (error: Error) => void): void {
+    this.#failures.add(listener);
   }
   initialize(): Promise<void> {
     this.#connecting ??= (async () => {
@@ -142,12 +150,13 @@ export class CodexAppServer {
         }
         this.#incomingRequests++;
         const method = frame.method;
+        const requestId = frame.id;
         // Unknown approval/input requests are errors, never implicit approvals.
         void Promise.resolve()
           .then(() => {
             if (!this.#requestHandler)
               throw new Error(`Unsupported Codex request: ${frame.method}`);
-            return this.#requestHandler(method, frame.params);
+            return this.#requestHandler(method, frame.params, requestId);
           })
           .then(
             (result) => {
@@ -192,6 +201,8 @@ export class CodexAppServer {
     }
     this.#pending.clear();
     this.#buffer = "";
+    for (const listener of this.#failures) listener(error);
+    this.#failures.clear();
     if (this.#child.exitCode === null && !this.#child.killed) this.#child.kill();
   }
   close(): Promise<void> {
