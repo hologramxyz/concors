@@ -1,6 +1,9 @@
 import { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
 import {
+  ProjectSetupSchema,
+  type ProjectSetup,
+  type ProjectRequest,
   TerminalInfoSchema,
   type TerminalInfo,
   type TerminalRequest,
@@ -25,13 +28,14 @@ export class WorkspaceStore {
         "PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL; PRAGMA busy_timeout = 5000;",
       );
       const version = this.#db.prepare("PRAGMA user_version").get()?.["user_version"];
-      if (version !== 0 && version !== 1 && version !== 2)
+      if (version !== 0 && version !== 1 && version !== 2 && version !== 3)
         throw new Error(`Unsupported workspace database version: ${String(version)}`);
       this.#db.exec(`
         CREATE TABLE IF NOT EXISTS workspace (id INTEGER PRIMARY KEY CHECK (id = 1), snapshot TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS commands (id TEXT PRIMARY KEY, payload TEXT NOT NULL, result TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS terminals (id TEXT PRIMARY KEY, request_id TEXT UNIQUE NOT NULL, request TEXT NOT NULL, info TEXT NOT NULL);
-        PRAGMA user_version = 2;
+        CREATE TABLE IF NOT EXISTS project_setups (id TEXT PRIMARY KEY, request TEXT NOT NULL, setup TEXT NOT NULL);
+        PRAGMA user_version = 3;
       `);
       const initial: WorkspaceSnapshot = {
         schemaVersion: 1,
@@ -114,6 +118,36 @@ export class WorkspaceStore {
       this.#db.exec("ROLLBACK");
       throw error;
     }
+  }
+
+  projectSetups(): ProjectSetup[] {
+    return this.#db
+      .prepare("SELECT setup FROM project_setups ORDER BY rowid")
+      .all()
+      .map((row) => ProjectSetupSchema.parse(JSON.parse(String(row["setup"]))));
+  }
+  reserveProjectSetup(request: ProjectRequest, setup: ProjectSetup): boolean {
+    const prior = this.#db
+      .prepare(
+        "SELECT request FROM project_setups WHERE id = ? OR json_extract(request, '$.requestId') = ?",
+      )
+      .get(setup.id, request.requestId);
+    if (prior) {
+      if (prior["request"] !== JSON.stringify(request))
+        throw new Error("Project setup ID already used with different parameters");
+      return false;
+    }
+    if (this.projectSetups().length >= 64)
+      throw new Error("Project setup history limit reached (64)");
+    this.#db
+      .prepare("INSERT INTO project_setups (id, request, setup) VALUES (?, ?, ?)")
+      .run(setup.id, JSON.stringify(request), JSON.stringify(setup));
+    return true;
+  }
+  saveProjectSetup(setup: ProjectSetup): void {
+    this.#db
+      .prepare("UPDATE project_setups SET setup = ? WHERE id = ?")
+      .run(JSON.stringify(ProjectSetupSchema.parse(setup)), setup.id);
   }
 
   terminals(): TerminalInfo[] {

@@ -1,3 +1,4 @@
+import { ProjectManager } from "../projects/manager.ts";
 import { randomUUID } from "node:crypto";
 import { TerminalManager } from "../terminal/manager.ts";
 import {
@@ -55,11 +56,18 @@ export function registerProtocolEndpoint(
     socket.send(JSON.stringify(message));
   };
 
+  const projects = new ProjectManager(options.workspace, () => {
+    for (const target of subscribers) {
+      send(target, { type: "workspace.snapshot", snapshot: options.workspace.snapshot() });
+      send(target, { type: "project.setups", setups: options.workspace.projectSetups() });
+    }
+  });
   const terminals = new TerminalManager(options.workspace, () => {
     const snapshot = options.workspace.snapshot();
     for (const target of subscribers) send(target, { type: "workspace.snapshot", snapshot });
   });
   app.addHook("onClose", () => {
+    projects.close();
     terminals.close();
   });
 
@@ -93,7 +101,11 @@ export function registerProtocolEndpoint(
     });
 
     new ConnectionHandler(socket, log, options.state, handshakeTimeoutMs, (message) => {
-      if (message.type === "terminal.request" || message.type === "terminal.input") {
+      if (
+        message.type === "terminal.request" ||
+        message.type === "terminal.input" ||
+        message.type === "project.request"
+      ) {
         if (!subscribers.has(socket)) {
           send(socket, {
             type: "error",
@@ -101,11 +113,13 @@ export function registerProtocolEndpoint(
           });
           return;
         }
-        if (message.type === "terminal.input")
+        if (message.type === "project.request") send(socket, projects.request(message));
+        else if (message.type === "terminal.input")
           terminals.input(viewer, message.sessionId, message.data);
         else void terminals.request(viewer, message).then((result) => send(socket, result));
       } else if (message.type === "workspace.subscribe") {
         subscribers.add(socket);
+        send(socket, { type: "project.setups", setups: options.workspace.projectSetups() });
         send(socket, { type: "workspace.snapshot", snapshot: options.workspace.snapshot() });
       } else if (message.type === "workspace.command") {
         if (!subscribers.has(socket)) {
@@ -143,6 +157,7 @@ export function registerProtocolEndpoint(
   });
 
   return () => {
+    projects.close();
     terminals.close();
     for (const socket of connections) {
       socket.close(CLOSE_GOING_AWAY, "daemon shutting down");
