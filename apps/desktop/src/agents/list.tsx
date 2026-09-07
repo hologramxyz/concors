@@ -21,11 +21,11 @@ export function AgentSidebar({
       {agents.map((agent) => (
         <li key={agent.id}>
           <button
-            className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left hover:bg-sidebar-accent"
+            className="flex w-full items-start gap-2 rounded-md px-2 py-2 text-left hover:bg-sidebar-accent"
             onClick={() => onSelect(agent.id)}
           >
-            <Bot className="size-4 shrink-0 text-muted-foreground" />
-            <span className="min-w-0 flex-1">
+            <Bot className="mt-1 size-4 shrink-0 text-muted-foreground" />
+            <span className="min-w-0 flex-1 [&>span]:text-[13px]">
               <span className="block truncate text-[13px]">{agent.name}</span>
               <span className="block truncate text-[13px] text-muted-foreground">
                 {workspace?.projects.find((p) => p.id === agent.projectId)?.name ??
