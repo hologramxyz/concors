@@ -2,7 +2,7 @@
 
 Run `pnpm daemon:dev` and `pnpm desktop:web:dev`, then open http://localhost:1420.
 Open an existing folder, create a folder, or clone a repository with **Add project**. Then create a tab, select a profile,
-and click **Start terminal** (or **Start codex/claude/opencode**). Click **Take control** to type.
+and click **Start terminal** (or **Start codex/claude/opencode**). Terminals focus automatically when available; click or focus a terminal to type when another device is viewing it.
 Agent CLIs must already be installed and authenticated on the daemon machine; the client does not
 install them or move credentials. This milestone provides their interactive terminals, not unified
 chat or semantic agent status. Shell exit status is not an agent turn-completion signal.
@@ -20,7 +20,7 @@ with Pierre's server separately; this PR does not modify that repository.
 ## Lifetime, replay and control
 
 - The daemon owns each PTY. Closing a pane, navigating away, or disconnecting a client leaves it
-  running. **Stop session** requests process termination and waits for the exit event.
+  running. **Stop** in the **Sessions** menu requests process termination and waits for the exit event.
 - **Sessions** lists current and historical terminals, including sessions detached by removing a
   project/tab. Create an empty pane in the same project and choose **Attach an existing session**
   to restore a detached binding. A session can be bound to one pane, viewed by multiple devices.
@@ -30,7 +30,8 @@ with Pierre's server separately; this PR does not modify that repository.
 - Attach sends a serialized xterm screen followed by sequenced output. A fresh snapshot recovers
   sequence gaps. The emulator includes terminal modes and up to 200 lines of replay scrollback;
   it is not a raw tail of escape sequences.
-- **Take control** claims input and terminal dimensions. Passive viewers retain the owner's
+- Clicking or focusing the terminal claims input and terminal dimensions. An unowned terminal activates
+  automatically without stealing from another device. Passive viewers retain the owner's
   dimensions and can scroll their viewport. Closing the controlling view releases ownership.
 - Daemon restart preserves bindings and history, marks previously running sessions **interrupted**,
   and offers **Start new session**. It does not resume an old shell or preserve its screen buffer.
