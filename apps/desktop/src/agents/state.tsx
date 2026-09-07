@@ -51,6 +51,11 @@ export function AgentStatus({ agent }: { agent: AgentInfo }) {
         className={`size-1.5 rounded-full ${agent.status === "needs_input" ? "bg-amber-500" : agent.status === "failed" ? "bg-destructive" : agent.status === "working" || agent.status === "starting" ? "animate-pulse bg-primary" : agent.status === "done" ? "bg-emerald-500" : "bg-muted-foreground"}`}
       />
       {AGENT_STATUS[agent.status]}
+      {agent.attention && !agent.attention.seen && (
+        <span aria-label="Unread agent update" className="rounded bg-primary/15 px-1 text-primary">
+          New
+        </span>
+      )}
       {seconds !== null && (
         <span className="tabular-nums">
           · {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}
