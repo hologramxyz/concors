@@ -19,5 +19,6 @@ export const DaemonInfoSchema = z.object({
   protocolVersion: ProtocolVersionSchema,
   daemonVersion: SemverSchema,
   status: DaemonStatusSchema,
+  capabilities: z.array(z.string()).optional(),
 });
 export type DaemonInfo = z.infer<typeof DaemonInfoSchema>;
