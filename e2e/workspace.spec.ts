@@ -31,11 +31,33 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
     await expect(
       second.getByRole("heading", { name: "Concors acceptance", exact: true }),
     ).toBeVisible();
+    const sidebar = first.getByRole("navigation", { name: "Primary" });
+    const projectsSection = sidebar.getByRole("button", { name: "Projects", exact: true });
+    await projectsSection.click();
+    await expect(projectsSection).toHaveAttribute("aria-expanded", "false");
+    await expect(
+      sidebar.getByRole("button", { name: "Concors acceptance", exact: true }),
+    ).toBeHidden();
+    await projectsSection.click();
+    await expect(
+      sidebar.getByRole("button", { name: "Concors acceptance", exact: true }),
+    ).toBeVisible();
+    await expect(sidebar.getByRole("button", { name: "Agents", exact: true })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    await expect(sidebar.getByRole("button", { name: "Servers", exact: true })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    await expect(first.getByRole("button", { name: "Sessions", exact: true })).toHaveCount(0);
     await first.getByRole("button", { name: "New tab", exact: true }).click();
     await expect(second.getByRole("region", { name: "Terminal pane", exact: true })).toHaveCount(1);
-    await first.getByRole("button", { name: "Split horizontally", exact: true }).click();
+    await first.getByRole("button", { name: "Pane actions", exact: true }).click();
+    await first.getByRole("menuitem", { name: "Split horizontally", exact: true }).click();
     await expect(second.getByRole("region", { name: "Terminal pane", exact: true })).toHaveCount(2);
-    await second.getByLabel("Pane profile").last().selectOption("chat");
+    await second.getByRole("button", { name: "Pane actions", exact: true }).last().click();
+    await second.getByRole("menuitemradio", { name: "Unified chat", exact: true }).click();
     await expect(first.getByRole("region", { name: "Unified chat pane", exact: true })).toHaveCount(
       1,
     );
@@ -45,7 +67,8 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
       "aria-valuenow",
       "55",
     );
-    await first.getByRole("button", { name: "Rename tab", exact: true }).click();
+    await first.getByRole("button", { name: "Tab 1", exact: true }).click({ button: "right" });
+    await first.getByRole("menuitem", { name: "Rename tab", exact: true }).click();
     await first.getByLabel("Tab name", { exact: true }).fill("Build and review");
     await first.getByRole("button", { name: "Save", exact: true }).click();
     await expect(
@@ -91,6 +114,11 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
     );
     await expect(first.getByRole("region", { name: "Terminal pane", exact: true })).toHaveCount(1);
     await expect(first.getByRole("separator", { name: "Resize split" })).toHaveCount(0);
+
+    await first.getByRole("button", { name: "Tab 2", exact: true }).focus();
+    await first.keyboard.press("Shift+F10");
+    await first.getByRole("menuitem", { name: "Close tab", exact: true }).click();
+    await expect(second.getByRole("button", { name: "Tab 2", exact: true })).toHaveCount(0);
 
     await first.getByRole("button", { name: "Switch machine", exact: true }).click();
     await first.getByRole("menuitem", { name: "Connect a machine…", exact: true }).click();

@@ -22,7 +22,8 @@ test("shared chat streams, reloads, handles approvals and remains in global Agen
       .getByRole("button", { name: "Add project", exact: true })
       .click();
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByLabel("Pane profile").selectOption("chat");
+    await page.getByRole("button", { name: "Pane actions", exact: true }).click();
+    await page.getByRole("menuitemradio", { name: "Unified chat", exact: true }).click();
     await page.getByRole("button", { name: "Start Codex chat", exact: true }).click();
     await expect(page.getByLabel("Agent status: Ready").first()).toBeVisible();
     await page.getByLabel("Message Codex").fill("hold this stream");
@@ -49,7 +50,12 @@ test("shared chat streams, reloads, handles approvals and remains in global Agen
     await second.getByRole("button", { name: "Submit answers", exact: true }).click();
     await expect(page.getByLabel("Agent status: Done").first()).toBeVisible();
     await page.getByRole("button", { name: "Close pane", exact: true }).click();
-    await page.getByRole("button", { name: "Agents", exact: true }).click();
+    await page
+      .getByRole("region", { name: "Agents", exact: true })
+      .getByRole("list")
+      .getByRole("button")
+      .first()
+      .click();
     await expect(page.getByRole("log")).toContainText("hold this stream");
     await page.getByLabel("Message Codex").fill("hello again");
     await page.getByRole("button", { name: "Send message", exact: true }).click();
