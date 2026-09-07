@@ -4,6 +4,12 @@ import { ClientInfoSchema } from "./client.ts";
 import { DaemonInfoSchema } from "./daemon.ts";
 import { ProtocolErrorSchema } from "./errors.ts";
 import { ProtocolVersionSchema } from "./version.ts";
+import {
+  WorkspaceCommandSchema,
+  WorkspaceSubscribeSchema,
+  WorkspaceSnapshotMessageSchema,
+  WorkspaceResultSchema,
+} from "./workspace.ts";
 
 /*
  * WebSocket messages are JSON objects discriminated by a dotted `type` string:
@@ -28,7 +34,11 @@ export const ClientHelloMessageSchema = z.object({
 });
 export type ClientHelloMessage = z.infer<typeof ClientHelloMessageSchema>;
 
-export const ClientMessageSchema = z.discriminatedUnion("type", [ClientHelloMessageSchema]);
+export const ClientMessageSchema = z.discriminatedUnion("type", [
+  ClientHelloMessageSchema,
+  WorkspaceSubscribeSchema,
+  WorkspaceCommandSchema,
+]);
 export type ClientMessage = z.infer<typeof ClientMessageSchema>;
 
 // ───────────────────────────── daemon → client ─────────────────────────────
@@ -47,6 +57,8 @@ export type ErrorMessage = z.infer<typeof ErrorMessageSchema>;
 export const DaemonMessageSchema = z.discriminatedUnion("type", [
   DaemonReadyMessageSchema,
   ErrorMessageSchema,
+  WorkspaceSnapshotMessageSchema,
+  WorkspaceResultSchema,
 ]);
 export type DaemonMessage = z.infer<typeof DaemonMessageSchema>;
 
