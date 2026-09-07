@@ -1,4 +1,10 @@
 import {
+  ProjectRequestSchema,
+  type ProjectSetup,
+  type ProjectOperation,
+  type ProjectResult,
+} from "@concors/protocol";
+import {
   PROTOCOL_VERSION,
   TerminalRequestSchema,
   TerminalInputSchema,
@@ -84,6 +90,16 @@ export class DaemonConnection {
   /** Rejects the in-flight `connect()` promise, if any. */
   #abortPending: ((error: ProtocolError) => void) | null = null;
   #workspace: WorkspaceSnapshot | null = null;
+  #projectSetups: ProjectSetup[] = [];
+  readonly #projectListeners = new Set<(setups: ProjectSetup[]) => void>();
+  readonly #projectRequests = new Map<
+    string,
+    {
+      resolve: (result: ProjectResult) => void;
+      reject: (error: Error) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
+  >();
   readonly #terminalListeners = new Set<(event: TerminalEvent) => void>();
   readonly #terminalRequests = new Map<
     string,
@@ -154,6 +170,35 @@ export class DaemonConnection {
         clearTimeout(timer);
         this.#commands.delete(command.commandId);
         reject(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
+  }
+
+  subscribeProjectSetups(listener: (setups: ProjectSetup[]) => void): () => void {
+    this.#projectListeners.add(listener);
+    listener(this.#projectSetups);
+    return () => {
+      this.#projectListeners.delete(listener);
+    };
+  }
+  requestProject(operation: ProjectOperation, requestId: string): Promise<ProjectResult> {
+    if (this.#state.status !== "ready" || !this.#workspace)
+      return Promise.reject(new Error("Workspace is disconnected"));
+    const request = ProjectRequestSchema.parse({ type: "project.request", requestId, operation });
+    if (this.#projectRequests.has(requestId))
+      return Promise.reject(new Error("Request is already pending"));
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.#projectRequests.delete(requestId);
+        reject(new Error("Request timed out; check project setup history before retrying"));
+      }, 10000);
+      this.#projectRequests.set(requestId, { resolve, reject, timer });
+      try {
+        this.#socket?.send(JSON.stringify(request));
+      } catch (error) {
+        clearTimeout(timer);
+        this.#projectRequests.delete(requestId);
+        reject(error);
       }
     });
   }
@@ -302,6 +347,21 @@ export class DaemonConnection {
             }
             break;
           }
+          case "project.setups":
+            if (this.#state.status === "ready") {
+              this.#projectSetups = message.setups;
+              for (const listener of this.#projectListeners) listener(message.setups);
+            }
+            break;
+          case "project.result": {
+            const pending = this.#projectRequests.get(message.requestId);
+            if (pending) {
+              clearTimeout(pending.timer);
+              this.#projectRequests.delete(message.requestId);
+              pending.resolve(message);
+            }
+            break;
+          }
           case "terminal.result": {
             const pending = this.#terminalRequests.get(message.requestId);
             if (pending) {
@@ -420,6 +480,11 @@ export class DaemonConnection {
         pending.reject(new Error("Connection lost; terminal launch outcome may be unknown"));
       }
       this.#terminalRequests.clear();
+      for (const pending of this.#projectRequests.values()) {
+        clearTimeout(pending.timer);
+        pending.reject(new Error("Connection lost; check setup history after reconnecting"));
+      }
+      this.#projectRequests.clear();
     }
     for (const listener of this.#listeners) {
       listener(state);
