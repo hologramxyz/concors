@@ -1,9 +1,12 @@
+import { randomUUID } from "node:crypto";
+import { TerminalManager } from "../terminal/manager.ts";
 import {
   PROTOCOL_VERSIONS,
   WS_PATH,
   createProtocolError,
   parseClientMessage,
   type ClientMessage,
+  type TerminalEvent,
   type DaemonMessage,
   type ProtocolError,
 } from "@concors/protocol";
@@ -52,6 +55,14 @@ export function registerProtocolEndpoint(
     socket.send(JSON.stringify(message));
   };
 
+  const terminals = new TerminalManager(options.workspace, () => {
+    const snapshot = options.workspace.snapshot();
+    for (const target of subscribers) send(target, { type: "workspace.snapshot", snapshot });
+  });
+  app.addHook("onClose", () => {
+    terminals.close();
+  });
+
   app.get(WS_PATH, { websocket: true }, (socket, request) => {
     const origin = request.headers.origin;
     // Native/CLI clients do not send Origin. Browser clients must use a known local UI.
@@ -70,13 +81,30 @@ export function registerProtocolEndpoint(
     }
     const log = request.log.child({ connection: request.id });
     connections.add(socket);
+    const viewer = {
+      id: randomUUID(),
+      send: (event: TerminalEvent) => send(socket, event),
+      active: () => socket.readyState === socket.OPEN,
+    };
     socket.on("close", () => {
       connections.delete(socket);
       subscribers.delete(socket);
+      terminals.detach(viewer.id);
     });
 
     new ConnectionHandler(socket, log, options.state, handshakeTimeoutMs, (message) => {
-      if (message.type === "workspace.subscribe") {
+      if (message.type === "terminal.request" || message.type === "terminal.input") {
+        if (!subscribers.has(socket)) {
+          send(socket, {
+            type: "error",
+            error: createProtocolError("INVALID_MESSAGE", "Subscribe to the workspace first"),
+          });
+          return;
+        }
+        if (message.type === "terminal.input")
+          terminals.input(viewer, message.sessionId, message.data);
+        else void terminals.request(viewer, message).then((result) => send(socket, result));
+      } else if (message.type === "workspace.subscribe") {
         subscribers.add(socket);
         send(socket, { type: "workspace.snapshot", snapshot: options.workspace.snapshot() });
       } else if (message.type === "workspace.command") {
@@ -115,6 +143,7 @@ export function registerProtocolEndpoint(
   });
 
   return () => {
+    terminals.close();
     for (const socket of connections) {
       socket.close(CLOSE_GOING_AWAY, "daemon shutting down");
     }
