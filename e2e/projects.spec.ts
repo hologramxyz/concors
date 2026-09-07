@@ -43,9 +43,8 @@ test("create and clone projects on the daemon machine and sync to another browse
     expect(readFileSync(join(root, "cloned", "README.md"), "utf8")).toContain("Concors");
     await second.reload();
     await second.getByRole("button", { name: "Add project", exact: true }).first().click();
-    await expect(second.getByRole("region", { name: "Project setup history" })).toContainText(
-      "Cloned from browser · done",
-    );
+    await expect(second.getByRole("region", { name: "Project setup history" })).toHaveCount(0);
+    await expect(second.getByRole("dialog")).not.toContainText("Cloned from browser");
   } finally {
     await context.close();
     rmSync(defaultFolder, { recursive: true, force: true });
