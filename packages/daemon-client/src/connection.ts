@@ -389,6 +389,7 @@ export class DaemonConnection {
               protocolVersion: message.protocolVersion,
               daemonVersion: message.daemonVersion,
               status: message.status,
+              ...(message.capabilities ? { capabilities: message.capabilities } : {}),
             };
             this.#setState({ status: "ready", daemon });
             if (this.#workspaceListeners.size > 0)

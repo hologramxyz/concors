@@ -351,6 +351,7 @@ export class WorkspaceStore {
       text.length > limit ? text.slice(0, limit) + "\n[Display truncated]" : text;
     const value = AgentItemSchema.parse({
       ...item,
+      revision: (this.agentItem(item.sessionId, item.id)?.revision ?? -1) + 1,
       text: bound(item.text, 16000),
       detail: bound(item.detail, 16000),
       title: bound(item.title, 240),
@@ -363,6 +364,19 @@ export class WorkspaceStore {
     const saved = this.agentItem(item.sessionId, item.id);
     if (!saved) throw new Error("Agent item was not saved");
     return saved;
+  }
+  agentTurnItems(sessionId: string, turnId: string): AgentItem[] {
+    return this.#db
+      .prepare(
+        "SELECT position, item FROM agent_items WHERE session_id = ? AND json_extract(item, '$.turnId') = ? ORDER BY position",
+      )
+      .all(sessionId, turnId)
+      .map((row) =>
+        AgentItemSchema.parse({
+          ...JSON.parse(String(row["item"])),
+          position: Number(row["position"]),
+        }),
+      );
   }
   agentConversation(id: string, before = Number.MAX_SAFE_INTEGER): AgentConversation {
     const rows = this.#db
