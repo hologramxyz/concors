@@ -147,8 +147,10 @@ Only `VITE_*` variables reach the frontend and they are public. Secrets never go
 { "type": "daemon.ready", "protocolVersion": "v1", "daemonVersion": "0.1.0", "status": "ready" }
 ```
 
-That is the entire protocol today. Agent sessions, terminals, file access, etc. will be added as new
-message types in `packages/protocol`, and only there.
+After the handshake, clients can subscribe to durable workspace metadata and submit versioned
+project/tab/pane commands. See [Workspace synchronization](docs/workspace-sync.md) for the
+command contract, persistence, reconnect behavior, and current limits. Agent execution, terminals,
+and file access will be added through the same protocol boundary.
 
 ## Local vs. remote daemons
 
