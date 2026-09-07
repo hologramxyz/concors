@@ -1,3 +1,4 @@
+import { AgentManager, type AgentProviderFactory } from "../agents/manager.ts";
 import { ProjectManager } from "../projects/manager.ts";
 import { randomUUID } from "node:crypto";
 import { TerminalManager } from "../terminal/manager.ts";
@@ -19,6 +20,7 @@ import type { WorkspaceStore } from "../workspace/store.ts";
 import type { DaemonState } from "../state.ts";
 
 export interface ProtocolEndpointOptions {
+  readonly agentProviderFactory?: AgentProviderFactory;
   readonly state: DaemonState;
   readonly workspace: WorkspaceStore;
   /** How long a freshly-opened socket may stay silent before we drop it. */
@@ -43,7 +45,7 @@ const DEFAULT_HANDSHAKE_TIMEOUT_MS = 5_000;
 export function registerProtocolEndpoint(
   app: FastifyInstance,
   options: ProtocolEndpointOptions,
-): () => void {
+): () => Promise<void> {
   const handshakeTimeoutMs = options.handshakeTimeoutMs ?? DEFAULT_HANDSHAKE_TIMEOUT_MS;
   const connections = new Set<WebSocket>();
   const subscribers = new Set<WebSocket>();
@@ -66,7 +68,19 @@ export function registerProtocolEndpoint(
     const snapshot = options.workspace.snapshot();
     for (const target of subscribers) send(target, { type: "workspace.snapshot", snapshot });
   });
-  app.addHook("onClose", () => {
+  const agents = new AgentManager(
+    options.workspace,
+    (event) => {
+      for (const target of subscribers) send(target, event);
+    },
+    () => {
+      for (const target of subscribers)
+        send(target, { type: "workspace.snapshot", snapshot: options.workspace.snapshot() });
+    },
+    options.agentProviderFactory,
+  );
+  app.addHook("onClose", async () => {
+    await agents.close();
     projects.close();
     terminals.close();
   });
@@ -104,7 +118,8 @@ export function registerProtocolEndpoint(
       if (
         message.type === "terminal.request" ||
         message.type === "terminal.input" ||
-        message.type === "project.request"
+        message.type === "project.request" ||
+        message.type === "agent.request"
       ) {
         if (!subscribers.has(socket)) {
           send(socket, {
@@ -113,12 +128,17 @@ export function registerProtocolEndpoint(
           });
           return;
         }
-        if (message.type === "project.request") send(socket, projects.request(message));
+        if (message.type === "agent.request")
+          void agents.request(message).then((result) => send(socket, result));
+        else if (message.type === "project.request") send(socket, projects.request(message));
         else if (message.type === "terminal.input")
           terminals.input(viewer, message.sessionId, message.data);
         else void terminals.request(viewer, message).then((result) => send(socket, result));
       } else if (message.type === "workspace.subscribe") {
         subscribers.add(socket);
+        send(socket, { type: "agent.list", agents: [] });
+        for (const agent of options.workspace.agents())
+          send(socket, { type: "agent.state", agent });
         send(socket, { type: "project.setups", setups: options.workspace.projectSetups() });
         send(socket, { type: "workspace.snapshot", snapshot: options.workspace.snapshot() });
       } else if (message.type === "workspace.command") {
@@ -156,7 +176,8 @@ export function registerProtocolEndpoint(
     }).run();
   });
 
-  return () => {
+  return async () => {
+    await agents.close();
     projects.close();
     terminals.close();
     for (const socket of connections) {
