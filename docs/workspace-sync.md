@@ -15,3 +15,18 @@ This milestone registers project directory metadata; it does not create/clone fo
 Browser WebSockets are limited to the existing local Vite and Tauri origins. Native/CLI callers can omit Origin. This is not authentication: use loopback or an independently protected connection only. Do not expose this daemon to an untrusted network until machine access grants are implemented with Pierre's server. Remote connection support in the transport is not a claim that cloud access is ready.
 
 Validation covers two actual WebSocket clients, stale edits, duplicate retries, reconnects, persisted receipts after restart, transaction rollback, malformed trees, and pane/tab selection repair.
+
+## Desktop workspace UI
+
+Run `pnpm daemon:dev` and `pnpm desktop:web:dev`, then open `http://localhost:1420` in two browser windows. Add a project, create tabs, split panes, change profiles, rename/reorder tabs, and drag split boundaries (or use arrow keys on a focused separator). The other window receives each saved change. Reload either window to verify restoration. Disconnecting from the daemon leaves the last snapshot visible and disables edits until a fresh snapshot arrives. Internet loss does not disable the loopback daemon.
+
+The machine switcher supports this computer and saved connection bookmarks. Bookmarks are device-local until cloud inventory is integrated; each connected daemon owns its independent projects and layout. Cloud provisioning, Agents, and Servers are explicitly marked as future milestones. Adding a project registers directory metadata; it does not create or clone files yet. Pane profiles select future session types and do not launch processes in this milestone.
+
+Automated browser acceptance test:
+
+```bash
+pnpm exec playwright install chromium
+pnpm test:workspace:e2e
+```
+
+The test starts two temporary daemons on ports 7429/7430 and Vite on 1420; stop any existing Vite instance first. It uses independent browser contexts to verify layout/profile/navigation sync, keyboard resizing, reload, actual WebSocket disconnection/reconnection, and isolation when switching machines. Temporary SQLite files live under the system temp directory. Traces are retained on failure in ignored `test-results/`.
