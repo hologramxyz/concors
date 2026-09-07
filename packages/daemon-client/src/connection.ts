@@ -1,4 +1,11 @@
 import {
+  AgentRequestSchema,
+  type AgentInfo,
+  type AgentEvent,
+  type AgentOperation,
+  type AgentResult,
+} from "@concors/protocol";
+import {
   ProjectRequestSchema,
   type ProjectSetup,
   type ProjectOperation,
@@ -91,6 +98,16 @@ export class DaemonConnection {
   #abortPending: ((error: ProtocolError) => void) | null = null;
   #workspace: WorkspaceSnapshot | null = null;
   #projectSetups: ProjectSetup[] = [];
+  #agents: AgentInfo[] = [];
+  readonly #agentListeners = new Set<(event: AgentEvent) => void>();
+  readonly #agentRequests = new Map<
+    string,
+    {
+      resolve: (result: AgentResult) => void;
+      reject: (error: Error) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
+  >();
   readonly #projectListeners = new Set<(setups: ProjectSetup[]) => void>();
   readonly #projectRequests = new Map<
     string,
@@ -198,6 +215,42 @@ export class DaemonConnection {
       } catch (error) {
         clearTimeout(timer);
         this.#projectRequests.delete(requestId);
+        reject(error);
+      }
+    });
+  }
+
+  get agents(): AgentInfo[] {
+    return this.#agents;
+  }
+  onAgent(listener: (event: AgentEvent) => void): () => void {
+    this.#agentListeners.add(listener);
+    listener({ type: "agent.list", agents: this.#agents });
+    return () => {
+      this.#agentListeners.delete(listener);
+    };
+  }
+  requestAgent(operation: AgentOperation, requestId: string): Promise<AgentResult> {
+    if (this.#state.status !== "ready" || !this.#workspace)
+      return Promise.reject(new Error("Workspace is disconnected"));
+    const request = AgentRequestSchema.parse({ type: "agent.request", requestId, operation });
+    if (this.#agentRequests.has(requestId))
+      return Promise.reject(new Error("Request is already pending"));
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.#agentRequests.delete(requestId);
+        reject(
+          new Error(
+            "Agent request timed out. Reconnect and check the conversation before retrying with the same request ID.",
+          ),
+        );
+      }, 35000);
+      this.#agentRequests.set(requestId, { resolve, reject, timer });
+      try {
+        this.#socket?.send(JSON.stringify(request));
+      } catch (error) {
+        clearTimeout(timer);
+        this.#agentRequests.delete(requestId);
         reject(error);
       }
     });
@@ -347,6 +400,30 @@ export class DaemonConnection {
             }
             break;
           }
+          case "agent.list":
+          case "agent.state":
+          case "agent.item":
+            if (this.#state.status !== "ready") break;
+            if (message.type === "agent.list") this.#agents = message.agents;
+            if (message.type === "agent.state") {
+              const prior = this.#agents.find((a) => a.id === message.agent.id);
+              if (prior && prior.revision > message.agent.revision) break;
+              this.#agents = [
+                ...this.#agents.filter((a) => a.id !== message.agent.id),
+                message.agent,
+              ];
+            }
+            for (const listener of this.#agentListeners) listener(message);
+            break;
+          case "agent.result": {
+            const pending = this.#agentRequests.get(message.requestId);
+            if (pending) {
+              clearTimeout(pending.timer);
+              this.#agentRequests.delete(message.requestId);
+              pending.resolve(message);
+            }
+            break;
+          }
           case "project.setups":
             if (this.#state.status === "ready") {
               this.#projectSetups = message.setups;
@@ -466,6 +543,15 @@ export class DaemonConnection {
     this.#state = state;
     if (state.status !== "ready") {
       this.#workspace = null;
+      for (const pending of this.#agentRequests.values()) {
+        clearTimeout(pending.timer);
+        pending.reject(
+          new Error(
+            "Connection lost; check the conversation after reconnecting. Prompts are never resent automatically.",
+          ),
+        );
+      }
+      this.#agentRequests.clear();
       for (const pending of this.#commands.values()) {
         clearTimeout(pending.timer);
         pending.reject(

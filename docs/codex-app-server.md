@@ -1,56 +1,58 @@
-# Codex unified chat: transport foundation
+# Codex unified chat
 
-The daemon now has a tested `CodexAppServer` transport in
-`packages/daemon/src/agents/codex/app-server.ts`. It owns a supplied child process,
-performs the initialization handshake, correlates requests, forwards streamed
-notifications, and delegates server requests to a host handler. Unhandled input
-or approval requests receive an error; they are never implicitly approved.
+The daemon connects the installed Codex CLI to durable agent sessions. A chat pane
+reserves a session and its binding before starting a provider thread. Prompts have
+persistent request IDs; reconnecting or retrying the same request never resends a
+prompt. Credentials stay with the machine's Codex installation.
 
-This is the first part of unified chat. It is not connected to the workspace UI
-and does not yet start conversations or persist messages. Existing terminal
-profiles continue to launch provider CLIs in terminals.
+## Reference implementation
 
-## Reference and protocol
+Reviewed Paseo at `a7a708bec99e935ee4b8c6f7314a4b9a9984cfa6`:
 
-The separation between transport and provider/session behavior follows the
-[Paseo Codex transport](https://github.com/getpaseo/paseo/blob/a7a708bec99e935ee4b8c6f7314a4b9a9984cfa6/packages/server/src/server/agent/providers/codex/app-server-transport.ts),
-reviewed at revision `a7a708bec99e935ee4b8c6f7314a4b9a9984cfa6`. This transport is a
-new implementation adapted to Concors' daemon boundary.
+- `packages/server/src/server/agent/providers/codex-app-server-agent.ts`: thread
+  resume, item lifecycle, explicit approval/input handlers, and turn identity.
+- `packages/server/src/server/agent/providers/codex/tool-call-mapper.ts`: tool
+  summaries and details. Its command normalization helpers are extracted into
+  `command-display.ts`, with Apache-2.0 attribution and the existing full license
+  in `third-party/paseo-LICENSE`. The remaining mapper is adapted to Concors items.
+- `packages/app/src/timeline/turn-liveness.ts`: completion must target the active
+  turn, so delayed events cannot close a newer turn.
 
-The wire format and handshake follow the official
-[Codex app-server documentation](https://learn.chatgpt.com/docs/app-server):
-newline-delimited JSON-RPC messages over stdio, `initialize`, then `initialized`.
-The caller must initialize before making requests. Incoming payloads remain
-unknown until the provider adapter validates their method-specific schemas.
+The [official Codex app-server documentation](https://learn.chatgpt.com/docs/app-server)
+is the protocol reference. The installed CLI smoke test additionally verified
+`on-request` approval policy and the `workspace-write` thread sandbox spelling.
 
-## Behavior and verification
+## State and behavior
 
-Requests have explicit timeouts and are not automatically replayed: a timeout
-does not establish whether a state-changing operation took effect. Transport
-frames and write buffering are bounded to 2 MiB, with at most 64 outgoing and
-16 incoming requests pending. Process failure rejects outstanding work. Closing
-the transport terminates its owned process, escalating after two seconds.
+SQLite migration 4 adds agent records, paginated timeline items, and durable
+request receipts. The machine daemon owns all state. Clients receive global agent
+summaries and incremental timeline items over the existing authenticated/tunneled
+connection, and read saved conversation pages after reconnecting.
 
-Automated child-process tests cover initialization, out-of-order replies,
-notifications split inside a UTF-8 character, explicit approval handling,
-unknown input requests, timeouts, process exit, and invalid/oversized frames.
-The daemon suite passes 33 tests. A local smoke check against the installed
-Codex CLI successfully initialized and retrieved seven entries from `model/list`.
-It did not start a turn or execute agent work.
+Statuses include starting, idle, working, needs input, done, failed, and interrupted.
+Command/file approvals offer only explicit, supported one-time decisions. Structured
+user questions can be answered from any client; the first valid answer wins.
+Unsupported server requests return errors. Raw reasoning is not stored or displayed.
+Closing a client or pane does not stop the agent. Interruption targets a specific
+turn. Daemon restart marks unfinished work interrupted and clears stale approvals;
+continuing resumes the saved provider thread without replaying its previous prompt.
 
-## Next integration slice
+Limits: 128 saved sessions, eight connected providers (idle providers are evicted
+and resumed when needed), and up to 16 pending provider requests. Timeline pages
+contain at most 80 items and 384 KiB of item JSON. Individual text/detail fields
+are capped at 16,000 characters with an explicit truncation marker. Older items
+remain in SQLite and can be loaded in earlier pages. Codex retains its native
+thread history independently. Very large native resume responses remain subject
+to the transport's 2 MiB frame limit and fail visibly.
 
-1. Add typed Codex thread/turn events and normalize them into the shared agent
-   lifecycle and timeline, following Paseo's provider adapter.
-2. Persist conversation and turn identifiers, timeline items, and pane bindings
-   in the machine daemon. Reconcile interrupted/reconnected turns without
-   duplicating prompts.
-3. Wire the unified chat pane to streaming messages, tool details, explicit
-   approvals/input, and interruption. Surface the same state in global Agents.
-4. Test two clients viewing one conversation, reconnect during streaming,
-   pending approval, failure, and completion immediately followed by a new turn.
-5. Build the completion/input notification behavior on authoritative lifecycle
-   events, then extend the adapter boundary to Claude Code and OpenCode.
+## Validation
 
-All work stays in the client/daemon repository; Pierre's cloud server repository
-is unchanged.
+Real WebSocket tests exercise two clients, one-time prompt dispatch, reconnect
+while streaming, explicit approvals, user questions, failure, interruption, late
+completion, persisted history, and daemon restart without replay. A real installed
+Codex completed a minimal tool-free turn and returned `CONCORS_CHAT_OK`.
+
+Windows/macOS tests use a deterministic provider; they do not establish real Codex
+installation or sandbox support on those systems. The UI integration is a separate
+PR. Claude Code/OpenCode chat adapters and notifications remain later slices.
+Pierre's cloud server repository is unchanged.
