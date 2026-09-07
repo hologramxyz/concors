@@ -17,9 +17,11 @@ pnpm daemon:dev          # terminal 1
 pnpm desktop:dev         # terminal 2 (or pnpm desktop:web:dev without Rust)
 ```
 
-Developing on a headless Linux box (VM/VPS)? `scripts/dev-vm-display.sh` starts everything under a
-virtual display and serves the native window through noVNC, so you can watch it from a browser tab
-on your own machine via one SSH port-forward. Instructions are at the top of the script.
+Developing on a headless Linux box (VM/VPS)? Skip Tauri and run the UI as a web app:
+`scripts/dev-web.sh` starts the daemon and the Vite dev server on loopback. From your laptop, open an
+SSH tunnel with `ssh -N -L 1420:127.0.0.1:1420 -L 7420:127.0.0.1:7420 user@host` and visit
+http://localhost:1420. Hot reload works through the tunnel; anything Tauri-specific (bundled daemon
+startup, native menus) is simply skipped in the browser.
 
 Before opening a PR, run what CI runs:
 
@@ -33,8 +35,10 @@ Please read the [architecture section of the README](README.md#architecture) fir
 
 - **The protocol is the boundary.** Anything that crosses client ↔ daemon is defined in
   `packages/protocol` first, as a Zod schema. No Node-specific types may appear there.
-- **Clients never import the daemon.** `apps/*` may depend on `@concors/protocol` and
-  `@concors/daemon-client` only. ESLint enforces this.
+- **Clients never import the daemon.** `apps/*` may depend on `@concors/protocol`,
+  `@concors/daemon-client` and `@concors/api-client` only. ESLint enforces the daemon boundary.
+- **The control plane is Pierre's.** `concors-server` is integrated, not modified, from this repo.
+  Missing server contracts are documented (see `docs/auth.md`) rather than worked around.
 - **Tauri stays in its corner.** In the desktop frontend, `@tauri-apps/*` is imported only from
   `apps/desktop/src/tauri/`. The Rust side (`src-tauri`) contains no product logic.
 - **Share only what is genuinely shared.** Protocol types, API clients, domain types and utilities

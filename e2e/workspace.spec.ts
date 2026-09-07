@@ -1,5 +1,7 @@
 import { test, expect, type WebSocketRoute } from "@playwright/test";
 
+import { signedIn } from "./signed-in.ts";
+
 test("two devices share workspace edits, reconnect, and switch isolated machines", async ({
   browser,
   page: first,
@@ -20,6 +22,7 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
   first.on("pageerror", (error) => errors.push(error.message));
   second.on("pageerror", (error) => errors.push(error.message));
   try {
+    await Promise.all([signedIn(first), signedIn(second)]);
     await Promise.all([first.goto("/"), second.goto("http://localhost:1420")]);
     await first.getByRole("button", { name: "Add project", exact: true }).first().click();
     await first.getByLabel("Project name", { exact: true }).fill("Concors acceptance");

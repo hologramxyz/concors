@@ -1,4 +1,4 @@
-import { Monitor, Moon, RefreshCw, Sun } from "lucide-react";
+import { LogOut, Monitor, Moon, RefreshCw, Sun } from "lucide-react";
 import { useEffect } from "react";
 
 import {
@@ -22,6 +22,7 @@ interface CommandPaletteProps {
   readonly onReconnect: () => void;
   readonly canReconnect: boolean;
   readonly onSetTheme: (theme: ThemePreference) => void;
+  readonly onSignOut: () => void;
 }
 
 const THEME_ITEMS = [
@@ -37,6 +38,7 @@ export function CommandPalette({
   onReconnect,
   canReconnect,
   onSetTheme,
+  onSignOut,
 }: CommandPaletteProps) {
   // ⌘K / Ctrl+K toggles the palette from anywhere.
   useEffect(() => {
@@ -96,6 +98,15 @@ export function CommandPalette({
             >
               <RefreshCw aria-hidden="true" />
               Reconnect to daemon
+            </CommandItem>
+          </CommandGroup>
+
+          <CommandSeparator />
+
+          <CommandGroup heading="Account">
+            <CommandItem value="sign out of concors account" onSelect={run(onSignOut)}>
+              <LogOut aria-hidden="true" />
+              Sign out
             </CommandItem>
           </CommandGroup>
 

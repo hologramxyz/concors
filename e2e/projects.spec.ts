@@ -4,6 +4,8 @@ import { randomUUID } from "node:crypto";
 import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
 
+import { signedIn } from "./signed-in.ts";
+
 test("create and clone projects on the daemon machine and sync to another browser", async ({
   page,
   browser,
@@ -14,6 +16,7 @@ test("create and clone projects on the daemon machine and sync to another browse
   const context = await browser.newContext();
   const second = await context.newPage();
   try {
+    await Promise.all([signedIn(page), signedIn(second)]);
     await page.goto("/");
     await second.goto("http://localhost:1420");
     await page.getByRole("button", { name: "Add project", exact: true }).first().click();
