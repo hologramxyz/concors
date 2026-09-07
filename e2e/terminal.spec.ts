@@ -45,8 +45,8 @@ test("two devices use the same terminal and recover its screen after reload", as
     await second.keyboard.type("printf 'second-%s\\n' device");
     await second.keyboard.press("Enter");
     await expect(page.getByLabel("Terminal output")).toContainText("second-device");
-    await second.getByRole("button", { name: "Sessions", exact: true }).click();
-    await second.getByRole("dialog").getByRole("button", { name: "Stop", exact: true }).click();
+    await second.keyboard.type("exit");
+    await second.keyboard.press("Enter");
     await expect(
       page.getByRole("button", { name: "Start new session", exact: true }),
     ).toBeVisible();
