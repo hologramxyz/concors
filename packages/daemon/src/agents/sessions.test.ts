@@ -185,3 +185,49 @@ it("marks a crashed active turn interrupted and never replays a durable prompt r
   expect(TestAgentProvider.turns).toBe(count);
   expect(b.agents[0]?.pending).toEqual([]);
 });
+
+it("syncs attention acknowledgements, rejects stale reads, and preserves unread state across restart", async () => {
+  const { a, b, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "hold" });
+  providers[0]!.finish();
+  await expect.poll(() => b.agents[0]?.attention?.kind).toBe("done");
+  const first = b.agents[0]!.attention!;
+  expect(first.seen).toBe(false);
+  providers[0]!.finish();
+  await action(b, { kind: "read", sessionId: id });
+  expect(b.agents[0]!.attention!.id).toBe(first.id);
+  await action(b, { kind: "seen", sessionId: id, attentionId: first.id });
+  await expect.poll(() => a.agents[0]?.attention?.seen).toBe(true);
+
+  await action(a, { kind: "send", sessionId: id, text: "hold again" });
+  await expect.poll(() => b.agents[0]?.attention).toBeNull();
+  providers[0]!.finish();
+  await expect.poll(() => b.agents[0]?.attention?.kind).toBe("done");
+  const second = b.agents[0]!.attention!;
+  expect(second.id).not.toBe(first.id);
+  await action(b, { kind: "seen", sessionId: id, attentionId: first.id });
+  expect(b.agents[0]!.attention!.seen).toBe(false);
+  a.disconnect();
+  b.disconnect();
+  await server!.close();
+  const c = await open(await boot());
+  expect(c.agents[0]!.attention).toEqual(second);
+});
+
+it("creates separate attention for input and completion and clears it when answering", async () => {
+  const { a, b, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "question" });
+  await expect.poll(() => b.agents[0]?.attention?.kind).toBe("needs_input");
+  const input = b.agents[0]!.attention!;
+  await action(b, { kind: "seen", sessionId: id, attentionId: input.id });
+  await expect.poll(() => a.agents[0]?.attention?.seen).toBe(true);
+  await action(a, {
+    kind: "respond",
+    sessionId: id,
+    pendingId: a.agents[0]!.pending[0]!.id,
+    answers: { color: ["Blue"] },
+  });
+  await expect.poll(() => b.agents[0]?.attention?.kind).toBe("done");
+  expect(b.agents[0]!.attention!.id).not.toBe(input.id);
+  expect(b.agents[0]!.attention!.seen).toBe(false);
+});
