@@ -69,6 +69,18 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
       "aria-pressed",
       "true",
     );
+    const tabs = first.getByLabel("Project tabs");
+    await tabs
+      .getByRole("button", { name: "Tab 2", exact: true })
+      .dragTo(tabs.getByRole("button", { name: "Build and review", exact: true }));
+    await expect
+      .poll(() =>
+        second
+          .getByLabel("Project tabs")
+          .locator("[data-tab-id] > button:first-child")
+          .allTextContents(),
+      )
+      .toEqual(["Tab 2", "Build and review"]);
     await second.getByRole("button", { name: "Build and review", exact: true }).click();
     await expect(
       first.getByRole("button", { name: "Build and review", exact: true }),

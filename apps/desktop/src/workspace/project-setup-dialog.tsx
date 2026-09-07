@@ -170,46 +170,39 @@ export function ProjectSetupDialog({
             </Button>
           </div>
         </form>
-        {setups.length > 0 && (
-          <section aria-label="Project setup history" className="space-y-2 border-t pt-3">
-            <h3 className="text-sm font-medium">Recent project setups</h3>
-            {[...setups].reverse().map((setup) => (
-              <div key={setup.id} className="rounded border p-3 text-xs">
-                <div className="flex items-center justify-between gap-2">
-                  <strong>
-                    {setup.name} · {setup.status}
-                  </strong>
-                  {setup.status === "working" && (
-                    <button
-                      className="text-destructive"
-                      disabled={!connected}
-                      onClick={() => {
-                        if (!connection) return;
-                        void connection
-                          .requestProject({ kind: "cancel", id: setup.id }, crypto.randomUUID())
-                          .then((result) => {
-                            if (result.outcome.status === "error") setError(result.outcome.message);
-                          })
-                          .catch((cause: unknown) =>
-                            setError(cause instanceof Error ? cause.message : "Could not cancel"),
-                          );
-                      }}
-                    >
-                      Cancel setup
-                    </button>
-                  )}
-                </div>
-                <p className="mt-1 truncate text-muted-foreground" title={setup.directory}>
-                  {setup.directory}
-                </p>
-                <pre
-                  className="mt-2 max-h-32 overflow-auto font-mono break-all whitespace-pre-wrap"
-                  role={setup.status === "failed" ? "alert" : undefined}
+        {active && (
+          <section aria-label="Current project setup" className="space-y-2 border-t pt-3 text-xs">
+            <div className="flex items-center justify-between">
+              <span>
+                {active.status === "working" ? "Setting up your project…" : active.status}
+              </span>
+              {active.status === "working" && (
+                <button
+                  type="button"
+                  className="text-destructive"
+                  disabled={!connected}
+                  onClick={() => {
+                    if (!connection) return;
+                    void connection
+                      .requestProject({ kind: "cancel", id: active.id }, crypto.randomUUID())
+                      .then((result) => {
+                        if (result.outcome.status === "error") setError(result.outcome.message);
+                      })
+                      .catch((cause: unknown) =>
+                        setError(cause instanceof Error ? cause.message : "Could not cancel"),
+                      );
+                  }}
                 >
-                  {setup.progress}
-                </pre>
-              </div>
-            ))}
+                  Cancel setup
+                </button>
+              )}
+            </div>
+            <pre
+              className="max-h-32 overflow-auto break-all whitespace-pre-wrap"
+              role={active.status === "failed" ? "alert" : undefined}
+            >
+              {active.progress}
+            </pre>
           </section>
         )}
       </DialogContent>

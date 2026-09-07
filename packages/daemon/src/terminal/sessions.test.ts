@@ -94,6 +94,13 @@ it("shares a real PTY, transfers control, replays its screen, rebinds and record
   await request(first.connection, { kind: "attach", sessionId });
   await request(second.connection, { kind: "attach", sessionId });
   await request(first.connection, { kind: "claim", sessionId, cols: 90, rows: 25 });
+  await request(second.connection, {
+    kind: "claim",
+    sessionId,
+    cols: 30,
+    rows: 10,
+    ifUnowned: true,
+  });
   await expect(
     request(second.connection, { kind: "resize", sessionId, cols: 30, rows: 10 }),
   ).rejects.toThrow("take control");

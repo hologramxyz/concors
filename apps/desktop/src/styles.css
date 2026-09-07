@@ -155,3 +155,13 @@
     @apply select-text;
   }
 }
+
+/* xterm owns scrollback; the surrounding pane must never add another scroll area. */
+.concors-terminal .xterm {
+  height: 100%;
+}
+.concors-terminal .xterm-scrollable-element > .scrollbar.vertical > .slider {
+  border-radius: 8px;
+  width: 6px !important;
+  margin-left: 4px;
+}

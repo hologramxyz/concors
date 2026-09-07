@@ -86,7 +86,13 @@ export class TerminalManager {
       return [runtime?.info ?? info];
     }
     if (!runtime) throw new Error("Terminal process is no longer running");
-    runtime.resize(viewer.id, op.cols, op.rows, op.kind === "claim");
+    runtime.resize(
+      viewer.id,
+      op.cols,
+      op.rows,
+      op.kind === "claim",
+      op.kind === "claim" && op.ifUnowned === true,
+    );
     return [runtime.info];
   }
 
