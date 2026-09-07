@@ -156,7 +156,9 @@ it("creates repos automatically and resolves simple names and tilde on the daemo
   manager.request(request("create", "first-project"));
   await expect.poll(() => store.projectSetups()[0]?.status).toBe("done");
   expect(existsSync(join(root, "repos", "first-project"))).toBe(true);
-  expect(store.snapshot().projects[0]?.directory).toBe(join(root, "repos", "first-project"));
+  expect(store.snapshot().projects[0]?.directory).toBe(
+    realpathSync(join(root, "repos", "first-project")),
+  );
   manager.request(request("create", "~/repos/second-project"));
   await expect.poll(() => store.projectSetups()[1]?.status).toBe("done");
   expect(existsSync(join(root, "repos", "second-project"))).toBe(true);
