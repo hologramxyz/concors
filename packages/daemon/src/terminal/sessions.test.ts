@@ -83,7 +83,7 @@ it("shares a real PTY, transfers control, replays its screen, rebinds and record
   };
   const receipt = randomUUID();
   const [session] = await request(first.connection, start, receipt);
-  expect(session?.status).toBe("running");
+  expect(session?.status, session?.error ?? "PTY launch").toBe("running");
   const sessionId = session!.id;
   expect((await request(second.connection, start, receipt))[0]?.id).toBe(sessionId);
   expect(await request(first.connection, { kind: "list" })).toHaveLength(1);
