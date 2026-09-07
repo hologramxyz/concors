@@ -1,3 +1,4 @@
+import type { AgentProviderFactory } from "./agents/manager.ts";
 import { HEALTH_PATH, type HealthResponse } from "@concors/protocol";
 import websocket from "@fastify/websocket";
 import Fastify, { type FastifyInstance } from "fastify";
@@ -8,6 +9,7 @@ import { DaemonState } from "./state.ts";
 import { registerProtocolEndpoint } from "./ws/protocol-endpoint.ts";
 
 export interface DaemonServerOptions {
+  readonly agentProviderFactory?: AgentProviderFactory;
   /** Overrides for tests; production always uses the defaults. */
   readonly handshakeTimeoutMs?: number;
   /** In-memory by default for embedded/test servers. The CLI supplies a durable file. */
@@ -46,7 +48,7 @@ export function createDaemonServer(
     genReqId: () => crypto.randomUUID(),
   });
 
-  let closeConnections: () => void = () => undefined;
+  let closeConnections: () => Promise<void> = async () => undefined;
 
   app.register(websocket, {
     options: {
@@ -59,6 +61,9 @@ export function createDaemonServer(
     closeConnections = registerProtocolEndpoint(instance, {
       state,
       workspace,
+      ...(options.agentProviderFactory
+        ? { agentProviderFactory: options.agentProviderFactory }
+        : {}),
       ...(options.handshakeTimeoutMs === undefined
         ? {}
         : { handshakeTimeoutMs: options.handshakeTimeoutMs }),
@@ -86,7 +91,7 @@ export function createDaemonServer(
     close(): Promise<void> {
       closing ??= (async () => {
         state.status = "shutting_down";
-        closeConnections();
+        await closeConnections();
         await app.close();
       })();
       return closing;
