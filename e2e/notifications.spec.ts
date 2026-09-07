@@ -1,3 +1,4 @@
+import { signedIn } from "./signed-in.ts";
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -46,6 +47,7 @@ test("notifications deduplicate across windows, open chat, and sync unread witho
     control.subscribeWorkspace(() => undefined);
     await control.connect();
     await expect.poll(() => control.workspace).not.toBeNull();
+    await signedIn(page);
     await page.goto("/");
     await page.getByRole("button", { name: "Add project", exact: true }).first().click();
     await page.getByLabel("Project name", { exact: true }).fill("Notifications acceptance");
@@ -55,7 +57,8 @@ test("notifications deduplicate across windows, open chat, and sync unread witho
       .getByRole("button", { name: "Add project", exact: true })
       .click();
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByLabel("Pane profile").selectOption("chat");
+    await page.getByRole("button", { name: "Pane actions", exact: true }).click();
+    await page.getByRole("menuitemradio", { name: "Unified chat", exact: true }).click();
     await page.getByRole("button", { name: "Start Codex chat", exact: true }).click();
     await expect(page.getByLabel("Agent status: Ready").first()).toBeVisible();
     const project = control.workspace?.projects.find((p) => p.directory === directory);
@@ -66,6 +69,7 @@ test("notifications deduplicate across windows, open chat, and sync unread witho
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     await page.getByLabel("Desktop notifications", { exact: true }).check();
     const second = await context.newPage();
+    await signedIn(second);
     await second.goto("/");
     await second.getByRole("button", { name: "Settings", exact: true }).click();
     await expect(second.getByLabel("Desktop notifications", { exact: true })).toBeChecked();

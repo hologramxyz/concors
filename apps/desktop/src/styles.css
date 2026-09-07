@@ -160,6 +160,10 @@
 .concors-terminal .xterm {
   height: 100%;
 }
+/* xterm's default black viewport can show below the last full terminal row. */
+.concors-terminal .xterm-viewport {
+  background-color: #15151b;
+}
 .concors-terminal .xterm-scrollable-element > .scrollbar.vertical > .slider {
   border-radius: 8px;
   width: 6px !important;

@@ -28,21 +28,13 @@ export function MachineSwitcher({
     <>
       <DropdownMenu>
         <DropdownMenuTrigger
-          className="flex h-14 w-full items-center gap-2 px-3 text-left hover:bg-sidebar-accent"
+          className="m-2 flex h-9 w-[calc(100%-1rem)] items-center gap-2 rounded-md px-2 text-left hover:bg-sidebar-accent"
           aria-label="Switch machine"
         >
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border bg-background">
-            <Monitor className="size-4" />
+          <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
+            {selected?.name ?? "This computer"}
           </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-[10px] tracking-wider text-muted-foreground uppercase">
-              Machine
-            </span>
-            <span className="block truncate text-[13px] font-medium">
-              {selected?.name ?? "This computer"}
-            </span>
-          </span>
-          <ChevronDown className="size-3.5" />
+          <ChevronDown className="size-4" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-64">
           {machines.map((machine) => (

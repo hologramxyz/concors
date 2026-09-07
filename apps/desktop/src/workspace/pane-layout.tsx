@@ -1,7 +1,17 @@
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+} from "@/components/ui/dropdown-menu";
 import { ChatPane } from "@/agents/chat";
 import { TerminalPane } from "@/terminal/terminal-pane";
 import { useRef, useState } from "react";
-import { Columns2, Rows2, Terminal, MessageSquare, X } from "lucide-react";
+import { Columns2, Rows2, Ellipsis, Terminal, MessageSquare, X } from "lucide-react";
 import type {
   LayoutNode,
   PaneProfile,
@@ -74,67 +84,69 @@ function Pane({
     >
       <header className="flex h-9 shrink-0 items-center gap-1 border-b bg-muted/30 px-2">
         {node.profile === "chat" ? (
-          <MessageSquare className="size-3.5 shrink-0 text-muted-foreground" />
+          <MessageSquare className="size-4 shrink-0 text-muted-foreground" />
         ) : (
-          <Terminal className="size-3.5 shrink-0 text-muted-foreground" />
+          <Terminal className="size-4 shrink-0 text-muted-foreground" />
         )}
-        <select
-          aria-label="Pane profile"
-          value={node.profile}
-          disabled={!canEdit || node.sessionId !== null}
-          onChange={(event) =>
-            onCommand({
-              kind: "pane.configure",
-              ...target,
-              profile: event.target.value as PaneProfile,
-            })
-          }
-          className="min-w-0 flex-1 bg-transparent text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {Object.entries(PROFILE_LABELS).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          aria-label="Split horizontally"
-          title="Split side by side"
-          disabled={!canEdit || tab.nodes.length >= 63}
-          onClick={() =>
-            onCommand({
-              kind: "pane.split",
-              ...target,
-              splitId: crypto.randomUUID(),
-              newPaneId: crypto.randomUUID(),
-              axis: "horizontal",
-              profile: node.profile,
-            })
-          }
-          className="rounded p-1 hover:bg-muted disabled:opacity-40"
-        >
-          <Columns2 className="size-3.5" />
-        </button>
-        <button
-          type="button"
-          aria-label="Split vertically"
-          title="Split above and below"
-          disabled={!canEdit || tab.nodes.length >= 63}
-          onClick={() =>
-            onCommand({
-              kind: "pane.split",
-              ...target,
-              splitId: crypto.randomUUID(),
-              newPaneId: crypto.randomUUID(),
-              axis: "vertical",
-              profile: node.profile,
-            })
-          }
-          className="rounded p-1 hover:bg-muted disabled:opacity-40"
-        >
-          <Rows2 className="size-3.5" />
-        </button>
+        <span className="min-w-0 flex-1 truncate text-[13px]">{PROFILE_LABELS[node.profile]}</span>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            aria-label="Pane actions"
+            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <Ellipsis className="size-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem
+              disabled={!canEdit || tab.nodes.length >= 63}
+              onSelect={() =>
+                onCommand({
+                  kind: "pane.split",
+                  ...target,
+                  splitId: crypto.randomUUID(),
+                  newPaneId: crypto.randomUUID(),
+                  axis: "horizontal",
+                  profile: node.profile,
+                })
+              }
+            >
+              <Columns2 /> Split horizontally
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={!canEdit || tab.nodes.length >= 63}
+              onSelect={() =>
+                onCommand({
+                  kind: "pane.split",
+                  ...target,
+                  splitId: crypto.randomUUID(),
+                  newPaneId: crypto.randomUUID(),
+                  axis: "vertical",
+                  profile: node.profile,
+                })
+              }
+            >
+              <Rows2 /> Split vertically
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>Pane profile</DropdownMenuLabel>
+            <DropdownMenuRadioGroup
+              value={node.profile}
+              onValueChange={(profile) =>
+                onCommand({ kind: "pane.configure", ...target, profile: profile as PaneProfile })
+              }
+            >
+              {Object.entries(PROFILE_LABELS).map(([value, label]) => (
+                <DropdownMenuRadioItem
+                  key={value}
+                  value={value}
+                  disabled={!canEdit || node.sessionId !== null}
+                >
+                  {label}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <button
           type="button"
           aria-label="Close pane"
@@ -142,7 +154,7 @@ function Pane({
           onClick={() => onCommand({ kind: "pane.close", ...target })}
           className="rounded p-1 hover:bg-muted disabled:opacity-40"
         >
-          <X className="size-3.5" />
+          <X className="size-4" />
         </button>
       </header>
       {node.profile !== "chat" ? (

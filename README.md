@@ -50,6 +50,9 @@ Node/TypeScript daemon  (concors-daemon)
 - **Daemon client** (`packages/daemon-client`) — `DaemonConnection`, a tiny host-agnostic
   WebSocket client that connects to `ws://127.0.0.1:<port>` and `wss://remote-daemon.example`
   alike.
+- **API client** (`packages/api-client`) — `ApiClient`, a fetch-based client for the Concors
+  control plane (`concors-server`): accounts, organizations, cloud machines. Also host-agnostic, so
+  the future mobile app shares it.
 
 ## Repository layout
 
@@ -63,6 +66,7 @@ concors/
 ├── packages/
 │   ├── protocol/           @concors/protocol — versioned schemas/types shared by clients & daemon
 │   ├── daemon-client/      @concors/daemon-client — DaemonConnection (local or remote daemons)
+│   ├── api-client/         @concors/api-client — control-plane API client (accounts, organizations)
 │   ├── daemon/             @concors/daemon — the concors-daemon Node process (Fastify + WebSocket)
 │   └── config/             @concors/config — shared ESLint / Prettier configuration
 ├── .github/workflows/      CI
@@ -132,10 +136,17 @@ Copy `apps/desktop/.env.example` to `apps/desktop/.env.local`:
 
 ```env
 VITE_CONCORS_API_URL=http://localhost:3000        # Concors control-plane API (https://api.concors.dev)
+# CONCORS_API_PROXY_TARGET=https://…              # dev only: proxy /api from the Vite server to a real API
 # VITE_CONCORS_DAEMON_URL=ws://127.0.0.1:7420/ws  # optional: override which daemon to connect to
 ```
 
 Only `VITE_*` variables reach the frontend and they are public. Secrets never go there.
+
+### Accounts
+
+The app requires a Concors account: signed out, you only see the sign-in screen; the workspace
+appears once the control plane confirms the session (email + password today). The flow, token
+handling and what the server provides are described in [docs/auth.md](docs/auth.md).
 
 ## How the client talks to the daemon
 
