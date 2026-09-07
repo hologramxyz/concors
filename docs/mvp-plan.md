@@ -141,6 +141,8 @@ Provider for cloud VMs and tunnels remains an open decision. Start with a connec
 
 ## 7. Notifications
 
+Desktop implementation and remaining platform verification are tracked in [agent-notifications.md](agent-notifications.md). Mobile background push remains part of the mobile milestone.
+
 Create semantic events on authoritative agent transitions: finished, needs input, failed. Deduplicate by stable event and turn IDs; revalidate delayed input/completion notifications so resumed work does not generate a stale alert.
 
 Desktop: distinct completion/input sounds, native notifications, user opt-in, and click-through to the machine/project/agent. Suppress redundant completion alerts for the conversation currently being viewed. Keep preferences per device and allow sound to be disabled separately.
