@@ -1,3 +1,4 @@
+import { TerminalPane } from "@/terminal/terminal-pane";
 import { useRef, useState } from "react";
 import { Columns2, Rows2, Terminal, MessageSquare, X } from "lucide-react";
 import type {
@@ -79,7 +80,7 @@ function Pane({
         <select
           aria-label="Pane profile"
           value={node.profile}
-          disabled={!canEdit}
+          disabled={!canEdit || node.sessionId !== null}
           onChange={(event) =>
             onCommand({
               kind: "pane.configure",
@@ -143,30 +144,34 @@ function Pane({
           <X className="size-3.5" />
         </button>
       </header>
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-auto p-5 text-center">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border bg-muted/40">
-          {node.profile === "chat" ? (
-            <MessageSquare className="size-5 text-muted-foreground" />
-          ) : (
-            <Terminal className="size-5 text-muted-foreground" />
-          )}
-        </span>
-        <div>
-          <p className="text-sm font-medium">{PROFILE_LABELS[node.profile]}</p>
-          <p className="mt-1 text-xs text-muted-foreground">Session not started</p>
+      {node.profile !== "chat" ? (
+        <TerminalPane project={project} tab={tab} node={node} canEdit={canEdit} />
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-auto p-5 text-center">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border bg-muted/40">
+            {node.profile === "chat" ? (
+              <MessageSquare className="size-5 text-muted-foreground" />
+            ) : (
+              <Terminal className="size-5 text-muted-foreground" />
+            )}
+          </span>
+          <div>
+            <p className="text-sm font-medium">{PROFILE_LABELS[node.profile]}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Session not started</p>
+          </div>
+          <p className="max-w-56 text-xs leading-relaxed text-muted-foreground">
+            Your pane layout and profile are saved.{" "}
+            {node.profile === "chat" ? "Agent chat" : "Terminal execution"} is coming in the next
+            milestone.
+          </p>
+          <code
+            className="max-w-full truncate text-[10px] text-muted-foreground"
+            title={project.directory}
+          >
+            {project.directory}
+          </code>
         </div>
-        <p className="max-w-56 text-xs leading-relaxed text-muted-foreground">
-          Your pane layout and profile are saved.{" "}
-          {node.profile === "chat" ? "Agent chat" : "Terminal execution"} is coming in the next
-          milestone.
-        </p>
-        <code
-          className="max-w-full truncate text-[10px] text-muted-foreground"
-          title={project.directory}
-        >
-          {project.directory}
-        </code>
-      </div>
+      )}
     </section>
   );
 }

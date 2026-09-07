@@ -22,6 +22,7 @@ const MAX_RETRY_MS = 30_000;
 
 export interface DaemonConnectionHandle {
   readonly state: ConnectionState;
+  readonly transport: DaemonConnection | null;
   readonly workspace: WorkspaceSnapshot | null;
   readonly workspaceReady: boolean;
   readonly execute: (operation: WorkspaceOperation) => Promise<void>;
@@ -35,6 +36,7 @@ export interface DaemonConnectionHandle {
  * and a remote VPS deserve different treatment, and that is a product decision, not a protocol one.
  */
 export function useDaemonConnection(endpoint: DaemonEndpoint | null): DaemonConnectionHandle {
+  const [transport, setTransport] = useState<DaemonConnection | null>(null);
   const [state, setState] = useState<ConnectionState>({ status: "disconnected" });
   const [replica, setReplica] = useState<{ url: string; snapshot: WorkspaceSnapshot } | null>(null);
   const [workspaceReady, setWorkspaceReady] = useState(false);
@@ -59,6 +61,7 @@ export function useDaemonConnection(endpoint: DaemonEndpoint | null): DaemonConn
       connection?.disconnect();
       connection = null;
       activeConnection.current = null;
+      setTransport(null);
     };
 
     const scheduleRetry = (): void => {
@@ -79,6 +82,7 @@ export function useDaemonConnection(endpoint: DaemonEndpoint | null): DaemonConn
       const next = new DaemonConnection({ endpoint, client: CLIENT_INFO });
       connection = next;
       activeConnection.current = next;
+      setTransport(next);
       setWorkspaceReady(false);
       unsubscribeWorkspace = next.subscribeWorkspace((snapshot) => {
         if (disposed || activeConnection.current !== next) return;
@@ -130,6 +134,7 @@ export function useDaemonConnection(endpoint: DaemonEndpoint | null): DaemonConn
 
   return {
     state,
+    transport: transport?.endpoint.url === endpoint?.url ? transport : null,
     workspace: replica?.url === endpoint?.url ? (replica?.snapshot ?? null) : null,
     workspaceReady: workspaceReady && replica?.url === endpoint?.url,
     execute: async (operation) => {
