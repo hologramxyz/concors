@@ -1,3 +1,4 @@
+import { AgentSidebar } from "@/agents/list";
 import { Folder, Plus, Search, Settings } from "lucide-react";
 import { cn } from "cn";
 import type { WorkspaceSnapshot } from "@concors/protocol";
@@ -6,6 +7,7 @@ import { MachineSwitcher } from "@/workspace/machine-switcher";
 import type { MachineConnection } from "@/workspace/machines";
 
 interface AppSidebarProps {
+  onSelectAgent: (id: string) => void;
   view: View;
   onNavigate: (view: View) => void;
   onOpenCommandPalette: () => void;
@@ -107,6 +109,7 @@ export function AppSidebar(props: AppSidebarProps) {
           </li>
         )}
       </ul>
+      <AgentSidebar onSelect={props.onSelectAgent} workspace={props.workspace} />
       <button
         type="button"
         onClick={() => props.onNavigate("settings")}

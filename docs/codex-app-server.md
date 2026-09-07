@@ -53,6 +53,30 @@ completion, persisted history, and daemon restart without replay. A real install
 Codex completed a minimal tool-free turn and returned `CONCORS_CHAT_OK`.
 
 Windows/macOS tests use a deterministic provider; they do not establish real Codex
-installation or sandbox support on those systems. The UI integration is a separate
+installation or sandbox support on those systems. The UI integration is reviewed in a separate
 PR. Claude Code/OpenCode chat adapters and notifications remain later slices.
 Pierre's cloud server repository is unchanged.
+
+## Chat client
+
+Choose **Unified chat** from a pane's profile menu, then **Start Codex chat**.
+Leave Model empty to use the machine's Codex default, or specify a model available
+to that installation. Codex must already be installed and signed in on the machine.
+Send with Enter; Shift+Enter inserts a line break. The square button interrupts the
+current turn. Closing the pane keeps its conversation in the global Agents view.
+
+The client adapts Paseo's shared timeline presentation: Markdown messages,
+collapsible tool summaries/details, explicit approval and question cards, progress
+plans, and turn status/timing. It follows output only while scrolled near the end,
+with a Latest button to return. Older pages are loaded on demand. Item revisions
+prevent a delayed history read from overwriting a newer streamed item. Tool-free
+responses and code blocks render without executing HTML or loading remote images.
+
+Agents appear across projects in the sidebar and Agents view, with project context,
+prompt-derived names, and authoritative status. A daemon capability check disables
+chat on older daemons until they are updated. Uncertain submissions retain their
+request ID for an explicit retry; they are never automatically resent.
+
+Browser acceptance covers streaming, reload, cross-client interruption, one-time
+approval, structured input, and continuing after closing the original pane. The
+browser fixture is a separate test entry point, never a production runtime option.
