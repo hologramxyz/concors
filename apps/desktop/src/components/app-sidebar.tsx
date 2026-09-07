@@ -2,6 +2,8 @@ import { AgentSidebar } from "@/agents/list";
 import { Folder, Plus, Search, Settings } from "lucide-react";
 import { cn } from "cn";
 import type { WorkspaceSnapshot } from "@concors/protocol";
+import type { SignedInAuth } from "@/auth/auth-state";
+import { AccountMenu } from "@/components/account-menu";
 import { PRIMARY_NAV, type View } from "@/navigation";
 import { MachineSwitcher } from "@/workspace/machine-switcher";
 import type { MachineConnection } from "@/workspace/machines";
@@ -19,6 +21,8 @@ interface AppSidebarProps {
   selectedMachineId: string;
   onSelectMachine: (id: string) => void;
   onAddMachine: (machine: MachineConnection) => void;
+  auth: SignedInAuth;
+  onSignOut: () => void;
 }
 
 export function AppSidebar(props: AppSidebarProps) {
@@ -110,14 +114,25 @@ export function AppSidebar(props: AppSidebarProps) {
         )}
       </ul>
       <AgentSidebar onSelect={props.onSelectAgent} workspace={props.workspace} />
-      <button
-        type="button"
-        onClick={() => props.onNavigate("settings")}
-        className="m-2 flex items-center gap-2 rounded-md p-2 text-xs hover:bg-sidebar-accent"
-      >
-        <Settings className="size-4" />
-        Settings
-      </button>
+      <div className="space-y-1 border-t border-sidebar-border p-2">
+        <button
+          type="button"
+          onClick={() => props.onNavigate("settings")}
+          aria-current={props.view === "settings" ? "page" : undefined}
+          className={cn(
+            "flex h-8 w-full items-center gap-2 rounded-md px-2 text-[13px] hover:bg-sidebar-accent",
+            props.view === "settings" && "bg-sidebar-accent font-medium",
+          )}
+        >
+          <Settings className="size-4" />
+          Settings
+        </button>
+        <AccountMenu
+          auth={props.auth}
+          onSignOut={props.onSignOut}
+          onOpenSettings={() => props.onNavigate("settings")}
+        />
+      </div>
     </nav>
   );
 }
