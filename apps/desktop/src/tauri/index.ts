@@ -13,3 +13,8 @@ export { localDaemon, type LocalDaemonStatus } from "./local-daemon.ts";
 export function isTauri(): boolean {
   return tauriIsTauri();
 }
+export {
+  showNativeNotification,
+  dismissNativeNotification,
+  onNativeNotificationClick,
+} from "./notifications";
