@@ -107,7 +107,7 @@ export class AgentManager {
       ...prior,
       ...patch,
       revision: prior.revision + 1,
-      updatedAt: new Date().toISOString(),
+      updatedAt: patch.updatedAt ?? new Date().toISOString(),
     };
     if (next.status === "done" && (prior.status !== "done" || next.turnId !== prior.turnId))
       next.attention = { id: randomUUID(), kind: "done", createdAt: next.updatedAt, seen: false };
@@ -231,7 +231,10 @@ export class AgentManager {
       if (op.kind === "seen") {
         const info = this.#store.agent(op.sessionId);
         if (info.attention?.id === op.attentionId && !info.attention.seen)
-          this.update(info.id, { attention: { ...info.attention, seen: true } });
+          this.update(info.id, {
+            attention: { ...info.attention, seen: true },
+            updatedAt: info.updatedAt,
+          });
         return this.result(request, op.sessionId);
       }
       const receipt = this.#store.agentReceipt(request);
