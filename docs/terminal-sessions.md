@@ -55,3 +55,7 @@ cover missing executables and Windows shim resolution. CI runs daemon tests on L
 Windows. `pnpm test:workspace:e2e` checks rendered terminal interaction and reload across two Chromium
 contexts. Packaging native PTY binaries into distributable daemon sidecars remains release work;
 these checks validate development runtimes, not signed desktop/mobile packages.
+
+`patches/node-pty@1.1.0.patch` restores executable permission on the macOS prebuilt spawn helper
+during dependency installation. Keep this patch until upgrading to an upstream version that ships
+the helper correctly; the macOS runtime test verifies that an actual shell can launch.
