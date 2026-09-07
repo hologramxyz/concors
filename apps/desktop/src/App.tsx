@@ -14,7 +14,7 @@ import { useDaemonConnection } from "@/daemon/use-daemon-connection";
 import { navItemFor, type View } from "@/navigation";
 import { useTheme } from "@/theme/use-theme";
 import { SettingsView } from "@/views/settings-view";
-import { FormDialog } from "@/workspace/form-dialog";
+import { ProjectSetupDialog } from "@/workspace/project-setup-dialog";
 import {
   MACHINES_STORAGE_KEY,
   parseMachineConnections,
@@ -217,26 +217,10 @@ export function App() {
           </div>
         </div>
         {addingProject && (
-          <FormDialog
-            title="Add project"
-            description="Register an existing folder on this machine. This saves its workspace; it does not create or clone files yet."
-            fields={[
-              { name: "name", label: "Project name", placeholder: "My project" },
-              {
-                name: "directory",
-                label: "Folder on this machine",
-                placeholder: "/home/me/projects/my-project",
-              },
-            ]}
-            submitLabel="Add project"
+          <ProjectSetupDialog
             onClose={() => setAddingProject(false)}
-            onSubmit={async (values) => {
-              await execute({
-                kind: "project.add",
-                projectId: crypto.randomUUID(),
-                name: values["name"] ?? "",
-                directory: values["directory"] ?? "",
-              });
+            onAdded={() => {
+              setAddingProject(false);
               setView("projects");
             }}
           />
