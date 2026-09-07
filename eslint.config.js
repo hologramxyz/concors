@@ -7,7 +7,8 @@ import { react } from "@concors/config/eslint/react";
  * Besides code-quality rules, this file encodes the architectural boundaries of Concors:
  *
  *  - Clients (desktop, future mobile) may only talk to the daemon through `@concors/protocol`
- *    and `@concors/daemon-client`. They must never import daemon implementation details.
+ *    and `@concors/daemon-client`, and to the control plane through `@concors/api-client`. They
+ *    must never import daemon implementation details.
  *  - Tauri APIs are confined to `apps/desktop/src/tauri/` so that the rest of the UI stays
  *    portable to non-Tauri hosts (web, mobile).
  */
@@ -47,7 +48,12 @@ export default [
 
   // Boundary: clients must not import daemon internals.
   {
-    files: ["apps/**/*.{ts,tsx}", "packages/daemon-client/**/*.ts", "packages/protocol/**/*.ts"],
+    files: [
+      "apps/**/*.{ts,tsx}",
+      "packages/api-client/**/*.ts",
+      "packages/daemon-client/**/*.ts",
+      "packages/protocol/**/*.ts",
+    ],
     rules: {
       "no-restricted-imports": [
         "error",

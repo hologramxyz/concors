@@ -1,8 +1,11 @@
 import { AgentSidebar } from "@/agents/list";
+import { SidebarSection } from "./sidebar-section";
 import { Folder, Plus, Search, Settings } from "lucide-react";
 import { cn } from "cn";
 import type { WorkspaceSnapshot } from "@concors/protocol";
-import { PRIMARY_NAV, type View } from "@/navigation";
+import type { View } from "@/navigation";
+import type { SignedInAuth } from "@/auth/auth-state";
+import { AccountMenu } from "@/components/account-menu";
 import { MachineSwitcher } from "@/workspace/machine-switcher";
 import type { MachineConnection } from "@/workspace/machines";
 
@@ -19,13 +22,15 @@ interface AppSidebarProps {
   selectedMachineId: string;
   onSelectMachine: (id: string) => void;
   onAddMachine: (machine: MachineConnection) => void;
+  auth: SignedInAuth;
+  onSignOut: () => void;
 }
 
 export function AppSidebar(props: AppSidebarProps) {
   return (
     <nav
       aria-label="Primary"
-      className="flex h-full w-[216px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
+      className="flex h-full w-[216px] shrink-0 flex-col bg-sidebar text-[13px] text-sidebar-foreground"
     >
       <MachineSwitcher
         machines={props.machines}
@@ -37,87 +42,86 @@ export function AppSidebar(props: AppSidebarProps) {
         <button
           type="button"
           onClick={props.onOpenCommandPalette}
-          className="flex h-8 w-full items-center gap-2 rounded-md border bg-background/60 px-2 text-xs text-muted-foreground hover:bg-background"
+          className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-[13px] text-muted-foreground hover:bg-sidebar-accent"
         >
-          <Search className="size-3.5" />
+          <Search className="size-4" />
           Search or jump to…
         </button>
       </div>
-      <ul className="space-y-1 px-2">
-        {PRIMARY_NAV.map((item) => (
-          <li key={item.view}>
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-2 py-3">
+        <SidebarSection
+          title="Projects"
+          action={
             <button
               type="button"
-              onClick={() => props.onNavigate(item.view)}
-              aria-current={props.view === item.view ? "page" : undefined}
-              className={cn(
-                "flex h-8 w-full items-center gap-2 rounded-md px-2 text-[13px] hover:bg-sidebar-accent",
-                props.view === item.view && "bg-sidebar-accent font-medium",
-              )}
+              aria-label="Add project"
+              disabled={!props.canEdit}
+              onClick={props.onAddProject}
+              className="rounded p-1 text-muted-foreground hover:bg-sidebar-accent disabled:opacity-40"
             >
-              <item.icon className="size-4" />
-              {item.label}
-              {item.view === "projects" && (
-                <span className="ml-auto text-xs text-muted-foreground">
-                  {props.workspace?.projects.length ?? 0}
-                </span>
-              )}
+              <Plus className="size-4" />
             </button>
-          </li>
-        ))}
-      </ul>
-      <div className="mt-6 flex items-center justify-between px-4 text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
-        Projects
+          }
+        >
+          <ul className="mt-1 space-y-0.5">
+            {props.workspace?.projects.map((project) => (
+              <li key={project.id}>
+                <button
+                  type="button"
+                  disabled={!props.canEdit}
+                  title={project.directory}
+                  onClick={() => props.onSelectProject(project.id)}
+                  aria-current={
+                    props.view === "projects" &&
+                    props.workspace?.selection?.projectId === project.id
+                      ? "page"
+                      : undefined
+                  }
+                  className={cn(
+                    "flex h-8 w-full items-center gap-2 rounded-md px-2 text-[13px] hover:bg-sidebar-accent disabled:opacity-50",
+                    props.view === "projects" &&
+                      props.workspace?.selection?.projectId === project.id &&
+                      "bg-sidebar-accent",
+                  )}
+                >
+                  <Folder className="size-4 shrink-0 text-muted-foreground" />
+                  <span className="truncate">{project.name}</span>
+                </button>
+              </li>
+            ))}
+            {props.workspace?.projects.length === 0 && (
+              <li className="px-2 py-3 text-[13px] leading-relaxed text-muted-foreground">
+                Add a project to organize your tabs and panes.
+              </li>
+            )}
+          </ul>
+        </SidebarSection>
+        <SidebarSection title="Agents">
+          <AgentSidebar onSelect={props.onSelectAgent} workspace={props.workspace} />
+        </SidebarSection>
+        <SidebarSection title="Servers">
+          <p className="px-2 py-2 leading-relaxed text-muted-foreground">No servers discovered.</p>
+        </SidebarSection>
+      </div>
+      <div className="space-y-1 border-t border-sidebar-border p-2">
         <button
           type="button"
-          aria-label="Add project"
-          disabled={!props.canEdit}
-          onClick={props.onAddProject}
-          className="rounded p-1 hover:bg-sidebar-accent disabled:opacity-40"
+          onClick={() => props.onNavigate("settings")}
+          aria-current={props.view === "settings" ? "page" : undefined}
+          className={cn(
+            "flex h-8 w-full items-center gap-2 rounded-md px-2 text-[13px] hover:bg-sidebar-accent",
+            props.view === "settings" && "bg-sidebar-accent font-medium",
+          )}
         >
-          <Plus className="size-3.5" />
+          <Settings className="size-4" />
+          Settings
         </button>
+        <AccountMenu
+          auth={props.auth}
+          onSignOut={props.onSignOut}
+          onOpenSettings={() => props.onNavigate("settings")}
+        />
       </div>
-      <ul className="mt-1 min-h-0 flex-1 space-y-1 overflow-y-auto px-2">
-        {props.workspace?.projects.map((project) => (
-          <li key={project.id}>
-            <button
-              type="button"
-              disabled={!props.canEdit}
-              title={project.directory}
-              onClick={() => props.onSelectProject(project.id)}
-              aria-current={
-                props.view === "projects" && props.workspace?.selection?.projectId === project.id
-                  ? "page"
-                  : undefined
-              }
-              className={cn(
-                "flex h-8 w-full items-center gap-2 rounded-md px-2 text-[13px] hover:bg-sidebar-accent disabled:opacity-50",
-                props.view === "projects" &&
-                  props.workspace?.selection?.projectId === project.id &&
-                  "bg-sidebar-accent",
-              )}
-            >
-              <Folder className="size-3.5 shrink-0 text-muted-foreground" />
-              <span className="truncate">{project.name}</span>
-            </button>
-          </li>
-        ))}
-        {props.workspace?.projects.length === 0 && (
-          <li className="px-2 py-3 text-xs leading-relaxed text-muted-foreground">
-            Add a project to organize your tabs and panes.
-          </li>
-        )}
-      </ul>
-      <AgentSidebar onSelect={props.onSelectAgent} workspace={props.workspace} />
-      <button
-        type="button"
-        onClick={() => props.onNavigate("settings")}
-        className="m-2 flex items-center gap-2 rounded-md p-2 text-xs hover:bg-sidebar-accent"
-      >
-        <Settings className="size-4" />
-        Settings
-      </button>
     </nav>
   );
 }

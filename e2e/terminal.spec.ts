@@ -1,5 +1,7 @@
 import { test, expect } from "@playwright/test";
 
+import { signedIn } from "./signed-in.ts";
+
 test("two devices use the same terminal and recover its screen after reload", async ({
   browser,
   page,
@@ -10,6 +12,7 @@ test("two devices use the same terminal and recover its screen after reload", as
   page.on("pageerror", (error) => errors.push(error.message));
   second.on("pageerror", (error) => errors.push(error.message));
   try {
+    await Promise.all([signedIn(page), signedIn(second)]);
     await page.goto("/");
 
     await page.getByRole("button", { name: "Add project", exact: true }).first().click();
@@ -42,8 +45,8 @@ test("two devices use the same terminal and recover its screen after reload", as
     await second.keyboard.type("printf 'second-%s\\n' device");
     await second.keyboard.press("Enter");
     await expect(page.getByLabel("Terminal output")).toContainText("second-device");
-    await second.getByRole("button", { name: "Sessions", exact: true }).click();
-    await second.getByRole("dialog").getByRole("button", { name: "Stop", exact: true }).click();
+    await second.keyboard.type("exit");
+    await second.keyboard.press("Enter");
     await expect(
       page.getByRole("button", { name: "Start new session", exact: true }),
     ).toBeVisible();
