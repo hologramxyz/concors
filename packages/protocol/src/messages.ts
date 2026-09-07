@@ -1,3 +1,4 @@
+import { ProjectRequestSchema, ProjectResultSchema, ProjectSetupsSchema } from "./projects.ts";
 import { z } from "zod";
 import {
   TerminalRequestSchema,
@@ -46,6 +47,7 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
   WorkspaceCommandSchema,
   TerminalRequestSchema,
   TerminalInputSchema,
+  ProjectRequestSchema,
 ]);
 export type ClientMessage = z.infer<typeof ClientMessageSchema>;
 
@@ -69,6 +71,8 @@ export const DaemonMessageSchema = z.discriminatedUnion("type", [
   WorkspaceResultSchema,
   TerminalResultSchema,
   ...TerminalEventSchema.options,
+  ProjectResultSchema,
+  ProjectSetupsSchema,
 ]);
 export type DaemonMessage = z.infer<typeof DaemonMessageSchema>;
 
