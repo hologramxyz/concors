@@ -33,6 +33,10 @@ export function createDaemonServer(
   config: DaemonConfig,
   options: DaemonServerOptions = {},
 ): DaemonServer {
+  if (!["127.0.0.1", "localhost", "::1"].includes(config.host))
+    throw new Error(
+      "Terminal-enabled daemons must bind to loopback until authenticated remote access is configured. Use an SSH tunnel for remote development.",
+    );
   const state = new DaemonState();
   const workspace = new WorkspaceStore(options.workspacePath);
 
