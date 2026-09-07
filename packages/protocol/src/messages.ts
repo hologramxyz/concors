@@ -1,3 +1,4 @@
+import { AgentRequestSchema, AgentResultSchema, AgentEventSchema } from "./agents.ts";
 import { ProjectRequestSchema, ProjectResultSchema, ProjectSetupsSchema } from "./projects.ts";
 import { z } from "zod";
 import {
@@ -48,6 +49,7 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
   TerminalRequestSchema,
   TerminalInputSchema,
   ProjectRequestSchema,
+  AgentRequestSchema,
 ]);
 export type ClientMessage = z.infer<typeof ClientMessageSchema>;
 
@@ -73,6 +75,8 @@ export const DaemonMessageSchema = z.discriminatedUnion("type", [
   ...TerminalEventSchema.options,
   ProjectResultSchema,
   ProjectSetupsSchema,
+  AgentResultSchema,
+  ...AgentEventSchema.options,
 ]);
 export type DaemonMessage = z.infer<typeof DaemonMessageSchema>;
 
