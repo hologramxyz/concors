@@ -127,7 +127,11 @@ export class WorkspaceStore {
       .map((row) => ProjectSetupSchema.parse(JSON.parse(String(row["setup"]))));
   }
   reserveProjectSetup(request: ProjectRequest, setup: ProjectSetup): boolean {
-    const prior = this.#db.prepare("SELECT request FROM project_setups WHERE id = ?").get(setup.id);
+    const prior = this.#db
+      .prepare(
+        "SELECT request FROM project_setups WHERE id = ? OR json_extract(request, '$.requestId') = ?",
+      )
+      .get(setup.id, request.requestId);
     if (prior) {
       if (prior["request"] !== JSON.stringify(request))
         throw new Error("Project setup ID already used with different parameters");
