@@ -24,7 +24,7 @@ export class DaemonState {
       protocolVersion: PROTOCOL_VERSION,
       daemonVersion: DAEMON_VERSION,
       status: this.#status,
-      capabilities: ["agent-chat"],
+      capabilities: ["agent-chat", "agent-attention"],
     };
   }
 }

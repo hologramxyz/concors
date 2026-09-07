@@ -93,6 +93,7 @@ export class AgentManager {
           ...info,
           status: "interrupted",
           pending: [],
+          attention: null,
           error:
             "The daemon restarted. Your saved conversation can be continued; the previous prompt will not be resent.",
           revision: info.revision + 1,
@@ -108,6 +109,19 @@ export class AgentManager {
       revision: prior.revision + 1,
       updatedAt: new Date().toISOString(),
     };
+    if (next.status === "done" && (prior.status !== "done" || next.turnId !== prior.turnId))
+      next.attention = { id: randomUUID(), kind: "done", createdAt: next.updatedAt, seen: false };
+    else if (
+      next.status === "needs_input" &&
+      next.pending.some((p) => !prior.pending.some((old) => old.id === p.id))
+    )
+      next.attention = {
+        id: randomUUID(),
+        kind: "needs_input",
+        createdAt: next.updatedAt,
+        seen: false,
+      };
+    else if (!["done", "needs_input"].includes(next.status)) next.attention = null;
     this.#store.saveAgent(next);
     this.#emit({ type: "agent.state", agent: next });
     return next;
@@ -214,6 +228,12 @@ export class AgentManager {
       if (this.#closed) throw new Error("Daemon is shutting down");
       const op = request.operation;
       if (op.kind === "read") return this.result(request, op.sessionId, op.before);
+      if (op.kind === "seen") {
+        const info = this.#store.agent(op.sessionId);
+        if (info.attention?.id === op.attentionId && !info.attention.seen)
+          this.update(info.id, { attention: { ...info.attention, seen: true } });
+        return this.result(request, op.sessionId);
+      }
       const receipt = this.#store.agentReceipt(request);
       if (receipt) return this.result(request, receipt);
       if (op.kind === "start") {
@@ -235,6 +255,7 @@ export class AgentManager {
           turnId: null,
           status: "starting",
           pending: [],
+          attention: null,
           error: null,
           startedAt: now,
           updatedAt: now,
@@ -266,6 +287,7 @@ export class AgentManager {
           turnId,
           turnStartedAt: new Date().toISOString(),
           pending: [],
+          attention: null,
           error: null,
           revision: info.revision + 1,
           updatedAt: new Date().toISOString(),
@@ -317,6 +339,7 @@ export class AgentManager {
         const next = {
           ...info,
           pending: remaining,
+          attention: remaining.length ? info.attention : null,
           status: remaining.length ? ("needs_input" as const) : ("working" as const),
           revision: info.revision + 1,
           updatedAt: new Date().toISOString(),
