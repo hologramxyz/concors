@@ -1,5 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs";
+import {
+  mkdtempSync,
+  chmodSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  rmSync,
+  existsSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -15,7 +23,7 @@ afterEach(() => {
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), "concors-projects-"));
   const store = new WorkspaceStore(join(root, "state.sqlite"));
-  const manager = new ProjectManager(store, () => undefined);
+  const manager = new ProjectManager(store, () => undefined, root);
   cleanups.push(() => {
     manager.close();
     store.close();
@@ -141,3 +149,39 @@ it("rejects command-like URLs and embedded credentials", () => {
   ])
     expect(() => validateRepository(repository)).not.toThrow();
 });
+
+it("creates repos automatically and resolves simple names and tilde on the daemon", async () => {
+  const { root, store, manager, request } = fixture();
+  manager.request(request("create", "first-project"));
+  await expect.poll(() => store.projectSetups()[0]?.status).toBe("done");
+  expect(existsSync(join(root, "repos", "first-project"))).toBe(true);
+  expect(store.snapshot().projects[0]?.directory).toBe(join(root, "repos", "first-project"));
+  manager.request(request("create", "~/repos/second-project"));
+  await expect.poll(() => store.projectSetups()[1]?.status).toBe("done");
+  expect(existsSync(join(root, "repos", "second-project"))).toBe(true);
+  const existing = join(root, "repos", "existing");
+  mkdirSync(existing);
+  manager.request(request("open", "existing"));
+  await expect.poll(() => store.projectSetups()[2]?.status).toBe("done");
+  expect(manager.request(request("create", "../outside")).outcome.status).toBe("error");
+  expect(existsSync(join(root, "outside"))).toBe(false);
+});
+
+it.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
+  "explains real permission failures without claiming destination files were created",
+  async () => {
+    const { root, store, manager, request } = fixture();
+    const protectedParent = join(root, "protected");
+    mkdirSync(protectedParent);
+    chmodSync(protectedParent, 0o500);
+    try {
+      manager.request(request("create", join(protectedParent, "test")));
+      await expect.poll(() => store.projectSetups()[0]?.status).toBe("failed");
+      expect(store.projectSetups()[0]?.progress).toContain("default ~/repos");
+      expect(store.projectSetups()[0]?.progress).not.toContain("preserved");
+      expect(existsSync(join(protectedParent, "test"))).toBe(false);
+    } finally {
+      chmodSync(protectedParent, 0o700);
+    }
+  },
+);
