@@ -2,6 +2,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, expect } from "@playwright/test";
+
+import { signedIn } from "./signed-in.ts";
 test("shared chat streams, reloads, handles approvals and remains in global Agents", async ({
   page,
   browser,
@@ -13,6 +15,7 @@ test("shared chat streams, reloads, handles approvals and remains in global Agen
   page.on("pageerror", (error) => errors.push(error.message));
   second.on("pageerror", (error) => errors.push(error.message));
   try {
+    await Promise.all([signedIn(page), signedIn(second)]);
     await page.goto("/");
     await page.getByRole("button", { name: "Add project", exact: true }).first().click();
     await page.getByLabel("Project name", { exact: true }).fill("Chat acceptance");
