@@ -149,6 +149,18 @@ button {
   cursor: pointer;
 }
 
+.sidebar__item--icon {
+  width: auto;
+  display: inline-flex;
+  align-items: center;
+  padding: 7px;
+  color: var(--fg-muted);
+}
+
+.sidebar__item--icon.sidebar__item--active {
+  color: var(--accent);
+}
+
 .sidebar__item:hover:not(:disabled) {
   background: color-mix(in srgb, var(--fg) 8%, transparent);
 }

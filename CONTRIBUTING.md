@@ -17,6 +17,10 @@ pnpm daemon:dev          # terminal 1
 pnpm desktop:dev         # terminal 2 (or pnpm desktop:web:dev without Rust)
 ```
 
+Developing on a headless Linux box (VM/VPS)? `scripts/dev-vm-display.sh` starts everything under a
+virtual display and serves the native window through noVNC, so you can watch it from a browser tab
+on your own machine via one SSH port-forward. Instructions are at the top of the script.
+
 Before opening a PR, run what CI runs:
 
 ```bash
