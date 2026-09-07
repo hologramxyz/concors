@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // Runtime-agnostic: this package must compile against the plain ES library only.
+    "lib": ["ES2023"],
+    "types": []
+  },
+  "include": ["src"]
+}

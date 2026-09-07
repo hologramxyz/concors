@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // This package runs in browsers, React Native, and Node alike: it may only use APIs common to
+    // all of them (the WHATWG WebSocket, timers, URL). No Node-only lib/types on purpose.
+    "lib": ["ES2023", "DOM"],
+    "types": []
+  },
+  "include": ["src"]
+}

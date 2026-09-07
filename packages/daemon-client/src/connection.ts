@@ -1,0 +1,279 @@
+import {
+  PROTOCOL_VERSION,
+  createProtocolError,
+  parseDaemonMessage,
+  type ClientHelloMessage,
+  type ClientInfo,
+  type DaemonInfo,
+  type ProtocolError,
+  type ProtocolVersion,
+} from "@concors/protocol";
+
+import type { DaemonEndpoint } from "./endpoint.ts";
+
+/**
+ * Minimal subset of the WHATWG WebSocket used by `DaemonConnection`. Browsers, React Native and
+ * Node ≥ 22 all provide a compatible global `WebSocket`; tests can inject a fake.
+ */
+export interface WebSocketLike {
+  readonly readyState: number;
+  send(data: string): void;
+  close(code?: number, reason?: string): void;
+  addEventListener(type: "open" | "error", listener: () => void): void;
+  addEventListener(type: "message", listener: (event: { data: unknown }) => void): void;
+  addEventListener(
+    type: "close",
+    listener: (event: { code: number; reason: string }) => void,
+  ): void;
+}
+
+export type WebSocketFactory = (url: string) => WebSocketLike;
+
+export type ConnectionState =
+  | { readonly status: "disconnected"; readonly reason?: string }
+  | { readonly status: "connecting" }
+  | { readonly status: "handshaking" }
+  | { readonly status: "ready"; readonly daemon: DaemonInfo }
+  | { readonly status: "error"; readonly error: ProtocolError };
+
+export type ConnectionStateListener = (state: ConnectionState) => void;
+
+export interface DaemonConnectionOptions {
+  readonly endpoint: DaemonEndpoint;
+  /** Identity presented to the daemon during the handshake. */
+  readonly client: ClientInfo;
+  readonly protocolVersion?: ProtocolVersion;
+  /** How long to wait for `daemon.ready` after the socket opens. */
+  readonly handshakeTimeoutMs?: number;
+  /** Override the WebSocket implementation (tests, custom transports). */
+  readonly webSocketFactory?: WebSocketFactory;
+}
+
+export class DaemonConnectionError extends Error {
+  override readonly name = "DaemonConnectionError";
+  readonly error: ProtocolError;
+
+  constructor(error: ProtocolError) {
+    super(`${error.code}: ${error.message}`);
+    this.error = error;
+  }
+}
+
+const DEFAULT_HANDSHAKE_TIMEOUT_MS = 5_000;
+
+/**
+ * A single connection to one daemon, local or remote. Speaks only `@concors/protocol`.
+ *
+ * Lifecycle: `disconnected → connecting → handshaking → ready → disconnected`, with `error` as a
+ * terminal state for a failed attempt. The class is deliberately single-shot: reconnection policy
+ * (backoff, UI prompts) belongs to the host application.
+ */
+export class DaemonConnection {
+  readonly endpoint: DaemonEndpoint;
+
+  #state: ConnectionState = { status: "disconnected" };
+  #socket: WebSocketLike | null = null;
+  /** Rejects the in-flight `connect()` promise, if any. */
+  #abortPending: ((error: ProtocolError) => void) | null = null;
+  readonly #listeners = new Set<ConnectionStateListener>();
+  readonly #client: ClientInfo;
+  readonly #protocolVersion: ProtocolVersion;
+  readonly #handshakeTimeoutMs: number;
+  readonly #createSocket: WebSocketFactory;
+
+  constructor(options: DaemonConnectionOptions) {
+    this.endpoint = options.endpoint;
+    this.#client = options.client;
+    this.#protocolVersion = options.protocolVersion ?? PROTOCOL_VERSION;
+    this.#handshakeTimeoutMs = options.handshakeTimeoutMs ?? DEFAULT_HANDSHAKE_TIMEOUT_MS;
+    this.#createSocket = options.webSocketFactory ?? defaultWebSocketFactory;
+  }
+
+  get state(): ConnectionState {
+    return this.#state;
+  }
+
+  /** Subscribe to state changes. Returns an unsubscribe function. */
+  subscribe(listener: ConnectionStateListener): () => void {
+    this.#listeners.add(listener);
+    return () => {
+      this.#listeners.delete(listener);
+    };
+  }
+
+  /**
+   * Opens the socket and performs the handshake. Resolves with the daemon's self-description once
+   * `daemon.ready` is received; rejects with `DaemonConnectionError` otherwise.
+   */
+  connect(): Promise<DaemonInfo> {
+    if (this.#socket !== null) {
+      return Promise.reject(
+        new DaemonConnectionError(
+          createProtocolError("INTERNAL_ERROR", "connect() called while already connected"),
+        ),
+      );
+    }
+
+    this.#setState({ status: "connecting" });
+
+    return new Promise<DaemonInfo>((resolve, reject) => {
+      let settled = false;
+      let handshakeTimer: ReturnType<typeof setTimeout> | undefined;
+      let socket: WebSocketLike | null = null;
+
+      /** Events from a socket that has been torn down (e.g. after `disconnect()`) are stale. */
+      const isCurrent = (): boolean => socket !== null && this.#socket === socket;
+
+      const settleReject = (error: ProtocolError): void => {
+        clearTimeout(handshakeTimer);
+        if (!settled) {
+          settled = true;
+          this.#abortPending = null;
+          reject(new DaemonConnectionError(error));
+        }
+      };
+      this.#abortPending = settleReject;
+
+      const fail = (error: ProtocolError): void => {
+        settleReject(error);
+        this.#setState({ status: "error", error });
+        this.#teardown(1002, error.code);
+      };
+
+      try {
+        socket = this.#createSocket(this.endpoint.url);
+      } catch (cause) {
+        fail(createProtocolError("INTERNAL_ERROR", `Could not open WebSocket: ${String(cause)}`));
+        return;
+      }
+      this.#socket = socket;
+
+      socket.addEventListener("open", () => {
+        if (!isCurrent() || socket === null) return;
+        this.#setState({ status: "handshaking" });
+        const hello: ClientHelloMessage = {
+          type: "client.hello",
+          protocolVersion: this.#protocolVersion,
+          client: this.#client,
+        };
+        socket.send(JSON.stringify(hello));
+        handshakeTimer = setTimeout(() => {
+          fail(
+            createProtocolError(
+              "HANDSHAKE_TIMEOUT",
+              `Daemon did not complete the handshake within ${this.#handshakeTimeoutMs}ms`,
+            ),
+          );
+        }, this.#handshakeTimeoutMs);
+      });
+
+      socket.addEventListener("message", (event) => {
+        if (!isCurrent()) return;
+        const parsed = parseDaemonMessage(event.data);
+        if (!parsed.success) {
+          if (this.#state.status === "handshaking") {
+            fail(
+              createProtocolError("INVALID_MESSAGE", "Daemon sent an invalid message", {
+                issues: parsed.error.issues,
+              }),
+            );
+          }
+          // After the handshake, unknown/extra messages are ignored for forward compatibility.
+          return;
+        }
+
+        const message = parsed.data;
+        switch (message.type) {
+          case "daemon.ready": {
+            clearTimeout(handshakeTimer);
+            const daemon: DaemonInfo = {
+              protocolVersion: message.protocolVersion,
+              daemonVersion: message.daemonVersion,
+              status: message.status,
+            };
+            this.#setState({ status: "ready", daemon });
+            if (!settled) {
+              settled = true;
+              this.#abortPending = null;
+              resolve(daemon);
+            }
+            break;
+          }
+          case "error":
+            fail(message.error);
+            break;
+        }
+      });
+
+      socket.addEventListener("error", () => {
+        // The WHATWG event carries no detail; the subsequent `close` event has the code.
+        if (isCurrent() && this.#state.status === "connecting") {
+          fail(
+            createProtocolError("INTERNAL_ERROR", `Could not reach daemon at ${this.endpoint.url}`),
+          );
+        }
+      });
+
+      socket.addEventListener("close", (event) => {
+        const wasCurrent = isCurrent();
+        if (wasCurrent) this.#socket = null;
+
+        if (!settled) {
+          // Closed before daemon.ready: the connect() attempt failed. If the host already moved us
+          // to a terminal state (disconnect() / fail()), keep it; otherwise record the error.
+          const error = createProtocolError(
+            "INTERNAL_ERROR",
+            `Connection closed before handshake completed (code ${event.code})`,
+          );
+          if (wasCurrent) this.#setState({ status: "error", error });
+          settleReject(error);
+          return;
+        }
+
+        if (wasCurrent && this.#state.status === "ready") {
+          this.#setState({
+            status: "disconnected",
+            reason: event.reason || `closed (${event.code})`,
+          });
+        }
+      });
+    });
+  }
+
+  /** Closes the connection. Safe to call in any state; a pending `connect()` rejects. */
+  disconnect(): void {
+    this.#teardown(1000, "client disconnect");
+    if (this.#state.status !== "disconnected") {
+      this.#setState({ status: "disconnected", reason: "client disconnect" });
+    }
+    this.#abortPending?.(
+      createProtocolError("INTERNAL_ERROR", "Disconnected by client before handshake completed"),
+    );
+  }
+
+  #teardown(code: number, reason: string): void {
+    const socket = this.#socket;
+    this.#socket = null;
+    if (socket !== null) {
+      try {
+        socket.close(code, reason);
+      } catch {
+        // Closing an already-closed socket is not an error we care about.
+      }
+    }
+  }
+
+  #setState(state: ConnectionState): void {
+    this.#state = state;
+    for (const listener of this.#listeners) {
+      listener(state);
+    }
+  }
+}
+
+function defaultWebSocketFactory(url: string): WebSocketLike {
+  if (typeof WebSocket === "undefined") {
+    throw new Error("No global WebSocket implementation available; pass `webSocketFactory`.");
+  }
+  return new WebSocket(url);
+}

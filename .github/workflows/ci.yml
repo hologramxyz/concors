@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Everything that runs on plain Node: lint, typecheck, tests, daemon bundle, frontend bundle.
+  node:
+    name: Lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        # Version is read from the `packageManager` field in package.json.
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm daemon:build
+      - run: pnpm desktop:web:build
+
+      - name: Smoke-test the daemon bundle
+        run: |
+          node packages/daemon/dist/cli.js --version
+          node packages/daemon/dist/cli.js serve --port 7420 --log-level warn &
+          DAEMON_PID=$!
+          for i in $(seq 1 20); do
+            curl -sf http://127.0.0.1:7420/health && break
+            sleep 0.5
+          done
+          curl -sf http://127.0.0.1:7420/health | grep -q '"status":"ok"'
+          kill -TERM "$DAEMON_PID"
+          wait "$DAEMON_PID"
+
+  # Keeps the thin Rust shell compiling. Only `cargo check` on Linux for now; a full multi-platform
+  # `tauri build` release pipeline is intentionally out of scope at this stage.
+  tauri:
+    name: Tauri (cargo check)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Tauri system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      # tauri-build validates that `frontendDist` exists, so the frontend must be built first.
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm desktop:web:build
+
+      - name: cargo fmt
+        run: cargo fmt --check
+        working-directory: apps/desktop/src-tauri
+
+      - name: cargo clippy
+        run: cargo clippy --all-targets -- -D warnings
+        working-directory: apps/desktop/src-tauri

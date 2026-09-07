@@ -1,0 +1,15 @@
+/**
+ * The only place in the desktop frontend allowed to import `@tauri-apps/*` (enforced by ESLint).
+ *
+ * Everything the UI needs from the native shell is exposed through this module with plain
+ * TypeScript types, so the rest of the app can run unchanged in a browser or be ported to another
+ * host.
+ */
+import { isTauri as tauriIsTauri } from "@tauri-apps/api/core";
+
+export { localDaemon, type LocalDaemonStatus } from "./local-daemon.ts";
+
+/** `true` when running inside the Tauri webview, `false` in a plain browser (`pnpm desktop:web:dev`). */
+export function isTauri(): boolean {
+  return tauriIsTauri();
+}
