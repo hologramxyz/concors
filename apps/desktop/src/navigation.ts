@@ -1,6 +1,6 @@
-import { Bot, FolderKanban, House, Server, Settings, type LucideIcon } from "lucide-react";
+import { Bot, FolderKanban, Server, Settings, type LucideIcon } from "lucide-react";
 
-export type View = "home" | "agents" | "projects" | "daemons" | "settings";
+export type View = "agents" | "projects" | "servers" | "settings";
 
 export interface NavItem {
   readonly view: View;
@@ -13,10 +13,9 @@ export interface NavItem {
 }
 
 export const PRIMARY_NAV: readonly NavItem[] = [
-  { view: "home", label: "Home", icon: House, shortcut: "G H" },
-  { view: "agents", label: "Agents", icon: Bot, comingSoon: true },
-  { view: "projects", label: "Projects", icon: FolderKanban, comingSoon: true },
-  { view: "daemons", label: "Daemons", icon: Server, comingSoon: true },
+  { view: "projects", label: "Projects", icon: FolderKanban },
+  { view: "agents", label: "Agents", icon: Bot },
+  { view: "servers", label: "Servers", icon: Server },
 ];
 
 export const SETTINGS_NAV: NavItem = {

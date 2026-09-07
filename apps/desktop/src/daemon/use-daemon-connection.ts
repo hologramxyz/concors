@@ -1,9 +1,10 @@
+import { WorkspaceOperationSchema } from "@concors/protocol";
 import {
   DaemonConnection,
   type ConnectionState,
   type DaemonEndpoint,
 } from "@concors/daemon-client";
-import type { ClientInfo } from "@concors/protocol";
+import type { ClientInfo, WorkspaceSnapshot, WorkspaceOperation } from "@concors/protocol";
 import { useEffect, useRef, useState } from "react";
 
 import { detectPlatform } from "@/lib/platform";
@@ -21,6 +22,9 @@ const MAX_RETRY_MS = 30_000;
 
 export interface DaemonConnectionHandle {
   readonly state: ConnectionState;
+  readonly workspace: WorkspaceSnapshot | null;
+  readonly workspaceReady: boolean;
+  readonly execute: (operation: WorkspaceOperation) => Promise<void>;
   /** Retry immediately instead of waiting for the current backoff. */
   readonly reconnectNow: () => void;
 }
@@ -32,6 +36,9 @@ export interface DaemonConnectionHandle {
  */
 export function useDaemonConnection(endpoint: DaemonEndpoint | null): DaemonConnectionHandle {
   const [state, setState] = useState<ConnectionState>({ status: "disconnected" });
+  const [replica, setReplica] = useState<{ url: string; snapshot: WorkspaceSnapshot } | null>(null);
+  const [workspaceReady, setWorkspaceReady] = useState(false);
+  const activeConnection = useRef<DaemonConnection | null>(null);
   const retryNow = useRef<() => void>(() => undefined);
 
   useEffect(() => {
@@ -42,13 +49,16 @@ export function useDaemonConnection(endpoint: DaemonEndpoint | null): DaemonConn
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
     let connection: DaemonConnection | null = null;
     let unsubscribe: () => void = () => undefined;
+    let unsubscribeWorkspace: () => void = () => undefined;
 
     const dropCurrent = (): void => {
       // Unsubscribe first so the resulting "disconnected" event does not schedule a retry.
       unsubscribe();
+      unsubscribeWorkspace();
       unsubscribe = () => undefined;
       connection?.disconnect();
       connection = null;
+      activeConnection.current = null;
     };
 
     const scheduleRetry = (): void => {
@@ -61,10 +71,23 @@ export function useDaemonConnection(endpoint: DaemonEndpoint | null): DaemonConn
     const attempt = (): void => {
       if (disposed) return;
       dropCurrent();
+      if (!navigator.onLine && endpoint.kind === "remote") {
+        setWorkspaceReady(false);
+        setState({ status: "disconnected", reason: "Device is offline" });
+        return;
+      }
       const next = new DaemonConnection({ endpoint, client: CLIENT_INFO });
       connection = next;
+      activeConnection.current = next;
+      setWorkspaceReady(false);
+      unsubscribeWorkspace = next.subscribeWorkspace((snapshot) => {
+        if (disposed || activeConnection.current !== next) return;
+        setReplica({ url: endpoint.url, snapshot });
+        setWorkspaceReady(true);
+      });
       unsubscribe = next.subscribe((s) => {
         setState(s);
+        if (s.status !== "ready") setWorkspaceReady(false);
         if (s.status === "ready") retryDelay = INITIAL_RETRY_MS;
         if (s.status === "disconnected" || s.status === "error") scheduleRetry();
       });
@@ -79,10 +102,25 @@ export function useDaemonConnection(endpoint: DaemonEndpoint | null): DaemonConn
       attempt();
     };
 
+    const offline = (): void => {
+      // Loss of internet must not disable a daemon on this computer.
+      if (endpoint.kind === "local") return;
+      clearTimeout(retryTimer);
+      dropCurrent();
+      setWorkspaceReady(false);
+      setState({ status: "disconnected", reason: "Device is offline" });
+    };
+    const online = (): void => {
+      retryNow.current();
+    };
+    window.addEventListener("offline", offline);
+    window.addEventListener("online", online);
     attempt();
 
     return () => {
       disposed = true;
+      window.removeEventListener("offline", offline);
+      window.removeEventListener("online", online);
       clearTimeout(retryTimer);
       dropCurrent();
       retryNow.current = () => undefined;
@@ -90,5 +128,22 @@ export function useDaemonConnection(endpoint: DaemonEndpoint | null): DaemonConn
     };
   }, [endpoint]);
 
-  return { state, reconnectNow: () => retryNow.current() };
+  return {
+    state,
+    workspace: replica?.url === endpoint?.url ? (replica?.snapshot ?? null) : null,
+    workspaceReady: workspaceReady && replica?.url === endpoint?.url,
+    execute: async (operation) => {
+      const connection = activeConnection.current;
+      if (!connection?.workspace || connection.endpoint.url !== endpoint?.url)
+        throw new Error("Reconnect to edit this workspace");
+      const result = await connection.executeWorkspace({
+        type: "workspace.command",
+        commandId: crypto.randomUUID(),
+        epoch: connection.workspace.epoch,
+        operation: WorkspaceOperationSchema.parse(operation),
+      });
+      if (result.outcome.status === "rejected") throw new Error(result.outcome.message);
+    },
+    reconnectNow: () => retryNow.current(),
+  };
 }
