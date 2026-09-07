@@ -49,6 +49,14 @@ it("opens and creates real folders, preserving duplicate receipts and existing f
   writeFileSync(join(target, "keep.txt"), "preserve me");
   expect(manager.request(create).outcome.status).toBe("ok");
   expect(store.snapshot().projects).toHaveLength(1);
+  if (create.operation.kind !== "start") throw new Error();
+  expect(
+    manager.request({
+      ...create,
+      operation: { ...create.operation, id: randomUUID(), directory: join(root, "other") },
+    }).outcome.status,
+  ).toBe("error");
+
   expect(manager.request({ ...create, requestId: randomUUID() }).outcome).toMatchObject({
     status: "error",
   });
