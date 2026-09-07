@@ -20,9 +20,7 @@ export function TerminalSurface({
 }) {
   const connection = useContext(TerminalConnectionContext);
   const host = useRef<HTMLDivElement>(null);
-  const controls = useRef<{ claim: () => void; stop: () => void } | null>(null);
   const [session, setSession] = useState<TerminalInfo | null>(null);
-  const [controlling, setControlling] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -31,19 +29,32 @@ export function TerminalSurface({
       owner = false,
       sequence = -1,
       viewerId = "",
-      snapshotPending = false;
+      snapshotPending = false,
+      running = false;
+    let claiming: Promise<void> | null = null;
+    let activateAfterClaim = false;
+    let queuedInput = "";
     const terminal = new Terminal({
       cursorBlink: true,
       fontSize: 12,
       fontFamily: '"SF Mono", Consolas, monospace',
       scrollback: 1000,
       screenReaderMode: true,
-      theme: { background: "#15151b", foreground: "#e4e4ea", cursor: "#c5c5ef" },
+      theme: {
+        background: "#15151b",
+        foreground: "#e4e4ea",
+        cursor: "#c5c5ef",
+        scrollbarSliderBackground: "#55556280",
+        scrollbarSliderHoverBackground: "#777786b0",
+        scrollbarSliderActiveBackground: "#9999a6",
+      },
       disableStdin: true,
     });
     const fit = new FitAddon();
     terminal.loadAddon(fit);
-    terminal.open(host.current);
+    const element = host.current;
+    terminal.open(element);
+    fit.fit();
     const report = (cause: unknown) => {
       if (!disposed) setError(cause instanceof Error ? cause.message : "Terminal request failed");
     };
@@ -74,33 +85,56 @@ export function TerminalSurface({
         rows: Math.max(2, Math.min(100, proposed?.rows ?? 24)),
       };
     };
-    const claim = () => {
+    const sendInput = (data: string) => {
+      for (let offset = 0; offset < data.length; offset += 8192)
+        connection.sendTerminalInput(sessionId, data.slice(offset, offset + 8192));
+    };
+    const claim = (ifUnowned = false) => {
+      if (disposed || !running || connection.state.status !== "ready") return;
+      if (claiming) {
+        if (!ifUnowned) activateAfterClaim = true;
+        return;
+      }
       setError(null);
-      void request({ kind: "claim", sessionId, ...dimensions() })
+      claiming = request({ kind: "claim", sessionId, ifUnowned, ...dimensions() })
         .then(() => {
-          if (!disposed) terminal.focus();
+          if (disposed || !owner) return;
+          if (queuedInput) sendInput(queuedInput);
+          if (document.visibilityState === "visible") terminal.focus();
         })
-        .catch(report);
+        .catch(report)
+        .finally(() => {
+          claiming = null;
+          if (activateAfterClaim && !owner && !disposed) {
+            activateAfterClaim = false;
+            claim();
+          } else {
+            activateAfterClaim = false;
+            queuedInput = "";
+          }
+        });
     };
-    controls.current = {
-      claim,
-      stop: () => {
-        void request({ kind: "stop", sessionId }).catch(report);
-      },
+    // Focusing/clicking a terminal is the user's intent to type; no separate control button.
+    const activate = () => {
+      if (!owner) claim();
     };
+    element.addEventListener("pointerdown", activate);
+    element.addEventListener("focusin", activate);
+    element.addEventListener("keydown", activate, true);
     const unsubscribe = connection.onTerminal((event) => {
       if (disposed) return;
       if (event.type === "terminal.snapshot" && event.session.id === sessionId) {
         sequence = event.sequence;
+        running = event.session.status === "running";
         viewerId = event.viewerId;
         owner = event.ownerId === viewerId;
         terminal.reset();
         terminal.resize(event.session.cols, event.session.rows);
         terminal.write(event.data);
-        terminal.options.disableStdin = !owner || event.session.status !== "running";
+        terminal.options.disableStdin = !running;
         setSession(event.session);
-        setControlling(owner);
         setError(null);
+        if (running && event.ownerId === null) claim(true);
       } else if (event.type === "terminal.output" && event.sessionId === sessionId) {
         if (event.sequence <= sequence) return;
         if (event.sequence !== sequence + 1) {
@@ -112,20 +146,20 @@ export function TerminalSurface({
       } else if (event.type === "terminal.owner" && event.sessionId === sessionId) {
         owner = event.ownerId === viewerId;
         terminal.resize(event.cols, event.rows);
-        terminal.options.disableStdin = !owner;
-        setControlling(owner);
+        terminal.options.disableStdin = !running;
       } else if (event.type === "terminal.state" && event.session.id === sessionId) {
         setSession(event.session);
-        if (event.session.status !== "running") terminal.options.disableStdin = true;
+        running = event.session.status === "running";
+        if (!running) terminal.options.disableStdin = true;
       } else if (event.type === "terminal.error" && event.sessionId === sessionId)
         setError(event.message);
     });
     const input = terminal.onData((data) => {
-      if (!owner || disposed) return;
+      if (disposed || !running) return;
       try {
-        // Bound each input frame. Never replay typed input automatically after reconnect.
-        for (let offset = 0; offset < data.length; offset += 8192)
-          connection.sendTerminalInput(sessionId, data.slice(offset, offset + 8192));
+        // Ownership can arrive before the claim reply. Keep later keys behind buffered keys.
+        if (claiming && queuedInput.length + data.length <= 16384) queuedInput += data;
+        else if (owner && !claiming) sendInput(data);
       } catch (cause) {
         report(cause);
       }
@@ -146,18 +180,21 @@ export function TerminalSurface({
     const unsubscribeState = connection.subscribe((state) => {
       if (state.status !== "ready") {
         terminal.options.disableStdin = true;
+        queuedInput = "";
+        running = false;
         sequence = -1;
         snapshotPending = false;
         owner = false;
-        setControlling(false);
       }
     });
     attach();
     return () => {
       disposed = true;
-      controls.current = null;
       clearTimeout(resizeTimer);
       observer.disconnect();
+      element.removeEventListener("pointerdown", activate);
+      element.removeEventListener("focusin", activate);
+      element.removeEventListener("keydown", activate, true);
       input.dispose();
       unsubscribe();
       unsubscribeWorkspace();
@@ -169,30 +206,16 @@ export function TerminalSurface({
   }, [connection, sessionId]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center gap-3 border-b px-2 py-1 text-[11px] text-muted-foreground">
-        <span>{!canEdit ? "Disconnected" : (session?.status ?? "Attaching…")}</span>
-        {session?.status === "running" && (
-          <>
-            <button
-              type="button"
-              disabled={!canEdit}
-              onClick={() => controls.current?.claim()}
-              className="text-primary disabled:opacity-50"
-            >
-              {controlling ? "You have control" : "Take control"}
-            </button>
-            <button
-              type="button"
-              disabled={!canEdit}
-              onClick={() => controls.current?.stop()}
-              className="ml-auto hover:text-destructive"
-            >
-              Stop session
-            </button>
-          </>
-        )}
-        {session && !["running", "starting"].includes(session.status) && (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      {session && !["running", "starting"].includes(session.status) && (
+        <div className="flex items-center justify-between border-b px-3 py-2 text-xs text-muted-foreground">
+          <span>
+            {session.status === "exited"
+              ? "Session ended"
+              : session.status === "interrupted"
+                ? "Session interrupted"
+                : "Session failed"}
+          </span>
           <button
             type="button"
             disabled={!canEdit || restartBusy}
@@ -201,18 +224,20 @@ export function TerminalSurface({
           >
             {restartBusy ? "Starting…" : "Start new session"}
           </button>
-        )}
-      </div>
+        </div>
+      )}
       {(error || launchError || session?.error) && (
         <p role="alert" className="shrink-0 px-2 py-1 text-xs text-destructive">
           {error ?? launchError ?? session?.error}
         </p>
       )}
-      <div
-        ref={host}
-        aria-label="Terminal output"
-        className="min-h-0 flex-1 overflow-auto bg-[#15151b] p-2"
-      />
+      <div className="min-h-0 min-w-0 flex-1 overflow-hidden bg-[#15151b] p-2">
+        <div
+          ref={host}
+          aria-label="Terminal output"
+          className="concors-terminal h-full w-full overflow-hidden"
+        />
+      </div>
     </div>
   );
 }

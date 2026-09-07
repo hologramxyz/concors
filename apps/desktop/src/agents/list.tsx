@@ -1,0 +1,99 @@
+import { useEffect } from "react";
+import { Bot } from "lucide-react";
+import type { WorkspaceSnapshot } from "@concors/protocol";
+import { Chat } from "./chat";
+import { AgentStatus } from "./state";
+import { useAgents } from "./context";
+export function AgentSidebar({
+  onSelect,
+  workspace,
+}: {
+  onSelect: (id: string) => void;
+  workspace: WorkspaceSnapshot | null;
+}) {
+  const agents = useAgents()
+    .filter((a) => a.status !== "idle")
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  if (!agents.length) return null;
+  return (
+    <div className="flex max-h-[35%] min-h-0 flex-col border-t pt-3">
+      <h2 className="px-4 text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
+        Agents
+      </h2>
+      <ul className="chat-scroll mt-1 space-y-1 overflow-y-auto px-2 pb-2">
+        {agents.map((agent) => (
+          <li key={agent.id}>
+            <button
+              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left hover:bg-sidebar-accent"
+              onClick={() => onSelect(agent.id)}
+            >
+              <Bot className="size-3.5 shrink-0 text-muted-foreground" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-xs">{agent.name}</span>
+                <span className="block truncate text-[10px] text-muted-foreground">
+                  {workspace?.projects.find((p) => p.id === agent.projectId)?.name ??
+                    "Removed project"}
+                </span>
+                <AgentStatus agent={agent} />
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+export function AgentsView({
+  selectedId,
+  onSelect,
+  workspace,
+  canEdit,
+}: {
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  workspace: WorkspaceSnapshot | null;
+  canEdit: boolean;
+}) {
+  const agents = useAgents().toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const selected = agents.find((a) => a.id === selectedId) ?? agents[0];
+  useEffect(() => {
+    if (selected && selected.id !== selectedId) onSelect(selected.id);
+  }, [selected, selectedId, onSelect]);
+  if (!selected)
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+        <Bot className="size-10 text-muted-foreground/50" />
+        <h2 className="text-lg font-medium">All your agents</h2>
+        <p className="max-w-sm text-sm text-muted-foreground">
+          Choose Unified chat in a project pane to start Codex. Conversations across projects will
+          appear here.
+        </p>
+      </div>
+    );
+  return (
+    <div className="flex h-full min-h-0 min-w-0">
+      <aside
+        aria-label="Agent sessions"
+        className="chat-scroll w-56 shrink-0 overflow-y-auto border-r p-2"
+      >
+        {agents.map((agent) => (
+          <button
+            key={agent.id}
+            aria-pressed={selected.id === agent.id}
+            className={`mb-1 w-full rounded-md px-3 py-3 text-left hover:bg-muted ${selected.id === agent.id ? "bg-muted" : ""}`}
+            onClick={() => onSelect(agent.id)}
+          >
+            <span className="block truncate text-sm">{agent.name}</span>
+            <span className="mb-1 block truncate text-[11px] text-muted-foreground">
+              {workspace?.projects.find((p) => p.id === agent.projectId)?.name ?? "Removed project"}
+            </span>
+            <AgentStatus agent={agent} />
+          </button>
+        ))}
+      </aside>
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <Chat key={selected.id} sessionId={selected.id} canEdit={canEdit} />
+      </section>
+    </div>
+  );
+}

@@ -16,8 +16,7 @@ export default defineConfig({
   },
   webServer: [
     {
-      command:
-        "pnpm --filter @concors/daemon exec node src/cli.ts serve --port 7429 --log-level warn",
+      command: "node e2e/support/daemon.ts",
       url: "http://127.0.0.1:7429/health",
       env: { CONCORS_DATA_DIR: join(dataDir, "first") },
       reuseExistingServer: false,

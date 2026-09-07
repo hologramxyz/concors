@@ -23,7 +23,8 @@ after setup and checkout succeed, and its selected project state is synchronized
 Project removal remains metadata-only and never deletes files.
 
 Setup is a durable daemon job. Closing the dialog or disconnecting a browser does not cancel it.
-Reopen **Add project** to view recent setup status, bounded Git progress, and **Cancel setup**. Cancel
+The dialog shows progress and **Cancel setup** only for the operation started in that dialog; it
+does not show past actions. Job records remain persisted for reconnect/recovery. Cancel
 terminates the active clone's process group on Unix or process tree on Windows. A cancelled or failed
 setup does not register a project. Permission errors suggest a writable location. A preservation
 message is shown only if setup actually created the destination. Remaining destination files are preserved for inspection; choose
