@@ -140,3 +140,55 @@ test("workspace shortcuts create, search, split and close the active pane withou
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("Mac workspace shortcuts use physical Control and display matching hints", async ({
+  page,
+}) => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-mac-shortcuts-"));
+  try {
+    // Exercise the Mac branch in browser CI; this does not simulate native macOS accelerators.
+    await page.addInitScript(() =>
+      Object.defineProperty(navigator, "platform", { get: () => "MacIntel" }),
+    );
+    await signedIn(page);
+    await page.goto("/");
+    await expect(
+      page.getByRole("button", { name: "Add project", exact: true }).first(),
+    ).toBeEnabled();
+    await page.keyboard.press("Control+Shift+n");
+    await page.getByLabel("Project name", { exact: true }).fill("Mac keyboard project");
+    await page.getByLabel("Folder on this machine").fill(directory);
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Add project", exact: true })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: "Mac keyboard project", exact: true }),
+    ).toBeVisible();
+    await page.keyboard.press("Control+Shift+t");
+    await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
+    const panes = page.getByRole("region", { name: "Terminal pane", exact: true });
+    await expect(panes).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "New tab", exact: true })).toHaveAttribute(
+      "title",
+      "New tab (Control+Shift+T)",
+    );
+    await expect(page.getByRole("button", { name: "Pane actions", exact: true })).toBeEnabled();
+    await panes.first().focus();
+    await page.keyboard.press("Control+Shift+d");
+    await expect(panes).toHaveCount(2);
+    await expect(panes.last()).toBeFocused();
+    await page.keyboard.press("Control+Shift+w");
+    await expect(panes).toHaveCount(1);
+    expect(page.isClosed()).toBe(false);
+    await page.keyboard.press("Control+Shift+x");
+    await expect(panes).toHaveCount(0);
+    await page.keyboard.press("Control+Shift+Slash");
+    await expect(page.getByRole("dialog")).toContainText(
+      "physical Control (⌃) key, not Command (⌘)",
+    );
+    await expect(page.getByRole("dialog")).toContainText("Control+Shift+W");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
