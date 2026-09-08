@@ -25,6 +25,8 @@ export const AgentSettingsSchema = z.object({
   model: z.string().max(100).nullable().default(null),
   effort: z.string().min(1).max(100).nullable().default(null),
   mode: z.enum(["default", "auto-review", "full-access"]).default("default"),
+  planMode: z.boolean().optional(),
+  serviceTier: z.string().max(100).nullable().optional(),
 });
 export type AgentSettings = z.infer<typeof AgentSettingsSchema>;
 export const AgentAttachmentSchema = z.object({
@@ -41,6 +43,7 @@ const AgentPresentationSchema = z.object({
   command: z.string().max(16000).optional(),
   cwd: z.string().optional(),
   output: z.string().max(16000).optional(),
+  input: z.string().max(16000).optional(),
   exitCode: z.number().nullable().optional(),
   files: z
     .array(z.object({ path: z.string(), diff: z.string().max(16000) }))
@@ -64,6 +67,7 @@ export const AgentInfoSchema = z.object({
   directory: z.string(),
   model: z.string().nullable(),
   settings: AgentSettingsSchema.optional(),
+  supportsPlan: z.boolean().optional(),
   models: z
     .array(
       z.object({
@@ -71,6 +75,10 @@ export const AgentInfoSchema = z.object({
         label: z.string(),
         efforts: z.array(z.string()),
         defaultEffort: z.string().nullable(),
+        serviceTiers: z
+          .array(z.object({ id: z.string(), label: z.string(), description: z.string() }))
+          .max(20)
+          .optional(),
       }),
     )
     .max(100)

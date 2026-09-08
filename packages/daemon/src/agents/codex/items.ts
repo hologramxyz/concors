@@ -126,6 +126,11 @@ export function mapCodexItem(
         ...base,
         kind: "tool",
         title: `${text(item["server"])} · ${text(item["tool"])}`,
+        presentation: {
+          type: "mcp",
+          input: detail(item["arguments"]).slice(0, 16000),
+          output: detail(item["result"] ?? item["error"]).slice(0, 16000),
+        },
         text: text(item["tool"]),
         detail: detail({ input: item["arguments"], output: item["result"], error: item["error"] }),
       };
@@ -134,6 +139,7 @@ export function mapCodexItem(
         ...base,
         kind: "tool",
         title: "Search the web",
+        presentation: { type: "search" },
         text: text(item["query"]),
         detail: detail(item["action"]),
       };

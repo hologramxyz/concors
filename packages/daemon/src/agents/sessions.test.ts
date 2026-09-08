@@ -374,3 +374,66 @@ it("streams structured plans, thinking summaries, child activity and context usa
   ).toBe("inProgress");
   expect(a.agents[0]?.status).toBe("working");
 });
+
+it("shares native plan and speed controls, resets plan mode, and rejects unavailable tiers", async () => {
+  const { a, b, id } = await setup();
+  expect(a.agents[0]?.supportsPlan).toBe(true);
+  const settings = {
+    model: "fixture",
+    effort: "high",
+    mode: "auto-review" as const,
+    planMode: true,
+    serviceTier: "fast",
+  };
+  expect(
+    (
+      await action(a, {
+        kind: "configure",
+        sessionId: id,
+        settings,
+        expectedRevision: a.agents[0]!.revision,
+      })
+    ).outcome.status,
+  ).toBe("ok");
+  await expect.poll(() => b.agents[0]?.settings?.planMode).toBe(true);
+  await action(b, { kind: "send", sessionId: id, text: "hold planning" });
+  await expect
+    .poll(() => providers[0]!.requests.filter((r) => r.method === "turn/start").length)
+    .toBe(1);
+  expect(providers[0]!.requests.find((r) => r.method === "turn/start")?.params).toMatchObject({
+    serviceTier: "fast",
+    sandboxPolicy: { type: "readOnly" },
+    collaborationMode: { mode: "plan", settings: { model: "fixture", reasoning_effort: "high" } },
+  });
+  providers[0]!.finish();
+  await expect.poll(() => a.agents[0]?.status).toBe("done");
+  expect(
+    (
+      await action(a, {
+        kind: "configure",
+        sessionId: id,
+        settings: { ...settings, serviceTier: "not-available" },
+        expectedRevision: a.agents[0]!.revision,
+      })
+    ).outcome.status,
+  ).toBe("error");
+  expect(
+    (
+      await action(a, {
+        kind: "configure",
+        sessionId: id,
+        settings: { ...settings, planMode: false, serviceTier: null },
+        expectedRevision: a.agents[0]!.revision,
+      })
+    ).outcome.status,
+  ).toBe("ok");
+  await action(a, { kind: "send", sessionId: id, text: "hold implementation" });
+  await expect
+    .poll(() => providers[0]!.requests.filter((r) => r.method === "turn/start").length)
+    .toBe(2);
+  expect(providers[0]!.requests.filter((r) => r.method === "turn/start")[1]?.params).toMatchObject({
+    serviceTier: null,
+    sandboxPolicy: { type: "workspaceWrite" },
+    collaborationMode: { mode: "default" },
+  });
+});

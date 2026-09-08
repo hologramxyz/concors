@@ -31,12 +31,21 @@ export class TestAgentProvider implements AgentProvider {
   }
   async request(method: string, params: unknown = {}): Promise<unknown> {
     this.requests.push({ method, params });
+    if (method === "collaborationMode/list")
+      return { data: [{ mode: "plan" }, { mode: "default" }] };
     if (method === "model/list")
       return {
         data: [
           {
             model: "fixture",
             displayName: "Fixture model",
+            serviceTiers: [
+              {
+                id: "fast",
+                name: "Fast",
+                description: "Faster responses; additional usage may apply.",
+              },
+            ],
             supportedReasoningEfforts: [{ reasoningEffort: "low" }, { reasoningEffort: "high" }],
             defaultReasoningEffort: "high",
           },
@@ -108,6 +117,13 @@ export class TestAgentProvider implements AgentProvider {
     } else if (text.includes("fail")) this.finish("failed");
     else {
       if (text.includes("rich")) {
+        this.emit("item/completed", {
+          item: {
+            id: `markdown-${this.turnId}`,
+            type: "agentMessage",
+            text: "## Preview\n\nA **formatted** response.\n\n```ts\nconst ready = true;\n```\n\n| Item | Status |\n| --- | --- |\n| Preview | Ready |",
+          },
+        });
         this.emit("turn/plan/updated", {
           plan: [
             { step: "Inspect the project", status: "completed" },
