@@ -96,6 +96,19 @@ to save the client one request.
 | GET    | `/api/v1/me`                        | Current user + session (active organization)    |
 | GET    | `/api/v1/organizations`             | Organizations of the user, personal first       |
 | POST   | `/api/auth/organization/set-active` | `{ organizationId }`                            |
+| GET    | `/api/v1/machines/catalog`          | Regions, sizes and prices for new machines      |
+| GET    | `/api/v1/machines`                  | Machines of an organization                     |
+| POST   | `/api/v1/machines`                  | `{ name, region, size }` → `{ machine }`        |
+| GET    | `/api/v1/machines/:id`              | One machine, refreshed from OVH                 |
+| DELETE | `/api/v1/machines/:id`              | Destroy a machine                               |
+| GET    | `/api/v1/machines/costs`            | Monthly cost of an organization's machines      |
+| GET    | `/api/v1/ssh-keys`                  | SSH keys of an organization                     |
+| POST   | `/api/v1/ssh-keys`                  | `{ name, publicKey }` → `{ sshKey }`            |
+| DELETE | `/api/v1/ssh-keys/:id`              | Remove a key                                    |
+| GET    | `/api/v1/billing`                   | Card on file, payment trouble, machine prices   |
+| POST   | `/api/v1/billing/setup`             | Stripe Checkout URL to save a card              |
+| POST   | `/api/v1/billing/portal`            | Stripe customer portal URL                      |
+| GET    | `/api/v1/billing/invoices`          | Invoices of an organization                     |
 
 Error bodies come in two shapes and are both mapped to `ApiError`: Fastify's
 `{ statusCode, error, message }` and Better Auth's `{ message, code }` (for example
@@ -106,5 +119,6 @@ Error bodies come in two shapes and are both mapped to `ApiError`: Fastify's
 - OAuth / social sign-in. The server has no providers registered yet; once it does, the desktop
   flow needs a system-browser round trip with a deep link back into the app.
 - Password reset and e-mail verification screens (the server has no e-mail provider wired up).
-- Using the account to list, create or connect **cloud machines**. The machine switcher still only
-  knows manually added daemon URLs; wiring `/api/v1/machines` is the next step.
+- Connecting the workspace to a **cloud machine's daemon**. Machines can be created and destroyed
+  from the Machines view and reached over SSH, but the machine switcher still only knows manually
+  added daemon URLs.
