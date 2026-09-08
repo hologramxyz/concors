@@ -154,7 +154,10 @@ export function AppSidebar(props: AppSidebarProps) {
             </ul>
           </SidebarSection>
           <SidebarSection title="Agents">
-            <AgentSidebar onSelect={props.onSelectAgent} />
+            <AgentSidebar
+              onSelect={props.onSelectAgent}
+              projects={props.workspace?.projects ?? []}
+            />
           </SidebarSection>
           <SidebarSection title="Servers">
             <p className="px-2 py-2 leading-relaxed text-muted-foreground">
