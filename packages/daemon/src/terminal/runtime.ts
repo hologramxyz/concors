@@ -1,3 +1,4 @@
+import { terminalEnvironment } from "./environment.ts";
 import * as pty from "node-pty";
 import headless from "@xterm/headless";
 import serialize from "@xterm/addon-serialize";
@@ -64,7 +65,7 @@ export class TerminalRuntime {
         cols: info.cols,
         rows: info.rows,
         cwd: info.directory,
-        env: { ...process.env, TERM: "xterm-256color", COLORTERM: "truecolor" },
+        env: terminalEnvironment(process.env),
       });
     } catch (error) {
       this.#coalescer.dispose();
