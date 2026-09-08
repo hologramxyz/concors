@@ -296,7 +296,11 @@ it("syncs model and permission choices, rejects stale edits, and forwards upload
         expectedRevision: a.agents[0]!.revision,
       })
     ).outcome.status,
-  ).toBe("error");
+  ).toBe("ok");
+  expect(params).toMatchObject({
+    approvalsReviewer: "auto_review",
+    sandboxPolicy: { type: "workspaceWrite" },
+  });
   providers[0]!.finish();
   await expect.poll(() => a.agents[0]?.status).toBe("done");
   await action(a, {
@@ -436,4 +440,32 @@ it("shares native plan and speed controls, resets plan mode, and rejects unavail
     sandboxPolicy: { type: "workspaceWrite" },
     collaborationMode: { mode: "default" },
   });
+});
+
+it("switches a bound Agent pane to a terminal without stopping the shared agent", async () => {
+  const { a, b, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "hold" });
+  await expect.poll(() => a.agents[0]?.status).toBe("working");
+  const project = a.workspace!.projects[0]!,
+    tab = project.tabs[0]!,
+    pane = tab.nodes.find((n) => n.kind === "pane")!;
+  await a.executeWorkspace({
+    type: "workspace.command",
+    commandId: randomUUID(),
+    epoch: a.workspace!.epoch,
+    operation: {
+      kind: "pane.configure",
+      projectId: project.id,
+      tabId: tab.id,
+      paneId: pane.id,
+      expectedVersion: project.version,
+      profile: "shell",
+    },
+  });
+  await expect
+    .poll(() => b.workspace!.projects[0]!.tabs[0]!.nodes[0])
+    .toMatchObject({ profile: "shell", sessionId: null });
+  expect(b.agents[0]?.status).toBe("working");
+  expect(providers[0]?.closed).toBe(false);
+  expect((await action(b, { kind: "read", sessionId: id })).outcome.status).toBe("ok");
 });

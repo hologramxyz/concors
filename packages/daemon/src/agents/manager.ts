@@ -305,8 +305,6 @@ export class AgentManager {
       if (op.kind === "configure") {
         if (info.revision !== op.expectedRevision)
           throw new Error("Agent settings changed. Try again.");
-        if (["starting", "working", "needs_input"].includes(info.status))
-          throw new Error("Change settings after this turn finishes.");
         if (
           op.settings.model &&
           info.models?.length &&
@@ -367,7 +365,7 @@ export class AgentManager {
           detail: "",
           status: "completed",
         });
-        void this.send(info.id, op.text, op.attachments ?? []).catch((error) =>
+        void this.send(info.id, op.text, op.attachments ?? [], next.settings).catch((error) =>
           this.fail(info.id, error),
         );
       } else if (op.kind === "interrupt") {
@@ -435,7 +433,12 @@ export class AgentManager {
       outcome: { status: "ok", conversation: this.#store.agentConversation(id, before) },
     };
   }
-  private async send(id: string, text: string, attachments: AgentAttachment[]): Promise<void> {
+  private async send(
+    id: string,
+    text: string,
+    attachments: AgentAttachment[],
+    settings: AgentInfo["settings"],
+  ): Promise<void> {
     const provider = await this.provider(id);
     const info = this.#store.agent(id);
     const uploaded = attachments.length
@@ -445,7 +448,7 @@ export class AgentManager {
       await provider.request("turn/start", {
         threadId: info.threadId,
         input: [...(text ? [{ type: "text", text }] : []), ...uploaded],
-        ...turnControls(info),
+        ...turnControls({ ...info, settings: settings ?? defaultSettings }),
       }),
     );
     const current = this.#store.agent(id);
