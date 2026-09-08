@@ -236,7 +236,17 @@
   padding: 0.4rem 0.6rem;
 }
 
-/* Keep scrollback accessible without native arrow buttons in the terminal corner. */
+/* xterm 6 supplies its own draggable scrollbar. Suppress the native viewport
+   scrollbar as well as its buttons so macOS/browser chrome cannot add a corner arrow.
+   Wheel, trackpad and keyboard scrollback remain owned by xterm. */
+.concors-terminal .xterm-viewport {
+  scrollbar-width: none;
+}
+.concors-terminal .xterm-viewport::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
 .concors-terminal .xterm-viewport::-webkit-scrollbar-button {
   display: none;
   width: 0;
