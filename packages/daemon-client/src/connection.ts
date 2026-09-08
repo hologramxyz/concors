@@ -16,6 +16,7 @@ import {
   TerminalRequestSchema,
   TerminalInputSchema,
   type TerminalEvent,
+  type TerminalInfo,
   type TerminalOperation,
   type TerminalResult,
   createProtocolError,
@@ -99,6 +100,8 @@ export class DaemonConnection {
   #workspace: WorkspaceSnapshot | null = null;
   #projectSetups: ProjectSetup[] = [];
   #agents: AgentInfo[] = [];
+  #terminals: TerminalInfo[] = [];
+  readonly #terminalSessionListeners = new Set<() => void>();
   readonly #agentListeners = new Set<(event: AgentEvent) => void>();
   readonly #agentRequests = new Map<
     string,
@@ -151,6 +154,22 @@ export class DaemonConnection {
 
   get state(): ConnectionState {
     return this.#state;
+  }
+
+  get terminals(): readonly TerminalInfo[] {
+    return this.#terminals;
+  }
+
+  subscribeTerminalSessions(listener: () => void): () => void {
+    this.#terminalSessionListeners.add(listener);
+    return () => {
+      this.#terminalSessionListeners.delete(listener);
+    };
+  }
+
+  private updateTerminal(session: TerminalInfo): void {
+    this.#terminals = [...this.#terminals.filter((item) => item.id !== session.id), session];
+    for (const listener of this.#terminalSessionListeners) listener();
   }
 
   get workspace(): WorkspaceSnapshot | null {
@@ -384,6 +403,8 @@ export class DaemonConnection {
         const message = parsed.data;
         switch (message.type) {
           case "daemon.ready": {
+            this.#terminals = [];
+            for (const listener of this.#terminalSessionListeners) listener();
             clearTimeout(handshakeTimer);
             const daemon: DaemonInfo = {
               protocolVersion: message.protocolVersion,
@@ -441,6 +462,8 @@ export class DaemonConnection {
             break;
           }
           case "terminal.result": {
+            if (this.#state.status === "ready" && message.outcome.status === "ok")
+              for (const session of message.outcome.sessions) this.updateTerminal(session);
             const pending = this.#terminalRequests.get(message.requestId);
             if (pending) {
               clearTimeout(pending.timer);
@@ -454,8 +477,11 @@ export class DaemonConnection {
           case "terminal.state":
           case "terminal.owner":
           case "terminal.error":
-            if (this.#state.status === "ready")
+            if (this.#state.status === "ready") {
+              if (message.type === "terminal.state" || message.type === "terminal.snapshot")
+                this.updateTerminal(message.session);
               for (const listener of this.#terminalListeners) listener(message);
+            }
             break;
           case "workspace.snapshot":
             if (this.#state.status !== "ready") break;

@@ -1,3 +1,4 @@
+import type { PaneFocusRequest } from "./session-pane";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -10,7 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ChatPane } from "@/agents/chat";
 import { TerminalPane } from "@/terminal/terminal-pane";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AgentPaneIcon } from "@/agents/activity";
 import { useAgents } from "@/agents/context";
 import { Columns2, Rows2, Ellipsis, Terminal, X } from "lucide-react";
@@ -30,6 +31,7 @@ const PROFILE_LABELS: Record<PaneProfile, string> = {
   opencode: "OpenCode",
 };
 interface Props {
+  focusRequest?: PaneFocusRequest | null;
   tab: WorkspaceTab;
   project: WorkspaceProject;
   canEdit: boolean;
@@ -37,6 +39,19 @@ interface Props {
 }
 
 export function PaneLayout(props: Props) {
+  const container = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const target = props.focusRequest;
+    if (!target || target.projectId !== props.project.id || target.tabId !== props.tab.id) return;
+    const frame = requestAnimationFrame(() => {
+      const pane = container.current?.querySelector<HTMLElement>(
+        `[data-pane-id="${target.paneId}"]`,
+      );
+      const input = pane?.querySelector<HTMLTextAreaElement>("textarea:not(:disabled)");
+      (input ?? pane)?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [props.focusRequest, props.project.id, props.tab.id]);
   const nodes = new Map(props.tab.nodes.map((node) => [node.id, node]));
   const render = (id: string): React.ReactNode => {
     const node = nodes.get(id);
@@ -63,7 +78,11 @@ export function PaneLayout(props: Props) {
       );
     return <Pane key={id} {...props} node={node} />;
   };
-  return <div className="h-full min-h-[220px] min-w-[320px] p-2">{render(props.tab.root)}</div>;
+  return (
+    <div ref={container} className="h-full min-h-[220px] min-w-[320px] p-2">
+      {render(props.tab.root)}
+    </div>
+  );
 }
 
 function Pane({
@@ -83,6 +102,8 @@ function Pane({
   };
   return (
     <section
+      data-pane-id={node.id}
+      tabIndex={-1}
       aria-label={`${PROFILE_LABELS[node.profile]} pane`}
       className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border bg-card"
     >

@@ -1,3 +1,4 @@
+import { findSessionPane, type PaneFocusRequest } from "@/workspace/session-pane";
 import { NotificationProvider } from "@/notifications/provider";
 import { AgentsProvider } from "@/agents/state";
 import { AgentsView } from "@/agents/list";
@@ -13,6 +14,7 @@ import { describeAuthError } from "@/auth/auth-state";
 import { useAuth } from "@/auth/use-auth";
 import { AppSidebar } from "@/components/app-sidebar";
 import { CommandPalette } from "@/components/command-palette";
+import { MachinesView } from "@/machines/machines-view";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { resolveStartupEndpoint } from "@/daemon/resolve-endpoint";
 import { useDaemonConnection } from "@/daemon/use-daemon-connection";
@@ -44,6 +46,7 @@ export function App() {
       document.getElementById(collapsed ? "expand-sidebar" : "collapse-sidebar")?.focus(),
     );
   };
+  const [paneFocus, setPaneFocus] = useState<PaneFocusRequest | null>(null);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [view, setView] = useState<View>("projects");
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -81,10 +84,41 @@ export function App() {
     };
   }, []);
 
-  const openAgent = useCallback((id: string) => {
-    setSelectedAgent(id);
-    setView("agents");
-  }, []);
+  const transport = connection.transport;
+  const openAgent = useCallback(
+    (id: string) => {
+      const target = findSessionPane(transport?.workspace ?? null, id);
+      if (!target) {
+        if (transport?.terminals.some((session) => session.id === id)) {
+          setError(
+            "This terminal's pane has been closed. Use Attach an existing session in a project pane to reopen it.",
+          );
+        } else {
+          setSelectedAgent(id);
+          setView("agents");
+        }
+        return;
+      }
+      if (!transport?.workspace) return;
+      setError(null);
+      void transport
+        .executeWorkspace({
+          type: "workspace.command",
+          commandId: crypto.randomUUID(),
+          epoch: transport.workspace.epoch,
+          operation: { kind: "selection.set", projectId: target.projectId, tabId: target.tabId },
+        })
+        .then((result) => {
+          if (result.outcome.status === "rejected") throw new Error(result.outcome.message);
+          setView("projects");
+          setPaneFocus({ ...target, requestId: crypto.randomUUID() });
+        })
+        .catch((cause: unknown) =>
+          setError(cause instanceof Error ? cause.message : "Could not open agent pane"),
+        );
+    },
+    [transport],
+  );
   const openPalette = useCallback(() => setPaletteOpen(true), []);
   const signOut = () => void auth.signOut();
 
@@ -137,10 +171,7 @@ export function App() {
                 collapsed={sidebarCollapsed}
                 onCollapse={() => toggleSidebar(true)}
                 execute={execute}
-                onSelectAgent={(id) => {
-                  setSelectedAgent(id);
-                  setView("agents");
-                }}
+                onSelectAgent={openAgent}
                 view={view}
                 onNavigate={setView}
                 onOpenCommandPalette={openPalette}
@@ -236,6 +267,7 @@ export function App() {
                   ) : view === "projects" ? (
                     workspace ? (
                       <ProjectWorkspace
+                        focusRequest={paneFocus}
                         workspace={workspace}
                         canEdit={canEdit}
                         onCommand={command}
@@ -257,6 +289,8 @@ export function App() {
                         </button>
                       </div>
                     )
+                  ) : view === "machines" ? (
+                    <MachinesView auth={account} />
                   ) : view === "agents" ? (
                     <AgentsView
                       selectedId={selectedAgent}

@@ -11,20 +11,31 @@ export class TerminalManager {
   readonly #store: WorkspaceStore;
   readonly #runtimes = new Map<string, TerminalRuntime>();
   readonly #workspaceChanged: () => void;
+  readonly #terminalChanged: (session: TerminalInfo) => void;
   #queue: Promise<unknown> = Promise.resolve();
   #closed = false;
 
-  constructor(store: WorkspaceStore, workspaceChanged: () => void) {
+  constructor(
+    store: WorkspaceStore,
+    workspaceChanged: () => void,
+    terminalChanged: (session: TerminalInfo) => void = () => undefined,
+  ) {
     this.#store = store;
     this.#workspaceChanged = workspaceChanged;
+    this.#terminalChanged = terminalChanged;
     for (const session of store.terminals())
       if (session.status === "running" || session.status === "starting") {
-        store.saveTerminal({
+        this.save({
           ...session,
           status: "interrupted",
           error: "Daemon restarted; the previous process is no longer attached",
         });
       }
+  }
+
+  private save(session: TerminalInfo): void {
+    this.#store.saveTerminal(session);
+    this.#terminalChanged(session);
   }
 
   request(viewer: TerminalViewer, request: TerminalRequest): Promise<TerminalResult> {
@@ -137,10 +148,9 @@ export class TerminalManager {
     };
     this.#store.reserveTerminal(request, info);
     this.#workspaceChanged();
+    this.#terminalChanged(info);
     try {
-      const runtime = new TerminalRuntime(info, command, (session) =>
-        this.#store.saveTerminal(session),
-      );
+      const runtime = new TerminalRuntime(info, command, (session) => this.save(session));
       this.#runtimes.set(info.id, runtime);
       return runtime.info;
     } catch (error) {
@@ -149,7 +159,7 @@ export class TerminalManager {
         status: "failed",
         error: error instanceof Error ? error.message : "Could not launch terminal",
       };
-      this.#store.saveTerminal(failed);
+      this.save(failed);
       return failed;
     }
   }
