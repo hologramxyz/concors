@@ -26,11 +26,17 @@ test("settings replace the app sidebar with grouped pages and return to the app"
   await expect(page.getByRole("heading", { name: "Organization", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Session", exact: true })).toBeVisible();
 
-  const mainBounds = await page.getByRole("main").boundingBox();
-  const profileBounds = await page
-    .getByRole("heading", { name: "Profile", exact: true })
-    .boundingBox();
-  expect((profileBounds?.x ?? 0) - (mainBounds?.x ?? 0)).toBeLessThanOrEqual(24);
+  const main = page.getByRole("main");
+  const mainBounds = await main.boundingBox();
+  const contentBounds = await main.locator(":scope > div").boundingBox();
+  expect(mainBounds).not.toBeNull();
+  expect(contentBounds).not.toBeNull();
+  if (mainBounds && contentBounds) {
+    const left = contentBounds.x - mainBounds.x;
+    const right = mainBounds.x + mainBounds.width - contentBounds.x - contentBounds.width;
+    expect(Math.abs(left - right)).toBeLessThanOrEqual(1);
+    expect(contentBounds.width).toBeLessThanOrEqual(768);
+  }
 
   await settingsNavigation.getByRole("button", { name: "Appearance", exact: true }).click();
   await expect(page.locator("header").getByRole("heading", { name: "Appearance" })).toBeVisible();
