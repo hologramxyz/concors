@@ -1,3 +1,5 @@
+import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
+import { TAB_PROFILES } from "@/workspace/tab-profiles";
 import { useEffect } from "react";
 import { Bot, LoaderCircle } from "lucide-react";
 import type { WorkspaceSnapshot } from "@concors/protocol";
@@ -5,15 +7,59 @@ import { Chat } from "./chat";
 import { AgentStatus } from "./state";
 import { useAgents, AGENT_STATUS } from "./context";
 export function AgentSidebar({ onSelect }: { onSelect: (id: string) => void }) {
-  const agents = useAgents().toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const chats = useAgents();
+  const terminals = useTerminalSessions();
+  const agents = [
+    ...chats.map((agent) => ({
+      id: agent.id,
+      name: agent.name,
+      updatedAt: agent.updatedAt,
+      running: agent.status === "starting" || agent.status === "working",
+      status: AGENT_STATUS[agent.status],
+      color:
+        agent.status === "done"
+          ? "bg-emerald-500"
+          : agent.status === "failed"
+            ? "bg-red-500"
+            : agent.status === "needs_input"
+              ? "bg-amber-500"
+              : "bg-white",
+      unread: !!(agent.attention && !agent.attention.seen),
+    })),
+    ...terminals
+      .filter((session) => session.profile !== "shell")
+      .map((session) => ({
+        id: session.id,
+        name:
+          TAB_PROFILES.find((profile) => profile.profile === session.profile)?.label ??
+          session.profile,
+        updatedAt: session.startedAt,
+        running: session.status === "running" || session.status === "starting",
+        status:
+          session.status === "running"
+            ? "Running in terminal"
+            : session.status === "starting"
+              ? "Starting"
+              : session.status === "exited"
+                ? "Exited"
+                : session.status === "failed"
+                  ? "Failed"
+                  : "Interrupted",
+        color:
+          session.status === "exited"
+            ? "bg-emerald-500"
+            : session.status === "failed"
+              ? "bg-red-500"
+              : "bg-white",
+        unread: false,
+      })),
+  ].toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   if (!agents.length)
     return <p className="px-2 py-2 text-[13px] text-muted-foreground">No agents yet.</p>;
   return (
     <ul className="mt-1 space-y-0.5">
       {agents.map((agent) => {
-        const running = agent.status === "starting" || agent.status === "working";
-        const status = AGENT_STATUS[agent.status];
-        const unread = agent.attention && !agent.attention.seen;
+        const { running, status, unread } = agent;
         return (
           <li key={agent.id}>
             <button
@@ -39,9 +85,7 @@ export function AgentSidebar({ onSelect }: { onSelect: (id: string) => void }) {
                     aria-hidden="true"
                   />
                 ) : (
-                  <span
-                    className={`size-2.5 rounded-full border border-black/15 ${agent.status === "done" ? "bg-emerald-500" : agent.status === "failed" ? "bg-red-500" : agent.status === "needs_input" ? "bg-amber-500" : "bg-white"}`}
-                  />
+                  <span className={`size-2.5 rounded-full border border-black/15 ${agent.color}`} />
                 )}
               </span>
               <span className="min-w-0 flex-1 truncate">{agent.name}</span>
