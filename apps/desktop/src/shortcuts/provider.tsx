@@ -71,8 +71,8 @@ export function ShortcutProvider({ children }: { children: ReactNode }) {
       if (commands.snapshot().length === 0) return;
       const id = matchShortcut(event, isMac(), terminal, isTauri());
       if (!id) return;
-      // Preserve selection shortcuts in chat/editors rather than preventing their defaults.
-      if (editing && id !== "search" && (!composer || id.startsWith("focus-"))) {
+      // Agent inputs participate in workspace navigation; ordinary form fields retain editing keys.
+      if (editing && id !== "search" && !composer) {
         if (!id.startsWith("focus-")) event.preventDefault();
         return;
       }

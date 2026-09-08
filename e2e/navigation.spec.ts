@@ -17,7 +17,7 @@ const focusedPane = (page: Page) =>
   page.evaluate(() =>
     document.activeElement?.closest("[data-pane-id]")?.getAttribute("data-pane-id"),
   );
-test("directional pane sequences, tab cycling, project memory and editor selection", async ({
+test("directional pane sequences, tab cycling, project memory and immediate Agent input focus", async ({
   page,
 }) => {
   const directory = await mkdtemp(join(tmpdir(), "concors-navigation-"));
@@ -78,10 +78,17 @@ test("directional pane sequences, tab cycling, project memory and editor selecti
     for (let i = 0; i < 3; i++) {
       await page.keyboard.press("Control+Shift+ArrowRight");
       await expect.poll(() => focusedPane(page)).toBe(upperId);
-      await expect(upper.locator("header")).toBeFocused();
+      await expect(upper.getByLabel("Message Codex")).toBeFocused();
       await page.keyboard.press("Control+Shift+ArrowLeft");
       await expect.poll(() => focusedPane(page)).toBe(left);
     }
+    await upper.getByLabel("Message Codex").fill("draft stays while navigating");
+    await page.keyboard.press("Control+Shift+ArrowLeft");
+    await expect.poll(() => focusedPane(page)).toBe(left);
+    await page.keyboard.press("Control+Shift+ArrowRight");
+    await expect(upper.getByLabel("Message Codex")).toBeFocused();
+    await expect(upper.getByLabel("Message Codex")).toHaveValue("draft stays while navigating");
+    await page.keyboard.press("Control+Shift+ArrowLeft");
     // Held directional keys may repeat; creation/close sequences may not.
     await page.evaluate(() =>
       window.dispatchEvent(
@@ -107,9 +114,11 @@ test("directional pane sequences, tab cycling, project memory and editor selecti
     await expect(input).toBeEnabled();
     await input.fill("keep these words");
     await page.keyboard.press("Control+Shift+ArrowLeft");
+    await expect(input).toBeFocused();
+    await expect(input).toHaveValue("keep these words");
     expect(
       await input.evaluate((node: HTMLTextAreaElement) => node.selectionEnd - node.selectionStart),
-    ).toBeGreaterThan(0);
+    ).toBe(0);
     await expect(page.getByRole("region", { name: "Pane shortcuts", exact: true })).toHaveCount(0);
     // P/T sequences work directly in the composer without inserting their follow-up keys.
     await sequence(page, "p", "Escape");

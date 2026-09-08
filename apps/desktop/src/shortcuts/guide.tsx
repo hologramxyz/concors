@@ -21,7 +21,8 @@ export function ShortcutGuide({
           <DialogDescription>
             {isMac() && "On Mac, use the physical Control (⌃) key, not Command (⌘). "}
             Press a P or T shortcut, release the keys, then choose the next key. Escape cancels.
-            Ctrl+Shift+Arrow moves between panes; in text fields it keeps selecting text.
+            Ctrl+Shift+Arrow moves between panes, including from the Agent input. Other form fields
+            keep their normal text-selection keys.
           </DialogDescription>
         </DialogHeader>
         <dl className="max-h-[55vh] space-y-2 overflow-y-auto text-[13px]">
