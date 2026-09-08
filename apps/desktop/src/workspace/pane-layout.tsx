@@ -1,3 +1,5 @@
+import { useCommand } from "@/shortcuts/context";
+import { shortcutLabel } from "@/shortcuts/bindings";
 import type { PaneFocusRequest } from "./session-pane";
 import {
   DropdownMenu,
@@ -38,6 +40,61 @@ interface Props {
 
 export function PaneLayout(props: Props) {
   const container = useRef<HTMLDivElement>(null);
+  const pendingFocus = useRef<string | null>(null);
+  const [activePaneId, setActivePaneId] = useState<string | null>(null);
+  const activePane =
+    props.tab.nodes.find((node) => node.kind === "pane" && node.id === activePaneId) ??
+    props.tab.nodes.find((node) => node.kind === "pane");
+  const split = (axis: "horizontal" | "vertical") => {
+    if (!activePane || activePane.kind !== "pane") return;
+    const newPaneId = crypto.randomUUID();
+    pendingFocus.current = newPaneId;
+    props.onCommand({
+      kind: "pane.split",
+      projectId: props.project.id,
+      expectedVersion: props.project.version,
+      tabId: props.tab.id,
+      paneId: activePane.id,
+      splitId: crypto.randomUUID(),
+      newPaneId,
+      axis,
+      profile: activePane.profile,
+    });
+  };
+  useEffect(() => {
+    const requested = pendingFocus.current;
+    const targetId =
+      requested && props.tab.nodes.some((node) => node.id === requested)
+        ? requested
+        : activePaneId && !props.tab.nodes.some((node) => node.id === activePaneId)
+          ? activePane?.id
+          : null;
+    if (!targetId) return;
+    pendingFocus.current = null;
+    const pane = container.current?.querySelector<HTMLElement>(`[data-pane-id="${targetId}"]`);
+    (pane?.querySelector<HTMLTextAreaElement>("textarea:not(:disabled)") ?? pane)?.focus();
+  }, [props.tab.nodes, activePaneId, activePane?.id]);
+  const canSplit = props.canEdit && !!activePane && props.tab.nodes.length < 63;
+  useCommand("new-pane", canSplit, () => split("horizontal"));
+  useCommand("split-horizontal", canSplit, () => split("horizontal"));
+  useCommand("split-vertical", canSplit, () => split("vertical"));
+  useCommand("close-pane", props.canEdit && !!activePane, () => {
+    if (activePane)
+      props.onCommand({
+        kind: "pane.close",
+        projectId: props.project.id,
+        expectedVersion: props.project.version,
+        tabId: props.tab.id,
+        paneId: activePane.id,
+      });
+  });
+  const rememberPane = (event: React.SyntheticEvent) => {
+    if (event.target instanceof Element) {
+      const id = event.target.closest("[data-pane-id]")?.getAttribute("data-pane-id");
+      if (id) setActivePaneId(id);
+    }
+  };
+
   useEffect(() => {
     const target = props.focusRequest;
     if (!target || target.projectId !== props.project.id || target.tabId !== props.tab.id) return;
@@ -77,7 +134,12 @@ export function PaneLayout(props: Props) {
     return <Pane key={id} {...props} node={node} />;
   };
   return (
-    <div ref={container} className="h-full min-h-[220px] min-w-[320px] p-2">
+    <div
+      ref={container}
+      onFocusCapture={rememberPane}
+      onPointerDownCapture={rememberPane}
+      className="h-full min-h-[220px] min-w-[320px] p-2"
+    >
       {render(props.tab.root)}
     </div>
   );
@@ -101,7 +163,7 @@ function Pane({
       data-pane-id={node.id}
       tabIndex={-1}
       aria-label={`${PROFILE_LABELS[node.profile]} pane`}
-      className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border bg-card"
+      className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border bg-card focus-visible:ring-1 focus-visible:ring-primary focus-visible:outline-none"
     >
       <header className="flex h-9 shrink-0 items-center gap-1 border-b bg-muted/30 px-2">
         {node.profile === "chat" ? (
@@ -117,7 +179,7 @@ function Pane({
           >
             <Ellipsis className="size-4" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuContent align="end" className="w-72">
             <DropdownMenuItem
               disabled={!canEdit || tab.nodes.length >= 63}
               onSelect={() =>
@@ -132,6 +194,12 @@ function Pane({
               }
             >
               <Columns2 /> Split horizontally
+              <span
+                aria-hidden="true"
+                className="ml-auto text-xs whitespace-nowrap text-muted-foreground"
+              >
+                {shortcutLabel("split-horizontal")}
+              </span>
             </DropdownMenuItem>
             <DropdownMenuItem
               disabled={!canEdit || tab.nodes.length >= 63}
@@ -147,6 +215,12 @@ function Pane({
               }
             >
               <Rows2 /> Split vertically
+              <span
+                aria-hidden="true"
+                className="ml-auto text-xs whitespace-nowrap text-muted-foreground"
+              >
+                {shortcutLabel("split-vertical")}
+              </span>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuLabel>Pane profile</DropdownMenuLabel>
@@ -171,6 +245,7 @@ function Pane({
         <button
           type="button"
           aria-label="Close pane"
+          title={`Close pane (${shortcutLabel("close-pane")})`}
           disabled={!canEdit}
           onClick={() => onCommand({ kind: "pane.close", ...target })}
           className="rounded p-1 hover:bg-muted disabled:opacity-40"
