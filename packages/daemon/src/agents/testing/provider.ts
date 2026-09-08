@@ -5,6 +5,7 @@ export class TestAgentProvider implements AgentProvider {
   static turns = 0;
   readonly listeners = new Set<(method: string, params: unknown) => void>();
   readonly onRequest: Parameters<AgentProviderFactory>[1];
+  readonly requests: { method: string; params: unknown }[] = [];
   threadId = "fixture-thread";
   turnId = "";
   closed = false;
@@ -29,6 +30,18 @@ export class TestAgentProvider implements AgentProvider {
         listener(method, { threadId: this.threadId, turnId: this.turnId, ...params });
   }
   async request(method: string, params: unknown = {}): Promise<unknown> {
+    this.requests.push({ method, params });
+    if (method === "model/list")
+      return {
+        data: [
+          {
+            model: "fixture",
+            displayName: "Fixture model",
+            supportedReasoningEfforts: [{ reasoningEffort: "low" }, { reasoningEffort: "high" }],
+            defaultReasoningEffort: "high",
+          },
+        ],
+      };
     const input = params as Record<string, unknown>;
     if (method === "thread/start" || method === "thread/resume")
       return { thread: { id: this.threadId, turns: [] }, model: "fixture" };
@@ -94,6 +107,59 @@ export class TestAgentProvider implements AgentProvider {
         .catch(() => undefined);
     } else if (text.includes("fail")) this.finish("failed");
     else {
+      if (text.includes("rich")) {
+        this.emit("turn/plan/updated", {
+          plan: [
+            { step: "Inspect the project", status: "completed" },
+            { step: "Implement the change", status: "inProgress" },
+          ],
+        });
+        this.emit("item/started", {
+          item: {
+            id: "thinking",
+            type: "reasoning",
+            summary: ["Checking the implementation"],
+            content: [],
+          },
+        });
+        this.emit("item/started", {
+          item: {
+            id: "shell",
+            type: "commandExecution",
+            command: "echo fixture",
+            cwd: "/project",
+            status: "inProgress",
+          },
+        });
+        this.emit("item/commandExecution/outputDelta", {
+          itemId: "shell",
+          delta: "fixture output",
+        });
+        this.emit("item/completed", {
+          item: {
+            id: "files",
+            type: "fileChange",
+            changes: [{ path: "example.ts", diff: "-old line\n+new line" }],
+          },
+        });
+        this.emit("item/started", {
+          item: {
+            id: "child",
+            type: "collabAgentToolCall",
+            tool: "spawnAgent",
+            receiverThreadIds: ["child-thread"],
+            agentsStates: { "child-thread": { status: "running", message: "Inspecting tests" } },
+            prompt: "Check the test coverage",
+          },
+        });
+        this.emit("thread/tokenUsage/updated", {
+          tokenUsage: {
+            last: { totalTokens: 32000 },
+            total: { totalTokens: 64000 },
+            modelContextWindow: 128000,
+          },
+        });
+      }
       this.emit("item/started", {
         item: { id: `message-${this.turnId}`, type: "agentMessage", text: "" },
       });
