@@ -1,3 +1,5 @@
+import { delimiter } from "node:path";
+import { installTestCodexProfile } from "../../packages/daemon/src/terminal/testing/profile.ts";
 // Test-only server entry point. Production CLI never imports or enables this provider.
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
@@ -7,6 +9,7 @@ import { TestAgentProvider } from "../../packages/daemon/src/agents/testing/prov
 const directory = process.env["CONCORS_DATA_DIR"];
 if (!directory) throw new Error("Set an isolated acceptance-test directory");
 await mkdir(directory, { recursive: true });
+process.env["PATH"] = installTestCodexProfile(directory) + delimiter + (process.env["PATH"] ?? "");
 const server = createDaemonServer(loadDaemonConfig({ port: 7429, logLevel: "warn" }, {}), {
   workspacePath: join(directory, "workspace.sqlite"),
   agentProviderFactory: (_cwd, handler) => new TestAgentProvider(handler),

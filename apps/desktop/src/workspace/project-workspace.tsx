@@ -1,3 +1,4 @@
+import type { PaneFocusRequest } from "./session-pane";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { NewTabMenu } from "./new-tab-menu";
 import { TAB_PROFILES } from "./tab-profiles";
@@ -11,12 +12,14 @@ import { PaneLayout } from "./pane-layout";
 
 export function ProjectWorkspace({
   workspace,
+  focusRequest,
   canEdit,
   onCommand,
   execute,
   onAddProject,
 }: {
   workspace: WorkspaceSnapshot;
+  focusRequest?: PaneFocusRequest | null;
   canEdit: boolean;
   onCommand: (operation: WorkspaceOperation) => void;
   execute: (operation: WorkspaceOperation) => Promise<void>;
@@ -248,6 +251,7 @@ export function ProjectWorkspace({
         {selected ? (
           <PaneLayout
             key={selected.id}
+            focusRequest={focusRequest ?? null}
             tab={selected}
             project={project}
             canEdit={canEdit && !launching}
