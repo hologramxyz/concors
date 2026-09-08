@@ -43,7 +43,7 @@ export function AppSidebar(props: AppSidebarProps) {
         aria-label="Primary"
         className="flex h-full w-[216px] flex-col bg-sidebar text-[13px] text-sidebar-foreground"
       >
-        <div className="m-2 flex h-9 items-center gap-1">
+        <div className="m-2 flex h-9 items-center justify-between gap-1">
           <MachineSwitcher
             machines={props.machines}
             selectedId={props.selectedMachineId}
