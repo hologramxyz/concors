@@ -194,7 +194,10 @@ function Pane({
               }
             >
               <Columns2 /> Split horizontally
-              <span className="ml-auto text-xs whitespace-nowrap text-muted-foreground">
+              <span
+                aria-hidden="true"
+                className="ml-auto text-xs whitespace-nowrap text-muted-foreground"
+              >
                 {shortcutLabel("split-horizontal")}
               </span>
             </DropdownMenuItem>
@@ -212,7 +215,10 @@ function Pane({
               }
             >
               <Rows2 /> Split vertically
-              <span className="ml-auto text-xs whitespace-nowrap text-muted-foreground">
+              <span
+                aria-hidden="true"
+                className="ml-auto text-xs whitespace-nowrap text-muted-foreground"
+              >
                 {shortcutLabel("split-vertical")}
               </span>
             </DropdownMenuItem>
