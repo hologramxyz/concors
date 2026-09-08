@@ -70,6 +70,34 @@ test("directional pane sequences, tab cycling, project memory and editor selecti
     await expect.poll(() => focusedPane(page)).toBe(upperId);
     await page.keyboard.press("Control+Shift+ArrowLeft");
     await expect.poll(() => focusedPane(page)).toBe(left);
+    // A terminal -> Agent -> terminal round-trip must keep navigating, not enter text selection.
+    await upper.getByRole("button", { name: "Pane actions" }).click();
+    await page.getByRole("menuitemradio", { name: "Agent", exact: true }).click();
+    await expect(upper.getByLabel("Message Codex")).toBeEnabled();
+    await panes.first().locator("textarea").focus();
+    for (let i = 0; i < 3; i++) {
+      await page.keyboard.press("Control+Shift+ArrowRight");
+      await expect.poll(() => focusedPane(page)).toBe(upperId);
+      await expect(upper.locator("header")).toBeFocused();
+      await page.keyboard.press("Control+Shift+ArrowLeft");
+      await expect.poll(() => focusedPane(page)).toBe(left);
+    }
+    // Held directional keys may repeat; creation/close sequences may not.
+    await page.evaluate(() =>
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowRight",
+          code: "ArrowRight",
+          ctrlKey: true,
+          shiftKey: true,
+          repeat: true,
+          bubbles: true,
+        }),
+      ),
+    );
+    await expect.poll(() => focusedPane(page)).toBe(upperId);
+    await page.keyboard.press("Control+Shift+ArrowLeft");
+    await expect.poll(() => focusedPane(page)).toBe(left);
     // At the outside edge, focus stays in the current pane.
     await page.keyboard.press("Control+Shift+ArrowLeft");
     await expect.poll(() => focusedPane(page)).toBe(left);
