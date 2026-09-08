@@ -1,7 +1,9 @@
+import { TerminalConnectionContext } from "@/terminal/connection-context";
+import { NewTabMenu, TAB_PROFILES } from "./new-tab-menu";
 import { ContextMenu } from "radix-ui";
-import { useState } from "react";
+import { useContext, useRef, useState } from "react";
 import { FolderOpen, Pencil, Plus, X } from "lucide-react";
-import type { WorkspaceOperation, WorkspaceSnapshot } from "@concors/protocol";
+import type { PaneProfile, WorkspaceOperation, WorkspaceSnapshot } from "@concors/protocol";
 import { Button } from "@/components/ui/button";
 import { FormDialog } from "./form-dialog";
 import { PaneLayout } from "./pane-layout";
@@ -19,6 +21,10 @@ export function ProjectWorkspace({
   execute: (operation: WorkspaceOperation) => Promise<void>;
   onAddProject: () => void;
 }) {
+  const connection = useContext(TerminalConnectionContext);
+  const creating = useRef(false);
+  const [launching, setLaunching] = useState(false);
+  const [launchError, setLaunchError] = useState<string | null>(null);
   const [dragging, setDragging] = useState<{ projectId: string; tabId: string } | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -40,6 +46,55 @@ export function ProjectWorkspace({
         </Button>
       </div>
     );
+  const createTab = (profile: PaneProfile, name?: string) => {
+    if (!connection?.workspace || !canEdit || creating.current) return;
+    const epoch = connection.workspace.epoch;
+    const tabId = crypto.randomUUID();
+    const paneId = crypto.randomUUID();
+    creating.current = true;
+    setLaunching(true);
+    setLaunchError(null);
+    void (async () => {
+      await execute({
+        kind: "tab.create",
+        projectId: project.id,
+        expectedVersion: project.version,
+        tabId,
+        paneId,
+        name: name || TAB_PROFILES.find((item) => item.profile === profile)!.label,
+        profile,
+      });
+      const current = connection.workspace;
+      const updated = current?.projects.find((item) => item.id === project.id);
+      if (current?.epoch !== epoch || !updated || connection.state.status !== "ready")
+        throw new Error(
+          "The tab was created, but the machine disconnected before its session started.",
+        );
+      const target = {
+        kind: "start" as const,
+        epoch,
+        projectId: project.id,
+        tabId,
+        paneId,
+        expectedVersion: updated.version,
+      };
+      const result =
+        profile === "chat"
+          ? await connection.requestAgent(target, crypto.randomUUID())
+          : await connection.requestTerminal(
+              { ...target, expectedSessionId: null, cols: 80, rows: 24 },
+              crypto.randomUUID(),
+            );
+      if (result.outcome.status === "error") throw new Error(result.outcome.message);
+    })()
+      .catch((cause: unknown) => {
+        setLaunchError(cause instanceof Error ? cause.message : "Could not start session");
+      })
+      .finally(() => {
+        creating.current = false;
+        setLaunching(false);
+      });
+  };
   const selected = project.tabs.find((tab) => tab.id === workspace.selection?.tabId);
   const renameTab = project.tabs.find((tab) => tab.id === renaming);
   return (
@@ -166,27 +221,28 @@ export function ProjectWorkspace({
               </ContextMenu.Portal>
             </ContextMenu.Root>
           ))}
-          <button
-            type="button"
-            aria-label="New tab"
-            disabled={!canEdit || project.tabs.length >= 32}
-            onClick={() =>
-              onCommand({
-                kind: "tab.create",
-                projectId: project.id,
-                expectedVersion: project.version,
-                tabId: crypto.randomUUID(),
-                paneId: crypto.randomUUID(),
-                name: `Tab ${project.tabs.length + 1}`,
-                profile: "shell",
-              })
-            }
-            className="shrink-0 rounded p-1.5 text-muted-foreground hover:bg-muted disabled:opacity-40"
-          >
-            <Plus className="size-4" />
-          </button>
+          <NewTabMenu
+            disabled={!canEdit || launching || project.tabs.length >= 32}
+            onCreate={createTab}
+          />
         </div>
       </div>
+      {launching && (
+        <p role="status" className="border-b px-3 py-1 text-xs text-muted-foreground">
+          Starting session…
+        </p>
+      )}
+      {launchError && (
+        <div
+          role="alert"
+          className="flex items-center justify-between gap-3 border-b px-3 py-2 text-xs text-destructive"
+        >
+          <span>{launchError}</span>
+          <button type="button" onClick={() => setLaunchError(null)}>
+            Dismiss
+          </button>
+        </div>
+      )}
       <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
         {selected ? (
           <PaneLayout
@@ -199,24 +255,7 @@ export function ProjectWorkspace({
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
             <p>No tabs in this project yet.</p>
-            <Button
-              variant="outline"
-              disabled={!canEdit}
-              onClick={() =>
-                onCommand({
-                  kind: "tab.create",
-                  projectId: project.id,
-                  expectedVersion: project.version,
-                  tabId: crypto.randomUUID(),
-                  paneId: crypto.randomUUID(),
-                  name: "Tab 1",
-                  profile: "shell",
-                })
-              }
-            >
-              <Plus />
-              Create a tab
-            </Button>
+            <NewTabMenu empty disabled={!canEdit || launching} onCreate={createTab} />
           </div>
         )}
       </div>
