@@ -3,7 +3,7 @@
 Use physical Control on macOS as well as Linux/Windows. `→` between keys denotes a sequence:
 press and release the first chord, then press the next key. A small action picker shows choices
 and disabled actions; Escape, clicking outside, or leaving the window cancels. Holding a key
-does not repeat a creation or close action. Unknown keys cancel the sequence and retain their
+does not repeat a creation or close action; directional focus keys can repeat. Unknown keys cancel the sequence and retain their
 ordinary behavior.
 
 | Action                                 | Shortcut                                   |
@@ -24,7 +24,8 @@ The desktop app additionally supports Ctrl+Tab and Ctrl+Shift+Tab. Browser clien
 to the browser's own tab navigation. Ctrl+Shift+W is not an app shortcut: it can close the browser
 window. The former D/E split and W/X close shortcuts have been removed from the app mappings.
 
-Pane navigation follows rendered geometry and does not wrap at outer edges. Tab navigation
+Pane navigation follows rendered geometry and does not wrap at outer edges. Directional navigation
+lands on an Agent pane header so consecutive arrows continue navigating; terminals receive input focus. Tab navigation
 follows the visible tab order and wraps. Switching projects restores the last selected tab and
 focused pane remembered by this client during the current app session; missing tabs/panes fall
 back to the first available item. Active project/tab selection continues to sync through the

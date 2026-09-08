@@ -81,7 +81,7 @@ export function ShortcutProvider({ children }: { children: ReactNode }) {
         return;
       }
       consume();
-      if (event.repeat) return;
+      if (event.repeat && !id.startsWith("focus-")) return;
       if (id === "p" || id === "t") {
         if (!sequenceBindings(id).some((binding) => commands.snapshot().includes(binding.id)))
           return;
