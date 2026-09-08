@@ -1,5 +1,7 @@
 import { LogOut, Monitor, Moon, RefreshCw, Sun } from "lucide-react";
-import { useEffect } from "react";
+import { useCommands } from "@/shortcuts/context";
+import { shortcutLabel } from "@/shortcuts/bindings";
+import type { WorkspaceProject } from "@concors/protocol";
 
 import {
   Command,
@@ -16,6 +18,9 @@ import { ALL_NAV, type View } from "@/navigation";
 import type { ThemePreference } from "@/theme/use-theme";
 
 interface CommandPaletteProps {
+  readonly canSelectProject: boolean;
+  readonly projects: readonly WorkspaceProject[];
+  readonly onSelectProject: (id: string) => void;
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly onNavigate: (view: View) => void;
@@ -32,6 +37,9 @@ const THEME_ITEMS = [
 ] as const;
 
 export function CommandPalette({
+  projects,
+  canSelectProject,
+  onSelectProject,
   open,
   onOpenChange,
   onNavigate,
@@ -40,17 +48,7 @@ export function CommandPalette({
   onSetTheme,
   onSignOut,
 }: CommandPaletteProps) {
-  // ⌘K / Ctrl+K toggles the palette from anywhere.
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() === "k" && (event.metaKey || event.ctrlKey)) {
-        event.preventDefault();
-        onOpenChange(!open);
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, onOpenChange]);
+  const commands = useCommands();
 
   const run = (action: () => void) => () => {
     onOpenChange(false);
@@ -69,8 +67,39 @@ export function CommandPalette({
         <CommandList>
           <CommandEmpty>No results.</CommandEmpty>
 
+          <CommandGroup heading="Workspace">
+            {commands.items
+              .filter((item) => item.id !== "search")
+              .map((item) => (
+                <CommandItem
+                  key={item.id}
+                  value={item.label}
+                  disabled={!item.enabled}
+                  onSelect={run(() => {
+                    requestAnimationFrame(() => commands.run(item.id));
+                  })}
+                >
+                  {item.label}
+                  <CommandShortcut>{shortcutLabel(item.id)}</CommandShortcut>
+                </CommandItem>
+              ))}
+          </CommandGroup>
+          {projects.length > 0 && (
+            <CommandGroup heading="Projects">
+              {projects.map((project) => (
+                <CommandItem
+                  key={project.id}
+                  disabled={!canSelectProject}
+                  value={`project ${project.name} ${project.directory}`}
+                  onSelect={run(() => onSelectProject(project.id))}
+                >
+                  {project.name}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          )}
           <CommandGroup heading="Go to">
-            {ALL_NAV.map((item) => {
+            {ALL_NAV.filter((item) => item.view !== "settings").map((item) => {
               const Icon = item.icon;
               return (
                 <CommandItem
@@ -82,7 +111,6 @@ export function CommandPalette({
                   <Icon aria-hidden="true" />
                   {item.label}
                   {item.comingSoon && <span className="text-muted-foreground">· soon</span>}
-                  {item.shortcut && <CommandShortcut>{item.shortcut}</CommandShortcut>}
                 </CommandItem>
               );
             })}

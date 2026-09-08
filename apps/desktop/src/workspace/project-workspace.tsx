@@ -1,3 +1,5 @@
+import { useCommand } from "@/shortcuts/context";
+import { shortcutLabel } from "@/shortcuts/bindings";
 import type { PaneFocusRequest } from "./session-pane";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { NewTabMenu } from "./new-tab-menu";
@@ -33,6 +35,16 @@ export function ProjectWorkspace({
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const project = workspace.projects.find((p) => p.id === workspace.selection?.projectId);
+  const selected = project?.tabs.find((tab) => tab.id === workspace.selection?.tabId);
+  useCommand("close-tab", !!project && !!selected && canEdit && !launching, () => {
+    if (project && selected)
+      onCommand({
+        kind: "tab.close",
+        projectId: project.id,
+        expectedVersion: project.version,
+        tabId: selected.id,
+      });
+  });
   if (!project)
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
@@ -77,7 +89,6 @@ export function ProjectWorkspace({
         setLaunching(false);
       });
   };
-  const selected = project.tabs.find((tab) => tab.id === workspace.selection?.tabId);
   const renameTab = project.tabs.find((tab) => tab.id === renaming);
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -198,12 +209,16 @@ export function ProjectWorkspace({
                     className="flex items-center gap-2 rounded px-2 py-1.5 outline-none focus:bg-accent data-disabled:opacity-40"
                   >
                     <X className="size-4" /> Close tab
+                    <span aria-hidden="true" className="ml-auto text-xs text-muted-foreground">
+                      {shortcutLabel("close-tab")}
+                    </span>
                   </ContextMenu.Item>
                 </ContextMenu.Content>
               </ContextMenu.Portal>
             </ContextMenu.Root>
           ))}
           <NewTabMenu
+            keyboard
             disabled={!canEdit || launching || project.tabs.length >= 32}
             onCreate={createTab}
           />

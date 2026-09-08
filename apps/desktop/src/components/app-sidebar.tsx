@@ -1,3 +1,4 @@
+import { shortcutLabel } from "@/shortcuts/bindings";
 import { AgentSidebar } from "@/agents/list";
 import { ProjectActions } from "@/workspace/project-actions";
 import { SidebarSection } from "./sidebar-section";
@@ -66,6 +67,7 @@ export function AppSidebar(props: AppSidebarProps) {
         <div className="px-2 py-2">
           <button
             type="button"
+            title={`Search (${shortcutLabel("search")})`}
             onClick={props.onOpenCommandPalette}
             className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-[13px] text-muted-foreground hover:bg-sidebar-accent"
           >

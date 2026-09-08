@@ -1,3 +1,5 @@
+import { useCommand } from "@/shortcuts/context";
+import { shortcutLabel } from "@/shortcuts/bindings";
 import { TAB_PROFILES } from "./tab-profiles";
 import { useState } from "react";
 import { Plus, SlidersHorizontal } from "lucide-react";
@@ -24,16 +26,21 @@ export function NewTabMenu({
   disabled,
   onCreate,
   empty = false,
+  keyboard = false,
 }: {
   disabled: boolean;
   onCreate: (profile: PaneProfile, name?: string) => void;
   empty?: boolean;
+  keyboard?: boolean;
 }) {
+  const [open, setOpen] = useState(false);
+  useCommand("new-tab", keyboard && !disabled, () => setOpen(true));
   const [configuring, setConfiguring] = useState(false);
   return (
     <>
-      <DropdownMenu>
+      <DropdownMenu open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger
+          title={`New tab (${shortcutLabel("new-tab")})`}
           aria-label={empty ? "Create a tab" : "New tab"}
           disabled={disabled}
           className={

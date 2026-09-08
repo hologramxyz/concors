@@ -107,7 +107,16 @@ export function TerminalSurface({
         .then(() => {
           if (disposed || !owner) return;
           if (queuedInput) sendInput(queuedInput);
-          if (document.visibilityState === "visible") terminal.focus();
+          // A split can remount this terminal while keyboard focus has moved to its sibling.
+          // Acquiring control must not steal that newer focus (or focus from an open dialog).
+          const focused = document.activeElement;
+          const focusedPane = focused?.closest("[data-pane-id]");
+          if (
+            document.visibilityState === "visible" &&
+            !focused?.closest('[role="dialog"], [role="alertdialog"], [role="menu"]') &&
+            (!focusedPane || focusedPane === element.closest("[data-pane-id]"))
+          )
+            terminal.focus();
         })
         .catch(report)
         .finally(() => {
