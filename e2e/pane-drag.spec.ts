@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test, expect } from "@playwright/test";
 import { signedIn } from "./signed-in.ts";
 
@@ -5,6 +8,7 @@ test("dragging swaps panes and creates a vertical split without replacing sessio
   page,
   browser,
 }) => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-pane-drag-"));
   const context = await browser.newContext();
   const second = await context.newPage();
   try {
@@ -12,7 +16,7 @@ test("dragging swaps panes and creates a vertical split without replacing sessio
     await page.goto("/");
     await page.getByRole("button", { name: "Add project", exact: true }).first().click();
     await page.getByLabel("Project name", { exact: true }).fill("Pane dragging");
-    await page.getByLabel("Folder on this machine").fill("/tmp");
+    await page.getByLabel("Folder on this machine").fill(directory);
     await page
       .getByRole("dialog")
       .getByRole("button", { name: "Add project", exact: true })
@@ -66,5 +70,6 @@ test("dragging swaps panes and creates a vertical split without replacing sessio
     await expect(page.getByRole("alert")).toHaveCount(0);
   } finally {
     await context.close();
+    await rm(directory, { recursive: true, force: true });
   }
 });
