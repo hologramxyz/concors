@@ -137,11 +137,7 @@ function Pane({
               }
             >
               {Object.entries(PROFILE_LABELS).map(([value, label]) => (
-                <DropdownMenuRadioItem
-                  key={value}
-                  value={value}
-                  disabled={!canEdit || node.sessionId !== null}
-                >
+                <DropdownMenuRadioItem key={value} value={value} disabled={!canEdit}>
                   {label}
                 </DropdownMenuRadioItem>
               ))}

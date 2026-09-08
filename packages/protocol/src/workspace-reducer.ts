@@ -162,11 +162,8 @@ export function applyWorkspaceOperation(
             if (pane.kind !== "pane")
               throw new WorkspaceOperationError("INVALID_OPERATION", "Target is not a pane");
             if (op.kind === "pane.configure") {
-              if (pane.sessionId !== null)
-                throw new WorkspaceOperationError(
-                  "INVALID_OPERATION",
-                  "Detach the session before changing its profile",
-                );
+              // Changing the view detaches its binding; runtime sessions remain alive and discoverable.
+              if (pane.profile !== op.profile) pane.sessionId = null;
               pane.profile = op.profile;
             } else if (op.kind === "pane.split") {
               claim(op.newPaneId);
