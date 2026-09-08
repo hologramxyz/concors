@@ -14,14 +14,14 @@ export function SidebarSection({
   const id = useId();
   return (
     <section aria-label={title}>
-      <div className="flex h-8 items-center gap-1">
+      <div className="group/section flex h-8 items-center gap-1 rounded-md focus-within:bg-sidebar-accent hover:bg-sidebar-accent">
         <h2 className="min-w-0 flex-1">
           <button
             type="button"
             aria-expanded={expanded}
             aria-controls={id}
             onClick={() => setExpanded(!expanded)}
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[13px] font-medium text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[13px] font-medium text-muted-foreground group-hover/section:text-sidebar-foreground"
           >
             <ChevronRight
               className={`size-4 transition-transform ${expanded ? "rotate-90" : ""}`}
