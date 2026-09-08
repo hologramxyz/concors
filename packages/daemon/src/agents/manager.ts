@@ -205,6 +205,14 @@ export class AgentManager {
       } catch {
         /* Older providers can still run their configured model. */
       }
+      try {
+        const modes = z
+          .object({ data: z.array(z.object({ mode: z.string().nullable().optional() })) })
+          .parse(await provider.request("collaborationMode/list", {}));
+        this.update(id, { supportsPlan: modes.data.some((mode) => mode.mode === "plan") });
+      } catch {
+        this.update(id, { supportsPlan: false });
+      }
       const response = ThreadResponse.parse(
         await provider.request(info.threadId ? "thread/resume" : "thread/start", {
           ...(info.threadId ? { threadId: info.threadId } : {}),
@@ -305,9 +313,18 @@ export class AgentManager {
           !info.models.some((m) => m.id === op.settings.model)
         )
           throw new Error("That model is not available on this machine.");
+        if (op.settings.planMode && !info.supportsPlan)
+          throw new Error(
+            "Plan mode is not available on this machine. Refresh models after updating Codex.",
+          );
         const model = info.models?.find((m) => m.id === (op.settings.model ?? info.model));
         if (op.settings.effort && model && !model.efforts.includes(op.settings.effort))
           throw new Error("That thinking effort is not supported by this model.");
+        if (
+          op.settings.serviceTier &&
+          !model?.serviceTiers?.some((tier) => tier.id === op.settings.serviceTier)
+        )
+          throw new Error("That speed is not supported by this model.");
         this.#store.reserveAgentAction(request, {
           ...info,
           settings: op.settings,
