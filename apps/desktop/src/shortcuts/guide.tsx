@@ -20,11 +20,11 @@ export function ShortcutGuide({
           <DialogTitle>Keyboard shortcuts</DialogTitle>
           <DialogDescription>
             {isMac() && "On Mac, use the physical Control (⌃) key, not Command (⌘). "}
-            Workspace shortcuts work inside terminals. In forms and dialogs, finish or dismiss the
-            dialog first.
+            Press a P or T shortcut, release the keys, then choose the next key. Escape cancels.
+            Ctrl+Shift+Arrow moves between panes; in text fields it keeps selecting text.
           </DialogDescription>
         </DialogHeader>
-        <dl className="space-y-3 text-[13px]">
+        <dl className="max-h-[55vh] space-y-2 overflow-y-auto text-[13px]">
           {BINDINGS.map((binding) => (
             <div key={binding.id} className="flex items-center justify-between gap-4">
               <dt>{binding.label}</dt>
@@ -41,9 +41,10 @@ export function ShortcutGuide({
           reorder it, or arrow keys on a split divider to resize panes.
         </p>
         <p className="text-xs text-muted-foreground">
-          New tab opens the profile picker. New pane adds a pane beside the active pane, using its
-          profile. Pane actions use the last focused pane. Closing a pane or tab leaves its sessions
-          running.
+          P → Enter creates a pane to the right; P → an arrow chooses its position. T → Enter opens
+          the tab profile picker; T → Left/Right cycles tabs. Backspace after P/T closes the
+          pane/tab, leaving its sessions running. Ctrl+Shift+K searches projects and commands. The
+          desktop app also supports Ctrl+Tab / Ctrl+Shift+Tab; browsers keep those for browser tabs.
         </p>
       </DialogContent>
     </Dialog>
