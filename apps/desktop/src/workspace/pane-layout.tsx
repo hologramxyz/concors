@@ -12,6 +12,7 @@ import { ChatPane } from "@/agents/chat";
 import { TerminalPane } from "@/terminal/terminal-pane";
 import { useRef, useState } from "react";
 import { AgentPaneIcon } from "@/agents/activity";
+import { useAgents } from "@/agents/context";
 import { Columns2, Rows2, Ellipsis, Terminal, X } from "lucide-react";
 import type {
   LayoutNode,
@@ -72,6 +73,8 @@ function Pane({
   canEdit,
   onCommand,
 }: Props & { node: Extract<LayoutNode, { kind: "pane" }> }) {
+  const agent = useAgents().find((agent) => agent.id === node.sessionId);
+  const title = node.profile === "chat" ? (agent?.name ?? "Agent") : PROFILE_LABELS[node.profile];
   const target = {
     projectId: project.id,
     expectedVersion: project.version,
@@ -83,13 +86,15 @@ function Pane({
       aria-label={`${PROFILE_LABELS[node.profile]} pane`}
       className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border bg-card"
     >
-      <header className="flex h-9 shrink-0 items-center gap-1 border-b bg-muted/30 px-2">
+      <header className="flex h-9 shrink-0 items-center gap-1 bg-muted/30 px-2">
         {node.profile === "chat" ? (
           <AgentPaneIcon sessionId={node.sessionId} />
         ) : (
           <Terminal className="size-4 shrink-0 text-muted-foreground" />
         )}
-        <span className="min-w-0 flex-1 truncate text-[13px]">{PROFILE_LABELS[node.profile]}</span>
+        <span className="min-w-0 flex-1 truncate text-[13px]" title={title}>
+          {title}
+        </span>
         <DropdownMenu>
           <DropdownMenuTrigger
             aria-label="Pane actions"
