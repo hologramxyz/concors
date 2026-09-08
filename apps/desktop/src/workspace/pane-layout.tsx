@@ -105,9 +105,9 @@ function Pane({
       data-pane-id={node.id}
       tabIndex={-1}
       aria-label={`${PROFILE_LABELS[node.profile]} pane`}
-      className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border bg-card"
+      className={`flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border ${node.profile === "chat" ? "bg-card" : "bg-[#15151b] text-[#e4e4ea]"}`}
     >
-      <header className="flex h-9 shrink-0 items-center gap-1 bg-muted/30 px-2">
+      <header className="flex h-9 shrink-0 items-center gap-1 border-b px-2">
         {node.profile === "chat" ? (
           <AgentPaneIcon sessionId={node.sessionId} />
         ) : (

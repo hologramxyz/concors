@@ -208,7 +208,7 @@ export function App() {
               <div
                 className={`workspace-surface my-2 mr-2 flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-background shadow-xs ${sidebarCollapsed ? "ml-2" : ""}`}
               >
-                <header className="flex h-11 shrink-0 items-center gap-2 px-4">
+                <header className="flex h-11 shrink-0 items-center gap-2 border-b px-4">
                   {sidebarCollapsed && (
                     <button
                       id="expand-sidebar"
