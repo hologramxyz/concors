@@ -21,6 +21,41 @@ export const AgentPendingSchema = z.object({
   questions: z.array(AgentQuestionSchema).max(3),
 });
 export type AgentPending = z.infer<typeof AgentPendingSchema>;
+export const AgentSettingsSchema = z.object({
+  model: z.string().max(100).nullable().default(null),
+  effort: z.string().min(1).max(100).nullable().default(null),
+  mode: z.enum(["default", "auto-review", "full-access"]).default("default"),
+});
+export type AgentSettings = z.infer<typeof AgentSettingsSchema>;
+export const AgentAttachmentSchema = z.object({
+  name: z.string().min(1).max(200),
+  mime: z.string().max(100),
+  data: z
+    .string()
+    .max(1400000)
+    .regex(/^[A-Za-z0-9+/]*={0,2}$/),
+});
+export type AgentAttachment = z.infer<typeof AgentAttachmentSchema>;
+const AgentPresentationSchema = z.object({
+  type: z.enum(["shell", "files", "mcp", "search", "sub_agent", "plan", "thinking"]),
+  command: z.string().max(16000).optional(),
+  cwd: z.string().optional(),
+  output: z.string().max(16000).optional(),
+  exitCode: z.number().nullable().optional(),
+  files: z
+    .array(z.object({ path: z.string(), diff: z.string().max(16000) }))
+    .max(100)
+    .optional(),
+  steps: z
+    .array(z.object({ step: z.string(), status: z.string() }))
+    .max(100)
+    .optional(),
+  children: z
+    .array(z.object({ id: z.string(), status: z.string(), message: z.string().nullable() }))
+    .max(100)
+    .optional(),
+});
+export type AgentPresentation = z.infer<typeof AgentPresentationSchema>;
 export const AgentInfoSchema = z.object({
   id: Id,
   projectId: Id,
@@ -28,6 +63,26 @@ export const AgentInfoSchema = z.object({
   name: z.string(),
   directory: z.string(),
   model: z.string().nullable(),
+  settings: AgentSettingsSchema.optional(),
+  models: z
+    .array(
+      z.object({
+        id: z.string(),
+        label: z.string(),
+        efforts: z.array(z.string()),
+        defaultEffort: z.string().nullable(),
+      }),
+    )
+    .max(100)
+    .optional(),
+  context: z
+    .object({
+      used: z.number().nonnegative(),
+      limit: z.number().positive().nullable(),
+      total: z.number().nonnegative(),
+    })
+    .nullable()
+    .optional(),
   threadId: z.string().nullable(),
   turnId: z.string().nullable(),
   status: z.enum(["idle", "starting", "working", "needs_input", "done", "failed", "interrupted"]),
@@ -58,6 +113,7 @@ export const AgentItemSchema = z.object({
   title: z.string(),
   text: z.string(),
   detail: z.string(),
+  presentation: AgentPresentationSchema.optional(),
   status: z.enum(["running", "completed", "failed", "interrupted"]),
   createdAt: z.string().datetime(),
 });
@@ -84,7 +140,21 @@ export const AgentOperationSchema = z.discriminatedUnion("kind", [
     before: z.number().int().positive().optional(),
   }),
   z.object({ kind: z.literal("seen"), sessionId: Id, attentionId: Id }),
-  z.object({ kind: z.literal("send"), sessionId: Id, text: z.string().trim().min(1).max(16000) }),
+  z.object({
+    kind: z.literal("configure"),
+    sessionId: Id,
+    settings: AgentSettingsSchema,
+    expectedRevision: z.number().int().nonnegative(),
+  }),
+  z.object({ kind: z.literal("refresh-models"), sessionId: Id }),
+  z
+    .object({
+      kind: z.literal("send"),
+      sessionId: Id,
+      text: z.string().trim().max(16000),
+      attachments: z.array(AgentAttachmentSchema).max(3).optional(),
+    })
+    .refine((v) => v.text.length > 0 || !!v.attachments?.length, "Add a message or attachment"),
   z.object({ kind: z.literal("interrupt"), sessionId: Id, turnId: z.string().min(1) }),
   z.object({
     kind: z.literal("respond"),
