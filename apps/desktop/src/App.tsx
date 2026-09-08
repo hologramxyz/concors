@@ -4,7 +4,7 @@ import { AgentsView } from "@/agents/list";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { describeDaemonEndpoint, type DaemonEndpoint } from "@concors/daemon-client";
 import type { WorkspaceOperation } from "@concors/protocol";
-import { Server } from "lucide-react";
+import { PanelLeftOpen, Server } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { api } from "@/auth/api";
@@ -37,6 +37,13 @@ function savedMachines() {
 }
 
 export function App() {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const toggleSidebar = (collapsed: boolean) => {
+    setSidebarCollapsed(collapsed);
+    requestAnimationFrame(() =>
+      document.getElementById(collapsed ? "expand-sidebar" : "collapse-sidebar")?.focus(),
+    );
+  };
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [view, setView] = useState<View>("projects");
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -127,6 +134,9 @@ export function App() {
           <TooltipProvider>
             <div className="flex h-dvh w-full overflow-hidden bg-sidebar">
               <AppSidebar
+                collapsed={sidebarCollapsed}
+                onCollapse={() => toggleSidebar(true)}
+                execute={execute}
                 onSelectAgent={(id) => {
                   setSelectedAgent(id);
                   setView("agents");
@@ -164,8 +174,24 @@ export function App() {
                 auth={account}
                 onSignOut={signOut}
               />
-              <div className="my-2 mr-2 flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-background shadow-xs">
-                <header className="flex h-11 shrink-0 items-center justify-between gap-3 border-b px-4">
+              <div
+                className={`my-2 mr-2 flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-background shadow-xs ${sidebarCollapsed ? "ml-2" : ""}`}
+              >
+                <header className="flex h-11 shrink-0 items-center gap-2 border-b px-4">
+                  {sidebarCollapsed && (
+                    <button
+                      id="expand-sidebar"
+                      type="button"
+                      aria-label="Expand sidebar"
+                      title="Expand sidebar"
+                      aria-controls="app-sidebar"
+                      aria-expanded={false}
+                      onClick={() => toggleSidebar(false)}
+                      className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    >
+                      <PanelLeftOpen className="size-4" aria-hidden="true" />
+                    </button>
+                  )}
                   <h1 className="truncate text-[13px] font-medium">
                     {view === "projects" && activeProject
                       ? activeProject.name

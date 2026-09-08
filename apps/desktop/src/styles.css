@@ -228,3 +228,13 @@
   border: 1px solid var(--border);
   padding: 0.4rem 0.6rem;
 }
+
+/* Keep scrollback accessible without native arrow buttons in the terminal corner. */
+.concors-terminal .xterm-viewport::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+.concors-terminal .xterm-scrollable-element > .scrollbar > .scra {
+  display: none;
+}
