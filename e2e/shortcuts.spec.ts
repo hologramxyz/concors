@@ -14,6 +14,15 @@ test("workspace shortcuts create, search, split and close the active pane withou
     await expect(
       page.getByRole("button", { name: "Add project", exact: true }).first(),
     ).toBeEnabled();
+    const shortcutButton = page.getByRole("button", { name: "Keyboard shortcuts", exact: true });
+    await shortcutButton.hover();
+    await expect(page.getByRole("tooltip")).toContainText("Ctrl+Shift+/");
+    await shortcutButton.click();
+    await expect(
+      page.getByRole("heading", { name: "Keyboard shortcuts", exact: true }),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
     await page.keyboard.press("Control+Shift+n");
     await expect(page.getByRole("dialog")).toBeVisible();
     await page.getByLabel("Project name", { exact: true }).fill("Keyboard project");
@@ -33,7 +42,7 @@ test("workspace shortcuts create, search, split and close the active pane withou
         document.activeElement?.dispatchEvent(event);
         return event.defaultPrevented;
       }),
-    ).toBe(true);
+    ).toBe(false);
     await page.getByLabel("Folder on this machine").fill(directory);
     await page
       .getByRole("dialog")
@@ -43,6 +52,7 @@ test("workspace shortcuts create, search, split and close the active pane withou
       page.getByRole("heading", { name: "Keyboard project", exact: true }),
     ).toBeVisible();
     await page.keyboard.press("Control+Shift+t");
+    await page.keyboard.press("Enter");
     await page.getByRole("menuitem", { name: "Codex", exact: true }).click();
     const panes = page.getByRole("region", { name: "Codex pane", exact: true });
     await expect(panes).toHaveCount(1);
@@ -58,11 +68,12 @@ test("workspace shortcuts create, search, split and close the active pane withou
     await expect(
       page.getByRole("heading", { name: "Keyboard shortcuts", exact: true }),
     ).toBeVisible();
-    await expect(page.getByRole("dialog")).toContainText("Ctrl+Shift+W");
+    await expect(page.getByRole("dialog")).toContainText("Ctrl+Shift+P → Backspace");
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await panes.first().locator("textarea").focus();
-    await page.keyboard.press("Control+Shift+d");
+    await page.keyboard.press("Control+Shift+p");
+    await page.keyboard.press("ArrowRight");
     await expect(panes).toHaveCount(2);
     await expect(page.getByRole("separator", { name: /Resize/ })).toHaveAttribute(
       "aria-orientation",
@@ -70,7 +81,8 @@ test("workspace shortcuts create, search, split and close the active pane withou
     );
     const newPane = panes.last();
     await expect(newPane.locator("textarea")).toBeFocused();
-    await page.keyboard.press("Control+Shift+e");
+    await page.keyboard.press("Control+Shift+p");
+    await page.keyboard.press("ArrowDown");
     await expect(panes).toHaveCount(3);
     await expect(page.getByRole("separator", { name: /Resize/ })).toHaveCount(2);
     await expect(page.locator('[role="separator"][aria-orientation="horizontal"]')).toHaveCount(1);
@@ -83,10 +95,12 @@ test("workspace shortcuts create, search, split and close the active pane withou
     await page.keyboard.type("exit");
     await page.keyboard.press("Enter");
     await expect(panes.last().getByRole("button", { name: "Start new session" })).toBeVisible();
-    await page.keyboard.press("Control+Shift+w");
+    await page.keyboard.press("Control+Shift+p");
+    await page.keyboard.press("Backspace");
     await expect(panes).toHaveCount(2);
     await expect(page.locator(`[data-pane-id="${closedId}"]`)).toHaveCount(0);
     await page.keyboard.press("Control+Shift+p");
+    await page.keyboard.press("Enter");
     await expect(panes).toHaveCount(3);
     // Repeated keydown events must not create additional panes.
     await page.evaluate(() =>
@@ -122,7 +136,8 @@ test("workspace shortcuts create, search, split and close the active pane withou
         .getByRole("button", { name: /Open in terminal.*Codex/ }),
     ).toHaveCount(0);
     await panes.first().focus();
-    await page.keyboard.press("Control+Shift+x");
+    await page.keyboard.press("Control+Shift+t");
+    await page.keyboard.press("Backspace");
     await expect(panes).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Codex", exact: true })).toHaveCount(0);
     await page.keyboard.press("Control+Shift+k");
@@ -166,30 +181,34 @@ test("Mac workspace shortcuts use physical Control and display matching hints", 
       page.getByRole("heading", { name: "Mac keyboard project", exact: true }),
     ).toBeVisible();
     await page.keyboard.press("Control+Shift+t");
+    await page.keyboard.press("Enter");
     await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
     const panes = page.getByRole("region", { name: "Terminal pane", exact: true });
     await expect(panes).toHaveCount(1);
     await expect(page.getByRole("button", { name: "New tab", exact: true })).toHaveAttribute(
       "title",
-      "New tab (Control+Shift+T)",
+      "New tab (Control+Shift+T → Enter)",
     );
     await expect(page.getByRole("button", { name: "Pane actions", exact: true })).toBeEnabled();
     await panes.first().focus();
-    await page.keyboard.press("Control+Shift+d");
+    await page.keyboard.press("Control+Shift+p");
+    await page.keyboard.press("ArrowRight");
     await expect(panes).toHaveCount(2);
     await expect
       .poll(() => panes.last().evaluate((pane) => pane.contains(document.activeElement)))
       .toBe(true);
-    await page.keyboard.press("Control+Shift+w");
+    await page.keyboard.press("Control+Shift+p");
+    await page.keyboard.press("Backspace");
     await expect(panes).toHaveCount(1);
     expect(page.isClosed()).toBe(false);
-    await page.keyboard.press("Control+Shift+x");
+    await page.keyboard.press("Control+Shift+t");
+    await page.keyboard.press("Backspace");
     await expect(panes).toHaveCount(0);
     await page.keyboard.press("Control+Shift+Slash");
     await expect(page.getByRole("dialog")).toContainText(
       "physical Control (⌃) key, not Command (⌘)",
     );
-    await expect(page.getByRole("dialog")).toContainText("Control+Shift+W");
+    await expect(page.getByRole("dialog")).toContainText("Control+Shift+P → Backspace");
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

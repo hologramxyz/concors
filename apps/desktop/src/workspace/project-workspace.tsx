@@ -15,6 +15,7 @@ import { PaneLayout } from "./pane-layout";
 export function ProjectWorkspace({
   workspace,
   focusRequest,
+  onPaneFocus,
   canEdit,
   onCommand,
   execute,
@@ -22,6 +23,7 @@ export function ProjectWorkspace({
 }: {
   workspace: WorkspaceSnapshot;
   focusRequest?: PaneFocusRequest | null;
+  onPaneFocus?: (paneId: string) => void;
   canEdit: boolean;
   onCommand: (operation: WorkspaceOperation) => void;
   execute: (operation: WorkspaceOperation) => Promise<void>;
@@ -36,6 +38,14 @@ export function ProjectWorkspace({
   const [renaming, setRenaming] = useState<string | null>(null);
   const project = workspace.projects.find((p) => p.id === workspace.selection?.projectId);
   const selected = project?.tabs.find((tab) => tab.id === workspace.selection?.tabId);
+  const cycleTab = (delta: number) => {
+    if (!project || project.tabs.length < 2) return;
+    const index = project.tabs.findIndex((tab) => tab.id === selected?.id);
+    const tab = project.tabs[(index + delta + project.tabs.length) % project.tabs.length];
+    if (tab) onCommand({ kind: "selection.set", projectId: project.id, tabId: tab.id });
+  };
+  useCommand("previous-tab", !!project && project.tabs.length > 1 && canEdit, () => cycleTab(-1));
+  useCommand("next-tab", !!project && project.tabs.length > 1 && canEdit, () => cycleTab(1));
   useCommand("close-tab", !!project && !!selected && canEdit && !launching, () => {
     if (project && selected)
       onCommand({
@@ -245,6 +255,7 @@ export function ProjectWorkspace({
           <PaneLayout
             key={selected.id}
             focusRequest={focusRequest ?? null}
+            onPaneFocus={onPaneFocus}
             tab={selected}
             project={project}
             canEdit={canEdit && !launching}

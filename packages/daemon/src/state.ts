@@ -30,6 +30,7 @@ export class DaemonState {
         "agent-composer",
         "pane-rearrangement",
         "workspace-pane-rearrangement",
+        "directional-pane-split",
       ],
     };
   }
