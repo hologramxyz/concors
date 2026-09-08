@@ -256,3 +256,62 @@ it("broadcasts Codex profile lifecycle to unattached clients and restores it on 
     .poll(() => restarted.connection.terminals.find((item) => item.id === next?.id)?.status)
     .toBe("interrupted");
 }, 15000);
+
+it("discovers Codex launched inside a shell, broadcasts it, and clears it on return to the shell", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "concors-shell-agent-"));
+  directories.push(directory);
+  vi.stubEnv("PATH", installTestCodexProfile(directory) + delimiter + (process.env["PATH"] ?? ""));
+  if (process.platform !== "win32") vi.stubEnv("SHELL", "/bin/sh");
+  server = createDaemonServer(loadDaemonConfig({ port: 0, logLevel: "silent" }, {}), {
+    workspacePath: join(directory, "workspace.sqlite"),
+  });
+  const url = await server.listen();
+  const first = await open(url),
+    observer = await open(url);
+  const projectId = randomUUID(),
+    tabId = randomUUID(),
+    paneId = randomUUID();
+  await edit(first.connection, { kind: "project.add", projectId, name: "Shell", directory });
+  await edit(first.connection, {
+    kind: "tab.create",
+    projectId,
+    tabId,
+    paneId,
+    expectedVersion: 0,
+    name: "Terminal",
+    profile: "shell",
+  });
+  const [session] = await request(first.connection, {
+    kind: "start",
+    epoch: first.connection.workspace!.epoch,
+    projectId,
+    tabId,
+    paneId,
+    expectedVersion: 1,
+    expectedSessionId: null,
+    cols: 80,
+    rows: 24,
+  });
+  const id = session!.id;
+  await request(first.connection, { kind: "attach", sessionId: id });
+  await request(first.connection, { kind: "claim", sessionId: id, cols: 80, rows: 24 });
+  first.connection.sendTerminalInput(id, "codex\r");
+  await expect
+    .poll(() => observer.connection.terminals.find((s) => s.id === id), { timeout: 10000 })
+    .toMatchObject({ profile: "shell", detectedAgent: "codex", status: "running" });
+  observer.connection.disconnect();
+  await observer.connection.connect();
+  await expect
+    .poll(() => observer.connection.terminals.find((s) => s.id === id)?.detectedAgent)
+    .toBe("codex");
+  first.connection.sendTerminalInput(id, "exit\r");
+  await expect
+    .poll(() => observer.connection.terminals.find((s) => s.id === id), { timeout: 10000 })
+    .toMatchObject({ detectedAgent: null, status: "running" });
+  first.connection.sendTerminalInput(id, "codex\r");
+  await expect
+    .poll(() => observer.connection.terminals.find((s) => s.id === id)?.detectedAgent, {
+      timeout: 10000,
+    })
+    .toBe("codex");
+}, 30000);
