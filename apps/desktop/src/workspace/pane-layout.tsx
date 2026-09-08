@@ -22,7 +22,7 @@ import type {
 
 const PROFILE_LABELS: Record<PaneProfile, string> = {
   shell: "Terminal",
-  chat: "Unified chat",
+  chat: "Agent",
   codex: "Codex",
   claude: "Claude Code",
   opencode: "OpenCode",

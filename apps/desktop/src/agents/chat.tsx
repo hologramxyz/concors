@@ -90,11 +90,11 @@ export function ChatPane({
         disabled={!canEdit || busy || !available}
         onClick={() => void start()}
       >
-        {busy ? "Starting…" : "Start Codex chat"}
+        {busy ? "Starting…" : "Start Codex agent"}
       </button>
       {!available && (
         <p className="text-xs text-muted-foreground">
-          Update and restart this machine’s daemon to enable unified chat.
+          Update and restart this machine’s daemon to enable agents.
         </p>
       )}
       {error && (
