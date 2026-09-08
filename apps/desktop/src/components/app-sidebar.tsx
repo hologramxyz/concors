@@ -1,8 +1,13 @@
+import { useContext, useEffect, useState } from "react";
+import { TerminalConnectionContext } from "@/terminal/connection-context";
+import { ProjectImage } from "@/workspace/project-image";
+import { repositoryImage } from "@/workspace/repository-image";
+import type { ProjectSetup } from "@concors/protocol";
 import { shortcutLabel } from "@/shortcuts/bindings";
 import { AgentSidebar } from "@/agents/list";
 import { ProjectActions } from "@/workspace/project-actions";
 import { SidebarSection } from "./sidebar-section";
-import { Folder, Keyboard, PanelLeftClose, Plus, Search } from "lucide-react";
+import { Keyboard, PanelLeftClose, Plus, Search } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "cn";
 import type { WorkspaceSnapshot, WorkspaceOperation } from "@concors/protocol";
@@ -34,6 +39,20 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar(props: AppSidebarProps) {
+  const connection = useContext(TerminalConnectionContext);
+  const [setupState, setSetupState] = useState<{
+    connection: typeof connection;
+    setups: ProjectSetup[];
+  }>({ connection: null, setups: [] });
+  useEffect(() => {
+    return connection?.subscribeProjectSetups((setups) => setSetupState({ connection, setups }));
+  }, [connection]);
+  const images = new Map(
+    (setupState.connection === connection ? setupState.setups : [])
+      .filter((setup) => setup.mode === "clone" && setup.status === "done")
+      .map((setup) => [setup.id, repositoryImage(setup.repository)]),
+  );
+
   return (
     <div
       className="sidebar-shell"
@@ -86,7 +105,7 @@ export function AppSidebar(props: AppSidebarProps) {
                 aria-label="Add project"
                 disabled={!props.canEdit}
                 onClick={props.onAddProject}
-                className="rounded p-1 text-muted-foreground hover:bg-sidebar-accent disabled:opacity-40"
+                className="rounded p-1 text-muted-foreground hover:text-sidebar-foreground disabled:opacity-40"
               >
                 <Plus className="size-4" />
               </button>
@@ -94,7 +113,15 @@ export function AppSidebar(props: AppSidebarProps) {
           >
             <ul className="mt-1 space-y-0.5">
               {props.workspace?.projects.map((project) => (
-                <li key={project.id} className="group flex items-center">
+                <li
+                  key={project.id}
+                  className={cn(
+                    "group flex items-center rounded-md focus-within:bg-sidebar-accent hover:bg-sidebar-accent has-[[data-state=open]]:bg-sidebar-accent",
+                    props.view === "projects" &&
+                      props.workspace?.selection?.projectId === project.id &&
+                      "bg-sidebar-accent",
+                  )}
+                >
                   <button
                     type="button"
                     disabled={!props.canEdit}
@@ -106,14 +133,12 @@ export function AppSidebar(props: AppSidebarProps) {
                         ? "page"
                         : undefined
                     }
-                    className={cn(
-                      "flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-[13px] hover:bg-sidebar-accent disabled:opacity-50",
-                      props.view === "projects" &&
-                        props.workspace?.selection?.projectId === project.id &&
-                        "bg-sidebar-accent",
-                    )}
+                    className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-[13px] disabled:opacity-50"
                   >
-                    <Folder className="size-4 shrink-0 text-muted-foreground" />
+                    <ProjectImage
+                      key={images.get(project.id) ?? "folder"}
+                      source={images.get(project.id) ?? null}
+                    />
                     <span className="truncate">{project.name}</span>
                   </button>
                   <ProjectActions
