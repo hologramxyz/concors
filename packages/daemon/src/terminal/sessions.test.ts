@@ -1,4 +1,4 @@
-import { installTestCodexProfile } from "./testing/profile.ts";
+import { installTestCodexProfile, installTestClaudeProfile } from "./testing/profile.ts";
 import { randomUUID } from "node:crypto";
 import { mkdtempSync } from "node:fs";
 import { rm } from "node:fs/promises";
@@ -165,11 +165,29 @@ it("shares a real PTY, transfers control, replays its screen, rebinds and record
   for (const c of connections) c.disconnect();
   await server.close();
   server = createDaemonServer(config, options);
-  const after = await open(await server.listen());
+  const restartUrl = await server.listen();
+  const after = await open(restartUrl);
   const sessions = await request(after.connection, { kind: "list" });
   expect(sessions.find((s) => s.id === next[0]!.id)?.status).toBe("interrupted");
   expect((await request(after.connection, start, receipt))[0]?.id).toBe(sessionId);
   expect(await request(after.connection, { kind: "list" })).toHaveLength(2);
+  const recover: TerminalOperation = {
+    ...start,
+    recover: true,
+    tabId: newTab,
+    paneId: newPane,
+    expectedVersion: 0, // Recovery of this exact binding tolerates unrelated project changes.
+    expectedSessionId: next[0]!.id,
+  };
+  const other = await open(restartUrl);
+  const [recovered, duplicate] = await Promise.all([
+    request(after.connection, recover),
+    request(other.connection, recover),
+  ]);
+  expect(recovered[0]?.status).toBe("running");
+  expect(duplicate[0]?.id).toBe(recovered[0]?.id);
+  expect(await request(after.connection, { kind: "list" })).toHaveLength(3);
+  await expect(request(after.connection, { ...recover, epoch: randomUUID() })).rejects.toThrow();
 }, 15000);
 
 it("rejects network exposure before starting a terminal-enabled daemon", () => {
@@ -257,61 +275,83 @@ it("broadcasts Codex profile lifecycle to unattached clients and restores it on 
     .toBe("interrupted");
 }, 15000);
 
-it("discovers Codex launched inside a shell, broadcasts it, and clears it on return to the shell", async () => {
-  const directory = mkdtempSync(join(tmpdir(), "concors-shell-agent-"));
-  directories.push(directory);
-  vi.stubEnv("PATH", installTestCodexProfile(directory) + delimiter + (process.env["PATH"] ?? ""));
-  if (process.platform !== "win32") vi.stubEnv("SHELL", "/bin/sh");
-  server = createDaemonServer(loadDaemonConfig({ port: 0, logLevel: "silent" }, {}), {
-    workspacePath: join(directory, "workspace.sqlite"),
-  });
-  const url = await server.listen();
-  const first = await open(url),
-    observer = await open(url);
-  const projectId = randomUUID(),
-    tabId = randomUUID(),
-    paneId = randomUUID();
-  await edit(first.connection, { kind: "project.add", projectId, name: "Shell", directory });
-  await edit(first.connection, {
-    kind: "tab.create",
-    projectId,
-    tabId,
-    paneId,
-    expectedVersion: 0,
-    name: "Terminal",
-    profile: "shell",
-  });
-  const [session] = await request(first.connection, {
-    kind: "start",
-    epoch: first.connection.workspace!.epoch,
-    projectId,
-    tabId,
-    paneId,
-    expectedVersion: 1,
-    expectedSessionId: null,
-    cols: 80,
-    rows: 24,
-  });
-  const id = session!.id;
-  await request(first.connection, { kind: "attach", sessionId: id });
-  await request(first.connection, { kind: "claim", sessionId: id, cols: 80, rows: 24 });
-  first.connection.sendTerminalInput(id, "codex\r");
-  await expect
-    .poll(() => observer.connection.terminals.find((s) => s.id === id), { timeout: 10000 })
-    .toMatchObject({ profile: "shell", detectedAgent: "codex", status: "running" });
-  observer.connection.disconnect();
-  await observer.connection.connect();
-  await expect
-    .poll(() => observer.connection.terminals.find((s) => s.id === id)?.detectedAgent)
-    .toBe("codex");
-  first.connection.sendTerminalInput(id, "exit\r");
-  await expect
-    .poll(() => observer.connection.terminals.find((s) => s.id === id), { timeout: 10000 })
-    .toMatchObject({ detectedAgent: null, status: "running" });
-  first.connection.sendTerminalInput(id, "codex\r");
-  await expect
-    .poll(() => observer.connection.terminals.find((s) => s.id === id)?.detectedAgent, {
-      timeout: 10000,
-    })
-    .toBe("codex");
-}, 30000);
+it.each(["codex", "claude"] as const)(
+  "discovers %s inside a shell, broadcasts activity, and clears it on return",
+  async (agent) => {
+    const directory = mkdtempSync(join(tmpdir(), "concors-shell-agent-"));
+    directories.push(directory);
+    vi.stubEnv(
+      "PATH",
+      installTestCodexProfile(directory) + delimiter + (process.env["PATH"] ?? ""),
+    );
+    installTestClaudeProfile(directory);
+    if (process.platform !== "win32") vi.stubEnv("SHELL", "/bin/sh");
+    server = createDaemonServer(loadDaemonConfig({ port: 0, logLevel: "silent" }, {}), {
+      workspacePath: join(directory, "workspace.sqlite"),
+    });
+    const url = await server.listen();
+    const first = await open(url),
+      observer = await open(url);
+    const projectId = randomUUID(),
+      tabId = randomUUID(),
+      paneId = randomUUID();
+    await edit(first.connection, { kind: "project.add", projectId, name: "Shell", directory });
+    await edit(first.connection, {
+      kind: "tab.create",
+      projectId,
+      tabId,
+      paneId,
+      expectedVersion: 0,
+      name: "Terminal",
+      profile: "shell",
+    });
+    const [session] = await request(first.connection, {
+      kind: "start",
+      epoch: first.connection.workspace!.epoch,
+      projectId,
+      tabId,
+      paneId,
+      expectedVersion: 1,
+      expectedSessionId: null,
+      cols: 80,
+      rows: 24,
+    });
+    const id = session!.id;
+    await request(first.connection, { kind: "attach", sessionId: id });
+    await request(first.connection, { kind: "claim", sessionId: id, cols: 80, rows: 24 });
+    first.connection.sendTerminalInput(id, `${agent}\r`);
+    await expect
+      .poll(() => observer.connection.terminals.find((s) => s.id === id), { timeout: 10000 })
+      .toMatchObject({ profile: "shell", detectedAgent: agent, status: "running" });
+    for (const [command, activity] of [
+      ["test-working", "working"],
+      ["test-approval", "needs_input"],
+      ["test-idle", "idle"],
+    ]) {
+      first.connection.sendTerminalInput(id, `${command}\r`);
+      for (const client of [first, observer])
+        await expect
+          .poll(() => client.connection.terminals.find((s) => s.id === id)?.agentActivity)
+          .toBe(activity);
+    }
+    observer.connection.disconnect();
+    await observer.connection.connect();
+    await expect
+      .poll(() => observer.connection.terminals.find((s) => s.id === id)?.detectedAgent)
+      .toBe(agent);
+    await expect
+      .poll(() => observer.connection.terminals.find((s) => s.id === id)?.agentActivity)
+      .toBe("idle");
+    first.connection.sendTerminalInput(id, "exit\r");
+    await expect
+      .poll(() => observer.connection.terminals.find((s) => s.id === id), { timeout: 10000 })
+      .toMatchObject({ detectedAgent: null, status: "running" });
+    first.connection.sendTerminalInput(id, `${agent}\r`);
+    await expect
+      .poll(() => observer.connection.terminals.find((s) => s.id === id)?.detectedAgent, {
+        timeout: 10000,
+      })
+      .toBe(agent);
+  },
+  30000,
+);

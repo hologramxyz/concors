@@ -4,6 +4,7 @@ import { LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TerminalConnectionContext } from "./connection-context";
 import { TerminalSurface } from "./terminal-surface";
+import { useTerminalSessions } from "./use-terminal-sessions";
 
 export function TerminalPane({
   project,
@@ -17,51 +18,75 @@ export function TerminalPane({
   canEdit: boolean;
 }) {
   const connection = useContext(TerminalConnectionContext);
+  const session = useTerminalSessions().find((item) => item.id === node.sessionId);
+  const recovering = session?.status === "interrupted";
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const attempted = useRef(false);
-  const start = useCallback(async () => {
-    if (!connection?.workspace || busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const result = await connection.requestTerminal(
-        {
-          kind: "start",
-          epoch: connection.workspace.epoch,
-          projectId: project.id,
-          tabId: tab.id,
-          paneId: node.id,
-          expectedVersion:
-            connection.workspace.projects.find((item) => item.id === project.id)?.version ??
-            project.version,
-          expectedSessionId: node.sessionId,
-          cols: 80,
-          rows: 24,
-        },
-        crypto.randomUUID(),
-      );
-      if (result.outcome.status === "error") throw new Error(result.outcome.message);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not start terminal");
-    } finally {
-      setBusy(false);
-    }
-  }, [connection, busy, project.id, project.version, tab.id, node.id, node.sessionId]);
+  const attempted = useRef<string | null>(null);
+  const start = useCallback(
+    async (recover = false) => {
+      if (!connection?.workspace || busy) return;
+      if (
+        recover &&
+        (connection.state.status !== "ready" ||
+          !connection.state.daemon.capabilities?.includes("terminal-recovery"))
+      ) {
+        setError("Update this machine to reconnect this session.");
+        return;
+      }
+      setBusy(true);
+      setError(null);
+      try {
+        const result = await connection.requestTerminal(
+          {
+            kind: "start",
+            ...(recover ? { recover: true } : {}),
+            epoch: connection.workspace.epoch,
+            projectId: project.id,
+            tabId: tab.id,
+            paneId: node.id,
+            expectedVersion:
+              connection.workspace.projects.find((item) => item.id === project.id)?.version ??
+              project.version,
+            expectedSessionId: node.sessionId,
+            cols: 80,
+            rows: 24,
+          },
+          crypto.randomUUID(),
+        );
+        if (result.outcome.status === "error") throw new Error(result.outcome.message);
+      } catch (cause) {
+        if (connection.state.status === "ready")
+          setError(cause instanceof Error ? cause.message : "Could not start terminal");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [connection, busy, project.id, project.version, tab.id, node.id, node.sessionId],
+  );
   useEffect(() => {
-    if (node.sessionId || !canEdit || connection?.state.status !== "ready" || attempted.current)
+    const key = node.sessionId ?? "new";
+    if (connection?.state.status !== "ready") attempted.current = null;
+    if (
+      busy ||
+      (node.sessionId && !recovering) ||
+      !canEdit ||
+      connection?.state.status !== "ready" ||
+      attempted.current === key
+    )
       return;
-    attempted.current = true;
-    void start();
-  }, [node.sessionId, canEdit, connection?.state.status, start]);
+    attempted.current = key;
+    void start(recovering);
+  }, [node.sessionId, recovering, canEdit, busy, connection?.state.status, start]);
   if (node.sessionId)
     return (
       <TerminalSurface
         key={node.sessionId}
         sessionId={node.sessionId}
         canEdit={canEdit}
+        recovering={recovering}
         onRestart={() => {
-          void start();
+          void start(recovering);
         }}
         restartBusy={busy}
         launchError={error}

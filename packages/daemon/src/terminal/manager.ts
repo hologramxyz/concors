@@ -145,11 +145,26 @@ export class TerminalManager {
       ?.nodes.find((n) => n.id === op.paneId);
     if (!project || !pane || pane.kind !== "pane") throw new Error("Pane no longer exists");
     if (pane.profile === "chat") throw new Error("Unified chat is not a terminal profile");
+    if (op.recover && pane.sessionId !== op.expectedSessionId && pane.sessionId) {
+      // Another attached client already recovered this pane. Return its binding, not a second PTY.
+      const current = this.#store.terminal(pane.sessionId);
+      if (state.epoch === op.epoch && ["running", "starting"].includes(current.status))
+        return current;
+    }
+    const lost = op.recover && pane.sessionId ? this.#store.terminal(pane.sessionId) : null;
+    if (op.recover && (!lost || lost.status !== "interrupted"))
+      throw new Error("This terminal does not need recovery");
     if (!isAbsolute(project.directory))
       throw new Error("Use an absolute project directory on this machine");
     const directory = await realpath(project.directory);
     if (!(await stat(directory)).isDirectory()) throw new Error("Project path is not a directory");
-    const command = resolveProfile(pane.profile);
+    const recoveryProfile = lost?.detectedAgent ?? pane.profile;
+    const command = resolveProfile(
+      op.recover ? recoveryProfile : pane.profile,
+      process.platform,
+      process.env,
+      !!op.recover,
+    );
     if (this.#closed || !viewer.active()) throw new Error("Connection closed before launch");
     if ([...this.#runtimes.values()].filter((r) => r.info.status === "running").length >= 16)
       throw new Error("Maximum of 16 running terminals reached; stop a session first");
