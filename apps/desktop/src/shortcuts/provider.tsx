@@ -105,9 +105,9 @@ export function ShortcutProvider({ children }: { children: ReactNode }) {
         <div
           role="region"
           aria-label={sequence === "p" ? "Pane shortcuts" : "Tab shortcuts"}
-          className="fixed bottom-6 left-1/2 z-[100] w-80 -translate-x-1/2 rounded-lg border bg-popover p-3 text-popover-foreground shadow-lg"
+          className="fixed bottom-6 left-1/2 z-[100] max-h-[calc(100dvh-3rem)] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 overflow-y-auto rounded-xl border bg-popover p-4 text-popover-foreground shadow-lg"
         >
-          <p className="mb-2 text-sm font-medium">
+          <p className="mb-3 text-lg font-medium">
             {sequence === "p" ? "Pane" : "Tab"} · choose an action
           </p>
           {sequenceBindings(sequence).map((binding) => (
@@ -119,15 +119,15 @@ export function ShortcutProvider({ children }: { children: ReactNode }) {
                 cancel();
                 commands.run(binding.id);
               }}
-              className="flex w-full items-center justify-between rounded px-2 py-1.5 text-[13px] hover:bg-accent disabled:opacity-40"
+              className="flex min-h-11 w-full items-center justify-between gap-3 rounded-md px-3 py-2.5 text-base hover:bg-accent disabled:opacity-40"
             >
               {binding.label}
-              <kbd className="ml-3 font-mono">
+              <kbd className="min-w-9 shrink-0 rounded border bg-muted px-2 py-1 text-center font-mono text-sm">
                 {"then" in binding ? keyLabel(binding.then) : ""}
               </kbd>
             </button>
           ))}
-          <p className="mt-2 text-xs text-muted-foreground">
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
             Release the shortcut keys, then choose. Esc cancels.
           </p>
         </div>
