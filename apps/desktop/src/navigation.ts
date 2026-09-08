@@ -6,8 +6,6 @@ export interface NavItem {
   readonly view: View;
   readonly label: string;
   readonly icon: LucideIcon;
-  /** Keyboard shortcut shown in menus (G then key, Linear-style "go to" chords). */
-  readonly shortcut?: string;
   /** Sections that exist in the navigation but have no UI yet. */
   readonly comingSoon?: boolean;
 }
@@ -23,7 +21,6 @@ export const SETTINGS_NAV: NavItem = {
   view: "settings",
   label: "Settings",
   icon: Settings,
-  shortcut: "G S",
 };
 
 export const ALL_NAV: readonly NavItem[] = [...PRIMARY_NAV, SETTINGS_NAV];
