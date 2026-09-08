@@ -1,9 +1,25 @@
 import { isProviderModelsQueryLoading } from "./paseo/model-loading";
 import { useContext, useEffect, useRef, useState } from "react";
-import { ArrowUp, ChevronDown, LoaderCircle, Mic, Paperclip, Square, X } from "lucide-react";
+import {
+  ArrowUp,
+  Brain,
+  ListTodo,
+  Zap,
+  LoaderCircle,
+  Mic,
+  Paperclip,
+  Shield,
+  ShieldCheck,
+  ShieldOff,
+  Square,
+  X,
+} from "lucide-react";
 import type { AgentInfo, AgentSettings, AgentAttachment, AgentOperation } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { submitAgentInput } from "./paseo/submit";
+import { ControlPicker } from "./control-picker";
+import { ContextMeter } from "./context-meter";
+import { CodexIcon } from "./paseo/codex-icon";
 import { useDictation } from "./dictation";
 const defaults: AgentSettings = { model: null, effort: null, mode: "default" };
 interface Draft {
@@ -15,8 +31,6 @@ interface Attempt {
   draft: Draft;
   operation: Extract<AgentOperation, { kind: "send" }>;
 }
-const control =
-  "max-w-44 rounded-md border-0 bg-transparent py-1 text-xs text-muted-foreground outline-none hover:bg-muted disabled:opacity-50";
 export function AgentComposer({
   agent,
   connected,
@@ -188,15 +202,13 @@ export function AgentComposer({
       setUploading(false);
     }
   };
-  const used = agent.context?.used,
-    limit = agent.context?.limit;
   const effortModel = models.find((m) => m.id === (settings.model ?? agent.model));
   return (
     <div className="space-y-2">
       {queue.map((entry, i) => (
         <div
           key={i}
-          className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-xs"
+          className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-[12px]"
         >
           <span className="text-muted-foreground">Queued</span>
           <span className="min-w-0 flex-1 truncate">
@@ -218,12 +230,12 @@ export function AgentComposer({
         </div>
       ))}
       {(error || dictation.error) && (
-        <p role="alert" className="text-xs text-destructive">
+        <p role="alert" className="text-[12px] text-destructive">
           {error ?? dictation.error}
         </p>
       )}
       {uncertain && (
-        <div className="flex items-center gap-2 text-xs">
+        <div className="flex items-center gap-2 text-[12px]">
           <span>Delivery could not be confirmed.</span>
           <button
             className="text-primary"
@@ -257,7 +269,7 @@ export function AgentComposer({
             {attachments.map((file, i) => (
               <div
                 key={i}
-                className="flex max-w-52 items-center gap-2 rounded-lg border bg-muted/40 px-2 py-1 text-xs"
+                className="flex max-w-52 items-center gap-2 rounded-lg border bg-muted/40 px-2 py-1 text-[12px]"
               >
                 {file.mime.startsWith("image/") && (
                   <img
@@ -297,15 +309,23 @@ export function AgentComposer({
             }
           }}
           onKeyDown={(e) => {
+            if (e.key === "Tab" && e.shiftKey && !active && !configuring && advanced) {
+              e.preventDefault();
+              const modes: AgentSettings["mode"][] = ["default", "auto-review", "full-access"];
+              void configure({
+                ...settings,
+                mode: modes[(modes.indexOf(settings.mode) + 1) % modes.length] ?? "default",
+              });
+            }
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
               if (!uncertain) void submit();
             }
           }}
-          className="max-h-48 min-h-16 w-full resize-none bg-transparent px-3 py-2 text-sm outline-none disabled:opacity-50"
+          className="max-h-48 min-h-16 w-full resize-none bg-transparent px-3 py-3 text-[16px] leading-relaxed outline-none disabled:opacity-50"
         />
         {dictation.listening && (
-          <p role="status" className="px-3 pb-2 text-xs text-primary">
+          <p role="status" className="px-3 pb-2 text-[12px] text-primary">
             {dictation.interim || "Listening… Click the microphone to finish."}
           </p>
         )}
@@ -325,92 +345,130 @@ export function AgentComposer({
             type="button"
             aria-label="Attach files"
             title="Attach files or paste an image (up to three, 1 MB each)"
-            className="rounded-lg p-2 text-muted-foreground hover:bg-muted"
+            className="agent-control"
             disabled={!advanced || !connected || busy || uploading || uncertain}
             onClick={() => picker.current?.click()}
           >
             <Paperclip className="size-4" />
           </button>
-          <label className="flex items-center gap-1">
-            <span className="sr-only">Agent and model</span>
-            <select
-              className={control}
-              aria-label="Agent and model"
-              value={settings.model ?? ""}
-              disabled={!advanced || !connected || active || busy || configuring || modelsLoading}
-              onChange={(e) =>
-                void configure({ ...settings, model: e.target.value || null, effort: null })
-              }
-            >
-              <option value="">Codex · {agent.model ?? "Default model"}</option>
-              {models.map((model) => (
-                <option key={model.id} value={model.id}>
-                  Codex · {model.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="button"
-            aria-label="Refresh agent models"
-            title="Refresh models from this machine"
-            disabled={!advanced || !connected || modelsLoading || active}
-            onClick={() => void refresh()}
-            className="p-1 text-muted-foreground"
-          >
-            {loadingModels ? (
-              <LoaderCircle className="size-3 animate-spin" />
-            ) : (
-              <ChevronDown className="size-3" />
-            )}
-          </button>
-          <select
-            aria-label="Thinking effort"
-            className={control}
+          <ControlPicker
+            label="Agent and model"
+            value={settings.model ?? ""}
+            icon={modelsLoading ? <LoaderCircle className="size-4 animate-spin" /> : <CodexIcon />}
+            disabled={!advanced || !connected || active || busy || configuring || modelsLoading}
+            options={[
+              {
+                id: "",
+                label: "Machine default",
+                description: agent.model ?? "Use this machine’s configured model",
+                icon: <CodexIcon />,
+              },
+              ...models.map((model) => ({ id: model.id, label: model.label, icon: <CodexIcon /> })),
+            ]}
+            onSelect={(model) =>
+              void configure({ ...settings, model: model || null, effort: null, serviceTier: null })
+            }
+            footer={
+              <button
+                type="button"
+                aria-label="Refresh agent models"
+                disabled={modelsLoading}
+                onClick={() => void refresh()}
+                className="w-full border-t px-2 py-2 text-left text-[12px] text-muted-foreground hover:bg-muted"
+              >
+                Refresh models
+              </button>
+            }
+          />
+          <ControlPicker
+            label="Thinking effort"
             value={settings.effort ?? ""}
+            icon={<Brain className="size-4" />}
             disabled={!advanced || !connected || active || busy || configuring}
-            onChange={(e) =>
-              void configure({
-                ...settings,
-                effort: (e.target.value || null) as AgentSettings["effort"],
-              })
-            }
-          >
-            <option value="">Thinking: {effortModel?.defaultEffort ?? "default"}</option>
-            {(effortModel?.efforts ?? []).map((e) => (
-              <option key={e} value={e}>
-                {e}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label="Permission mode"
-            title="Full access allows file changes and network commands without approval prompts."
-            className={control}
+            options={[
+              {
+                id: "",
+                label: `Default (${effortModel?.defaultEffort ?? "automatic"})`,
+                icon: <Brain className="size-4" />,
+              },
+              ...(effortModel?.efforts ?? []).map((effort) => ({
+                id: effort,
+                label: effort.charAt(0).toUpperCase() + effort.slice(1),
+                icon: <Brain className="size-4" />,
+              })),
+            ]}
+            onSelect={(effort) => void configure({ ...settings, effort: effort || null })}
+          />
+          <ControlPicker
+            label="Permission mode"
             value={settings.mode}
-            disabled={!advanced || !connected || active || busy || configuring}
-            onChange={(e) =>
-              void configure({ ...settings, mode: e.target.value as AgentSettings["mode"] })
+            icon={
+              settings.mode === "auto-review" ? (
+                <ShieldCheck className="size-4" />
+              ) : settings.mode === "full-access" ? (
+                <ShieldOff className="size-4 text-amber-500" />
+              ) : (
+                <Shield className="size-4" />
+              )
             }
-          >
-            <option value="default">Default permissions</option>
-            <option value="auto-review">Auto-review</option>
-            <option value="full-access">Full access</option>
-          </select>
-          <div className="ml-auto flex items-center gap-1">
-            <span
-              title={
-                used !== undefined
-                  ? `${used.toLocaleString()} tokens in context; ${agent.context?.total.toLocaleString()} total tokens`
-                  : "Context usage is reported by the agent after a turn."
-              }
-              aria-label="Context window"
-              className="px-1 text-[10px] text-muted-foreground tabular-nums"
+            disabled={!advanced || !connected || active || busy || configuring}
+            options={[
+              {
+                id: "default",
+                label: "Default permissions",
+                description: "Workspace access; asks when approval is needed.",
+                icon: <Shield className="size-4" />,
+              },
+              {
+                id: "auto-review",
+                label: "Auto-review",
+                description: "Same sandbox; eligible requests go to the reviewer agent.",
+                icon: <ShieldCheck className="size-4" />,
+              },
+              {
+                id: "full-access",
+                label: "Full access",
+                description: "File and network access without approval prompts.",
+                icon: <ShieldOff className="size-4 text-amber-500" />,
+              },
+            ]}
+            onSelect={(mode) =>
+              void configure({ ...settings, mode: mode as AgentSettings["mode"] })
+            }
+          />
+          {agent.supportsPlan && (
+            <button
+              type="button"
+              aria-label="Plan mode"
+              aria-pressed={!!settings.planMode}
+              title="Plan mode: explore and plan with read-only access"
+              className={`agent-control ${settings.planMode ? "bg-primary/10 text-primary!" : ""}`}
+              disabled={!connected || active || busy || configuring}
+              onClick={() => void configure({ ...settings, planMode: !settings.planMode })}
             >
-              {used !== undefined && limit
-                ? `${Math.min(100, Math.round((used / limit) * 100))}% context`
-                : "Context —"}
-            </span>
+              <ListTodo className="size-4" />
+            </button>
+          )}
+          {!!effortModel?.serviceTiers?.length && (
+            <ControlPicker
+              label="Speed"
+              value={settings.serviceTier ?? ""}
+              icon={<Zap className={`size-4 ${settings.serviceTier ? "text-amber-500" : ""}`} />}
+              disabled={!connected || active || busy || configuring}
+              options={[
+                { id: "", label: "Default speed", icon: <Zap className="size-4" /> },
+                ...effortModel.serviceTiers.map((tier) => ({
+                  ...tier,
+                  icon: <Zap className="size-4" />,
+                })),
+              ]}
+              onSelect={(serviceTier) =>
+                void configure({ ...settings, serviceTier: serviceTier || null })
+              }
+            />
+          )}
+          <div className="ml-auto flex items-center gap-1">
+            <ContextMeter context={agent.context} />
             <button
               type="button"
               aria-label={dictation.listening ? "Stop dictation" : "Start dictation"}
@@ -421,7 +479,7 @@ export function AgentComposer({
               }
               disabled={!dictation.supported || !connected || busy || uncertain}
               onClick={dictation.toggle}
-              className={`rounded-lg p-2 disabled:opacity-30 ${dictation.listening ? "bg-red-500/10 text-red-500" : "text-muted-foreground hover:bg-muted"}`}
+              className={`agent-control ${dictation.listening ? "bg-red-500/10 text-red-500" : "text-muted-foreground hover:bg-muted"}`}
             >
               <Mic className="size-4" />
             </button>
@@ -458,20 +516,15 @@ export function AgentComposer({
           </div>
         </div>
       </form>
-      <p className="px-2 text-[10px] text-muted-foreground">
-        {uploading
-          ? "Reading attachments…"
-          : !connected
-            ? "Reconnecting…"
-            : configuring
-              ? "Updating agent settings…"
-              : settings.mode === "auto-review"
-                ? "Eligible approval requests are reviewed by Codex’s reviewer agent."
-                : settings.mode === "full-access"
-                  ? "Full access · commands and file changes run without approval prompts."
-                  : "Enter to send · Shift+Enter for a new line"}
-        {dictation.supported ? "" : " · Dictation unavailable in this browser"}
-      </p>
+      {(uploading || !connected || configuring) && (
+        <p role="status" className="px-2 text-[12px] text-muted-foreground">
+          {uploading
+            ? "Reading attachments…"
+            : !connected
+              ? "Reconnecting…"
+              : "Updating agent settings…"}
+        </p>
+      )}
     </div>
   );
 }
