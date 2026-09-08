@@ -109,7 +109,6 @@ export class TerminalRuntime {
         };
         this.#owner = null;
         this.#save(this.info);
-        this.emit({ type: "terminal.state", session: this.info });
         this.emitOwner();
         this.#resolveExit();
       });
