@@ -7,7 +7,7 @@ import {
   Zap,
   LoaderCircle,
   Mic,
-  Paperclip,
+  Plus,
   Shield,
   ShieldCheck,
   ShieldOff,
@@ -349,7 +349,7 @@ export function AgentComposer({
             disabled={!advanced || !connected || busy || uploading || uncertain}
             onClick={() => picker.current?.click()}
           >
-            <Paperclip className="size-4" />
+            <Plus className="size-4" />
           </button>
           <ControlPicker
             label="Agent and model"
