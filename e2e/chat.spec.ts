@@ -32,6 +32,12 @@ test("shared chat streams, reloads, handles approvals and remains in global Agen
       .getByRole("region", { name: "Agents", exact: true });
     await expect(agentList.getByRole("img", { name: "Agent status: Ready" })).toBeVisible();
     await expect(agentList.getByText("Chat acceptance", { exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: /^Account:/ }).click();
+    await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
+    await agentList.getByRole("list").getByRole("button").first().click();
+    await expect(page.getByRole("heading", { name: "Chat acceptance", exact: true })).toBeVisible();
+    await expect(page.getByLabel("Message Codex")).toBeFocused();
+    await expect(page.getByRole("complementary", { name: "Agent sessions" })).toHaveCount(0);
     await page.getByLabel("Message Codex").fill("hold this stream");
     await page.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(page.getByRole("log")).toContainText("Hello from");
