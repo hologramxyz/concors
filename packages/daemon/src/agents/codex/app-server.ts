@@ -33,6 +33,7 @@ export class CodexAppServer {
   #stderr = "";
   #failure: Error | null = null;
   #ready = false;
+  #autoReviewAvailable = false;
   #connecting: Promise<void> | null = null;
   #closing: Promise<void> | null = null;
   #exit: Promise<void>;
@@ -65,9 +66,14 @@ export class CodexAppServer {
   }
   initialize(): Promise<void> {
     this.#connecting ??= (async () => {
-      await this.rpc("initialize", {
+      const response = await this.rpc("initialize", {
         clientInfo: { name: "concors", title: "Concors", version: "0.1.0" },
+        capabilities: { experimentalApi: true },
       });
+      const hello = z.object({ userAgent: z.string() }).safeParse(response);
+      const version = hello.success ? /\/(\d+)\.(\d+)\.(\d+)/.exec(hello.data.userAgent) : null;
+      this.#autoReviewAvailable =
+        !!version && (Number(version[1]) > 0 || Number(version[2]) >= 115);
       this.write({ method: "initialized", params: {} });
       this.#ready = true;
     })();
@@ -81,6 +87,16 @@ export class CodexAppServer {
   }
   request(method: string, params: unknown = {}, timeoutMs = 30000): Promise<unknown> {
     if (!this.#ready) return Promise.reject(new Error("Initialize the Codex app server first"));
+    if (
+      method === "turn/start" &&
+      !this.#autoReviewAvailable &&
+      z.object({ approvalsReviewer: z.literal("auto_review") }).safeParse(params).success
+    )
+      return Promise.reject(
+        new Error(
+          "Auto-review requires Codex 0.115.0 or newer. Update Codex on this machine or choose Default permissions.",
+        ),
+      );
     return this.rpc(method, params, timeoutMs);
   }
   private rpc(method: string, params: unknown, timeoutMs = 30000): Promise<unknown> {

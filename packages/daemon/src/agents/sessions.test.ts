@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DaemonConnection, describeDaemonEndpoint } from "@concors/daemon-client";
@@ -232,4 +232,240 @@ it("creates separate attention for input and completion and clears it when answe
   await expect.poll(() => b.agents[0]?.attention?.kind).toBe("done");
   expect(b.agents[0]!.attention!.id).not.toBe(input.id);
   expect(b.agents[0]!.attention!.seen).toBe(false);
+});
+
+it("syncs model and permission choices, rejects stale edits, and forwards uploads to the provider", async () => {
+  const { a, b, id } = await setup();
+  expect(a.agents[0]!.models?.[0]?.id).toBe("fixture");
+  const settings = { model: "fixture", effort: "high" as const, mode: "auto-review" as const };
+  const revision = a.agents[0]!.revision;
+  expect(
+    (await action(a, { kind: "configure", sessionId: id, settings, expectedRevision: revision }))
+      .outcome.status,
+  ).toBe("ok");
+  await expect.poll(() => b.agents[0]?.settings).toEqual(settings);
+  expect(
+    (
+      await action(b, {
+        kind: "configure",
+        sessionId: id,
+        settings: { ...settings, mode: "full-access" },
+        expectedRevision: revision,
+      })
+    ).outcome.status,
+  ).toBe("error");
+  const attachment = {
+    name: "../../note.txt",
+    mime: "text/plain",
+    data: Buffer.from("attached content").toString("base64"),
+  };
+  const requestId = randomUUID();
+  await action(
+    a,
+    { kind: "send", sessionId: id, text: "hold", attachments: [attachment] },
+    requestId,
+  );
+  await expect
+    .poll(() => providers[0]!.requests.filter((r) => r.method === "turn/start").length)
+    .toBe(1);
+  const params = providers[0]!.requests.find((r) => r.method === "turn/start")!.params as {
+    input: { type: string; text: string }[];
+  };
+  expect(params).toMatchObject({
+    model: "fixture",
+    effort: "high",
+    approvalPolicy: "on-request",
+    approvalsReviewer: "auto_review",
+    sandboxPolicy: { type: "workspaceWrite", networkAccess: false },
+  });
+  const path = params.input[1]!.text.split("Its file on this machine is: ")[1]!;
+  expect(path.startsWith(join(directory, "attachments", id))).toBe(true);
+  expect(await readFile(path, "utf8")).toBe("attached content");
+  await action(
+    b,
+    { kind: "send", sessionId: id, text: "hold", attachments: [attachment] },
+    requestId,
+  );
+  expect(providers[0]!.requests.filter((r) => r.method === "turn/start")).toHaveLength(1);
+  expect(
+    (
+      await action(a, {
+        kind: "configure",
+        sessionId: id,
+        settings: { ...settings, mode: "full-access" },
+        expectedRevision: a.agents[0]!.revision,
+      })
+    ).outcome.status,
+  ).toBe("ok");
+  expect(params).toMatchObject({
+    approvalsReviewer: "auto_review",
+    sandboxPolicy: { type: "workspaceWrite" },
+  });
+  providers[0]!.finish();
+  await expect.poll(() => a.agents[0]?.status).toBe("done");
+  await action(a, {
+    kind: "configure",
+    sessionId: id,
+    settings: { ...settings, mode: "full-access" },
+    expectedRevision: a.agents[0]!.revision,
+  });
+  await action(a, { kind: "send", sessionId: id, text: "hold" });
+  await expect
+    .poll(() => providers[0]!.requests.filter((r) => r.method === "turn/start").length)
+    .toBe(2);
+  expect(providers[0]!.requests.filter((r) => r.method === "turn/start")[1]!.params).toMatchObject({
+    approvalPolicy: "never",
+    approvalsReviewer: "user",
+    sandboxPolicy: { type: "dangerFullAccess" },
+  });
+});
+
+it("streams structured plans, thinking summaries, child activity and context usage", async () => {
+  const { a, b, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "hold" });
+  await expect.poll(() => a.agents[0]?.turnId?.startsWith("turn-")).toBe(true);
+  const provider = providers[0]!;
+  provider.emit("turn/plan/updated", {
+    plan: [
+      { step: "Inspect", status: "completed" },
+      { step: "Implement", status: "inProgress" },
+    ],
+  });
+  provider.emit("item/started", {
+    item: {
+      id: "reasoning",
+      type: "reasoning",
+      summary: ["Reviewing the files"],
+      content: ["not for display"],
+    },
+  });
+  provider.emit("item/started", {
+    item: {
+      id: "children",
+      type: "collabAgentToolCall",
+      tool: "spawnAgent",
+      receiverThreadIds: ["child"],
+      agentsStates: { child: { status: "running", message: null } },
+      prompt: "Inspect tests",
+    },
+  });
+  provider.emit("turn/completed", {
+    threadId: "child",
+    turn: { id: "child-turn", status: "completed", items: [], error: null },
+  });
+  provider.emit("thread/tokenUsage/updated", {
+    tokenUsage: {
+      last: { totalTokens: 1234 },
+      total: { totalTokens: 4567 },
+      modelContextWindow: 128000,
+    },
+  });
+  await expect.poll(() => b.agents[0]?.context?.used).toBe(1234);
+  const result = await action(b, { kind: "read", sessionId: id });
+  expect(result.outcome.status).toBe("ok");
+  if (result.outcome.status !== "ok") return;
+  expect(
+    result.outcome.conversation.items.find((i) => i.id === "children")?.presentation?.children?.[0]
+      ?.status,
+  ).toBe("completed");
+  expect(result.outcome.conversation.items.find((i) => i.id === "reasoning")?.text).toBe(
+    "Reviewing the files",
+  );
+  expect(JSON.stringify(result.outcome.conversation.items)).not.toContain("not for display");
+  expect(
+    result.outcome.conversation.items.find((i) => i.kind === "plan")?.presentation?.steps?.[1]
+      ?.status,
+  ).toBe("inProgress");
+  expect(a.agents[0]?.status).toBe("working");
+});
+
+it("shares native plan and speed controls, resets plan mode, and rejects unavailable tiers", async () => {
+  const { a, b, id } = await setup();
+  expect(a.agents[0]?.supportsPlan).toBe(true);
+  const settings = {
+    model: "fixture",
+    effort: "high",
+    mode: "auto-review" as const,
+    planMode: true,
+    serviceTier: "fast",
+  };
+  expect(
+    (
+      await action(a, {
+        kind: "configure",
+        sessionId: id,
+        settings,
+        expectedRevision: a.agents[0]!.revision,
+      })
+    ).outcome.status,
+  ).toBe("ok");
+  await expect.poll(() => b.agents[0]?.settings?.planMode).toBe(true);
+  await action(b, { kind: "send", sessionId: id, text: "hold planning" });
+  await expect
+    .poll(() => providers[0]!.requests.filter((r) => r.method === "turn/start").length)
+    .toBe(1);
+  expect(providers[0]!.requests.find((r) => r.method === "turn/start")?.params).toMatchObject({
+    serviceTier: "fast",
+    sandboxPolicy: { type: "readOnly" },
+    collaborationMode: { mode: "plan", settings: { model: "fixture", reasoning_effort: "high" } },
+  });
+  providers[0]!.finish();
+  await expect.poll(() => a.agents[0]?.status).toBe("done");
+  expect(
+    (
+      await action(a, {
+        kind: "configure",
+        sessionId: id,
+        settings: { ...settings, serviceTier: "not-available" },
+        expectedRevision: a.agents[0]!.revision,
+      })
+    ).outcome.status,
+  ).toBe("error");
+  expect(
+    (
+      await action(a, {
+        kind: "configure",
+        sessionId: id,
+        settings: { ...settings, planMode: false, serviceTier: null },
+        expectedRevision: a.agents[0]!.revision,
+      })
+    ).outcome.status,
+  ).toBe("ok");
+  await action(a, { kind: "send", sessionId: id, text: "hold implementation" });
+  await expect
+    .poll(() => providers[0]!.requests.filter((r) => r.method === "turn/start").length)
+    .toBe(2);
+  expect(providers[0]!.requests.filter((r) => r.method === "turn/start")[1]?.params).toMatchObject({
+    serviceTier: null,
+    sandboxPolicy: { type: "workspaceWrite" },
+    collaborationMode: { mode: "default" },
+  });
+});
+
+it("switches a bound Agent pane to a terminal without stopping the shared agent", async () => {
+  const { a, b, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "hold" });
+  await expect.poll(() => a.agents[0]?.status).toBe("working");
+  const project = a.workspace!.projects[0]!,
+    tab = project.tabs[0]!,
+    pane = tab.nodes.find((n) => n.kind === "pane")!;
+  await a.executeWorkspace({
+    type: "workspace.command",
+    commandId: randomUUID(),
+    epoch: a.workspace!.epoch,
+    operation: {
+      kind: "pane.configure",
+      projectId: project.id,
+      tabId: tab.id,
+      paneId: pane.id,
+      expectedVersion: project.version,
+      profile: "shell",
+    },
+  });
+  await expect
+    .poll(() => b.workspace!.projects[0]!.tabs[0]!.nodes[0])
+    .toMatchObject({ profile: "shell", sessionId: null });
+  expect(b.agents[0]?.status).toBe("working");
+  expect(providers[0]?.closed).toBe(false);
+  expect((await action(b, { kind: "read", sessionId: id })).outcome.status).toBe("ok");
 });

@@ -99,3 +99,14 @@ it.each(["bad", "large"])("fails closed on %s frames", async (method) => {
   await client.initialize();
   await expect(client.request(method)).rejects.toThrow(method === "bad" ? "Invalid" : "2 MiB");
 });
+
+it("rejects auto-review when the provider does not report a supported version", async () => {
+  const client = open();
+  await client.initialize();
+  await expect(client.request("turn/start", { approvalsReviewer: "auto_review" })).rejects.toThrow(
+    "0.115.0",
+  );
+  expect(await client.request("echo", { value: "still connected" })).toEqual({
+    value: "still connected",
+  });
+});

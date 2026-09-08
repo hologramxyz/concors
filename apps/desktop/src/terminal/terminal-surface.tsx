@@ -1,3 +1,4 @@
+import { terminalTheme } from "./theme";
 import { useContext, useEffect, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
@@ -36,18 +37,12 @@ export function TerminalSurface({
     let queuedInput = "";
     const terminal = new Terminal({
       cursorBlink: true,
-      fontSize: 12,
-      fontFamily: '"SF Mono", Consolas, monospace',
+      fontSize: 13,
+      lineHeight: 1.2,
+      fontFamily: '"Geist Mono Variable", "SF Mono", Consolas, monospace',
       scrollback: 1000,
       screenReaderMode: true,
-      theme: {
-        background: "#15151b",
-        foreground: "#e4e4ea",
-        cursor: "#c5c5ef",
-        scrollbarSliderBackground: "#55556280",
-        scrollbarSliderHoverBackground: "#777786b0",
-        scrollbarSliderActiveBackground: "#9999a6",
-      },
+      theme: terminalTheme(),
       disableStdin: true,
     });
     const fit = new FitAddon();
@@ -55,6 +50,18 @@ export function TerminalSurface({
     const element = host.current;
     terminal.open(element);
     fit.fit();
+    const themeObserver = new MutationObserver(() => {
+      terminal.options.theme = terminalTheme();
+    });
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+    void document.fonts.ready.then(() => {
+      if (disposed) return;
+      fit.fit();
+      if (owner) void request({ kind: "resize", sessionId, ...dimensions() }).catch(report);
+    });
     const report = (cause: unknown) => {
       if (!disposed) setError(cause instanceof Error ? cause.message : "Terminal request failed");
     };
@@ -137,9 +144,10 @@ export function TerminalSurface({
         running = event.session.status === "running";
         viewerId = event.viewerId;
         owner = event.ownerId === viewerId;
-        terminal.reset();
         terminal.resize(event.session.cols, event.session.rows);
-        terminal.write(event.data);
+        // Queue the reset with its snapshot so back-to-back attaches cannot replay
+        // two screens after a synchronous reset raced ahead of queued xterm writes.
+        terminal.write("\x1bc" + event.data);
         terminal.options.disableStdin = !running;
         setSession(event.session);
         setError(null);
@@ -201,6 +209,7 @@ export function TerminalSurface({
       disposed = true;
       clearTimeout(resizeTimer);
       observer.disconnect();
+      themeObserver.disconnect();
       element.removeEventListener("pointerdown", activate);
       element.removeEventListener("focusin", activate);
       element.removeEventListener("keydown", activate, true);
@@ -240,7 +249,7 @@ export function TerminalSurface({
           {error ?? launchError ?? session?.error}
         </p>
       )}
-      <div className="min-h-0 min-w-0 flex-1 overflow-hidden bg-[#15151b] p-2">
+      <div className="min-h-0 min-w-0 flex-1 overflow-hidden bg-[var(--terminal-background)] p-2">
         <div
           ref={host}
           aria-label="Terminal output"

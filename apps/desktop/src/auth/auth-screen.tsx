@@ -1,3 +1,4 @@
+import { BrandMark } from "@/components/brand-mark";
 import type { SignInInput, SignUpInput } from "@concors/api-client";
 import { RefreshCw } from "lucide-react";
 import { useState } from "react";
@@ -80,13 +81,8 @@ export function AuthScreen({ state, onSignIn, onSignUp, onRetry }: AuthScreenPro
     <main className="flex h-dvh items-center justify-center bg-background p-6">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex items-center gap-2.5">
-          <span
-            aria-hidden="true"
-            className="flex size-7 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground"
-          >
-            C
-          </span>
-          <span className="text-[15px] font-semibold tracking-tight">Concors</span>
+          <BrandMark className="size-8 text-primary" />
+          <span className="text-[23px] font-semibold tracking-[-.06em]">concors</span>
         </div>
 
         <h1 className="text-xl font-semibold tracking-tight">{copy.title}</h1>

@@ -25,13 +25,26 @@ test("shared chat streams, reloads, handles approvals and remains in global Agen
       .getByRole("button", { name: "Add project", exact: true })
       .click();
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Unified chat", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
     await expect(page.getByLabel("Agent status: Ready").first()).toBeVisible();
     const agentList = page
       .getByRole("navigation", { name: "Primary" })
       .getByRole("region", { name: "Agents", exact: true });
     await expect(agentList.getByRole("img", { name: "Agent status: Ready" })).toBeVisible();
     await expect(agentList.getByText("Chat acceptance", { exact: true })).toHaveCount(0);
+    await expect(page.getByLabel("Message Codex")).toBeEnabled();
+    await expect(page.getByRole("log")).toBeEmpty();
+    await expect(page.getByText("Start a conversation", { exact: true })).toHaveCount(0);
+    await expect(
+      page.getByRole("region", { name: "Agent pane", exact: true }).locator("header .truncate"),
+    ).toHaveText(
+      await agentList
+        .getByRole("list")
+        .getByRole("button")
+        .first()
+        .locator(".truncate")
+        .innerText(),
+    );
     await page.getByRole("button", { name: /^Account:/ }).click();
     await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
     await agentList.getByRole("list").getByRole("button").first().click();
@@ -41,8 +54,13 @@ test("shared chat streams, reloads, handles approvals and remains in global Agen
     await page.getByLabel("Message Codex").fill("hold this stream");
     await page.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(page.getByRole("log")).toContainText("Hello from");
-    const status = agentList.getByRole("img", { name: "Agent status: Working" });
+    const status = agentList
+      .getByRole("button", { name: /hold this stream/ })
+      .getByRole("img", { name: "Agent status: Working" });
     await expect(status).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: "Agent pane", exact: true }).locator("header .truncate"),
+    ).toHaveText("hold this stream");
     await expect(status.locator("svg")).toHaveCSS("animation-name", "spin");
     const row = agentList.getByRole("list").getByRole("button").first();
     expect((await row.boundingBox())?.height).toBeLessThanOrEqual(28);
@@ -63,7 +81,10 @@ test("shared chat streams, reloads, handles approvals and remains in global Agen
     await expect(second.getByRole("region", { name: "Allow command execution?" })).toBeVisible();
     await second.getByRole("button", { name: "Decline", exact: true }).click();
     await expect(page.getByLabel("Agent status: Done").first()).toBeVisible();
-    await expect(agentList.getByRole("img", { name: "Agent status: Done" })).toBeVisible();
+    await expect(row.getByRole("img", { name: "Agent status: Done" })).toBeVisible();
+    await expect(page.getByText(/^Worked for /)).toBeVisible();
+    await expect(page.getByText(/^Completed ·/)).toHaveCount(0);
+    await expect(page.getByLabel("Elapsed time", { exact: true })).toHaveCount(0);
     await expect(agentList.getByRole("img").locator("svg")).toHaveCount(0);
 
     await expect(page.getByRole("button", { name: "Allow once", exact: true })).toHaveCount(0);
@@ -83,6 +104,11 @@ test("shared chat streams, reloads, handles approvals and remains in global Agen
     await page.getByLabel("Message Codex").fill("hello again");
     await page.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(page.getByRole("log")).toContainText("Hello from Codex");
+    const replyFooter = page.getByRole("article").filter({ hasText: "Hello from Codex" }).last();
+    await expect(replyFooter.getByText(/^Worked for /)).toBeVisible();
+    await expect(
+      replyFooter.getByRole("button", { name: "Copy message", exact: true }),
+    ).toBeVisible();
     await page.screenshot({ path: "test-results/chat.png" });
     expect(errors).toEqual([]);
   } finally {

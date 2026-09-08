@@ -2,7 +2,7 @@
 
 Run `pnpm daemon:dev` and `pnpm desktop:web:dev`, then open http://localhost:1420.
 Open an existing folder, create a folder, or clone a repository with **Add project**. Then create a tab, select a profile,
-and click **Start terminal** (or **Start codex/claude/opencode**). Terminals focus automatically when available; click or focus a terminal to type when another device is viewing it.
+and the terminal starts automatically. Split panes and panes switched to a terminal profile also start automatically; ended sessions still require an explicit restart. Terminals focus automatically when available; click or focus a terminal to type when another device is viewing it.
 Agent CLIs must already be installed and authenticated on the daemon machine; the client does not
 install them or move credentials. This milestone provides their interactive terminals, not unified
 chat or semantic agent status. Shell exit status is not an agent turn-completion signal.
@@ -60,3 +60,17 @@ these checks validate development runtimes, not signed desktop/mobile packages.
 `patches/node-pty@1.1.0.patch` restores executable permission on the macOS prebuilt spawn helper
 during dependency installation. Keep this patch until upgrading to an upstream version that ships
 the helper correctly; the macOS runtime test verifies that an actual shell can launch.
+
+## Color support
+
+PTYs advertise `TERM=xterm-256color`, `COLORTERM=truecolor`, and `CLICOLOR=1`.
+Daemon-launcher overrides (`NO_COLOR`, `FORCE_COLOR`, `CLICOLOR`, `CLICOLOR_FORCE`)
+are removed before setting interactive terminal defaults. This prevents the VPS launcher’s
+`NO_COLOR=1` from silently disabling colors in Codex, Claude Code, and other TUI apps.
+Users can still override colors inside their own shell or application settings.
+
+The client has explicit light/dark ANSI palettes and preserves 256-color and RGB escape
+sequences during streaming and snapshot replay. Resets are queued with snapshot data,
+preventing overlapping attach responses from duplicating the displayed screen.
+A daemon update and new terminal sessions are required for the environment fix;
+the client palette updates existing sessions immediately.

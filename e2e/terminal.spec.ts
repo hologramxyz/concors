@@ -13,6 +13,7 @@ test("two devices use the same terminal and recover its screen after reload", as
   second.on("pageerror", (error) => errors.push(error.message));
   try {
     await Promise.all([signedIn(page), signedIn(second)]);
+    await page.emulateMedia({ colorScheme: "light" });
     await page.goto("/");
 
     await page.getByRole("button", { name: "Add project", exact: true }).first().click();
@@ -38,10 +39,35 @@ test("two devices use the same terminal and recover its screen after reload", as
       .toEqual({ horizontal: false, vertical: false });
     await page.keyboard.type("printf 'hello-%s\\n' shared-terminal");
     await page.keyboard.press("Enter");
+    await page.keyboard.type(
+      "printf '\\033[34mANSI_BLUE\\033[0m\\n\\033[38;5;196mINDEX_RED\\033[0m\\n\\033[38;2;12;200;140mTRUE_GREEN\\033[0m\\n'",
+    );
+    await page.keyboard.press("Enter");
+    const blue = page.locator(".xterm-rows span").getByText("ANSI_BLUE", { exact: true });
+    const indexed = page.locator(".xterm-rows span").getByText("INDEX_RED", { exact: true });
+    const trueColor = page.locator(".xterm-rows span").getByText("TRUE_GREEN", { exact: true });
+    await expect(blue).toHaveCSS("color", "rgb(51, 93, 206)");
+    await expect(indexed).toHaveCSS("color", "rgb(255, 0, 0)");
+    await expect(trueColor).toHaveCSS("color", "rgb(12, 200, 140)");
+    await expect(page.getByRole("region", { name: "Terminal pane" })).toHaveCSS(
+      "background-color",
+      "rgb(244, 243, 239)",
+    );
+    await page.emulateMedia({ colorScheme: "dark" });
+    await expect(blue).toHaveCSS("color", "rgb(118, 155, 255)");
+    await expect(trueColor).toHaveCSS("color", "rgb(12, 200, 140)");
+    await expect(page.getByRole("region", { name: "Terminal pane" })).toHaveCSS(
+      "background-color",
+      "rgb(24, 27, 35)",
+    );
+    await page.screenshot({ path: "test-results/terminal-cobalt-dark.png" });
     await second.goto("http://localhost:1420");
     await expect(second.getByLabel("Terminal output")).toContainText("hello-shared-terminal");
     await second.reload();
     await expect(second.getByLabel("Terminal output")).toContainText("hello-shared-terminal");
+    await expect(
+      second.locator(".xterm-rows span").getByText("TRUE_GREEN", { exact: true }),
+    ).toHaveCSS("color", "rgb(12, 200, 140)");
     await second.getByLabel("Terminal output").click();
     await second.keyboard.type("printf 'second-%s\\n' device");
     await second.keyboard.press("Enter");

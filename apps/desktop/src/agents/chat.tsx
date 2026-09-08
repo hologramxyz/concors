@@ -1,10 +1,10 @@
+import { completedTurnFooters } from "./duration";
+import { AgentComposer } from "./composer";
+import { TimelineItem } from "./timeline-item";
 import { useViewedAgent } from "@/notifications/context";
 import { useContext, useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Bot, Square, Wrench } from "lucide-react";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { ArrowDown } from "lucide-react";
 import type {
-  AgentItem,
   AgentOperation,
   AgentPending,
   LayoutNode,
@@ -12,7 +12,8 @@ import type {
   WorkspaceTab,
 } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
-import { AgentStatus } from "./state";
+import { Activity } from "./activity";
+import { PlanProgress } from "./plan-progress";
 import { useAgents } from "./context";
 import { useConversation } from "./conversation";
 
@@ -29,79 +30,84 @@ export function ChatPane({
   canEdit: boolean;
 }) {
   const connection = useContext(TerminalConnectionContext);
-  const [model, setModel] = useState("");
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
+  const attempted = useRef(false);
   const startId = useRef(crypto.randomUUID());
   const available =
     connection?.state.status === "ready" &&
     connection.state.daemon.capabilities?.includes("agent-chat");
-  if (node.sessionId)
-    return <Chat key={node.sessionId} sessionId={node.sessionId} canEdit={canEdit} />;
-  const start = async () => {
-    if (!connection?.workspace) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const result = await connection.requestAgent(
+  useEffect(() => {
+    if (node.sessionId || !canEdit || !available || !connection?.workspace || attempted.current)
+      return;
+    attempted.current = true;
+    const current = connection.workspace;
+    const currentProject = current.projects.find((item) => item.id === project.id);
+    if (!currentProject) return;
+    void connection
+      .requestAgent(
         {
           kind: "start",
-          epoch: connection.workspace.epoch,
+          epoch: current.epoch,
           projectId: project.id,
           tabId: tab.id,
           paneId: node.id,
-          expectedVersion: project.version,
-          ...(model.trim() ? { model: model.trim() } : {}),
+          expectedVersion: currentProject.version,
         },
         startId.current,
-      );
-      if (result.outcome.status === "error") {
-        startId.current = crypto.randomUUID();
-        throw new Error(result.outcome.message);
-      }
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not start chat");
-    } finally {
-      setBusy(false);
-    }
-  };
+      )
+      .then((result) => {
+        if (result.outcome.status === "error") {
+          startId.current = crypto.randomUUID();
+          throw new Error(result.outcome.message);
+        }
+      })
+      .catch((cause: unknown) => {
+        setError(cause instanceof Error ? cause.message : "Could not prepare agent");
+      });
+  }, [node.sessionId, node.id, canEdit, available, connection, project.id, tab.id, retry]);
+  if (node.sessionId)
+    return <Chat key={node.sessionId} sessionId={node.sessionId} canEdit={canEdit} />;
   return (
-    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
-      <Bot className="size-8 text-primary/70" />
-      <div>
-        <h2 className="text-sm font-medium">Start a conversation</h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Codex works in {project.name}. Your conversation stays with this machine.
-        </p>
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="Agent conversation">
+      <div className="min-h-0 flex-1" role="log" aria-label="Chat timeline" />
+      <div className="shrink-0 px-3 pt-2 pb-3">
+        <div className="mx-auto max-w-5xl space-y-3">
+          {error && (
+            <div role="alert" className="flex items-center gap-2 text-xs text-destructive">
+              {error}
+              <button
+                className={button}
+                disabled={!canEdit || !available}
+                onClick={() => {
+                  attempted.current = false;
+                  setError(null);
+                  setRetry((value) => value + 1);
+                }}
+              >
+                Retry
+              </button>
+            </div>
+          )}
+          <div className="rounded-2xl border bg-background p-2">
+            <textarea
+              aria-label="Message Codex"
+              placeholder="Message Codex…"
+              disabled
+              className="min-h-16 w-full resize-none bg-transparent px-3 py-3 text-[16px] leading-relaxed outline-none"
+            />
+            <p role="status" className="px-3 pb-2 text-xs text-muted-foreground">
+              {!canEdit
+                ? "Waiting for an editable connection…"
+                : !available
+                  ? "Waiting for a machine with agent support…"
+                  : error
+                    ? "Agent could not be prepared."
+                    : "Preparing agent…"}
+            </p>
+          </div>
+        </div>
       </div>
-      <label className="flex w-full max-w-64 flex-col gap-1.5 text-left text-xs text-muted-foreground">
-        Model
-        <input
-          aria-label="Chat model"
-          placeholder="Use this machine’s default"
-          value={model}
-          onChange={(e) => setModel(e.target.value)}
-          disabled={busy}
-          className="rounded-md border bg-background px-3 py-2 text-foreground"
-        />
-      </label>
-      <button
-        className={button}
-        disabled={!canEdit || busy || !available}
-        onClick={() => void start()}
-      >
-        {busy ? "Starting…" : "Start Codex chat"}
-      </button>
-      {!available && (
-        <p className="text-xs text-muted-foreground">
-          Update and restart this machine’s daemon to enable unified chat.
-        </p>
-      )}
-      {error && (
-        <p role="alert" className="text-xs text-destructive">
-          {error}
-        </p>
-      )}
     </div>
   );
 }
@@ -111,18 +117,28 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
   const connection = useContext(TerminalConnectionContext);
   const agent = useAgents().find((a) => a.id === sessionId);
   const conversation = useConversation(sessionId);
-  const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [uncertain, setUncertain] = useState<{ id: string; text: string } | null>(null);
   const scroll = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   const [atBottom, setAtBottom] = useState(true);
+  const footers = completedTurnFooters(conversation.items);
+  const latestPlan = conversation.items.findLast((item) => item.kind === "plan");
   const active = agent && ["starting", "working", "needs_input"].includes(agent.status);
   const connected = canEdit && connection?.state.status === "ready";
   useEffect(() => {
     if (follow.current && scroll.current) scroll.current.scrollTop = scroll.current.scrollHeight;
   }, [conversation.items, agent?.pending]);
+  useEffect(() => {
+    const viewport = scroll.current;
+    const content = viewport?.firstElementChild;
+    if (!viewport || !content) return;
+    const observer = new ResizeObserver(() => {
+      if (follow.current) viewport.scrollTop = viewport.scrollHeight;
+    });
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, []);
   const perform = async (operation: AgentOperation, id = crypto.randomUUID()) => {
     if (!connection) throw new Error("Machine is disconnected");
     const result = await connection.requestAgent(operation, id);
@@ -139,46 +155,14 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
       setBusy(false);
     }
   };
-  const send = async () => {
-    const attempt = uncertain ?? { id: crypto.randomUUID(), text: draft.trim() };
-    if (!attempt.text) return;
-    setBusy(true);
-    setError(null);
-    try {
-      if (!connection) throw new Error("Machine is disconnected");
-      const result = await connection.requestAgent(
-        { kind: "send", sessionId, text: attempt.text },
-        attempt.id,
-      );
-      if (result.outcome.status === "error") {
-        setUncertain(null);
-        setError(result.outcome.message);
-        return;
-      }
-      setUncertain(null);
-      setDraft("");
-      follow.current = true;
-    } catch (cause) {
-      setUncertain(attempt);
-      setError(cause instanceof Error ? cause.message : "Could not confirm prompt submission");
-    } finally {
-      setBusy(false);
-    }
-  };
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="Agent conversation">
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b px-4 py-2">
-        <span className="truncate text-xs text-muted-foreground">
-          Codex{agent?.model ? ` · ${agent.model}` : ""}
-        </span>
-        {agent && <AgentStatus agent={agent} />}
-      </div>
       <div
         ref={scroll}
         role="log"
         aria-label="Chat timeline"
         aria-live="off"
-        className="chat-scroll min-h-0 flex-1 overflow-y-auto px-5 py-4"
+        className="chat-scroll min-h-0 flex-1 overflow-y-auto px-3 py-4"
         onScroll={() => {
           const el = scroll.current;
           if (!el) return;
@@ -186,7 +170,7 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
           setAtBottom(follow.current);
         }}
       >
-        <div className="mx-auto max-w-3xl space-y-5">
+        <div className="mx-auto max-w-5xl space-y-5">
           {conversation.hasMore && (
             <button
               className={button}
@@ -206,17 +190,21 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
               Load earlier messages
             </button>
           )}
-          {!conversation.ready && (
-            <p className="text-xs text-muted-foreground">Loading conversation…</p>
+          {!conversation.ready && <Activity>Loading conversation…</Activity>}
+          {conversation.items
+            .filter((item) => !footers.hidden.has(item.id))
+            .map((item) => (
+              <TimelineItem key={item.id} item={item} workedFor={footers.durations.get(item.id)} />
+            ))}
+          {active && (
+            <Activity startedAt={agent.turnStartedAt}>
+              {agent?.status === "starting"
+                ? "Starting agent…"
+                : agent?.status === "needs_input"
+                  ? "Waiting for your input"
+                  : "Working…"}
+            </Activity>
           )}
-          {conversation.ready && conversation.items.length === 0 && (
-            <p className="py-10 text-center text-sm text-muted-foreground">
-              What would you like to work on?
-            </p>
-          )}
-          {conversation.items.map((item) => (
-            <TimelineItem key={item.id} item={item} />
-          ))}
         </div>
       </div>
       {!atBottom && (
@@ -232,8 +220,8 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
           Latest
         </button>
       )}
-      <div className="max-h-[55%] shrink-0 overflow-y-auto border-t px-4 py-3">
-        <div className="mx-auto max-w-3xl space-y-3">
+      <div className="max-h-[55%] shrink-0 overflow-y-auto px-3 pt-2 pb-3">
+        <div className="mx-auto max-w-5xl space-y-3">
           {agent?.pending.map((pending) => (
             <PendingInput
               key={pending.id}
@@ -249,141 +237,23 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
               {error ?? conversation.error ?? agent?.error}
             </p>
           )}
-          {uncertain && (
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span>Check the conversation before retrying.</span>
-              <button className={button} disabled={!connected || busy} onClick={() => void send()}>
-                Retry same prompt
-              </button>
-              <button
-                className={button}
-                onClick={() => {
-                  setUncertain(null);
-                  setDraft("");
-                  setError(null);
-                }}
-              >
-                Dismiss and review
-              </button>
-            </div>
-          )}
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!active && !busy && !uncertain) void send();
-            }}
-            className="rounded-xl border bg-background p-2 shadow-sm"
-          >
-            <textarea
-              aria-label="Message Codex"
-              placeholder={active ? "Codex is working…" : "Ask Codex to build something…"}
-              value={draft}
-              maxLength={16000}
-              rows={3}
-              disabled={!connected || busy || !!uncertain || !agent?.threadId}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                  e.preventDefault();
-                  if (!active && draft.trim() && !busy && !uncertain) void send();
-                }
+          {latestPlan && <PlanProgress compact item={latestPlan} />}
+          {agent && (
+            <AgentComposer
+              key={agent.id}
+              agent={agent}
+              connected={!!connected && !busy}
+              onInterrupt={() => {
+                if (agent.turnId)
+                  void run(() =>
+                    perform({ kind: "interrupt", sessionId, turnId: agent.turnId ?? "" }),
+                  );
               }}
-              className="max-h-48 min-h-16 w-full resize-y bg-transparent px-2 py-1 text-sm outline-none disabled:opacity-50"
             />
-            <div className="flex items-center justify-between px-1">
-              <span className="text-[10px] text-muted-foreground">
-                {!connected
-                  ? "Reconnecting…"
-                  : active
-                    ? "You can interrupt this turn"
-                    : "Enter to send · Shift+Enter for a new line"}
-              </span>
-              {active ? (
-                <button
-                  type="button"
-                  aria-label="Interrupt agent"
-                  className={button}
-                  disabled={
-                    !connected || busy || !agent?.turnId || agent.turnId.startsWith("pending:")
-                  }
-                  onClick={() => {
-                    if (agent?.turnId)
-                      void run(() =>
-                        perform({ kind: "interrupt", sessionId, turnId: agent.turnId ?? "" }),
-                      );
-                  }}
-                >
-                  <Square className="size-3" />
-                </button>
-              ) : (
-                <button
-                  aria-label="Send message"
-                  className="rounded-md bg-primary p-2 text-primary-foreground disabled:opacity-40"
-                  disabled={!connected || busy || !draft.trim() || !!uncertain || !agent?.threadId}
-                >
-                  <ArrowUp className="size-3.5" />
-                </button>
-              )}
-            </div>
-          </form>
+          )}
         </div>
       </div>
     </div>
-  );
-}
-function TimelineItem({ item }: { item: AgentItem }) {
-  if (item.kind === "tool")
-    return (
-      <details className="rounded-lg border bg-muted/20 text-xs">
-        <summary className="flex cursor-pointer items-center gap-2 px-3 py-2">
-          <Wrench className="size-3 shrink-0 text-muted-foreground" />
-          <span className="min-w-0 flex-1 truncate">
-            {item.title}: {item.text}
-          </span>
-          <span
-            className={`shrink-0 ${item.status === "failed" ? "text-destructive" : "text-muted-foreground"}`}
-          >
-            {item.status}
-          </span>
-        </summary>
-        <pre className="chat-scroll max-h-72 overflow-auto border-t p-3 text-[11px] break-words whitespace-pre-wrap">
-          {item.detail || "Waiting for tool details…"}
-        </pre>
-      </details>
-    );
-  return (
-    <article
-      className={
-        item.kind === "user"
-          ? "ml-8 rounded-xl bg-muted/60 px-4 py-3"
-          : item.kind === "plan"
-            ? "rounded-lg border-l-2 border-primary/40 pl-4"
-            : ""
-      }
-    >
-      <p className="mb-1.5 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
-        {item.title}
-      </p>
-      <div className="chat-markdown text-sm leading-relaxed break-words">
-        {item.kind === "user" ? (
-          <p className="whitespace-pre-wrap">{item.text}</p>
-        ) : (
-          <Markdown
-            remarkPlugins={[remarkGfm]}
-            components={{
-              a: ({ children, ...props }) => (
-                <a {...props} target="_blank" rel="noopener noreferrer">
-                  {children}
-                </a>
-              ),
-              img: () => null,
-            }}
-          >
-            {item.text}
-          </Markdown>
-        )}
-      </div>
-    </article>
   );
 }
 function PendingInput({

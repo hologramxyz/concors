@@ -1,4 +1,4 @@
-import { useContext, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { WorkspaceProject, WorkspaceTab, LayoutNode, TerminalInfo } from "@concors/protocol";
 import { Button } from "@/components/ui/button";
 import { TerminalConnectionContext } from "./connection-context";
@@ -19,7 +19,8 @@ export function TerminalPane({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sessions, setSessions] = useState<TerminalInfo[] | null>(null);
-  const start = async () => {
+  const attempted = useRef(false);
+  const start = useCallback(async () => {
     if (!connection?.workspace || busy) return;
     setBusy(true);
     setError(null);
@@ -31,7 +32,9 @@ export function TerminalPane({
           projectId: project.id,
           tabId: tab.id,
           paneId: node.id,
-          expectedVersion: project.version,
+          expectedVersion:
+            connection.workspace.projects.find((item) => item.id === project.id)?.version ??
+            project.version,
           expectedSessionId: node.sessionId,
           cols: 80,
           rows: 24,
@@ -44,7 +47,13 @@ export function TerminalPane({
     } finally {
       setBusy(false);
     }
-  };
+  }, [connection, busy, project.id, project.version, tab.id, node.id, node.sessionId]);
+  useEffect(() => {
+    if (node.sessionId || !canEdit || connection?.state.status !== "ready" || attempted.current)
+      return;
+    attempted.current = true;
+    void start();
+  }, [node.sessionId, canEdit, connection?.state.status, start]);
   if (node.sessionId)
     return (
       <TerminalSurface

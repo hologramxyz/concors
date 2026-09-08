@@ -1,3 +1,4 @@
+import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { useCommand } from "@/shortcuts/context";
 import { shortcutLabel } from "@/shortcuts/bindings";
 import type { PaneFocusRequest } from "./session-pane";
@@ -13,8 +14,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ChatPane } from "@/agents/chat";
 import { TerminalPane } from "@/terminal/terminal-pane";
-import { useEffect, useRef, useState } from "react";
-import { Columns2, Rows2, Ellipsis, Terminal, MessageSquare, X } from "lucide-react";
+import { useContext, useEffect, useRef, useState } from "react";
+import { AgentPaneIcon } from "@/agents/activity";
+import { useAgents } from "@/agents/context";
+import { Columns2, Rows2, Ellipsis, Terminal, X } from "lucide-react";
 import type {
   LayoutNode,
   PaneProfile,
@@ -25,7 +28,7 @@ import type {
 
 const PROFILE_LABELS: Record<PaneProfile, string> = {
   shell: "Terminal",
-  chat: "Unified chat",
+  chat: "Agent",
   codex: "Codex",
   claude: "Claude Code",
   opencode: "OpenCode",
@@ -38,7 +41,15 @@ interface Props {
   onCommand: (operation: WorkspaceOperation) => void;
 }
 
+type Placement = "left" | "right" | "top" | "bottom";
+interface PaneDrag {
+  paneId: string;
+  version: number;
+}
+
 export function PaneLayout(props: Props) {
+  const [dragging, setDragging] = useState<PaneDrag | null>(null);
+  const [drop, setDrop] = useState<Placement | null>(null);
   const container = useRef<HTMLDivElement>(null);
   const pendingFocus = useRef<string | null>(null);
   const [activePaneId, setActivePaneId] = useState<string | null>(null);
@@ -131,16 +142,69 @@ export function PaneLayout(props: Props) {
           second={render(node.second)}
         />
       );
-    return <Pane key={id} {...props} node={node} />;
+    return <Pane key={id} {...props} node={node} onDrag={setDragging} />;
   };
   return (
     <div
       ref={container}
       onFocusCapture={rememberPane}
       onPointerDownCapture={rememberPane}
-      className="h-full min-h-[220px] min-w-[320px] p-2"
+      data-testid="pane-workspace"
+      onDragOver={(event) => {
+        if (!dragging) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        const rect = event.currentTarget.getBoundingClientRect();
+        const x = (event.clientX - rect.left) / rect.width;
+        const y = (event.clientY - rect.top) / rect.height;
+        setDrop(y < 0.25 ? "top" : y > 0.75 ? "bottom" : x < 0.5 ? "left" : "right");
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDrop(null);
+      }}
+      onDrop={(event) => {
+        const target = props.tab.nodes.find(
+          (node) => node.kind === "pane" && node.id !== dragging?.paneId,
+        );
+        if (!dragging || !drop || !target) return;
+        event.preventDefault();
+        props.onCommand({
+          kind: "pane.move",
+          projectId: props.project.id,
+          tabId: props.tab.id,
+          expectedVersion: dragging.version,
+          paneId: dragging.paneId,
+          targetPaneId: target.id,
+          scope: "workspace",
+          placement: drop,
+          splitId: crypto.randomUUID(),
+        });
+        setDragging(null);
+        setDrop(null);
+      }}
+      className="relative h-full min-h-[220px] min-w-[320px] px-2 pb-2"
     >
       {render(props.tab.root)}
+      {dragging && (
+        <div className="pointer-events-none absolute inset-0 z-30" data-testid="pane-drop-targets">
+          {(
+            [
+              ["top", "inset-x-1 top-1 h-[calc(25%-0.5rem)]"],
+              ["bottom", "inset-x-1 bottom-1 h-[calc(25%-0.5rem)]"],
+              ["left", "inset-y-1/4 left-1 w-[calc(50%-0.5rem)]"],
+              ["right", "inset-y-1/4 right-1 w-[calc(50%-0.5rem)]"],
+            ] as const
+          ).map(([placement, area]) => (
+            <div
+              key={placement}
+              aria-label={`Move pane ${placement}`}
+              data-drop-zone={placement}
+              data-active={drop === placement}
+              className={`absolute rounded-md border ${area} ${drop === placement ? "border-primary bg-primary/30" : "border-primary/40 bg-primary/10"}`}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -151,7 +215,18 @@ function Pane({
   project,
   canEdit,
   onCommand,
-}: Props & { node: Extract<LayoutNode, { kind: "pane" }> }) {
+  onDrag,
+}: Props & {
+  node: Extract<LayoutNode, { kind: "pane" }>;
+  onDrag: (drag: PaneDrag | null) => void;
+}) {
+  const connection = useContext(TerminalConnectionContext);
+  const canDrag =
+    canEdit &&
+    connection?.state.status === "ready" &&
+    !!connection.state.daemon.capabilities?.includes("workspace-pane-rearrangement");
+  const agent = useAgents().find((agent) => agent.id === node.sessionId);
+  const title = node.profile === "chat" ? (agent?.name ?? "Agent") : PROFILE_LABELS[node.profile];
   const target = {
     projectId: project.id,
     expectedVersion: project.version,
@@ -163,15 +238,31 @@ function Pane({
       data-pane-id={node.id}
       tabIndex={-1}
       aria-label={`${PROFILE_LABELS[node.profile]} pane`}
-      className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border bg-card focus-visible:ring-1 focus-visible:ring-primary focus-visible:outline-none"
+      className={`relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border focus-visible:ring-1 focus-visible:ring-primary focus-visible:outline-none ${node.profile === "chat" ? "bg-card" : "bg-[var(--terminal-background)] text-[var(--terminal-foreground)]"}`}
     >
-      <header className="flex h-9 shrink-0 items-center gap-1 border-b bg-muted/30 px-2">
+      <header
+        draggable={canDrag && tab.nodes.length > 1}
+        title="Drag to move pane"
+        onDragStart={(event) => {
+          if ((event.target as HTMLElement).closest("button") || !canDrag) {
+            event.preventDefault();
+            return;
+          }
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("application/x-concors-pane", node.id);
+          onDrag({ paneId: node.id, version: project.version });
+        }}
+        onDragEnd={() => onDrag(null)}
+        className={`flex h-9 shrink-0 items-center gap-1 border-b px-2 ${canDrag && tab.nodes.length > 1 ? "cursor-grab active:cursor-grabbing" : ""}`}
+      >
         {node.profile === "chat" ? (
-          <MessageSquare className="size-4 shrink-0 text-muted-foreground" />
+          <AgentPaneIcon sessionId={node.sessionId} />
         ) : (
           <Terminal className="size-4 shrink-0 text-muted-foreground" />
         )}
-        <span className="min-w-0 flex-1 truncate text-[13px]">{PROFILE_LABELS[node.profile]}</span>
+        <span className="min-w-0 flex-1 truncate text-[13px]" title={title}>
+          {title}
+        </span>
         <DropdownMenu>
           <DropdownMenuTrigger
             aria-label="Pane actions"
@@ -231,11 +322,7 @@ function Pane({
               }
             >
               {Object.entries(PROFILE_LABELS).map(([value, label]) => (
-                <DropdownMenuRadioItem
-                  key={value}
-                  value={value}
-                  disabled={!canEdit || node.sessionId !== null}
-                >
+                <DropdownMenuRadioItem key={value} value={value} disabled={!canEdit}>
                   {label}
                 </DropdownMenuRadioItem>
               ))}
@@ -254,7 +341,13 @@ function Pane({
         </button>
       </header>
       {node.profile !== "chat" ? (
-        <TerminalPane project={project} tab={tab} node={node} canEdit={canEdit} />
+        <TerminalPane
+          key={node.profile}
+          project={project}
+          tab={tab}
+          node={node}
+          canEdit={canEdit}
+        />
       ) : (
         <ChatPane project={project} tab={tab} node={node} canEdit={canEdit} />
       )}
