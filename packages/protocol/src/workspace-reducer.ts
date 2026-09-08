@@ -152,6 +152,60 @@ export function applyWorkspaceOperation(
             split.ratio = op.ratio;
             break;
           }
+          case "pane.move": {
+            const source = requireValue(
+              tab.nodes.find((n) => n.id === op.paneId),
+              "Source pane",
+            );
+            const target = requireValue(
+              tab.nodes.find((n) => n.id === op.targetPaneId),
+              "Target pane",
+            );
+            if (source.kind !== "pane" || target.kind !== "pane" || source.id === target.id)
+              throw new WorkspaceOperationError("INVALID_OPERATION", "Choose two different panes");
+            if (op.placement === "center") {
+              const swap = (id: string) =>
+                id === source.id ? target.id : id === target.id ? source.id : id;
+              for (const node of tab.nodes)
+                if (node.kind === "split") {
+                  node.first = swap(node.first);
+                  node.second = swap(node.second);
+                }
+            } else {
+              claim(op.splitId);
+              const parent = requireValue(
+                tab.nodes.find(
+                  (n) => n.kind === "split" && (n.first === source.id || n.second === source.id),
+                ),
+                "Source parent",
+              );
+              if (parent.kind !== "split")
+                throw new WorkspaceOperationError("INVALID_OPERATION", "Invalid source parent");
+              const sibling = parent.first === source.id ? parent.second : parent.first;
+              const replace = (from: string, to: string) => {
+                if (tab.root === from) tab.root = to;
+                for (const node of tab.nodes)
+                  if (node.kind === "split") {
+                    if (node.first === from) node.first = to;
+                    if (node.second === from) node.second = to;
+                  }
+              };
+              replace(parent.id, sibling);
+              tab.nodes = tab.nodes.filter((n) => n.id !== parent.id);
+              replace(target.id, op.splitId);
+              const before = op.placement === "left" || op.placement === "top";
+              tab.nodes.push({
+                id: op.splitId,
+                kind: "split",
+                ratio: 0.5,
+                axis:
+                  op.placement === "left" || op.placement === "right" ? "horizontal" : "vertical",
+                first: before ? source.id : target.id,
+                second: before ? target.id : source.id,
+              });
+            }
+            break;
+          }
           case "pane.configure":
           case "pane.split":
           case "pane.close": {

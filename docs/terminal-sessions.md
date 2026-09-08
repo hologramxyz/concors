@@ -2,7 +2,7 @@
 
 Run `pnpm daemon:dev` and `pnpm desktop:web:dev`, then open http://localhost:1420.
 Open an existing folder, create a folder, or clone a repository with **Add project**. Then create a tab, select a profile,
-and click **Start terminal** (or **Start codex/claude/opencode**). Terminals focus automatically when available; click or focus a terminal to type when another device is viewing it.
+and the terminal starts automatically. Split panes and panes switched to a terminal profile also start automatically; ended sessions still require an explicit restart. Terminals focus automatically when available; click or focus a terminal to type when another device is viewing it.
 Agent CLIs must already be installed and authenticated on the daemon machine; the client does not
 install them or move credentials. This milestone provides their interactive terminals, not unified
 chat or semantic agent status. Shell exit status is not an agent turn-completion signal.
