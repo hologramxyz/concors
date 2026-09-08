@@ -11,7 +11,8 @@ import {
 import { ChatPane } from "@/agents/chat";
 import { TerminalPane } from "@/terminal/terminal-pane";
 import { useRef, useState } from "react";
-import { Columns2, Rows2, Ellipsis, Terminal, MessageSquare, X } from "lucide-react";
+import { AgentPaneIcon } from "@/agents/activity";
+import { Columns2, Rows2, Ellipsis, Terminal, X } from "lucide-react";
 import type {
   LayoutNode,
   PaneProfile,
@@ -84,7 +85,7 @@ function Pane({
     >
       <header className="flex h-9 shrink-0 items-center gap-1 border-b bg-muted/30 px-2">
         {node.profile === "chat" ? (
-          <MessageSquare className="size-4 shrink-0 text-muted-foreground" />
+          <AgentPaneIcon sessionId={node.sessionId} />
         ) : (
           <Terminal className="size-4 shrink-0 text-muted-foreground" />
         )}
