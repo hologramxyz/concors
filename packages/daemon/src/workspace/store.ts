@@ -1,3 +1,5 @@
+import { dirname, join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import {
   AgentInfoSchema,
   AgentItemSchema,
@@ -27,9 +29,14 @@ import {
 /** A single daemon owns this database. Layout and retry receipts commit atomically. */
 export class WorkspaceStore {
   readonly #db: DatabaseSync;
+  readonly attachmentsDirectory: string;
   #closed = false;
 
   constructor(path = ":memory:") {
+    this.attachmentsDirectory =
+      path === ":memory:"
+        ? join(tmpdir(), "concors-attachments-" + randomUUID())
+        : join(dirname(resolve(path)), "attachments");
     this.#db = new DatabaseSync(path);
     try {
       this.#db.exec(
