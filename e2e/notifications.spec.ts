@@ -57,21 +57,21 @@ test("notifications deduplicate across windows, open chat, and sync unread witho
       .getByRole("button", { name: "Add project", exact: true })
       .click();
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("button", { name: "Pane actions", exact: true }).click();
-    await page.getByRole("menuitemradio", { name: "Unified chat", exact: true }).click();
-    await page.getByRole("button", { name: "Start Codex chat", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Unified chat", exact: true }).click();
     await expect(page.getByLabel("Agent status: Ready").first()).toBeVisible();
     const project = control.workspace?.projects.find((p) => p.directory === directory);
     assert(project);
     const agent = control.agents.find((a) => a.projectId === project.id);
     assert(agent);
     const id = agent.id;
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("button", { name: /^Account:/ }).click();
+    await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
     await page.getByLabel("Desktop notifications", { exact: true }).check();
     const second = await context.newPage();
     await signedIn(second);
     await second.goto("/");
-    await second.getByRole("button", { name: "Settings", exact: true }).click();
+    await second.getByRole("button", { name: /^Account:/ }).click();
+    await second.getByRole("menuitem", { name: "Settings", exact: true }).click();
     await expect(second.getByLabel("Desktop notifications", { exact: true })).toBeChecked();
     await control.requestAgent({ kind: "send", sessionId: id, text: "hello" }, randomUUID());
     await expect.poll(count).toBe(1);
@@ -89,14 +89,17 @@ test("notifications deduplicate across windows, open chat, and sync unread witho
     await expect.poll(() => control.agents.find((a) => a.id === id)?.attention?.seen).toBe(true);
     await expect(page.getByLabel("Unread agent update")).toHaveCount(0);
     await expect(second.getByLabel("Unread agent update")).toHaveCount(0);
-    await opened.getByRole("button", { name: "Settings", exact: true }).click();
+    await opened.getByRole("button", { name: /^Account:/ }).click();
+    await opened.getByRole("menuitem", { name: "Settings", exact: true }).click();
     await control.requestAgent({ kind: "send", sessionId: id, text: "question" }, randomUUID());
     await expect.poll(count).toBe(2);
     // Reload both windows: old attention must not replay.
     await page.reload();
     await second.reload();
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
-    await second.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("button", { name: /^Account:/ }).click();
+    await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
+    await second.getByRole("button", { name: /^Account:/ }).click();
+    await second.getByRole("menuitem", { name: "Settings", exact: true }).click();
     await expect.poll(count).toBe(0);
     // A new turn invalidates the old attention and closes any outstanding browser notice.
     const pending = control.agents.find((a) => a.id === id)?.pending[0];
