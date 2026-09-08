@@ -44,7 +44,7 @@ export function ProjectWorkspace({
   const renameTab = project.tabs.find((tab) => tab.id === renaming);
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-10 shrink-0 items-center border-b bg-muted/20 px-2">
+      <div className="flex h-8 shrink-0 items-center border-b bg-muted/20 px-2">
         <div
           className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
           aria-label="Project tabs"
@@ -117,7 +117,7 @@ export function ProjectWorkspace({
                     onClick={() =>
                       onCommand({ kind: "selection.set", projectId: project.id, tabId: tab.id })
                     }
-                    className="max-w-44 truncate px-3 py-1.5 text-[13px]"
+                    className="max-w-44 truncate px-2 py-0.5 text-[12px]"
                   >
                     {tab.name}
                   </button>
@@ -133,7 +133,7 @@ export function ProjectWorkspace({
                         tabId: tab.id,
                       })
                     }
-                    className="rounded p-1.5 text-muted-foreground opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 hover:text-foreground [@media(hover:none)]:opacity-100"
+                    className="rounded p-1 text-muted-foreground opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 hover:text-foreground [@media(hover:none)]:opacity-100"
                   >
                     <X className="size-3" />
                   </button>
