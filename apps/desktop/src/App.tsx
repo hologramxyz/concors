@@ -21,6 +21,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { resolveStartupEndpoint } from "@/daemon/resolve-endpoint";
 import { useDaemonConnection } from "@/daemon/use-daemon-connection";
 import { navItemFor, type View } from "@/navigation";
+import { settingsNavItemFor, type SettingsPage } from "@/settings/navigation";
+import { SettingsSidebar } from "@/settings/settings-sidebar";
 import { useTheme } from "@/theme/use-theme";
 import { SettingsView } from "@/views/settings-view";
 import { ProjectSetupDialog } from "@/workspace/project-setup-dialog";
@@ -59,6 +61,8 @@ function AppContent() {
   const lastPanes = useRef(new Map<string, string>());
   const [paneFocus, setPaneFocus] = useState<PaneFocusRequest | null>(null);
   const [view, setView] = useState<View>("projects");
+  const [settingsPage, setSettingsPage] = useState<SettingsPage>("account");
+  const settingsReturnView = useRef<Exclude<View, "settings">>("projects");
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [localEndpoint, setLocalEndpoint] = useState<DaemonEndpoint | null>(null);
@@ -149,11 +153,16 @@ function AppContent() {
   );
   const openPalette = useCallback(() => setPaletteOpen(true), []);
   const signOut = () => void auth.signOut();
+  const openSettings = () => {
+    if (view !== "settings") settingsReturnView.current = view;
+    setSettingsPage("account");
+    setView("settings");
+  };
 
   const signedIn = auth.state.status === "signed-in";
   useCommand("search", signedIn, () => setPaletteOpen((open) => !open));
   useCommand("new-project", signedIn && canEdit, () => setAddingProject(true));
-  useCommand("settings", signedIn, () => setView("settings"));
+  useCommand("settings", signedIn, openSettings);
   useCommand("shortcuts", signedIn, () => setShortcutsOpen(true));
 
   // Nothing but the sign-in screen exists for a signed-out user. All hooks run above this line.
@@ -224,37 +233,47 @@ function AppContent() {
         <AgentsProvider connection={connection.transport}>
           <TooltipProvider>
             <div className="flex h-dvh w-full overflow-hidden bg-sidebar">
-              <AppSidebar
-                collapsed={sidebarCollapsed}
-                onCollapse={() => toggleSidebar(true)}
-                execute={execute}
-                onSelectAgent={openAgent}
-                view={view}
-                onNavigate={setView}
-                onOpenCommandPalette={openPalette}
-                onOpenShortcuts={() => setShortcutsOpen(true)}
-                workspace={workspace}
-                canEdit={canEdit}
-                onSelectProject={selectProject}
-                onAddProject={() => setAddingProject(true)}
-                machines={machines}
-                selectedMachineId={selectedMachineId}
-                onSelectMachine={selectMachine}
-                onAddMachine={(machine) => {
-                  if (machines.some((existing) => existing.url === machine.url))
-                    throw new Error("This machine connection is already saved");
-                  if (bookmarks.length >= 32)
-                    throw new Error("You can save up to 32 machine connections");
-                  const next = [...bookmarks, machine];
-                  localStorage.setItem(MACHINES_STORAGE_KEY, JSON.stringify(next));
-                  setBookmarks(next);
-                  setEndpoint(describeDaemonEndpoint(machine.url));
-                  setSelectedMachineId(machine.id);
-                  setView("projects");
-                }}
-                auth={account}
-                onSignOut={signOut}
-              />
+              {view === "settings" ? (
+                <SettingsSidebar
+                  collapsed={sidebarCollapsed}
+                  page={settingsPage}
+                  onBack={() => setView(settingsReturnView.current)}
+                  onCollapse={() => toggleSidebar(true)}
+                  onNavigate={setSettingsPage}
+                />
+              ) : (
+                <AppSidebar
+                  collapsed={sidebarCollapsed}
+                  onCollapse={() => toggleSidebar(true)}
+                  execute={execute}
+                  onSelectAgent={openAgent}
+                  view={view}
+                  onOpenSettings={openSettings}
+                  onOpenCommandPalette={openPalette}
+                  onOpenShortcuts={() => setShortcutsOpen(true)}
+                  workspace={workspace}
+                  canEdit={canEdit}
+                  onSelectProject={selectProject}
+                  onAddProject={() => setAddingProject(true)}
+                  machines={machines}
+                  selectedMachineId={selectedMachineId}
+                  onSelectMachine={selectMachine}
+                  onAddMachine={(machine) => {
+                    if (machines.some((existing) => existing.url === machine.url))
+                      throw new Error("This machine connection is already saved");
+                    if (bookmarks.length >= 32)
+                      throw new Error("You can save up to 32 machine connections");
+                    const next = [...bookmarks, machine];
+                    localStorage.setItem(MACHINES_STORAGE_KEY, JSON.stringify(next));
+                    setBookmarks(next);
+                    setEndpoint(describeDaemonEndpoint(machine.url));
+                    setSelectedMachineId(machine.id);
+                    setView("projects");
+                  }}
+                  auth={account}
+                  onSignOut={signOut}
+                />
+              )}
               <div
                 className={`workspace-surface my-2 mr-2 flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-background shadow-xs ${sidebarCollapsed ? "ml-2" : ""}`}
               >
@@ -262,7 +281,9 @@ function AppContent() {
                   <header className="flex h-11 shrink-0 items-center gap-2 border-b px-4">
                     {sidebarToggle}
                     <h1 className="truncate text-[13px] font-medium">
-                      {navItemFor(view).label}
+                      {view === "settings"
+                        ? settingsNavItemFor(settingsPage).label
+                        : navItemFor(view).label}
                     </h1>
                   </header>
                 )}
