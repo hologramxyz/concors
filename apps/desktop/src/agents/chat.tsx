@@ -1,3 +1,4 @@
+import { useViewedAgent } from "@/notifications/context";
 import { useContext, useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Bot, Square, Wrench } from "lucide-react";
 import Markdown from "react-markdown";
@@ -106,6 +107,7 @@ export function ChatPane({
 }
 
 export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boolean }) {
+  useViewedAgent(sessionId);
   const connection = useContext(TerminalConnectionContext);
   const agent = useAgents().find((a) => a.id === sessionId);
   const conversation = useConversation(sessionId);
