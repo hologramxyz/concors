@@ -1,41 +1,54 @@
 import { useEffect } from "react";
-import { Bot } from "lucide-react";
+import { Bot, LoaderCircle } from "lucide-react";
 import type { WorkspaceSnapshot } from "@concors/protocol";
 import { Chat } from "./chat";
 import { AgentStatus } from "./state";
-import { useAgents } from "./context";
-export function AgentSidebar({
-  onSelect,
-  workspace,
-}: {
-  onSelect: (id: string) => void;
-  workspace: WorkspaceSnapshot | null;
-}) {
-  const agents = useAgents()
-    .filter((a) => a.status !== "idle")
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+import { useAgents, AGENT_STATUS } from "./context";
+export function AgentSidebar({ onSelect }: { onSelect: (id: string) => void }) {
+  const agents = useAgents().toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   if (!agents.length)
-    return <p className="px-2 py-2 text-[13px] text-muted-foreground">No active agents.</p>;
+    return <p className="px-2 py-2 text-[13px] text-muted-foreground">No agents yet.</p>;
   return (
     <ul className="mt-1 space-y-0.5">
-      {agents.map((agent) => (
-        <li key={agent.id}>
-          <button
-            className="flex w-full items-start gap-2 rounded-md px-2 py-2 text-left hover:bg-sidebar-accent"
-            onClick={() => onSelect(agent.id)}
-          >
-            <Bot className="mt-1 size-4 shrink-0 text-muted-foreground" />
-            <span className="min-w-0 flex-1 [&>span]:text-[13px]">
-              <span className="block truncate text-[13px]">{agent.name}</span>
-              <span className="block truncate text-[13px] text-muted-foreground">
-                {workspace?.projects.find((p) => p.id === agent.projectId)?.name ??
-                  "Removed project"}
+      {agents.map((agent) => {
+        const running = agent.status === "starting" || agent.status === "working";
+        const status = AGENT_STATUS[agent.status];
+        const unread = agent.attention && !agent.attention.seen;
+        return (
+          <li key={agent.id}>
+            <button
+              type="button"
+              title={`${agent.name} · ${status}${unread ? " · Unread update" : ""}`}
+              className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[13px] hover:bg-sidebar-accent"
+              onClick={() => onSelect(agent.id)}
+            >
+              <span
+                role="img"
+                aria-label={`Agent status: ${status}`}
+                className="relative flex size-4 shrink-0 items-center justify-center"
+              >
+                {unread && (
+                  <span
+                    aria-label="Unread agent update"
+                    className="absolute inset-0 rounded-full ring-1 ring-muted-foreground/40"
+                  />
+                )}
+                {running ? (
+                  <LoaderCircle
+                    className="size-4 animate-spin text-amber-500 motion-reduce:animate-none"
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <span
+                    className={`size-2.5 rounded-full border border-black/15 ${agent.status === "done" ? "bg-emerald-500" : agent.status === "failed" ? "bg-red-500" : agent.status === "needs_input" ? "bg-amber-500" : "bg-white"}`}
+                  />
+                )}
               </span>
-              <AgentStatus agent={agent} />
-            </span>
-          </button>
-        </li>
-      ))}
+              <span className="min-w-0 flex-1 truncate">{agent.name}</span>
+            </button>
+          </li>
+        );
+      })}
     </ul>
   );
 }
