@@ -22,7 +22,10 @@ export interface MachinesState {
   readonly loading: boolean;
   reload(): void;
   create(input: Omit<CreateMachineInput, "organizationId">): Promise<Machine>;
-  destroy(id: string): Promise<void>;
+  /** Stops the renewals; the machine keeps running until its paid month ends. */
+  cancel(id: string): Promise<void>;
+  /** Undoes `cancel` while the month is still running. */
+  resume(id: string): Promise<void>;
 }
 
 /**
@@ -82,14 +85,14 @@ export function useMachines(organizationId: string | undefined): MachinesState {
     [organizationId],
   );
 
-  const destroy = useCallback(async (id: string) => {
-    const machine = await api.deleteMachine(id);
+  const replace = (machine: Machine) =>
     setMachines((current) =>
       (current ?? [])
-        .map((candidate) => (candidate.id === id ? machine : candidate))
+        .map((candidate) => (candidate.id === machine.id ? machine : candidate))
         .filter((candidate) => candidate.status !== "deleted"),
     );
-  }, []);
+  const cancel = useCallback(async (id: string) => replace(await api.cancelMachine(id)), []);
+  const resume = useCallback(async (id: string) => replace(await api.resumeMachine(id)), []);
 
   return {
     machines,
@@ -98,7 +101,8 @@ export function useMachines(organizationId: string | undefined): MachinesState {
     loading: loading || (machines === null && error === null),
     reload,
     create,
-    destroy,
+    cancel,
+    resume,
   };
 }
 

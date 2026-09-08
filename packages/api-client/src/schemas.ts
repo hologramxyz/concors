@@ -88,7 +88,6 @@ export const MACHINE_STATUSES = [
   "running",
   "stopped",
   "error",
-  "deleting",
   "deleted",
   "unknown",
 ] as const;
@@ -122,14 +121,17 @@ export const MachineSchema = z.object({
   reinstallTaskId: z.string().nullable(),
   /** What the organization pays per month; null when the server has no billing. */
   monthlyPrice: MoneySchema.nullable(),
+  /** End of the paid month; a cancelled machine runs until then. */
   paidUntil: z.string().nullable(),
+  /** Set once the machine was cancelled; it ends at `paidUntil` unless resumed. */
+  cancelledAt: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
   deletedAt: z.string().nullable(),
 });
 export type Machine = z.infer<typeof MachineSchema>;
 
-/** `GET /api/v1/machines/:id`, `POST /api/v1/machines`, `DELETE /api/v1/machines/:id` */
+/** `GET/POST/DELETE /api/v1/machines[/:id]` and `POST /api/v1/machines/:id/resume` */
 export const MachineResponseSchema = z.object({ machine: MachineSchema });
 
 /** `GET /api/v1/machines` */
