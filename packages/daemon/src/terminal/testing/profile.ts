@@ -34,3 +34,38 @@ if (process.argv.includes("resume") || process.argv.includes("--resume")) proces
   );
   return bin;
 }
+
+/** Claude-style screen redraws without OSC titles; exercises the fallback used by real CLIs. */
+export function installTestClaudeProfile(directory: string): string {
+  const bin = join(directory, "test-bin");
+  mkdirSync(bin, { recursive: true });
+  const script = join(bin, "claude.cjs");
+  writeFileSync(
+    script,
+    String.raw`
+const { createInterface } = require("node:readline");
+const rule = "────────────────────────────────────────";
+function screen(state) {
+  const lines = state === "approval"
+    ? [rule, "Do you want to proceed?", "❯ 1. Yes", "  2. No", "Esc to cancel"]
+    : [state === "working" ? "✻ Thinking… (12s · ↓ 120 tokens)" : "✻ Cooked for 52s", rule, "❯ ", rule, "  ⏵⏵ auto mode on (shift+tab to cycle)"];
+  process.stdout.write("\x1b[2J\x1b[H" + lines.join("\r\n"));
+}
+createInterface({ input: process.stdin, terminal: false, crlfDelay: Infinity }).on("line", data => {
+  const command = data.trim();
+  if (command === "exit") process.exit(0);
+  if (command.startsWith("test-")) screen(command.slice(5));
+});
+screen("idle");
+`,
+  );
+  const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";
+  writeFileSync(
+    join(bin, process.platform === "win32" ? "claude.cmd" : "claude"),
+    process.platform === "win32"
+      ? `@echo off\r\n"${process.execPath}" "${script}" %*\r\n`
+      : `#!/bin/sh\nexec ${quote(process.execPath)} ${quote(script)} "$@"\n`,
+    { mode: 0o755 },
+  );
+  return bin;
+}
