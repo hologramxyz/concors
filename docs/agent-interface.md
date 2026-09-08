@@ -39,6 +39,9 @@ parser licenses remain with the dependency.
 
 ## Behavior
 
+- New, split, and converted Agent panes prepare their session automatically and open
+  an empty conversation with the normal composer at the bottom. No message is sent
+  until submitted. Pane titles use the same live session name as the sidebar.
 - Loading and working indicators follow the machine's authoritative status.
 - Tool calls expand to show command output, exit codes, and file diffs. Plans show
   steps and completion counts. Sub-agent cards show provider-reported status and

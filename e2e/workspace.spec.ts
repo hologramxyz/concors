@@ -63,6 +63,9 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
     await second.getByRole("button", { name: "Pane actions", exact: true }).last().click();
     await second.getByRole("menuitemradio", { name: "Agent", exact: true }).click();
     await expect(first.getByRole("region", { name: "Agent pane", exact: true })).toHaveCount(1);
+    await expect(first.getByLabel("Message Codex")).toBeEnabled();
+    await expect(second.getByLabel("Message Codex")).toBeEnabled();
+    await expect(first.getByRole("log", { name: "Chat timeline" })).toBeEmpty();
     await first.getByRole("separator", { name: "Resize split" }).focus();
     await first.keyboard.press("ArrowRight");
     await expect(second.getByRole("separator", { name: "Resize split" })).toHaveAttribute(

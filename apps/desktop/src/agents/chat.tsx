@@ -2,7 +2,7 @@ import { AgentComposer } from "./composer";
 import { TimelineItem } from "./timeline-item";
 import { useViewedAgent } from "@/notifications/context";
 import { useContext, useEffect, useRef, useState } from "react";
-import { ArrowDown, Bot } from "lucide-react";
+import { ArrowDown } from "lucide-react";
 import type {
   AgentOperation,
   AgentPending,
@@ -29,79 +29,84 @@ export function ChatPane({
   canEdit: boolean;
 }) {
   const connection = useContext(TerminalConnectionContext);
-  const [model, setModel] = useState("");
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
+  const attempted = useRef(false);
   const startId = useRef(crypto.randomUUID());
   const available =
     connection?.state.status === "ready" &&
     connection.state.daemon.capabilities?.includes("agent-chat");
-  if (node.sessionId)
-    return <Chat key={node.sessionId} sessionId={node.sessionId} canEdit={canEdit} />;
-  const start = async () => {
-    if (!connection?.workspace) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const result = await connection.requestAgent(
+  useEffect(() => {
+    if (node.sessionId || !canEdit || !available || !connection?.workspace || attempted.current)
+      return;
+    attempted.current = true;
+    const current = connection.workspace;
+    const currentProject = current.projects.find((item) => item.id === project.id);
+    if (!currentProject) return;
+    void connection
+      .requestAgent(
         {
           kind: "start",
-          epoch: connection.workspace.epoch,
+          epoch: current.epoch,
           projectId: project.id,
           tabId: tab.id,
           paneId: node.id,
-          expectedVersion: project.version,
-          ...(model.trim() ? { model: model.trim() } : {}),
+          expectedVersion: currentProject.version,
         },
         startId.current,
-      );
-      if (result.outcome.status === "error") {
-        startId.current = crypto.randomUUID();
-        throw new Error(result.outcome.message);
-      }
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not start chat");
-    } finally {
-      setBusy(false);
-    }
-  };
+      )
+      .then((result) => {
+        if (result.outcome.status === "error") {
+          startId.current = crypto.randomUUID();
+          throw new Error(result.outcome.message);
+        }
+      })
+      .catch((cause: unknown) => {
+        setError(cause instanceof Error ? cause.message : "Could not prepare agent");
+      });
+  }, [node.sessionId, node.id, canEdit, available, connection, project.id, tab.id, retry]);
+  if (node.sessionId)
+    return <Chat key={node.sessionId} sessionId={node.sessionId} canEdit={canEdit} />;
   return (
-    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
-      <Bot className="size-8 text-primary/70" />
-      <div>
-        <h2 className="text-sm font-medium">Start a conversation</h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Codex works in {project.name}. Your conversation stays with this machine.
-        </p>
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="Agent conversation">
+      <div className="min-h-0 flex-1" role="log" aria-label="Chat timeline" />
+      <div className="shrink-0 px-3 pt-2 pb-3">
+        <div className="mx-auto max-w-5xl space-y-3">
+          {error && (
+            <div role="alert" className="flex items-center gap-2 text-xs text-destructive">
+              {error}
+              <button
+                className={button}
+                disabled={!canEdit || !available}
+                onClick={() => {
+                  attempted.current = false;
+                  setError(null);
+                  setRetry((value) => value + 1);
+                }}
+              >
+                Retry
+              </button>
+            </div>
+          )}
+          <div className="rounded-2xl border bg-background p-2">
+            <textarea
+              aria-label="Message Codex"
+              placeholder="Message Codex…"
+              disabled
+              className="min-h-16 w-full resize-none bg-transparent px-3 py-3 text-[16px] leading-relaxed outline-none"
+            />
+            <p role="status" className="px-3 pb-2 text-xs text-muted-foreground">
+              {!canEdit
+                ? "Waiting for an editable connection…"
+                : !available
+                  ? "Waiting for a machine with agent support…"
+                  : error
+                    ? "Agent could not be prepared."
+                    : "Preparing agent…"}
+            </p>
+          </div>
+        </div>
       </div>
-      <label className="flex w-full max-w-64 flex-col gap-1.5 text-left text-xs text-muted-foreground">
-        Model
-        <input
-          aria-label="Chat model"
-          placeholder="Use this machine’s default"
-          value={model}
-          onChange={(e) => setModel(e.target.value)}
-          disabled={busy}
-          className="rounded-md border bg-background px-3 py-2 text-foreground"
-        />
-      </label>
-      <button
-        className={button}
-        disabled={!canEdit || busy || !available}
-        onClick={() => void start()}
-      >
-        {busy ? "Starting…" : "Start Codex agent"}
-      </button>
-      {!available && (
-        <p className="text-xs text-muted-foreground">
-          Update and restart this machine’s daemon to enable agents.
-        </p>
-      )}
-      {error && (
-        <p role="alert" className="text-xs text-destructive">
-          {error}
-        </p>
-      )}
     </div>
   );
 }
@@ -184,11 +189,6 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
             </button>
           )}
           {!conversation.ready && <Activity>Loading conversation…</Activity>}
-          {conversation.ready && conversation.items.length === 0 && (
-            <p className="py-10 text-center text-sm text-muted-foreground">
-              What would you like to work on?
-            </p>
-          )}
           {conversation.items.map((item) => (
             <TimelineItem key={item.id} item={item} />
           ))}

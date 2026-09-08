@@ -32,6 +32,19 @@ test("shared chat streams, reloads, handles approvals and remains in global Agen
       .getByRole("region", { name: "Agents", exact: true });
     await expect(agentList.getByRole("img", { name: "Agent status: Ready" })).toBeVisible();
     await expect(agentList.getByText("Chat acceptance", { exact: true })).toHaveCount(0);
+    await expect(page.getByLabel("Message Codex")).toBeEnabled();
+    await expect(page.getByRole("log")).toBeEmpty();
+    await expect(page.getByText("Start a conversation", { exact: true })).toHaveCount(0);
+    await expect(
+      page.getByRole("region", { name: "Agent pane", exact: true }).locator("header .truncate"),
+    ).toHaveText(
+      await agentList
+        .getByRole("list")
+        .getByRole("button")
+        .first()
+        .locator(".truncate")
+        .innerText(),
+    );
     await page.getByRole("button", { name: /^Account:/ }).click();
     await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
     await agentList.getByRole("list").getByRole("button").first().click();
@@ -45,6 +58,9 @@ test("shared chat streams, reloads, handles approvals and remains in global Agen
       .getByRole("button", { name: /hold this stream/ })
       .getByRole("img", { name: "Agent status: Working" });
     await expect(status).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: "Agent pane", exact: true }).locator("header .truncate"),
+    ).toHaveText("hold this stream");
     await expect(status.locator("svg")).toHaveCSS("animation-name", "spin");
     const row = agentList.getByRole("list").getByRole("button").first();
     expect((await row.boundingBox())?.height).toBeLessThanOrEqual(28);
