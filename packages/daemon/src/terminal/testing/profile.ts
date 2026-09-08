@@ -20,14 +20,16 @@ lines.on("line", (data) => {
   process.stdout.write("CODEX_REPLY:" + data.trim() + "\\n");
 });
 process.stdout.write("CODEX_TERMINAL_READY\\n");
+process.stdout.write("SESSION_PID:" + process.pid + "\\n");
+if (process.argv.includes("resume") || process.argv.includes("--resume")) process.stdout.write("RECOVERY_PICKER_READY\\n");
 `,
   );
   const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";
   writeFileSync(
     join(bin, process.platform === "win32" ? "codex.cmd" : "codex"),
     process.platform === "win32"
-      ? `@echo off\r\n"${process.execPath}" "${script}"\r\n`
-      : `#!/bin/sh\nexec ${quote(process.execPath)} ${quote(script)}\n`,
+      ? `@echo off\r\n"${process.execPath}" "${script}" %*\r\n`
+      : `#!/bin/sh\nexec ${quote(process.execPath)} ${quote(script)} "$@"\n`,
     { mode: 0o755 },
   );
   return bin;
