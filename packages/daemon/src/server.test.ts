@@ -76,6 +76,7 @@ describe("WebSocket handshake", () => {
           "agent-composer",
           "pane-rearrangement",
           "workspace-pane-rearrangement",
+          "directional-pane-split",
         ],
       });
       expect(connection.state.status).toBe("ready");
