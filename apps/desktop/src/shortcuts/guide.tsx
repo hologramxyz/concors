@@ -15,7 +15,7 @@ export function ShortcutGuide({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Keyboard shortcuts</DialogTitle>
           <DialogDescription>
@@ -25,23 +25,26 @@ export function ShortcutGuide({
             keep their normal text-selection keys.
           </DialogDescription>
         </DialogHeader>
-        <dl className="max-h-[55vh] space-y-2 overflow-y-auto text-[13px]">
+        <dl className="max-h-[55vh] space-y-3 overflow-y-auto text-[15px]">
           {BINDINGS.map((binding) => (
-            <div key={binding.id} className="flex items-center justify-between gap-4">
+            <div
+              key={binding.id}
+              className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center sm:gap-4"
+            >
               <dt>{binding.label}</dt>
               <dd>
-                <kbd className="rounded border bg-muted px-2 py-1 font-mono text-xs">
+                <kbd className="rounded border bg-muted px-2 py-1 font-mono text-sm">
                   {shortcutLabel(binding.id)}
                 </kbd>
               </dd>
             </div>
           ))}
         </dl>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm leading-relaxed text-muted-foreground">
           Outside terminals, ⌘K / Ctrl+K also opens search. Use Alt+Shift+Left/Right on a tab to
           reorder it, or arrow keys on a split divider to resize panes.
         </p>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm leading-relaxed text-muted-foreground">
           P → Enter creates a pane to the right; P → an arrow chooses its position. T → Enter opens
           the tab profile picker; T → Left/Right cycles tabs. Backspace after P/T closes the
           pane/tab, leaving its sessions running. Ctrl+Shift+K searches projects and commands. The
