@@ -21,6 +21,7 @@ const MACHINE = {
   reinstallTaskId: null,
   monthlyPrice: { amount: 6.99, currency: "USD" },
   paidUntil: "2026-10-07T22:06:18.000Z",
+  cancelledAt: null,
   createdAt: "2026-09-07T22:06:18.000Z",
   updatedAt: "2026-09-07T22:06:18.000Z",
   deletedAt: null,
@@ -93,7 +94,7 @@ describe("ApiClient machines", () => {
     expect(new Headers(lastCall(fetch).init.headers).get("authorization")).toBe("Bearer tok-1");
   });
 
-  it("creates, reads and deletes a machine", async () => {
+  it("creates, reads, cancels and resumes a machine", async () => {
     const fetch = vi.fn(async () => json({ machine: MACHINE }));
     const api = client(fetch);
 
@@ -112,10 +113,15 @@ describe("ApiClient machines", () => {
     await expect(api.getMachine("m 1")).resolves.toEqual(MACHINE);
     expect(lastCall(fetch).url).toBe("https://api.example/api/v1/machines/m%201");
 
-    await expect(api.deleteMachine("m1")).resolves.toEqual(MACHINE);
+    await expect(api.cancelMachine("m1")).resolves.toEqual(MACHINE);
     call = lastCall(fetch);
     expect(call.url).toBe("https://api.example/api/v1/machines/m1");
     expect(call.init.method).toBe("DELETE");
+
+    await expect(api.resumeMachine("m1")).resolves.toEqual(MACHINE);
+    call = lastCall(fetch);
+    expect(call.url).toBe("https://api.example/api/v1/machines/m1/resume");
+    expect(call.init.method).toBe("POST");
   });
 
   it("surfaces a payment failure as ApiError 402", async () => {
