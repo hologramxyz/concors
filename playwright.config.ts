@@ -23,7 +23,7 @@ export default defineConfig({
     },
     {
       command:
-        "pnpm --filter @concors/daemon exec node src/cli.ts serve --port 7430 --log-level warn",
+        "pnpm --filter @concors/daemon exec node src/cli.ts serve --ephemeral --port 7430 --log-level warn",
       url: "http://127.0.0.1:7430/health",
       env: { CONCORS_DATA_DIR: join(dataDir, "second") },
       reuseExistingServer: false,
