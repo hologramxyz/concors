@@ -8,6 +8,7 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
   page,
   browser,
 }) => {
+  test.setTimeout(45_000);
   const directory = await mkdtemp(join(tmpdir(), "concors-terminal-agents-"));
   const context = await browser.newContext();
   const second = await context.newPage();
@@ -27,6 +28,34 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
       .getByRole("navigation", { name: "Primary" })
       .getByRole("region", { name: "Agents", exact: true });
     await expect(agents.getByRole("button", { name: /Open in terminal/ })).toHaveCount(0);
+    // Starting an agent from a normal shell must be discovered without changing its profile.
+    const shellPane = page.getByRole("region", { name: "Terminal pane", exact: true });
+    const shellPaneId = await shellPane.getAttribute("data-pane-id");
+    await shellPane.locator(".xterm-helper-textarea").focus();
+    await page.keyboard.type("codex");
+    await page.keyboard.press("Enter");
+    await expect(agents.getByRole("button", { name: /Open in terminal.*Codex/ })).toHaveCount(1);
+    await expect(shellPane.getByLabel("Terminal output")).toContainText("CODEX_TERMINAL_READY");
+    await second.goto("http://localhost:1420");
+    const shellAgent = second
+      .getByRole("navigation", { name: "Primary" })
+      .getByRole("region", { name: "Agents", exact: true })
+      .getByRole("button", { name: /Open in terminal.*Codex/ });
+    await expect(shellAgent).toBeVisible();
+    await second.reload();
+    await shellAgent.click();
+    await expect
+      .poll(() =>
+        second.evaluate(() =>
+          document.activeElement?.closest("[data-pane-id]")?.getAttribute("data-pane-id"),
+        ),
+      )
+      .toBe(shellPaneId);
+    await second.keyboard.type("exit");
+    await second.keyboard.press("Enter");
+    await expect(shellAgent).toHaveCount(0);
+    await expect(agents.getByRole("button", { name: /Open in terminal/ })).toHaveCount(0);
+
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Codex", exact: true }).click();
     await expect(agents.getByRole("button", { name: /Open in terminal.*Codex/ })).toHaveCount(1);
