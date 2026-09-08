@@ -14,7 +14,9 @@ test("settings replace the app sidebar with grouped pages and return to the app"
 
   const settingsNavigation = page.getByRole("navigation", { name: "Settings" });
   await expect(settingsNavigation).toBeVisible();
-  await expect(page.getByRole("button", { name: /Collapse sidebar|Expand sidebar/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Collapse sidebar|Expand sidebar/ })).toHaveCount(
+    0,
+  );
   await expect(primaryNavigation).toHaveCount(0);
   await expect(settingsNavigation.getByRole("heading", { name: "Settings" })).toBeVisible();
   await expect(settingsNavigation.getByRole("region", { name: "Personal" })).toBeVisible();
@@ -71,7 +73,9 @@ test("settings replace the app sidebar with grouped pages and return to the app"
   await page.getByRole("button", { name: "Collapse sidebar" }).click();
   await page.keyboard.press("Control+Shift+Comma");
   await expect(settingsNavigation).toBeVisible();
-  await expect(page.getByRole("button", { name: /Collapse sidebar|Expand sidebar/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Collapse sidebar|Expand sidebar/ })).toHaveCount(
+    0,
+  );
   await settingsNavigation.getByRole("button", { name: "Back to app", exact: true }).click();
   await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
   await page.getByRole("button", { name: "Expand sidebar" }).click();
