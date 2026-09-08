@@ -92,7 +92,7 @@ export function ProjectWorkspace({
   const renameTab = project.tabs.find((tab) => tab.id === renaming);
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex min-h-9 shrink-0 items-center px-2 pt-2">
+      <div className="flex min-h-9 shrink-0 items-center px-2 py-1">
         <div
           className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
           aria-label="Project tabs"
