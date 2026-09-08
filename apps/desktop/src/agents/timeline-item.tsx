@@ -28,7 +28,7 @@ export function TimelineItem({ item }: { item: AgentItem }) {
             <AgentMarkdown>{item.text}</AgentMarkdown>
           )}
         </div>
-        {item.status !== "running" && (
+        {item.kind === "assistant" && item.status !== "running" && (
           <div className="mt-2 flex">
             <CopyButton text={item.text} />
           </div>
