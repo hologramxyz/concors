@@ -5,7 +5,7 @@ import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { NewTabMenu } from "./new-tab-menu";
 import { TAB_PROFILES } from "./tab-profiles";
 import { ContextMenu } from "radix-ui";
-import { useContext, useRef, useState } from "react";
+import { useContext, useRef, useState, type ReactNode } from "react";
 import { FolderOpen, Pencil, Plus, X } from "lucide-react";
 import type { PaneProfile, WorkspaceOperation, WorkspaceSnapshot } from "@concors/protocol";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { PaneLayout } from "./pane-layout";
 
 export function ProjectWorkspace({
   workspace,
+  sidebarToggle,
   focusRequest,
   onPaneFocus,
   canEdit,
@@ -22,6 +23,7 @@ export function ProjectWorkspace({
   onAddProject,
 }: {
   workspace: WorkspaceSnapshot;
+  sidebarToggle?: ReactNode;
   focusRequest?: PaneFocusRequest | null;
   onPaneFocus?: (paneId: string) => void;
   canEdit: boolean;
@@ -102,7 +104,9 @@ export function ProjectWorkspace({
   const renameTab = project.tabs.find((tab) => tab.id === renaming);
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex min-h-9 shrink-0 items-center px-2 py-1">
+      <h1 className="sr-only">{project.name}</h1>
+      <div className="flex min-h-9 shrink-0 items-center gap-2 px-2 py-1">
+        {sidebarToggle}
         <div
           className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
           aria-label="Project tabs"

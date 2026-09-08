@@ -203,6 +203,21 @@ function AppContent() {
     (project) => project.id === workspace.selection?.projectId,
   );
 
+  const sidebarToggle = sidebarCollapsed && (
+    <button
+      id="expand-sidebar"
+      type="button"
+      aria-label="Expand sidebar"
+      title="Expand sidebar"
+      aria-controls="app-sidebar"
+      aria-expanded={false}
+      onClick={() => toggleSidebar(false)}
+      className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+    >
+      <PanelLeftOpen className="size-4" aria-hidden="true" />
+    </button>
+  );
+
   return (
     <TerminalConnectionContext value={connection.transport}>
       <NotificationProvider connection={connection.transport} onOpen={openAgent}>
@@ -243,27 +258,14 @@ function AppContent() {
               <div
                 className={`workspace-surface my-2 mr-2 flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-background shadow-xs ${sidebarCollapsed ? "ml-2" : ""}`}
               >
-                <header className="flex h-11 shrink-0 items-center gap-2 border-b px-4">
-                  {sidebarCollapsed && (
-                    <button
-                      id="expand-sidebar"
-                      type="button"
-                      aria-label="Expand sidebar"
-                      title="Expand sidebar"
-                      aria-controls="app-sidebar"
-                      aria-expanded={false}
-                      onClick={() => toggleSidebar(false)}
-                      className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                    >
-                      <PanelLeftOpen className="size-4" aria-hidden="true" />
-                    </button>
-                  )}
-                  <h1 className="truncate text-[13px] font-medium">
-                    {view === "projects" && activeProject
-                      ? activeProject.name
-                      : navItemFor(view).label}
-                  </h1>
-                </header>
+                {!(view === "projects" && activeProject) && (
+                  <header className="flex h-11 shrink-0 items-center gap-2 border-b px-4">
+                    {sidebarToggle}
+                    <h1 className="truncate text-[13px] font-medium">
+                      {navItemFor(view).label}
+                    </h1>
+                  </header>
+                )}
                 {error && (
                   <div
                     role="alert"
@@ -302,6 +304,7 @@ function AppContent() {
                   ) : view === "projects" ? (
                     workspace ? (
                       <ProjectWorkspace
+                        sidebarToggle={sidebarToggle}
                         onPaneFocus={(paneId) => {
                           if (selection?.tabId)
                             lastPanes.current.set(`${memoryKey}:${selection.tabId}`, paneId);
