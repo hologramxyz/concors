@@ -1,8 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { test, expect } from "@playwright/test";
-import { signedIn } from "./signed-in.ts";
+import { test, expect, signedIn } from "./signed-in.ts";
 
 test("Codex terminal profiles appear across clients and agent clicks focus the owning split pane", async ({
   page,

@@ -1,6 +1,5 @@
-import { test, expect, type WebSocketRoute } from "@playwright/test";
-
-import { signedIn } from "./signed-in.ts";
+import type { WebSocketRoute } from "@playwright/test";
+import { test, expect, signedIn } from "./signed-in.ts";
 
 test("two devices share workspace edits, reconnect, and switch isolated machines", async ({
   browser,

@@ -1,6 +1,4 @@
-import { test, expect } from "@playwright/test";
-
-import { signedIn } from "./signed-in.ts";
+import { test, expect, signedIn } from "./signed-in.ts";
 
 test("two devices use the same terminal and recover its screen after reload", async ({
   browser,

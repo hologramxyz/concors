@@ -1,8 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { test, expect } from "@playwright/test";
-import { signedIn } from "./signed-in.ts";
+import { test, expect, signedIn } from "./signed-in.ts";
 
 test("workspace shortcuts create, search, split and close the active pane without leaking into terminals", async ({
   page,

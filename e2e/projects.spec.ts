@@ -1,10 +1,8 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, signedIn } from "./signed-in.ts";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
-
-import { signedIn } from "./signed-in.ts";
 
 test("create and clone projects on the daemon machine and sync to another browser", async ({
   page,
