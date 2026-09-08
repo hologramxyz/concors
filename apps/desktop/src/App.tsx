@@ -8,7 +8,7 @@ import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { describeDaemonEndpoint, type DaemonEndpoint } from "@concors/daemon-client";
 import type { WorkspaceOperation } from "@concors/protocol";
 import { PanelLeftOpen, Server } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { api } from "@/auth/api";
 import { AuthScreen } from "@/auth/auth-screen";
@@ -55,6 +55,8 @@ function AppContent() {
       document.getElementById(collapsed ? "expand-sidebar" : "collapse-sidebar")?.focus(),
     );
   };
+  const lastTabs = useRef(new Map<string, string>());
+  const lastPanes = useRef(new Map<string, string>());
   const [paneFocus, setPaneFocus] = useState<PaneFocusRequest | null>(null);
   const [view, setView] = useState<View>("projects");
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -74,6 +76,29 @@ function AppContent() {
     : bookmarks;
   const workspace = connection.workspace;
   const canEdit = connection.state.status === "ready" && connection.workspaceReady && !pending;
+  const selection = workspace?.selection;
+  const memoryKey = `${selectedMachineId}:${workspace?.epoch}`;
+  useEffect(() => {
+    if (!selection?.projectId || !selection.tabId) return;
+    lastTabs.current.set(`${memoryKey}:${selection.projectId}`, selection.tabId);
+    if (view !== "projects") return;
+    const tab = workspace?.projects
+      .find((p) => p.id === selection.projectId)
+      ?.tabs.find((t) => t.id === selection.tabId);
+    const remembered = lastPanes.current.get(`${memoryKey}:${selection.tabId}`);
+    const pane =
+      tab?.nodes.find((n) => n.kind === "pane" && n.id === remembered) ??
+      tab?.nodes.find((n) => n.kind === "pane");
+    if (pane)
+      setPaneFocus({
+        projectId: selection.projectId,
+        tabId: selection.tabId,
+        paneId: pane.id,
+        requestId: crypto.randomUUID(),
+      });
+    // Restore focus only when navigating, not on background layout/session updates.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [memoryKey, selection?.projectId, selection?.tabId, view]);
 
   useEffect(() => {
     let cancelled = false;
@@ -102,6 +127,7 @@ function AppContent() {
         return;
       }
       if (!transport?.workspace) return;
+      lastPanes.current.set(`${memoryKey}:${target.tabId}`, target.paneId);
       setError(null);
       void transport
         .executeWorkspace({
@@ -119,7 +145,7 @@ function AppContent() {
           setError(cause instanceof Error ? cause.message : "Could not open agent pane"),
         );
     },
-    [transport],
+    [transport, memoryKey],
   );
   const openPalette = useCallback(() => setPaletteOpen(true), []);
   const signOut = () => void auth.signOut();
@@ -156,6 +182,14 @@ function AppContent() {
       setError(cause instanceof Error ? cause.message : "Could not update workspace"),
     );
   };
+  const selectProject = (projectId: string) => {
+    const project = workspace?.projects.find((p) => p.id === projectId);
+    const remembered = lastTabs.current.get(`${memoryKey}:${projectId}`);
+    const tabId =
+      project?.tabs.find((tab) => tab.id === remembered)?.id ?? project?.tabs[0]?.id ?? null;
+    setView("projects");
+    command({ kind: "selection.set", projectId, tabId });
+  };
   const selectMachine = (id: string) => {
     const machine = machines.find((item) => item.id === id);
     if (!machine) return;
@@ -183,17 +217,10 @@ function AppContent() {
                 view={view}
                 onNavigate={setView}
                 onOpenCommandPalette={openPalette}
+                onOpenShortcuts={() => setShortcutsOpen(true)}
                 workspace={workspace}
                 canEdit={canEdit}
-                onSelectProject={(id) => {
-                  setView("projects");
-                  const project = workspace?.projects.find((p) => p.id === id);
-                  command({
-                    kind: "selection.set",
-                    projectId: id,
-                    tabId: project?.tabs[0]?.id ?? null,
-                  });
-                }}
+                onSelectProject={selectProject}
                 onAddProject={() => setAddingProject(true)}
                 machines={machines}
                 selectedMachineId={selectedMachineId}
@@ -275,6 +302,10 @@ function AppContent() {
                   ) : view === "projects" ? (
                     workspace ? (
                       <ProjectWorkspace
+                        onPaneFocus={(paneId) => {
+                          if (selection?.tabId)
+                            lastPanes.current.set(`${memoryKey}:${selection.tabId}`, paneId);
+                        }}
                         focusRequest={paneFocus}
                         workspace={workspace}
                         canEdit={canEdit}
@@ -325,11 +356,7 @@ function AppContent() {
             <CommandPalette
               canSelectProject={canEdit}
               projects={workspace?.projects ?? []}
-              onSelectProject={(projectId) => {
-                const project = workspace?.projects.find((item) => item.id === projectId);
-                setView("projects");
-                command({ kind: "selection.set", projectId, tabId: project?.tabs[0]?.id ?? null });
-              }}
+              onSelectProject={selectProject}
               open={paletteOpen}
               onOpenChange={setPaletteOpen}
               onNavigate={setView}

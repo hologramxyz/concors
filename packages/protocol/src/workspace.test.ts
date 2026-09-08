@@ -450,3 +450,31 @@ describe("pane rearrangement", () => {
     });
   });
 });
+
+it.each(["horizontal", "vertical"] as const)(
+  "places a new pane before its sibling on the %s axis",
+  (axis) => {
+    const { state, projectId, tabId, paneId } = fixture();
+    const newPaneId = id(),
+      splitId = id();
+    const updated = applyWorkspaceOperation(state, {
+      kind: "pane.split",
+      projectId,
+      tabId,
+      paneId,
+      newPaneId,
+      splitId,
+      axis,
+      before: true,
+      profile: "shell",
+      expectedVersion: 1,
+    });
+    const tab = updated.projects[0]!.tabs[0]!;
+    expect(tab.nodes.find((n) => n.id === splitId)).toMatchObject({
+      first: newPaneId,
+      second: paneId,
+      axis,
+    });
+    validateLayout(tab);
+  },
+);

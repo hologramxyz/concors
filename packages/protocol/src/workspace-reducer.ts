@@ -235,8 +235,8 @@ export function applyWorkspaceOperation(
                   kind: "split",
                   axis: op.axis,
                   ratio: 0.5,
-                  first: pane.id,
-                  second: op.newPaneId,
+                  first: op.before ? op.newPaneId : pane.id,
+                  second: op.before ? pane.id : op.newPaneId,
                 },
                 { id: op.newPaneId, kind: "pane", profile: op.profile, sessionId: null },
               );

@@ -1,3 +1,4 @@
+import { neighborPane, type Direction } from "./pane-navigation";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { useCommand } from "@/shortcuts/context";
 import { shortcutLabel } from "@/shortcuts/bindings";
@@ -35,6 +36,7 @@ const PROFILE_LABELS: Record<PaneProfile, string> = {
 };
 interface Props {
   focusRequest?: PaneFocusRequest | null;
+  onPaneFocus?: ((paneId: string) => void) | undefined;
   tab: WorkspaceTab;
   project: WorkspaceProject;
   canEdit: boolean;
@@ -56,7 +58,7 @@ export function PaneLayout(props: Props) {
   const activePane =
     props.tab.nodes.find((node) => node.kind === "pane" && node.id === activePaneId) ??
     props.tab.nodes.find((node) => node.kind === "pane");
-  const split = (axis: "horizontal" | "vertical") => {
+  const split = (axis: "horizontal" | "vertical", before = false) => {
     if (!activePane || activePane.kind !== "pane") return;
     const newPaneId = crypto.randomUUID();
     pendingFocus.current = newPaneId;
@@ -69,6 +71,7 @@ export function PaneLayout(props: Props) {
       splitId: crypto.randomUUID(),
       newPaneId,
       axis,
+      before,
       profile: activePane.profile,
     });
   };
@@ -85,7 +88,41 @@ export function PaneLayout(props: Props) {
     const pane = container.current?.querySelector<HTMLElement>(`[data-pane-id="${targetId}"]`);
     (pane?.querySelector<HTMLTextAreaElement>("textarea:not(:disabled)") ?? pane)?.focus();
   }, [props.tab.nodes, activePaneId, activePane?.id]);
+  const connection = useContext(TerminalConnectionContext);
+  const canSplitBefore = !!(
+    connection?.state.status === "ready" ? connection.state.daemon : null
+  )?.capabilities?.includes("directional-pane-split");
+  const focusNeighbor = (direction: Direction) => {
+    const panes = [...(container.current?.querySelectorAll<HTMLElement>("[data-pane-id]") ?? [])];
+    const current =
+      panes.find((pane) => pane.contains(document.activeElement))?.dataset.paneId ?? activePane?.id;
+    if (!current) return;
+    const next = neighborPane(
+      panes.map((pane) => {
+        const rect = pane.getBoundingClientRect();
+        return {
+          id: pane.dataset.paneId ?? "",
+          left: rect.left,
+          top: rect.top,
+          right: rect.right,
+          bottom: rect.bottom,
+        };
+      }),
+      current,
+      direction,
+    );
+    const pane = panes.find((pane) => pane.dataset.paneId === next);
+    // Focus the input immediately; both terminal and Agent inputs allow pane shortcuts.
+    const target = pane?.querySelector<HTMLElement>("textarea:not(:disabled)") ?? pane;
+    target?.focus({ preventScroll: true });
+  };
+  useCommand("focus-left", !!activePane, () => focusNeighbor("left"));
+  useCommand("focus-right", !!activePane, () => focusNeighbor("right"));
+  useCommand("focus-up", !!activePane, () => focusNeighbor("up"));
+  useCommand("focus-down", !!activePane, () => focusNeighbor("down"));
   const canSplit = props.canEdit && !!activePane && props.tab.nodes.length < 63;
+  useCommand("split-left", canSplit && canSplitBefore, () => split("horizontal", true));
+  useCommand("split-up", canSplit && canSplitBefore, () => split("vertical", true));
   useCommand("new-pane", canSplit, () => split("horizontal"));
   useCommand("split-horizontal", canSplit, () => split("horizontal"));
   useCommand("split-vertical", canSplit, () => split("vertical"));
@@ -102,7 +139,10 @@ export function PaneLayout(props: Props) {
   const rememberPane = (event: React.SyntheticEvent) => {
     if (event.target instanceof Element) {
       const id = event.target.closest("[data-pane-id]")?.getAttribute("data-pane-id");
-      if (id) setActivePaneId(id);
+      if (id) {
+        setActivePaneId(id);
+        props.onPaneFocus?.(id);
+      }
     }
   };
 
@@ -241,6 +281,7 @@ function Pane({
       className={`relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border focus-visible:ring-1 focus-visible:ring-primary focus-visible:outline-none ${node.profile === "chat" ? "bg-card" : "bg-[var(--terminal-background)] text-[var(--terminal-foreground)]"}`}
     >
       <header
+        tabIndex={0}
         draggable={canDrag && tab.nodes.length > 1}
         title="Drag to move pane"
         onDragStart={(event) => {
