@@ -148,7 +148,7 @@ export function PaneLayout(props: Props) {
       ref={container}
       onFocusCapture={rememberPane}
       onPointerDownCapture={rememberPane}
-      className="h-full min-h-[220px] min-w-[320px] p-2"
+      className="h-full min-h-[220px] min-w-[320px] px-2 pt-1 pb-2"
     >
       {render(props.tab.root)}
     </div>
