@@ -127,6 +127,7 @@ export function App() {
           <TooltipProvider>
             <div className="flex h-dvh w-full overflow-hidden bg-sidebar">
               <AppSidebar
+                execute={execute}
                 onSelectAgent={(id) => {
                   setSelectedAgent(id);
                   setView("agents");

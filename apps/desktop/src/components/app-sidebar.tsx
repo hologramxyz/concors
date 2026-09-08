@@ -1,8 +1,9 @@
 import { AgentSidebar } from "@/agents/list";
+import { ProjectActions } from "@/workspace/project-actions";
 import { SidebarSection } from "./sidebar-section";
 import { Folder, Plus, Search } from "lucide-react";
 import { cn } from "cn";
-import type { WorkspaceSnapshot } from "@concors/protocol";
+import type { WorkspaceSnapshot, WorkspaceOperation } from "@concors/protocol";
 import type { View } from "@/navigation";
 import type { SignedInAuth } from "@/auth/auth-state";
 import { AccountMenu } from "@/components/account-menu";
@@ -24,6 +25,7 @@ interface AppSidebarProps {
   onAddMachine: (machine: MachineConnection) => void;
   auth: SignedInAuth;
   onSignOut: () => void;
+  execute: (operation: WorkspaceOperation) => Promise<void>;
 }
 
 export function AppSidebar(props: AppSidebarProps) {
@@ -65,7 +67,7 @@ export function AppSidebar(props: AppSidebarProps) {
         >
           <ul className="mt-1 space-y-0.5">
             {props.workspace?.projects.map((project) => (
-              <li key={project.id}>
+              <li key={project.id} className="group flex items-center">
                 <button
                   type="button"
                   disabled={!props.canEdit}
@@ -78,7 +80,7 @@ export function AppSidebar(props: AppSidebarProps) {
                       : undefined
                   }
                   className={cn(
-                    "flex h-8 w-full items-center gap-2 rounded-md px-2 text-[13px] hover:bg-sidebar-accent disabled:opacity-50",
+                    "flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-[13px] hover:bg-sidebar-accent disabled:opacity-50",
                     props.view === "projects" &&
                       props.workspace?.selection?.projectId === project.id &&
                       "bg-sidebar-accent",
@@ -87,6 +89,7 @@ export function AppSidebar(props: AppSidebarProps) {
                   <Folder className="size-4 shrink-0 text-muted-foreground" />
                   <span className="truncate">{project.name}</span>
                 </button>
+                <ProjectActions project={project} canEdit={props.canEdit} execute={props.execute} />
               </li>
             ))}
             {props.workspace?.projects.length === 0 && (

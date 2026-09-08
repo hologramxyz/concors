@@ -1,6 +1,6 @@
 import { ContextMenu } from "radix-ui";
 import { useState } from "react";
-import { FolderOpen, Pencil, Plus, Trash2, X } from "lucide-react";
+import { FolderOpen, Pencil, Plus, X } from "lucide-react";
 import type { WorkspaceOperation, WorkspaceSnapshot } from "@concors/protocol";
 import { Button } from "@/components/ui/button";
 import { FormDialog } from "./form-dialog";
@@ -186,27 +186,6 @@ export function ProjectWorkspace({
             <Plus className="size-4" />
           </button>
         </div>
-        <button
-          type="button"
-          aria-label="Remove project from workspace"
-          title="Remove project from workspace (keeps files)"
-          disabled={!canEdit}
-          onClick={() => {
-            if (
-              window.confirm(
-                `Remove ${project.name} and its saved tabs from this workspace? Files will be kept.`,
-              )
-            )
-              onCommand({
-                kind: "project.remove",
-                projectId: project.id,
-                expectedVersion: project.version,
-              });
-          }}
-          className="ml-2 rounded p-1.5 text-muted-foreground hover:bg-muted"
-        >
-          <Trash2 className="size-3.5" />
-        </button>
       </div>
       <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
         {selected ? (
