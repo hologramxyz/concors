@@ -26,17 +26,18 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
     const agents = page
       .getByRole("navigation", { name: "Primary" })
       .getByRole("region", { name: "Agents", exact: true });
-    await expect(agents.getByRole("button", { name: /Running in terminal/ })).toHaveCount(0);
+    await expect(agents.getByRole("button", { name: /Open in terminal/ })).toHaveCount(0);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Codex", exact: true }).click();
-    await expect(agents.getByRole("button", { name: /Running in terminal.*Codex/ })).toHaveCount(1);
+    await expect(agents.getByRole("button", { name: /Open in terminal.*Codex/ })).toHaveCount(1);
     await expect(page.getByLabel("Terminal output")).toContainText("CODEX_TERMINAL_READY");
+    await expect(agents.getByLabel("Agent status: Open in terminal").locator("svg")).toHaveCount(0);
     await page.getByRole("button", { name: "Pane actions" }).click();
     await page.getByRole("menuitem", { name: "Split horizontally" }).click();
     await expect(
       page.getByRole("region", { name: "Codex pane", exact: true }).locator(".xterm"),
     ).toHaveCount(2);
-    await expect(agents.getByRole("button", { name: /Running in terminal.*Codex/ })).toHaveCount(2);
+    await expect(agents.getByRole("button", { name: /Open in terminal.*Codex/ })).toHaveCount(2);
     const panes = page.getByRole("region", { name: "Codex pane", exact: true });
     const firstPaneId = await panes.first().getAttribute("data-pane-id");
     const lastPaneId = await panes.last().getAttribute("data-pane-id");
@@ -46,19 +47,19 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
     const remoteAgents = second
       .getByRole("navigation", { name: "Primary" })
       .getByRole("region", { name: "Agents", exact: true });
-    await expect(
-      remoteAgents.getByRole("button", { name: /Running in terminal.*Codex/ }),
-    ).toHaveCount(2);
+    await expect(remoteAgents.getByRole("button", { name: /Open in terminal.*Codex/ })).toHaveCount(
+      2,
+    );
     await second.reload();
-    await expect(
-      remoteAgents.getByRole("button", { name: /Running in terminal.*Codex/ }),
-    ).toHaveCount(2);
+    await expect(remoteAgents.getByRole("button", { name: /Open in terminal.*Codex/ })).toHaveCount(
+      2,
+    );
     await second.getByRole("button", { name: /^Account:/ }).click();
     await second.getByRole("menuitem", { name: "Settings", exact: true }).click();
 
     await page.getByRole("button", { name: "Terminal", exact: true }).click();
     await agents
-      .getByRole("button", { name: /Running in terminal.*Codex/ })
+      .getByRole("button", { name: /Open in terminal.*Codex/ })
       .first()
       .click();
     await expect(page.getByRole("button", { name: "Codex", exact: true })).toHaveAttribute(
@@ -80,7 +81,7 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
     await expect(page.getByRole("complementary", { name: "Agent sessions" })).toHaveCount(0);
 
     await agents
-      .getByRole("button", { name: /Running in terminal.*Codex/ })
+      .getByRole("button", { name: /Open in terminal.*Codex/ })
       .last()
       .click();
     await expect
@@ -94,10 +95,10 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
     await page.keyboard.press("Enter");
     await expect(panes.first().getByRole("button", { name: "Start new session" })).toBeVisible();
     await expect(remoteAgents.getByRole("button", { name: /Failed.*Codex/ })).toHaveCount(0);
-    await expect(
-      remoteAgents.getByRole("button", { name: /Running in terminal.*Codex/ }),
-    ).toHaveCount(1);
-    await remoteAgents.getByRole("button", { name: /Running in terminal.*Codex/ }).click();
+    await expect(remoteAgents.getByRole("button", { name: /Open in terminal.*Codex/ })).toHaveCount(
+      1,
+    );
+    await remoteAgents.getByRole("button", { name: /Open in terminal.*Codex/ }).click();
     await expect(
       second.getByRole("heading", { name: "Terminal agents", exact: true }),
     ).toBeVisible();
@@ -110,16 +111,27 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
       .toBe(lastPaneId);
     await second.keyboard.press("Control+c");
     await expect(panes.last().getByRole("button", { name: "Start new session" })).toBeVisible();
-    await expect(agents.getByRole("button", { name: /Running in terminal.*Codex/ })).toHaveCount(0);
-    await expect(
-      remoteAgents.getByRole("button", { name: /Running in terminal.*Codex/ }),
-    ).toHaveCount(0);
+    await expect(agents.getByRole("button", { name: /Open in terminal.*Codex/ })).toHaveCount(0);
+    await expect(remoteAgents.getByRole("button", { name: /Open in terminal.*Codex/ })).toHaveCount(
+      0,
+    );
     await second.reload();
     await expect(
       remoteAgents.getByRole("button", {
-        name: /(?:Running in terminal|Exited|Failed|Interrupted).*Codex/,
+        name: /(?:Open in terminal|Exited|Failed|Interrupted).*Codex/,
       }),
     ).toHaveCount(0);
+    await panes.last().getByRole("button", { name: "Start new session" }).click();
+    await expect(agents.getByRole("button", { name: /Open in terminal.*Codex/ })).toHaveCount(1);
+    await panes.last().getByRole("button", { name: "Close pane" }).click();
+    await expect(agents.getByRole("button", { name: /Open in terminal.*Codex/ })).toHaveCount(0);
+    await expect(remoteAgents.getByRole("button", { name: /Open in terminal.*Codex/ })).toHaveCount(
+      0,
+    );
+    await second.reload();
+    await expect(remoteAgents.getByRole("button", { name: /Open in terminal.*Codex/ })).toHaveCount(
+      0,
+    );
     await page.screenshot({ path: "test-results/terminal-agents.png" });
   } finally {
     await context.close();
