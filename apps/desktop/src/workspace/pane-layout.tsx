@@ -1,3 +1,4 @@
+import { TerminalConnectionContext } from "@/terminal/connection-context";
 import type { PaneFocusRequest } from "./session-pane";
 import {
   DropdownMenu,
@@ -11,7 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ChatPane } from "@/agents/chat";
 import { TerminalPane } from "@/terminal/terminal-pane";
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { AgentPaneIcon } from "@/agents/activity";
 import { useAgents } from "@/agents/context";
 import { Columns2, Rows2, Ellipsis, Terminal, X } from "lucide-react";
@@ -38,7 +39,14 @@ interface Props {
   onCommand: (operation: WorkspaceOperation) => void;
 }
 
+type Placement = Extract<WorkspaceOperation, { kind: "pane.move" }>["placement"];
+interface PaneDrag {
+  paneId: string;
+  version: number;
+}
+
 export function PaneLayout(props: Props) {
+  const [dragging, setDragging] = useState<PaneDrag | null>(null);
   const container = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const target = props.focusRequest;
@@ -76,7 +84,7 @@ export function PaneLayout(props: Props) {
           second={render(node.second)}
         />
       );
-    return <Pane key={id} {...props} node={node} />;
+    return <Pane key={id} {...props} node={node} dragging={dragging} onDrag={setDragging} />;
   };
   return (
     <div ref={container} className="h-full min-h-[220px] min-w-[320px] p-2">
@@ -91,7 +99,20 @@ function Pane({
   project,
   canEdit,
   onCommand,
-}: Props & { node: Extract<LayoutNode, { kind: "pane" }> }) {
+  dragging,
+  onDrag,
+}: Props & {
+  node: Extract<LayoutNode, { kind: "pane" }>;
+  dragging: PaneDrag | null;
+  onDrag: (drag: PaneDrag | null) => void;
+}) {
+  const [drop, setDrop] = useState<Placement | null>(null);
+  const connection = useContext(TerminalConnectionContext);
+  const canDrag =
+    canEdit &&
+    connection?.state.status === "ready" &&
+    !!connection.state.daemon.capabilities?.includes("pane-rearrangement");
+  const canDrop = canDrag && dragging !== null && dragging.paneId !== node.id;
   const agent = useAgents().find((agent) => agent.id === node.sessionId);
   const title = node.profile === "chat" ? (agent?.name ?? "Agent") : PROFILE_LABELS[node.profile];
   const target = {
@@ -103,11 +124,60 @@ function Pane({
   return (
     <section
       data-pane-id={node.id}
+      onDragOver={(event) => {
+        if (!canDrop) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        const rect = event.currentTarget.getBoundingClientRect();
+        const x = (event.clientX - rect.left) / rect.width;
+        const y = (event.clientY - rect.top) / rect.height;
+        const edges = [
+          ["left", x],
+          ["right", 1 - x],
+          ["top", y],
+          ["bottom", 1 - y],
+        ] as const;
+        const nearest = edges.reduce((best, edge) => (edge[1] < best[1] ? edge : best));
+        setDrop(nearest[1] < 0.25 ? nearest[0] : "center");
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDrop(null);
+      }}
+      onDrop={(event) => {
+        if (!canDrop || !drop || !dragging) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onCommand({
+          kind: "pane.move",
+          ...target,
+          expectedVersion: dragging.version,
+          paneId: dragging.paneId,
+          targetPaneId: node.id,
+          placement: drop,
+          splitId: crypto.randomUUID(),
+        });
+        setDrop(null);
+        onDrag(null);
+      }}
       tabIndex={-1}
       aria-label={`${PROFILE_LABELS[node.profile]} pane`}
-      className={`flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border ${node.profile === "chat" ? "bg-card" : "bg-[#15151b] text-[#e4e4ea]"}`}
+      className={`relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border ${node.profile === "chat" ? "bg-card" : "bg-[#15151b] text-[#e4e4ea]"}`}
     >
-      <header className="flex h-9 shrink-0 items-center gap-1 border-b px-2">
+      <header
+        draggable={canDrag && tab.nodes.length > 1}
+        title="Drag to move pane; drop in the center to swap or on an edge to split"
+        onDragStart={(event) => {
+          if ((event.target as HTMLElement).closest("button") || !canDrag) {
+            event.preventDefault();
+            return;
+          }
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("application/x-concors-pane", node.id);
+          onDrag({ paneId: node.id, version: project.version });
+        }}
+        onDragEnd={() => onDrag(null)}
+        className={`flex h-9 shrink-0 items-center gap-1 border-b px-2 ${canDrag && tab.nodes.length > 1 ? "cursor-grab active:cursor-grabbing" : ""}`}
+      >
         {node.profile === "chat" ? (
           <AgentPaneIcon sessionId={node.sessionId} />
         ) : (
@@ -181,9 +251,34 @@ function Pane({
         </button>
       </header>
       {node.profile !== "chat" ? (
-        <TerminalPane project={project} tab={tab} node={node} canEdit={canEdit} />
+        <TerminalPane
+          key={node.profile}
+          project={project}
+          tab={tab}
+          node={node}
+          canEdit={canEdit}
+        />
       ) : (
         <ChatPane project={project} tab={tab} node={node} canEdit={canEdit} />
+      )}
+      {canDrop && drop && (
+        <div
+          data-testid="pane-drop-preview"
+          data-placement={drop}
+          className={`pointer-events-none absolute z-30 flex items-center justify-center rounded border-2 border-primary bg-primary/15 text-sm font-medium text-foreground ${
+            drop === "left"
+              ? "inset-y-0 left-0 w-1/2"
+              : drop === "right"
+                ? "inset-y-0 right-0 w-1/2"
+                : drop === "top"
+                  ? "inset-x-0 top-0 h-1/2"
+                  : drop === "bottom"
+                    ? "inset-x-0 bottom-0 h-1/2"
+                    : "inset-0"
+          }`}
+        >
+          {drop === "center" ? "Swap panes" : "Move into split"}
+        </div>
       )}
     </section>
   );

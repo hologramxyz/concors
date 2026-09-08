@@ -70,7 +70,7 @@ describe("WebSocket handshake", () => {
         protocolVersion: PROTOCOL_VERSION,
         daemonVersion: DAEMON_VERSION,
         status: "ready",
-        capabilities: ["agent-chat", "agent-attention", "agent-composer"],
+        capabilities: ["agent-chat", "agent-attention", "agent-composer", "pane-rearrangement"],
       });
       expect(connection.state.status).toBe("ready");
     } finally {

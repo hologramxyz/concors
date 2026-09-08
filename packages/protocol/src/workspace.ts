@@ -80,6 +80,14 @@ export const WorkspaceOperationSchema = z.discriminatedUnion("kind", [
   }),
   z.object({ kind: z.literal("pane.close"), ...TabTarget, paneId: Id }),
   z.object({
+    kind: z.literal("pane.move"),
+    ...TabTarget,
+    paneId: Id,
+    targetPaneId: Id,
+    placement: z.enum(["center", "left", "right", "top", "bottom"]),
+    splitId: Id,
+  }),
+  z.object({
     kind: z.literal("pane.resize"),
     ...TabTarget,
     splitId: Id,

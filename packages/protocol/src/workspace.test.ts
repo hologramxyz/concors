@@ -235,3 +235,131 @@ it("keeps a binding for the same profile and detaches it for a different profile
   });
   expect(state.projects[0]!.tabs[0]!.nodes[0]).toMatchObject({ sessionId: pane.sessionId });
 });
+
+describe("pane rearrangement", () => {
+  it.each(["center", "left", "right", "top", "bottom"] as const)(
+    "moves nested bound panes to %s without changing sessions",
+    (placement) => {
+      const { state, projectId, tabId, paneId } = fixture();
+      const second = id(),
+        third = id(),
+        root = id(),
+        nested = id(),
+        newSplit = id();
+      let current = applyWorkspaceOperation(state, {
+        kind: "pane.split",
+        projectId,
+        tabId,
+        paneId,
+        expectedVersion: 1,
+        newPaneId: second,
+        splitId: root,
+        axis: "horizontal",
+        profile: "chat",
+      });
+      current = applyWorkspaceOperation(current, {
+        kind: "pane.split",
+        projectId,
+        tabId,
+        paneId: second,
+        expectedVersion: 2,
+        newPaneId: third,
+        splitId: nested,
+        axis: "vertical",
+        profile: "codex",
+      });
+      for (const pane of current.projects[0]!.tabs[0]!.nodes)
+        if (pane.kind === "pane") pane.sessionId = id();
+      const original = JSON.stringify(current);
+      const moved = applyWorkspaceOperation(current, {
+        kind: "pane.move",
+        projectId,
+        tabId,
+        paneId: second,
+        targetPaneId: paneId,
+        placement,
+        splitId: newSplit,
+        expectedVersion: 3,
+      });
+      const tab = moved.projects[0]!.tabs[0]!;
+      expect(tab.nodes.filter((n) => n.kind === "pane")).toEqual(
+        current.projects[0]!.tabs[0]!.nodes.filter((n) => n.kind === "pane"),
+      );
+      expect(tab.nodes).toHaveLength(5);
+      expect(JSON.stringify(current)).toBe(original);
+      validateLayout(tab);
+      if (placement === "center") {
+        expect(tab.nodes.find((n) => n.id === root)).toMatchObject({ first: second });
+        expect(tab.nodes.find((n) => n.id === nested)).toMatchObject({ first: paneId });
+      } else {
+        expect(tab.nodes.find((n) => n.id === root)).toMatchObject({
+          first: newSplit,
+          second: third,
+        });
+        expect(tab.nodes.find((n) => n.id === newSplit)).toMatchObject({
+          axis: ["left", "right"].includes(placement) ? "horizontal" : "vertical",
+          first: ["left", "top"].includes(placement) ? second : paneId,
+          second: ["left", "top"].includes(placement) ? paneId : second,
+        });
+      }
+      expect(() =>
+        applyWorkspaceOperation(moved, {
+          kind: "pane.move",
+          projectId,
+          tabId,
+          paneId: second,
+          targetPaneId: paneId,
+          placement,
+          splitId: id(),
+          expectedVersion: 3,
+        }),
+      ).toThrow(/changed on another client/);
+      expect(() =>
+        applyWorkspaceOperation(moved, {
+          kind: "pane.move",
+          projectId,
+          tabId,
+          paneId: second,
+          targetPaneId: second,
+          placement,
+          splitId: id(),
+          expectedVersion: 4,
+        }),
+      ).toThrow(/different panes/);
+    },
+  );
+  it("collapses the old root when moving sibling panes into a different split", () => {
+    const { state, projectId, tabId, paneId } = fixture();
+    const second = id(),
+      split = id(),
+      replacement = id();
+    const current = applyWorkspaceOperation(state, {
+      kind: "pane.split",
+      projectId,
+      tabId,
+      paneId,
+      expectedVersion: 1,
+      newPaneId: second,
+      splitId: split,
+      axis: "horizontal",
+      profile: "shell",
+    });
+    const moved = applyWorkspaceOperation(current, {
+      kind: "pane.move",
+      projectId,
+      tabId,
+      paneId,
+      targetPaneId: second,
+      placement: "bottom",
+      splitId: replacement,
+      expectedVersion: 2,
+    });
+    expect(moved.projects[0]!.tabs[0]!.root).toBe(replacement);
+    expect(moved.projects[0]!.tabs[0]!.nodes).toHaveLength(3);
+    expect(moved.projects[0]!.tabs[0]!.nodes.find((n) => n.id === replacement)).toMatchObject({
+      first: second,
+      second: paneId,
+      axis: "vertical",
+    });
+  });
+});
