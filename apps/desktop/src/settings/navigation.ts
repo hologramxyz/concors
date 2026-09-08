@@ -22,11 +22,17 @@ export interface SettingsNavGroup {
   readonly items: readonly SettingsNavItem[];
 }
 
+const ACCOUNT_SETTINGS_ITEM: SettingsNavItem = {
+  page: "account",
+  label: "Account",
+  icon: UserRound,
+};
+
 export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
   {
     label: "Personal",
     items: [
-      { page: "account", label: "Account", icon: UserRound },
+      ACCOUNT_SETTINGS_ITEM,
       { page: "appearance", label: "Appearance", icon: Palette },
       { page: "notifications", label: "Notifications", icon: Bell },
     ],
@@ -47,6 +53,6 @@ export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
 export function settingsNavItemFor(page: SettingsPage): SettingsNavItem {
   return (
     SETTINGS_NAV_GROUPS.flatMap((group) => group.items).find((item) => item.page === page) ??
-    SETTINGS_NAV_GROUPS[0]!.items[0]!
+    ACCOUNT_SETTINGS_ITEM
   );
 }
