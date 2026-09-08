@@ -20,6 +20,11 @@ test("workspace shortcuts create, search, split and close the active pane withou
     // Workspace actions must not escape a form dialog.
     await page.keyboard.press("Control+Shift+t");
     await expect(page.getByRole("menu")).toHaveCount(0);
+    expect(await page.evaluate(() => {
+      const event = new KeyboardEvent("keydown", { key: "w", code: "KeyW", ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true });
+      document.activeElement?.dispatchEvent(event);
+      return event.defaultPrevented;
+    })).toBe(true);
     await page.getByLabel("Folder on this machine").fill(directory);
     await page
       .getByRole("dialog")

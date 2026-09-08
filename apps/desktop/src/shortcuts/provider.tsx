@@ -9,6 +9,9 @@ export function ShortcutProvider({ children }: { children: ReactNode }) {
       const target = event.target instanceof Element ? event.target : null;
       const id = matchShortcut(event, isMac(), !!target?.closest(".xterm"));
       if (!id || event.defaultPrevented || event.getModifierState("AltGraph")) return;
+      // Reserve app chords even when a dialog or disabled action blocks execution.
+      // Otherwise browser defaults such as closing a window can run instead.
+      event.preventDefault();
       // Let dialogs, profile menus and text forms own their keyboard interaction.
       if (
         document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"]') &&
@@ -21,8 +24,6 @@ export function ShortcutProvider({ children }: { children: ReactNode }) {
         !target.closest(".xterm")
       )
         return;
-      // Reserve recognized app chords even when disconnected or at a layout limit.
-      event.preventDefault();
       event.stopImmediatePropagation();
       if (!event.repeat) commands.run(id);
     };
