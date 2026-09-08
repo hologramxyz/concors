@@ -26,7 +26,7 @@ test("new tab menu creates a named terminal only after choosing a profile", asyn
   const bounds = await tab.boundingBox();
   expect(bounds?.height).toBeLessThanOrEqual(25);
   await page.getByLabel("Terminal output").click();
-  await page.keyboard.type("printf 'configured-session\\n'");
+  await page.keyboard.type("printf 'configured-%s\\n' session");
   await page.keyboard.press("Enter");
   await expect(page.getByLabel("Terminal output")).toContainText("configured-session");
   await page.screenshot({ path: "test-results/project-controls.png" });
