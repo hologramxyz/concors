@@ -37,6 +37,15 @@ export const AgentInfoSchema = z.object({
   updatedAt: z.string().datetime(),
   revision: z.number().int().nonnegative(),
   pending: z.array(AgentPendingSchema).max(16),
+  attention: z
+    .object({
+      id: Id,
+      kind: z.enum(["done", "needs_input"]),
+      createdAt: z.string().datetime(),
+      seen: z.boolean(),
+    })
+    .nullable()
+    .default(null),
 });
 export type AgentInfo = z.infer<typeof AgentInfoSchema>;
 export const AgentItemSchema = z.object({
@@ -74,6 +83,7 @@ export const AgentOperationSchema = z.discriminatedUnion("kind", [
     sessionId: Id,
     before: z.number().int().positive().optional(),
   }),
+  z.object({ kind: z.literal("seen"), sessionId: Id, attentionId: Id }),
   z.object({ kind: z.literal("send"), sessionId: Id, text: z.string().trim().min(1).max(16000) }),
   z.object({ kind: z.literal("interrupt"), sessionId: Id, turnId: z.string().min(1) }),
   z.object({

@@ -16,13 +16,13 @@ interface AccountMenuProps {
   readonly onOpenSettings: () => void;
 }
 
-/** Sidebar footer: who is signed in, with account settings and sign out. */
+/** Sidebar footer: who is signed in, with settings and sign out. */
 export function AccountMenu({ auth, onSignOut, onOpenSettings }: AccountMenuProps) {
   const org = activeOrganization(auth);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        className="flex h-11 w-full items-center gap-2 rounded-md px-2 text-left hover:bg-sidebar-accent aria-expanded:bg-sidebar-accent"
+        className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left hover:bg-sidebar-accent aria-expanded:bg-sidebar-accent"
         aria-label={`Account: ${auth.user.name}`}
       >
         <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
@@ -30,23 +30,23 @@ export function AccountMenu({ auth, onSignOut, onOpenSettings }: AccountMenuProp
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13px] font-medium">{auth.user.name}</span>
-          <span className="block truncate text-[11px] text-muted-foreground">
-            {auth.user.email}
-          </span>
         </span>
         <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" side="top" className="w-56">
-        <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-          {org ? (org.isPersonal ? "Personal organization" : "Organization") : "Signed in"}
-          {org && <span className="block truncate text-foreground">{org.name}</span>}
+        <DropdownMenuLabel className="text-[13px] font-normal text-muted-foreground">
+          {org ? (org.isPersonal ? "Personal organization" : org.name) : "Signed in"}
+          <span className="mt-1 block truncate text-foreground">{auth.user.name}</span>
+          <span className="block truncate" title={auth.user.email}>
+            {auth.user.email}
+          </span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={onOpenSettings}>
+        <DropdownMenuItem className="text-[13px]" onSelect={onOpenSettings}>
           <Settings aria-hidden="true" />
-          Account settings
+          Settings
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={onSignOut}>
+        <DropdownMenuItem className="text-[13px]" onSelect={onSignOut}>
           <LogOut aria-hidden="true" />
           Sign out
         </DropdownMenuItem>

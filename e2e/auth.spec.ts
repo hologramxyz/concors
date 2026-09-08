@@ -115,14 +115,30 @@ test("the app is gated behind sign-in: sign in, restore on reload, sign out, cre
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(sidebar.getByRole("button", { name: `Account: ${USER.name}` })).toBeVisible();
   await expect(signInHeading).toHaveCount(0);
-  await expect(sidebar.getByText(USER.email)).toBeVisible();
+  await expect(sidebar.getByText(USER.email)).toHaveCount(0);
+  await expect(sidebar.getByRole("button", { name: "Settings", exact: true })).toHaveCount(0);
   expect(await page.evaluate((key) => localStorage.getItem(key), TOKEN_KEY)).toBe(
     "e2e-session-token",
   );
   expect(api.bearer.at(-1)).toBe("Bearer e2e-session-token");
 
   // Settings shows the account and its organization.
-  await sidebar.getByRole("button", { name: "Settings" }).click();
+  await sidebar.getByRole("button", { name: `Account: ${USER.name}` }).click();
+  await expect(page.getByRole("menu").getByText(USER.email)).toBeVisible();
+  const menu = page.getByRole("menu");
+  const nameBounds = await menu.getByText(USER.name, { exact: true }).boundingBox();
+  const emailBounds = await menu.getByText(USER.email, { exact: true }).boundingBox();
+  expect(emailBounds?.y).toBeGreaterThan(nameBounds?.y ?? 0);
+  await expect(menu.getByRole("menuitem", { name: "Settings", exact: true })).toHaveCSS(
+    "font-size",
+    "13px",
+  );
+  await expect(menu.getByRole("menuitem", { name: "Sign out", exact: true })).toHaveCSS(
+    "font-size",
+    "13px",
+  );
+
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
   await expect(page.getByText(ORG.name, { exact: true })).toBeVisible();
 
@@ -148,5 +164,6 @@ test("the app is gated behind sign-in: sign in, restore on reload, sign out, cre
   await page.getByLabel("Password").fill(PASSWORD);
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(sidebar.getByRole("button", { name: "Account: Grace Hopper" })).toBeVisible();
-  await expect(sidebar.getByText("grace@example.com")).toBeVisible();
+  await sidebar.getByRole("button", { name: "Account: Grace Hopper" }).click();
+  await expect(page.getByRole("menu").getByText("grace@example.com")).toBeVisible();
 });

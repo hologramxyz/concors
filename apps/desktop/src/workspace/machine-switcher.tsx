@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, Monitor, Plus } from "lucide-react";
+import { ChevronDown, Server, Plus } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,26 +28,19 @@ export function MachineSwitcher({
     <>
       <DropdownMenu>
         <DropdownMenuTrigger
-          className="flex h-14 w-full items-center gap-2 px-3 text-left hover:bg-sidebar-accent"
+          className="flex h-9 w-fit min-w-0 items-center gap-1.5 rounded-md px-1.5 text-left hover:bg-sidebar-accent"
           aria-label="Switch machine"
         >
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border bg-background">
-            <Monitor className="size-4" />
+          <Server className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span className="min-w-0 truncate text-[13px] font-medium">
+            {selected?.name ?? "This computer"}
           </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-[10px] tracking-wider text-muted-foreground uppercase">
-              Machine
-            </span>
-            <span className="block truncate text-[13px] font-medium">
-              {selected?.name ?? "This computer"}
-            </span>
-          </span>
-          <ChevronDown className="size-3.5" />
+          <ChevronDown className="size-3 shrink-0" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-64">
           {machines.map((machine) => (
             <DropdownMenuItem key={machine.id} onSelect={() => onSelect(machine.id)}>
-              <Monitor />
+              <Server />
               {machine.name}
               {machine.id === selectedId && (
                 <span className="ml-auto text-xs text-muted-foreground">Selected</span>
