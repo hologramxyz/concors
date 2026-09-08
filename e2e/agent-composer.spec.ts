@@ -94,7 +94,12 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     await page.getByLabel("Sub-agent activity").getByText("Agent update", { exact: true }).click();
     await expect(page.getByLabel("Sub-agent activity")).toContainText("Inspecting tests");
     await expect(page.getByLabel("Context window")).toContainText("25%");
-    await expect(page.getByLabel("Permission mode")).toBeDisabled();
+    await expect(page.getByLabel("Permission mode")).toBeEnabled();
+    await page.getByRole("button", { name: "Thinking effort", exact: true }).click();
+    await page.getByRole("option", { name: "Low", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "Thinking effort", exact: true }),
+    ).toHaveAttribute("data-value", "low");
     await expect(page.getByRole("heading", { name: "Preview", exact: true })).toBeVisible();
     await expect(page.getByRole("log").locator('[data-syntax="keyword"]').first()).toBeVisible();
     await page.getByRole("button", { name: "Copy code", exact: true }).click();
@@ -131,6 +136,11 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     const composer = await page.getByLabel("Message Codex").boundingBox();
     expect((composer?.x ?? 0) + (composer?.width ?? 0)).toBeLessThanOrEqual(390);
     await page.screenshot({ path: "test-results/agent-composer-mobile.png" });
+    await page.getByRole("button", { name: "Pane actions", exact: true }).click();
+    for (const name of ["Terminal", "Agent", "Codex", "Claude Code", "OpenCode"])
+      await expect(page.getByRole("menuitemradio", { name, exact: true })).toBeEnabled();
+    await page.getByRole("menuitemradio", { name: "Terminal", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Start terminal", exact: true })).toBeVisible();
     expect(errors).toEqual([]);
   } finally {
     await rm(directory, { recursive: true, force: true });
