@@ -125,6 +125,19 @@ test("the app is gated behind sign-in: sign in, restore on reload, sign out, cre
   // Settings shows the account and its organization.
   await sidebar.getByRole("button", { name: `Account: ${USER.name}` }).click();
   await expect(page.getByRole("menu").getByText(USER.email)).toBeVisible();
+  const menu = page.getByRole("menu");
+  const nameBounds = await menu.getByText(USER.name, { exact: true }).boundingBox();
+  const emailBounds = await menu.getByText(USER.email, { exact: true }).boundingBox();
+  expect(emailBounds?.y).toBeGreaterThan(nameBounds?.y ?? 0);
+  await expect(menu.getByRole("menuitem", { name: "Settings", exact: true })).toHaveCSS(
+    "font-size",
+    "13px",
+  );
+  await expect(menu.getByRole("menuitem", { name: "Sign out", exact: true })).toHaveCSS(
+    "font-size",
+    "13px",
+  );
+
   await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
   await expect(page.getByText(ORG.name, { exact: true })).toBeVisible();
