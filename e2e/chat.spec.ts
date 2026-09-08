@@ -82,6 +82,9 @@ test("shared chat streams, reloads, handles approvals and remains in global Agen
     await second.getByRole("button", { name: "Decline", exact: true }).click();
     await expect(page.getByLabel("Agent status: Done").first()).toBeVisible();
     await expect(row.getByRole("img", { name: "Agent status: Done" })).toBeVisible();
+    await expect(page.getByText(/^Worked for /)).toBeVisible();
+    await expect(page.getByText(/^Completed ·/)).toHaveCount(0);
+    await expect(page.getByLabel("Elapsed time", { exact: true })).toHaveCount(0);
     await expect(agentList.getByRole("img").locator("svg")).toHaveCount(0);
 
     await expect(page.getByRole("button", { name: "Allow once", exact: true })).toHaveCount(0);
@@ -101,6 +104,11 @@ test("shared chat streams, reloads, handles approvals and remains in global Agen
     await page.getByLabel("Message Codex").fill("hello again");
     await page.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(page.getByRole("log")).toContainText("Hello from Codex");
+    const replyFooter = page.getByRole("article").filter({ hasText: "Hello from Codex" }).last();
+    await expect(replyFooter.getByText(/^Worked for /)).toBeVisible();
+    await expect(
+      replyFooter.getByRole("button", { name: "Copy message", exact: true }),
+    ).toBeVisible();
     await page.screenshot({ path: "test-results/chat.png" });
     expect(errors).toEqual([]);
   } finally {

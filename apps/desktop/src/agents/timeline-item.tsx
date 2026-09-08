@@ -1,6 +1,7 @@
+import { formatDuration } from "./duration";
 import { extractToolCallFilePath } from "./paseo/extract-tool-call-file-path";
 import { useState } from "react";
-import { Bot, Check, ChevronRight, FileCode, Terminal, Wrench, XCircle } from "lucide-react";
+import { Bot, ChevronRight, FileCode, Terminal, Wrench, XCircle } from "lucide-react";
 import { AgentMarkdown, CopyButton } from "./markdown";
 import { PlanProgress } from "./plan-progress";
 import { BrailleSpinner } from "./activity";
@@ -11,7 +12,13 @@ import { buildToolCallDisplayModel } from "./paseo/tool-call-display";
 import type { ToolCallDetail } from "./paseo/agent-types";
 import { hasMeaningfulToolCallDetail } from "./paseo/tool-call-detail-state";
 
-export function TimelineItem({ item }: { item: AgentItem }) {
+export function TimelineItem({
+  item,
+  workedFor,
+}: {
+  item: AgentItem;
+  workedFor?: string | undefined;
+}) {
   const [open, setOpen] = useState(false);
   const data = item.presentation;
   if (item.kind === "user" || item.kind === "assistant")
@@ -29,8 +36,11 @@ export function TimelineItem({ item }: { item: AgentItem }) {
           )}
         </div>
         {item.kind === "assistant" && item.status !== "running" && (
-          <div className="mt-2 flex">
+          <div className="mt-2 flex items-center gap-2">
             <CopyButton text={item.text} />
+            {workedFor && (
+              <span className="text-[12px] text-muted-foreground">Worked for {workedFor}</span>
+            )}
           </div>
         )}
       </article>
@@ -39,9 +49,12 @@ export function TimelineItem({ item }: { item: AgentItem }) {
   if (item.kind === "system")
     return (
       <article className="flex items-center gap-2 text-[12px] text-muted-foreground">
-        <Check className="size-3" />
         <span>
-          {item.title} · {item.text}
+          {item.id === `turn:${item.turnId}` &&
+          item.status === "completed" &&
+          /^\d+s$/.test(item.text)
+            ? `Worked for ${formatDuration(Number(item.text.slice(0, -1)))}`
+            : `${item.title} · ${item.text}`}
         </span>
       </article>
     );
@@ -85,6 +98,8 @@ export function TimelineItem({ item }: { item: AgentItem }) {
   const filePath = extractToolCallFilePath(detail);
   return (
     <article
+      data-tool-status={item.status}
+      aria-busy={running}
       className="overflow-hidden rounded-xl border border-transparent bg-muted/20"
       aria-label={
         data?.type === "sub_agent"
@@ -133,7 +148,10 @@ export function TimelineItem({ item }: { item: AgentItem }) {
             ) : (
               <Bot className="size-4" />
             )}
-            <span title={child.id} className="truncate">
+            <span
+              title={child.id}
+              className={`truncate ${["running", "pending", "inProgress"].includes(child.status) ? "agent-shimmer" : ""}`}
+            >
               Agent {child.id.slice(0, 8)}
             </span>
             <span className="ml-auto text-muted-foreground">{child.status}</span>

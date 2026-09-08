@@ -1,3 +1,4 @@
+import { completedTurnFooters } from "./duration";
 import { AgentComposer } from "./composer";
 import { TimelineItem } from "./timeline-item";
 import { useViewedAgent } from "@/notifications/context";
@@ -121,6 +122,7 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
   const scroll = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   const [atBottom, setAtBottom] = useState(true);
+  const footers = completedTurnFooters(conversation.items);
   const latestPlan = conversation.items.findLast((item) => item.kind === "plan");
   const active = agent && ["starting", "working", "needs_input"].includes(agent.status);
   const connected = canEdit && connection?.state.status === "ready";
@@ -189,11 +191,13 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
             </button>
           )}
           {!conversation.ready && <Activity>Loading conversation…</Activity>}
-          {conversation.items.map((item) => (
-            <TimelineItem key={item.id} item={item} />
-          ))}
+          {conversation.items
+            .filter((item) => !footers.hidden.has(item.id))
+            .map((item) => (
+              <TimelineItem key={item.id} item={item} workedFor={footers.durations.get(item.id)} />
+            ))}
           {active && (
-            <Activity>
+            <Activity startedAt={agent.turnStartedAt}>
               {agent?.status === "starting"
                 ? "Starting agent…"
                 : agent?.status === "needs_input"
