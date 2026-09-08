@@ -88,6 +88,7 @@ export function NewTabMenu({
               <label className="block space-y-2">
                 <span>Terminal profile</span>
                 <select
+                  aria-label="Terminal profile"
                   name="profile"
                   defaultValue="shell"
                   disabled={disabled}
