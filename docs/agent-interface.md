@@ -46,7 +46,7 @@ parser licenses remain with the dependency.
 - Thinking cards show provider-authored summaries, never raw reasoning content.
 - Model choices and thinking efforts come from the machine's Codex model catalog.
   Settings are saved with the agent and broadcast across clients. Concurrent edits
-  reject stale revisions; controls cannot change during an active turn.
+  reject stale revisions. Controls remain available during active turns; changes apply to the next message.
 - Default permissions use workspace-write and on-request approvals. Auto-review
   sends `approvalsReviewer: auto_review` with the same sandbox (requires Codex
   0.115.0 or newer). Full access explicitly selects danger-full-access and no
@@ -84,3 +84,7 @@ follow-ups, and persisted settings/history after reload. Speech recognition is
 stubbed in that test; it does not establish microphone/service support on a device.
 The imported submit helper is tested for preserved drafts on failure and receipt
 retry during an active turn.
+
+Pane profile changes detach the view binding without stopping its agent or terminal.
+The previous session remains discoverable. Workspace source packages are excluded
+from Vite prebundling so changed schemas reach the development client immediately.

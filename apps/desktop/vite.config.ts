@@ -21,6 +21,12 @@ export default defineConfig(({ mode }) => {
       alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
     },
 
+    // Workspace schemas must stay live while the daemon/client protocol evolves.
+    optimizeDeps: {
+      exclude: ["@concors/protocol", "@concors/daemon-client", "@concors/api-client"],
+      include: ["zod"],
+    },
+
     // Tauri expects a fixed port and fails if it is taken.
     clearScreen: false,
     server: {
