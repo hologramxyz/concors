@@ -155,7 +155,7 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
         role="log"
         aria-label="Chat timeline"
         aria-live="off"
-        className="chat-scroll min-h-0 flex-1 overflow-y-auto px-5 py-4"
+        className="chat-scroll min-h-0 flex-1 overflow-y-auto px-3 py-4"
         onScroll={() => {
           const el = scroll.current;
           if (!el) return;
@@ -163,7 +163,7 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
           setAtBottom(follow.current);
         }}
       >
-        <div className="mx-auto max-w-3xl space-y-5">
+        <div className="mx-auto max-w-5xl space-y-5">
           {conversation.hasMore && (
             <button
               className={button}
@@ -216,8 +216,8 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
           Latest
         </button>
       )}
-      <div className="max-h-[55%] shrink-0 overflow-y-auto px-4 pt-2 pb-4">
-        <div className="mx-auto max-w-3xl space-y-3">
+      <div className="max-h-[55%] shrink-0 overflow-y-auto px-3 pt-2 pb-3">
+        <div className="mx-auto max-w-5xl space-y-3">
           {agent?.pending.map((pending) => (
             <PendingInput
               key={pending.id}
