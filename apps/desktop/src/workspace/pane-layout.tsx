@@ -336,23 +336,26 @@ function Pane({
       ) : (
         <ChatPane project={project} tab={tab} node={node} canEdit={canEdit} />
       )}
-      {canDrop && drop && (
-        <div
-          data-testid="pane-drop-preview"
-          data-placement={drop}
-          className={`pointer-events-none absolute z-30 flex items-center justify-center rounded border-2 border-primary bg-primary/15 text-sm font-medium text-foreground ${
-            drop === "left"
-              ? "inset-y-0 left-0 w-1/2"
-              : drop === "right"
-                ? "inset-y-0 right-0 w-1/2"
-                : drop === "top"
-                  ? "inset-x-0 top-0 h-1/2"
-                  : drop === "bottom"
-                    ? "inset-x-0 bottom-0 h-1/2"
-                    : "inset-0"
-          }`}
-        >
-          {drop === "center" ? "Swap panes" : "Move into split"}
+      {canDrop && (
+        <div className="pointer-events-none absolute inset-0 z-30" data-testid="pane-drop-targets">
+          {(
+            [
+              ["top", "Move above", "inset-x-1 top-1 h-[24%]"],
+              ["bottom", "Move below", "inset-x-1 bottom-1 h-[24%]"],
+              ["left", "Move left", "inset-y-1/4 left-1 w-[24%]"],
+              ["right", "Move right", "inset-y-1/4 right-1 w-[24%]"],
+              ["center", "Swap panes", "inset-1/4"],
+            ] as const
+          ).map(([placement, label, area]) => (
+            <div
+              key={placement}
+              data-drop-zone={placement}
+              data-active={drop === placement}
+              className={`absolute flex items-center justify-center rounded-md border p-2 text-center text-[12px] font-medium ${area} ${drop === placement ? "border-primary bg-primary/90 text-primary-foreground" : "border-primary/40 bg-background/90 text-foreground"}`}
+            >
+              {label}
+            </div>
+          ))}
         </div>
       )}
     </section>
