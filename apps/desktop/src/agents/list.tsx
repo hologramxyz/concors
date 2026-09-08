@@ -61,8 +61,8 @@ export function AgentsView({
         <Bot className="size-10 text-muted-foreground/50" />
         <h2 className="text-lg font-medium">All your agents</h2>
         <p className="max-w-sm text-sm text-muted-foreground">
-          Choose Unified chat in a project pane to start Codex. Conversations across projects will
-          appear here.
+          Choose Agent in a project pane to start Codex. Conversations across projects will appear
+          here.
         </p>
       </div>
     );

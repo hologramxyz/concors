@@ -26,8 +26,8 @@ test("shared chat streams, reloads, handles approvals and remains in global Agen
       .click();
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("button", { name: "Pane actions", exact: true }).click();
-    await page.getByRole("menuitemradio", { name: "Unified chat", exact: true }).click();
-    await page.getByRole("button", { name: "Start Codex chat", exact: true }).click();
+    await page.getByRole("menuitemradio", { name: "Agent", exact: true }).click();
+    await page.getByRole("button", { name: "Start Codex agent", exact: true }).click();
     await expect(page.getByLabel("Agent status: Ready").first()).toBeVisible();
     await page.getByLabel("Message Codex").fill("hold this stream");
     await page.getByRole("button", { name: "Send message", exact: true }).click();
