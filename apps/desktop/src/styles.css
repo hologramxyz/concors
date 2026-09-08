@@ -321,6 +321,17 @@
   color: var(--muted-foreground);
   cursor: pointer;
 }
+.agent-control.agent-control-value {
+  width: auto;
+  min-width: 28px;
+  max-width: min(220px, 100%);
+  gap: 6px;
+  padding-inline: 7px;
+  font-size: 12px;
+}
+.agent-control > svg {
+  flex-shrink: 0;
+}
 .agent-control:hover,
 .agent-control[data-state="open"] {
   background: var(--muted);
