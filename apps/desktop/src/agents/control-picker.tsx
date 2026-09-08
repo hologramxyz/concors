@@ -16,6 +16,8 @@ export function ControlPicker({
   disabled,
   onSelect,
   footer,
+  showValue = false,
+  selectedLabel,
 }: {
   label: string;
   value: string;
@@ -24,6 +26,8 @@ export function ControlPicker({
   disabled?: boolean;
   onSelect: (id: string) => void;
   footer?: ReactNode;
+  showValue?: boolean;
+  selectedLabel?: string;
 }) {
   const [open, setOpen] = useState(false),
     [query, setQuery] = useState(""),
@@ -37,6 +41,8 @@ export function ControlPicker({
       restoreFocus.current = false;
     }
   }, [open, disabled]);
+  const currentLabel =
+    selectedLabel ?? options.find((option) => option.id === value)?.label ?? value;
   const visible = options.filter((o) =>
     `${o.label} ${o.description ?? ""}`.toLowerCase().includes(query.toLowerCase()),
   );
@@ -59,11 +65,12 @@ export function ControlPicker({
         type="button"
         aria-label={label}
         data-value={value}
-        title={`${label}: ${options.find((o) => o.id === value)?.label ?? value}`}
+        title={`${label}: ${currentLabel}`}
         disabled={disabled}
-        className="agent-control"
+        className={`agent-control ${showValue ? "agent-control-value" : ""}`}
       >
         {icon}
+        {showValue && <span className="truncate">{currentLabel}</span>}
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content

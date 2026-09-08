@@ -1,3 +1,4 @@
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { visibleAgentSessions } from "./visible-sessions";
 import { AgentLoadingIcon } from "./activity";
 import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
@@ -17,6 +18,7 @@ export function AgentSidebar({
   const agents = [
     ...visible.chats.map((agent) => ({
       id: agent.id,
+      projectId: agent.projectId,
       name: agent.name,
       updatedAt: agent.updatedAt,
       running: agent.status === "starting" || agent.status === "working",
@@ -33,6 +35,7 @@ export function AgentSidebar({
     })),
     ...visible.terminals.map((session) => ({
       id: session.id,
+      projectId: session.projectId,
       name:
         TAB_PROFILES.find((profile) => profile.profile === session.profile)?.label ??
         session.profile,
@@ -49,33 +52,50 @@ export function AgentSidebar({
     <ul className="mt-1 space-y-0.5">
       {agents.map((agent) => {
         const { running, status, unread } = agent;
+        const projectName =
+          workspace?.projects.find((project) => project.id === agent.projectId)?.name ??
+          "Project no longer available";
         return (
           <li key={agent.id}>
-            <button
-              type="button"
-              title={`${agent.name} · ${status}${unread ? " · Unread update" : ""}`}
-              className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[13px] hover:bg-sidebar-accent"
-              onClick={() => onSelect(agent.id)}
-            >
-              <span
-                role="img"
-                aria-label={`Agent status: ${status}`}
-                className="relative flex size-4 shrink-0 items-center justify-center"
-              >
-                {unread && (
+            <Tooltip delayDuration={250}>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[13px] hover:bg-sidebar-accent"
+                  onClick={() => onSelect(agent.id)}
+                >
                   <span
-                    aria-label="Unread agent update"
-                    className="absolute inset-0 rounded-full ring-1 ring-muted-foreground/40"
-                  />
-                )}
-                {running ? (
-                  <AgentLoadingIcon />
-                ) : (
-                  <span className={`size-2.5 rounded-full border border-black/15 ${agent.color}`} />
-                )}
-              </span>
-              <span className="min-w-0 flex-1 truncate">{agent.name}</span>
-            </button>
+                    role="img"
+                    aria-label={`Agent status: ${status}`}
+                    className="relative flex size-4 shrink-0 items-center justify-center"
+                  >
+                    {unread && (
+                      <span
+                        aria-label="Unread agent update"
+                        className="absolute inset-0 rounded-full ring-1 ring-muted-foreground/40"
+                      />
+                    )}
+                    {running ? (
+                      <AgentLoadingIcon />
+                    ) : (
+                      <span
+                        className={`size-2.5 rounded-full border border-black/15 ${agent.color}`}
+                      />
+                    )}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">{agent.name}</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={6}>
+                <div className="min-w-0">
+                  <p className="font-medium break-words">{projectName}</p>
+                  <p className="opacity-75">
+                    {status}
+                    {unread ? " · Unread update" : ""}
+                  </p>
+                </div>
+              </TooltipContent>
+            </Tooltip>
           </li>
         );
       })}

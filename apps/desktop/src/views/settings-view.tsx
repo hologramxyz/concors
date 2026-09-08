@@ -65,16 +65,19 @@ export function SettingsView({
         />
       </Section>
 
-      <SshKeysSection key={`keys-${org?.id ?? ""}`} organization={org} />
-
-      <BillingSection key={`billing-${org?.id ?? ""}`} organization={org} />
-
-      <NotificationSettings />
-      <Section title="Appearance" description="How Concors looks on this device.">
+      <Section
+        title="Appearance"
+        description="One theme for your workspace, agent chat, and terminals."
+      >
         <Row label="Theme" hint="Follow the system or pick one explicitly.">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="min-w-28 justify-between">
+              <Button
+                aria-label="Theme"
+                variant="outline"
+                size="sm"
+                className="min-w-28 justify-between"
+              >
                 <span className="flex items-center gap-2">
                   <CurrentThemeIcon aria-hidden="true" />
                   {THEME_LABEL[theme]}
@@ -97,6 +100,12 @@ export function SettingsView({
           </DropdownMenu>
         </Row>
       </Section>
+
+      <SshKeysSection key={`keys-${org?.id ?? ""}`} organization={org} />
+
+      <BillingSection key={`billing-${org?.id ?? ""}`} organization={org} />
+
+      <NotificationSettings />
 
       <Section
         title="Daemon"

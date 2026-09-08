@@ -53,13 +53,21 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     await page.getByLabel("Agent and model", { exact: true }).click();
     await page.getByRole("combobox", { name: "Search agent and model" }).fill("Fixture");
     await page.getByRole("option", { name: "Fixture model", exact: true }).click();
+    await expect(page.getByLabel("Agent and model", { exact: true })).toHaveText("Fixture model");
     await expect(page.getByLabel("Thinking effort")).toBeEnabled();
     await page.getByLabel("Thinking effort", { exact: true }).click();
     await page.getByRole("option", { name: "High", exact: true }).click();
+    await expect(page.getByLabel("Thinking effort", { exact: true })).toHaveText("High");
     await expect(page.getByLabel("Permission mode")).toBeEnabled();
     await page.getByLabel("Permission mode", { exact: true }).click();
     await page.getByRole("option", { name: /Auto-review/ }).click();
     await expect(page.getByLabel("Permission mode")).toHaveAttribute("data-value", "auto-review");
+    await expect(page.getByLabel("Permission mode", { exact: true })).toHaveText("Auto-review");
+    await expect(
+      page.getByRole("button", { name: "Attach files", exact: true }).locator("svg"),
+    ).toHaveClass(/lucide-plus/);
+    await expect(page.getByLabel("Plan mode", { exact: true })).toHaveText("");
+    await expect(page.getByLabel("Speed", { exact: true })).toHaveText("");
     await expect(page.getByLabel("Permission mode")).toBeEnabled();
     await page.getByLabel("Upload files").setInputFiles({
       name: "notes.txt",
@@ -116,6 +124,7 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     await expect(
       page.getByRole("button", { name: "Thinking effort", exact: true }),
     ).toHaveAttribute("data-value", "low");
+    await expect(page.getByLabel("Thinking effort", { exact: true })).toHaveText("Low");
     await expect(page.getByRole("heading", { name: "Preview", exact: true })).toBeVisible();
     await expect(page.getByRole("log").locator('[data-syntax="keyword"]').first()).toBeVisible();
     await page.getByRole("button", { name: "Copy code", exact: true }).click();
@@ -146,6 +155,12 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     await expect(page.getByRole("button", { name: "Queue message", exact: true })).toHaveCount(0);
     await page.reload();
     await expect(page.getByLabel("Permission mode")).toHaveAttribute("data-value", "auto-review");
+    await expect(page.getByLabel("Permission mode", { exact: true })).toHaveText("Auto-review");
+    await expect(
+      page.getByRole("button", { name: "Attach files", exact: true }).locator("svg"),
+    ).toHaveClass(/lucide-plus/);
+    await expect(page.getByLabel("Plan mode", { exact: true })).toHaveText("");
+    await expect(page.getByLabel("Speed", { exact: true })).toHaveText("");
     await expect(page.getByRole("log")).toContainText("Attached: notes.txt");
     await expect(page.getByTestId("pane-agent-loading")).toHaveCount(0);
     await expect(page.getByRole("log").locator(".agent-shimmer")).toHaveCount(0);
