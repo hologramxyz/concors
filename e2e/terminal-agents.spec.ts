@@ -21,12 +21,14 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
       .getByRole("dialog")
       .getByRole("button", { name: "Add project", exact: true })
       .click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
     const agents = page
       .getByRole("navigation", { name: "Primary" })
       .getByRole("region", { name: "Agents", exact: true });
     await expect(agents.getByRole("button", { name: /Open in terminal/ })).toHaveCount(0);
     // Starting an agent from a normal shell must be discovered without changing its profile.
     const shellPane = page.getByRole("region", { name: "Terminal pane", exact: true });
+    await expect(shellPane.getByLabel("Terminal output")).toHaveAttribute("aria-busy", "false");
     const shellPaneId = await shellPane.getAttribute("data-pane-id");
     await shellPane.locator(".xterm-helper-textarea").focus();
     await page.keyboard.type("codex");
@@ -50,19 +52,53 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
       .toBe(shellPaneId);
     await second.keyboard.type("test-working");
     await second.keyboard.press("Enter");
-    await expect(agents.getByLabel("Agent status: Working")).toBeVisible();
-    await expect(second.getByLabel("Agent status: Working")).toBeVisible();
+    await expect(
+      agents.getByRole("button", { name: /Agent status: Working.*Codex/ }),
+    ).toBeVisible();
+    await expect(
+      second.getByRole("button", { name: /Agent status: Working.*Codex/ }),
+    ).toBeVisible();
     await second.keyboard.type("test-approval");
     await second.keyboard.press("Enter");
-    await expect(agents.getByLabel("Agent status: Needs input")).toBeVisible();
+    await expect(
+      agents.getByRole("button", { name: /Agent status: Needs input.*Codex/ }),
+    ).toBeVisible();
     await second.keyboard.type("test-idle");
     await second.keyboard.press("Enter");
     await expect(shellAgent).toBeVisible();
-    await expect(agents.getByLabel("Agent status: Working")).toHaveCount(0);
+    await expect(agents.getByRole("button", { name: /Agent status: Working.*Codex/ })).toHaveCount(
+      0,
+    );
     await second.keyboard.type("exit");
     await second.keyboard.press("Enter");
     await expect(shellAgent).toHaveCount(0);
     await expect(agents.getByRole("button", { name: /Open in terminal/ })).toHaveCount(0);
+
+    // Claude redraws its screen without a title update. Both sidebars must follow
+    // real working / permission / completed UI, including after observer reconnect.
+    await second.keyboard.type("claude");
+    await second.keyboard.press("Enter");
+    const claude = agents.getByRole("button", { name: /Open in terminal.*Claude/ });
+    await expect(claude).toBeVisible();
+    for (const [command, label] of [
+      ["test-working", "Working"],
+      ["test-approval", "Needs input"],
+      ["test-idle", "Open in terminal"],
+    ]) {
+      await second.keyboard.type(command);
+      await second.keyboard.press("Enter");
+      for (const client of [page, second])
+        await expect(
+          client.getByRole("button", { name: new RegExp(`Agent status: ${label}.*Claude`) }),
+        ).toBeVisible();
+    }
+    await second.reload();
+    await second.getByRole("button", { name: /Open in terminal.*Claude/ }).click();
+    await expect(second.getByLabel("Terminal output")).toHaveAttribute("aria-busy", "false");
+    await second.locator(".xterm-helper-textarea").focus();
+    await second.keyboard.type("exit");
+    await second.keyboard.press("Enter");
+    await expect(claude).toHaveCount(0);
 
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Codex", exact: true }).click();

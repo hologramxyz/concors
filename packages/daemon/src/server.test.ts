@@ -77,6 +77,7 @@ describe("WebSocket handshake", () => {
           "pane-rearrangement",
           "workspace-pane-rearrangement",
           "directional-pane-split",
+          "terminal-recovery",
         ],
       });
       expect(connection.state.status).toBe("ready");

@@ -14,6 +14,9 @@ it("resolves installed agent executables and rejects missing profiles", () => {
       command: executable,
       args: [],
     });
+    expect(resolveProfile("codex", process.platform, { PATH: directory }, true).args).toEqual([
+      "resume",
+    ]);
     expect(() => resolveProfile("claude", process.platform, { PATH: directory })).toThrow(
       "not installed",
     );
@@ -33,6 +36,9 @@ it("routes Windows npm CLI shims through cmd with escaped metacharacters", () =>
     expect(result.args).toContain("/d /s /c");
     expect(result.args).toContain("^&");
     expect(result.args).toContain("^ ");
+    expect(
+      resolveProfile("claude", "win32", { PATH: directory, ComSpec: "cmd.exe" }, true).args,
+    ).toContain(" --resume");
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

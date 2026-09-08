@@ -31,6 +31,7 @@ export class DaemonState {
         "pane-rearrangement",
         "workspace-pane-rearrangement",
         "directional-pane-split",
+        "terminal-recovery",
       ],
     };
   }
