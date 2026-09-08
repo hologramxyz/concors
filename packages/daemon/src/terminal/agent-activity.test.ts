@@ -16,6 +16,46 @@ const prompt = (above: string[], input = "❯ ") => [
   "  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents",
 ];
 
+// Captured from the installed Claude Code 2.1.236 during a real, tools-disabled
+// explanation turn. Only its status chrome is retained; title updates are optional.
+const claude236 = (status: string, footer: string) => [
+  status,
+  "                                                                                                            ● high · /effort",
+  "──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+  "❯ ",
+  "──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+  footer,
+];
+
+it.each(["", "✳ Claude Code"])(
+  "detects the captured Claude 2.1.236 layout with title %j",
+  (title) => {
+    const footer =
+      "  ⏸ plan mode on (shift+tab to cycle) · PR #30 · esc to interrupt · ← for agents       /rc";
+    expect(
+      terminalAgentActivity(
+        "claude",
+        title,
+        claude236("✽ Metamorphosing… (8s · ↓ 490 tokens)", footer),
+      ),
+    ).toBe("working");
+    // The footer remains authoritative while the spinner is temporarily absent in a redraw.
+    expect(terminalAgentActivity("claude", title, claude236("", footer))).toBe("working");
+    // And the spinner is sufficient when the footer has not yet been updated.
+    expect(
+      terminalAgentActivity("claude", title, claude236("✻ Ruminating…", "  ⏵⏵ auto mode on")),
+    ).toBe("working");
+    expect(
+      terminalAgentActivity(
+        "claude",
+        title,
+        claude236("✻ Cooked for 8s", "  ⏸ plan mode on (shift+tab to cycle) · ← for agents"),
+        "working",
+      ),
+    ).toBe("idle");
+  },
+);
+
 it.each(["*", "·", "✢", "✶", "✻", "✽"])(
   "detects Claude's %s spinner without OSC titles",
   (spinner) => {
