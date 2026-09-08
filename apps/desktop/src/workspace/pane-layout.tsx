@@ -112,12 +112,8 @@ export function PaneLayout(props: Props) {
       direction,
     );
     const pane = panes.find((pane) => pane.dataset.paneId === next);
-    // Keep directional navigation out of chat editing mode so the next arrow can navigate too.
-    // Terminal inputs consume app shortcuts, while composer inputs retain text selection.
-    const target =
-      pane?.querySelector<HTMLElement>(".xterm textarea:not(:disabled)") ??
-      pane?.querySelector<HTMLElement>("header") ??
-      pane;
+    // Focus the input immediately; both terminal and Agent inputs allow pane shortcuts.
+    const target = pane?.querySelector<HTMLElement>("textarea:not(:disabled)") ?? pane;
     target?.focus({ preventScroll: true });
   };
   useCommand("focus-left", !!activePane, () => focusNeighbor("left"));

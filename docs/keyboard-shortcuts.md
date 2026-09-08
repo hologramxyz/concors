@@ -25,14 +25,15 @@ to the browser's own tab navigation. Ctrl+Shift+W is not an app shortcut: it can
 window. The former D/E split and W/X close shortcuts have been removed from the app mappings.
 
 Pane navigation follows rendered geometry and does not wrap at outer edges. Directional navigation
-lands on an Agent pane header so consecutive arrows continue navigating; terminals receive input focus. Tab navigation
+focuses the target terminal or Agent input, ready to type; consecutive arrows continue navigating. Tab navigation
 follows the visible tab order and wraps. Switching projects restores the last selected tab and
 focused pane remembered by this client during the current app session; missing tabs/panes fall
 back to the first available item. Active project/tab selection continues to sync through the
 workspace; keyboard focus remains local.
 
-Inside a chat composer or other text field, Ctrl+Shift+Arrow retains text selection. Workspace shortcuts work directly in the chat composer. Click/focus
-the pane header to use directional pane navigation there. Terminals allow workspace shortcuts, and their
+Ctrl+Shift+Arrow navigates directly from the Agent composer as well as terminals. It does not
+select text in the Agent composer; use Shift+Arrow or the mouse for selection there. Ordinary
+form fields retain their native Ctrl+Shift+Arrow editing behavior. Terminals allow workspace shortcuts, and their
 recognized keys are consumed before reaching the PTY. Forms and dialogs retain their own keys.
 Unsent chat text and attachments survive pane/tab navigation in memory for the current daemon connection.
 Outside terminals, Ctrl+K (Command+K on Mac) remains a search alias.
