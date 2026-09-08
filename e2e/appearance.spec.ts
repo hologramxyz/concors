@@ -54,6 +54,10 @@ test("appearance follows the system and uses a shared neutral terminal/chat surf
     await page.screenshot({ path: "test-results/neutral-terminal.png" });
     await page.getByRole("button", { name: /^Account:/ }).click();
     await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
+    await page
+      .getByRole("navigation", { name: "Settings" })
+      .getByRole("button", { name: "Appearance", exact: true })
+      .click();
     await expect(page.getByRole("heading", { name: "Appearance", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Theme", exact: true })).toHaveText("System");
     await page.getByRole("button", { name: "Theme", exact: true }).click();
@@ -64,6 +68,10 @@ test("appearance follows the system and uses a shared neutral terminal/chat surf
     // The stored explicit preference overrides a dark system preference.
     await page.getByRole("button", { name: /^Account:/ }).click();
     await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
+    await page
+      .getByRole("navigation", { name: "Settings" })
+      .getByRole("button", { name: "Appearance", exact: true })
+      .click();
     await expect(page.getByRole("button", { name: "Theme", exact: true })).toHaveText("Light");
     await page.getByRole("button", { name: "Theme", exact: true }).click();
     await page.getByRole("menuitem", { name: "Dark", exact: true }).click();

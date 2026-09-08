@@ -5,6 +5,7 @@ const Size = { cols: z.number().int().min(10).max(240), rows: z.number().int().m
 export const TerminalProfileSchema = z.enum(["shell", "codex", "claude", "opencode"]);
 export type TerminalProfile = z.infer<typeof TerminalProfileSchema>;
 export const TerminalInfoSchema = z.object({
+  agentActivity: z.enum(["unknown", "idle", "working", "needs_input"]).optional(),
   id: Id,
   projectId: Id,
   profile: TerminalProfileSchema,
