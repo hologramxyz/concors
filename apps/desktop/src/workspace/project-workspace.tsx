@@ -68,6 +68,8 @@ export function ProjectWorkspace({
         name: name || (TAB_PROFILES.find((item) => item.profile === profile)?.label ?? "Terminal"),
         profile,
       });
+      // The mounted ChatPane prepares its session, including split and converted panes.
+      if (profile === "chat") return;
       const current = connection.workspace;
       const updated = current?.projects.find((item) => item.id === project.id);
       if (current?.epoch !== epoch || !updated || connection.state.status !== "ready")
@@ -82,13 +84,10 @@ export function ProjectWorkspace({
         paneId,
         expectedVersion: updated.version,
       };
-      const result =
-        profile === "chat"
-          ? await connection.requestAgent(target, crypto.randomUUID())
-          : await connection.requestTerminal(
-              { ...target, expectedSessionId: null, cols: 80, rows: 24 },
-              crypto.randomUUID(),
-            );
+      const result = await connection.requestTerminal(
+        { ...target, expectedSessionId: null, cols: 80, rows: 24 },
+        crypto.randomUUID(),
+      );
       if (result.outcome.status === "error") throw new Error(result.outcome.message);
     })()
       .catch((cause: unknown) => {
