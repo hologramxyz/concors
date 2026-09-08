@@ -1,3 +1,4 @@
+import { detectTerminalAgent, readTerminalProcesses } from "./agent-process.ts";
 import { randomUUID } from "node:crypto";
 import { realpath, stat } from "node:fs/promises";
 import { isAbsolute } from "node:path";
@@ -14,12 +15,18 @@ export class TerminalManager {
   readonly #terminalChanged: (session: TerminalInfo) => void;
   #queue: Promise<unknown> = Promise.resolve();
   #closed = false;
+  #scanning = false;
+  readonly #agentPoll: ReturnType<typeof setInterval>;
 
   constructor(
     store: WorkspaceStore,
     workspaceChanged: () => void,
     terminalChanged: (session: TerminalInfo) => void = () => undefined,
   ) {
+    this.#agentPoll = setInterval(() => {
+      void this.scanAgents();
+    }, 1000);
+    this.#agentPoll.unref();
     this.#store = store;
     this.#workspaceChanged = workspaceChanged;
     this.#terminalChanged = terminalChanged;
@@ -31,6 +38,25 @@ export class TerminalManager {
           error: "Daemon restarted; the previous process is no longer attached",
         });
       }
+  }
+
+  private async scanAgents(): Promise<void> {
+    if (this.#closed || this.#scanning) return;
+    const shells = [...this.#runtimes.values()].filter(
+      (runtime) => runtime.info.profile === "shell" && runtime.info.status === "running",
+    );
+    if (!shells.length) return;
+    this.#scanning = true;
+    try {
+      const processes = await readTerminalProcesses();
+      if (this.#closed) return;
+      for (const runtime of shells)
+        runtime.detectAgent(detectTerminalAgent(runtime.pid, processes));
+    } catch {
+      // Process enumeration can be unavailable temporarily; retain the last observed state.
+    } finally {
+      this.#scanning = false;
+    }
   }
 
   private save(session: TerminalInfo): void {
@@ -183,6 +209,7 @@ export class TerminalManager {
   }
   close(): void {
     this.#closed = true;
+    clearInterval(this.#agentPoll);
     for (const runtime of this.#runtimes.values()) runtime.dispose();
     this.#runtimes.clear();
   }

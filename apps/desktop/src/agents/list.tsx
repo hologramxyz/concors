@@ -37,7 +37,10 @@ export function AgentSidebar({
       id: session.id,
       projectId: session.projectId,
       name:
-        TAB_PROFILES.find((profile) => profile.profile === session.profile)?.label ??
+        TAB_PROFILES.find(
+          (profile) => profile.profile === (session.detectedAgent ?? session.profile),
+        )?.label ??
+        session.detectedAgent ??
         session.profile,
       updatedAt: session.startedAt,
       running: session.status === "starting",
