@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-export const THEME_PREFERENCES = ["light", "dark", "system"] as const;
+export const THEME_PREFERENCES = ["system", "dark", "light"] as const;
 export type ThemePreference = (typeof THEME_PREFERENCES)[number];
 export type ResolvedTheme = "light" | "dark";
 
