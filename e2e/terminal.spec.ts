@@ -23,7 +23,8 @@ test("two devices use the same terminal and recover its screen after reload", as
       .getByRole("button", { name: "Add project", exact: true })
       .click();
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("button", { name: "Start terminal", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Start terminal", exact: true })).toHaveCount(0);
     await expect(page.getByLabel("Terminal output")).toBeVisible();
     await expect(page.getByRole("button", { name: "Take control", exact: true })).toHaveCount(0);
 
