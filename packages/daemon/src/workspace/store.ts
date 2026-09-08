@@ -204,7 +204,10 @@ export class WorkspaceStore {
       const tab = project?.tabs.find((t) => t.id === op.tabId);
       const pane = tab?.nodes.find((n) => n.id === op.paneId);
       if (!project || !pane || pane.kind !== "pane") throw new Error("Pane no longer exists");
-      if (project.version !== op.expectedVersion || pane.sessionId !== op.expectedSessionId)
+      if (
+        (!op.recover && project.version !== op.expectedVersion) ||
+        pane.sessionId !== op.expectedSessionId
+      )
         throw new Error("Pane changed on another client; refresh before starting");
       if (pane.profile === "chat" || pane.profile !== info.profile)
         throw new Error("Select a terminal profile before starting");
