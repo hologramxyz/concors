@@ -161,7 +161,7 @@ function Pane({
       }}
       tabIndex={-1}
       aria-label={`${PROFILE_LABELS[node.profile]} pane`}
-      className={`relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border ${node.profile === "chat" ? "bg-card" : "bg-[#15151b] text-[#e4e4ea]"}`}
+      className={`relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border ${node.profile === "chat" ? "bg-card" : "bg-[var(--terminal-background)] text-[var(--terminal-foreground)]"}`}
     >
       <header
         draggable={canDrag && tab.nodes.length > 1}
