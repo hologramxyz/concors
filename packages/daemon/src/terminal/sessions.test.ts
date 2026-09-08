@@ -165,11 +165,29 @@ it("shares a real PTY, transfers control, replays its screen, rebinds and record
   for (const c of connections) c.disconnect();
   await server.close();
   server = createDaemonServer(config, options);
-  const after = await open(await server.listen());
+  const restartUrl = await server.listen();
+  const after = await open(restartUrl);
   const sessions = await request(after.connection, { kind: "list" });
   expect(sessions.find((s) => s.id === next[0]!.id)?.status).toBe("interrupted");
   expect((await request(after.connection, start, receipt))[0]?.id).toBe(sessionId);
   expect(await request(after.connection, { kind: "list" })).toHaveLength(2);
+  const recover: TerminalOperation = {
+    ...start,
+    recover: true,
+    tabId: newTab,
+    paneId: newPane,
+    expectedVersion: 0, // Recovery of this exact binding tolerates unrelated project changes.
+    expectedSessionId: next[0]!.id,
+  };
+  const other = await open(restartUrl);
+  const [recovered, duplicate] = await Promise.all([
+    request(after.connection, recover),
+    request(other.connection, recover),
+  ]);
+  expect(recovered[0]?.status).toBe("running");
+  expect(duplicate[0]?.id).toBe(recovered[0]?.id);
+  expect(await request(after.connection, { kind: "list" })).toHaveLength(3);
+  await expect(request(after.connection, { ...recover, epoch: randomUUID() })).rejects.toThrow();
 }, 15000);
 
 it("rejects network exposure before starting a terminal-enabled daemon", () => {
