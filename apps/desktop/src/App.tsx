@@ -4,7 +4,6 @@ import { ShortcutGuide } from "@/shortcuts/guide";
 import { findSessionPane, type PaneFocusRequest } from "@/workspace/session-pane";
 import { NotificationProvider } from "@/notifications/provider";
 import { AgentsProvider } from "@/agents/state";
-import { AgentsView } from "@/agents/list";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { describeDaemonEndpoint, type DaemonEndpoint } from "@concors/daemon-client";
 import type { WorkspaceOperation } from "@concors/protocol";
@@ -57,7 +56,6 @@ function AppContent() {
     );
   };
   const [paneFocus, setPaneFocus] = useState<PaneFocusRequest | null>(null);
-  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [view, setView] = useState<View>("projects");
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -100,14 +98,7 @@ function AppContent() {
     (id: string) => {
       const target = findSessionPane(transport?.workspace ?? null, id);
       if (!target) {
-        if (transport?.terminals.some((session) => session.id === id)) {
-          setError(
-            "This terminal's pane has been closed. Use Attach an existing session in a project pane to reopen it.",
-          );
-        } else {
-          setSelectedAgent(id);
-          setView("agents");
-        }
+        setError("This agent's pane has been closed.");
         return;
       }
       if (!transport?.workspace) return;
@@ -308,13 +299,6 @@ function AppContent() {
                     )
                   ) : view === "machines" ? (
                     <MachinesView auth={account} />
-                  ) : view === "agents" ? (
-                    <AgentsView
-                      selectedId={selectedAgent}
-                      onSelect={setSelectedAgent}
-                      workspace={workspace}
-                      canEdit={canEdit}
-                    />
                   ) : (
                     <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
                       <Server className="size-10 text-muted-foreground/50" />
