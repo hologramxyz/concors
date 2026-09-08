@@ -82,8 +82,10 @@ test("notifications deduplicate across windows, open chat, and sync unread witho
     await expect(second.getByLabel("Desktop notifications", { exact: true })).toBeChecked();
     await control.requestAgent({ kind: "send", sessionId: id, text: "hello" }, randomUUID());
     await expect.poll(count).toBe(1);
-    await expect(page.getByLabel("Unread agent update").first()).toBeVisible();
-    await expect(second.getByLabel("Unread agent update").first()).toBeVisible();
+    // Settings deliberately replaces the app sidebar, so verify the shared unread state directly.
+    await expect
+      .poll(() => control.agents.find((agent) => agent.id === id)?.attention?.seen)
+      .toBe(false);
     // Notification clicks navigate asynchronously; use the window that owns the notification.
     let opened = page;
     for (const p of context.pages()) {
