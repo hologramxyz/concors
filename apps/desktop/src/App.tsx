@@ -212,7 +212,8 @@ function AppContent() {
     (project) => project.id === workspace.selection?.projectId,
   );
 
-  const sidebarToggle = sidebarCollapsed && (
+  const appSidebarCollapsed = view !== "settings" && sidebarCollapsed;
+  const sidebarToggle = appSidebarCollapsed && (
     <button
       id="expand-sidebar"
       type="button"
@@ -235,10 +236,8 @@ function AppContent() {
             <div className="flex h-dvh w-full overflow-hidden bg-sidebar">
               {view === "settings" ? (
                 <SettingsSidebar
-                  collapsed={sidebarCollapsed}
                   page={settingsPage}
                   onBack={() => setView(settingsReturnView.current)}
-                  onCollapse={() => toggleSidebar(true)}
                   onNavigate={setSettingsPage}
                 />
               ) : (
@@ -275,7 +274,7 @@ function AppContent() {
                 />
               )}
               <div
-                className={`workspace-surface my-2 mr-2 flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-background shadow-xs ${sidebarCollapsed ? "ml-2" : ""}`}
+                className={`workspace-surface my-2 mr-2 flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-background shadow-xs ${appSidebarCollapsed ? "ml-2" : ""}`}
               >
                 {!(view === "projects" && activeProject) && (
                   <header className="flex h-11 shrink-0 items-center gap-2 border-b px-4">
