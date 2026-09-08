@@ -177,7 +177,14 @@ test("Mac workspace shortcuts use physical Control and display matching hints", 
     await panes.first().focus();
     await page.keyboard.press("Control+Shift+d");
     await expect(panes).toHaveCount(2);
-    await expect(panes.last()).toBeFocused();
+    const newPaneId = await panes.last().getAttribute("data-pane-id");
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          document.activeElement?.closest("[data-pane-id]")?.getAttribute("data-pane-id"),
+        ),
+      )
+      .toBe(newPaneId);
     await page.keyboard.press("Control+Shift+w");
     await expect(panes).toHaveCount(1);
     expect(page.isClosed()).toBe(false);
