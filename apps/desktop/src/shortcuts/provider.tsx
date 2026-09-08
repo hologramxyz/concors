@@ -28,6 +28,7 @@ export function ShortcutProvider({ children }: { children: ReactNode }) {
       const terminal = !!target?.closest(".xterm");
       const editing =
         !!target?.closest('input, textarea, select, [contenteditable="true"]') && !terminal;
+      const composer = !!target?.closest("[data-agent-composer]");
       const modal = !!document.querySelector(
         '[role="dialog"], [role="alertdialog"], [role="menu"]',
       );
@@ -45,7 +46,7 @@ export function ShortcutProvider({ children }: { children: ReactNode }) {
           consume();
           return;
         }
-        if (modal || editing) {
+        if (modal || (editing && !composer)) {
           cancel();
           return;
         }
@@ -71,7 +72,7 @@ export function ShortcutProvider({ children }: { children: ReactNode }) {
       const id = matchShortcut(event, isMac(), terminal, isTauri());
       if (!id) return;
       // Preserve selection shortcuts in chat/editors rather than preventing their defaults.
-      if (editing && id !== "search") {
+      if (editing && id !== "search" && (!composer || id.startsWith("focus-"))) {
         if (!id.startsWith("focus-")) event.preventDefault();
         return;
       }

@@ -91,6 +91,7 @@ export function ChatPane({
           )}
           <div className="rounded-2xl border bg-background p-2">
             <textarea
+              data-agent-composer
               aria-label="Message Codex"
               placeholder="Message Codex…"
               disabled

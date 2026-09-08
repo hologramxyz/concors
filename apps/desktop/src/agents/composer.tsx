@@ -1,3 +1,4 @@
+import { useAgentDraft } from "./draft";
 import { isProviderModelsQueryLoading } from "./paseo/model-loading";
 import { useContext, useEffect, useRef, useState } from "react";
 import {
@@ -41,8 +42,7 @@ export function AgentComposer({
   onInterrupt: () => void;
 }) {
   const connection = useContext(TerminalConnectionContext);
-  const [draft, setDraft] = useState(""),
-    [attachments, setAttachments] = useState<AgentAttachment[]>([]);
+  const { draft, setDraft, attachments, setAttachments } = useAgentDraft(connection, agent.id);
   const [busy, setBusy] = useState(false),
     [uploading, setUploading] = useState(false),
     [configuring, setConfiguring] = useState(false),
@@ -293,6 +293,7 @@ export function AgentComposer({
         )}
         <textarea
           ref={textarea}
+          data-agent-composer
           aria-label="Message Codex"
           placeholder={
             active ? "Add a follow-up to the queue…" : "Ask your agent to build something…"

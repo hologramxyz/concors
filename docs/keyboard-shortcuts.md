@@ -30,9 +30,10 @@ focused pane remembered by this client during the current app session; missing t
 back to the first available item. Active project/tab selection continues to sync through the
 workspace; keyboard focus remains local.
 
-Inside a chat composer or other text field, Ctrl+Shift+Arrow retains text selection. Click/focus
-the pane header to use workspace shortcuts there. Terminals allow workspace shortcuts, and their
+Inside a chat composer or other text field, Ctrl+Shift+Arrow retains text selection. Workspace shortcuts work directly in the chat composer. Click/focus
+the pane header to use directional pane navigation there. Terminals allow workspace shortcuts, and their
 recognized keys are consumed before reaching the PTY. Forms and dialogs retain their own keys.
+Unsent chat text and attachments survive pane/tab navigation in memory for the current daemon connection.
 Outside terminals, Ctrl+K (Command+K on Mac) remains a search alias.
 
 New left/above splits require a daemon advertising `directional-pane-split`; these actions are

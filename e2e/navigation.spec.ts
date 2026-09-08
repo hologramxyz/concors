@@ -83,13 +83,14 @@ test("directional pane sequences, tab cycling, project memory and editor selecti
       await input.evaluate((node: HTMLTextAreaElement) => node.selectionEnd - node.selectionStart),
     ).toBeGreaterThan(0);
     await expect(page.getByRole("region", { name: "Pane shortcuts", exact: true })).toHaveCount(0);
-    // Navigation keys act at the pane level while the composer retains editing shortcuts.
-    await panes.first().locator("header").click();
+    // P/T sequences work directly in the composer without inserting their follow-up keys.
+    await sequence(page, "p", "Escape");
+    await expect(input).toHaveValue("keep these words");
     await sequence(page, "t", "ArrowLeft");
     await expect.poll(() => focusedPane(page)).toBe(left);
     await sequence(page, "t", "ArrowLeft"); // wraps to the last tab
-    await expect(input).toBeVisible();
-    await panes.first().locator("header").click();
+    await expect(input).toBeFocused();
+    await expect(input).toHaveValue("keep these words");
     await sequence(page, "t", "ArrowRight");
     await expect.poll(() => focusedPane(page)).toBe(left);
     // A second project must not replace this project's remembered tab or pane.
