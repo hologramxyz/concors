@@ -148,6 +148,7 @@ export class TerminalRuntime {
       this.info.detectedAgent ?? this.info.profile,
       this.#title,
       lines,
+      this.info.agentActivity,
     );
     if ((this.info.agentActivity ?? "unknown") === agentActivity) return;
     this.info = { ...this.info, agentActivity };

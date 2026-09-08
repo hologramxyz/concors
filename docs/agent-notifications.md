@@ -51,6 +51,16 @@ The completion/input policy follows [Herdr](https://github.com/herdrdev/herdr), 
 license is preserved in [third-party/herdr-LICENSE](../third-party/herdr-LICENSE).
 The shared daemon acknowledgement protocol and React/native integration are Concors code.
 
+Terminal activity detection also adapts Herdr's `src/detect/manifests/claude.toml`
+(manifest `2026.09.04.1`) and `src/detect/manifest.rs` screen regions at the same revision.
+The TypeScript adaptation excludes prompt input, detects live spinner/background-task and
+permission controls, recognizes idle prompt boxes, and preserves state in transcript view.
+It reads the emulator's live viewport, independently of client scroll position, and broadcasts
+state changes to all clients. Herdr's Claude hook at this revision reports session identity,
+not a complete activity lifecycle; output volume and process existence are not working signals.
+PTY tests cover manually launched Codex and Claude, two-client transitions and reconnects;
+browser tests verify both sidebars and removal when the agent returns to the shell.
+
 ## Verification and remaining platform work
 
 Policy tests cover baseline suppression, duplicate events, focused input, remote reads, resumed
