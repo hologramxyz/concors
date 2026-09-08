@@ -238,3 +238,33 @@
 .concors-terminal .xterm-scrollable-element > .scrollbar > .scra {
   display: none;
 }
+
+/* A fixed-width inner sidebar slides within its animated footprint without reflowing labels. */
+.sidebar-shell {
+  width: 216px;
+  flex-shrink: 0;
+  overflow: hidden;
+  transition: width 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.sidebar-shell[data-collapsed="true"] {
+  width: 0;
+}
+.sidebar-shell > nav {
+  transition:
+    opacity 180ms ease,
+    transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.sidebar-shell[data-collapsed="true"] > nav {
+  opacity: 0;
+  transform: translateX(-12px);
+}
+.workspace-surface {
+  transition: margin-left 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-shell,
+  .sidebar-shell > nav,
+  .workspace-surface {
+    transition: none;
+  }
+}
