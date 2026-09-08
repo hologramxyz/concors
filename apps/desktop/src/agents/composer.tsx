@@ -8,7 +8,7 @@ import {
   Zap,
   LoaderCircle,
   Mic,
-  Paperclip,
+  Plus,
   Shield,
   ShieldCheck,
   ShieldOff,
@@ -350,10 +350,17 @@ export function AgentComposer({
             disabled={!advanced || !connected || busy || uploading || uncertain}
             onClick={() => picker.current?.click()}
           >
-            <Paperclip className="size-4" />
+            <Plus className="size-4" />
           </button>
           <ControlPicker
             label="Agent and model"
+            showValue
+            selectedLabel={
+              models.find((model) => model.id === (settings.model ?? agent.model))?.label ??
+              settings.model ??
+              agent.model ??
+              "Machine default"
+            }
             value={settings.model ?? ""}
             icon={modelsLoading ? <LoaderCircle className="size-4 animate-spin" /> : <CodexIcon />}
             disabled={!advanced || !connected || busy || configuring || modelsLoading}
@@ -383,6 +390,7 @@ export function AgentComposer({
           />
           <ControlPicker
             label="Thinking effort"
+            showValue
             value={settings.effort ?? ""}
             icon={<Brain className="size-4" />}
             disabled={!advanced || !connected || busy || configuring}
@@ -402,6 +410,7 @@ export function AgentComposer({
           />
           <ControlPicker
             label="Permission mode"
+            showValue
             value={settings.mode}
             icon={
               settings.mode === "auto-review" ? (

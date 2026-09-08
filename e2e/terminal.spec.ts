@@ -51,16 +51,16 @@ test("two devices use the same terminal and recover its screen after reload", as
     await expect(trueColor).toHaveCSS("color", "rgb(12, 200, 140)");
     await expect(page.getByRole("region", { name: "Terminal pane" })).toHaveCSS(
       "background-color",
-      "rgb(244, 243, 239)",
+      "rgb(255, 255, 255)",
     );
     await page.emulateMedia({ colorScheme: "dark" });
     await expect(blue).toHaveCSS("color", "rgb(118, 155, 255)");
     await expect(trueColor).toHaveCSS("color", "rgb(12, 200, 140)");
     await expect(page.getByRole("region", { name: "Terminal pane" })).toHaveCSS(
       "background-color",
-      "rgb(24, 27, 35)",
+      "rgb(27, 27, 27)",
     );
-    await page.screenshot({ path: "test-results/terminal-cobalt-dark.png" });
+    await page.screenshot({ path: "test-results/terminal-neutral-dark.png" });
     await second.goto("http://localhost:1420");
     await expect(second.getByLabel("Terminal output")).toContainText("hello-shared-terminal");
     await second.reload();

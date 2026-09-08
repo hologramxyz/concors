@@ -26,8 +26,8 @@ export function terminalTheme(): ITheme {
     brightMagenta: color("bright-magenta"),
     brightCyan: color("bright-cyan"),
     brightWhite: color("bright-white"),
-    scrollbarSliderBackground: "#7c879a60",
-    scrollbarSliderHoverBackground: "#7c879a90",
-    scrollbarSliderActiveBackground: "#7c879ab0",
+    scrollbarSliderBackground: "#80808060",
+    scrollbarSliderHoverBackground: "#80808090",
+    scrollbarSliderActiveBackground: "#808080b0",
   };
 }
