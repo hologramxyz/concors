@@ -17,6 +17,19 @@ ssh -N -L 1420:127.0.0.1:1420 -L 7420:127.0.0.1:7420 user@your-machine
 Open http://localhost:1420 on your computer. Remote authentication and cloud routing will integrate
 with Pierre's server separately; this PR does not modify that repository.
 
+## Agent sidebar
+
+The Agents sidebar contains chats bound to Agent panes and live Codex/Claude Code/OpenCode
+terminal profiles bound to terminal panes. Closing a pane, tab, or project, or switching its
+profile, removes detached sessions from the sidebar on every client without deleting history.
+Exited, failed, and interrupted terminal sessions are omitted. Selecting an entry focuses its
+owning project, tab, and pane; there is no separate Agents page.
+
+A live terminal profile is labeled **Open in terminal** with a static status icon. Process
+liveness does not indicate whether the model is generating, waiting for input, or idle. Only
+structured chat events drive working/done/needs-input indicators. Commands launched manually
+inside a shell are not currently discovered as separate sidebar agents.
+
 ## Lifetime, replay and control
 
 - The daemon owns each PTY. Closing a pane, navigating away, or disconnecting a client leaves it

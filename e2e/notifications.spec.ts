@@ -77,13 +77,18 @@ test("notifications deduplicate across windows, open chat, and sync unread witho
     await expect.poll(count).toBe(1);
     await expect(page.getByLabel("Unread agent update").first()).toBeVisible();
     await expect(second.getByLabel("Unread agent update").first()).toBeVisible();
-    for (const p of context.pages())
-      await p.evaluate(() => {
+    // Notification clicks navigate asynchronously; use the window that owns the notification.
+    let opened = page;
+    for (const p of context.pages()) {
+      const clicked = await p.evaluate(() => {
         const records = (Notification as unknown as { records: { onclick: (() => void) | null }[] })
           .records;
-        records[0]?.onclick?.();
+        if (!records[0]?.onclick) return false;
+        records[0].onclick();
+        return true;
       });
-    const opened = (await page.getByRole("log").count()) ? page : second;
+      if (clicked) opened = p;
+    }
     await opened.bringToFront();
     await expect(opened.getByRole("log")).toContainText("Hello from Codex");
     await expect.poll(() => control.agents.find((a) => a.id === id)?.attention?.seen).toBe(true);

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { test, expect } from "@playwright/test";
 
 import { signedIn } from "./signed-in.ts";
-test("shared chat streams, reloads, handles approvals and remains in global Agents", async ({
+test("shared chat streams, handles approvals and removes detached sidebar entries", async ({
   page,
   browser,
 }) => {
@@ -93,14 +93,6 @@ test("shared chat streams, reloads, handles approvals and remains in global Agen
     await second.getByRole("button", { name: "Blue", exact: true }).click();
     await second.getByRole("button", { name: "Submit answers", exact: true }).click();
     await expect(page.getByLabel("Agent status: Done").first()).toBeVisible();
-    await page.getByRole("button", { name: "Close pane", exact: true }).click();
-    await page
-      .getByRole("region", { name: "Agents", exact: true })
-      .getByRole("list")
-      .getByRole("button")
-      .first()
-      .click();
-    await expect(page.getByRole("log")).toContainText("hold this stream");
     await page.getByLabel("Message Codex").fill("hello again");
     await page.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(page.getByRole("log")).toContainText("Hello from Codex");
@@ -109,6 +101,23 @@ test("shared chat streams, reloads, handles approvals and remains in global Agen
     await expect(
       replyFooter.getByRole("button", { name: "Copy message", exact: true }),
     ).toBeVisible();
+    await page.getByRole("button", { name: "Pane actions" }).click();
+    await page.getByRole("menuitemradio", { name: "Terminal", exact: true }).click();
+    await expect(page.locator(".xterm")).toBeVisible();
+    await expect(agentList.getByRole("list").getByRole("button")).toHaveCount(0);
+    const remoteAgents = second.getByRole("region", { name: "Agents", exact: true });
+    await expect(remoteAgents.getByRole("list").getByRole("button")).toHaveCount(0);
+    await second.reload();
+    await expect(remoteAgents.getByRole("list").getByRole("button")).toHaveCount(0);
+    await page.getByRole("button", { name: "Pane actions" }).click();
+    await page.getByRole("menuitemradio", { name: "Agent", exact: true }).click();
+    await expect(page.getByLabel("Message Codex")).toBeEnabled();
+    await expect(agentList.getByRole("list").getByRole("button")).toHaveCount(1);
+    await page.getByRole("button", { name: "Close pane", exact: true }).click();
+    await expect(agentList.getByRole("list").getByRole("button")).toHaveCount(0);
+    await expect(remoteAgents.getByRole("list").getByRole("button")).toHaveCount(0);
+    await second.reload();
+    await expect(remoteAgents.getByRole("list").getByRole("button")).toHaveCount(0);
     await page.screenshot({ path: "test-results/chat.png" });
     expect(errors).toEqual([]);
   } finally {
