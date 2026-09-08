@@ -41,7 +41,7 @@ interface Props {
   onCommand: (operation: WorkspaceOperation) => void;
 }
 
-type Placement = Extract<WorkspaceOperation, { kind: "pane.move" }>["placement"];
+type Placement = "left" | "right" | "top" | "bottom";
 interface PaneDrag {
   paneId: string;
   version: number;
@@ -49,6 +49,7 @@ interface PaneDrag {
 
 export function PaneLayout(props: Props) {
   const [dragging, setDragging] = useState<PaneDrag | null>(null);
+  const [drop, setDrop] = useState<Placement | null>(null);
   const container = useRef<HTMLDivElement>(null);
   const pendingFocus = useRef<string | null>(null);
   const [activePaneId, setActivePaneId] = useState<string | null>(null);
@@ -141,16 +142,69 @@ export function PaneLayout(props: Props) {
           second={render(node.second)}
         />
       );
-    return <Pane key={id} {...props} node={node} dragging={dragging} onDrag={setDragging} />;
+    return <Pane key={id} {...props} node={node} onDrag={setDragging} />;
   };
   return (
     <div
       ref={container}
       onFocusCapture={rememberPane}
       onPointerDownCapture={rememberPane}
-      className="h-full min-h-[220px] min-w-[320px] px-2 pb-2"
+      data-testid="pane-workspace"
+      onDragOver={(event) => {
+        if (!dragging) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        const rect = event.currentTarget.getBoundingClientRect();
+        const x = (event.clientX - rect.left) / rect.width;
+        const y = (event.clientY - rect.top) / rect.height;
+        setDrop(y < 0.25 ? "top" : y > 0.75 ? "bottom" : x < 0.5 ? "left" : "right");
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDrop(null);
+      }}
+      onDrop={(event) => {
+        const target = props.tab.nodes.find(
+          (node) => node.kind === "pane" && node.id !== dragging?.paneId,
+        );
+        if (!dragging || !drop || !target) return;
+        event.preventDefault();
+        props.onCommand({
+          kind: "pane.move",
+          projectId: props.project.id,
+          tabId: props.tab.id,
+          expectedVersion: dragging.version,
+          paneId: dragging.paneId,
+          targetPaneId: target.id,
+          scope: "workspace",
+          placement: drop,
+          splitId: crypto.randomUUID(),
+        });
+        setDragging(null);
+        setDrop(null);
+      }}
+      className="relative h-full min-h-[220px] min-w-[320px] px-2 pb-2"
     >
       {render(props.tab.root)}
+      {dragging && (
+        <div className="pointer-events-none absolute inset-0 z-30" data-testid="pane-drop-targets">
+          {(
+            [
+              ["top", "inset-x-1 top-1 h-[calc(25%-0.5rem)]"],
+              ["bottom", "inset-x-1 bottom-1 h-[calc(25%-0.5rem)]"],
+              ["left", "inset-y-1/4 left-1 w-[calc(50%-0.5rem)]"],
+              ["right", "inset-y-1/4 right-1 w-[calc(50%-0.5rem)]"],
+            ] as const
+          ).map(([placement, area]) => (
+            <div
+              key={placement}
+              aria-label={`Move pane ${placement}`}
+              data-drop-zone={placement}
+              data-active={drop === placement}
+              className={`absolute rounded-md border ${area} ${drop === placement ? "border-primary bg-primary/30" : "border-primary/40 bg-primary/10"}`}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -161,20 +215,16 @@ function Pane({
   project,
   canEdit,
   onCommand,
-  dragging,
   onDrag,
 }: Props & {
   node: Extract<LayoutNode, { kind: "pane" }>;
-  dragging: PaneDrag | null;
   onDrag: (drag: PaneDrag | null) => void;
 }) {
-  const [drop, setDrop] = useState<Placement | null>(null);
   const connection = useContext(TerminalConnectionContext);
   const canDrag =
     canEdit &&
     connection?.state.status === "ready" &&
-    !!connection.state.daemon.capabilities?.includes("pane-rearrangement");
-  const canDrop = canDrag && dragging !== null && dragging.paneId !== node.id;
+    !!connection.state.daemon.capabilities?.includes("workspace-pane-rearrangement");
   const agent = useAgents().find((agent) => agent.id === node.sessionId);
   const title = node.profile === "chat" ? (agent?.name ?? "Agent") : PROFILE_LABELS[node.profile];
   const target = {
@@ -186,48 +236,13 @@ function Pane({
   return (
     <section
       data-pane-id={node.id}
-      onDragOver={(event) => {
-        if (!canDrop) return;
-        event.preventDefault();
-        event.dataTransfer.dropEffect = "move";
-        const rect = event.currentTarget.getBoundingClientRect();
-        const x = (event.clientX - rect.left) / rect.width;
-        const y = (event.clientY - rect.top) / rect.height;
-        const edges = [
-          ["left", x],
-          ["right", 1 - x],
-          ["top", y],
-          ["bottom", 1 - y],
-        ] as const;
-        const nearest = edges.reduce((best, edge) => (edge[1] < best[1] ? edge : best));
-        setDrop(nearest[1] < 0.25 ? nearest[0] : "center");
-      }}
-      onDragLeave={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDrop(null);
-      }}
-      onDrop={(event) => {
-        if (!canDrop || !drop || !dragging) return;
-        event.preventDefault();
-        event.stopPropagation();
-        onCommand({
-          kind: "pane.move",
-          ...target,
-          expectedVersion: dragging.version,
-          paneId: dragging.paneId,
-          targetPaneId: node.id,
-          placement: drop,
-          splitId: crypto.randomUUID(),
-        });
-        setDrop(null);
-        onDrag(null);
-      }}
       tabIndex={-1}
       aria-label={`${PROFILE_LABELS[node.profile]} pane`}
       className={`relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border focus-visible:ring-1 focus-visible:ring-primary focus-visible:outline-none ${node.profile === "chat" ? "bg-card" : "bg-[var(--terminal-background)] text-[var(--terminal-foreground)]"}`}
     >
       <header
         draggable={canDrag && tab.nodes.length > 1}
-        title="Drag to move pane; drop in the center to swap or on an edge to split"
+        title="Drag to move pane"
         onDragStart={(event) => {
           if ((event.target as HTMLElement).closest("button") || !canDrag) {
             event.preventDefault();
@@ -335,28 +350,6 @@ function Pane({
         />
       ) : (
         <ChatPane project={project} tab={tab} node={node} canEdit={canEdit} />
-      )}
-      {canDrop && (
-        <div className="pointer-events-none absolute inset-0 z-30" data-testid="pane-drop-targets">
-          {(
-            [
-              ["top", "Move above", "inset-x-1 top-1 h-[24%]"],
-              ["bottom", "Move below", "inset-x-1 bottom-1 h-[24%]"],
-              ["left", "Move left", "inset-y-1/4 left-1 w-[24%]"],
-              ["right", "Move right", "inset-y-1/4 right-1 w-[24%]"],
-              ["center", "Swap panes", "inset-1/4"],
-            ] as const
-          ).map(([placement, label, area]) => (
-            <div
-              key={placement}
-              data-drop-zone={placement}
-              data-active={drop === placement}
-              className={`absolute flex items-center justify-center rounded-md border p-2 text-center text-[12px] font-medium ${area} ${drop === placement ? "border-primary bg-primary/90 text-primary-foreground" : "border-primary/40 bg-background/90 text-foreground"}`}
-            >
-              {label}
-            </div>
-          ))}
-        </div>
       )}
     </section>
   );
