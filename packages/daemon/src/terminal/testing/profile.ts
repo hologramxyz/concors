@@ -9,14 +9,14 @@ export function installTestCodexProfile(directory: string): string {
   writeFileSync(
     script,
     `
-process.stdout.write("CODEX_TERMINAL_READY\\n");
-process.stdin.setEncoding("utf8");
-process.stdin.on("data", (data) => {
+const { createInterface } = require("node:readline");
+const lines = createInterface({ input: process.stdin, terminal: false, crlfDelay: Infinity });
+lines.on("line", (data) => {
   if (data.trim() === "fail") process.exit(7);
   if (data.trim() === "exit") process.exit(0);
   process.stdout.write("CODEX_REPLY:" + data.trim() + "\\n");
 });
-process.stdin.resume();
+process.stdout.write("CODEX_TERMINAL_READY\\n");
 `,
   );
   const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";

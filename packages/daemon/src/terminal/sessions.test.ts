@@ -225,9 +225,22 @@ it("broadcasts Codex profile lifecycle to unattached clients and restores it on 
   await expect.poll(() => observer.connection.terminals).toMatchObject([{ id, status: "running" }]);
   await request(first.connection, { kind: "attach", sessionId: id });
   await request(first.connection, { kind: "claim", sessionId: id, cols: 80, rows: 24 });
+  // A spawned PTY can be running before the executable is ready to accept input.
+  await expect
+    .poll(
+      () =>
+        first.events
+          .filter((event) => event.type === "terminal.output" || event.type === "terminal.snapshot")
+          .map((event) => event.data)
+          .join(""),
+      { timeout: 5000 },
+    )
+    .toContain("CODEX_TERMINAL_READY");
   first.connection.sendTerminalInput(id, "fail\r");
   await expect
-    .poll(() => observer.connection.terminals.find((item) => item.id === id)?.status)
+    .poll(() => observer.connection.terminals.find((item) => item.id === id)?.status, {
+      timeout: 5000,
+    })
     .toBe("failed");
   const [next] = await request(first.connection, {
     ...start,
