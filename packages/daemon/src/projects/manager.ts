@@ -1,4 +1,5 @@
 import { homedir } from "node:os";
+import { randomUUID } from "node:crypto";
 import { projectDirectory, projectDirectoryError } from "./directories.ts";
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdir, realpath, stat } from "node:fs/promises";
@@ -142,6 +143,24 @@ export class ProjectManager {
       });
       if (result.result.outcome.status === "rejected")
         throw new Error(result.result.outcome.message);
+      const project = this.#store.snapshot().projects.find((item) => item.id === setup.id);
+      if (!project) throw new Error("Created project is unavailable");
+      const terminal = this.#store.execute({
+        type: "workspace.command",
+        commandId: randomUUID(),
+        epoch,
+        operation: {
+          kind: "tab.create",
+          projectId: project.id,
+          expectedVersion: project.version,
+          tabId: randomUUID(),
+          paneId: randomUUID(),
+          name: "Terminal",
+          profile: "shell",
+        },
+      });
+      if (terminal.result.outcome.status === "rejected")
+        throw new Error(terminal.result.outcome.message);
       this.save({ ...setup, status: "done", progress: "Project ready" });
     } catch (error) {
       this.save({

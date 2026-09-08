@@ -1,5 +1,6 @@
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
-import type { WorkspaceProject, WorkspaceTab, LayoutNode, TerminalInfo } from "@concors/protocol";
+import type { WorkspaceProject, WorkspaceTab, LayoutNode } from "@concors/protocol";
+import { LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TerminalConnectionContext } from "./connection-context";
 import { TerminalSurface } from "./terminal-surface";
@@ -18,7 +19,6 @@ export function TerminalPane({
   const connection = useContext(TerminalConnectionContext);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sessions, setSessions] = useState<TerminalInfo[] | null>(null);
   const attempted = useRef(false);
   const start = useCallback(async () => {
     if (!connection?.workspace || busy) return;
@@ -68,91 +68,26 @@ export function TerminalPane({
       />
     );
   return (
-    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-auto p-5 text-center">
-      <p className="text-sm font-medium">
-        {node.profile === "shell"
-          ? "A terminal for this project"
-          : `Run ${node.profile} on this machine`}
-      </p>
-      <code className="max-w-full truncate text-xs text-muted-foreground" title={project.directory}>
-        {project.directory}
-      </code>
-      <Button
-        size="sm"
-        disabled={!canEdit || busy}
-        onClick={() => {
-          void start();
-        }}
-      >
-        {busy ? "Starting…" : node.profile === "shell" ? "Start terminal" : `Start ${node.profile}`}
-      </Button>
-      <button
-        type="button"
-        disabled={!canEdit || busy}
-        className="text-xs text-muted-foreground hover:text-foreground"
-        onClick={() => {
-          if (!connection) return;
-          void connection
-            .requestTerminal({ kind: "list" }, crypto.randomUUID())
-            .then((result) => {
-              if (result.outcome.status === "error") throw new Error(result.outcome.message);
-              setSessions(
-                result.outcome.sessions.filter((session) => session.projectId === project.id),
-              );
-            })
-            .catch((cause: unknown) =>
-              setError(cause instanceof Error ? cause.message : "Could not load sessions"),
-            );
-        }}
-      >
-        Attach an existing session
-      </button>
-      {sessions && (
-        <div className="w-full max-w-sm space-y-1">
-          {sessions.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No sessions for this project yet.</p>
-          ) : (
-            sessions.map((session) => (
-              <button
-                key={session.id}
-                type="button"
-                disabled={!canEdit || busy}
-                className="block w-full rounded border px-3 py-2 text-left text-xs hover:bg-muted"
-                onClick={() => {
-                  if (!connection) return;
-                  setBusy(true);
-                  void connection
-                    .requestTerminal(
-                      {
-                        kind: "bind",
-                        projectId: project.id,
-                        tabId: tab.id,
-                        paneId: node.id,
-                        expectedVersion: project.version,
-                        sessionId: session.id,
-                      },
-                      crypto.randomUUID(),
-                    )
-                    .then((result) => {
-                      if (result.outcome.status === "error")
-                        throw new Error(result.outcome.message);
-                    })
-                    .catch((cause: unknown) =>
-                      setError(cause instanceof Error ? cause.message : "Could not attach"),
-                    )
-                    .finally(() => setBusy(false));
-                }}
-              >
-                {session.profile} · {session.status} · {session.id.slice(0, 8)}
-              </button>
-            ))
-          )}
+    <div
+      className="flex min-h-0 flex-1 items-center justify-center bg-[var(--terminal-background)]"
+      aria-busy={!error}
+    >
+      {error ? (
+        <div className="flex max-w-sm flex-col items-center gap-3 p-5 text-center">
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+          <Button size="sm" disabled={!canEdit || busy} onClick={() => void start()}>
+            {busy ? "Starting…" : "Retry terminal"}
+          </Button>
         </div>
-      )}
-      {error && (
-        <p role="alert" className="max-w-sm text-xs text-destructive">
-          {error}
-        </p>
+      ) : (
+        <span role="status" className="text-muted-foreground">
+          <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+          <span className="sr-only">
+            {canEdit ? "Starting terminal…" : "Waiting for terminal…"}
+          </span>
+        </span>
       )}
     </div>
   );

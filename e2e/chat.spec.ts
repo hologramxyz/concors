@@ -1,9 +1,8 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { test, expect } from "@playwright/test";
+import { test, expect, signedIn } from "./signed-in.ts";
 
-import { signedIn } from "./signed-in.ts";
 test("shared chat streams, handles approvals and removes detached sidebar entries", async ({
   page,
   browser,

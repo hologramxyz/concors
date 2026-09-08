@@ -1,8 +1,8 @@
 import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { test, expect, type Page } from "@playwright/test";
-import { signedIn } from "./signed-in.ts";
+import type { Page } from "@playwright/test";
+import { test, expect, signedIn } from "./signed-in.ts";
 const sequence = async (page: Page, prefix: "p" | "t", key: string) => {
   await page.keyboard.press(`Control+Shift+${prefix}`);
   await expect(
@@ -32,8 +32,6 @@ test("directional pane sequences, tab cycling, project memory and immediate Agen
       .getByRole("button", { name: "Add project", exact: true })
       .click();
     await expect(page.getByRole("button", { name: "New tab", exact: true })).toBeEnabled();
-    await sequence(page, "t", "Enter");
-    await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
     const panes = page.locator("[data-pane-id]");
     await expect(panes.locator("textarea")).toBeFocused();
     const original = await focusedPane(page);

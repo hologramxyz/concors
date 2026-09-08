@@ -1,6 +1,5 @@
-import { test, expect, type WebSocketRoute } from "@playwright/test";
-
-import { signedIn } from "./signed-in.ts";
+import type { WebSocketRoute } from "@playwright/test";
+import { test, expect, signedIn } from "./signed-in.ts";
 
 test("two devices share workspace edits, reconnect, and switch isolated machines", async ({
   browser,
@@ -54,8 +53,6 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
       "true",
     );
     await expect(first.getByRole("button", { name: "Sessions", exact: true })).toHaveCount(0);
-    await first.getByRole("button", { name: "New tab", exact: true }).click();
-    await first.getByRole("menuitem", { name: "Terminal", exact: true }).click();
     await expect(second.getByRole("region", { name: "Terminal pane", exact: true })).toHaveCount(1);
     await first.getByRole("button", { name: "Pane actions", exact: true }).click();
     await first.getByRole("menuitem", { name: "Split horizontally", exact: true }).click();
