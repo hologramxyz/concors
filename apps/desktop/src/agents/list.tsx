@@ -25,8 +25,14 @@ export function AgentSidebar({ onSelect }: { onSelect: (id: string) => void }) {
               <span
                 role="img"
                 aria-label={`Agent status: ${status}`}
-                className="flex size-4 shrink-0 items-center justify-center"
+                className="relative flex size-4 shrink-0 items-center justify-center"
               >
+                {unread && (
+                  <span
+                    aria-label="Unread agent update"
+                    className="absolute inset-0 rounded-full ring-1 ring-muted-foreground/40"
+                  />
+                )}
                 {running ? (
                   <LoaderCircle
                     className="size-4 animate-spin text-amber-500 motion-reduce:animate-none"
@@ -39,7 +45,6 @@ export function AgentSidebar({ onSelect }: { onSelect: (id: string) => void }) {
                 )}
               </span>
               <span className="min-w-0 flex-1 truncate">{agent.name}</span>
-              {unread && <span className="sr-only">Unread agent update</span>}
             </button>
           </li>
         );
