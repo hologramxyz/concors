@@ -309,6 +309,7 @@ function AppContent() {
                 <main className="min-h-0 flex-1 overflow-auto">
                   {view === "settings" ? (
                     <SettingsView
+                      page={settingsPage}
                       endpoint={endpoint}
                       state={connection.state}
                       theme={theme.preference}
