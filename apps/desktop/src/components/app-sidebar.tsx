@@ -1,6 +1,6 @@
 import { AgentSidebar } from "@/agents/list";
 import { SidebarSection } from "./sidebar-section";
-import { Folder, Plus, Search, Settings } from "lucide-react";
+import { Folder, Plus, Search } from "lucide-react";
 import { cn } from "cn";
 import type { WorkspaceSnapshot } from "@concors/protocol";
 import type { View } from "@/navigation";
@@ -104,18 +104,6 @@ export function AppSidebar(props: AppSidebarProps) {
         </SidebarSection>
       </div>
       <div className="space-y-1 border-t border-sidebar-border p-2">
-        <button
-          type="button"
-          onClick={() => props.onNavigate("settings")}
-          aria-current={props.view === "settings" ? "page" : undefined}
-          className={cn(
-            "flex h-8 w-full items-center gap-2 rounded-md px-2 text-[13px] hover:bg-sidebar-accent",
-            props.view === "settings" && "bg-sidebar-accent font-medium",
-          )}
-        >
-          <Settings className="size-4" />
-          Settings
-        </button>
         <AccountMenu
           auth={props.auth}
           onSignOut={props.onSignOut}
