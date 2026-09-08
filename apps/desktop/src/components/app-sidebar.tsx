@@ -22,7 +22,7 @@ interface AppSidebarProps {
   onCollapse: () => void;
   onSelectAgent: (id: string) => void;
   view: View;
-  onNavigate: (view: View) => void;
+  onOpenSettings: () => void;
   onOpenCommandPalette: () => void;
   onOpenShortcuts: () => void;
   workspace: WorkspaceSnapshot | null;
@@ -173,7 +173,7 @@ export function AppSidebar(props: AppSidebarProps) {
             <AccountMenu
               auth={props.auth}
               onSignOut={props.onSignOut}
-              onOpenSettings={() => props.onNavigate("settings")}
+              onOpenSettings={props.onOpenSettings}
             />
           </div>
           <Tooltip>

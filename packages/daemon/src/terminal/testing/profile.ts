@@ -12,6 +12,9 @@ export function installTestCodexProfile(directory: string): string {
 const { createInterface } = require("node:readline");
 const lines = createInterface({ input: process.stdin, terminal: false, crlfDelay: Infinity });
 lines.on("line", (data) => {
+  if (data.trim() === "test-working") process.stdout.write("\\x1b]0;⠙ Test turn\\x07");
+  if (data.trim() === "test-idle") process.stdout.write("\\x1b]0;Codex\\x07");
+  if (data.trim() === "test-approval") process.stdout.write("\\x1b]0;Action Required\\x07");
   if (data.trim() === "fail") process.exit(7);
   if (data.trim() === "exit") process.exit(0);
   process.stdout.write("CODEX_REPLY:" + data.trim() + "\\n");
