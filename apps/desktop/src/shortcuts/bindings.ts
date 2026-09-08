@@ -1,20 +1,44 @@
 export const BINDINGS = [
   { id: "search", label: "Search projects and commands", key: "k" },
   { id: "new-project", label: "New project", key: "n" },
-  { id: "new-tab", label: "New tab…", key: "t" },
-  { id: "new-pane", label: "New pane", key: "p" },
-  { id: "split-horizontal", label: "Split horizontally (side by side)", key: "d" },
-  { id: "split-vertical", label: "Split vertically (stacked)", key: "e" },
-  { id: "close-pane", label: "Close pane", key: "w" },
-  { id: "close-tab", label: "Close tab", key: "x" },
+  { id: "new-tab", label: "New tab…", key: "t", then: "Enter" },
+  { id: "previous-tab", label: "Previous tab", key: "t", then: "ArrowLeft" },
+  { id: "next-tab", label: "Next tab", key: "t", then: "ArrowRight" },
+  { id: "new-pane", label: "New pane beside current", key: "p", then: "Enter" },
+  { id: "split-left", label: "New pane to the left", key: "p", then: "ArrowLeft" },
+  { id: "split-horizontal", label: "New pane to the right", key: "p", then: "ArrowRight" },
+  { id: "split-up", label: "New pane above", key: "p", then: "ArrowUp" },
+  { id: "split-vertical", label: "New pane below", key: "p", then: "ArrowDown" },
+  { id: "focus-left", label: "Focus pane to the left", key: "ArrowLeft" },
+  { id: "focus-right", label: "Focus pane to the right", key: "ArrowRight" },
+  { id: "focus-up", label: "Focus pane above", key: "ArrowUp" },
+  { id: "focus-down", label: "Focus pane below", key: "ArrowDown" },
+  { id: "close-pane", label: "Close pane", key: "p", then: "Backspace" },
+  { id: "close-tab", label: "Close tab", key: "t", then: "Backspace" },
   { id: "settings", label: "Settings", key: "," },
   { id: "shortcuts", label: "Keyboard shortcuts", key: "/" },
 ] as const;
 export type CommandId = (typeof BINDINGS)[number]["id"];
+export type Sequence = "p" | "t";
 export const isMac = () => /Mac|iPhone|iPad/.test(navigator.platform);
+export function keyLabel(key: string): string {
+  return (
+    ({ ArrowLeft: "←", ArrowRight: "→", ArrowUp: "↑", ArrowDown: "↓" } as Record<string, string>)[
+      key
+    ] ?? (key.length === 1 ? key.toUpperCase() : key)
+  );
+}
 export function shortcutLabel(id: CommandId, mac = isMac()): string {
   const binding = BINDINGS.find((item) => item.id === id);
-  return [mac ? "Control" : "Ctrl", "Shift", binding?.key.toUpperCase() ?? ""].join("+");
+  if (!binding) return "";
+  return `${mac ? "Control" : "Ctrl"}+Shift+${keyLabel(binding.key)}${"then" in binding ? ` → ${keyLabel(binding.then)}` : ""}`;
+}
+export function sequenceBindings(sequence: Sequence) {
+  return BINDINGS.filter((binding) => binding.key === sequence && "then" in binding);
+}
+export function matchSequence(sequence: Sequence, key: string): CommandId | undefined {
+  return sequenceBindings(sequence).find((binding) => "then" in binding && binding.then === key)
+    ?.id;
 }
 export function matchShortcut(
   event: Pick<
@@ -23,20 +47,23 @@ export function matchShortcut(
   >,
   mac: boolean,
   terminal: boolean,
-): CommandId | undefined {
+  native = false,
+): CommandId | Sequence | undefined {
   if (event.isComposing || event.altKey) return;
-  // Preserve the palette alias outside terminals; ordinary Ctrl+K belongs to the shell.
+  if (native && event.key === "Tab" && event.ctrlKey && !event.metaKey)
+    return event.shiftKey ? "previous-tab" : "next-tab";
   if (!event.shiftKey) {
     const primaryOnly = mac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
     return primaryOnly && !terminal && event.key.toLowerCase() === "k" ? "search" : undefined;
   }
-  // On macOS, use the physical Control key. Command-based window/tab shortcuts
-  // belong to the browser and cannot reliably be overridden by a page listener.
   if (!event.ctrlKey || event.metaKey) return;
+  const key = event.key.toLowerCase();
+  if (key === "p" || key === "t") return key;
   return BINDINGS.find(
     (binding) =>
-      event.key.toLowerCase() === binding.key ||
-      (binding.key === "," && event.code === "Comma") ||
-      (binding.key === "/" && event.code === "Slash"),
+      !("then" in binding) &&
+      (key === binding.key.toLowerCase() ||
+        (binding.key === "," && event.code === "Comma") ||
+        (binding.key === "/" && event.code === "Slash")),
   )?.id;
 }
