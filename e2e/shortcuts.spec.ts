@@ -14,6 +14,15 @@ test("workspace shortcuts create, search, split and close the active pane withou
     await expect(
       page.getByRole("button", { name: "Add project", exact: true }).first(),
     ).toBeEnabled();
+    const shortcutButton = page.getByRole("button", { name: "Keyboard shortcuts", exact: true });
+    await shortcutButton.hover();
+    await expect(page.getByRole("tooltip")).toContainText("Ctrl+Shift+/");
+    await shortcutButton.click();
+    await expect(
+      page.getByRole("heading", { name: "Keyboard shortcuts", exact: true }),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
     await page.keyboard.press("Control+Shift+n");
     await expect(page.getByRole("dialog")).toBeVisible();
     await page.getByLabel("Project name", { exact: true }).fill("Keyboard project");

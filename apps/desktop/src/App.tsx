@@ -217,6 +217,7 @@ function AppContent() {
                 view={view}
                 onNavigate={setView}
                 onOpenCommandPalette={openPalette}
+                onOpenShortcuts={() => setShortcutsOpen(true)}
                 workspace={workspace}
                 canEdit={canEdit}
                 onSelectProject={selectProject}
