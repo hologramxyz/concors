@@ -27,9 +27,22 @@ test("shared chat streams, reloads, handles approvals and remains in global Agen
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Unified chat", exact: true }).click();
     await expect(page.getByLabel("Agent status: Ready").first()).toBeVisible();
+    const agentList = page
+      .getByRole("navigation", { name: "Primary" })
+      .getByRole("region", { name: "Agents", exact: true });
+    await expect(agentList.getByRole("img", { name: "Agent status: Ready" })).toBeVisible();
+    await expect(agentList.getByText("Chat acceptance", { exact: true })).toHaveCount(0);
     await page.getByLabel("Message Codex").fill("hold this stream");
     await page.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(page.getByRole("log")).toContainText("Hello from");
+    const status = agentList.getByRole("img", { name: "Agent status: Working" });
+    await expect(status).toBeVisible();
+    await expect(status.locator("svg")).toHaveCSS("animation-name", "spin");
+    const row = agentList.getByRole("list").getByRole("button").first();
+    expect((await row.boundingBox())?.height).toBeLessThanOrEqual(28);
+    await expect(row.locator(".truncate")).toHaveCSS("white-space", "nowrap");
+    await expect(row.locator(".truncate")).toHaveCSS("text-overflow", "ellipsis");
+
     await second.goto("http://localhost:1420");
     await expect(second.getByRole("log")).toContainText("Hello from");
     await second.reload();
@@ -44,6 +57,9 @@ test("shared chat streams, reloads, handles approvals and remains in global Agen
     await expect(second.getByRole("region", { name: "Allow command execution?" })).toBeVisible();
     await second.getByRole("button", { name: "Decline", exact: true }).click();
     await expect(page.getByLabel("Agent status: Done").first()).toBeVisible();
+    await expect(agentList.getByRole("img", { name: "Agent status: Done" })).toBeVisible();
+    await expect(agentList.getByRole("img").locator("svg")).toHaveCount(0);
+
     await expect(page.getByRole("button", { name: "Allow once", exact: true })).toHaveCount(0);
     await page.getByLabel("Message Codex").fill("question");
     await page.getByRole("button", { name: "Send message", exact: true }).click();

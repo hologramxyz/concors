@@ -35,18 +35,18 @@ export function AccountMenu({ auth, onSignOut, onOpenSettings }: AccountMenuProp
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" side="top" className="w-56">
         <DropdownMenuLabel className="text-[13px] font-normal text-muted-foreground">
-          <span className="mb-2 block truncate" title={auth.user.email}>
+          {org ? (org.isPersonal ? "Personal organization" : org.name) : "Signed in"}
+          <span className="mt-1 block truncate text-foreground">{auth.user.name}</span>
+          <span className="block truncate" title={auth.user.email}>
             {auth.user.email}
           </span>
-          {org ? (org.isPersonal ? "Personal organization" : "Organization") : "Signed in"}
-          {org && <span className="block truncate text-foreground">{org.name}</span>}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={onOpenSettings}>
+        <DropdownMenuItem className="text-[13px]" onSelect={onOpenSettings}>
           <Settings aria-hidden="true" />
           Settings
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={onSignOut}>
+        <DropdownMenuItem className="text-[13px]" onSelect={onSignOut}>
           <LogOut aria-hidden="true" />
           Sign out
         </DropdownMenuItem>
