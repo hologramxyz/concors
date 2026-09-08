@@ -8,6 +8,7 @@ export const TerminalInfoSchema = z.object({
   id: Id,
   projectId: Id,
   profile: TerminalProfileSchema,
+  detectedAgent: z.enum(["codex", "claude", "opencode"]).nullable().optional(),
   directory: z.string(),
   status: z.enum(["starting", "running", "exited", "failed", "interrupted"]),
   exitCode: z.number().int().nullable(),

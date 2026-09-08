@@ -116,6 +116,17 @@ export class TerminalRuntime {
     });
   }
 
+  get pid(): number {
+    return this.#pty.pid;
+  }
+
+  detectAgent(agent: TerminalInfo["detectedAgent"]): void {
+    if (this.#disposed || this.info.status !== "running" || this.info.profile !== "shell") return;
+    if ((this.info.detectedAgent ?? null) === (agent ?? null)) return;
+    this.info = { ...this.info, detectedAgent: agent ?? null };
+    this.#save(this.info);
+  }
+
   attach(viewer: TerminalViewer): Promise<void> {
     return new Promise((resolve) => {
       // Queue a barrier behind all preceding PTY output before capturing sequence + screen.

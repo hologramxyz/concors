@@ -72,29 +72,33 @@ export function AppSidebar(props: AppSidebarProps) {
             onSelect={props.onSelectMachine}
             onAdd={props.onAddMachine}
           />
-          <button
-            id="collapse-sidebar"
-            type="button"
-            aria-label="Collapse sidebar"
-            title="Collapse sidebar"
-            aria-controls="app-sidebar"
-            aria-expanded={true}
-            onClick={props.onCollapse}
-            className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
-          >
-            <PanelLeftClose className="size-4" aria-hidden="true" />
-          </button>
-        </div>
-        <div className="px-2 py-2">
-          <button
-            type="button"
-            title={`Search (${shortcutLabel("search")})`}
-            onClick={props.onOpenCommandPalette}
-            className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-[13px] text-muted-foreground hover:bg-sidebar-accent"
-          >
-            <Search className="size-4" />
-            Search or jump to…
-          </button>
+          <div className="ml-auto flex shrink-0 items-center gap-0.5">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="Search"
+                  onClick={props.onOpenCommandPalette}
+                  className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                >
+                  <Search className="size-4" aria-hidden="true" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Search ({shortcutLabel("search")})</TooltipContent>
+            </Tooltip>
+            <button
+              id="collapse-sidebar"
+              type="button"
+              aria-label="Collapse sidebar"
+              title="Collapse sidebar"
+              aria-controls="app-sidebar"
+              aria-expanded={true}
+              onClick={props.onCollapse}
+              className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            >
+              <PanelLeftClose className="size-4" aria-hidden="true" />
+            </button>
+          </div>
         </div>
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-2 py-3">
           <SidebarSection

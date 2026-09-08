@@ -10,6 +10,8 @@ const directory = process.env["CONCORS_DATA_DIR"];
 if (!directory) throw new Error("Set an isolated acceptance-test directory");
 await mkdir(directory, { recursive: true });
 process.env["PATH"] = installTestCodexProfile(directory) + delimiter + (process.env["PATH"] ?? "");
+// Keep shell startup files from replacing the harmless test executable in PATH.
+if (process.platform !== "win32") process.env["SHELL"] = "/bin/sh";
 const server = createDaemonServer(loadDaemonConfig({ port: 7429, logLevel: "warn" }, {}), {
   workspacePath: join(directory, "workspace.sqlite"),
   agentProviderFactory: (_cwd, handler) => new TestAgentProvider(handler),

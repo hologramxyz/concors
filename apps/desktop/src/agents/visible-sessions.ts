@@ -18,7 +18,7 @@ export function visibleAgentSessions(
     terminals: terminals.filter(
       (session) =>
         terminalIds.has(session.id) &&
-        session.profile !== "shell" &&
+        (session.profile !== "shell" || !!session.detectedAgent) &&
         (session.status === "running" || session.status === "starting"),
     ),
   };
