@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useNotificationPreferences, setNotificationPreferences } from "./preferences";
 import { notificationPermission, requestNotificationPermission, desktopNotice } from "./platform";
 import { playAgentSound, unlockAudio } from "./sound";
+import { Section } from "@/views/settings-primitives";
+
 export function NotificationSettings() {
   const preferences = useNotificationPreferences();
   const [error, setError] = useState<string | null>(null);
@@ -19,12 +21,10 @@ export function NotificationSettings() {
   };
   const permission = notificationPermission();
   return (
-    <section className="mb-10">
-      <h2 className="text-[15px] font-semibold">Agent notifications</h2>
-      <p className="mt-1 text-muted-foreground">
-        Preferences apply to this device. Unread indicators sync across devices.
-      </p>
-      <div className="my-4 border-t" />
+    <Section
+      title="Agent notifications"
+      description="Preferences apply to this device. Unread indicators sync across devices."
+    >
       <label className="flex items-center justify-between gap-6 py-2.5">
         <span>
           Sound
@@ -127,6 +127,6 @@ export function NotificationSettings() {
           {error}
         </p>
       )}
-    </section>
+    </Section>
   );
 }
