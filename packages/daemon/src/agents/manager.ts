@@ -1,3 +1,6 @@
+import { defaultSettings, parseModels, turnControls } from "./controls.ts";
+import { saveAttachments } from "./attachments.ts";
+import type { AgentAttachment } from "@concors/protocol";
 import { normalizeCommandExecutionCommand } from "./codex/command-display.ts";
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
@@ -129,7 +132,7 @@ export class AgentManager {
   private item(
     id: string,
     turnId: string,
-    value: Pick<AgentItem, "id" | "kind" | "title" | "text" | "detail" | "status">,
+    value: Pick<AgentItem, "id" | "kind" | "title" | "text" | "detail" | "status" | "presentation">,
   ): void {
     const previous = this.#store.agentItem(id, value.id);
     const item = this.#store.saveAgentItem({
@@ -196,6 +199,20 @@ export class AgentManager {
     });
     runtime.ready = (async () => {
       await provider.initialize();
+      try {
+        const models = parseModels(await provider.request("model/list", {}));
+        this.update(id, { models });
+      } catch {
+        /* Older providers can still run their configured model. */
+      }
+      try {
+        const modes = z
+          .object({ data: z.array(z.object({ mode: z.string().nullable().optional() })) })
+          .parse(await provider.request("collaborationMode/list", {}));
+        this.update(id, { supportsPlan: modes.data.some((mode) => mode.mode === "plan") });
+      } catch {
+        this.update(id, { supportsPlan: false });
+      }
       const response = ThreadResponse.parse(
         await provider.request(info.threadId ? "thread/resume" : "thread/start", {
           ...(info.threadId ? { threadId: info.threadId } : {}),
@@ -254,6 +271,8 @@ export class AgentManager {
           directory: project.directory,
           provider: "codex",
           model: op.model ?? null,
+          settings: { ...defaultSettings, model: op.model ?? null },
+          context: null,
           threadId: null,
           turnId: null,
           status: "starting",
@@ -275,6 +294,43 @@ export class AgentManager {
         return this.result(request, info.id);
       }
       const info = this.#store.agent(op.sessionId);
+      if (op.kind === "refresh-models") {
+        const provider = await this.provider(info.id);
+        this.update(info.id, {
+          models: parseModels(await provider.request("model/list", {})),
+          updatedAt: info.updatedAt,
+        });
+        return this.result(request, info.id);
+      }
+      if (op.kind === "configure") {
+        if (info.revision !== op.expectedRevision)
+          throw new Error("Agent settings changed. Try again.");
+        if (
+          op.settings.model &&
+          info.models?.length &&
+          !info.models.some((m) => m.id === op.settings.model)
+        )
+          throw new Error("That model is not available on this machine.");
+        if (op.settings.planMode && !info.supportsPlan)
+          throw new Error(
+            "Plan mode is not available on this machine. Refresh models after updating Codex.",
+          );
+        const model = info.models?.find((m) => m.id === (op.settings.model ?? info.model));
+        if (op.settings.effort && model && !model.efforts.includes(op.settings.effort))
+          throw new Error("That thinking effort is not supported by this model.");
+        if (
+          op.settings.serviceTier &&
+          !model?.serviceTiers?.some((tier) => tier.id === op.settings.serviceTier)
+        )
+          throw new Error("That speed is not supported by this model.");
+        this.#store.reserveAgentAction(request, {
+          ...info,
+          settings: op.settings,
+          revision: info.revision + 1,
+        });
+        this.#emit({ type: "agent.state", agent: this.#store.agent(info.id) });
+        return this.result(request, info.id);
+      }
       if (op.kind === "send") {
         if (["starting", "working", "needs_input"].includes(info.status))
           throw new Error("This agent already has an active turn");
@@ -301,11 +357,17 @@ export class AgentManager {
           id: `prompt:${request.requestId}`,
           kind: "user",
           title: "You",
-          text: op.text,
+          text:
+            op.text +
+            (op.attachments?.length
+              ? "\n\nAttached: " + op.attachments.map((a) => a.name).join(", ")
+              : ""),
           detail: "",
           status: "completed",
         });
-        void this.send(info.id, op.text).catch((error) => this.fail(info.id, error));
+        void this.send(info.id, op.text, op.attachments ?? [], next.settings).catch((error) =>
+          this.fail(info.id, error),
+        );
       } else if (op.kind === "interrupt") {
         if (info.turnId !== op.turnId || !["working", "needs_input"].includes(info.status))
           throw new Error("That turn is no longer active");
@@ -371,13 +433,22 @@ export class AgentManager {
       outcome: { status: "ok", conversation: this.#store.agentConversation(id, before) },
     };
   }
-  private async send(id: string, text: string): Promise<void> {
+  private async send(
+    id: string,
+    text: string,
+    attachments: AgentAttachment[],
+    settings: AgentInfo["settings"],
+  ): Promise<void> {
     const provider = await this.provider(id);
     const info = this.#store.agent(id);
+    const uploaded = attachments.length
+      ? await saveAttachments(this.#store.attachmentsDirectory, id, attachments)
+      : [];
     const response = z.object({ turn: Turn }).parse(
       await provider.request("turn/start", {
         threadId: info.threadId,
-        input: [{ type: "text", text }],
+        input: [...(text ? [{ type: "text", text }] : []), ...uploaded],
+        ...turnControls({ ...info, settings: settings ?? defaultSettings }),
       }),
     );
     const current = this.#store.agent(id);
@@ -413,7 +484,57 @@ export class AgentManager {
   private notification(id: string, method: string, raw: unknown): void {
     const params = ObjectValue.parse(raw);
     const info = this.#store.agent(id);
-    if (params["threadId"] !== info.threadId) return;
+    if (params["threadId"] !== info.threadId) {
+      for (const item of this.#store.agentConversation(id).items) {
+        const children = item.presentation?.children;
+        if (!children?.some((child) => child.id === params["threadId"])) continue;
+        let status: string | undefined, message: string | undefined;
+        if (method === "turn/started") status = "running";
+        if (method === "turn/completed") {
+          const turn = Turn.safeParse(params["turn"]);
+          if (turn.success) status = turn.data.status;
+        }
+        if (method === "item/completed") {
+          const output = z
+            .object({ type: z.literal("agentMessage"), text: z.string() })
+            .safeParse(params["item"]);
+          if (output.success) message = output.data.text.slice(0, 4000);
+        }
+        if (status || message)
+          this.item(id, item.turnId, {
+            ...item,
+            presentation: {
+              ...item.presentation,
+              type: "sub_agent",
+              children: children.map((child) =>
+                child.id === params["threadId"]
+                  ? { ...child, status: status ?? child.status, message: message ?? child.message }
+                  : child,
+              ),
+            },
+          });
+      }
+      return;
+    }
+    if (method === "thread/tokenUsage/updated") {
+      const usage = z
+        .object({
+          last: z.object({ totalTokens: z.number().nonnegative() }),
+          total: z.object({ totalTokens: z.number().nonnegative() }),
+          modelContextWindow: z.number().positive().nullable(),
+        })
+        .safeParse(params["tokenUsage"]);
+      if (usage.success)
+        this.update(id, {
+          context: {
+            used: usage.data.last.totalTokens,
+            total: usage.data.total.totalTokens,
+            limit: usage.data.modelContextWindow,
+          },
+          updatedAt: info.updatedAt,
+        });
+      return;
+    }
     if (method === "turn/started") {
       const turn = Turn.parse(params["turn"]);
       this.started(id, turn.id);
@@ -440,13 +561,27 @@ export class AgentManager {
         for (const p of runtime.pending.values()) p.reject(new Error("Turn ended"));
         runtime.pending.clear();
       }
-      if (turn.status !== "completed")
-        for (const item of this.#store.agentTurnItems(id, turn.id))
-          if (item.status === "running")
-            this.item(id, turn.id, {
-              ...item,
-              status: turn.status === "interrupted" ? "interrupted" : "failed",
-            });
+      for (const item of this.#store.agentTurnItems(id, turn.id)) {
+        const status =
+          turn.status === "completed"
+            ? "completed"
+            : turn.status === "interrupted"
+              ? "interrupted"
+              : "failed";
+        const children = item.presentation?.children?.map((child) =>
+          status !== "completed" && ["running", "pending", "inProgress"].includes(child.status)
+            ? { ...child, status }
+            : child,
+        );
+        if (item.status === "running" || children)
+          this.item(id, turn.id, {
+            ...item,
+            status: item.status === "running" ? status : item.status,
+            ...(children && item.presentation
+              ? { presentation: { ...item.presentation, children } }
+              : {}),
+          });
+      }
       const duration = info.turnStartedAt
         ? Math.max(0, Math.round((Date.now() - Date.parse(info.turnStartedAt)) / 1000))
         : 0;
@@ -484,9 +619,12 @@ export class AgentManager {
     if (method === "item/started" || method === "item/completed")
       this.lifecycle(id, String(params["turnId"]), params["item"], method === "item/completed");
     else if (
-      ["item/agentMessage/delta", "item/plan/delta", "item/commandExecution/outputDelta"].includes(
-        method,
-      )
+      [
+        "item/agentMessage/delta",
+        "item/plan/delta",
+        "item/commandExecution/outputDelta",
+        "item/reasoning/summaryTextDelta",
+      ].includes(method)
     ) {
       const event = z
         .object({ itemId: z.string(), delta: z.string(), turnId: z.string() })
@@ -495,8 +633,21 @@ export class AgentManager {
       const tool = method === "item/commandExecution/outputDelta";
       this.item(id, event.turnId, {
         id: event.itemId,
-        kind: tool ? "tool" : method === "item/plan/delta" ? "plan" : "assistant",
-        title: prior?.title ?? (tool ? "Run command" : "Codex"),
+        kind:
+          tool || method === "item/reasoning/summaryTextDelta"
+            ? "tool"
+            : method === "item/plan/delta"
+              ? "plan"
+              : "assistant",
+        presentation:
+          method === "item/reasoning/summaryTextDelta" ? { type: "thinking" } : prior?.presentation,
+        title:
+          prior?.title ??
+          (tool
+            ? "Run command"
+            : method === "item/reasoning/summaryTextDelta"
+              ? "Thinking"
+              : "Codex"),
         text: tool ? (prior?.text ?? "") : (prior?.text ?? "") + event.delta,
         detail: tool ? (prior?.detail ?? "") + event.delta : (prior?.detail ?? ""),
         status: "running",
@@ -509,6 +660,7 @@ export class AgentManager {
         id: `plan:${info.turnId}`,
         kind: "plan",
         title: "Progress",
+        presentation: { type: "plan", steps: plan.slice(0, 100) },
         text: plan
           .map(
             (p) =>

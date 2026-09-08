@@ -11,7 +11,7 @@ const detail = (value: unknown) => (value === undefined ? "" : JSON.stringify(va
 export function mapCodexItem(
   raw: unknown,
   completed: boolean,
-): Pick<AgentItem, "id" | "kind" | "title" | "text" | "detail" | "status"> | null {
+): Pick<AgentItem, "id" | "kind" | "title" | "text" | "detail" | "status" | "presentation"> | null {
   const item = Item.parse(raw);
   const status: AgentItem["status"] = ["failed", "declined"].includes(item.status ?? "")
     ? "failed"
@@ -38,12 +38,24 @@ export function mapCodexItem(
     case "plan":
       return { ...base, kind: "plan", title: "Plan", text: text(item["text"]) };
     case "reasoning":
-      return null; // Only user-facing messages are persisted; raw reasoning stays provider-side.
+      return {
+        ...base,
+        kind: "tool",
+        title: "Thinking",
+        text: z.array(z.string()).catch([]).parse(item["summary"]).join("\n"),
+        presentation: { type: "thinking" },
+      }; // Provider-authored summaries only; never raw reasoning content.
     case "commandExecution":
       return {
         ...base,
         kind: "tool",
         title: "Run command",
+        presentation: {
+          type: "shell",
+          command: (normalizeCommandExecutionCommand(item["command"]) ?? "Command").slice(0, 16000),
+          cwd: text(item["cwd"]),
+          exitCode: typeof item["exitCode"] === "number" ? item["exitCode"] : null,
+        },
         text: normalizeCommandExecutionCommand(item["command"]) ?? "Command",
         detail: [
           text(item["cwd"]),
@@ -58,14 +70,67 @@ export function mapCodexItem(
         ...base,
         kind: "tool",
         title: "Edit files",
+        presentation: {
+          type: "files",
+          files: z
+            .array(z.object({ path: z.string(), diff: z.string().optional() }))
+            .catch([])
+            .parse(item["changes"])
+            .slice(0, 100)
+            .map((f) => ({ path: f.path, diff: (f.diff ?? "").slice(0, 16000) })),
+        },
         text: "File changes",
         detail: detail(item["changes"]),
+      };
+    case "collabAgentToolCall": {
+      const states = z
+        .record(
+          z.string(),
+          z.object({ status: z.string(), message: z.string().nullable().optional() }),
+        )
+        .catch({})
+        .parse(item["agentsStates"]);
+      const ids = z.array(z.string()).catch([]).parse(item["receiverThreadIds"]);
+      return {
+        ...base,
+        kind: "tool",
+        title: "Sub-agents",
+        text: text(item["prompt"]) || text(item["tool"]),
+        detail: detail(item),
+        presentation: {
+          type: "sub_agent",
+          children: ids.slice(0, 100).map((id) => ({
+            id,
+            status: states[id]?.status ?? "running",
+            message: states[id]?.message?.slice(0, 4000) ?? null,
+          })),
+        },
+      };
+    }
+    case "subAgentActivity":
+      return {
+        ...base,
+        kind: "tool",
+        title: "Sub-agent activity",
+        text: text(item["agentPath"]),
+        detail: detail(item),
+        presentation: {
+          type: "sub_agent",
+          children: [
+            { id: text(item["agentThreadId"]), status: text(item["kind"]), message: null },
+          ],
+        },
       };
     case "mcpToolCall":
       return {
         ...base,
         kind: "tool",
         title: `${text(item["server"])} · ${text(item["tool"])}`,
+        presentation: {
+          type: "mcp",
+          input: detail(item["arguments"]).slice(0, 16000),
+          output: detail(item["result"] ?? item["error"]).slice(0, 16000),
+        },
         text: text(item["tool"]),
         detail: detail({ input: item["arguments"], output: item["result"], error: item["error"] }),
       };
@@ -74,6 +139,7 @@ export function mapCodexItem(
         ...base,
         kind: "tool",
         title: "Search the web",
+        presentation: { type: "search" },
         text: text(item["query"]),
         detail: detail(item["action"]),
       };

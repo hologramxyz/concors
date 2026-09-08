@@ -1,7 +1,8 @@
+import { AgentLoadingIcon } from "./activity";
 import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
 import { TAB_PROFILES } from "@/workspace/tab-profiles";
 import { useEffect } from "react";
-import { Bot, LoaderCircle } from "lucide-react";
+import { Bot } from "lucide-react";
 import type { WorkspaceSnapshot } from "@concors/protocol";
 import { Chat } from "./chat";
 import { AgentStatus } from "./state";
@@ -27,30 +28,20 @@ export function AgentSidebar({ onSelect }: { onSelect: (id: string) => void }) {
       unread: !!(agent.attention && !agent.attention.seen),
     })),
     ...terminals
-      .filter((session) => session.profile !== "shell")
+      .filter(
+        (session) =>
+          session.profile !== "shell" &&
+          (session.status === "running" || session.status === "starting"),
+      )
       .map((session) => ({
         id: session.id,
         name:
           TAB_PROFILES.find((profile) => profile.profile === session.profile)?.label ??
           session.profile,
         updatedAt: session.startedAt,
-        running: session.status === "running" || session.status === "starting",
-        status:
-          session.status === "running"
-            ? "Running in terminal"
-            : session.status === "starting"
-              ? "Starting"
-              : session.status === "exited"
-                ? "Exited"
-                : session.status === "failed"
-                  ? "Failed"
-                  : "Interrupted",
-        color:
-          session.status === "exited"
-            ? "bg-emerald-500"
-            : session.status === "failed"
-              ? "bg-red-500"
-              : "bg-white",
+        running: true,
+        status: session.status === "running" ? "Running in terminal" : "Starting",
+        color: "bg-white",
         unread: false,
       })),
   ].toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -80,10 +71,7 @@ export function AgentSidebar({ onSelect }: { onSelect: (id: string) => void }) {
                   />
                 )}
                 {running ? (
-                  <LoaderCircle
-                    className="size-4 animate-spin text-amber-500 motion-reduce:animate-none"
-                    aria-hidden="true"
-                  />
+                  <AgentLoadingIcon />
                 ) : (
                   <span className={`size-2.5 rounded-full border border-black/15 ${agent.color}`} />
                 )}
@@ -118,8 +106,8 @@ export function AgentsView({
         <Bot className="size-10 text-muted-foreground/50" />
         <h2 className="text-lg font-medium">All your agents</h2>
         <p className="max-w-sm text-sm text-muted-foreground">
-          Choose Unified chat in a project pane to start Codex. Conversations across projects will
-          appear here.
+          Choose Agent in a project pane to start Codex. Conversations across projects will appear
+          here.
         </p>
       </div>
     );

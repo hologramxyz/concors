@@ -69,12 +69,20 @@ test("workspace shortcuts create, search, split and close the active pane withou
       "vertical",
     );
     const newPane = panes.last();
-    await expect(newPane).toBeFocused();
+    await expect(newPane.locator("textarea")).toBeFocused();
     await page.keyboard.press("Control+Shift+e");
     await expect(panes).toHaveCount(3);
     await expect(page.getByRole("separator", { name: /Resize/ })).toHaveCount(2);
     await expect(page.locator('[role="separator"][aria-orientation="horizontal"]')).toHaveCount(1);
-    const closedId = await page.locator("[data-pane-id]:focus").getAttribute("data-pane-id");
+    await expect(panes.last().locator("textarea")).toBeFocused();
+    await expect(panes.last().getByLabel("Terminal output")).toContainText("CODEX_TERMINAL_READY");
+    const closedId = await page.evaluate(() =>
+      document.activeElement?.closest("[data-pane-id]")?.getAttribute("data-pane-id"),
+    );
+    // Closing a pane deliberately leaves its PTY alive; end this fixture first.
+    await page.keyboard.type("exit");
+    await page.keyboard.press("Enter");
+    await expect(panes.last().getByRole("button", { name: "Start new session" })).toBeVisible();
     await page.keyboard.press("Control+Shift+w");
     await expect(panes).toHaveCount(2);
     await expect(page.locator(`[data-pane-id="${closedId}"]`)).toHaveCount(0);
@@ -99,11 +107,14 @@ test("workspace shortcuts create, search, split and close the active pane withou
         .getByRole("navigation", { name: "Primary" })
         .getByRole("region", { name: "Agents", exact: true })
         .getByRole("button", { name: /Running in terminal.*Codex/ }),
-    ).toHaveCount(1);
+    ).toHaveCount(3);
     // The daemon is shared by acceptance tests; stop our fixture before detaching its pane.
-    await panes.first().locator("textarea").focus();
-    await page.keyboard.type("exit");
-    await page.keyboard.press("Enter");
+    for (const pane of await panes.all()) {
+      await pane.locator("textarea").focus();
+      await page.keyboard.type("exit");
+      await page.keyboard.press("Enter");
+      await expect(pane.getByRole("button", { name: "Start new session" })).toBeVisible();
+    }
     await expect(
       page
         .getByRole("navigation", { name: "Primary" })

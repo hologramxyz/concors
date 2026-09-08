@@ -1,4 +1,4 @@
-# Codex unified chat
+# Codex Agent chat
 
 The daemon connects the installed Codex CLI to durable agent sessions. A chat pane
 reserves a session and its binding before starting a provider thread. Prompts have
@@ -54,12 +54,12 @@ Codex completed a minimal tool-free turn and returned `CONCORS_CHAT_OK`.
 
 Windows/macOS tests use a deterministic provider; they do not establish real Codex
 installation or sandbox support on those systems. The UI integration is reviewed in a separate
-PR. Claude Code/OpenCode chat adapters and notifications remain later slices.
+PR. Claude Code/OpenCode chat adapters remain later slices.
 Pierre's cloud server repository is unchanged.
 
 ## Chat client
 
-Choose **Unified chat** from a pane's profile menu, then **Start Codex chat**.
+Choose **New tab → Agent**, or choose **Agent** from a pane's profile menu, then **Start Codex agent**.
 Leave Model empty to use the machine's Codex default, or specify a model available
 to that installation. Codex must already be installed and signed in on the machine.
 Send with Enter; Shift+Enter inserts a line break. The square button interrupts the
@@ -80,3 +80,6 @@ request ID for an explicit retry; they are never automatically resent.
 Browser acceptance covers streaming, reload, cross-client interruption, one-time
 approval, structured input, and continuing after closing the original pane. The
 browser fixture is a separate test entry point, never a production runtime option.
+
+See [Agent interface](agent-interface.md) for the expanded composer, structured progress,
+Paseo source manifest, and feature limits.

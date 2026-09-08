@@ -60,11 +60,15 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
     await first.getByRole("button", { name: "Pane actions", exact: true }).click();
     await first.getByRole("menuitem", { name: "Split horizontally", exact: true }).click();
     await expect(second.getByRole("region", { name: "Terminal pane", exact: true })).toHaveCount(2);
+    await expect(first.locator(".concors-terminal .xterm")).toHaveCount(2);
+    await expect(second.locator(".concors-terminal .xterm")).toHaveCount(2);
+    await expect(first.getByRole("button", { name: "Start terminal", exact: true })).toHaveCount(0);
     await second.getByRole("button", { name: "Pane actions", exact: true }).last().click();
-    await second.getByRole("menuitemradio", { name: "Unified chat", exact: true }).click();
-    await expect(first.getByRole("region", { name: "Unified chat pane", exact: true })).toHaveCount(
-      1,
-    );
+    await second.getByRole("menuitemradio", { name: "Agent", exact: true }).click();
+    await expect(first.getByRole("region", { name: "Agent pane", exact: true })).toHaveCount(1);
+    await expect(first.getByLabel("Message Codex")).toBeEnabled();
+    await expect(second.getByLabel("Message Codex")).toBeEnabled();
+    await expect(first.getByRole("log", { name: "Chat timeline" })).toBeEmpty();
     await first.getByRole("separator", { name: "Resize split" }).focus();
     await first.keyboard.press("ArrowRight");
     await expect(second.getByRole("separator", { name: "Resize split" })).toHaveAttribute(
@@ -79,9 +83,7 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
       second.getByRole("button", { name: "Build and review", exact: true }),
     ).toBeVisible();
     await second.reload();
-    await expect(
-      second.getByRole("region", { name: "Unified chat pane", exact: true }),
-    ).toHaveCount(1);
+    await expect(second.getByRole("region", { name: "Agent pane", exact: true })).toHaveCount(1);
     await expect(second.getByRole("separator", { name: "Resize split" })).toHaveAttribute(
       "aria-valuenow",
       "55",
@@ -114,9 +116,7 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
       first.getByRole("button", { name: "Build and review", exact: true }),
     ).toHaveAttribute("aria-pressed", "true");
     await second.getByRole("button", { name: "Close pane", exact: true }).last().click();
-    await expect(first.getByRole("region", { name: "Unified chat pane", exact: true })).toHaveCount(
-      0,
-    );
+    await expect(first.getByRole("region", { name: "Agent pane", exact: true })).toHaveCount(0);
     await expect(first.getByRole("region", { name: "Terminal pane", exact: true })).toHaveCount(1);
     await expect(first.getByRole("separator", { name: "Resize split" })).toHaveCount(0);
 

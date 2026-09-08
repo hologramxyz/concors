@@ -30,3 +30,16 @@ pnpm test:workspace:e2e
 ```
 
 The test starts two temporary daemons on ports 7429/7430 and Vite on 1420; stop any existing Vite instance first. It uses independent browser contexts to verify layout/profile/navigation sync, keyboard resizing, reload, actual WebSocket disconnection/reconnection, and isolation when switching machines. Temporary SQLite files live under the system temp directory. Traces are retained on failure in ignored `test-results/`.
+
+## Rearranging panes
+
+Drag a pane header within its tab. Four unlabeled drop zones cover the entire pane workspace.
+Dropping left/right/top/bottom moves the source beside all remaining panes in a new half-width
+or half-height split. The active zone is highlighted; there is no center swap target.
+The old source split collapses automatically.
+
+`pane.move` with `scope: "workspace"` commits the tree change atomically using the project version captured at drag start.
+Pane IDs, profiles, and session bindings stay unchanged; no terminal or agent is stopped or
+restarted. Layouts sync across clients and survive reload. Clients only enable dragging when
+the daemon advertises `workspace-pane-rearrangement`. Cross-tab dragging and touch dragging are not
+implemented in this browser interaction.

@@ -64,7 +64,6 @@ export function ProjectWorkspace({
     );
   const createTab = (profile: PaneProfile, name?: string) => {
     if (!connection?.workspace || !canEdit || creating.current) return;
-    const epoch = connection.workspace.epoch;
     const tabId = crypto.randomUUID();
     const paneId = crypto.randomUUID();
     creating.current = true;
@@ -80,28 +79,7 @@ export function ProjectWorkspace({
         name: name || (TAB_PROFILES.find((item) => item.profile === profile)?.label ?? "Terminal"),
         profile,
       });
-      const current = connection.workspace;
-      const updated = current?.projects.find((item) => item.id === project.id);
-      if (current?.epoch !== epoch || !updated || connection.state.status !== "ready")
-        throw new Error(
-          "The tab was created, but the machine disconnected before its session started.",
-        );
-      const target = {
-        kind: "start" as const,
-        epoch,
-        projectId: project.id,
-        tabId,
-        paneId,
-        expectedVersion: updated.version,
-      };
-      const result =
-        profile === "chat"
-          ? await connection.requestAgent(target, crypto.randomUUID())
-          : await connection.requestTerminal(
-              { ...target, expectedSessionId: null, cols: 80, rows: 24 },
-              crypto.randomUUID(),
-            );
-      if (result.outcome.status === "error") throw new Error(result.outcome.message);
+      // Each mounted pane starts its own session, including split and converted panes.
     })()
       .catch((cause: unknown) => {
         setLaunchError(cause instanceof Error ? cause.message : "Could not start session");
@@ -114,7 +92,7 @@ export function ProjectWorkspace({
   const renameTab = project.tabs.find((tab) => tab.id === renaming);
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-8 shrink-0 items-center border-b bg-muted/20 px-2">
+      <div className="flex min-h-9 shrink-0 items-center px-2 py-1">
         <div
           className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
           aria-label="Project tabs"

@@ -57,7 +57,7 @@ test("notifications deduplicate across windows, open chat, and sync unread witho
       .getByRole("button", { name: "Add project", exact: true })
       .click();
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Unified chat", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
     await expect(page.getByLabel("Agent status: Ready").first()).toBeVisible();
     const project = control.workspace?.projects.find((p) => p.directory === directory);
     assert(project);

@@ -17,7 +17,7 @@ test("new tab menu creates a named terminal only after choosing a profile", asyn
       .getByRole("button", { name: "Add project", exact: true })
       .click();
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    for (const name of ["Terminal", "Unified chat", "Codex", "Claude Code", "OpenCode"]) {
+    for (const name of ["Terminal", "Agent", "Codex", "Claude Code", "OpenCode"]) {
       await expect(page.getByRole("menuitem", { name, exact: true })).toBeVisible();
     }
     await page.keyboard.press("Escape");
