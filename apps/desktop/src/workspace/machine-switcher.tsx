@@ -31,6 +31,7 @@ export function MachineSwitcher({
           className="m-2 flex h-9 w-[calc(100%-1rem)] items-center gap-2 rounded-md px-2 text-left hover:bg-sidebar-accent"
           aria-label="Switch machine"
         >
+          <Monitor className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
             {selected?.name ?? "This computer"}
           </span>
