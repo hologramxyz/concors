@@ -84,6 +84,7 @@ export const WorkspaceOperationSchema = z.discriminatedUnion("kind", [
     ...TabTarget,
     paneId: Id,
     targetPaneId: Id,
+    scope: z.enum(["pane", "workspace"]).optional(),
     placement: z.enum(["center", "left", "right", "top", "bottom"]),
     splitId: Id,
   }),
