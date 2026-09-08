@@ -140,7 +140,7 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     for (const name of ["Terminal", "Agent", "Codex", "Claude Code", "OpenCode"])
       await expect(page.getByRole("menuitemradio", { name, exact: true })).toBeEnabled();
     await page.getByRole("menuitemradio", { name: "Terminal", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Start terminal", exact: true })).toBeVisible();
+    await expect(page.locator(".concors-terminal .xterm")).toBeVisible();
     expect(errors).toEqual([]);
   } finally {
     await rm(directory, { recursive: true, force: true });
