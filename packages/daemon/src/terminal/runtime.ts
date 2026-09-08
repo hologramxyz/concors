@@ -163,7 +163,7 @@ export class TerminalRuntime {
           return;
         }
         this.#coalescer.flush();
-        let data = this.#serializer.serialize({ scrollback: 200 });
+        let data = this.#serializer.serialize({ scrollback: 500 });
         if (Buffer.byteLength(data) > 1024 * 1024)
           data = this.#serializer.serialize({ scrollback: 0 });
         viewer.send({
