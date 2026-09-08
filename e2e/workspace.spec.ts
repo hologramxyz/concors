@@ -34,11 +34,34 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
     await expect(
       second.getByRole("heading", { name: "Concors acceptance", exact: true }),
     ).toBeVisible();
+    const sidebar = first.getByRole("navigation", { name: "Primary" });
+    const projectsSection = sidebar.getByRole("button", { name: "Projects", exact: true });
+    await projectsSection.click();
+    await expect(projectsSection).toHaveAttribute("aria-expanded", "false");
+    await expect(
+      sidebar.getByRole("button", { name: "Concors acceptance", exact: true }),
+    ).toBeHidden();
+    await projectsSection.click();
+    await expect(
+      sidebar.getByRole("button", { name: "Concors acceptance", exact: true }),
+    ).toBeVisible();
+    await expect(sidebar.getByRole("button", { name: "Agents", exact: true })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    await expect(sidebar.getByRole("button", { name: "Servers", exact: true })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    await expect(first.getByRole("button", { name: "Sessions", exact: true })).toHaveCount(0);
     await first.getByRole("button", { name: "New tab", exact: true }).click();
+    await first.getByRole("menuitem", { name: "Terminal", exact: true }).click();
     await expect(second.getByRole("region", { name: "Terminal pane", exact: true })).toHaveCount(1);
-    await first.getByRole("button", { name: "Split horizontally", exact: true }).click();
+    await first.getByRole("button", { name: "Pane actions", exact: true }).click();
+    await first.getByRole("menuitem", { name: "Split horizontally", exact: true }).click();
     await expect(second.getByRole("region", { name: "Terminal pane", exact: true })).toHaveCount(2);
-    await second.getByLabel("Pane profile").last().selectOption("chat");
+    await second.getByRole("button", { name: "Pane actions", exact: true }).last().click();
+    await second.getByRole("menuitemradio", { name: "Unified chat", exact: true }).click();
     await expect(first.getByRole("region", { name: "Unified chat pane", exact: true })).toHaveCount(
       1,
     );
@@ -48,7 +71,8 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
       "aria-valuenow",
       "55",
     );
-    await first.getByRole("button", { name: "Rename tab", exact: true }).click();
+    await first.getByRole("button", { name: "Terminal", exact: true }).click({ button: "right" });
+    await first.getByRole("menuitem", { name: "Rename tab", exact: true }).click();
     await first.getByLabel("Tab name", { exact: true }).fill("Build and review");
     await first.getByRole("button", { name: "Save", exact: true }).click();
     await expect(
@@ -67,14 +91,15 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
     for (const socket of sockets.splice(0)) socket.close();
     await expect(second.getByRole("button", { name: "New tab", exact: true })).toBeDisabled();
     await first.getByRole("button", { name: "New tab", exact: true }).click();
+    await first.getByRole("menuitem", { name: "Terminal", exact: true }).click();
     disconnected = false;
-    await expect(second.getByRole("button", { name: "Tab 2", exact: true })).toHaveAttribute(
+    await expect(second.getByRole("button", { name: "Terminal", exact: true })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
     const tabs = first.getByLabel("Project tabs");
     await tabs
-      .getByRole("button", { name: "Tab 2", exact: true })
+      .getByRole("button", { name: "Terminal", exact: true })
       .dragTo(tabs.getByRole("button", { name: "Build and review", exact: true }));
     await expect
       .poll(() =>
@@ -83,7 +108,7 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
           .locator("[data-tab-id] > button:first-child")
           .allTextContents(),
       )
-      .toEqual(["Tab 2", "Build and review"]);
+      .toEqual(["Terminal", "Build and review"]);
     await second.getByRole("button", { name: "Build and review", exact: true }).click();
     await expect(
       first.getByRole("button", { name: "Build and review", exact: true }),
@@ -94,6 +119,11 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
     );
     await expect(first.getByRole("region", { name: "Terminal pane", exact: true })).toHaveCount(1);
     await expect(first.getByRole("separator", { name: "Resize split" })).toHaveCount(0);
+
+    await first.getByRole("button", { name: "Terminal", exact: true }).focus();
+    await first.keyboard.press("Shift+F10");
+    await first.getByRole("menuitem", { name: "Close tab", exact: true }).click();
+    await expect(second.getByRole("button", { name: "Terminal", exact: true })).toHaveCount(0);
 
     await first.getByRole("button", { name: "Switch machine", exact: true }).click();
     await first.getByRole("menuitem", { name: "Connect a machine…", exact: true }).click();
@@ -114,6 +144,23 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
     await expect(
       first.getByRole("button", { name: "Build and review", exact: true }),
     ).toHaveAttribute("aria-pressed", "true");
+    await first.getByRole("button", { name: "Actions for Concors acceptance" }).click();
+    await first.getByRole("menuitem", { name: "Remove project…" }).click();
+    await expect(first.getByRole("dialog")).toContainText("Files on disk are kept.");
+    await expect(first.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+    await first.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(
+      first.getByRole("heading", { name: "Concors acceptance", exact: true }),
+    ).toBeVisible();
+    await first.getByRole("button", { name: "Actions for Concors acceptance" }).click();
+    await first.getByRole("menuitem", { name: "Remove project…" }).click();
+    await first
+      .getByRole("dialog")
+      .getByRole("button", { name: "Remove project", exact: true })
+      .click();
+    await expect(
+      second.getByRole("heading", { name: "Your projects, in one place" }),
+    ).toBeVisible();
     expect(errors).toEqual([]);
   } finally {
     await otherDevice.close();

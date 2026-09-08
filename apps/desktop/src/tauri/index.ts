@@ -14,3 +14,8 @@ export { openExternal } from "./open-external.ts";
 export function isTauri(): boolean {
   return tauriIsTauri();
 }
+export {
+  showNativeNotification,
+  dismissNativeNotification,
+  onNativeNotificationClick,
+} from "./notifications";

@@ -10,6 +10,7 @@
 //! over the Concors protocol. No product or agent-orchestration logic belongs here.
 
 mod daemon;
+mod notifications;
 
 use tauri::Manager;
 
@@ -21,7 +22,10 @@ pub fn run() {
         // Opens links (Stripe Checkout, invoices) in the system browser instead of the webview.
         .plugin(tauri_plugin_opener::init())
         .manage(daemon::LocalDaemon::default())
+        .manage(notifications::Notifications::default())
         .invoke_handler(tauri::generate_handler![
+            notifications::show_agent_notification,
+            notifications::dismiss_agent_notification,
             daemon::local_daemon_status,
             daemon::start_local_daemon,
             daemon::stop_local_daemon,
