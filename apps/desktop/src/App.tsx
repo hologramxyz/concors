@@ -261,9 +261,7 @@ function AppContent() {
                 {!(view === "projects" && activeProject) && (
                   <header className="flex h-11 shrink-0 items-center gap-2 border-b px-4">
                     {sidebarToggle}
-                    <h1 className="truncate text-[13px] font-medium">
-                      {navItemFor(view).label}
-                    </h1>
+                    <h1 className="truncate text-[13px] font-medium">{navItemFor(view).label}</h1>
                   </header>
                 )}
                 {error && (

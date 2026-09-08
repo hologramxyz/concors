@@ -35,7 +35,6 @@ export const STATUS_TONE: Record<MachineStatus, StatusTone> = {
   running: "success",
   stopped: "neutral",
   error: "danger",
-  deleting: "pending",
   deleted: "neutral",
   unknown: "neutral",
 };
@@ -54,8 +53,6 @@ export function describeStatus(machine: Pick<Machine, "status" | "ovhState" | "s
       return "Stopped";
     case "error":
       return "Error";
-    case "deleting":
-      return "Deleting";
     case "deleted":
       return "Deleted";
     case "unknown":
@@ -65,11 +62,20 @@ export function describeStatus(machine: Pick<Machine, "status" | "ovhState" | "s
 
 /** Machines the server may still change on its own; the list keeps polling while any exist. */
 export function isSettling(machine: Pick<Machine, "status">): boolean {
-  return (
-    machine.status === "provisioning" ||
-    machine.status === "deleting" ||
-    machine.status === "unknown"
-  );
+  return machine.status === "provisioning" || machine.status === "unknown";
+}
+
+/** `Ends Oct 8, 2026` for a cancelled machine, or `null` when it is not cancelled. */
+export function describeEnding(
+  machine: Pick<Machine, "cancelledAt" | "paidUntil">,
+  locale?: string,
+): string | null {
+  if (machine.cancelledAt === null) return null;
+  if (machine.paidUntil === null) return "Ends when the paid month is over";
+  const date = new Date(machine.paidUntil);
+  return Number.isNaN(date.getTime())
+    ? "Ends when the paid month is over"
+    : `Ends ${date.toLocaleDateString(locale, { dateStyle: "medium" })}`;
 }
 
 /** `ssh ubuntu@1.2.3.4`, or `null` until the machine has an address and accepts logins. */

@@ -1,6 +1,6 @@
 import type { Machine } from "@concors/api-client";
 import { cn } from "cn";
-import { Check, Cloud, Copy, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { CalendarX, Check, Cloud, Copy, Plus, RefreshCw, Undo2 } from "lucide-react";
 import { useState } from "react";
 
 import { activeOrganization, type SignedInAuth } from "@/auth/auth-state";
@@ -17,6 +17,7 @@ import {
 
 import { CreateMachineDialog } from "./create-machine-dialog.tsx";
 import {
+  describeEnding,
   describeStatus,
   formatMonthly,
   sshCommand,
@@ -29,12 +30,13 @@ interface MachinesViewProps {
   readonly auth: SignedInAuth;
 }
 
-/** Cloud machines of the active organization: list, create, destroy, and how to connect. */
+/** Cloud machines of the active organization: list, create, cancel, and how to connect. */
 export function MachinesView({ auth }: MachinesViewProps) {
   const organization = activeOrganization(auth);
   const state = useMachines(organization?.id);
   const [creating, setCreating] = useState(false);
-  const [destroying, setDestroying] = useState<Machine | null>(null);
+  const [cancelling, setCancelling] = useState<Machine | null>(null);
+  const [resuming, setResuming] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const machines = state.machines ?? [];
@@ -99,7 +101,19 @@ export function MachinesView({ auth }: MachinesViewProps) {
         <ul className="flex flex-col gap-3">
           {machines.map((machine) => (
             <li key={machine.id}>
-              <MachineCard machine={machine} onDestroy={() => setDestroying(machine)} />
+              <MachineCard
+                machine={machine}
+                onCancel={() => setCancelling(machine)}
+                resuming={resuming === machine.id}
+                onResume={() => {
+                  setResuming(machine.id);
+                  setActionError(null);
+                  void state
+                    .resume(machine.id)
+                    .catch((cause: unknown) => setActionError(describeMachinesError(cause)))
+                    .finally(() => setResuming(null));
+                }}
+              />
             </li>
           ))}
         </ul>
@@ -117,15 +131,15 @@ export function MachinesView({ auth }: MachinesViewProps) {
         />
       )}
 
-      {destroying && (
-        <DestroyMachineDialog
-          machine={destroying}
+      {cancelling && (
+        <CancelMachineDialog
+          machine={cancelling}
           onConfirm={async () => {
-            await state.destroy(destroying.id).catch((cause: unknown) => {
+            await state.cancel(cancelling.id).catch((cause: unknown) => {
               throw new Error(describeMachinesError(cause));
             });
           }}
-          onClose={() => setDestroying(null)}
+          onClose={() => setCancelling(null)}
         />
       )}
     </div>
@@ -141,13 +155,18 @@ const TONE_CLASS: Record<StatusTone, string> = {
 
 function MachineCard({
   machine,
-  onDestroy,
+  onCancel,
+  onResume,
+  resuming,
 }: {
   readonly machine: Machine;
-  readonly onDestroy: () => void;
+  readonly onCancel: () => void;
+  readonly onResume: () => void;
+  readonly resuming: boolean;
 }) {
   const command = sshCommand(machine);
   const tone = STATUS_TONE[machine.status];
+  const ending = describeEnding(machine);
   return (
     <div className="rounded-lg border p-4">
       <div className="flex items-start justify-between gap-4">
@@ -163,21 +182,28 @@ function MachineCard({
             />
             <h3 className="truncate font-medium">{machine.name}</h3>
             <Badge variant="outline">{describeStatus(machine)}</Badge>
+            {ending && <Badge variant="secondary">{ending}</Badge>}
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
             <span className="capitalize">{machine.size}</span> · {machine.region} ·{" "}
             {formatMonthly(machine.monthlyPrice)}
           </p>
         </div>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={onDestroy}
-          disabled={machine.status === "deleting"}
-          aria-label={`Destroy ${machine.name}`}
-        >
-          <Trash2 aria-hidden="true" />
-        </Button>
+        {ending ? (
+          <Button variant="outline" size="sm" onClick={onResume} disabled={resuming}>
+            <Undo2 data-icon="inline-start" aria-hidden="true" />
+            {resuming ? "Resuming…" : "Keep machine"}
+          </Button>
+        ) : (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={onCancel}
+            aria-label={`Cancel ${machine.name}`}
+          >
+            <CalendarX aria-hidden="true" />
+          </Button>
+        )}
       </div>
 
       {machine.lastError && (
@@ -234,7 +260,7 @@ function CopyButton({ text }: { readonly text: string }) {
   );
 }
 
-function DestroyMachineDialog({
+function CancelMachineDialog({
   machine,
   onConfirm,
   onClose,
@@ -245,6 +271,9 @@ function DestroyMachineDialog({
 }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const until = machine.paidUntil
+    ? new Date(machine.paidUntil).toLocaleDateString(undefined, { dateStyle: "medium" })
+    : "the end of the paid month";
   return (
     <Dialog
       open
@@ -254,10 +283,10 @@ function DestroyMachineDialog({
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Destroy {machine.name}?</DialogTitle>
+          <DialogTitle>Cancel {machine.name}?</DialogTitle>
           <DialogDescription>
-            Everything on the server is wiped and billing stops. The rest of the current month is
-            not refunded.
+            The machine keeps running until {until}, then it is deleted and nothing is charged
+            again. You can change your mind until then. The current month is not refunded.
           </DialogDescription>
         </DialogHeader>
         {error && (
@@ -278,14 +307,12 @@ function DestroyMachineDialog({
               onConfirm()
                 .then(onClose)
                 .catch((cause: unknown) => {
-                  setError(
-                    cause instanceof Error ? cause.message : "Could not destroy the machine",
-                  );
+                  setError(cause instanceof Error ? cause.message : "Could not cancel the machine");
                 })
                 .finally(() => setPending(false));
             }}
           >
-            {pending ? "Destroying…" : "Destroy machine"}
+            {pending ? "Cancelling…" : "Cancel machine"}
           </Button>
         </DialogFooter>
       </DialogContent>

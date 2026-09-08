@@ -88,27 +88,28 @@ to save the client one request.
 
 ## Endpoints used by the client
 
-| Method | Path                                | Purpose                                         |
-| ------ | ----------------------------------- | ----------------------------------------------- |
-| POST   | `/api/auth/sign-up/email`           | `{ name, email, password }` → `{ token, user }` |
-| POST   | `/api/auth/sign-in/email`           | `{ email, password }` → `{ token, user }`       |
-| POST   | `/api/auth/sign-out`                | Revoke the session                              |
-| GET    | `/api/v1/me`                        | Current user + session (active organization)    |
-| GET    | `/api/v1/organizations`             | Organizations of the user, personal first       |
-| POST   | `/api/auth/organization/set-active` | `{ organizationId }`                            |
-| GET    | `/api/v1/machines/catalog`          | Regions, sizes and prices for new machines      |
-| GET    | `/api/v1/machines`                  | Machines of an organization                     |
-| POST   | `/api/v1/machines`                  | `{ name, region, size }` → `{ machine }`        |
-| GET    | `/api/v1/machines/:id`              | One machine, refreshed from OVH                 |
-| DELETE | `/api/v1/machines/:id`              | Destroy a machine                               |
-| GET    | `/api/v1/machines/costs`            | Monthly cost of an organization's machines      |
-| GET    | `/api/v1/ssh-keys`                  | SSH keys of an organization                     |
-| POST   | `/api/v1/ssh-keys`                  | `{ name, publicKey }` → `{ sshKey }`            |
-| DELETE | `/api/v1/ssh-keys/:id`              | Remove a key                                    |
-| GET    | `/api/v1/billing`                   | Card on file, payment trouble, machine prices   |
-| POST   | `/api/v1/billing/setup`             | Stripe Checkout URL to save a card              |
-| POST   | `/api/v1/billing/portal`            | Stripe customer portal URL                      |
-| GET    | `/api/v1/billing/invoices`          | Invoices of an organization                     |
+| Method | Path                                | Purpose                                           |
+| ------ | ----------------------------------- | ------------------------------------------------- |
+| POST   | `/api/auth/sign-up/email`           | `{ name, email, password }` → `{ token, user }`   |
+| POST   | `/api/auth/sign-in/email`           | `{ email, password }` → `{ token, user }`         |
+| POST   | `/api/auth/sign-out`                | Revoke the session                                |
+| GET    | `/api/v1/me`                        | Current user + session (active organization)      |
+| GET    | `/api/v1/organizations`             | Organizations of the user, personal first         |
+| POST   | `/api/auth/organization/set-active` | `{ organizationId }`                              |
+| GET    | `/api/v1/machines/catalog`          | Regions, sizes and prices for new machines        |
+| GET    | `/api/v1/machines`                  | Machines of an organization                       |
+| POST   | `/api/v1/machines`                  | `{ name, region, size }` → `{ machine }`          |
+| GET    | `/api/v1/machines/:id`              | One machine, refreshed from OVH                   |
+| DELETE | `/api/v1/machines/:id`              | Cancel a machine (runs until the paid month ends) |
+| POST   | `/api/v1/machines/:id/resume`       | Undo a cancellation                               |
+| GET    | `/api/v1/machines/costs`            | Monthly cost of an organization's machines        |
+| GET    | `/api/v1/ssh-keys`                  | SSH keys of an organization                       |
+| POST   | `/api/v1/ssh-keys`                  | `{ name, publicKey }` → `{ sshKey }`              |
+| DELETE | `/api/v1/ssh-keys/:id`              | Remove a key                                      |
+| GET    | `/api/v1/billing`                   | Card on file, payment trouble, machine prices     |
+| POST   | `/api/v1/billing/setup`             | Stripe Checkout URL to save a card                |
+| POST   | `/api/v1/billing/portal`            | Stripe customer portal URL                        |
+| GET    | `/api/v1/billing/invoices`          | Invoices of an organization                       |
 
 Error bodies come in two shapes and are both mapped to `ApiError`: Fastify's
 `{ statusCode, error, message }` and Better Auth's `{ message, code }` (for example

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  describeEnding,
   describeStatus,
   formatMoney,
   formatMonthly,
@@ -61,9 +62,22 @@ describe("status", () => {
 
   it("keeps polling only while the server may still change the machine", () => {
     expect(isSettling({ status: "provisioning" })).toBe(true);
-    expect(isSettling({ status: "deleting" })).toBe(true);
+    expect(isSettling({ status: "unknown" })).toBe(true);
     expect(isSettling({ status: "running" })).toBe(false);
     expect(isSettling({ status: "error" })).toBe(false);
+  });
+
+  it("says when a cancelled machine ends", () => {
+    expect(describeEnding({ cancelledAt: null, paidUntil: "2026-10-08T21:01:42.000Z" })).toBeNull();
+    expect(
+      describeEnding(
+        { cancelledAt: "2026-09-08T22:10:55.773Z", paidUntil: "2026-10-08T21:01:42.000Z" },
+        "en-US",
+      ),
+    ).toBe("Ends Oct 8, 2026");
+    expect(describeEnding({ cancelledAt: "2026-09-08T22:10:55.773Z", paidUntil: null })).toBe(
+      "Ends when the paid month is over",
+    );
   });
 });
 
