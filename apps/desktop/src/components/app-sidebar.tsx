@@ -1,7 +1,7 @@
 import { AgentSidebar } from "@/agents/list";
 import { ProjectActions } from "@/workspace/project-actions";
 import { SidebarSection } from "./sidebar-section";
-import { Folder, Plus, Search } from "lucide-react";
+import { Folder, PanelLeftClose, Plus, Search } from "lucide-react";
 import { cn } from "cn";
 import type { WorkspaceSnapshot, WorkspaceOperation } from "@concors/protocol";
 import type { View } from "@/navigation";
@@ -11,6 +11,8 @@ import { MachineSwitcher } from "@/workspace/machine-switcher";
 import type { MachineConnection } from "@/workspace/machines";
 
 interface AppSidebarProps {
+  collapsed: boolean;
+  onCollapse: () => void;
   onSelectAgent: (id: string) => void;
   view: View;
   onNavigate: (view: View) => void;
@@ -31,15 +33,33 @@ interface AppSidebarProps {
 export function AppSidebar(props: AppSidebarProps) {
   return (
     <nav
+      id="app-sidebar"
       aria-label="Primary"
-      className="flex h-full w-[216px] shrink-0 flex-col bg-sidebar text-[13px] text-sidebar-foreground"
+      className={cn(
+        "h-full w-[216px] shrink-0 flex-col bg-sidebar text-[13px] text-sidebar-foreground",
+        props.collapsed ? "hidden" : "flex",
+      )}
     >
-      <MachineSwitcher
-        machines={props.machines}
-        selectedId={props.selectedMachineId}
-        onSelect={props.onSelectMachine}
-        onAdd={props.onAddMachine}
-      />
+      <div className="m-2 flex h-9 items-center gap-1">
+        <MachineSwitcher
+          machines={props.machines}
+          selectedId={props.selectedMachineId}
+          onSelect={props.onSelectMachine}
+          onAdd={props.onAddMachine}
+        />
+        <button
+          id="collapse-sidebar"
+          type="button"
+          aria-label="Collapse sidebar"
+          title="Collapse sidebar"
+          aria-controls="app-sidebar"
+          aria-expanded={true}
+          onClick={props.onCollapse}
+          className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+        >
+          <PanelLeftClose className="size-4" aria-hidden="true" />
+        </button>
+      </div>
       <div className="px-2 py-2">
         <button
           type="button"
