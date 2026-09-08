@@ -35,7 +35,9 @@ test("shared chat streams, reloads, handles approvals and remains in global Agen
     await page.getByLabel("Message Codex").fill("hold this stream");
     await page.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(page.getByRole("log")).toContainText("Hello from");
-    const status = agentList.getByRole("img", { name: "Agent status: Working" });
+    const status = agentList
+      .getByRole("button", { name: /hold this stream/ })
+      .getByRole("img", { name: "Agent status: Working" });
     await expect(status).toBeVisible();
     await expect(status.locator("svg")).toHaveCSS("animation-name", "spin");
     const row = agentList.getByRole("list").getByRole("button").first();

@@ -7,6 +7,8 @@ available. Pierre's cloud server repository is unchanged.
 
 ## Paseo reuse
 
+See [the UI audit](paseo-ui-audit.md) for the follow-up port and explicit remaining differences.
+
 The following source files were imported from `getpaseo/paseo` revision
 `a7a708bec99e935ee4b8c6f7314a4b9a9984cfa6`, under Apache-2.0. The copyright
 notice and full license are retained in `third-party/paseo-LICENSE`.
@@ -28,6 +30,13 @@ send-error fallback. The tool icon type is narrowed to the needs of the DOM adap
 daemon protocol; Paseo's React Native components cannot be mounted directly here.
 Daemon mode presets also follow Paseo's `codex-app-server-agent.ts`.
 
+Additional imports: `components/icons/codex-icon.tsx`,
+`components/context-window-meter.utils.ts`, `utils/tool-call-icon-name.ts`, and
+`utils/highlight-cache.ts`. DOM adapters replace React Native SVG/clipboard/style
+APIs, and the cache constructor uses erasable TypeScript syntax. Syntax highlighting
+uses the published `@getpaseo/highlight@0.7.2` package; its packaged third-party
+parser licenses remain with the dependency.
+
 ## Behavior
 
 - Loading and working indicators follow the machine's authoritative status.
@@ -48,6 +57,8 @@ Daemon mode presets also follow Paseo's `codex-app-server-agent.ts`.
   file permissions. They are retained with session history; automatic cleanup and
   downloading old attachments are not implemented. Retried requests use the same
   receipt and do not upload or send twice.
+- Native Plan mode and model-provided speed tiers are exposed when available.
+  Plan mode uses read-only access, and disabling it restores the default workflow.
 - Enter sends; Shift+Enter adds a line. While working, Enter queues a follow-up.
   Queues and drafts belong to the current mounted composer and do not survive
   closing the pane or reloading. Delivered history, settings, and context usage
