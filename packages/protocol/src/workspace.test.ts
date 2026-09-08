@@ -328,6 +328,93 @@ describe("pane rearrangement", () => {
       ).toThrow(/different panes/);
     },
   );
+  it.each(["left", "right", "top", "bottom"] as const)(
+    "moves nested panes to workspace %s without changing sessions",
+    (placement) => {
+      const { state, projectId, tabId, paneId } = fixture();
+      const second = id(),
+        third = id(),
+        root = id(),
+        nested = id(),
+        newSplit = id();
+      let current = applyWorkspaceOperation(state, {
+        kind: "pane.split",
+        projectId,
+        tabId,
+        paneId,
+        expectedVersion: 1,
+        newPaneId: second,
+        splitId: root,
+        axis: "horizontal",
+        profile: "chat",
+      });
+      current = applyWorkspaceOperation(current, {
+        kind: "pane.split",
+        projectId,
+        tabId,
+        paneId: second,
+        expectedVersion: 2,
+        newPaneId: third,
+        splitId: nested,
+        axis: "vertical",
+        profile: "codex",
+      });
+      for (const pane of current.projects[0]!.tabs[0]!.nodes)
+        if (pane.kind === "pane") pane.sessionId = id();
+      const original = JSON.stringify(current);
+      const moved = applyWorkspaceOperation(current, {
+        kind: "pane.move",
+        projectId,
+        tabId,
+        paneId: second,
+        targetPaneId: paneId,
+        placement,
+        scope: "workspace",
+        splitId: newSplit,
+        expectedVersion: 3,
+      });
+      const tab = moved.projects[0]!.tabs[0]!;
+      expect(tab.nodes.filter((n) => n.kind === "pane")).toEqual(
+        current.projects[0]!.tabs[0]!.nodes.filter((n) => n.kind === "pane"),
+      );
+      expect(tab.nodes).toHaveLength(5);
+      expect(JSON.stringify(current)).toBe(original);
+      validateLayout(tab);
+      expect(tab.root).toBe(newSplit);
+      expect(tab.nodes.find((n) => n.id === root)).toMatchObject({ first: paneId, second: third });
+      expect(tab.nodes.find((n) => n.id === newSplit)).toMatchObject({
+        axis: ["left", "right"].includes(placement) ? "horizontal" : "vertical",
+        first: ["left", "top"].includes(placement) ? second : root,
+        second: ["left", "top"].includes(placement) ? root : second,
+      });
+      expect(() =>
+        applyWorkspaceOperation(moved, {
+          kind: "pane.move",
+          projectId,
+          tabId,
+          paneId: second,
+          targetPaneId: paneId,
+          placement,
+          scope: "workspace",
+          splitId: id(),
+          expectedVersion: 3,
+        }),
+      ).toThrow(/changed on another client/);
+      expect(() =>
+        applyWorkspaceOperation(moved, {
+          kind: "pane.move",
+          projectId,
+          tabId,
+          paneId: second,
+          targetPaneId: second,
+          placement,
+          scope: "workspace",
+          splitId: id(),
+          expectedVersion: 4,
+        }),
+      ).toThrow(/different panes/);
+    },
+  );
   it("collapses the old root when moving sibling panes into a different split", () => {
     const { state, projectId, tabId, paneId } = fixture();
     const second = id(),

@@ -192,7 +192,8 @@ export function applyWorkspaceOperation(
               };
               replace(parent.id, sibling);
               tab.nodes = tab.nodes.filter((n) => n.id !== parent.id);
-              replace(target.id, op.splitId);
+              const destination = op.scope === "workspace" ? tab.root : target.id;
+              replace(destination, op.splitId);
               const before = op.placement === "left" || op.placement === "top";
               tab.nodes.push({
                 id: op.splitId,
@@ -200,8 +201,8 @@ export function applyWorkspaceOperation(
                 ratio: 0.5,
                 axis:
                   op.placement === "left" || op.placement === "right" ? "horizontal" : "vertical",
-                first: before ? source.id : target.id,
-                second: before ? target.id : source.id,
+                first: before ? source.id : destination,
+                second: before ? destination : source.id,
               });
             }
             break;
