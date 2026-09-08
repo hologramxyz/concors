@@ -5,7 +5,7 @@ import { join } from "node:path";
 export function installTestCodexProfile(directory: string): string {
   const bin = join(directory, "test-bin");
   mkdirSync(bin, { recursive: true });
-  const script = join(bin, "codex-fixture.cjs");
+  const script = join(bin, "codex.cjs");
   writeFileSync(
     script,
     `
