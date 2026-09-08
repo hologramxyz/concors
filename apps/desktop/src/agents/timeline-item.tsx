@@ -1,26 +1,11 @@
 import { extractToolCallFilePath } from "./paseo/extract-tool-call-file-path";
 import { useState } from "react";
-import {
-  Bot,
-  Check,
-  ChevronRight,
-  Circle,
-  FileCode,
-  LoaderCircle,
-  Terminal,
-  Wrench,
-  XCircle,
-} from "lucide-react";
-import Markdown, { type Components } from "react-markdown";
-const markdownComponents: Components = {
-  img: () => null,
-  a: ({ children, ...props }) => (
-    <a {...props} target="_blank" rel="noopener noreferrer">
-      {children}
-    </a>
-  ),
-};
-import remarkGfm from "remark-gfm";
+import { Bot, Check, ChevronRight, FileCode, Terminal, Wrench, XCircle } from "lucide-react";
+import { AgentMarkdown, CopyButton } from "./markdown";
+import { PlanProgress } from "./plan-progress";
+import { BrailleSpinner } from "./activity";
+import { Brain, Eye, Globe, Search, Pencil } from "lucide-react";
+import { resolveToolCallIconName } from "./paseo/tool-call-icon-name";
 import type { AgentItem } from "@concors/protocol";
 import { buildToolCallDisplayModel } from "./paseo/tool-call-display";
 import type { ToolCallDetail } from "./paseo/agent-types";
@@ -36,57 +21,24 @@ export function TimelineItem({ item }: { item: AgentItem }) {
           item.kind === "user" ? "ml-auto max-w-[90%] rounded-2xl bg-muted/65 px-4 py-3" : "py-1"
         }
       >
-        <p className="mb-2 text-[11px] font-medium text-muted-foreground">{item.title}</p>
-        <div className="chat-markdown text-sm break-words">
+        <div className="chat-markdown text-[16px] leading-7 break-words">
           {item.kind === "user" ? (
             <p className="whitespace-pre-wrap">{item.text}</p>
           ) : (
-            <Markdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
-              {item.text}
-            </Markdown>
+            <AgentMarkdown>{item.text}</AgentMarkdown>
           )}
         </div>
+        {item.status !== "running" && (
+          <div className="mt-2 flex">
+            <CopyButton text={item.text} />
+          </div>
+        )}
       </article>
     );
-  if (data?.type === "plan")
-    return (
-      <article className="rounded-xl border bg-muted/20 p-4" aria-label="Agent plan">
-        <p className="mb-3 text-xs font-medium">
-          Plan · {data.steps?.filter((s) => s.status === "completed").length ?? 0}/
-          {data.steps?.length ?? 0}
-        </p>
-        <ol className="space-y-2">
-          {data.steps?.map((step, i) => (
-            <li key={i} className="flex items-start gap-2 text-sm">
-              {step.status === "completed" ? (
-                <Check className="mt-0.5 size-4 shrink-0 text-emerald-500" />
-              ) : step.status === "inProgress" && item.status === "running" ? (
-                <LoaderCircle className="mt-0.5 size-4 shrink-0 animate-spin text-primary" />
-              ) : (
-                <Circle className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-              )}
-              <span className={step.status === "completed" ? "text-muted-foreground" : ""}>
-                {step.step}
-              </span>
-            </li>
-          ))}
-        </ol>
-      </article>
-    );
-  if (item.kind === "plan")
-    return (
-      <article className="rounded-xl border p-4">
-        <p className="mb-2 text-xs font-medium">{item.title}</p>
-        <div className="chat-markdown text-sm">
-          <Markdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
-            {item.text}
-          </Markdown>
-        </div>
-      </article>
-    );
+  if (data?.type === "plan" || item.kind === "plan") return <PlanProgress item={item} />;
   if (item.kind === "system")
     return (
-      <article className="flex items-center gap-2 text-xs text-muted-foreground">
+      <article className="flex items-center gap-2 text-[12px] text-muted-foreground">
         <Check className="size-3" />
         <span>
           {item.title} · {item.text}
@@ -100,6 +52,7 @@ export function TimelineItem({ item }: { item: AgentItem }) {
     detail = { type: "edit", filePath: data.files?.[0]?.path ?? "Files", unifiedDiff: item.detail };
   if (data?.type === "sub_agent")
     detail = { type: "sub_agent", description: item.text, log: item.detail };
+  if (data?.type === "search") detail = { type: "search", query: item.text };
   if (data?.type === "thinking")
     detail = { type: "plain_text", label: "Thinking", text: item.text };
   const display = buildToolCallDisplayModel({
@@ -108,20 +61,31 @@ export function TimelineItem({ item }: { item: AgentItem }) {
     error: item.status === "failed" ? item.detail : null,
     detail,
   });
+  const iconName = resolveToolCallIconName(item.title, detail);
   const Icon =
-    data?.type === "shell"
-      ? Terminal
-      : data?.type === "files"
-        ? FileCode
-        : data?.type === "sub_agent"
-          ? Bot
-          : Wrench;
+    data?.type === "thinking"
+      ? Brain
+      : data?.type === "search"
+        ? Search
+        : iconName === "eye"
+          ? Eye
+          : iconName === "pencil"
+            ? Pencil
+            : iconName === "globe"
+              ? Globe
+              : data?.type === "shell"
+                ? Terminal
+                : data?.type === "files"
+                  ? FileCode
+                  : data?.type === "sub_agent"
+                    ? Bot
+                    : Wrench;
   const running = item.status === "running";
   const hasDetails = hasMeaningfulToolCallDetail(detail);
   const filePath = extractToolCallFilePath(detail);
   return (
     <article
-      className="overflow-hidden rounded-xl border bg-muted/10"
+      className="overflow-hidden rounded-xl border border-transparent bg-muted/20"
       aria-label={
         data?.type === "sub_agent"
           ? "Sub-agent activity"
@@ -138,19 +102,23 @@ export function TimelineItem({ item }: { item: AgentItem }) {
         className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left"
       >
         {running ? (
-          <LoaderCircle className="size-4 shrink-0 animate-spin text-primary" />
+          <BrailleSpinner />
         ) : item.status === "failed" ? (
           <XCircle className="size-4 shrink-0 text-destructive" />
         ) : (
           <Icon className="size-4 shrink-0 text-muted-foreground" />
         )}
-        <span className="shrink-0 text-xs font-medium">{display.displayName}</span>
-        <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
+        <span className={`shrink-0 text-[14px] font-medium ${running ? "agent-shimmer" : ""}`}>
+          {display.displayName}
+        </span>
+        <span
+          className={`min-w-0 flex-1 truncate text-[14px] text-muted-foreground ${running ? "agent-shimmer" : ""}`}
+        >
           {display.summary ?? item.text}
         </span>
-        <span className="text-[10px] text-muted-foreground">
-          {running ? "Running" : item.status === "completed" ? "Done" : item.status}
-        </span>
+        {item.status === "failed" || item.status === "interrupted" ? (
+          <span className="text-[12px] text-muted-foreground">{item.status}</span>
+        ) : null}
         {hasDetails && (
           <ChevronRight
             className={`size-3 shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
@@ -158,24 +126,44 @@ export function TimelineItem({ item }: { item: AgentItem }) {
         )}
       </button>
       {data?.children?.map((child) => (
-        <div key={child.id} className="border-t px-4 py-2 text-xs">
+        <div key={child.id} className="border-t px-4 py-3 text-[14px]">
           <div className="flex items-center gap-2">
-            <Bot className="size-3" />
-            <span className="truncate font-mono">{child.id}</span>
+            {["running", "pending", "inProgress"].includes(child.status) ? (
+              <BrailleSpinner />
+            ) : (
+              <Bot className="size-4" />
+            )}
+            <span title={child.id} className="truncate">
+              Agent {child.id.slice(0, 8)}
+            </span>
             <span className="ml-auto text-muted-foreground">{child.status}</span>
           </div>
           {child.message && (
-            <p className="mt-2 whitespace-pre-wrap text-muted-foreground">{child.message}</p>
+            <details className="mt-2">
+              <summary className="cursor-pointer text-[12px] text-muted-foreground">
+                Agent update
+              </summary>
+              <div className="mt-2">
+                <AgentMarkdown>{child.message}</AgentMarkdown>
+                <CopyButton label="Copy agent update" text={child.message} />
+              </div>
+            </details>
           )}
         </div>
       ))}
       {open && (
-        <div className="max-h-96 overflow-auto border-t p-3 text-xs">
+        <div className="chat-scroll max-h-96 overflow-auto border-t p-4 text-[13px] leading-6">
+          <div className="mb-2 flex justify-end">
+            <CopyButton text={item.detail || item.text} label="Copy tool output" />
+          </div>
           {filePath && <p className="mb-2 truncate font-mono text-muted-foreground">{filePath}</p>}
           {data?.type === "files" && data.files?.length ? (
             data.files.map((file) => (
               <div key={file.path} className="mb-3">
-                <p className="mb-2 font-mono font-medium">{file.path}</p>
+                <div className="mb-2 flex items-center gap-2">
+                  <p className="flex-1 font-mono font-medium">{file.path}</p>
+                  <CopyButton label="Copy diff" text={file.diff} />
+                </div>
                 <pre className="overflow-x-auto font-mono">
                   {file.diff.split("\n").map((line, i) => (
                     <div
@@ -194,11 +182,26 @@ export function TimelineItem({ item }: { item: AgentItem }) {
                 </pre>
               </div>
             ))
+          ) : data?.type === "mcp" ? (
+            <div className="space-y-4">
+              <section>
+                <h4 className="mb-1 font-medium">Input</h4>
+                <pre className="break-words whitespace-pre-wrap">
+                  {data.input || "No arguments"}
+                </pre>
+              </section>
+              <section>
+                <h4 className="mb-1 font-medium">
+                  {item.status === "failed" ? "Error" : "Result"}
+                </h4>
+                <pre className="break-words whitespace-pre-wrap">
+                  {data.output || (running ? "Waiting for result…" : "No output")}
+                </pre>
+              </section>
+            </div>
           ) : data?.type === "thinking" ? (
             <div className="chat-markdown">
-              <Markdown components={markdownComponents}>
-                {item.text || "Preparing a response…"}
-              </Markdown>
+              <AgentMarkdown>{item.text || "Preparing a response…"}</AgentMarkdown>
             </div>
           ) : (
             <pre className="font-mono break-words whitespace-pre-wrap">

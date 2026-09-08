@@ -2,7 +2,7 @@ import { AgentComposer } from "./composer";
 import { TimelineItem } from "./timeline-item";
 import { useViewedAgent } from "@/notifications/context";
 import { useContext, useEffect, useRef, useState } from "react";
-import { ArrowDown, Bot, LoaderCircle } from "lucide-react";
+import { ArrowDown, Bot } from "lucide-react";
 import type {
   AgentOperation,
   AgentPending,
@@ -11,7 +11,8 @@ import type {
   WorkspaceTab,
 } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
-import { AgentStatus } from "./state";
+import { Activity } from "./activity";
+import { PlanProgress } from "./plan-progress";
 import { useAgents } from "./context";
 import { useConversation } from "./conversation";
 
@@ -115,11 +116,22 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
   const scroll = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   const [atBottom, setAtBottom] = useState(true);
+  const latestPlan = conversation.items.findLast((item) => item.kind === "plan");
   const active = agent && ["starting", "working", "needs_input"].includes(agent.status);
   const connected = canEdit && connection?.state.status === "ready";
   useEffect(() => {
     if (follow.current && scroll.current) scroll.current.scrollTop = scroll.current.scrollHeight;
   }, [conversation.items, agent?.pending]);
+  useEffect(() => {
+    const viewport = scroll.current;
+    const content = viewport?.firstElementChild;
+    if (!viewport || !content) return;
+    const observer = new ResizeObserver(() => {
+      if (follow.current) viewport.scrollTop = viewport.scrollHeight;
+    });
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, []);
   const perform = async (operation: AgentOperation, id = crypto.randomUUID()) => {
     if (!connection) throw new Error("Machine is disconnected");
     const result = await connection.requestAgent(operation, id);
@@ -138,15 +150,6 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
   };
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="Agent conversation">
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b px-4 py-2">
-        <span className="truncate text-xs text-muted-foreground">
-          Codex
-          {(agent?.settings?.model ?? agent?.model)
-            ? ` · ${agent?.settings?.model ?? agent?.model}`
-            : ""}
-        </span>
-        {agent && <AgentStatus agent={agent} />}
-      </div>
       <div
         ref={scroll}
         role="log"
@@ -180,31 +183,24 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
               Load earlier messages
             </button>
           )}
-          {!conversation.ready && (
-            <p className="text-xs text-muted-foreground">Loading conversation…</p>
-          )}
+          {!conversation.ready && <Activity>Loading conversation…</Activity>}
           {conversation.ready && conversation.items.length === 0 && (
             <p className="py-10 text-center text-sm text-muted-foreground">
               What would you like to work on?
             </p>
           )}
+          {conversation.items.map((item) => (
+            <TimelineItem key={item.id} item={item} />
+          ))}
           {active && (
-            <div
-              role="status"
-              className="sticky top-0 z-10 flex items-center gap-2 rounded-lg bg-background/95 px-3 py-2 text-xs text-muted-foreground"
-            >
-              <LoaderCircle className="size-4 animate-spin text-primary" />
+            <Activity>
               {agent?.status === "starting"
                 ? "Starting agent…"
                 : agent?.status === "needs_input"
                   ? "Waiting for your input"
-                  : (conversation.items.findLast((item) => item.status === "running")?.title ??
-                    "Thinking…")}
-            </div>
+                  : "Working…"}
+            </Activity>
           )}
-          {conversation.items.map((item) => (
-            <TimelineItem key={item.id} item={item} />
-          ))}
         </div>
       </div>
       {!atBottom && (
@@ -220,7 +216,7 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
           Latest
         </button>
       )}
-      <div className="max-h-[55%] shrink-0 overflow-y-auto border-t px-4 py-3">
+      <div className="max-h-[55%] shrink-0 overflow-y-auto px-4 pt-2 pb-4">
         <div className="mx-auto max-w-3xl space-y-3">
           {agent?.pending.map((pending) => (
             <PendingInput
@@ -237,6 +233,7 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
               {error ?? conversation.error ?? agent?.error}
             </p>
           )}
+          {latestPlan && <PlanProgress compact item={latestPlan} />}
           {agent && (
             <AgentComposer
               key={agent.id}

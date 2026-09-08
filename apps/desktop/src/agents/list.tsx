@@ -1,5 +1,6 @@
+import { AgentLoadingIcon } from "./activity";
 import { useEffect } from "react";
-import { Bot, LoaderCircle } from "lucide-react";
+import { Bot } from "lucide-react";
 import type { WorkspaceSnapshot } from "@concors/protocol";
 import { Chat } from "./chat";
 import { AgentStatus } from "./state";
@@ -34,10 +35,7 @@ export function AgentSidebar({ onSelect }: { onSelect: (id: string) => void }) {
                   />
                 )}
                 {running ? (
-                  <LoaderCircle
-                    className="size-4 animate-spin text-amber-500 motion-reduce:animate-none"
-                    aria-hidden="true"
-                  />
+                  <AgentLoadingIcon />
                 ) : (
                   <span
                     className={`size-2.5 rounded-full border border-black/15 ${agent.status === "done" ? "bg-emerald-500" : agent.status === "failed" ? "bg-red-500" : agent.status === "needs_input" ? "bg-amber-500" : "bg-white"}`}
