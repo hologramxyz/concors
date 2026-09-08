@@ -29,5 +29,24 @@ test("new tab menu creates a named terminal only after choosing a profile", asyn
   await page.keyboard.type("printf 'configured-%s\\n' session");
   await page.keyboard.press("Enter");
   await expect(page.getByLabel("Terminal output")).toContainText("configured-session");
+  const sidebar = page.getByRole("navigation", { name: "Primary" });
+  const before = await page.getByLabel("Terminal output").boundingBox();
+  await page.getByRole("button", { name: "Collapse sidebar" }).click();
+  await expect(sidebar).toBeHidden();
+  const expand = page.getByRole("banner").getByRole("button", { name: "Expand sidebar" });
+  await expect(expand).toBeFocused();
+  await expect(page.getByRole("heading", { name: "Profile controls", exact: true })).toBeVisible();
+  await expect
+    .poll(async () => (await page.getByLabel("Terminal output").boundingBox())?.width ?? 0)
+    .toBeGreaterThan(before?.width ?? 0);
+  await expect(page.getByLabel("Terminal output")).toContainText("configured-session");
+  await page.screenshot({ path: "test-results/sidebar-collapsed.png" });
+  await page.keyboard.press("Enter");
+  await expect(sidebar).toBeVisible();
+  await expect(page.getByRole("button", { name: "Collapse sidebar" })).toBeFocused();
+  await expect(page.getByRole("button", { name: "Development", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
   await page.screenshot({ path: "test-results/project-controls.png" });
 });
