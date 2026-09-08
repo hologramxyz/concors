@@ -1,8 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { test, expect } from "@playwright/test";
-import { signedIn } from "./signed-in.ts";
+import { test, expect, signedIn } from "./signed-in.ts";
 
 test("Codex terminal profiles appear across clients and agent clicks focus the owning split pane", async ({
   page,
@@ -22,8 +21,6 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
       .getByRole("dialog")
       .getByRole("button", { name: "Add project", exact: true })
       .click();
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
     const agents = page
       .getByRole("navigation", { name: "Primary" })
       .getByRole("region", { name: "Agents", exact: true });

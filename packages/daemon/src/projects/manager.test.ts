@@ -77,6 +77,18 @@ it("opens and creates real folders, preserving duplicate receipts and existing f
   manager.request(request("open", existing));
   await expect.poll(() => store.projectSetups()[2]?.status).toBe("done");
   expect(store.snapshot().projects).toHaveLength(2);
+  for (const project of store.snapshot().projects) {
+    expect(project.tabs).toHaveLength(1);
+    expect(project.tabs[0]).toMatchObject({
+      name: "Terminal",
+      nodes: [{ kind: "pane", profile: "shell", sessionId: null }],
+    });
+  }
+  const selectedProject = store.snapshot().projects[1]!;
+  expect(store.snapshot().selection).toEqual({
+    projectId: selectedProject.id,
+    tabId: selectedProject.tabs[0]!.id,
+  });
   manager.request(request("open", join(root, "missing")));
   await expect.poll(() => store.projectSetups()[3]?.status).toBe("failed");
   expect(store.snapshot().projects).toHaveLength(2);
