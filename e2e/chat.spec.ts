@@ -46,6 +46,7 @@ test("shared chat streams, handles approvals and removes detached sidebar entrie
     );
     await page.getByRole("button", { name: /^Account:/ }).click();
     await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
+    await page.getByRole("button", { name: "Back to app", exact: true }).click();
     await agentList.getByRole("list").getByRole("button").first().click();
     await expect(page.getByRole("heading", { name: "Chat acceptance", exact: true })).toBeVisible();
     await expect(page.getByLabel("Message Codex")).toBeFocused();

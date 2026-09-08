@@ -65,12 +65,20 @@ test("notifications deduplicate across windows, open chat, and sync unread witho
     const id = agent.id;
     await page.getByRole("button", { name: /^Account:/ }).click();
     await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
+    await page
+      .getByRole("navigation", { name: "Settings" })
+      .getByRole("button", { name: "Notifications", exact: true })
+      .click();
     await page.getByLabel("Desktop notifications", { exact: true }).check();
     const second = await context.newPage();
     await signedIn(second);
     await second.goto("/");
     await second.getByRole("button", { name: /^Account:/ }).click();
     await second.getByRole("menuitem", { name: "Settings", exact: true }).click();
+    await second
+      .getByRole("navigation", { name: "Settings" })
+      .getByRole("button", { name: "Notifications", exact: true })
+      .click();
     await expect(second.getByLabel("Desktop notifications", { exact: true })).toBeChecked();
     await control.requestAgent({ kind: "send", sessionId: id, text: "hello" }, randomUUID());
     await expect.poll(count).toBe(1);
