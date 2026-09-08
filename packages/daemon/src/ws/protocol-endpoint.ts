@@ -64,10 +64,16 @@ export function registerProtocolEndpoint(
       send(target, { type: "project.setups", setups: options.workspace.projectSetups() });
     }
   });
-  const terminals = new TerminalManager(options.workspace, () => {
-    const snapshot = options.workspace.snapshot();
-    for (const target of subscribers) send(target, { type: "workspace.snapshot", snapshot });
-  });
+  const terminals = new TerminalManager(
+    options.workspace,
+    () => {
+      const snapshot = options.workspace.snapshot();
+      for (const target of subscribers) send(target, { type: "workspace.snapshot", snapshot });
+    },
+    (session) => {
+      for (const target of subscribers) send(target, { type: "terminal.state", session });
+    },
+  );
   const agents = new AgentManager(
     options.workspace,
     (event) => {
@@ -136,6 +142,8 @@ export function registerProtocolEndpoint(
         else void terminals.request(viewer, message).then((result) => send(socket, result));
       } else if (message.type === "workspace.subscribe") {
         subscribers.add(socket);
+        for (const session of options.workspace.terminals())
+          send(socket, { type: "terminal.state", session });
         send(socket, { type: "agent.list", agents: [] });
         for (const agent of options.workspace.agents())
           send(socket, { type: "agent.state", agent });

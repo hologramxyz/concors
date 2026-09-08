@@ -2,7 +2,6 @@ import { NotificationSettings } from "@/notifications/settings";
 import type { ConnectionState, DaemonEndpoint } from "@concors/daemon-client";
 import { PROTOCOL_VERSION } from "@concors/protocol";
 import { Check, ChevronDown, LogOut, Monitor, Moon, Sun } from "lucide-react";
-import type { ReactNode } from "react";
 
 import { activeOrganization, initialOf, type SignedInAuth } from "@/auth/auth-state";
 import { Badge } from "@/components/ui/badge";
@@ -13,10 +12,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Separator } from "@/components/ui/separator";
 import { env } from "@/config/env";
+import { BillingSection } from "@/settings/billing-section";
+import { SshKeysSection } from "@/settings/ssh-keys-section";
 import { THEME_PREFERENCES, type ThemePreference } from "@/theme/use-theme";
 import { APP_VERSION } from "@/version";
+
+import { formatDate } from "@/lib/format-date";
+
+import { Mono, Row, Section } from "./settings-primitives.tsx";
 
 interface SettingsViewProps {
   readonly endpoint: DaemonEndpoint | null;
@@ -46,6 +50,7 @@ export function SettingsView({
   onSetActiveOrganization,
 }: SettingsViewProps) {
   const CurrentThemeIcon = THEME_ICON[theme];
+  const org = activeOrganization(auth);
 
   return (
     <div className="mx-auto w-full max-w-2xl px-8 py-8">
@@ -59,6 +64,10 @@ export function SettingsView({
           onSetActiveOrganization={onSetActiveOrganization}
         />
       </Section>
+
+      <SshKeysSection key={`keys-${org?.id ?? ""}`} organization={org} />
+
+      <BillingSection key={`billing-${org?.id ?? ""}`} organization={org} />
 
       <NotificationSettings />
       <Section title="Appearance" description="How Concors looks on this device.">
@@ -194,46 +203,4 @@ function AccountRows({
       </div>
     </>
   );
-}
-
-function formatDate(iso: string): string {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime())
-    ? iso
-    : date.toLocaleDateString(undefined, { dateStyle: "medium" });
-}
-
-function Section({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description?: string;
-  children: ReactNode;
-}) {
-  return (
-    <section className="mb-10">
-      <h2 className="text-[15px] font-semibold">{title}</h2>
-      {description && <p className="mt-1 text-muted-foreground">{description}</p>}
-      <Separator className="my-4" />
-      <div className="flex flex-col">{children}</div>
-    </section>
-  );
-}
-
-function Row({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-6 py-2.5">
-      <div className="min-w-0">
-        <div className="font-medium">{label}</div>
-        {hint && <div className="mt-0.5 text-xs text-muted-foreground">{hint}</div>}
-      </div>
-      <div className="selectable min-w-0 shrink-0 text-muted-foreground">{children}</div>
-    </div>
-  );
-}
-
-function Mono({ children }: { children: ReactNode }) {
-  return <span className="font-mono text-xs">{children}</span>;
 }

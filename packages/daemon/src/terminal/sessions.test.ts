@@ -1,11 +1,12 @@
+import { installTestCodexProfile } from "./testing/profile.ts";
 import { randomUUID } from "node:crypto";
 import { mkdtempSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { DaemonConnection, describeDaemonEndpoint } from "@concors/daemon-client";
 import type { TerminalEvent, TerminalOperation, WorkspaceOperation } from "@concors/protocol";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { loadDaemonConfig } from "../config.ts";
 import { createDaemonServer, type DaemonServer } from "../server.ts";
 
@@ -15,6 +16,7 @@ const directories: string[] = [];
 afterEach(async () => {
   for (const connection of connections.splice(0)) connection.disconnect();
   await server?.close();
+  vi.unstubAllEnvs();
   for (const directory of directories.splice(0))
     await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 });
@@ -173,3 +175,84 @@ it("shares a real PTY, transfers control, replays its screen, rebinds and record
 it("rejects network exposure before starting a terminal-enabled daemon", () => {
   expect(() => createDaemonServer(loadDaemonConfig({ host: "0.0.0.0" }, {}))).toThrow("loopback");
 });
+
+it("broadcasts Codex profile lifecycle to unattached clients and restores it on reconnect", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "concors-codex-terminal-"));
+  directories.push(directory);
+  vi.stubEnv("PATH", installTestCodexProfile(directory) + delimiter + (process.env["PATH"] ?? ""));
+  const config = loadDaemonConfig({ port: 0, logLevel: "silent" }, {});
+  const options = { workspacePath: join(directory, "workspace.sqlite") };
+  server = createDaemonServer(config, options);
+  const url = await server.listen();
+  const first = await open(url);
+  const observer = await open(url);
+  const projectId = randomUUID(),
+    tabId = randomUUID(),
+    paneId = randomUUID();
+  await edit(first.connection, { kind: "project.add", projectId, name: "Codex", directory });
+  await edit(first.connection, {
+    kind: "tab.create",
+    projectId,
+    tabId,
+    paneId,
+    expectedVersion: 0,
+    name: "Codex",
+    profile: "codex",
+  });
+  const start: TerminalOperation = {
+    kind: "start",
+    epoch: first.connection.workspace!.epoch,
+    projectId,
+    tabId,
+    paneId,
+    expectedVersion: 1,
+    expectedSessionId: null,
+    cols: 80,
+    rows: 24,
+  };
+  const receipt = randomUUID();
+  const [session] = await request(first.connection, start, receipt);
+  expect(session?.status).toBe("running");
+  const id = session!.id;
+  await expect
+    .poll(() => observer.connection.terminals)
+    .toMatchObject([{ id, profile: "codex", status: "running" }]);
+  expect(observer.events.some((event) => event.type === "terminal.output")).toBe(false);
+  await request(first.connection, start, receipt);
+  expect(first.connection.terminals.filter((item) => item.id === id)).toHaveLength(1);
+  observer.connection.disconnect();
+  await observer.connection.connect();
+  await expect.poll(() => observer.connection.terminals).toMatchObject([{ id, status: "running" }]);
+  await request(first.connection, { kind: "attach", sessionId: id });
+  await request(first.connection, { kind: "claim", sessionId: id, cols: 80, rows: 24 });
+  // A spawned PTY can be running before the executable is ready to accept input.
+  await expect
+    .poll(
+      () =>
+        first.events
+          .filter((event) => event.type === "terminal.output" || event.type === "terminal.snapshot")
+          .map((event) => event.data)
+          .join(""),
+      { timeout: 5000 },
+    )
+    .toContain("CODEX_TERMINAL_READY");
+  first.connection.sendTerminalInput(id, "fail\r");
+  await expect
+    .poll(() => observer.connection.terminals.find((item) => item.id === id)?.status, {
+      timeout: 5000,
+    })
+    .toBe("failed");
+  const [next] = await request(first.connection, {
+    ...start,
+    expectedVersion: 2,
+    expectedSessionId: id,
+  });
+  expect(next?.status).toBe("running");
+  for (const connection of connections) connection.disconnect();
+  await server.close();
+  server = createDaemonServer(config, options);
+  const restarted = await open(await server.listen());
+  await expect
+    .poll(() => restarted.connection.terminals.find((item) => item.id === next?.id)?.status)
+    .toBe("interrupted");
+}, 15000);
