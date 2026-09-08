@@ -197,11 +197,24 @@ export class ApiClient {
     return data.machine;
   }
 
-  /** Destroys a machine and stops billing it; no refund for the rest of the month. */
-  async deleteMachine(id: string): Promise<Machine> {
+  /**
+   * Cancels a machine: nothing is renewed and it keeps running until `paidUntil`, then ends.
+   * No refund for the current month. Undo with `resumeMachine` before then.
+   */
+  async cancelMachine(id: string): Promise<Machine> {
     const { data } = await this.#request("DELETE", `/api/v1/machines/${encodeURIComponent(id)}`, {
       schema: MachineResponseSchema,
     });
+    return data.machine;
+  }
+
+  /** Undoes `cancelMachine` while the paid month is still running (409 once it ended). */
+  async resumeMachine(id: string): Promise<Machine> {
+    const { data } = await this.#request(
+      "POST",
+      `/api/v1/machines/${encodeURIComponent(id)}/resume`,
+      { body: {}, schema: MachineResponseSchema },
+    );
     return data.machine;
   }
 
