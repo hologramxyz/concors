@@ -48,6 +48,17 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
         ),
       )
       .toBe(shellPaneId);
+    await second.keyboard.type("test-working");
+    await second.keyboard.press("Enter");
+    await expect(agents.getByLabel("Agent status: Working")).toBeVisible();
+    await expect(second.getByLabel("Agent status: Working")).toBeVisible();
+    await second.keyboard.type("test-approval");
+    await second.keyboard.press("Enter");
+    await expect(agents.getByLabel("Agent status: Needs input")).toBeVisible();
+    await second.keyboard.type("test-idle");
+    await second.keyboard.press("Enter");
+    await expect(shellAgent).toBeVisible();
+    await expect(agents.getByLabel("Agent status: Working")).toHaveCount(0);
     await second.keyboard.type("exit");
     await second.keyboard.press("Enter");
     await expect(shellAgent).toHaveCount(0);
