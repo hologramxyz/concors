@@ -106,7 +106,7 @@ test("workspace shortcuts create, search, split and close the active pane withou
       page
         .getByRole("navigation", { name: "Primary" })
         .getByRole("region", { name: "Agents", exact: true })
-        .getByRole("button", { name: /Running in terminal.*Codex/ }),
+        .getByRole("button", { name: /Open in terminal.*Codex/ }),
     ).toHaveCount(3);
     // The daemon is shared by acceptance tests; stop our fixture before detaching its pane.
     for (const pane of await panes.all()) {
@@ -119,7 +119,7 @@ test("workspace shortcuts create, search, split and close the active pane withou
       page
         .getByRole("navigation", { name: "Primary" })
         .getByRole("region", { name: "Agents", exact: true })
-        .getByRole("button", { name: /Running in terminal.*Codex/ }),
+        .getByRole("button", { name: /Open in terminal.*Codex/ }),
     ).toHaveCount(0);
     await panes.first().focus();
     await page.keyboard.press("Control+Shift+x");
@@ -177,14 +177,9 @@ test("Mac workspace shortcuts use physical Control and display matching hints", 
     await panes.first().focus();
     await page.keyboard.press("Control+Shift+d");
     await expect(panes).toHaveCount(2);
-    const newPaneId = await panes.last().getAttribute("data-pane-id");
     await expect
-      .poll(() =>
-        page.evaluate(() =>
-          document.activeElement?.closest("[data-pane-id]")?.getAttribute("data-pane-id"),
-        ),
-      )
-      .toBe(newPaneId);
+      .poll(() => panes.last().evaluate((pane) => pane.contains(document.activeElement)))
+      .toBe(true);
     await page.keyboard.press("Control+Shift+w");
     await expect(panes).toHaveCount(1);
     expect(page.isClosed()).toBe(false);
