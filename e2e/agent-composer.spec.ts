@@ -89,6 +89,22 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
       "animation-name",
       "paseo-toolcall-shimmer",
     );
+    const runningTools = page.locator('[data-tool-status="running"]');
+    await expect(runningTools).toHaveCount(3);
+    for (const tool of await runningTools.all()) {
+      const label = tool.locator("button .agent-shimmer").first();
+      await expect(label).toHaveCSS("animation-name", "paseo-toolcall-shimmer");
+      await expect(label).toHaveCSS("-webkit-text-fill-color", "rgba(0, 0, 0, 0)");
+      const position = await label.evaluate((el) => getComputedStyle(el).backgroundPosition);
+      await expect
+        .poll(() => label.evaluate((el) => getComputedStyle(el).backgroundPosition))
+        .not.toBe(position);
+    }
+    await expect(page.locator('[data-tool-status="completed"] .agent-shimmer')).toHaveCount(0);
+    const elapsed = page.getByLabel("Elapsed time", { exact: true });
+    await expect(elapsed).toBeVisible();
+    const initialElapsed = await elapsed.innerText();
+    await expect(elapsed).not.toHaveText(initialElapsed);
     await expect(page.getByLabel("Message Codex")).toHaveCSS("font-size", "16px");
     await expect(page.getByLabel("Agent plan")).toContainText("Implement the change");
     await page.getByLabel("Sub-agent activity").getByText("Agent update", { exact: true }).click();
@@ -113,6 +129,12 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     );
     await page.emulateMedia({ reducedMotion: "no-preference" });
     await page.getByRole("button", { name: /^Shell/ }).click();
+    await expect(
+      page
+        .getByRole("button", { name: /^Shell/ })
+        .locator(".agent-shimmer")
+        .first(),
+    ).toHaveCSS("animation-name", "paseo-toolcall-shimmer");
     await expect(page.getByLabel("Tool call").filter({ hasText: "fixture output" })).toBeVisible();
     await page.getByRole("button", { name: /^Edit/ }).click();
     await expect(page.getByText("+new line", { exact: true })).toBeVisible();

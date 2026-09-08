@@ -1,3 +1,4 @@
+import { formatDuration } from "./duration";
 import { useEffect, useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import { CodexIcon } from "./paseo/codex-icon";
@@ -62,10 +63,28 @@ export function BrailleSpinner() {
   );
 }
 
-export function Activity({ children }: { children: React.ReactNode }) {
+export function Activity({
+  children,
+  startedAt,
+}: {
+  children: React.ReactNode;
+  startedAt?: string | null;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!startedAt) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [startedAt]);
+  const elapsed = startedAt ? (now - Date.parse(startedAt)) / 1000 : null;
   return (
     <div role="status" className="flex items-center gap-2 py-3 text-[14px] text-muted-foreground">
       <BrailleSpinner />
+      {elapsed !== null && Number.isFinite(elapsed) && (
+        <span aria-label="Elapsed time" className="text-[12px] text-muted-foreground tabular-nums">
+          {formatDuration(elapsed)}
+        </span>
+      )}
       <span className="agent-shimmer">{children}</span>
     </div>
   );

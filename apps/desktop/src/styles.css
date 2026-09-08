@@ -273,10 +273,10 @@
    Copyright (c) 2025-present Mohamed Boudra; third-party/paseo-LICENSE. */
 @keyframes paseo-toolcall-shimmer {
   0% {
-    background-position: -200px 0;
+    background-position: 100% 0;
   }
   100% {
-    background-position: 200px 0;
+    background-position: -100% 0;
   }
 }
 .agent-shimmer {
@@ -287,8 +287,10 @@
     var(--foreground) 50%,
     var(--muted-foreground) 70%
   );
-  background-size: 200px 100%;
+  background-size: 200% 100%;
   background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
   animation: paseo-toolcall-shimmer 2s linear infinite;
 }
 .agent-control {
@@ -337,6 +339,7 @@
     animation: none;
     background: none;
     color: var(--muted-foreground);
+    -webkit-text-fill-color: currentColor;
   }
 }
 .syntax-token {
