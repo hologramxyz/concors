@@ -36,6 +36,15 @@ export function ShortcutProvider({ children }: { children: ReactNode }) {
         event.stopImmediatePropagation();
       };
       if (armed.current) {
+        if (
+          event.repeat &&
+          event.ctrlKey &&
+          event.shiftKey &&
+          event.key.toLowerCase() === armed.current
+        ) {
+          consume();
+          return;
+        }
         if (modal || editing) {
           cancel();
           return;
@@ -62,8 +71,14 @@ export function ShortcutProvider({ children }: { children: ReactNode }) {
       const id = matchShortcut(event, isMac(), terminal, isTauri());
       if (!id) return;
       // Preserve selection shortcuts in chat/editors rather than preventing their defaults.
-      if (editing && id !== "search") return;
-      if (modal && !(id === "search" && target?.closest("[cmdk-root]"))) return;
+      if (editing && id !== "search") {
+        if (!id.startsWith("focus-")) event.preventDefault();
+        return;
+      }
+      if (modal && !(id === "search" && target?.closest("[cmdk-root]"))) {
+        if (!id.startsWith("focus-")) event.preventDefault();
+        return;
+      }
       consume();
       if (event.repeat) return;
       if (id === "p" || id === "t") {
