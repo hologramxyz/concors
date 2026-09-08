@@ -203,3 +203,35 @@ describe("workspace commands", () => {
     ).toThrow("cycle");
   });
 });
+
+it("keeps a binding for the same profile and detaches it for a different profile", () => {
+  const { state, projectId, tabId, paneId } = fixture();
+  const pane = state.projects[0]!.tabs[0]!.nodes[0]!;
+  if (pane.kind !== "pane") throw new Error("Expected pane");
+  pane.sessionId = id();
+  const unchanged = applyWorkspaceOperation(state, {
+    kind: "pane.configure",
+    projectId,
+    tabId,
+    paneId,
+    expectedVersion: 1,
+    profile: "shell",
+  });
+  expect(unchanged.projects[0]!.tabs[0]!.nodes[0]).toMatchObject({
+    profile: "shell",
+    sessionId: pane.sessionId,
+  });
+  const changed = applyWorkspaceOperation(state, {
+    kind: "pane.configure",
+    projectId,
+    tabId,
+    paneId,
+    expectedVersion: 1,
+    profile: "chat",
+  });
+  expect(changed.projects[0]!.tabs[0]!.nodes[0]).toMatchObject({
+    profile: "chat",
+    sessionId: null,
+  });
+  expect(state.projects[0]!.tabs[0]!.nodes[0]).toMatchObject({ sessionId: pane.sessionId });
+});
