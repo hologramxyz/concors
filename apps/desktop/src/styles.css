@@ -268,3 +268,80 @@
     transition: none;
   }
 }
+
+/* DOM adaptation of Paseo's tool-call text shimmer (message.tsx), Apache-2.0.
+   Copyright (c) 2025-present Mohamed Boudra; third-party/paseo-LICENSE. */
+@keyframes paseo-toolcall-shimmer {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: 200px 0;
+  }
+}
+.agent-shimmer {
+  color: transparent;
+  background: linear-gradient(
+    100deg,
+    var(--muted-foreground) 30%,
+    var(--foreground) 50%,
+    var(--muted-foreground) 70%
+  );
+  background-size: 200px 100%;
+  background-clip: text;
+  animation: paseo-toolcall-shimmer 2s linear infinite;
+}
+.agent-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.agent-control:hover,
+.agent-control[data-state="open"] {
+  background: var(--muted);
+  color: var(--foreground);
+}
+.agent-control:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.agent-control:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.chat-markdown {
+  font-size: 16px;
+  line-height: 1.75;
+}
+.chat-markdown pre {
+  font-size: 13px;
+  line-height: 1.7;
+}
+.chat-markdown h1 {
+  font-size: 1.5em;
+}
+.chat-markdown h2 {
+  font-size: 1.25em;
+}
+.chat-markdown h3 {
+  font-size: 1.1em;
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-shimmer {
+    animation: none;
+    background: none;
+    color: var(--muted-foreground);
+  }
+}
+.syntax-token {
+  color: var(--token-light);
+}
+.dark .syntax-token {
+  color: var(--token-dark);
+}
