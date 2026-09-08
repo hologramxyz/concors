@@ -1,4 +1,5 @@
 import { terminalEnvironment } from "./environment.ts";
+import { terminalAgentActivity } from "./agent-activity.ts";
 import * as pty from "node-pty";
 import headless from "@xterm/headless";
 import serialize from "@xterm/addon-serialize";
@@ -25,6 +26,7 @@ export class TerminalRuntime {
   #queuedBytes = 0;
   #paused = false;
   #stopped = false;
+  #title = "";
   #resolveExit: () => void = () => undefined;
   readonly #exit: Promise<void>;
   readonly #save: (info: TerminalInfo) => void;
@@ -47,6 +49,10 @@ export class TerminalRuntime {
     });
     this.#serializer = new serialize.SerializeAddon();
     this.#screen.loadAddon(this.#serializer);
+    this.#screen.onTitleChange((title) => {
+      this.#title = title;
+      this.updateAgentActivity();
+    });
     this.#coalescer = new TerminalOutputCoalescer({
       timers: { setTimeout, clearTimeout },
       onFlush: ({ payload }) => {
@@ -96,6 +102,7 @@ export class TerminalRuntime {
           this.#pty.resume();
         }
         this.#coalescer.handle(data);
+        this.updateAgentActivity();
       });
     });
     this.#pty.onExit(({ exitCode }) => {
@@ -107,6 +114,7 @@ export class TerminalRuntime {
           ...this.info,
           status: this.#stopped || exitCode === 0 ? "exited" : "failed",
           exitCode,
+          agentActivity: "unknown",
         };
         this.#owner = null;
         this.#save(this.info);
@@ -124,6 +132,25 @@ export class TerminalRuntime {
     if (this.#disposed || this.info.status !== "running" || this.info.profile !== "shell") return;
     if ((this.info.detectedAgent ?? null) === (agent ?? null)) return;
     this.info = { ...this.info, detectedAgent: agent ?? null };
+    if (!agent) this.#title = "";
+    this.#save(this.info);
+    this.updateAgentActivity();
+  }
+
+  private updateAgentActivity(): void {
+    if (this.#disposed || this.info.status !== "running") return;
+    const buffer = this.#screen.buffer.active;
+    const lines = Array.from(
+      { length: this.#screen.rows },
+      (_, row) => buffer.getLine(buffer.baseY + row)?.translateToString(true) ?? "",
+    );
+    const agentActivity = terminalAgentActivity(
+      this.info.detectedAgent ?? this.info.profile,
+      this.#title,
+      lines,
+    );
+    if ((this.info.agentActivity ?? "unknown") === agentActivity) return;
+    this.info = { ...this.info, agentActivity };
     this.#save(this.info);
   }
 
