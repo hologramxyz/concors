@@ -59,8 +59,12 @@ function claudeActivity(
   )
     return "needs_input";
   if (/^[\u2800-\u28ff\u25d0-\u25d3] /u.test(title)) return "working";
-  // With a prompt box, only the live status immediately above it is authoritative.
-  const statusLines = hasPrompt ? recent.slice(-1) : recent;
+  // Claude 2.1.236 puts the interrupt hint BELOW the prompt and may insert an
+  // effort row between the spinner and its top border. Neither is prompt input.
+  if (hasPrompt && /^\s*[⏸⏵].*\besc to interrupt(?:\s|·|$)/mu.test(form)) return "working";
+  const statusRegion = recent.filter((line) => !/^\s*●\s+\S.*\/effort\s*$/u.test(line));
+  // Only the final status above the prompt is live; older transcript examples aren't.
+  const statusLines = hasPrompt ? statusRegion.slice(-1) : statusRegion;
   if (
     statusLines.some(
       (line) =>
