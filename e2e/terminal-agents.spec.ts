@@ -33,7 +33,9 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
     await expect(page.getByLabel("Terminal output")).toContainText("CODEX_TERMINAL_READY");
     await page.getByRole("button", { name: "Pane actions" }).click();
     await page.getByRole("menuitem", { name: "Split horizontally" }).click();
-    await page.getByRole("button", { name: "Start codex", exact: true }).click();
+    await expect(
+      page.getByRole("region", { name: "Codex pane", exact: true }).locator(".xterm"),
+    ).toHaveCount(2);
     await expect(agents.getByRole("button", { name: /Running in terminal.*Codex/ })).toHaveCount(2);
     const panes = page.getByRole("region", { name: "Codex pane", exact: true });
     const firstPaneId = await panes.first().getAttribute("data-pane-id");

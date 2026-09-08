@@ -52,7 +52,6 @@ export function ProjectWorkspace({
     );
   const createTab = (profile: PaneProfile, name?: string) => {
     if (!connection?.workspace || !canEdit || creating.current) return;
-    const epoch = connection.workspace.epoch;
     const tabId = crypto.randomUUID();
     const paneId = crypto.randomUUID();
     creating.current = true;
@@ -68,27 +67,7 @@ export function ProjectWorkspace({
         name: name || (TAB_PROFILES.find((item) => item.profile === profile)?.label ?? "Terminal"),
         profile,
       });
-      // The mounted ChatPane prepares its session, including split and converted panes.
-      if (profile === "chat") return;
-      const current = connection.workspace;
-      const updated = current?.projects.find((item) => item.id === project.id);
-      if (current?.epoch !== epoch || !updated || connection.state.status !== "ready")
-        throw new Error(
-          "The tab was created, but the machine disconnected before its session started.",
-        );
-      const target = {
-        kind: "start" as const,
-        epoch,
-        projectId: project.id,
-        tabId,
-        paneId,
-        expectedVersion: updated.version,
-      };
-      const result = await connection.requestTerminal(
-        { ...target, expectedSessionId: null, cols: 80, rows: 24 },
-        crypto.randomUUID(),
-      );
-      if (result.outcome.status === "error") throw new Error(result.outcome.message);
+      // Each mounted pane starts its own session, including split and converted panes.
     })()
       .catch((cause: unknown) => {
         setLaunchError(cause instanceof Error ? cause.message : "Could not start session");

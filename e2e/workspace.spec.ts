@@ -60,6 +60,9 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
     await first.getByRole("button", { name: "Pane actions", exact: true }).click();
     await first.getByRole("menuitem", { name: "Split horizontally", exact: true }).click();
     await expect(second.getByRole("region", { name: "Terminal pane", exact: true })).toHaveCount(2);
+    await expect(first.locator(".concors-terminal .xterm")).toHaveCount(2);
+    await expect(second.locator(".concors-terminal .xterm")).toHaveCount(2);
+    await expect(first.getByRole("button", { name: "Start terminal", exact: true })).toHaveCount(0);
     await second.getByRole("button", { name: "Pane actions", exact: true }).last().click();
     await second.getByRole("menuitemradio", { name: "Agent", exact: true }).click();
     await expect(first.getByRole("region", { name: "Agent pane", exact: true })).toHaveCount(1);
