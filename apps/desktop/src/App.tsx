@@ -24,6 +24,7 @@ import { navItemFor, type View } from "@/navigation";
 import { settingsNavItemFor, type SettingsPage } from "@/settings/navigation";
 import { SettingsSidebar } from "@/settings/settings-sidebar";
 import { useTheme } from "@/theme/use-theme";
+import { useCornerStyle } from "@/theme/use-corner-style";
 import { SettingsView } from "@/views/settings-view";
 import { ProjectSetupDialog } from "@/workspace/project-setup-dialog";
 import {
@@ -74,6 +75,7 @@ function AppContent() {
   const [endpoint, setEndpoint] = useState<DaemonEndpoint | null>(null);
   const connection = useDaemonConnection(endpoint);
   const theme = useTheme();
+  const corners = useCornerStyle();
   const auth = useAuth(api);
   const machines = localEndpoint
     ? [{ id: LOCAL_ID, name: "This computer", url: localEndpoint.url }, ...bookmarks]
@@ -313,6 +315,8 @@ function AppContent() {
                       state={connection.state}
                       theme={theme.preference}
                       onSetTheme={theme.setPreference}
+                      cornerStyle={corners.preference}
+                      onSetCornerStyle={corners.setPreference}
                       auth={account}
                       onSignOut={signOut}
                       onSetActiveOrganization={(organizationId) => {
