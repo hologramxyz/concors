@@ -61,7 +61,6 @@ these checks validate development runtimes, not signed desktop/mobile packages.
 during dependency installation. Keep this patch until upgrading to an upstream version that ships
 the helper correctly; the macOS runtime test verifies that an actual shell can launch.
 
-
 ## Color support
 
 PTYs advertise `TERM=xterm-256color`, `COLORTERM=truecolor`, and `CLICOLOR=1`.
