@@ -1,3 +1,6 @@
+import { useCommand } from "@/shortcuts/context";
+import { ShortcutProvider } from "@/shortcuts/provider";
+import { ShortcutGuide } from "@/shortcuts/guide";
 import { findSessionPane, type PaneFocusRequest } from "@/workspace/session-pane";
 import { NotificationProvider } from "@/notifications/provider";
 import { AgentsProvider } from "@/agents/state";
@@ -39,6 +42,13 @@ function savedMachines() {
 }
 
 export function App() {
+  return (
+    <ShortcutProvider>
+      <AppContent />
+    </ShortcutProvider>
+  );
+}
+function AppContent() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const toggleSidebar = (collapsed: boolean) => {
     setSidebarCollapsed(collapsed);
@@ -49,6 +59,7 @@ export function App() {
   const [paneFocus, setPaneFocus] = useState<PaneFocusRequest | null>(null);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [view, setView] = useState<View>("projects");
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [localEndpoint, setLocalEndpoint] = useState<DaemonEndpoint | null>(null);
   const [bookmarks, setBookmarks] = useState<MachineConnection[]>(savedMachines);
@@ -121,6 +132,12 @@ export function App() {
   );
   const openPalette = useCallback(() => setPaletteOpen(true), []);
   const signOut = () => void auth.signOut();
+
+  const signedIn = auth.state.status === "signed-in";
+  useCommand("search", signedIn, () => setPaletteOpen((open) => !open));
+  useCommand("new-project", signedIn && canEdit, () => setAddingProject(true));
+  useCommand("settings", signedIn, () => setView("settings"));
+  useCommand("shortcuts", signedIn, () => setShortcutsOpen(true));
 
   // Nothing but the sign-in screen exists for a signed-out user. All hooks run above this line.
   if (auth.state.status !== "signed-in") {
@@ -320,7 +337,15 @@ export function App() {
                 }}
               />
             )}
+            <ShortcutGuide open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
             <CommandPalette
+              canSelectProject={canEdit}
+              projects={workspace?.projects ?? []}
+              onSelectProject={(projectId) => {
+                const project = workspace?.projects.find((item) => item.id === projectId);
+                setView("projects");
+                command({ kind: "selection.set", projectId, tabId: project?.tabs[0]?.id ?? null });
+              }}
               open={paletteOpen}
               onOpenChange={setPaletteOpen}
               onNavigate={setView}
