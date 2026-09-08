@@ -48,7 +48,7 @@ const rule = "──────────────────────
 function screen(state) {
   const lines = state === "approval"
     ? [rule, "Do you want to proceed?", "❯ 1. Yes", "  2. No", "Esc to cancel"]
-    : [state === "working" ? "✻ Thinking… (12s · ↓ 120 tokens)" : "✻ Cooked for 52s", rule, "❯ ", rule, "  ⏵⏵ auto mode on (shift+tab to cycle)"];
+    : [state === "working" ? "✻ Thinking… (12s · ↓ 120 tokens)" : "✻ Cooked for 52s", "                       ● high · /effort", rule, "❯ ", rule, "  ⏵⏵ auto mode on (shift+tab to cycle)" + (state === "working" ? " · esc to interrupt" : "")];
   process.stdout.write("\x1b[2J\x1b[H" + lines.join("\r\n"));
 }
 createInterface({ input: process.stdin, terminal: false, crlfDelay: Infinity }).on("line", data => {
