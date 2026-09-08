@@ -53,7 +53,7 @@ export function createDaemonServer(
   app.register(websocket, {
     options: {
       // Handshake messages are small; agent output will be streamed in frames well below this.
-      maxPayload: 1024 * 1024,
+      maxPayload: 8 * 1024 * 1024,
     },
   });
 
