@@ -1,5 +1,6 @@
+import { TAB_PROFILES } from "./tab-profiles";
 import { useState } from "react";
-import { Bot, MessageSquare, Plus, SlidersHorizontal, Terminal } from "lucide-react";
+import { Plus, SlidersHorizontal } from "lucide-react";
 import type { PaneProfile } from "@concors/protocol";
 import {
   DropdownMenu,
@@ -18,14 +19,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-
-export const TAB_PROFILES: { profile: PaneProfile; label: string; icon: typeof Terminal }[] = [
-  { profile: "shell", label: "Terminal", icon: Terminal },
-  { profile: "chat", label: "Unified chat", icon: MessageSquare },
-  { profile: "codex", label: "Codex", icon: Bot },
-  { profile: "claude", label: "Claude Code", icon: Bot },
-  { profile: "opencode", label: "OpenCode", icon: Bot },
-];
 
 export function NewTabMenu({
   disabled,
