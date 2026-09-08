@@ -87,10 +87,7 @@ export function AccountSettings({
         </Row>
       </Section>
 
-      <Section
-        title="Session"
-        description="Sessions last 30 days and renew while you use Concors."
-      >
+      <Section title="Session" description="Sessions last 30 days and renew while you use Concors.">
         <Row label="Expires">
           <span>{formatDate(auth.session.expiresAt)}</span>
         </Row>

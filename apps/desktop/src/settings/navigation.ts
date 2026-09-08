@@ -9,12 +9,7 @@ import {
 } from "lucide-react";
 
 export type SettingsPage =
-  | "account"
-  | "appearance"
-  | "notifications"
-  | "billing"
-  | "ssh-keys"
-  | "advanced";
+  "account" | "appearance" | "notifications" | "billing" | "ssh-keys" | "advanced";
 
 export interface SettingsNavItem {
   readonly page: SettingsPage;
