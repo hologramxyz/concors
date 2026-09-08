@@ -1,5 +1,6 @@
 import { NotificationSettings } from "@/notifications/settings";
 import type { ConnectionState, DaemonEndpoint } from "@concors/daemon-client";
+import type { ReactNode } from "react";
 
 import { activeOrganization, type SignedInAuth } from "@/auth/auth-state";
 import { AccountSettings } from "@/settings/account-settings";
@@ -32,7 +33,7 @@ export function SettingsView({
   onSetActiveOrganization,
 }: SettingsViewProps) {
   const organization = activeOrganization(auth);
-  let content;
+  let content: ReactNode;
 
   switch (page) {
     case "account":
@@ -63,6 +64,10 @@ export function SettingsView({
     case "advanced":
       content = <AdvancedSettings endpoint={endpoint} state={state} />;
       break;
+    default: {
+      const unhandledPage: never = page;
+      throw new Error(`Unhandled settings page: ${unhandledPage}`);
+    }
   }
 
   return <div className="w-full max-w-3xl px-5 py-6 sm:px-6">{content}</div>;
