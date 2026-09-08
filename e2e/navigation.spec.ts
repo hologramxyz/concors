@@ -37,7 +37,20 @@ test("directional pane sequences, tab cycling, project memory and editor selecti
     const panes = page.locator("[data-pane-id]");
     await expect(panes.locator("textarea")).toBeFocused();
     const original = await focusedPane(page);
-    await sequence(page, "p", "Escape");
+    await page.keyboard.press("Control+Shift+p");
+    await page.evaluate(() =>
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "p",
+          ctrlKey: true,
+          shiftKey: true,
+          repeat: true,
+          bubbles: true,
+        }),
+      ),
+    );
+    await expect(page.getByRole("region", { name: "Pane shortcuts", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
     await expect(panes).toHaveCount(1);
     await sequence(page, "p", "ArrowLeft");
     await expect(panes).toHaveCount(2);
