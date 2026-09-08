@@ -1,10 +1,9 @@
+import { AgentComposer } from "./composer";
+import { TimelineItem } from "./timeline-item";
 import { useViewedAgent } from "@/notifications/context";
 import { useContext, useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Bot, Square, Wrench } from "lucide-react";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { ArrowDown, Bot, LoaderCircle } from "lucide-react";
 import type {
-  AgentItem,
   AgentOperation,
   AgentPending,
   LayoutNode,
@@ -111,10 +110,8 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
   const connection = useContext(TerminalConnectionContext);
   const agent = useAgents().find((a) => a.id === sessionId);
   const conversation = useConversation(sessionId);
-  const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [uncertain, setUncertain] = useState<{ id: string; text: string } | null>(null);
   const scroll = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   const [atBottom, setAtBottom] = useState(true);
@@ -139,37 +136,14 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
       setBusy(false);
     }
   };
-  const send = async () => {
-    const attempt = uncertain ?? { id: crypto.randomUUID(), text: draft.trim() };
-    if (!attempt.text) return;
-    setBusy(true);
-    setError(null);
-    try {
-      if (!connection) throw new Error("Machine is disconnected");
-      const result = await connection.requestAgent(
-        { kind: "send", sessionId, text: attempt.text },
-        attempt.id,
-      );
-      if (result.outcome.status === "error") {
-        setUncertain(null);
-        setError(result.outcome.message);
-        return;
-      }
-      setUncertain(null);
-      setDraft("");
-      follow.current = true;
-    } catch (cause) {
-      setUncertain(attempt);
-      setError(cause instanceof Error ? cause.message : "Could not confirm prompt submission");
-    } finally {
-      setBusy(false);
-    }
-  };
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="Agent conversation">
       <div className="flex shrink-0 items-center justify-between gap-2 border-b px-4 py-2">
         <span className="truncate text-xs text-muted-foreground">
-          Codex{agent?.model ? ` · ${agent.model}` : ""}
+          Codex
+          {(agent?.settings?.model ?? agent?.model)
+            ? ` · ${agent?.settings?.model ?? agent?.model}`
+            : ""}
         </span>
         {agent && <AgentStatus agent={agent} />}
       </div>
@@ -214,6 +188,20 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
               What would you like to work on?
             </p>
           )}
+          {active && (
+            <div
+              role="status"
+              className="sticky top-0 z-10 flex items-center gap-2 rounded-lg bg-background/95 px-3 py-2 text-xs text-muted-foreground"
+            >
+              <LoaderCircle className="size-4 animate-spin text-primary" />
+              {agent?.status === "starting"
+                ? "Starting agent…"
+                : agent?.status === "needs_input"
+                  ? "Waiting for your input"
+                  : (conversation.items.findLast((item) => item.status === "running")?.title ??
+                    "Thinking…")}
+            </div>
+          )}
           {conversation.items.map((item) => (
             <TimelineItem key={item.id} item={item} />
           ))}
@@ -249,141 +237,22 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
               {error ?? conversation.error ?? agent?.error}
             </p>
           )}
-          {uncertain && (
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span>Check the conversation before retrying.</span>
-              <button className={button} disabled={!connected || busy} onClick={() => void send()}>
-                Retry same prompt
-              </button>
-              <button
-                className={button}
-                onClick={() => {
-                  setUncertain(null);
-                  setDraft("");
-                  setError(null);
-                }}
-              >
-                Dismiss and review
-              </button>
-            </div>
-          )}
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!active && !busy && !uncertain) void send();
-            }}
-            className="rounded-xl border bg-background p-2 shadow-sm"
-          >
-            <textarea
-              aria-label="Message Codex"
-              placeholder={active ? "Codex is working…" : "Ask Codex to build something…"}
-              value={draft}
-              maxLength={16000}
-              rows={3}
-              disabled={!connected || busy || !!uncertain || !agent?.threadId}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                  e.preventDefault();
-                  if (!active && draft.trim() && !busy && !uncertain) void send();
-                }
+          {agent && (
+            <AgentComposer
+              key={agent.id}
+              agent={agent}
+              connected={!!connected && !busy}
+              onInterrupt={() => {
+                if (agent.turnId)
+                  void run(() =>
+                    perform({ kind: "interrupt", sessionId, turnId: agent.turnId ?? "" }),
+                  );
               }}
-              className="max-h-48 min-h-16 w-full resize-y bg-transparent px-2 py-1 text-sm outline-none disabled:opacity-50"
             />
-            <div className="flex items-center justify-between px-1">
-              <span className="text-[10px] text-muted-foreground">
-                {!connected
-                  ? "Reconnecting…"
-                  : active
-                    ? "You can interrupt this turn"
-                    : "Enter to send · Shift+Enter for a new line"}
-              </span>
-              {active ? (
-                <button
-                  type="button"
-                  aria-label="Interrupt agent"
-                  className={button}
-                  disabled={
-                    !connected || busy || !agent?.turnId || agent.turnId.startsWith("pending:")
-                  }
-                  onClick={() => {
-                    if (agent?.turnId)
-                      void run(() =>
-                        perform({ kind: "interrupt", sessionId, turnId: agent.turnId ?? "" }),
-                      );
-                  }}
-                >
-                  <Square className="size-3" />
-                </button>
-              ) : (
-                <button
-                  aria-label="Send message"
-                  className="rounded-md bg-primary p-2 text-primary-foreground disabled:opacity-40"
-                  disabled={!connected || busy || !draft.trim() || !!uncertain || !agent?.threadId}
-                >
-                  <ArrowUp className="size-3.5" />
-                </button>
-              )}
-            </div>
-          </form>
+          )}
         </div>
       </div>
     </div>
-  );
-}
-function TimelineItem({ item }: { item: AgentItem }) {
-  if (item.kind === "tool")
-    return (
-      <details className="rounded-lg border bg-muted/20 text-xs">
-        <summary className="flex cursor-pointer items-center gap-2 px-3 py-2">
-          <Wrench className="size-3 shrink-0 text-muted-foreground" />
-          <span className="min-w-0 flex-1 truncate">
-            {item.title}: {item.text}
-          </span>
-          <span
-            className={`shrink-0 ${item.status === "failed" ? "text-destructive" : "text-muted-foreground"}`}
-          >
-            {item.status}
-          </span>
-        </summary>
-        <pre className="chat-scroll max-h-72 overflow-auto border-t p-3 text-[11px] break-words whitespace-pre-wrap">
-          {item.detail || "Waiting for tool details…"}
-        </pre>
-      </details>
-    );
-  return (
-    <article
-      className={
-        item.kind === "user"
-          ? "ml-8 rounded-xl bg-muted/60 px-4 py-3"
-          : item.kind === "plan"
-            ? "rounded-lg border-l-2 border-primary/40 pl-4"
-            : ""
-      }
-    >
-      <p className="mb-1.5 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
-        {item.title}
-      </p>
-      <div className="chat-markdown text-sm leading-relaxed break-words">
-        {item.kind === "user" ? (
-          <p className="whitespace-pre-wrap">{item.text}</p>
-        ) : (
-          <Markdown
-            remarkPlugins={[remarkGfm]}
-            components={{
-              a: ({ children, ...props }) => (
-                <a {...props} target="_blank" rel="noopener noreferrer">
-                  {children}
-                </a>
-              ),
-              img: () => null,
-            }}
-          >
-            {item.text}
-          </Markdown>
-        )}
-      </div>
-    </article>
   );
 }
 function PendingInput({
