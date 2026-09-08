@@ -2,7 +2,8 @@ import { shortcutLabel } from "@/shortcuts/bindings";
 import { AgentSidebar } from "@/agents/list";
 import { ProjectActions } from "@/workspace/project-actions";
 import { SidebarSection } from "./sidebar-section";
-import { Folder, PanelLeftClose, Plus, Search } from "lucide-react";
+import { Folder, Keyboard, PanelLeftClose, Plus, Search } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "cn";
 import type { WorkspaceSnapshot, WorkspaceOperation } from "@concors/protocol";
 import type { View } from "@/navigation";
@@ -18,6 +19,7 @@ interface AppSidebarProps {
   view: View;
   onNavigate: (view: View) => void;
   onOpenCommandPalette: () => void;
+  onOpenShortcuts: () => void;
   workspace: WorkspaceSnapshot | null;
   canEdit: boolean;
   onSelectProject: (id: string) => void;
@@ -137,12 +139,29 @@ export function AppSidebar(props: AppSidebarProps) {
             </p>
           </SidebarSection>
         </div>
-        <div className="space-y-1 border-t border-sidebar-border p-2">
-          <AccountMenu
-            auth={props.auth}
-            onSignOut={props.onSignOut}
-            onOpenSettings={() => props.onNavigate("settings")}
-          />
+        <div className="flex items-center gap-1 border-t border-sidebar-border p-2">
+          <div className="min-w-0 flex-1">
+            <AccountMenu
+              auth={props.auth}
+              onSignOut={props.onSignOut}
+              onOpenSettings={() => props.onNavigate("settings")}
+            />
+          </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label="Keyboard shortcuts"
+                onClick={props.onOpenShortcuts}
+                className="flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              >
+                <Keyboard className="size-4" aria-hidden="true" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="flex items-center gap-2 text-sm">
+              Keyboard shortcuts <kbd>{shortcutLabel("shortcuts")}</kbd>
+            </TooltipContent>
+          </Tooltip>
         </div>
       </nav>
     </div>
