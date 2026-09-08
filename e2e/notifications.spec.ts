@@ -1,10 +1,9 @@
-import { signedIn } from "./signed-in.ts";
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { test, expect } from "@playwright/test";
+import { test, expect, signedIn } from "./signed-in.ts";
 import { DaemonConnection, describeDaemonEndpoint } from "../packages/daemon-client/src/index.ts";
 
 test("notifications deduplicate across windows, open chat, and sync unread without replay", async ({

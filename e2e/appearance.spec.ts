@@ -1,8 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { test, expect } from "@playwright/test";
-import { signedIn } from "./signed-in";
+import { test, expect, signedIn } from "./signed-in.ts";
 
 test("appearance follows the system and uses a shared neutral terminal/chat surface", async ({
   page,

@@ -1,8 +1,8 @@
 import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { test, expect, type Page } from "@playwright/test";
-import { signedIn } from "./signed-in.ts";
+import type { Page } from "@playwright/test";
+import { test, expect, signedIn } from "./signed-in.ts";
 const sequence = async (page: Page, prefix: "p" | "t", key: string) => {
   await page.keyboard.press(`Control+Shift+${prefix}`);
   await expect(

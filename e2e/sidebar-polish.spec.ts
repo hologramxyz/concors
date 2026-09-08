@@ -1,8 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { test, expect } from "@playwright/test";
-import { signedIn } from "./signed-in";
+import { test, expect, signedIn } from "./signed-in.ts";
 
 test("GitHub clone images fall back cleanly and project hover spans the action buttons", async ({
   page,

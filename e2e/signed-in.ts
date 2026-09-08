@@ -1,33 +1,37 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test as base, expect, type Page } from "@playwright/test";
 import { DaemonConnection, describeDaemonEndpoint } from "../packages/daemon-client/src/index.ts";
 
 // Specs share isolated daemons, but their PTYs must not accumulate toward the runtime limit.
-test.beforeEach(async () => {
-  for (const port of [7429, 7430]) {
-    const connection = new DaemonConnection({
-      endpoint: describeDaemonEndpoint(`ws://127.0.0.1:${port}/ws`),
-      client: { kind: "test", name: "terminal cleanup", version: "0.0.0" },
-    });
-    const unsubscribe = connection.subscribeWorkspace(() => undefined);
-    try {
-      await connection.connect();
-      await expect.poll(() => connection.workspace).not.toBeNull();
-      const result = await connection.requestTerminal({ kind: "list" }, crypto.randomUUID());
-      if (result.outcome.status === "error") throw new Error(result.outcome.message);
-      for (const session of result.outcome.sessions) {
-        if (session.status !== "running" && session.status !== "starting") continue;
-        const stopped = await connection.requestTerminal(
-          { kind: "stop", sessionId: session.id },
-          crypto.randomUUID(),
-        );
-        expect(stopped.outcome.status).toBe("ok");
+export const test = base.extend({
+  page: async ({ page }, use) => {
+    for (const port of [7429, 7430]) {
+      const connection = new DaemonConnection({
+        endpoint: describeDaemonEndpoint(`ws://127.0.0.1:${port}/ws`),
+        client: { kind: "test", name: "terminal cleanup", version: "0.0.0" },
+      });
+      const unsubscribe = connection.subscribeWorkspace(() => undefined);
+      try {
+        await connection.connect();
+        await expect.poll(() => connection.workspace).not.toBeNull();
+        const result = await connection.requestTerminal({ kind: "list" }, crypto.randomUUID());
+        if (result.outcome.status === "error") throw new Error(result.outcome.message);
+        for (const session of result.outcome.sessions) {
+          if (session.status !== "running" && session.status !== "starting") continue;
+          const stopped = await connection.requestTerminal(
+            { kind: "stop", sessionId: session.id },
+            crypto.randomUUID(),
+          );
+          expect(stopped.outcome.status).toBe("ok");
+        }
+      } finally {
+        unsubscribe();
+        connection.disconnect();
       }
-    } finally {
-      unsubscribe();
-      connection.disconnect();
     }
-  }
+    await use(page);
+  },
 });
+export { expect };
 
 const TOKEN_KEY = "concors.auth.session-token.v1";
 
