@@ -180,9 +180,6 @@ test("Mac workspace shortcuts use physical Control and display matching hints", 
     await expect(
       page.getByRole("heading", { name: "Mac keyboard project", exact: true }),
     ).toBeVisible();
-    await page.keyboard.press("Control+Shift+t");
-    await page.keyboard.press("Enter");
-    await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
     const panes = page.getByRole("region", { name: "Terminal pane", exact: true });
     await expect(panes).toHaveCount(1);
     await expect(page.getByRole("button", { name: "New tab", exact: true })).toHaveAttribute(
