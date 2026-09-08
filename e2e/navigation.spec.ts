@@ -32,8 +32,6 @@ test("directional pane sequences, tab cycling, project memory and immediate Agen
       .getByRole("button", { name: "Add project", exact: true })
       .click();
     await expect(page.getByRole("button", { name: "New tab", exact: true })).toBeEnabled();
-    await sequence(page, "t", "Enter");
-    await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
     const panes = page.locator("[data-pane-id]");
     await expect(panes.locator("textarea")).toBeFocused();
     const original = await focusedPane(page);

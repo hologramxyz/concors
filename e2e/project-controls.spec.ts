@@ -4,7 +4,9 @@ import { join } from "node:path";
 import { test, expect } from "@playwright/test";
 import { signedIn } from "./signed-in.ts";
 
-test("new tab menu creates a named terminal only after choosing a profile", async ({ page }) => {
+test("projects open a terminal immediately and new tabs start the chosen profile", async ({
+  page,
+}) => {
   const directory = await mkdtemp(join(tmpdir(), "concors-profile-controls-"));
   try {
     await signedIn(page);
@@ -16,13 +18,18 @@ test("new tab menu creates a named terminal only after choosing a profile", asyn
       .getByRole("dialog")
       .getByRole("button", { name: "Add project", exact: true })
       .click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(page.getByRole("banner")).toHaveCount(0);
+    await expect(page.getByLabel("Terminal output")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Start terminal", exact: true })).toHaveCount(0);
+    await expect(page.getByText("A terminal for this project")).toHaveCount(0);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     for (const name of ["Terminal", "Agent", "Codex", "Claude Code", "OpenCode"]) {
       await expect(page.getByRole("menuitem", { name, exact: true })).toBeVisible();
     }
     await page.keyboard.press("Escape");
-    await expect(page.getByLabel("Project tabs").locator("[data-tab-id]")).toHaveCount(0);
-    await page.getByRole("button", { name: "Create a tab", exact: true }).click();
+    await expect(page.getByLabel("Project tabs").locator("[data-tab-id]")).toHaveCount(1);
+    await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Configure terminal profile…" }).click();
     await page.getByLabel("Tab name", { exact: true }).fill("Development");
     await page.getByLabel("Terminal profile", { exact: true }).selectOption("shell");
@@ -30,7 +37,7 @@ test("new tab menu creates a named terminal only after choosing a profile", asyn
     await expect(page.getByRole("button", { name: "Development", exact: true })).toBeVisible();
     await expect(page.getByLabel("Terminal output")).toBeVisible();
     await expect(page.getByRole("button", { name: "Start terminal", exact: true })).toHaveCount(0);
-    const tab = page.getByLabel("Project tabs").locator("[data-tab-id]");
+    const tab = page.getByLabel("Project tabs").locator("[data-tab-id]").last();
     const bounds = await tab.boundingBox();
     expect(bounds?.height).toBeLessThanOrEqual(25);
     await page.getByLabel("Terminal output").click();
@@ -44,7 +51,7 @@ test("new tab menu creates a named terminal only after choosing a profile", asyn
     await expect(page.locator(".sidebar-shell")).toHaveAttribute("inert", "");
     await expect(page.locator(".sidebar-shell")).toHaveCSS("transition-property", "width");
     await expect(page.locator(".sidebar-shell")).toHaveCSS("width", "0px");
-    const expand = page.getByRole("banner").getByRole("button", { name: "Expand sidebar" });
+    const expand = page.getByRole("button", { name: "Expand sidebar" });
     await expect(expand).toBeFocused();
     await expect(
       page.getByRole("heading", { name: "Profile controls", exact: true }),

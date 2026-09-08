@@ -21,8 +21,6 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
       .getByRole("dialog")
       .getByRole("button", { name: "Add project", exact: true })
       .click();
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
     const agents = page
       .getByRole("navigation", { name: "Primary" })
       .getByRole("region", { name: "Agents", exact: true });
