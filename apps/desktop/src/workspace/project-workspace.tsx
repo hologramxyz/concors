@@ -1,5 +1,6 @@
 import { TerminalConnectionContext } from "@/terminal/connection-context";
-import { NewTabMenu, TAB_PROFILES } from "./new-tab-menu";
+import { NewTabMenu } from "./new-tab-menu";
+import { TAB_PROFILES } from "./tab-profiles";
 import { ContextMenu } from "radix-ui";
 import { useContext, useRef, useState } from "react";
 import { FolderOpen, Pencil, Plus, X } from "lucide-react";
@@ -61,7 +62,7 @@ export function ProjectWorkspace({
         expectedVersion: project.version,
         tabId,
         paneId,
-        name: name || TAB_PROFILES.find((item) => item.profile === profile)!.label,
+        name: name || (TAB_PROFILES.find((item) => item.profile === profile)?.label ?? "Terminal"),
         profile,
       });
       const current = connection.workspace;
@@ -249,7 +250,7 @@ export function ProjectWorkspace({
             key={selected.id}
             tab={selected}
             project={project}
-            canEdit={canEdit}
+            canEdit={canEdit && !launching}
             onCommand={onCommand}
           />
         ) : (
