@@ -85,6 +85,7 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
     );
     await second.getByRole("button", { name: /^Account:/ }).click();
     await second.getByRole("menuitem", { name: "Settings", exact: true }).click();
+    await second.getByRole("button", { name: "Back to app", exact: true }).click();
 
     await page.getByRole("button", { name: "Terminal", exact: true }).click();
     await agents
