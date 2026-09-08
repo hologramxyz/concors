@@ -309,7 +309,7 @@ export function AgentComposer({
             }
           }}
           onKeyDown={(e) => {
-            if (e.key === "Tab" && e.shiftKey && !active && !configuring && advanced) {
+            if (e.key === "Tab" && e.shiftKey && !configuring && advanced) {
               e.preventDefault();
               const modes: AgentSettings["mode"][] = ["default", "auto-review", "full-access"];
               void configure({
@@ -355,7 +355,7 @@ export function AgentComposer({
             label="Agent and model"
             value={settings.model ?? ""}
             icon={modelsLoading ? <LoaderCircle className="size-4 animate-spin" /> : <CodexIcon />}
-            disabled={!advanced || !connected || active || busy || configuring || modelsLoading}
+            disabled={!advanced || !connected || busy || configuring || modelsLoading}
             options={[
               {
                 id: "",
@@ -384,7 +384,7 @@ export function AgentComposer({
             label="Thinking effort"
             value={settings.effort ?? ""}
             icon={<Brain className="size-4" />}
-            disabled={!advanced || !connected || active || busy || configuring}
+            disabled={!advanced || !connected || busy || configuring}
             options={[
               {
                 id: "",
@@ -411,7 +411,7 @@ export function AgentComposer({
                 <Shield className="size-4" />
               )
             }
-            disabled={!advanced || !connected || active || busy || configuring}
+            disabled={!advanced || !connected || busy || configuring}
             options={[
               {
                 id: "default",
@@ -443,7 +443,7 @@ export function AgentComposer({
               aria-pressed={!!settings.planMode}
               title="Plan mode: explore and plan with read-only access"
               className={`agent-control ${settings.planMode ? "bg-primary/10 text-primary!" : ""}`}
-              disabled={!connected || active || busy || configuring}
+              disabled={!connected || busy || configuring}
               onClick={() => void configure({ ...settings, planMode: !settings.planMode })}
             >
               <ListTodo className="size-4" />
@@ -454,7 +454,7 @@ export function AgentComposer({
               label="Speed"
               value={settings.serviceTier ?? ""}
               icon={<Zap className={`size-4 ${settings.serviceTier ? "text-amber-500" : ""}`} />}
-              disabled={!connected || active || busy || configuring}
+              disabled={!connected || busy || configuring}
               options={[
                 { id: "", label: "Default speed", icon: <Zap className="size-4" /> },
                 ...effortModel.serviceTiers.map((tier) => ({
