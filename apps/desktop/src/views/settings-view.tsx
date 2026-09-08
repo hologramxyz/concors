@@ -65,5 +65,5 @@ export function SettingsView({
       break;
   }
 
-  return <div className="mx-auto w-full max-w-2xl px-8 py-8">{content}</div>;
+  return <div className="w-full max-w-3xl px-5 py-6 sm:px-6">{content}</div>;
 }
