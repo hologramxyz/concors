@@ -57,7 +57,7 @@ test("shared chat streams, reloads, handles approvals and remains in global Agen
     await expect(second.getByRole("region", { name: "Allow command execution?" })).toBeVisible();
     await second.getByRole("button", { name: "Decline", exact: true }).click();
     await expect(page.getByLabel("Agent status: Done").first()).toBeVisible();
-    await expect(agentList.getByRole("img", { name: "Agent status: Done" })).toBeVisible();
+    await expect(row.getByRole("img", { name: "Agent status: Done" })).toBeVisible();
     await expect(agentList.getByRole("img").locator("svg")).toHaveCount(0);
 
     await expect(page.getByRole("button", { name: "Allow once", exact: true })).toHaveCount(0);
