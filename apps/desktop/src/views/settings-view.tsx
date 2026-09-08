@@ -1,3 +1,4 @@
+import { NotificationSettings } from "@/notifications/settings";
 import type { ConnectionState, DaemonEndpoint } from "@concors/daemon-client";
 import { PROTOCOL_VERSION } from "@concors/protocol";
 import { Check, ChevronDown, LogOut, Monitor, Moon, Sun } from "lucide-react";
@@ -59,6 +60,7 @@ export function SettingsView({
         />
       </Section>
 
+      <NotificationSettings />
       <Section title="Appearance" description="How Concors looks on this device.">
         <Row label="Theme" hint="Follow the system or pick one explicitly.">
           <DropdownMenu>
