@@ -5,7 +5,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { BINDINGS, shortcutLabel } from "./bindings";
+import { BINDINGS, isMac, shortcutLabel } from "./bindings";
 export function ShortcutGuide({
   open,
   onOpenChange,
@@ -19,6 +19,7 @@ export function ShortcutGuide({
         <DialogHeader>
           <DialogTitle>Keyboard shortcuts</DialogTitle>
           <DialogDescription>
+            {isMac() && "On Mac, use the physical Control (⌃) key, not Command (⌘). "}
             Workspace shortcuts work inside terminals. In forms and dialogs, finish or dismiss the
             dialog first.
           </DialogDescription>

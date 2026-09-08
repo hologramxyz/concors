@@ -14,7 +14,7 @@ export type CommandId = (typeof BINDINGS)[number]["id"];
 export const isMac = () => /Mac|iPhone|iPad/.test(navigator.platform);
 export function shortcutLabel(id: CommandId, mac = isMac()): string {
   const binding = BINDINGS.find((item) => item.id === id);
-  return [mac ? "⌘" : "Ctrl", "Shift", binding?.key.toUpperCase() ?? ""].join("+");
+  return [mac ? "Control" : "Ctrl", "Shift", binding?.key.toUpperCase() ?? ""].join("+");
 }
 export function matchShortcut(
   event: Pick<
@@ -24,14 +24,15 @@ export function matchShortcut(
   mac: boolean,
   terminal: boolean,
 ): CommandId | undefined {
-  if (
-    event.isComposing ||
-    event.altKey ||
-    (mac ? !event.metaKey || event.ctrlKey : !event.ctrlKey || event.metaKey)
-  )
-    return;
-  // Preserve the existing palette shortcut outside terminals. Ctrl+K belongs to the shell.
-  if (!event.shiftKey) return !terminal && event.key.toLowerCase() === "k" ? "search" : undefined;
+  if (event.isComposing || event.altKey) return;
+  // Preserve the palette alias outside terminals; ordinary Ctrl+K belongs to the shell.
+  if (!event.shiftKey) {
+    const primaryOnly = mac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+    return primaryOnly && !terminal && event.key.toLowerCase() === "k" ? "search" : undefined;
+  }
+  // On macOS, use the physical Control key. Command-based window/tab shortcuts
+  // belong to the browser and cannot reliably be overridden by a page listener.
+  if (!event.ctrlKey || event.metaKey) return;
   return BINDINGS.find(
     (binding) =>
       event.key.toLowerCase() === binding.key ||
