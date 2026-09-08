@@ -33,6 +33,9 @@ test("new tab menu creates a named terminal only after choosing a profile", asyn
   const before = await page.getByLabel("Terminal output").boundingBox();
   await page.getByRole("button", { name: "Collapse sidebar" }).click();
   await expect(sidebar).toBeHidden();
+  await expect(page.locator(".sidebar-shell")).toHaveAttribute("inert", "");
+  await expect(page.locator(".sidebar-shell")).toHaveCSS("transition-property", "width");
+  await expect(page.locator(".sidebar-shell")).toHaveCSS("width", "0px");
   const expand = page.getByRole("banner").getByRole("button", { name: "Expand sidebar" });
   await expect(expand).toBeFocused();
   await expect(page.getByRole("heading", { name: "Profile controls", exact: true })).toBeVisible();
@@ -43,10 +46,17 @@ test("new tab menu creates a named terminal only after choosing a profile", asyn
   await page.screenshot({ path: "test-results/sidebar-collapsed.png" });
   await page.keyboard.press("Enter");
   await expect(sidebar).toBeVisible();
+  await expect(page.locator(".sidebar-shell")).toHaveCSS("width", "216px");
   await expect(page.getByRole("button", { name: "Collapse sidebar" })).toBeFocused();
   await expect(page.getByRole("button", { name: "Development", exact: true })).toHaveAttribute(
     "aria-pressed",
     "true",
   );
   await page.screenshot({ path: "test-results/project-controls.png" });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(page.locator(".sidebar-shell")).toHaveCSS("transition-duration", "0s");
+  await page.getByRole("button", { name: "Collapse sidebar" }).click();
+  await expect(page.locator(".sidebar-shell")).toHaveCSS("width", "0px");
+  await page.getByRole("button", { name: "Expand sidebar" }).click();
+  await expect(page.locator(".sidebar-shell")).toHaveCSS("width", "216px");
 });
