@@ -28,30 +28,20 @@ export function AgentSidebar({ onSelect }: { onSelect: (id: string) => void }) {
       unread: !!(agent.attention && !agent.attention.seen),
     })),
     ...terminals
-      .filter((session) => session.profile !== "shell")
+      .filter(
+        (session) =>
+          session.profile !== "shell" &&
+          (session.status === "running" || session.status === "starting"),
+      )
       .map((session) => ({
         id: session.id,
         name:
           TAB_PROFILES.find((profile) => profile.profile === session.profile)?.label ??
           session.profile,
         updatedAt: session.startedAt,
-        running: session.status === "running" || session.status === "starting",
-        status:
-          session.status === "running"
-            ? "Running in terminal"
-            : session.status === "starting"
-              ? "Starting"
-              : session.status === "exited"
-                ? "Exited"
-                : session.status === "failed"
-                  ? "Failed"
-                  : "Interrupted",
-        color:
-          session.status === "exited"
-            ? "bg-emerald-500"
-            : session.status === "failed"
-              ? "bg-red-500"
-              : "bg-white",
+        running: true,
+        status: session.status === "running" ? "Running in terminal" : "Starting",
+        color: "bg-white",
         unread: false,
       })),
   ].toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt));

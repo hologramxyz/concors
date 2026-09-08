@@ -92,7 +92,8 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
       .toBe(firstPaneId);
     await page.keyboard.type("fail");
     await page.keyboard.press("Enter");
-    await expect(remoteAgents.getByRole("button", { name: /Failed.*Codex/ })).toHaveCount(1);
+    await expect(panes.first().getByRole("button", { name: "Start new session" })).toBeVisible();
+    await expect(remoteAgents.getByRole("button", { name: /Failed.*Codex/ })).toHaveCount(0);
     await expect(
       remoteAgents.getByRole("button", { name: /Running in terminal.*Codex/ }),
     ).toHaveCount(1);
@@ -107,6 +108,18 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
         ),
       )
       .toBe(lastPaneId);
+    await second.keyboard.press("Control+c");
+    await expect(panes.last().getByRole("button", { name: "Start new session" })).toBeVisible();
+    await expect(agents.getByRole("button", { name: /Running in terminal.*Codex/ })).toHaveCount(0);
+    await expect(
+      remoteAgents.getByRole("button", { name: /Running in terminal.*Codex/ }),
+    ).toHaveCount(0);
+    await second.reload();
+    await expect(
+      remoteAgents.getByRole("button", {
+        name: /(?:Running in terminal|Exited|Failed|Interrupted).*Codex/,
+      }),
+    ).toHaveCount(0);
     await page.screenshot({ path: "test-results/terminal-agents.png" });
   } finally {
     await context.close();
