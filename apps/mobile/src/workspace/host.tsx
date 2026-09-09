@@ -29,7 +29,7 @@ import { WorkspaceRenderer } from "./renderer";
 import type { WorkspaceRendererHandle } from "./renderer-types";
 import { dispatchMobileApi } from "./api";
 
-const defaults: MobilePreferences = { theme: "system", corners: "subtle" };
+const defaults: MobilePreferences = { theme: "system", corners: "subtle", sound: false };
 export function WorkspaceHost() {
   const auth = useAuth();
   // A fresh renderer/session nonce on account or organization change rejects stale bridge actions.
