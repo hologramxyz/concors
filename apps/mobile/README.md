@@ -30,9 +30,10 @@ phone-size mode. Select **Explore demo**; it opens straight into the agent chat.
 2. While the approval is pending or an agent is working, send a follow-up to queue it.
    Attach a small file; switch to Terminal · Pane 2 with the top picker and back.
    Drafts, attachments and queued messages survive pane/tab navigation.
-3. Swipe right on the conversation to open Projects / Agents / Servers.
-   The workspace moves right. Swipe left, press Close sidebar, or tap the workspace
-   to return. Code blocks/terminal controls retain their own gestures.
+3. Swipe left on the conversation or terminal to open Projects / Agents / Servers.
+   The workspace moves right. Swipe right, press Close sidebar, or tap the workspace
+   to return. Vertical terminal scrolling and taps still work; code blocks and terminal
+   toolbar controls retain their own gestures.
 4. Tap your **name/avatar** at the bottom of the sidebar for the animated Account drawer,
    then **Settings** (or **Sign out**). The settings
    picker contains account, appearance, notifications, SSH, billing, machines and diagnostics.
@@ -47,7 +48,7 @@ phone-size mode. Select **Explore demo**; it opens straight into the agent chat.
    Tapping the covered trigger hits the backdrop and closes the drawer without reopening it.
    Desktop-only split/arrange/resize actions are intentionally absent on phones.
 
-The in-memory demo has no filesystem and leaves **Files** disabled. Use a current desktop
+The in-memory demo has no filesystem; **Files** opens an explanation. Use a current desktop
 daemon to test actual files, as described below. 6. Add a project from the sidebar's animated drawer (open/create/clone). Expand tool calls, diffs,
 plans, thinking and sub-agent updates. Try `ask me a question` for an input request.
 Model, effort and permissions use icon-only desktop controls when expanded.
@@ -171,10 +172,12 @@ and advertise `project-files` (plus `project-file-create` for creation). Updatin
 alone cannot enable files on an older running daemon. No control-plane/server PR is needed.
 Upgrade/restart that daemon when it is safe for your sessions, or test with a separate current daemon.
 
-1. Open a project, then tap the top-right **Files** button. Swipe left on the chat surface also
-   reveals Files from the right; swipe right on the file surface or tap **Back to chat** to return.
-   Swipe right from chat still opens the project sidebar. Inputs, editors, code blocks and terminal
-   controls keep their own gestures; the buttons always work.
+1. Open a project, then tap the top-right **Files** button. Swipe right on chat or the terminal
+   to open Files; swipe left on the file surface or tap **Back to chat** to return.
+   Swipe left from chat or the terminal opens the project sidebar. Inputs, editors, code blocks and
+   terminal toolbar controls keep their own gestures; vertical terminal gestures never navigate.
+   The Files button and navigation also work on older/offline daemons, with an explanation of
+   what is missing. They do not invent a filesystem or bypass the daemon's capabilities.
 2. Browse the project's registered root directory. Expand folders, filter loaded filenames,
    toggle hidden files, refresh, or create a file/folder with the tree's toolbar.
 3. Tap a Markdown file for its rendered preview and **Edit source** to change it. Other supported
@@ -274,5 +277,7 @@ reconnects, disconnect without stopping work, cold links and zero cloud API requ
 It does not claim a real provider account or physical device was tested.
 The direct suite also exercises real directory reads, Markdown links, file/folder creation,
 explicit saves, competing disk edits, in-app discard guards, draft-preserving reconnects,
-file-view swipes and 320/390/430px editor layouts. File tests use disposable temporary projects;
-they never edit the user's existing workspace.
+file-view and terminal swipes, session/input preservation after navigation and 320/390/430px editor
+layouts. A compatibility test removes file capabilities and verifies the Files explanation sends no
+unsupported file requests. File tests use disposable temporary projects; they never edit the user's
+existing workspace.
