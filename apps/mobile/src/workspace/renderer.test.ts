@@ -5,7 +5,7 @@ it("never interprets daemon output as injected renderer code", () => {
     type: "result" as const,
     scope: crypto.randomUUID(),
     requestId: crypto.randomUUID(),
-    result: '\");globalThis.compromised=true;//\n</script>\u2028\u2029',
+    result: '");globalThis.compromised=true;//\n</script>\u2028\u2029',
   };
   const received: unknown[] = [];
   const script = workspaceScript(message);
