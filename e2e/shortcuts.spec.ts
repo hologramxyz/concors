@@ -55,7 +55,9 @@ test("workspace shortcuts create, search, split and close the active pane withou
     await page.getByRole("menuitem", { name: "Codex", exact: true }).click();
     const panes = page.getByRole("region", { name: "Codex pane", exact: true });
     await expect(panes).toHaveCount(1);
-    await expect(page.getByLabel("Terminal output")).toContainText("CODEX_TERMINAL_READY");
+    await expect(page.getByLabel("Terminal output").filter({ visible: true })).toContainText(
+      "CODEX_TERMINAL_READY",
+    );
     await panes.first().locator("textarea").focus();
     // Ctrl+K stays in the terminal; the app variant opens search.
     await page.keyboard.press("Control+k");
@@ -86,7 +88,9 @@ test("workspace shortcuts create, search, split and close the active pane withou
     await expect(page.getByRole("separator", { name: /Resize/ })).toHaveCount(2);
     await expect(page.locator('[role="separator"][aria-orientation="horizontal"]')).toHaveCount(1);
     await expect(panes.last().locator("textarea")).toBeFocused();
-    await expect(panes.last().getByLabel("Terminal output")).toContainText("CODEX_TERMINAL_READY");
+    await expect(
+      panes.last().getByLabel("Terminal output").filter({ visible: true }),
+    ).toContainText("CODEX_TERMINAL_READY");
     const closedId = await page.evaluate(() =>
       document.activeElement?.closest("[data-pane-id]")?.getAttribute("data-pane-id"),
     );

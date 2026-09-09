@@ -1,4 +1,5 @@
 import { neighborPane, type Direction } from "./pane-navigation";
+import { useTabVisible } from "./tab-visibility";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { useCommand } from "@/shortcuts/context";
 import { shortcutLabel } from "@/shortcuts/bindings";
@@ -50,6 +51,7 @@ interface PaneDrag {
 }
 
 export function PaneLayout(props: Props) {
+  const visible = useTabVisible();
   const [dragging, setDragging] = useState<PaneDrag | null>(null);
   const [drop, setDrop] = useState<Placement | null>(null);
   const container = useRef<HTMLDivElement>(null);
@@ -76,6 +78,7 @@ export function PaneLayout(props: Props) {
     });
   };
   useEffect(() => {
+    if (!visible) return;
     const requested = pendingFocus.current;
     const targetId =
       requested && props.tab.nodes.some((node) => node.id === requested)
@@ -87,7 +90,7 @@ export function PaneLayout(props: Props) {
     pendingFocus.current = null;
     const pane = container.current?.querySelector<HTMLElement>(`[data-pane-id="${targetId}"]`);
     (pane?.querySelector<HTMLTextAreaElement>("textarea:not(:disabled)") ?? pane)?.focus();
-  }, [props.tab.nodes, activePaneId, activePane?.id]);
+  }, [props.tab.nodes, activePaneId, activePane?.id, visible]);
   const connection = useContext(TerminalConnectionContext);
   const canSplitBefore = !!(
     connection?.state.status === "ready" ? connection.state.daemon : null
@@ -116,10 +119,10 @@ export function PaneLayout(props: Props) {
     const target = pane?.querySelector<HTMLElement>("textarea:not(:disabled)") ?? pane;
     target?.focus({ preventScroll: true });
   };
-  useCommand("focus-left", !!activePane, () => focusNeighbor("left"));
-  useCommand("focus-right", !!activePane, () => focusNeighbor("right"));
-  useCommand("focus-up", !!activePane, () => focusNeighbor("up"));
-  useCommand("focus-down", !!activePane, () => focusNeighbor("down"));
+  useCommand("focus-left", visible && !!activePane, () => focusNeighbor("left"));
+  useCommand("focus-right", visible && !!activePane, () => focusNeighbor("right"));
+  useCommand("focus-up", visible && !!activePane, () => focusNeighbor("up"));
+  useCommand("focus-down", visible && !!activePane, () => focusNeighbor("down"));
   const canSplit = props.canEdit && !!activePane && props.tab.nodes.length < 63;
   useCommand("split-left", canSplit && canSplitBefore, () => split("horizontal", true));
   useCommand("split-up", canSplit && canSplitBefore, () => split("vertical", true));
@@ -149,14 +152,39 @@ export function PaneLayout(props: Props) {
   useEffect(() => {
     const target = props.focusRequest;
     if (!target || target.projectId !== props.project.id || target.tabId !== props.tab.id) return;
-    const frame = requestAnimationFrame(() => {
+    const root = container.current;
+    if (!root) return;
+    let initial = true;
+    const focus = () => {
       const pane = container.current?.querySelector<HTMLElement>(
         `[data-pane-id="${target.paneId}"]`,
       );
       const input = pane?.querySelector<HTMLTextAreaElement>("textarea:not(:disabled)");
+      const focused = document.activeElement;
+      const focusedPane = focused?.closest<HTMLElement>("[data-pane-id]");
+      if (focused?.closest('[role="dialog"], [role="alertdialog"], [role="menu"]')) return;
+      if (!initial && focusedPane && focusedPane !== pane && focusedPane.getClientRects().length) {
+        observer.disconnect();
+        return;
+      }
       (input ?? pane)?.focus({ preventScroll: true });
+      initial = false;
+      if (input) observer.disconnect();
+    };
+    // The first Agent composer can arrive after the navigation frame. Complete
+    // that focus request when its input is mounted/enabled, instead of losing it.
+    const observer = new MutationObserver(focus);
+    observer.observe(root, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["disabled"],
     });
-    return () => cancelAnimationFrame(frame);
+    const frame = requestAnimationFrame(focus);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
   }, [props.focusRequest, props.project.id, props.tab.id]);
   const nodes = new Map(props.tab.nodes.map((node) => [node.id, node]));
   const render = (id: string): React.ReactNode => {
@@ -278,7 +306,7 @@ function Pane({
       data-pane-id={node.id}
       tabIndex={-1}
       aria-label={`${PROFILE_LABELS[node.profile]} pane`}
-      className={`relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border focus-visible:ring-1 focus-visible:ring-primary focus-visible:outline-none ${node.profile === "chat" ? "bg-card" : "bg-[var(--terminal-background)] text-[var(--terminal-foreground)]"}`}
+      className={`relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border outline-none ${node.profile === "chat" ? "bg-card" : "bg-[var(--terminal-background)] text-[var(--terminal-foreground)]"}`}
     >
       <header
         tabIndex={0}
@@ -294,7 +322,7 @@ function Pane({
           onDrag({ paneId: node.id, version: project.version });
         }}
         onDragEnd={() => onDrag(null)}
-        className={`flex h-9 shrink-0 items-center gap-1 border-b px-2 ${canDrag && tab.nodes.length > 1 ? "cursor-grab active:cursor-grabbing" : ""}`}
+        className={`flex h-9 shrink-0 items-center gap-1 border-b px-2 outline-none ${canDrag && tab.nodes.length > 1 ? "cursor-grab active:cursor-grabbing" : ""}`}
       >
         {node.profile === "chat" ? (
           <AgentPaneIcon sessionId={node.sessionId} />
