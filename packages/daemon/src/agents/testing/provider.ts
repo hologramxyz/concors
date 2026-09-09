@@ -116,6 +116,15 @@ export class TestAgentProvider implements AgentProvider {
         .catch(() => undefined);
     } else if (text.includes("fail")) this.finish("failed");
     else {
+      if (text.includes("file-links")) {
+        this.emit("item/completed", {
+          item: {
+            id: `files-link-${this.turnId}`,
+            type: "agentMessage",
+            text: "Read [the README](README.md) or [the code](src/main.ts#L2).",
+          },
+        });
+      }
       if (text.includes("rich")) {
         this.emit("item/completed", {
           item: {

@@ -106,7 +106,7 @@ export function ControlPicker({
                 setActive(0);
               }}
               placeholder={label}
-              className="min-w-0 flex-1 bg-transparent text-[14px] outline-none"
+              className="min-w-0 flex-1 bg-transparent text-sm outline-none"
             />
           </div>
           <div
@@ -124,13 +124,13 @@ export function ControlPicker({
                 key={option.id}
                 onMouseMove={() => setActive(index)}
                 onClick={() => select(option.id)}
-                className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left text-[14px] ${active === index ? "bg-accent" : "hover:bg-accent"}`}
+                className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left text-sm ${active === index ? "bg-accent" : "hover:bg-accent"}`}
               >
                 {option.icon}
                 <span className="min-w-0 flex-1">
                   <span className="block truncate">{option.label}</span>
                   {option.description && (
-                    <span className="mt-0.5 block text-[12px] text-muted-foreground">
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
                       {option.description}
                     </span>
                   )}
@@ -138,7 +138,7 @@ export function ControlPicker({
                 {value === option.id && <Check className="size-4 shrink-0" />}
               </button>
             ))}
-            {!visible.length && <p className="p-3 text-[14px] text-muted-foreground">No matches</p>}
+            {!visible.length && <p className="p-3 text-sm text-muted-foreground">No matches</p>}
           </div>
           {footer}
         </Popover.Content>

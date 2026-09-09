@@ -18,3 +18,11 @@ Terminal colors are explicit ANSI palettes for light and dark themes, with cobal
 readable red/green/yellow/cyan/magenta colors, matching pane chrome, and a 13px Geist Mono
 font. Switching the app theme updates the renderer without restarting its session.
 Application-specified indexed and true-color values are preserved.
+
+## Desktop text sizes
+
+The root remains 13px to preserve the compact rem-based spacing. Tailwind text-size tokens use
+explicit pixel values so `text-xs` actually renders at 12px, rather than 9.75px. Both sidebars, tabs,
+and compact navigation use `text-ui` (13px); supporting metadata uses 12px; body controls and code
+use 14px; chat prose uses 16px. Terminal text uses 13px with a block cursor; the code editor uses 14px. Inline code may use a
+relative size, but fenced code inherits its block's full size.

@@ -51,7 +51,7 @@ export function ConnectionStatus({ state, endpoint, onReconnect }: ConnectionSta
           {endpoint !== null && (
             <Badge
               variant="outline"
-              className="h-4 px-1 text-[10px] tracking-wide text-muted-foreground uppercase"
+              className="h-5 px-1 text-xs tracking-wide text-muted-foreground uppercase"
             >
               {endpoint.kind}
             </Badge>
