@@ -8,5 +8,5 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext"
   },
-  "include": ["src", "tsup.config.ts"]
+  "include": ["src", "scripts", "tsup.config.ts"]
 }
