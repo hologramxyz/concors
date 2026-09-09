@@ -4,12 +4,14 @@
 interface CodexIconProps {
   size?: number;
   color?: string;
+  className?: string;
 }
 
-export function CodexIcon({ size = 16, color = "currentColor" }: CodexIconProps) {
+export function CodexIcon({ size = 16, color = "currentColor", className }: CodexIconProps) {
   return (
     <svg
       aria-hidden="true"
+      className={className}
       width={size}
       height={size}
       viewBox="0 0 24 24"
