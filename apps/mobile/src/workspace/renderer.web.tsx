@@ -3,7 +3,7 @@ import { workspaceHtml } from "../../assets/workspace-html";
 import type { WorkspaceRendererHandle, WorkspaceRendererProps } from "./renderer-types";
 
 export const WorkspaceRenderer = forwardRef<WorkspaceRendererHandle, WorkspaceRendererProps>(
-  function WorkspaceRenderer({ onMessage, onError }, ref) {
+  function WorkspaceRenderer({ onMessage, onError, backgroundColor }, ref) {
     const frame = useRef<HTMLIFrameElement>(null);
     useEffect(() => {
       const viewport = window.visualViewport;
@@ -59,7 +59,7 @@ export const WorkspaceRenderer = forwardRef<WorkspaceRendererHandle, WorkspaceRe
           border: 0,
           width: "100%",
           height: "100%",
-          background: "#f4f3ef",
+          background: backgroundColor,
           touchAction: "pan-y",
         }}
       />

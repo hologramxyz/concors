@@ -3,6 +3,7 @@ export interface WorkspaceRendererHandle {
   send(message: MobileHostMessage): void;
 }
 export interface WorkspaceRendererProps {
+  backgroundColor: string;
   onMessage(raw: unknown): void;
   onError(): void;
 }

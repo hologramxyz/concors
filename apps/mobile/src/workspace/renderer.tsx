@@ -8,7 +8,7 @@ import {
 } from "./renderer-types";
 
 export const WorkspaceRenderer = forwardRef<WorkspaceRendererHandle, WorkspaceRendererProps>(
-  function WorkspaceRenderer({ onMessage, onError }, ref) {
+  function WorkspaceRenderer({ onMessage, onError, backgroundColor }, ref) {
     const view = useRef<WebView>(null);
     useImperativeHandle(
       ref,
@@ -19,7 +19,7 @@ export const WorkspaceRenderer = forwardRef<WorkspaceRendererHandle, WorkspaceRe
       <WebView
         ref={view}
         source={{ html: workspaceHtml }}
-        style={{ flex: 1, backgroundColor: "#f4f3ef" }}
+        style={{ flex: 1, backgroundColor }}
         // Route every navigation through the deny-by-default callback. An origin excluded
         // here would otherwise be handed to the OS by react-native-webview itself.
         originWhitelist={["*"]}
