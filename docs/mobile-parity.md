@@ -17,10 +17,18 @@ Phone-specific behavior:
 - No bottom navigation. The existing chat composer occupies the bottom of the workspace;
   tapping its textarea opens the platform keyboard.
 - A swipeable Projects / Agents / Servers sidebar pushes the workspace to the right.
-  Swipe back, press the sidebar icon, or tap the workspace scrim to close it.
-- Settings is a modal drawer over the current workspace, preserving the conversation.
-- A grouped tab-and-pane select above the active pane replaces a desktop split-grid.
-  Navigation is device-local; explicit layout edits still update the shared workspace.
+  Swipe back, press the mobile menu icon, or tap the workspace scrim to close it.
+- A compact name/avatar account menu opens Settings. Machine management is a settings section.
+- Search, Settings, Add Project and New Tab use the shared Radix dialog with animated
+  bottom-sheet presentation, focus restoration and reduced-motion support.
+  Opening Search leaves the sidebar visible behind it.
+- Styled, grouped pickers share accessible touch-sized options for tabs/panes, machines
+  and settings. The header has one title and a contained chevron, without a project subtitle.
+  Navigation is device-local; explicit rename/reorder/profile/close edits update the shared workspace.
+- Model, effort and permissions are icon-only. Plan, speed, context and dictation live
+  under More, keeping send/queue/interrupt on the same toolbar row down to 320px width.
+- Desktop split/placement/arrangement/resize controls and commands are intentionally
+  absent on phones. Existing desktop split panes remain accessible in the top picker.
 - Project, tab, and pane controls remain available as touch menus.
 - Drafts, attachments, queues and uncertain-send retry IDs survive pane/tab navigation
   and foreground socket replacement. They remain memory-only and account scoped;
@@ -30,17 +38,17 @@ Phone-specific behavior:
 
 ## Source parity
 
-| Area          | Shared implementation                                                       | Phone behavior                                                                                               |
-| ------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Composer      | `agents/composer.tsx`, `draft.ts`, Paseo submit logic                       | Attachments, queue, retry, model/effort/permissions/plan/speed/context, interrupt; native keyboard dictation |
-| Conversation  | `agents/chat.tsx`, `timeline-item.tsx`, `markdown.tsx`, `plan-progress.tsx` | Same history, streaming, approvals/questions, thinking, tool/MCP/diff/sub-agent rendering and copy actions   |
-| Projects      | `workspace/project-setup-dialog.tsx`, `project-actions.tsx`                 | Open/create/clone/remove; setup continues remotely                                                           |
-| Tabs/panes    | Protocol workspace reducer, `workspace/new-tab-menu.tsx`                    | Local grouped selector; explicit rename/reorder/split/profile/move/resize/confirmed close                    |
-| Terminal      | `terminal/terminal-pane.tsx`, `surface.tsx` and xterm                       | Same replay, input ownership, resize/recovery; extra key strip and confirmed stop                            |
-| Settings      | `views/settings-view.tsx` and `settings/*`                                  | Drawer: account/orgs, theme/corners, SSH, billing, native-safe diagnostics                                   |
-| Notifications | Shared attention engine, provider and sound settings                        | Foreground notices; native opt-in push remains backend gated                                                 |
-| Machines      | `machines/machines-view.tsx`                                                | Shared inventory/provisioning/lifecycle controls in a drawer                                                 |
-| Servers       | Same empty state as desktop                                                 | No discovered servers until upstream discovery exists                                                        |
+| Area          | Shared implementation                                                       | Phone behavior                                                                                                   |
+| ------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Composer      | `agents/composer.tsx`, `draft.ts`, Paseo submit logic                       | Attachments, queue, retry, model/effort/permissions/plan/speed/context, interrupt; native keyboard dictation     |
+| Conversation  | `agents/chat.tsx`, `timeline-item.tsx`, `markdown.tsx`, `plan-progress.tsx` | Same history, streaming, approvals/questions, thinking, tool/MCP/diff/sub-agent rendering and copy actions       |
+| Projects      | `workspace/project-setup-dialog.tsx`, `project-actions.tsx`                 | Open/create/clone/remove; setup continues remotely                                                               |
+| Tabs/panes    | Protocol workspace reducer, `workspace/new-tab-menu.tsx`                    | Local grouped selector; new-session drawer; rename/reorder/profile/confirmed close; no desktop geometry controls |
+| Terminal      | `terminal/terminal-pane.tsx`, `surface.tsx` and xterm                       | Same replay, input ownership, resize/recovery; extra key strip and confirmed stop                                |
+| Settings      | `views/settings-view.tsx` and `settings/*`                                  | Drawer: account/orgs, theme/corners, SSH, billing, native-safe diagnostics                                       |
+| Notifications | Shared attention engine, provider and sound settings                        | Foreground notices; native opt-in push remains backend gated                                                     |
+| Machines      | `machines/machines-view.tsx`                                                | Shared inventory/provisioning/lifecycle controls inside Settings                                                 |
+| Servers       | Same empty state as desktop                                                 | No discovered servers until upstream discovery exists                                                            |
 
 Paths above are relative to `apps/desktop/src/`. The earlier mobile-only chat and
 terminal renderers were removed. Tauri-specific APIs are replaced by narrow native
@@ -57,8 +65,11 @@ Implementation/verification checklist (updated as each slice lands):
 - [x] Desktop regression cases and refreshed private preview.
 
 Verification on 2026-09-09: 218 unit tests pass (one opt-in API integration test is
-skipped), 12 phone browser scenarios pass, and all 19 desktop browser scenarios pass
-across the isolated-port runs. The appearance scenario additionally exercises theme
+skipped), 15 phone browser scenarios pass, and all 19 desktop browser scenarios pass
+across isolated-port runs (17 initially, the two multi-client cases passed on isolated retry).
+The phone suite covers 320/375/390/430px toolbars, contained picker chevrons,
+drawer focus/animations/reduced motion, sidebar-preserving search, account menus and machine management.
+The appearance scenario additionally exercises theme
 and corner preferences. A local-WebView test removes the browser UUID helper and
 verifies new-tab requests still use secure, valid IDs. The private static preview was opened at iPhone size for
 chat/sidebar/settings/terminal screenshots with no page errors. Other Tailscale routes
@@ -71,3 +82,5 @@ confined to test fixtures; it does not relax the production daemon allowlist.
 Production gateway, push service and deletion backend remain external release gates.
 Store billing-policy review and physical iOS/Android keyboard, gestures, file picker,
 clipboard and accessibility checks are required before claiming submission readiness.
+The optional local WebKit check could not run because this host lacks WebKit's Linux
+runtime libraries; Chromium device emulation is not a physical iPhone/Safari verification.
