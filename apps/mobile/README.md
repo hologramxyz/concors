@@ -100,8 +100,9 @@ physical devices, APNs/FCM credentials and the server integration.
 
 Tapping the real textarea focuses the system keyboard. Mobile Enter inserts a newline;
 Ctrl/Command+Enter sends. Dictation uses the phone keyboard's microphone, not browser
-speech recognition. Attachment capture/selection may request iOS photo/camera/audio
-permission only when explicitly chosen in the system file picker.
+speech recognition. Native iOS attachments use the system document picker; the app does
+not request camera, photo-library or microphone access. Android also blocks camera,
+recording and broad media/storage permissions.
 
 ## Connect to the real service
 
@@ -111,6 +112,14 @@ Set `EXPO_PUBLIC_DEV_DAEMON_URL` to a private WSS endpoint for the **existing de
 daemon**, `EXPO_PUBLIC_DEMO=false`, and use a development/preview build. Restart Metro
 with `--clear` after switching modes. The welcome screen offers **Connect to desktop**.
 This is a real workspace connection, not a demo account or a simulated machine.
+
+Before any real workspace connection, review the AI-sharing disclosure and explicitly
+choose **Allow AI data sharing**. Consent is versioned and scoped to the account and
+organization (or private endpoint), stored on the device, and required before the socket
+opens. **Not now** returns without connecting. In Settings, **Review AI data sharing →
+Withdraw and disconnect** removes that choice and closes the phone connection after
+confirmation. Save files first; unsent drafts are discarded, while remote sessions continue.
+The in-memory demo does not share data with AI providers and skips this gate.
 
 The host uses the same `DaemonConnection` protocol as desktop and obtains the actual
 machine ID from its workspace snapshot. Cloud login, inventory and API requests are

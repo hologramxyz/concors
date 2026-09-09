@@ -2,6 +2,12 @@
 
 ## Shortest path
 
+Start with the [submission packet](../apps/mobile/release/submission-packet.md): draft
+store copy, data inventory, public URL audit, and ownership for each blocker. The first
+release's account/purchasing scope still needs product approval. Client-side AI disclosure
+and explicit account-scoped consent are implemented; provider/privacy review and a
+functioning content-reporting service are separate requirements.
+
 Client/demo/shared lifecycle/protocol integration/build profiles are implemented.
 No signed IPA/AAB, store release or production validation is implied by bundle export.
 Test the real workspace now using the [direct desktop connection](../apps/mobile/README.md#first-connect-to-the-same-daemon-as-desktop).
@@ -36,7 +42,7 @@ the separate [authenticated workspace bridge](mobile-backend.md) on the new mach
 The client now has an API method for the actual machine JWT endpoint and retains agent
 metadata. It does not silently connect the chat UI to the terminal-only protocol.
 Managed-cloud testing still needs the selected account/machine; native builds need team-owned
-project and signing configuration. The production checklist remains intentionally false.
+project and signing configuration. The production checklist remains intentionally blocked/pending.
 
 The mobile client now reuses the desktop workspace, including account creation,
 machine provisioning and billing/checkout UI. Commands still run remotely and the
@@ -115,10 +121,10 @@ backgrounding or APNs/FCM.
   terminal throughout review. Explain remote execution; do not use customer data.
 - Recheck encryption/export compliance (current HTTPS/WSS config declares no non-exempt
   encryption), dependency privacy manifests and permissions in the generated binary.
-  Android broad media/storage/recording permissions remain blocked. iOS attachment
-  selection/capture includes purpose descriptions for photos, camera and video audio;
-  exercise permission denial as well as success. Chat dictation uses the OS keyboard.
-  See the [WebView upload requirements](https://github.com/react-native-webview/react-native-webview/blob/master/docs/Guide.md#add-support-for-file-upload).
+  Android camera, broad media/storage and recording permissions remain blocked. iOS
+  attachments use the native system document picker, not in-app capture, so unused
+  camera/microphone/photo-library purpose strings were removed. Chat dictation uses the
+  OS keyboard. Exercise document selection, cancellation and denial on physical devices.
 - Start required closed testing early. Applicable new personal Google accounts require
   12 opted-in testers continuously for 14 days before production access; check the
   [current account requirements](https://support.google.com/googleplay/android-developer/answer/14151465).
@@ -130,9 +136,13 @@ execution. Only promise notifications after real delivery is verified.
 
 ## Production gate and submission
 
-Update `apps/mobile/release/readiness.json` only after verifying each item; record evidence
-in the release PR. It **fails intentionally today**. EAS production pre-install enforces
-the checklist/configuration; this workflow guard is not an independent compliance audit.
+Update `apps/mobile/release/readiness.json` only after verifying each item. Every required
+gate needs `status: "verified"`, a named `verifiedBy`, ISO `verifiedAt` and nonempty
+`evidence`; choose the approved `releaseModel` as well. It **fails intentionally today**.
+EAS pre-install and standard asset/native/export scripts enforce the checklist whenever
+the build profile or app variant is production, including custom EAS profiles. Empty,
+missing, duplicate or evidence-free gates cannot pass. This workflow guard is not an
+independent compliance audit. `release:check --json` produces a machine-readable report.
 Development/preview builds remain available. CI never uploads/submits automatically.
 
 ```bash
