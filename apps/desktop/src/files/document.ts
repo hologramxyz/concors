@@ -43,6 +43,7 @@ export class FileDocument {
 
   async load(request: Request, discard = false) {
     if (this.snapshot.busy) return;
+    const startingContent = this.snapshot.content;
     const generation = ++this.generation;
     this.update({ busy: true, error: null });
     try {
@@ -50,7 +51,7 @@ export class FileDocument {
       if (generation !== this.generation) return;
       if (result.status !== "read")
         throw new Error("message" in result ? result.message : "Could not read file.");
-      if (this.dirty && !discard)
+      if (this.dirty && (!discard || this.snapshot.content !== startingContent))
         this.update({
           disk: result.file,
           changed: result.file.revision !== this.snapshot.base?.revision,
