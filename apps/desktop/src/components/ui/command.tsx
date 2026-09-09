@@ -44,9 +44,10 @@ function CommandDialog({
     <Dialog {...props}>
       <DialogContent
         className={cn(
-          "top-[12vh] translate-y-0 overflow-hidden rounded-xl! p-0 sm:max-w-2xl",
+          compact
+            ? "mobile-search-drawer"
+            : "top-[12vh] translate-y-0 overflow-hidden rounded-xl! p-0 sm:max-w-2xl",
           className,
-          compact && "mobile-search-drawer",
         )}
         showCloseButton={compact || showCloseButton}
       >
