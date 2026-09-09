@@ -4,10 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DaemonConnection, describeDaemonEndpoint } from "@concors/daemon-client";
 import type { AgentOperation, WorkspaceOperation } from "@concors/protocol";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { createDaemonServer, type DaemonServer } from "../server.ts";
 import { loadDaemonConfig } from "../config.ts";
 import { TestAgentProvider } from "./testing/provider.ts";
+
+// Every test here spawns a daemon plus a fake provider; Windows CI runners need well over the
+// 5 s default before the first turn streams.
+vi.setConfig({ testTimeout: 15_000 });
 
 let server: DaemonServer | undefined;
 let directory = "";
