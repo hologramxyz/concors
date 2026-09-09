@@ -16,9 +16,12 @@ process.env["PATH"] = installTestCodexProfile(directory) + delimiter + (process.
 installTestClaudeProfile(directory);
 // Keep shell startup files from replacing the harmless test executable in PATH.
 if (process.platform !== "win32") process.env["SHELL"] = "/bin/sh";
-const server = createDaemonServer(loadDaemonConfig({ port: 7429, logLevel: "warn" }, {}), {
-  workspacePath: join(directory, "workspace.sqlite"),
-  agentProviderFactory: (_cwd, handler) => new TestAgentProvider(handler),
-});
+const server = createDaemonServer(
+  loadDaemonConfig({ port: process.env["CONCORS_E2E_DAEMON_PORT"] ?? 7429, logLevel: "warn" }, {}),
+  {
+    workspacePath: join(directory, "workspace.sqlite"),
+    agentProviderFactory: (_cwd, handler) => new TestAgentProvider(handler),
+  },
+);
 await server.listen();
 for (const signal of ["SIGINT", "SIGTERM"] as const) process.on(signal, () => void server.close());
