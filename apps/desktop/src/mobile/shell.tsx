@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { FolderOpen, PanelLeft, Plus, Search, Settings, Server, ChevronDown } from "lucide-react";
+import { FolderOpen, Menu, Plus, Search, Server } from "lucide-react";
 import type { MobileState, MobileTarget } from "@concors/client-core";
 import type { PaneProfile, WorkspaceOperation, WorkspaceSnapshot } from "@concors/protocol";
 import { ShortcutProvider } from "@/shortcuts/provider";
@@ -22,20 +22,15 @@ import { SidebarSection } from "@/components/sidebar-section";
 import { NewTabMenu } from "@/workspace/new-tab-menu";
 import { TAB_PROFILES } from "@/workspace/tab-profiles";
 import { CommandPalette } from "@/components/command-palette";
-import { MachinesView } from "@/machines/machines-view";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
+import { AccountMenu } from "@/components/account-menu";
 import { Button } from "@/components/ui/button";
 import { embeddedConnection, getHostState, hostAction, subscribeHost } from "./bridge";
 import { resolveMobileSelection, tabPanes, PROFILE_LABELS } from "./selection";
 import { useSidebarGesture } from "./sidebar-gesture";
 import { SettingsDrawer } from "./settings-drawer";
 import { WorkspaceActions } from "./workspace-actions";
+import { MobileSelect } from "./select";
+import type { SettingsPage } from "@/settings/navigation";
 
 const subscribeState = (listener: () => void) =>
   subscribeHost((message) => {
@@ -58,7 +53,7 @@ export function MobileApp() {
 function MobileWorkspace({ host }: { host: MobileState }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [machinesOpen, setMachinesOpen] = useState(false);
+  const [settingsPage, setSettingsPage] = useState<SettingsPage | "machines">("account");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [addingProject, setAddingProject] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -164,7 +159,7 @@ function MobileWorkspace({ host }: { host: MobileState }) {
     const keydown = (event: KeyboardEvent) => {
       if (
         document.querySelector(
-          '[role="dialog"]:not([aria-label="Workspace sidebar"]), [role="menu"]',
+          '[role="dialog"]:not([aria-label="Workspace sidebar"]), [role="menu"], [role="listbox"]',
         )
       )
         return;
@@ -269,15 +264,11 @@ function MobileWorkspace({ host }: { host: MobileState }) {
   };
   const openSettings = () => {
     setSidebarOpen(false);
+    setSettingsPage("account");
     setSettingsOpen(true);
   };
   const unobscured =
-    !sidebarOpen &&
-    !settingsOpen &&
-    !machinesOpen &&
-    !paletteOpen &&
-    !addingProject &&
-    !shortcutsOpen;
+    !sidebarOpen && !settingsOpen && !paletteOpen && !addingProject && !shortcutsOpen;
   const cycleTab = (delta: number) => {
     if (!project || !tab) return;
     const next =
@@ -325,43 +316,39 @@ function MobileWorkspace({ host }: { host: MobileState }) {
                       aria-label="Close sidebar"
                       onClick={() => setSidebarOpen(false)}
                     >
-                      <PanelLeft />
+                      <Menu />
                     </button>
                     <span className="font-medium">Concors</span>
                     <button
                       className="mobile-icon ml-auto"
                       aria-label="Search workspace"
-                      onClick={() => {
-                        setSidebarOpen(false);
-                        setPaletteOpen(true);
-                      }}
+                      onClick={() => setPaletteOpen(true)}
                     >
                       <Search />
                     </button>
                   </div>
                   <div className="px-3 pb-3">
-                    <label className="sr-only" htmlFor="mobile-machine">
-                      Machine
-                    </label>
-                    <select
-                      id="mobile-machine"
-                      className="mobile-select"
+                    <MobileSelect
+                      label="Machine"
                       value={host.machineId ?? ""}
-                      onChange={(event) => {
-                        setLocal({ machineId: event.target.value, target: {} });
-                        runHost({ kind: "select-machine", machineId: event.target.value });
+                      placeholder="Choose a machine"
+                      onValueChange={(machineId) => {
+                        setLocal({ machineId, target: {} });
+                        runHost({ kind: "select-machine", machineId });
                         setSidebarOpen(false);
                       }}
-                    >
-                      <option value="" disabled>
-                        Choose a machine
-                      </option>
-                      {host.machines.map((machine) => (
-                        <option key={machine.id} value={machine.id}>
-                          {machine.name}
-                        </option>
-                      ))}
-                    </select>
+                      groups={[
+                        {
+                          label: "Your machines",
+                          options: host.machines.map((machine) => ({
+                            value: machine.id,
+                            label: machine.name,
+                            icon: <Server />,
+                            description: machine.status,
+                          })),
+                        },
+                      ]}
+                    />
                   </div>
                   <nav aria-label="Primary" className="mobile-sidebar-content">
                     <SidebarSection
@@ -408,36 +395,14 @@ function MobileWorkspace({ host }: { host: MobileState }) {
                       <p className="px-2 py-3 text-sm text-muted-foreground">
                         No servers discovered.
                       </p>
-                      <button
-                        className="mobile-sidebar-row"
-                        onClick={() => {
-                          setSidebarOpen(false);
-                          setMachinesOpen(true);
-                        }}
-                      >
-                        <Server className="size-4" />
-                        Manage machines
-                      </button>
                     </SidebarSection>
                   </nav>
                   <div className="mobile-sidebar-footer">
-                    <button
-                      className="mobile-sidebar-row"
-                      aria-label="Settings"
-                      onClick={openSettings}
-                    >
-                      <Settings className="size-5" />
-                      <span className="flex-1 text-left">Settings</span>
-                      <span className="mobile-avatar">{host.me.user.name[0]?.toUpperCase()}</span>
-                    </button>
-                    <p className="truncate px-3 text-xs text-muted-foreground">
-                      {host.me.user.email}
-                    </p>
-                    {host.demo && (
-                      <span className="px-3 text-xs text-muted-foreground">
-                        Demo · Simulated sessions
-                      </span>
-                    )}
+                    <AccountMenu
+                      auth={{ status: "signed-in", ...host.me, organizations: host.organizations }}
+                      onOpenSettings={openSettings}
+                      onSignOut={() => runHost({ kind: "sign-out" })}
+                    />
                   </div>
                 </aside>
                 <div
@@ -462,31 +427,25 @@ function MobileWorkspace({ host }: { host: MobileState }) {
                         aria-expanded={sidebarOpen}
                         onClick={() => setSidebarOpen(true)}
                       >
-                        <PanelLeft />
+                        <Menu />
                       </button>
                       {project && tab && pane ? (
-                        <div className="mobile-picker">
-                          <span className="mobile-project-title">{project.name}</span>
-                          <select
-                            aria-label="Tabs and panes"
-                            value={`${tab.id}:${pane.id}`}
-                            onChange={(event) => {
-                              const [tabId, paneId] = event.target.value.split(":");
-                              select({ projectId: project.id, tabId, paneId });
-                            }}
-                          >
-                            {project.tabs.map((item) => (
-                              <optgroup key={item.id} label={item.name}>
-                                {tabPanes(item).map((node, index) => (
-                                  <option key={node.id} value={`${item.id}:${node.id}`}>
-                                    {item.name} · {PROFILE_LABELS[node.profile]} {index + 1}
-                                  </option>
-                                ))}
-                              </optgroup>
-                            ))}
-                          </select>
-                          <ChevronDown className="size-4" aria-hidden="true" />
-                        </div>
+                        <MobileSelect
+                          className="mobile-picker"
+                          label="Tabs and panes"
+                          value={`${tab.id}:${pane.id}`}
+                          onValueChange={(value) => {
+                            const [tabId, paneId] = value.split(":");
+                            select({ projectId: project.id, tabId, paneId });
+                          }}
+                          groups={project.tabs.map((item) => ({
+                            label: item.name,
+                            options: tabPanes(item).map((node, index) => ({
+                              value: `${item.id}:${node.id}`,
+                              label: `${item.name} · ${PROFILE_LABELS[node.profile]} ${index + 1}`,
+                            })),
+                          }))}
+                        />
                       ) : (
                         <h1 className="min-w-0 flex-1 truncate text-base font-medium">
                           {project?.name ?? "Concors"}
@@ -600,35 +559,23 @@ function MobileWorkspace({ host }: { host: MobileState }) {
                 onOpenChange={setSettingsOpen}
                 host={host}
                 connectionState={connection?.state ?? { status: "disconnected" }}
+                page={settingsPage}
+                onPageChange={setSettingsPage}
               />
               <ShortcutGuide open={shortcutsOpen} onOpenChange={setShortcutsOpen} compact />
-              <Dialog open={machinesOpen} onOpenChange={setMachinesOpen}>
-                <DialogContent className="mobile-settings-drawer">
-                  <DialogHeader>
-                    <DialogTitle>Machines</DialogTitle>
-                    <DialogDescription>Your organization's cloud machines.</DialogDescription>
-                  </DialogHeader>
-                  <div className="mobile-settings-body">
-                    <MachinesView
-                      auth={{ status: "signed-in", ...host.me, organizations: host.organizations }}
-                    />
-                  </div>
-                </DialogContent>
-              </Dialog>
-              {addingProject && (
-                <ProjectSetupDialog
-                  onClose={() => setAddingProject(false)}
-                  onAdded={() => {
-                    setAddingProject(false);
-                    setSidebarOpen(false);
-                    if (connection?.workspace?.selection)
-                      select({
-                        projectId: connection.workspace.selection.projectId,
-                        tabId: connection.workspace.selection.tabId ?? undefined,
-                      });
-                  }}
-                />
-              )}
+              <ProjectSetupDialog
+                open={addingProject}
+                onClose={() => setAddingProject(false)}
+                onAdded={() => {
+                  setAddingProject(false);
+                  setSidebarOpen(false);
+                  if (connection?.workspace?.selection)
+                    select({
+                      projectId: connection.workspace.selection.projectId,
+                      tabId: connection.workspace.selection.tabId ?? undefined,
+                    });
+                }}
+              />
               <CommandPalette
                 projects={workspace?.projects ?? []}
                 canSelectProject={!!workspace}
@@ -637,8 +584,11 @@ function MobileWorkspace({ host }: { host: MobileState }) {
                 onOpenChange={setPaletteOpen}
                 onNavigate={(view) => {
                   if (view === "settings") openSettings();
-                  else if (view === "machines") setMachinesOpen(true);
-                  else setSidebarOpen(true);
+                  else if (view === "machines") {
+                    setSidebarOpen(false);
+                    setSettingsPage("machines");
+                    setSettingsOpen(true);
+                  } else setSidebarOpen(true);
                 }}
                 onReconnect={() => runHost({ kind: "retry" })}
                 canReconnect={!ready}

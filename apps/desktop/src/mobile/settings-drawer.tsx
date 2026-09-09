@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Server } from "lucide-react";
 import type { ConnectionState } from "@concors/daemon-client";
 import type { MobileState } from "@concors/client-core";
 import {
@@ -15,19 +16,24 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { hostAction } from "./bridge";
 import { NotificationSettings } from "@/notifications/settings";
+import { MachinesView } from "@/machines/machines-view";
+import { MobileSelect } from "./select";
 
 export function SettingsDrawer({
   open,
   onOpenChange,
   host,
   connectionState,
+  page,
+  onPageChange,
 }: {
   open: boolean;
   onOpenChange(open: boolean): void;
   host: MobileState;
   connectionState: ConnectionState;
+  page: SettingsPage | "machines";
+  onPageChange(page: SettingsPage | "machines"): void;
 }) {
-  const [page, setPage] = useState<SettingsPage>("account");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -62,25 +68,24 @@ export function SettingsDrawer({
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>Your account and this device.</DialogDescription>
         </DialogHeader>
-        <label className="sr-only" htmlFor="settings-section">
-          Settings section
-        </label>
-        <select
-          id="settings-section"
-          className="mobile-select"
+        <MobileSelect
+          label="Settings section"
           value={page}
-          onChange={(event) => setPage(event.target.value as SettingsPage)}
-        >
-          {SETTINGS_NAV_GROUPS.map((group) => (
-            <optgroup key={group.label} label={group.label}>
-              {group.items.map((item) => (
-                <option key={item.page} value={item.page}>
-                  {item.label}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
+          onValueChange={(value) => onPageChange(value as SettingsPage | "machines")}
+          groups={SETTINGS_NAV_GROUPS.map((group) => ({
+            label: group.label,
+            options: [
+              ...group.items.map(({ page, label, icon: Icon }) => ({
+                value: page,
+                label,
+                icon: <Icon />,
+              })),
+              ...(group.label === "Workspace"
+                ? [{ value: "machines", label: "Machines", icon: <Server /> }]
+                : []),
+            ],
+          }))}
+        />
         <div className="mobile-settings-body">
           {error && (
             <p role="alert" className="px-4 text-sm text-destructive">
@@ -92,7 +97,11 @@ export function SettingsDrawer({
               Demo · Account actions are simulated.
             </p>
           )}
-          {page === "notifications" ? (
+          {page === "machines" ? (
+            <MachinesView
+              auth={{ status: "signed-in", ...host.me, organizations: host.organizations }}
+            />
+          ) : page === "notifications" ? (
             <div className="p-4">
               <NotificationSettings
                 native
