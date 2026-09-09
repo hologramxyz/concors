@@ -27,6 +27,7 @@ export class DaemonState {
       capabilities: [
         "project-files",
         "project-file-create",
+        "folder-workspaces",
         "agent-chat",
         "agent-attention",
         "agent-composer",
