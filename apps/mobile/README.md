@@ -6,7 +6,8 @@ push sidebar, top tab/pane picker, and modal settings. There is no bottom naviga
 and no second implementation of chat/tool rendering.
 
 **Status: implemented client and interactive preview, not store-submission ready.**
-Production connectivity, push and deletion require the [server contracts](../../docs/mobile-backend.md).
+Direct desktop testing works without a cloud account or server change; see below.
+Managed cloud connectivity, push and deletion require the [server contracts](../../docs/mobile-backend.md).
 Signed builds and physical device checks require team-owned accounts/devices.
 See the [parity matrix](../../docs/mobile-parity.md) and [release runbook](../../docs/mobile-release.md).
 
@@ -102,6 +103,68 @@ permission only when explicitly chosen in the system file picker.
 
 ## Connect to the real service
 
+### First: connect to the same daemon as desktop
+
+Set `EXPO_PUBLIC_DEV_DAEMON_URL` to a private WSS endpoint for the **existing desktop
+daemon**, `EXPO_PUBLIC_DEMO=false`, and use a development/preview build. Restart Metro
+with `--clear` after switching modes. The welcome screen offers **Connect to desktop**.
+This is a real workspace connection, not a demo account or a simulated machine.
+
+The host uses the same `DaemonConnection` protocol as desktop and obtains the actual
+machine ID from its workspace snapshot. Cloud login, inventory and API requests are
+not needed and are explicitly blocked in this mode. Account credentials are not read,
+sent, created or revoked. Appearance and connection diagnostics remain available;
+account/billing/provisioning/push controls are unavailable. Full onboarding design is deferred.
+
+Use **Desktop connection → Settings → Disconnect desktop** to leave. This detaches
+the phone, not the daemon's agents or terminals. Reconnects retain in-memory drafts;
+explicit disconnect or page reload discards unsent input. Cold session links must match
+the connected daemon. The direct option is disabled in production builds.
+
+For a browser/phone preview, `scripts/direct-gateway.mjs` is a small loopback-only
+development adapter. It validates one Tailscale identity and the exact preview origin,
+then forwards only `/ws` and `/health` to a fixed loopback daemon port. It adapts the
+approved origin without changing the daemon's production origin allowlist; it does not
+forward cookies, account authorization or Tailscale identity headers to the daemon.
+
+Example on the computer running the daemon (replace the origin and login):
+
+```bash
+CONCORS_DIRECT_DAEMON_PORT=7420 \
+CONCORS_DIRECT_GATEWAY_PORT=7444 \
+CONCORS_DIRECT_GATEWAY_ORIGIN=https://your-device.your-tailnet.ts.net:8444 \
+CONCORS_DIRECT_GATEWAY_USER=you@example.com \
+node apps/mobile/scripts/direct-gateway.mjs
+```
+
+In another terminal, add **only** the daemon path to your private preview:
+
+```bash
+tailscale serve --bg --https=8444 --set-path=/desktop-daemon http://127.0.0.1:7444
+```
+
+Keep port 8444 private, never Funnel. Do not reset or replace unrelated Serve routes.
+The adapter trusts [Serve's identity headers](https://tailscale.com/docs/features/tailscale-serve#identity-headers),
+so it must remain loopback-only behind Serve. Other local processes are part of that
+trust boundary. Tagged devices without a user identity are denied. Private-network
+access is not a substitute for managed cloud authorization or production pairing.
+
+Then run the mobile host with its protected socket URL:
+
+```bash
+APP_VARIANT=preview EXPO_PUBLIC_DEMO=false \
+EXPO_PUBLIC_DEV_DAEMON_URL=wss://your-device.your-tailnet.ts.net:8444/desktop-daemon/ws \
+pnpm mobile:web --clear
+```
+
+The origin serving the mobile host must match the adapter's configured origin. For a
+standalone Tailscale preview, export the web bundle with the same configuration and
+serve those files at that origin. For an installed development build use `mobile:dev`
+with the same environment. Plain WS is allowed **only for loopback in development**
+for the isolated browser test; preview builds require WSS.
+
+### Later: managed cloud connections
+
 Create `apps/mobile/.env.local` from `.env.example`. Set the real HTTPS
 `EXPO_PUBLIC_API_URL`, disable `EXPO_PUBLIC_DEMO`, then run `pnpm mobile:dev`.
 Native sign-up/sign-in, inventory and organization switching use the existing API.
@@ -126,11 +189,10 @@ advertised capabilities. It does not provision anything, mint access tokens, cre
 sessions or verify a live chat. Missing workspace capability returns a nonzero exit
 status with an explanation; a successful preflight only permits attempting the next test.
 
-For private integration testing, `EXPO_PUBLIC_DEV_DAEMON_URL` accepts a clean WSS
-gateway URL. It supplies **no authentication itself**: use an already protected private
-network/gateway, never expose a bare daemon publicly. It requires a real signed-in
-account/machine selection and bypasses cloud ticket/machine-ID checks. Production
-ignores it. This is not a production access mechanism.
+`EXPO_PUBLIC_DEV_DAEMON_URL` supplies **no authentication itself**. The private tunnel
+must enforce access; do not expose a bare daemon. Leave it unset for cloud sign-in.
+Unlike cloud connections, direct mode derives the machine ID from the daemon instead
+of claiming a cloud inventory machine ID identifies a desktop workspace.
 
 `EXPO_PUBLIC_*` values ship in the app: never put secrets in them. Native tokens use
 device-only SecureStore. Transcripts, drafts, workspace and terminal buffers are
@@ -166,6 +228,7 @@ pnpm mobile:test
 pnpm --filter @concors/mobile typecheck
 pnpm exec playwright install chromium
 pnpm test:mobile:e2e
+pnpm test:mobile:direct
 pnpm mobile:build
 ```
 
@@ -174,3 +237,9 @@ model controls, touch swipes, keyboard-sized layouts, project/tab/pane edits, to
 settings, terminal and cold links. `mobile:build` exports iOS/Android Hermes bundles and
 web assets, **not signed IPA/AABs**. These checks do not replace the physical-device,
 real-backend, accessibility and store-policy matrix in the release runbook.
+
+The separate direct suite uses an isolated real daemon and PTY with a deterministic
+coding-provider fixture (not the mobile demo server). A second desktop protocol client
+verifies shared edits/session IDs, chat/approvals, terminal input, draft-preserving
+reconnects, disconnect without stopping work, cold links and zero cloud API requests.
+It does not claim a real provider account or physical device was tested.
