@@ -18,24 +18,30 @@ Phone-specific behavior:
   tapping its textarea opens the platform keyboard.
 - A swipeable Projects / Agents / Servers sidebar pushes the workspace to the right.
   Swipe back, press the mobile menu icon, or tap the workspace scrim to close it.
-- A compact name/avatar account menu opens Settings. Machine management is a settings section.
+- A compact name/avatar trigger opens an animated Account bottom drawer with Settings and Sign out.
+  Machine management is a settings section; the sidebar header has no redundant product title.
 - Search, Settings, Add Project and New Tab use the shared Radix dialog with animated
   bottom-sheet presentation, focus restoration and reduced-motion support.
   Opening Search leaves the sidebar visible behind it.
-- Floating glass header groups contain navigation and workspace actions, with opaque
-  fallbacks for reduced transparency. The picker uses a tab/pane breadcrumb and indented
-  pane options under named tab headings with counts. Non-modal popovers toggle on a
+- Separate backdrop-blurred glass controls contain the sidebar toggle, picker and actions menu,
+  with matching rounded pressed states and opaque fallbacks for reduced transparency.
+  The picker uses a tab/pane breadcrumb and lightly indented
+  pane options under named tab headings with counts, without hierarchy lines or guide text.
+  Non-modal popovers toggle on a
   repeated trigger tap and support arrow keys, Home/End, typeahead and Escape.
   Navigation is device-local; explicit create/rename/profile/close edits update the shared workspace.
 - The composer collapses to a single line with attachment and primary actions.
-  Focus expands model, effort and permission icons, directly visible context/dictation,
+  Text-field focus animates the measured height to reveal model, effort and permission icons,
+  context/dictation on the right beside the primary button,
   and a sliders popover for Plan/Speed. Owned portaled controls preserve expansion.
   Keyboard dismissal or an outside click collapses it without losing the draft.
+  Height/content animations respect reduced motion; collapsed action taps do not move their target.
   One centered primary action shows Stop while active with an empty draft, Queue with
   follow-up content, or Send when idle. Controls fit a single row down to 320px width.
 - Desktop split/placement/arrangement/resize controls and commands are intentionally
   absent on phones. Existing desktop split panes remain accessible in the top picker.
-- The new-session drawer distinguishes New Tab from Add Pane to This Tab and includes
+- The top actions menu contains New Tab and Add Pane to This Tab, with no separate plus button.
+  Both open the new-session drawer, which distinguishes their destinations and includes
   locally packaged provider logos. Add Pane uses the shared split operation without
   exposing desktop geometry. The actions menu omits tab left/right moves and warns that
   closing the last pane also closes its tab.
@@ -74,8 +80,8 @@ Implementation/verification checklist (updated as each slice lands):
 - [x] Desktop regression cases and refreshed private preview.
 
 Verification on 2026-09-09: 218 unit tests pass (one opt-in API integration test is
-skipped), 17 phone browser scenarios pass, and all 19 desktop browser scenarios pass
-across isolated-port runs (17 initially, the two multi-client cases passed on isolated retry).
+skipped), all 19 phone browser scenarios pass, and all 19 desktop browser scenarios
+pass in a single isolated-port run.
 The phone suite covers 320/375/390/430px toolbars, contained picker chevrons, repeated
 touch toggles, hierarchical tab/pane creation and closing, collapsed/expanded composer
 focus and keyboard dismissal, single centered send/stop actions,
