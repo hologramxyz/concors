@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { signedIn } from "./signed-in.ts";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Page, Locator } from "@playwright/test";
@@ -220,6 +220,75 @@ test("a slow editor download shows the file immediately instead of a loading-edi
     await expect(page.getByRole("textbox", { name: "Code editor: src/main.ts" })).toBeVisible();
   } finally {
     release();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("file actions create entries, toggle hidden files and refresh expanded folders", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  const root = await project(page);
+  try {
+    writeFileSync(join(root, ".env"), "EXAMPLE=demo\n");
+    const tree = await openSource(page);
+    const iconSize = (locator: Locator) =>
+      locator.locator("svg").evaluate((icon) => getComputedStyle(icon).width);
+    const expectedSize = await iconSize(page.getByRole("button", { name: "Toggle project files" }));
+    for (const name of [
+      "Close files",
+      "New file",
+      "New folder",
+      "Show hidden files",
+      "Refresh file tree",
+    ]) {
+      expect(await iconSize(tree.getByRole("button", { name, exact: true }))).toBe(expectedSize);
+    }
+    const close = await bounds(tree.getByRole("button", { name: "Close files" }));
+    const actions = await bounds(tree.getByRole("group", { name: "File actions" }));
+    expect(actions.y).toBeGreaterThanOrEqual(close.y + close.height);
+    await expect(tree.getByText(root, { exact: true })).toHaveCount(0);
+    await expect(tree.getByRole("button", { name: ".env", exact: true })).toHaveCount(0);
+    await tree.getByRole("button", { name: "Show hidden files" }).click();
+    await expect(tree.getByRole("button", { name: ".env", exact: true })).toBeVisible();
+    await tree.getByRole("button", { name: "Hide hidden files" }).click();
+    await expect(tree.getByRole("button", { name: ".env", exact: true })).toHaveCount(0);
+    await tree.getByRole("button", { name: "New folder", exact: true }).click();
+    await tree.getByLabel("New folder path").fill("notes");
+    await tree.getByRole("button", { name: "Create", exact: true }).click();
+    await expect(tree.getByRole("button", { name: "notes", exact: true })).toBeVisible();
+    expect(statSync(join(root, "notes")).isDirectory()).toBe(true);
+    await tree.getByRole("button", { name: "New file", exact: true }).click();
+    await tree.getByLabel("New file path").fill("notes/new.ts");
+    await tree.getByRole("button", { name: "Create", exact: true }).click();
+    const editor = page.getByRole("textbox", { name: "Code editor: notes/new.ts" });
+    await expect(editor).toBeVisible();
+    await editor.fill("export const created = true;\n");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect
+      .poll(() => readFileSync(join(root, "notes/new.ts"), "utf8"))
+      .toContain("created = true");
+    await expect(tree.getByRole("button", { name: "new.ts", exact: true })).toBeVisible();
+    await tree.getByRole("button", { name: "New file", exact: true }).click();
+    await tree.getByLabel("New file path").fill("notes/new.ts");
+    await tree.getByRole("button", { name: "Create", exact: true }).click();
+    await expect(tree.getByRole("alert")).toContainText("already exists");
+    expect(readFileSync(join(root, "notes/new.ts"), "utf8")).toContain("created = true");
+    await tree.getByRole("button", { name: "Cancel", exact: true }).click();
+    writeFileSync(join(root, "src", "from-agent.ts"), "// new agent file\n");
+    await tree.getByRole("button", { name: "Refresh file tree" }).click();
+    await expect(tree.getByRole("button", { name: "from-agent.ts", exact: true })).toBeVisible();
+    await expect(tree.getByRole("button", { name: "new.ts", exact: true })).toBeVisible();
+    await page.screenshot({ path: "test-results/files-actions.png" });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await tree.getByRole("button", { name: "New folder", exact: true }).click();
+    await expect(tree.getByLabel("New folder path")).toBeVisible();
+    expect(await tree.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+    await page.screenshot({ path: "test-results/files-actions-mobile.png" });
+    await tree.getByLabel("New folder path").press("Escape");
+    await expect(tree).toBeVisible();
+    await expect(tree.getByLabel("Filter loaded files")).toBeFocused();
+  } finally {
     rmSync(root, { recursive: true, force: true });
   }
 });

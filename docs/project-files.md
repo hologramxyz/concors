@@ -5,8 +5,17 @@ Opening a file adds a client-local file tab beside the existing agent and termin
 left edge supports pointer dragging, arrow-key resizing, Home/End limits, and double-click reset.
 Width is remembered on this client. Opening/closing moves the workspace and Files toggle together;
 reduced motion disables the transition. Narrow screens use a full-height overlay with room for the
-toggle beside it. It lists dotfiles, loads folders on expansion, and can refresh or filter the
-filenames already loaded. Expanded folders stay open when the sidebar closes and reopens.
+toggle beside it. A separate toolbar below the Files heading provides new file, new folder,
+hidden-file visibility, and refresh actions, with the same icon size as the sidebar toggles.
+Dotfiles are hidden by default; the visibility preference is remembered on this client. Folders
+load on expansion, and the filter searches filenames already loaded. Expanded folders stay open
+when the sidebar closes and reopens or refreshes. The drawer omits the absolute project path footer.
+
+New files and folders use paths relative to the project, with existing parent folders. A new file
+opens in an editor tab; a new folder expands in the tree. The daemon advertises
+`project-file-create` separately, so older machines keep browsing/editing and disable creation.
+Creation uses exclusive file opens or non-recursive directory creation, rejects linked/outside
+parents, and never replaces existing entries. Duplicate names keep the form open with an error.
 
 ## Viewing and editing
 
@@ -51,7 +60,7 @@ against another process deliberately changing directories during an operation.
 
 - File tabs and unsaved drafts live in this client session; they are not synchronized or restored
   after an app restart. Save before leaving. Undo/cursor history resets when an editor remounts.
-- This is a lightweight existing-file editor, without language servers, file creation/rename/delete,
+- This is a lightweight file editor, without language servers, rename/delete,
   binary/image previews, or a full-project search index.
 - Vim uses CodeMirror keybindings, not an embedded Neovim process.
 - The separate native mobile client is not changed by this PR. The desktop web UI's file drawer and
@@ -69,9 +78,11 @@ no workspace schema migration or control-plane change is needed. Paseo's Apache-
 `third-party/paseo-LICENSE`.
 
 Unit coverage exercises traversal and symlinks, read limits, UTF-8/BOM/CRLF, executable permissions,
-concurrent saves, agent edits, lost acknowledgements, draft retention, and link resolution.
+concurrent saves and creation, safe parent paths, duplicate names, agent edits, lost acknowledgements,
+draft retention, and link resolution.
 `e2e/files.spec.ts` exercises real daemon file reads/writes, Markdown and agent links, switching file
 tabs, discard protection, conflict review, Vim `:w`, full-height sidebar resizing, remembered width,
-reduced motion, text sizes, a delayed editor download, and a narrow viewport. The browser tests mock
+reduced motion, text and icon sizes, file/folder creation, hidden-file visibility, refresh preserving
+expanded folders, a delayed editor download, and a narrow viewport. The browser tests mock
 control-plane account responses and agent inference, as the existing acceptance suite does; file
 operations use real temporary projects on the daemon.
