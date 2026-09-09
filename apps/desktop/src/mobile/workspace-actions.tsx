@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useContext, useState } from "react";
+import { TerminalConnectionContext } from "@/terminal/connection-context";
+import { useCommand } from "@/shortcuts/context";
 import { Columns2, Rows2, Ellipsis, Pencil, X, ArrowLeft, ArrowRight, Move } from "lucide-react";
 import type {
   PaneProfile,
@@ -51,13 +53,18 @@ export function WorkspaceActions({
   const [closing, setClosing] = useState<"pane" | "tab" | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const connection = useContext(TerminalConnectionContext);
+  const capabilities =
+    connection?.state.status === "ready" ? (connection.state.daemon.capabilities ?? []) : [];
+  const directional = capabilities.includes("directional-pane-split");
+  const rearrange = capabilities.includes("workspace-pane-rearrangement");
   const target = {
     projectId: project.id,
     expectedVersion: project.version,
     tabId: tab.id,
     paneId: pane.id,
   };
-  const split = (axis: "horizontal" | "vertical") => {
+  const split = (axis: "horizontal" | "vertical", before = false) => {
     const newPaneId = crypto.randomUUID();
     void execute({
       kind: "pane.split",
@@ -65,6 +72,7 @@ export function WorkspaceActions({
       splitId: crypto.randomUUID(),
       newPaneId,
       axis,
+      ...(before ? { before } : {}),
       profile: pane.profile,
     })
       .then(() => onSelect({ projectId: project.id, tabId: tab.id, paneId: newPaneId }))
@@ -73,6 +81,14 @@ export function WorkspaceActions({
       );
   };
   const index = project.tabs.findIndex((item) => item.id === tab.id);
+  const canSplit = canEdit && tab.nodes.length < 63;
+  useCommand("new-pane", canSplit, () => split("horizontal"));
+  useCommand("split-horizontal", canSplit, () => split("horizontal"));
+  useCommand("split-vertical", canSplit, () => split("vertical"));
+  useCommand("split-left", canSplit && directional, () => split("horizontal", true));
+  useCommand("split-up", canSplit && directional, () => split("vertical", true));
+  useCommand("close-pane", canEdit, () => setClosing("pane"));
+  useCommand("close-tab", canEdit, () => setClosing("tab"));
   return (
     <>
       <DropdownMenu>
@@ -136,7 +152,19 @@ export function WorkspaceActions({
             Split vertically
           </DropdownMenuItem>
           <DropdownMenuItem
-            disabled={!canEdit || tab.nodes.length < 3}
+            disabled={!canSplit || !directional}
+            onSelect={() => split("horizontal", true)}
+          >
+            <Columns2 /> New pane to the left
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={!canSplit || !directional}
+            onSelect={() => split("vertical", true)}
+          >
+            <Rows2 /> New pane above
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={!canEdit || !rearrange || tab.nodes.length < 3}
             onSelect={() => setLayout(true)}
           >
             <Move />
@@ -258,7 +286,7 @@ export function WorkspaceActions({
                 ...target,
                 targetPaneId: String(data.get("target")),
                 placement: data.get("placement") as "left" | "right" | "top" | "bottom",
-                scope: "pane",
+                scope: data.get("scope") as "pane" | "workspace",
                 splitId: crypto.randomUUID(),
               });
             }}
@@ -278,12 +306,19 @@ export function WorkspaceActions({
             <label className="block space-y-2">
               Placement
               <select name="placement" className="mobile-select">
-                {["left", "right", "top", "bottom"].map((value) => (
+                {["left", "right", "top", "bottom", "center"].map((value) => (
                   <option key={value}>{value}</option>
                 ))}
               </select>
             </label>
-            <Button disabled={!canEdit}>Move pane</Button>
+            <label className="block space-y-2">
+              Layout scope
+              <select name="scope" className="mobile-select">
+                <option value="pane">Next to selected pane</option>
+                <option value="workspace">Edge of the whole tab</option>
+              </select>
+            </label>
+            <Button disabled={!canEdit || !rearrange}>Move pane</Button>
           </form>
           {tab.nodes
             .filter((node) => node.kind === "split")
