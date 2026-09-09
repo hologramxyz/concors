@@ -8,6 +8,7 @@ export {
 export { mergeItems, findSession } from "./conversation.ts";
 export { createProtocolRelay } from "./protocol-relay.ts";
 export * from "./mobile-bridge.ts";
+export * from "./native-surfaces.ts";
 export {
   notificationTarget,
   sessionHref,
