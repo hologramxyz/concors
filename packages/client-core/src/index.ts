@@ -6,6 +6,7 @@ export {
   type ConnectionSnapshot,
 } from "./connection.ts";
 export { mergeItems, findSession } from "./conversation.ts";
+export { createProtocolRelay } from "./protocol-relay.ts";
 export {
   notificationTarget,
   sessionHref,
