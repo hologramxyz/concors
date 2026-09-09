@@ -20,10 +20,16 @@ const config: ExpoConfig = {
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false,
       NSAppTransportSecurity: { NSAllowsArbitraryLoads: false },
+      NSPhotoLibraryUsageDescription: "Choose a photo to attach to an agent message.",
+      NSCameraUsageDescription:
+        "Take a photo or video only when you choose to attach one to an agent message.",
+      NSMicrophoneUsageDescription:
+        "Include audio only when you choose to record a video attachment. Keyboard dictation is managed by iOS.",
     },
     ...(production ? { associatedDomains: ["applinks:concors.dev"] } : {}),
   },
   android: {
+    softwareKeyboardLayoutMode: "resize",
     package: production ? identifier : `${identifier}.preview`,
     allowBackup: false,
     adaptiveIcon: {
