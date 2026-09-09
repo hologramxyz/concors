@@ -56,10 +56,11 @@ Implementation/verification checklist (updated as each slice lands):
 - [x] iOS/Android Hermes and web export, native project generation, Expo Doctor 21/21.
 - [x] Desktop regression cases and refreshed private preview.
 
-Verification on 2026-09-09: 217 unit tests pass (one opt-in API integration test is
-skipped), 11 phone browser scenarios pass, and all 19 desktop browser scenarios pass
+Verification on 2026-09-09: 218 unit tests pass (one opt-in API integration test is
+skipped), 12 phone browser scenarios pass, and all 19 desktop browser scenarios pass
 across the isolated-port runs. The appearance scenario additionally exercises theme
-and corner preferences. The private static preview was opened at iPhone size for
+and corner preferences. A local-WebView test removes the browser UUID helper and
+verifies new-tab requests still use secure, valid IDs. The private static preview was opened at iPhone size for
 chat/sidebar/settings/terminal screenshots with no page errors. Other Tailscale routes
 were unchanged; mobile preview is tailnet-only, not Funnel.
 

@@ -3,6 +3,25 @@ import { ids } from "../src/demo/fixtures";
 const workspace = (page: Page) => page.frameLocator('iframe[title="Concors workspace"]');
 const activeChat = `${ids.tab}:${ids.pane}`;
 const activeTerminal = `${ids.tab}:${ids.terminalPane}`;
+test("offline renderer supplies secure request IDs without the browser UUID helper", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    if (window.parent !== window)
+      Object.defineProperty(Crypto.prototype, "randomUUID", {
+        configurable: true,
+        value: undefined,
+      });
+  });
+  const ui = await enter(page);
+  await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
+  await ui.getByRole("button", { name: "New tab", exact: true }).click();
+  await ui.getByRole("menuitem", { name: "Agent", exact: true }).click();
+  await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
+  await expect(ui.getByRole("combobox", { name: "Tabs and panes" }).locator("option")).toHaveCount(
+    3,
+  );
+});
 async function enter(page: Page) {
   await page.goto("/");
   await page.getByRole("button", { name: "Explore demo" }).click();

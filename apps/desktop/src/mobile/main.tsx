@@ -1,8 +1,10 @@
 import { createRoot } from "react-dom/client";
 import { MobileApp } from "./shell";
 import { hostAction, sendHost } from "./bridge";
+import { installRandomUUID } from "./platform";
 import "../styles.css";
 import "./mobile.css";
+installRandomUUID(crypto);
 
 // Opaque-origin offline renderers cannot use the browser clipboard directly.
 Object.defineProperty(navigator, "clipboard", {
