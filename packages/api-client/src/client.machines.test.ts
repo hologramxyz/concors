@@ -60,6 +60,22 @@ function lastCall(fetch: ReturnType<typeof vi.fn>): { url: string; init: Request
 }
 
 describe("ApiClient machines", () => {
+  it("preserves upstream agent and TLS readiness while supporting older deployments", async () => {
+    const machine = {
+      ...MACHINE,
+      hostname: "machine.example",
+      agentInstalledAt: "2026-09-09T00:00:00.000Z",
+      agentSeenAt: "2026-09-09T00:01:00.000Z",
+      agentVersion: "0.1.0",
+      agentError: null,
+      certificateExpiresAt: "2026-12-09T00:00:00.000Z",
+      certificateError: null,
+    };
+    await expect(client(async () => json({ machine })).getMachine("m1")).resolves.toEqual(machine);
+    await expect(client(async () => json({ machine: MACHINE })).getMachine("m1")).resolves.toEqual(
+      MACHINE,
+    );
+  });
   it("reads the catalog", async () => {
     const catalog = {
       regions: [{ id: "US-EAST-VA", location: "Vint Hill, Virginia", countryCode: "US" }],

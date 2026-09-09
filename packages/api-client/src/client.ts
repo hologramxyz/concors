@@ -29,11 +29,13 @@ import { memoryTokenStore, type TokenStore } from "./token-store.ts";
 import {
   AccountDeletionSchema,
   MachineConnectionTicketSchema,
+  MachineAccessTokenSchema,
   MobileCapabilitiesSchema,
   NO_MOBILE_CAPABILITIES,
   PushDeviceSchema,
   type MobileCapabilities,
   type MachineConnectionTicket,
+  type MachineAccessToken,
   type PushDevice,
 } from "./mobile.ts";
 
@@ -327,6 +329,21 @@ export class ApiClient {
         502,
         "The machine connection ticket is invalid or expired",
         "INVALID_TICKET",
+      );
+    return data;
+  }
+  /** The native host owns this credential. Never put it in renderer state, logs or a URL. */
+  async getMachineAccessToken(machineId: string): Promise<MachineAccessToken> {
+    const { data } = await this.#request(
+      "POST",
+      `/api/v1/machines/${encodeURIComponent(machineId)}/token`,
+      { body: {}, schema: MachineAccessTokenSchema },
+    );
+    if (data.machineId !== machineId || Date.parse(data.expiresAt) <= Date.now() + 5_000)
+      throw new ApiError(
+        502,
+        "The machine access token is invalid or expired",
+        "INVALID_MACHINE_TOKEN",
       );
     return data;
   }
