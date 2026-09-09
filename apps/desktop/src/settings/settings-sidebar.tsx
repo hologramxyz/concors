@@ -1,30 +1,17 @@
-import { ArrowLeft, PanelLeftClose } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { cn } from "cn";
 
 import { SETTINGS_NAV_GROUPS, type SettingsPage } from "./navigation";
 
 interface SettingsSidebarProps {
-  readonly collapsed: boolean;
   readonly page: SettingsPage;
   readonly onBack: () => void;
-  readonly onCollapse: () => void;
   readonly onNavigate: (page: SettingsPage) => void;
 }
 
-export function SettingsSidebar({
-  collapsed,
-  page,
-  onBack,
-  onCollapse,
-  onNavigate,
-}: SettingsSidebarProps) {
+export function SettingsSidebar({ page, onBack, onNavigate }: SettingsSidebarProps) {
   return (
-    <div
-      className="sidebar-shell"
-      data-collapsed={collapsed}
-      inert={collapsed}
-      aria-hidden={collapsed ? true : undefined}
-    >
+    <div className="sidebar-shell">
       <nav
         id="app-sidebar"
         aria-label="Settings"
@@ -38,18 +25,6 @@ export function SettingsSidebar({
           >
             <ArrowLeft className="size-4 shrink-0" aria-hidden="true" />
             <span className="truncate">Back to app</span>
-          </button>
-          <button
-            id="collapse-sidebar"
-            type="button"
-            aria-label="Collapse sidebar"
-            title="Collapse sidebar"
-            aria-controls="app-sidebar"
-            aria-expanded={true}
-            onClick={onCollapse}
-            className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
-          >
-            <PanelLeftClose className="size-4" aria-hidden="true" />
           </button>
         </div>
 

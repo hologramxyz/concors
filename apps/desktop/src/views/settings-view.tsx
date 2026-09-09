@@ -10,6 +10,7 @@ import { BillingSection } from "@/settings/billing-section";
 import type { SettingsPage } from "@/settings/navigation";
 import { SshKeysSection } from "@/settings/ssh-keys-section";
 import type { ThemePreference } from "@/theme/use-theme";
+import type { CornerStyle } from "@/theme/use-corner-style";
 
 interface SettingsViewProps {
   readonly page: SettingsPage;
@@ -17,6 +18,8 @@ interface SettingsViewProps {
   readonly state: ConnectionState;
   readonly theme: ThemePreference;
   readonly onSetTheme: (theme: ThemePreference) => void;
+  readonly cornerStyle: CornerStyle;
+  readonly onSetCornerStyle: (style: CornerStyle) => void;
   readonly auth: SignedInAuth;
   readonly onSignOut: () => void;
   readonly onSetActiveOrganization: (organizationId: string) => void;
@@ -28,6 +31,8 @@ export function SettingsView({
   state,
   theme,
   onSetTheme,
+  cornerStyle,
+  onSetCornerStyle,
   auth,
   onSignOut,
   onSetActiveOrganization,
@@ -46,7 +51,14 @@ export function SettingsView({
       );
       break;
     case "appearance":
-      content = <AppearanceSettings theme={theme} onSetTheme={onSetTheme} />;
+      content = (
+        <AppearanceSettings
+          theme={theme}
+          onSetTheme={onSetTheme}
+          cornerStyle={cornerStyle}
+          onSetCornerStyle={onSetCornerStyle}
+        />
+      );
       break;
     case "notifications":
       content = <NotificationSettings />;
@@ -70,5 +82,5 @@ export function SettingsView({
     }
   }
 
-  return <div className="w-full max-w-3xl px-5 py-6 sm:px-6">{content}</div>;
+  return <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">{content}</div>;
 }
