@@ -3,12 +3,12 @@
 > A cross-platform client and runtime for orchestrating coding agents locally and in the cloud.
 
 Concors lets you run coding agents such as **Claude Code**, **Codex** and **OpenCode** either on your
-own machine or on a persistent VPS, and drive them from one desktop client (with a mobile client to
-follow).
+own machine or on a persistent VPS, and drive them from desktop or the new iOS/Android companion.
 
 > **Status: early-stage.** This repository currently contains the project foundation — the
 > synchronized workspace UI, project opening/creation/cloning, and real terminal sessions with shell/Codex/Claude Code/OpenCode
-> profiles. Unified chat, structured agent tracking, mobile and cloud integration remain planned.
+> profiles, Codex chat and agent tracking. The Expo mobile client is implemented with a testable
+> preview; authenticated cloud connectivity, push delivery and store release still need integration.
 > Expect breaking changes.
 
 ## Architecture
@@ -19,7 +19,7 @@ Desktop client ──────┤
                      └── Remote daemon ─ VPS agents
 
 
-Future mobile client ─── Remote daemon ─ VPS agents
+Expo mobile client ───── Remote gateway ─ daemon ─ VPS agents
 ```
 
 Concors is split into two independent processes that only ever talk through a versioned protocol:
@@ -52,7 +52,11 @@ Node/TypeScript daemon  (concors-daemon)
   alike.
 - **API client** (`packages/api-client`) — `ApiClient`, a fetch-based client for the Concors
   control plane (`concors-server`): accounts, organizations, cloud machines. Also host-agnostic, so
-  the future mobile app shares it.
+  the mobile app shares it.
+- **Mobile client** (`apps/mobile`) — Expo SDK 57 / React Native for iOS and Android.
+  [Try the no-account demo](apps/mobile/README.md) and see the [release gates](docs/mobile-release.md).
+- **Client core** (`packages/client-core`) — host-independent lifecycle, secure token-store
+  adapter, transcript merging and notification routing helpers.
 
 ## Repository layout
 
@@ -62,11 +66,12 @@ concors/
 │   ├── desktop/            Tauri 2 + React + Vite desktop client
 │   │   ├── src/              React UI (src/tauri/ is the only place Tauri APIs are imported)
 │   │   └── src-tauri/        Thin Rust shell: window, lifecycle, bundled-daemon process control
-│   └── mobile/             Reserved for the future React Native / Expo client (README only)
+│   └── mobile/             React Native / Expo iOS and Android client + browser preview
 ├── packages/
 │   ├── protocol/           @concors/protocol — versioned schemas/types shared by clients & daemon
 │   ├── daemon-client/      @concors/daemon-client — DaemonConnection (local or remote daemons)
 │   ├── api-client/         @concors/api-client — control-plane API client (accounts, organizations)
+│   ├── client-core/        @concors/client-core — shared client lifecycle and presentation helpers
 │   ├── daemon/             @concors/daemon — the concors-daemon Node process (Fastify + WebSocket)
 │   └── config/             @concors/config — shared ESLint / Prettier configuration
 ├── .github/workflows/      CI

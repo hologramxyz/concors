@@ -1,0 +1,131 @@
+import { useState } from "react";
+import { Redirect } from "expo-router";
+import { Image, KeyboardAvoidingView, Linking, Platform, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useAuth } from "../src/auth/provider";
+import { config } from "../src/config";
+import { Button, Copy, Field, Notice, Screen, useTheme } from "../src/ui";
+
+export default function SignInScreen() {
+  const auth = useAuth();
+  const theme = useTheme();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  if (auth.me) return <Redirect href="/(app)" />;
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+      >
+        <Screen title="Concors" subtitle="Your workspace, wherever you are.">
+          <View style={{ paddingVertical: 28, gap: 20 }}>
+            <Image
+              source={require("../assets/icon.png")}
+              style={{ width: 76, height: 76, borderRadius: 16 }}
+              accessibilityLabel="Concors"
+            />
+            <Copy size={32} weight="600">
+              Keep your work{`\n`}moving.
+            </Copy>
+            <Copy muted>
+              Check in on your agents, answer a request, and pick up where you left off.
+            </Copy>
+          </View>
+          {config.demo && (
+            <Notice>
+              Demo preview · All sessions and responses are simulated. No real credentials are
+              needed.
+            </Notice>
+          )}
+          {auth.error && <Notice>{auth.error}</Notice>}
+          {config.demo ? (
+            <Button
+              disabled={auth.loading}
+              onPress={() => {
+                void auth.signIn("demo@concors.dev", "demo-mode");
+              }}
+            >
+              {auth.loading ? "Getting ready…" : "Explore demo"}
+            </Button>
+          ) : (
+            <>
+              <Field
+                label="Email"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoComplete="email"
+                textContentType="username"
+                placeholder="you@example.com"
+              />
+              <Field
+                label="Password"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                autoComplete="current-password"
+                textContentType="password"
+                onSubmitEditing={() => {
+                  if (email && password && !auth.loading) void auth.signIn(email, password);
+                }}
+              />
+              <Button
+                disabled={auth.loading || !email.trim() || !password}
+                onPress={() => {
+                  void auth.signIn(email, password);
+                }}
+              >
+                {auth.loading ? "Checking session…" : "Sign in"}
+              </Button>
+              <Copy muted size={13}>
+                Sign in with your existing Concors account. Your machines and agents continue
+                running while you’re away.
+              </Copy>
+            </>
+          )}
+          {auth.error && (
+            <View style={{ gap: 10 }}>
+              <Button
+                secondary
+                onPress={() => {
+                  void auth.refresh();
+                }}
+              >
+                Retry connection
+              </Button>
+              <Button
+                secondary
+                disabled={auth.loading}
+                onPress={() => {
+                  void auth.signOut();
+                }}
+              >
+                Clear saved session
+              </Button>
+            </View>
+          )}
+          <View style={{ flexDirection: "row", gap: 12 }}>
+            <Button
+              secondary
+              onPress={() => {
+                void Linking.openURL(config.supportUrl);
+              }}
+            >
+              Support
+            </Button>
+            <Button
+              secondary
+              onPress={() => {
+                void Linking.openURL(config.privacyUrl);
+              }}
+            >
+              Privacy
+            </Button>
+          </View>
+        </Screen>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}

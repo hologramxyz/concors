@@ -60,3 +60,13 @@ export {
   type SshKey,
 } from "./schemas.ts";
 export { memoryTokenStore, type TokenStore } from "./token-store.ts";
+export {
+  MobileCapabilitiesSchema,
+  MachineConnectionTicketSchema,
+  PushDeviceSchema,
+  NO_MOBILE_CAPABILITIES,
+  AccountDeletionSchema,
+  type MobileCapabilities,
+  type MachineConnectionTicket,
+  type PushDevice,
+} from "./mobile.ts";
