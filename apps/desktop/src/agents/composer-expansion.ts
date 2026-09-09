@@ -46,8 +46,13 @@ export function useComposerExpansion(compact: boolean) {
       largest = Math.max(largest, height);
       if (largest - smallest > 100 && height - smallest > 100) {
         // The native host or browser resized back after keyboard dismissal.
-        // Do not dismiss an owned picker when it takes focus from the keyboard.
-        if (document.activeElement?.matches("[data-agent-composer]")) collapse();
+        // A picker may take focus from the keyboard. Keep its controls mounted,
+        // but collapse after ordinary toolbar actions (whose buttons can retain focus).
+        const pickerOpen = [...document.querySelectorAll("[data-composer-surface]")].some(
+          (element) =>
+            element.tagName !== "FORM" && element.getAttribute("data-composer-surface") === id,
+        );
+        if (!pickerOpen) collapse();
         largest = smallest = height;
       } else smallest = Math.min(smallest, height);
     };
