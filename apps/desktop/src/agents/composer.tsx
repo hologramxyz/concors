@@ -208,7 +208,7 @@ export function AgentComposer({
       {queue.map((entry, i) => (
         <div
           key={i}
-          className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-[12px]"
+          className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-xs"
         >
           <span className="text-muted-foreground">Queued</span>
           <span className="min-w-0 flex-1 truncate">
@@ -230,12 +230,12 @@ export function AgentComposer({
         </div>
       ))}
       {(error || dictation.error) && (
-        <p role="alert" className="text-[12px] text-destructive">
+        <p role="alert" className="text-xs text-destructive">
           {error ?? dictation.error}
         </p>
       )}
       {uncertain && (
-        <div className="flex items-center gap-2 text-[12px]">
+        <div className="flex items-center gap-2 text-xs">
           <span>Delivery could not be confirmed.</span>
           <button
             className="text-primary"
@@ -269,7 +269,7 @@ export function AgentComposer({
             {attachments.map((file, i) => (
               <div
                 key={i}
-                className="flex max-w-52 items-center gap-2 rounded-lg border bg-muted/40 px-2 py-1 text-[12px]"
+                className="flex max-w-52 items-center gap-2 rounded-lg border bg-muted/40 px-2 py-1 text-xs"
               >
                 {file.mime.startsWith("image/") && (
                   <img
@@ -326,7 +326,7 @@ export function AgentComposer({
           className="max-h-48 min-h-16 w-full resize-none bg-transparent px-3 py-3 text-[16px] leading-relaxed outline-none disabled:opacity-50"
         />
         {dictation.listening && (
-          <p role="status" className="px-3 pb-2 text-[12px] text-primary">
+          <p role="status" className="px-3 pb-2 text-xs text-primary">
             {dictation.interim || "Listening… Click the microphone to finish."}
           </p>
         )}
@@ -382,7 +382,7 @@ export function AgentComposer({
                 aria-label="Refresh agent models"
                 disabled={modelsLoading}
                 onClick={() => void refresh()}
-                className="w-full border-t px-2 py-2 text-left text-[12px] text-muted-foreground hover:bg-muted"
+                className="w-full border-t px-2 py-2 text-left text-xs text-muted-foreground hover:bg-muted"
               >
                 Refresh models
               </button>
@@ -527,7 +527,7 @@ export function AgentComposer({
         </div>
       </form>
       {uploading && (
-        <p role="status" className="px-2 text-[12px] text-muted-foreground">
+        <p role="status" className="px-2 text-xs text-muted-foreground">
           Reading attachments…
         </p>
       )}

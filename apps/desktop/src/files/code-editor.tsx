@@ -100,7 +100,7 @@ export default function CodeEditor({
               height: "100%",
               backgroundColor: "var(--background)",
               color: "var(--foreground)",
-              fontSize: "13px",
+              fontSize: "14px",
             },
             ".cm-scroller": {
               overflow: "auto",

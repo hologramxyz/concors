@@ -32,7 +32,7 @@ export function MachineSwitcher({
           aria-label="Switch machine"
         >
           <Server className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <span className="min-w-0 truncate text-[13px] font-medium">
+          <span className="min-w-0 truncate text-ui font-medium">
             {selected?.name ?? "This computer"}
           </span>
           <ChevronDown className="size-3 shrink-0" />

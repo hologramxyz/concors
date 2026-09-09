@@ -329,7 +329,7 @@ function Pane({
         ) : (
           <Terminal className="size-4 shrink-0 text-muted-foreground" />
         )}
-        <span className="min-w-0 flex-1 truncate text-[13px]" title={title}>
+        <span className="min-w-0 flex-1 truncate text-ui" title={title}>
           {title}
         </span>
         <DropdownMenu>

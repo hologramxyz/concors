@@ -47,7 +47,7 @@ export function TerminalSurface({
       cursorStyle: "bar",
       cursorInactiveStyle: "bar",
       cursorWidth: 1,
-      fontSize: 13,
+      fontSize: 14,
       lineHeight: 1.2,
       fontFamily: '"Geist Mono Variable", "SF Mono", Consolas, monospace',
       scrollback: 1000,
