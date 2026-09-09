@@ -7,13 +7,23 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { FileCode2, RefreshCw, Save, WrapText } from "lucide-react";
+import { FileCode2, RefreshCw, Save, WrapText, Search, Ellipsis, Copy } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuCheckboxItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { AgentMarkdown, CopyButton } from "@/agents/markdown";
 import { Button } from "@/components/ui/button";
 import type { FileOperation } from "@concors/protocol";
 import { useFiles, type OpenFile } from "./context";
 import { loadCodeEditor } from "./editor-loader";
+import { useFilePrompts } from "./prompts";
+import { CompactLayoutContext } from "@/components/compact-layout";
 const CodeEditor = lazy(loadCodeEditor);
 
 export function FileTabLabel({ file }: { file: OpenFile }) {
@@ -48,6 +58,8 @@ export function FileTabLabel({ file }: { file: OpenFile }) {
   );
 }
 export function FileTab({ file }: { file: OpenFile }) {
+  const prompts = useFilePrompts();
+  const compact = useContext(CompactLayoutContext);
   const connection = useContext(TerminalConnectionContext);
   const state = useSyncExternalStore(file.document.subscribe, file.document.getSnapshot);
   const [mode, setMode] = useState({
@@ -56,7 +68,8 @@ export function FileTab({ file }: { file: OpenFile }) {
   });
   const preview = file.location.line && mode.navigation !== file.navigation ? false : mode.preview;
   const [compare, setCompare] = useState(false);
-  const [wrap, setWrap] = useState(false);
+  const [searchRequest, setSearchRequest] = useState(0);
+  const [wrap, setWrap] = useState(compact);
   const [vimEnabled, setVim] = useState(() => {
     try {
       return localStorage.getItem("concors.files.vim") === "true";
@@ -105,8 +118,12 @@ export function FileTab({ file }: { file: OpenFile }) {
       aria-label={`File ${file.path}`}
       className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden border-t"
     >
-      <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b px-3 py-2">
+      <div
+        data-file-toolbar
+        className="flex shrink-0 flex-wrap items-center gap-1.5 border-b px-3 py-2"
+      >
         <span
+          data-file-path
           title={file.path}
           className="min-w-20 flex-1 truncate font-mono text-ui text-muted-foreground"
         >
@@ -121,44 +138,100 @@ export function FileTab({ file }: { file: OpenFile }) {
             {preview ? "Edit source" : "Preview"}
           </Button>
         )}
-        <Button
-          size="sm"
-          variant="ghost"
-          aria-pressed={vimEnabled}
-          onClick={() => {
-            const next = !vimEnabled;
-            setVim(next);
-            try {
-              localStorage.setItem("concors.files.vim", String(next));
-            } catch {
-              /* The toggle still works when browser storage is unavailable. */
-            }
-          }}
-        >
-          Vim
-        </Button>
-        <Button
-          size="icon-xs"
-          variant="ghost"
-          aria-label="Toggle word wrap"
-          aria-pressed={wrap}
-          onClick={() => setWrap(!wrap)}
-        >
-          <WrapText />
-        </Button>
-        <CopyButton text={state.content} label="Copy file" />
-        <Button
-          size="icon-xs"
-          variant="ghost"
-          aria-label="Reload file from disk"
-          disabled={!available || state.busy}
-          onClick={() => {
-            if (!dirty || window.confirm("Discard your draft and reload this file from disk?"))
-              void file.document.load(request, true);
-          }}
-        >
-          <RefreshCw />
-        </Button>
+        {compact ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger className="mobile-icon ml-auto" aria-label="File options">
+              <Ellipsis />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem
+                onSelect={() => {
+                  setMode({ preview: false, navigation: file.navigation });
+                  setSearchRequest((value) => value + 1);
+                }}
+              >
+                <Search />
+                Find in file
+              </DropdownMenuItem>
+              <DropdownMenuCheckboxItem checked={wrap} onCheckedChange={setWrap}>
+                Word wrap
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem checked={vimEnabled} onCheckedChange={setVim}>
+                Vim keybindings
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={() => {
+                  void navigator.clipboard
+                    .writeText(state.content)
+                    .catch(() => prompts.notify("Could not copy this file to the clipboard."));
+                }}
+              >
+                <Copy />
+                Copy file
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={!available || state.busy}
+                onSelect={() => {
+                  void (async () => {
+                    if (
+                      !dirty ||
+                      (await prompts.confirm("Discard your draft and reload this file from disk?"))
+                    )
+                      await file.document.load(request, true);
+                  })();
+                }}
+              >
+                <RefreshCw />
+                Reload from disk
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <>
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-pressed={vimEnabled}
+              onClick={() => {
+                const next = !vimEnabled;
+                setVim(next);
+                try {
+                  localStorage.setItem("concors.files.vim", String(next));
+                } catch {
+                  /* The toggle still works when browser storage is unavailable. */
+                }
+              }}
+            >
+              Vim
+            </Button>
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              aria-label="Toggle word wrap"
+              aria-pressed={wrap}
+              onClick={() => setWrap(!wrap)}
+            >
+              <WrapText />
+            </Button>
+            <CopyButton text={state.content} label="Copy file" />
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              aria-label="Reload file from disk"
+              disabled={!available || state.busy}
+              onClick={async () => {
+                if (
+                  !dirty ||
+                  (await prompts.confirm("Discard your draft and reload this file from disk?"))
+                )
+                  void file.document.load(request, true);
+              }}
+            >
+              <RefreshCw />
+            </Button>
+          </>
+        )}
         <Button
           size="sm"
           variant="outline"
@@ -205,8 +278,11 @@ export function FileTab({ file }: { file: OpenFile }) {
             <Button
               size="sm"
               variant="outline"
-              onClick={() => {
-                if (!dirty || window.confirm("Discard your draft and use the disk version?")) {
+              onClick={async () => {
+                if (
+                  !dirty ||
+                  (await prompts.confirm("Discard your draft and use the disk version?"))
+                ) {
                   void file.document.load(request, true);
                   setCompare(false);
                 }
@@ -218,9 +294,9 @@ export function FileTab({ file }: { file: OpenFile }) {
               size="sm"
               variant="outline"
               disabled={state.busy || !available}
-              onClick={() => {
+              onClick={async () => {
                 if (
-                  window.confirm(
+                  await prompts.confirm(
                     "Use your draft in place of the disk version shown? You still need to Save.",
                   )
                 ) {
@@ -263,6 +339,8 @@ export function FileTab({ file }: { file: OpenFile }) {
                 wrap={wrap}
                 location={file.location}
                 navigation={file.navigation}
+                searchRequest={searchRequest}
+                focusLocation={!compact}
               />
             </Suspense>
           )
