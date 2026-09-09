@@ -12,7 +12,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "cn";
 import type { WorkspaceSnapshot, WorkspaceOperation } from "@concors/protocol";
 import type { View } from "@/navigation";
-import type { SignedInAuth } from "@/auth/auth-state";
+import { activeOrganization, type SignedInAuth } from "@/auth/auth-state";
 import { AccountMenu } from "@/components/account-menu";
 import { MachineSwitcher } from "@/workspace/machine-switcher";
 import type { MachineConnection } from "@/workspace/machines";
@@ -32,7 +32,7 @@ interface AppSidebarProps {
   machines: MachineConnection[];
   selectedMachineId: string;
   onSelectMachine: (id: string) => void;
-  onAddMachine: (machine: MachineConnection) => void;
+  onViewCloud: (machineId?: string) => void;
   auth: SignedInAuth;
   onSignOut: () => void;
   execute: (operation: WorkspaceOperation) => Promise<void>;
@@ -67,10 +67,12 @@ export function AppSidebar(props: AppSidebarProps) {
       >
         <div className="m-2 flex h-9 items-center justify-between gap-1">
           <MachineSwitcher
+            key={activeOrganization(props.auth)?.id}
+            organizationId={activeOrganization(props.auth)?.id}
+            onViewCloud={props.onViewCloud}
             machines={props.machines}
             selectedId={props.selectedMachineId}
             onSelect={props.onSelectMachine}
-            onAdd={props.onAddMachine}
           />
           <div className="ml-auto flex shrink-0 items-center gap-0.5">
             <Tooltip>

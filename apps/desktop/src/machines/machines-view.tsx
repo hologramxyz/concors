@@ -1,7 +1,10 @@
+import { describeDaemonEndpoint } from "@concors/daemon-client";
+import { FormDialog } from "@/workspace/form-dialog";
+import { MachineConnectionSchema, type MachineConnection } from "@/workspace/machines";
 import type { Machine } from "@concors/api-client";
 import { cn } from "cn";
 import { CalendarX, Check, Cloud, Copy, Plus, RefreshCw, Undo2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { activeOrganization, type SignedInAuth } from "@/auth/auth-state";
 import { Badge } from "@/components/ui/badge";
@@ -28,16 +31,33 @@ import { describeMachinesError, useMachines } from "./use-machines.ts";
 
 interface MachinesViewProps {
   readonly auth: SignedInAuth;
+  readonly onAddMachine: (machine: MachineConnection) => void;
+  readonly focusedMachineId: string | null;
+  readonly creating: boolean;
+  readonly onCreatingChange: (creating: boolean) => void;
 }
 
 /** Cloud machines of the active organization: list, create, cancel, and how to connect. */
-export function MachinesView({ auth }: MachinesViewProps) {
+export function MachinesView({
+  auth,
+  onAddMachine,
+  focusedMachineId,
+  creating,
+  onCreatingChange: setCreating,
+}: MachinesViewProps) {
   const organization = activeOrganization(auth);
   const state = useMachines(organization?.id);
-  const [creating, setCreating] = useState(false);
+  const [adding, setAdding] = useState(false);
   const [cancelling, setCancelling] = useState<Machine | null>(null);
   const [resuming, setResuming] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (focusedMachineId)
+      document
+        .getElementById(`cloud-machine-${focusedMachineId}`)
+        ?.scrollIntoView({ block: "nearest" });
+  }, [focusedMachineId, state.machines]);
 
   const machines = state.machines ?? [];
   const empty = state.machines !== null && machines.length === 0;
@@ -60,6 +80,12 @@ export function MachinesView({ auth }: MachinesViewProps) {
             aria-label="Refresh"
           >
             <RefreshCw className={cn(state.loading && "animate-spin")} aria-hidden="true" />
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2 leading-none" disabled>
+            <span className="inline-flex h-full items-center">Connect a machine</span>
+            <span className="inline-flex h-5 items-center rounded bg-muted px-1.5 text-[10px] leading-none">
+              Coming soon
+            </span>
           </Button>
           <Button size="sm" onClick={() => setCreating(true)} disabled={state.catalog === null}>
             <Plus data-icon="inline-start" aria-hidden="true" />
@@ -100,7 +126,11 @@ export function MachinesView({ auth }: MachinesViewProps) {
       ) : (
         <ul className="flex flex-col gap-3">
           {machines.map((machine) => (
-            <li key={machine.id}>
+            <li
+              key={machine.id}
+              id={`cloud-machine-${machine.id}`}
+              className={cn(machine.id === focusedMachineId && "rounded-lg ring-2 ring-primary/40")}
+            >
               <MachineCard
                 machine={machine}
                 onCancel={() => setCancelling(machine)}
@@ -119,8 +149,33 @@ export function MachinesView({ auth }: MachinesViewProps) {
         </ul>
       )}
 
-      {creating && state.catalog && (
+      {adding && (
+        <FormDialog
+          title="Connect a machine"
+          description="Connect an existing daemon through a trusted local or protected connection."
+          fields={[
+            { name: "name", label: "Machine name", placeholder: "Development machine" },
+            { name: "url", label: "Daemon URL", placeholder: "wss://your-machine.example/ws" },
+          ]}
+          submitLabel="Add connection"
+          onClose={() => setAdding(false)}
+          onSubmit={(values) => {
+            const endpoint = describeDaemonEndpoint(values["url"] ?? "");
+            const machine = MachineConnectionSchema.parse({
+              id: crypto.randomUUID(),
+              name: values["name"],
+              url: endpoint.url,
+            });
+            onAddMachine(machine);
+            return Promise.resolve();
+          }}
+        />
+      )}
+
+      {creating && state.catalog && organization && (
         <CreateMachineDialog
+          organizationId={organization.id}
+          organizationName={organization.name}
           catalog={state.catalog}
           onCreate={async (input) => {
             await state.create(input).catch((cause: unknown) => {
