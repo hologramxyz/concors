@@ -5,6 +5,9 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
   browser,
   page: first,
 }) => {
+  // This two-client flow includes a reload, a real reconnect delay, machine
+  // switching and teardown. Keep individual assertions on their normal deadline.
+  test.setTimeout(60_000);
   const otherDevice = await browser.newContext();
   let disconnected = false;
   const sockets: WebSocketRoute[] = [];
