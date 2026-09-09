@@ -10,6 +10,226 @@ body {
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
 }
+.mobile-files {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--background);
+  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  touch-action: pan-y;
+}
+.mobile-files-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  flex-shrink: 0;
+}
+.mobile-files-header h1 {
+  font-size: 17px;
+  font-weight: 600;
+}
+.mobile-files-header p {
+  font-size: 13px;
+  color: var(--muted-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mobile-file-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 4px 12px 10px;
+  flex-shrink: 0;
+}
+.mobile-file-tabs button {
+  min-height: 40px;
+}
+.mobile-files-content,
+.mobile-files-tree,
+.mobile-files-editor {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+.mobile-files [hidden] {
+  display: none !important;
+}
+.mobile-files-tree button {
+  min-height: 44px;
+}
+.mobile-files-tree input {
+  font-size: 16px;
+  min-height: 44px;
+}
+.mobile-files-tree [aria-label="File actions"] {
+  gap: 8px;
+  padding: 6px 4px 10px;
+}
+.mobile-files-editor [data-file-path] {
+  flex-basis: 100%;
+  min-width: 0;
+  font-size: 13px;
+}
+.mobile-files-editor [data-file-toolbar] {
+  padding: 8px 12px;
+}
+.mobile-files-editor [data-file-toolbar] button {
+  min-height: 44px;
+}
+.mobile-files-editor [data-file-toolbar] > button:last-child {
+  min-width: 76px;
+}
+.mobile-files-editor .cm-editor {
+  font-size: 16px;
+}
+.mobile-files-editor .cm-scroller {
+  touch-action: pan-x pan-y;
+}
+.mobile-files-editor .cm-search input {
+  font-size: 16px;
+  max-width: 100%;
+}
+.mobile-files-editor .cm-search {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-right: 28px;
+}
+.mobile-files-editor .cm-search button {
+  min-height: 36px;
+}
+.mobile-workspace-list {
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 2px;
+}
+.mobile-tab-card {
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--muted) 22%, var(--background));
+  flex-shrink: 0;
+}
+.mobile-tab-card[data-active="true"] {
+  border-color: color-mix(in srgb, var(--primary) 30%, var(--border));
+}
+.mobile-tab-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 6px;
+}
+.mobile-tab-choice {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+}
+.mobile-tab-choice > svg {
+  width: 18px;
+  height: 18px;
+  color: var(--muted-foreground);
+  flex-shrink: 0;
+}
+.mobile-tab-choice > span:first-of-type {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mobile-tab-panes {
+  padding: 0 6px 6px 18px;
+}
+.mobile-pane-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 12px;
+}
+.mobile-pane-row:has([aria-pressed="true"]) {
+  background: var(--accent);
+}
+.mobile-pane-choice {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-height: 54px;
+  gap: 10px;
+  padding: 7px 10px;
+  text-align: left;
+  border-radius: 12px;
+}
+.mobile-pane-choice > svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+.mobile-pane-choice > span {
+  min-width: 0;
+  flex: 1;
+  font-size: 14px;
+}
+.mobile-pane-choice small {
+  display: block;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.mobile-pane-choice > .mobile-pane-selected {
+  width: 15px;
+  height: 15px;
+  color: var(--primary);
+}
+.mobile-row-actions {
+  color: var(--muted-foreground);
+}
+.mobile-row-actions:active,
+.mobile-tab-choice:active,
+.mobile-pane-choice:active {
+  background: var(--muted);
+}
+.mobile-new-tab-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 48px;
+  border-radius: 14px;
+  background: var(--foreground);
+  color: var(--background);
+  font-size: 15px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.mobile-new-tab-button svg {
+  width: 18px;
+  height: 18px;
+}
+.mobile-new-tab-button:disabled {
+  opacity: 0.4;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mobile-files {
+    transition: none;
+  }
+}
 .mobile-shell {
   position: relative;
   height: 100%;

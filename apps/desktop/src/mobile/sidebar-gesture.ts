@@ -1,6 +1,15 @@
 import { useRef, useState, type PointerEvent } from "react";
 
-export function useSidebarGesture(open: boolean, onChange: (open: boolean) => void, width: number) {
+export function useSidebarGesture(
+  open: boolean,
+  onChange: (open: boolean) => void,
+  width: number,
+  {
+    direction = 1,
+    enabled = true,
+    protectInputs = false,
+  }: { direction?: 1 | -1; enabled?: boolean; protectInputs?: boolean } = {},
+) {
   const gesture = useRef<{
     id: number;
     x: number;
@@ -15,7 +24,7 @@ export function useSidebarGesture(open: boolean, onChange: (open: boolean) => vo
     if (!current || current.id !== event.pointerId) return;
     if (!cancelled && current.moved) {
       suppressClickUntil.current = performance.now() + 400;
-      const delta = event.clientX - current.x;
+      const delta = (event.clientX - current.x) * direction;
       onChange(open ? delta > -width * 0.25 : delta > width * 0.25);
     }
     gesture.current = null;
@@ -26,14 +35,14 @@ export function useSidebarGesture(open: boolean, onChange: (open: boolean) => vo
     dragging: offset !== null,
     handlers: {
       onPointerDown(event: PointerEvent) {
-        if (event.pointerType === "mouse" || event.button !== 0) return;
+        if (!enabled || event.pointerType === "mouse" || event.button !== 0) return;
         const target = event.target as HTMLElement;
         // React portals bubble through this shell, but their popups own their gestures.
         if (!event.currentTarget.contains(target)) return;
         if (
-          !open &&
+          (!open || protectInputs) &&
           target.closest(
-            "input, textarea, select, button, a, pre, .concors-terminal, [role=dialog], [role=menu]",
+            "input, textarea, select, button, a, pre, [contenteditable], .cm-editor, .concors-terminal, [role=dialog], [role=menu]",
           )
         )
           return;
@@ -48,8 +57,12 @@ export function useSidebarGesture(open: boolean, onChange: (open: boolean) => vo
       onPointerMove(event: PointerEvent) {
         const current = gesture.current;
         if (!current || current.id !== event.pointerId) return;
-        const x = event.clientX - current.x,
+        const x = (event.clientX - current.x) * direction,
           y = event.clientY - current.y;
+        if (!current.moved && !open && x < -8) {
+          gesture.current = null;
+          return;
+        }
         if (!current.moved && Math.abs(y) > Math.abs(x) && Math.abs(y) > 8) {
           gesture.current = null;
           return;

@@ -64,7 +64,7 @@ export function TerminalSurface({
     const fit = new FitAddon();
     terminal.loadAddon(fit);
     const element = host.current;
-    const isVisible = () => element.getClientRects().length > 0;
+    const isVisible = () => element.getClientRects().length > 0 && !element.closest("[inert]");
     terminal.open(element);
     fit.fit();
     const themeObserver = new MutationObserver(() => {
