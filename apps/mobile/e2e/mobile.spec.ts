@@ -172,7 +172,16 @@ test("sidebar pushes the workspace and settings opens as a drawer over the same 
   await expect(settings).toBeVisible();
   await settings.getByLabel("Settings section").selectOption("appearance");
   await expect(settings.getByRole("button", { name: "Theme", exact: true })).toBeVisible();
+  await settings.getByRole("radio", { name: "Square", exact: true }).check();
+  await expect(settings).toHaveCSS("border-top-left-radius", "0px");
+  await settings.getByRole("button", { name: "Theme", exact: true }).click();
+  await ui.getByRole("menuitem", { name: "Dark", exact: true }).click();
+  await expect(ui.locator("html")).toHaveClass("dark");
   await settings.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(ui.locator("form:has([data-agent-composer])")).toHaveCSS(
+    "border-top-left-radius",
+    "0px",
+  );
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toHaveValue("Keep this draft");
 });
 test("top select switches split panes and cold session links survive sign-in", async ({ page }) => {
