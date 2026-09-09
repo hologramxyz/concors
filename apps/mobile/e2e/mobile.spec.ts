@@ -1,5 +1,6 @@
 import { expect, test, type Page, type FrameLocator } from "@playwright/test";
 import { ids } from "../src/demo/fixtures";
+import { swipe as touchSwipe } from "./support/swipe";
 const workspace = (page: Page) => page.frameLocator('iframe[title="Concors workspace"]');
 const activeChat = `${ids.tab}:${ids.pane}`;
 const activeTerminal = `${ids.tab}:${ids.terminalPane}`;
@@ -241,11 +242,51 @@ test("touch swipes reveal and dismiss the push sidebar", async ({ page }) => {
       });
     await client.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
   };
-  await swipe(4, 285);
-  await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "true");
   await swipe(285, 25);
+  await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "true");
+  await swipe(25, 285);
   await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "false");
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
+});
+test("Files responds in the demo and terminal swipes keep both panels reachable", async ({
+  page,
+}) => {
+  const ui = await enter(page);
+  await choose(ui, "Tabs and panes", activeTerminal);
+  const terminal = ui.getByLabel("Terminal output", { exact: true });
+  await expect(terminal).toBeVisible();
+  const shell = ui.locator(".mobile-shell");
+  const width = await shell.evaluate((element) => element.clientWidth);
+  const files = ui.getByRole("region", { name: "Project files", exact: true });
+  await ui.getByRole("button", { name: "Project files", exact: true }).click();
+  await expect(files.getByRole("status")).toContainText("The demo has no filesystem");
+  await files.getByRole("button", { name: "Back to chat" }).click();
+  await expect(ui.locator(".mobile-files")).toHaveCSS(
+    "transform",
+    `matrix(1, 0, 0, 1, ${width}, 0)`,
+  );
+  await touchSwipe(page, { x: 170, y: 240 }, { x: 173, y: 480 });
+  await expect(shell).toHaveAttribute("data-files-open", "false");
+  await expect(shell).toHaveAttribute("data-sidebar-open", "false");
+  await touchSwipe(page, { x: 100, y: 240 }, { x: 115, y: 240 });
+  await expect(shell).toHaveAttribute("data-files-open", "false");
+  await touchSwipe(page, { x: 55, y: 250 }, { x: 335, y: 250 });
+  await expect(files.getByRole("status")).toContainText("The demo has no filesystem");
+  await expect(shell).toHaveAttribute("data-sidebar-open", "false");
+  await touchSwipe(page, { x: 320, y: 300 }, { x: 70, y: 300 });
+  await expect(shell).toHaveAttribute("data-files-open", "false");
+  await expect(ui.locator(".mobile-files")).toHaveCSS(
+    "transform",
+    `matrix(1, 0, 0, 1, ${width}, 0)`,
+  );
+  await touchSwipe(page, { x: 335, y: 250 }, { x: 55, y: 250 });
+  await expect(shell).toHaveAttribute("data-sidebar-open", "true");
+  await touchSwipe(page, { x: 30, y: 240 }, { x: 300, y: 240 });
+  await expect(shell).toHaveAttribute("data-sidebar-open", "false");
+  await expect(ui.getByRole("combobox", { name: "Tabs and panes" })).toHaveAttribute(
+    "data-value",
+    activeTerminal,
+  );
 });
 test("tab and pane changes use the authoritative workspace operations", async ({ page }) => {
   const ui = await enter(page);
@@ -622,7 +663,7 @@ test("drawer actions target their own tab and pane without changing the current 
   const picker = ui.getByRole("combobox", { name: "Tabs and panes", includeHidden: true });
   await expect(
     ui.locator(".mobile-header").getByRole("button", { name: "Project files" }),
-  ).toBeDisabled();
+  ).toBeEnabled();
   await expect(ui.getByRole("button", { name: "Workspace actions", exact: true })).toHaveCount(0);
   await newTab(ui);
   await ui

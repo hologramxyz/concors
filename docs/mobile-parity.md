@@ -55,7 +55,9 @@ Phone-specific behavior:
   exposing geometry. Each menu targets its own row, including unselected tabs/panes.
   Closing the last pane warns that its tab will also close; hardware close shortcuts remain.
 - Files opens full-screen from the right, with a directory tree and separate open-file strip.
-  Swipe left from chat opens it, swipe right returns; the sidebar retains the opposite gesture.
+  Swipe right from chat or the terminal opens it, swipe left returns; the sidebar retains the
+  opposite gesture. Horizontal terminal gestures are handled before xterm can consume them;
+  vertical gestures and taps retain terminal behavior.
   Tree, CodeMirror, Markdown, file links, create, explicit save and conflict review are desktop code.
   Editors preserve their own gestures and do not automatically summon the keyboard on opening.
   Dirty-close/disconnect dialogs are in-app, since sandboxed web renderers cannot use browser modals.
@@ -117,13 +119,15 @@ backdrop dismissal without reopening, hierarchical tab/pane creation and closing
 focus and keyboard dismissal, single centered send/stop actions,
 drawer focus/animations/reduced motion, sidebar-preserving search and machine selection,
 account menus and machine management.
-The file integration also has two isolated real-daemon acceptance scenarios for
+The file integration also has isolated real-daemon acceptance scenarios for
 directory browsing, Markdown links, file/folder creation, hidden files, refresh,
 explicit saving, competing disk revisions, draft retention on reconnect, in-app
 discard guards, the browser host unload guard and 320/390/430px editor layouts.
 The tab drawer regression targets an unselected tab/pane and checks hardware close
-shortcuts with the drawer unmounted. Files are disabled on older daemons and in the
-in-memory demo, rather than presenting a simulated filesystem as live data.
+shortcuts with the drawer unmounted. Files opens a capability explanation on older daemons and in
+the in-memory demo, rather than presenting a simulated filesystem as live data. Terminal touch
+regressions cover both panel directions, Files-button taps, vertical gesture isolation,
+session preservation and working terminal input after navigation.
 The appearance scenario additionally exercises theme
 and corner preferences. A local-WebView test removes the browser UUID helper and
 verifies new-tab requests still use secure, valid IDs. The earlier simulated static preview was opened at iPhone size for

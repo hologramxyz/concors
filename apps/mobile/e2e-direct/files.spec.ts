@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DaemonConnection, describeDaemonEndpoint } from "@concors/daemon-client";
+import { swipe } from "../e2e/support/swipe";
 
 async function setup(page: Page) {
   const root = await mkdtemp(join(tmpdir(), "concors-mobile-files-"));
@@ -58,6 +59,8 @@ async function setup(page: Page) {
     root,
     desktop,
     ui,
+    tabId,
+    paneId,
     cleanup: async () => {
       desktop.disconnect();
       off();
@@ -65,6 +68,115 @@ async function setup(page: Page) {
     },
   };
 }
+
+test("terminal taps and horizontal swipes open real files and the sidebar without losing the session", async ({
+  page,
+}) => {
+  const { ui, desktop, tabId, paneId, cleanup } = await setup(page);
+  try {
+    const chat = ui.getByRole("textbox", { name: "Message Codex" });
+    await chat.fill("Keep my chat draft during terminal gestures");
+    const picker = ui.getByRole("combobox", { name: "Tabs and panes" });
+    await picker.click();
+    await ui.getByRole("button", { name: "Actions for tab File review", exact: true }).click();
+    await ui.getByRole("menuitem", { name: "Add pane to this tab", exact: true }).click();
+    await ui
+      .getByRole("dialog", { name: "Add pane", exact: true })
+      .getByRole("button", { name: "Terminal", exact: true })
+      .click();
+    const terminal = ui.getByLabel("Terminal output", { exact: true });
+    await expect(terminal).toBeVisible();
+    await terminal.tap();
+    await page.keyboard.type("printf 'gesture-%s\\n' terminal-ready");
+    await page.keyboard.press("Enter");
+    await expect(terminal).toContainText("gesture-terminal-ready");
+    const selection = await picker.getAttribute("data-value");
+    if (!selection) throw new Error("Terminal pane is not selected");
+    const terminalSession = () => {
+      const node = desktop.workspace?.projects
+        .flatMap((project) => project.tabs)
+        .find((tab) => tab.id === tabId)
+        ?.nodes.find((node) => node.id === selection.split(":")[1]);
+      return node?.kind === "pane" ? node.sessionId : null;
+    };
+    const terminalId = terminalSession();
+    expect(terminalId).toBeTruthy();
+    const shell = ui.locator(".mobile-shell");
+    const files = ui.getByRole("region", { name: "Project files", exact: true });
+    const closed = () =>
+      expect(ui.locator(".mobile-files")).toHaveCSS("transform", "matrix(1, 0, 0, 1, 390, 0)");
+    // The icon works while a terminal is focused, too.
+    await ui.getByRole("button", { name: "Project files", exact: true }).tap();
+    await expect(files.getByRole("button", { name: "README.md", exact: true })).toBeVisible();
+    await files.getByRole("button", { name: "Back to chat" }).tap();
+    await closed();
+    // Start in xterm's actual screen, not the chat or the surrounding header.
+    const screen = await terminal.locator(".xterm-screen").boundingBox();
+    if (!screen) throw new Error("Terminal screen is missing");
+    const y = screen.y + Math.min(180, screen.height / 2);
+    await swipe(page, { x: 170, y }, { x: 173, y: y + 180 });
+    await expect(shell).toHaveAttribute("data-files-open", "false");
+    await expect(shell).toHaveAttribute("data-sidebar-open", "false");
+    await swipe(page, { x: 55, y }, { x: 335, y });
+    await expect(files.getByRole("button", { name: "README.md", exact: true })).toBeVisible();
+    await expect(shell).toHaveAttribute("data-sidebar-open", "false");
+    await swipe(page, { x: 320, y: 30 }, { x: 70, y: 30 });
+    await closed();
+    await swipe(page, { x: 335, y }, { x: 55, y });
+    await expect(shell).toHaveAttribute("data-sidebar-open", "true");
+    await expect(shell).toHaveAttribute("data-files-open", "false");
+    await swipe(page, { x: 30, y: 240 }, { x: 300, y: 240 });
+    await expect(shell).toHaveAttribute("data-sidebar-open", "false");
+    await expect(picker).toHaveAttribute("data-value", selection);
+    expect(terminalSession()).toBe(terminalId);
+    expect(desktop.terminals.find((session) => session.id === terminalId)?.status).toBe("running");
+    // A real tap still focuses xterm and accepts input after gesture navigation.
+    await terminal.tap();
+    await page.keyboard.type("printf 'gesture-%s\\n' still-connected");
+    await page.keyboard.press("Enter");
+    await expect(terminal).toContainText("gesture-still-connected");
+    await picker.click();
+    await ui.locator(`[data-pane-choice][data-value="${tabId}:${paneId}"]`).click();
+    await expect(chat).toHaveValue("Keep my chat draft during terminal gestures");
+  } finally {
+    await cleanup();
+  }
+});
+
+test("Files explains an older daemon without sending unsupported file requests", async ({
+  page,
+}) => {
+  let fileRequests = 0;
+  await page.routeWebSocket("ws://localhost:7440/ws", (socket) => {
+    const server = socket.connectToServer();
+    server.onMessage((raw) => {
+      const message = JSON.parse(raw.toString()) as { type: string; capabilities?: string[] };
+      if (message.type === "daemon.ready") {
+        message.capabilities = message.capabilities?.filter(
+          (item) => !item.startsWith("project-file"),
+        );
+        socket.send(JSON.stringify(message));
+      } else socket.send(raw);
+    });
+    socket.onMessage((raw) => {
+      if ((JSON.parse(raw.toString()) as { type: string }).type === "file.request") fileRequests++;
+      server.send(raw);
+    });
+  });
+  const { ui, cleanup } = await setup(page);
+  try {
+    await ui.getByRole("button", { name: "Project files", exact: true }).tap();
+    const files = ui.getByRole("region", { name: "Project files", exact: true });
+    await expect(files.getByRole("status")).toContainText("File access needs a newer daemon");
+    await expect(files.getByRole("status")).toContainText("Updating the mobile app alone");
+    await expect(files.getByRole("button", { name: "README.md", exact: true })).toHaveCount(0);
+    await files.getByRole("button", { name: "Back to chat" }).tap();
+    await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
+    expect(fileRequests).toBe(0);
+  } finally {
+    await cleanup();
+  }
+});
 
 test("real mobile files preserve drafts, save explicitly and resolve competing disk edits", async ({
   page,
@@ -180,7 +292,7 @@ test("mobile file browsing supports Markdown links, safe creation, hidden files 
         });
       await client.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
     };
-    await swipe(350, 35);
+    await swipe(35, 350);
     await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-files-open", "true");
     const files = ui.getByRole("region", { name: "Project files", exact: true });
     await expect(files.getByRole("button", { name: "README.md", exact: true })).toBeVisible();
@@ -230,9 +342,9 @@ test("mobile file browsing supports Markdown links, safe creation, hidden files 
       path: "apps/mobile/test-results/direct/mobile-file-tree.png",
       animations: "disabled",
     });
-    await swipe(140, 380, 30);
+    await swipe(320, 80, 30);
     await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-files-open", "false");
-    await swipe(30, 330);
+    await swipe(330, 30);
     await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "true");
   } finally {
     await cleanup();
