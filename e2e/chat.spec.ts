@@ -67,7 +67,7 @@ test("shared chat streams, handles approvals and removes detached sidebar entrie
     await expect(row.locator(".truncate")).toHaveCSS("white-space", "nowrap");
     await expect(row.locator(".truncate")).toHaveCSS("text-overflow", "ellipsis");
 
-    await second.goto("http://localhost:1420");
+    await second.goto(test.info().project.use.baseURL ?? "http://localhost:1420");
     await expect(second.getByRole("log")).toContainText("Hello from");
     await second.reload();
     await expect(second.getByRole("log")).toContainText("hold this stream");
