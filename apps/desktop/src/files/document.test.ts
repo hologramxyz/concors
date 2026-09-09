@@ -55,6 +55,23 @@ describe("editor drafts", () => {
     });
     expect(doc.dirty).toBe(true);
   });
+  it("preserves typing that arrives while a reload is in flight", async () => {
+    const doc = new FileDocument(target);
+    await doc.load(read);
+    doc.edit("old draft");
+    let settle: ((result: FileResult["outcome"]) => void) | undefined;
+    const loading = doc.load(
+      () =>
+        new Promise((resolve) => {
+          settle = resolve;
+        }),
+      true,
+    );
+    doc.edit("new typing");
+    settle?.({ status: "read", file: { ...initial, content: "disk", revision: "2" } });
+    await loading;
+    expect(doc.getSnapshot()).toMatchObject({ content: "new typing", changed: true });
+  });
   it("ignores an old disk check that finishes after a save", async () => {
     const doc = new FileDocument(target);
     await doc.load(read);
