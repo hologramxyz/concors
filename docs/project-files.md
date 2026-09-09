@@ -63,8 +63,10 @@ against another process deliberately changing directories during an operation.
 - This is a lightweight file editor, without language servers, rename/delete,
   binary/image previews, or a full-project search index.
 - Vim uses CodeMirror keybindings, not an embedded Neovim process.
-- The separate native mobile client is not changed by this PR. The desktop web UI's file drawer and
-  editor fit a narrow viewport with the app sidebar collapsed.
+- Mobile shares this tree, document model, editor and file protocol. Its Files button opens a
+  full-page view with a local open-file strip instead of the desktop resizable sidebar. Mobile
+  uses in-app discard dialogs and defaults to word wrap; no filesystem access is added to the
+  embedded renderer. See the [mobile walkthrough](../apps/mobile/README.md#browse-and-edit-the-projects-real-files).
 - Native Tauri close-dialog behavior still needs a packaged-app check; browser behavior is covered.
 
 ## References and validation

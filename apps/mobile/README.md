@@ -38,23 +38,24 @@ phone-size mode. Select **Explore demo**; it opens straight into the agent chat.
    picker contains account, appearance, notifications, SSH, billing, machines and diagnostics.
    Search and the machine selector open animated bottom drawers without dismissing the sidebar.
    The machine drawer shows each machine's current status and selection.
-5. Use the floating glass **…** at the top for **New tab** or **Add pane to this tab**,
-   then choose Agent, Terminal, Codex, Claude Code or OpenCode.
-   That same menu offers rename, pane profile and confirmed close (no left/right reordering).
-   The sidebar button, picker and actions button are separate translucent, backdrop-blurred controls.
-   The picker opens a bottom drawer with tab headings, pane counts and indented panes.
+5. Open the top **Tabs and panes** picker. Each tab has its own card with indented panes.
+   **New tab** is at the bottom; the tab's **…** offers **Add pane to this tab**, rename and close.
+   Each pane's **…** offers profile selection and confirmed close (no left/right reordering).
+   New tab/Add pane open the provider drawer with Agent, Terminal, Codex, Claude Code and OpenCode.
+   The sidebar button, picker and **Files** button are separate backdrop-blurred controls.
    Choose a pane to switch views, or dismiss with Close, Escape or the backdrop.
    Tapping the covered trigger hits the backdrop and closes the drawer without reopening it.
    Desktop-only split/arrange/resize actions are intentionally absent on phones.
-6. Add a project from the sidebar's animated drawer (open/create/clone). Expand tool calls, diffs,
-   plans, thinking and sub-agent updates. Try `ask me a question` for an input request.
-   Model, effort and permissions use icon-only desktop controls when expanded.
-   Context usage and dictation sit on the right beside the primary button; the sliders button contains only
-   Plan and Speed. Dictation focuses the native keyboard and explains how to use its microphone.
-   There is one primary button: Stop while working with an empty draft, Queue for a follow-up,
-   or Send when idle.
-7. Select **Terminal · Pane 2** for the shared xterm terminal: type, use extra keys,
-   reload the renderer or explicitly stop the process after confirmation.
+
+The in-memory demo has no filesystem and leaves **Files** disabled. Use a current desktop
+daemon to test actual files, as described below. 6. Add a project from the sidebar's animated drawer (open/create/clone). Expand tool calls, diffs,
+plans, thinking and sub-agent updates. Try `ask me a question` for an input request.
+Model, effort and permissions use icon-only desktop controls when expanded.
+Context usage and dictation sit on the right beside the primary button; the sliders button contains only
+Plan and Speed. Dictation focuses the native keyboard and explains how to use its microphone.
+There is one primary button: Stop while working with an empty draft, Queue for a follow-up,
+or Send when idle. 7. Select **Terminal · Pane 2** for the shared xterm terminal: type, use extra keys,
+reload the renderer or explicitly stop the process after confirmation.
 
 ### Tabs versus panes
 
@@ -163,6 +164,34 @@ serve those files at that origin. For an installed development build use `mobile
 with the same environment. Plain WS is allowed **only for loopback in development**
 for the isolated browser test; preview builds require WSS.
 
+### Browse and edit the project's real files
+
+The connected daemon must include desktop [PR #36](https://github.com/concors-dev/concors/pull/36)
+and advertise `project-files` (plus `project-file-create` for creation). Updating the phone
+alone cannot enable files on an older running daemon. No control-plane/server PR is needed.
+Upgrade/restart that daemon when it is safe for your sessions, or test with a separate current daemon.
+
+1. Open a project, then tap the top-right **Files** button. Swipe left on the chat surface also
+   reveals Files from the right; swipe right on the file surface or tap **Back to chat** to return.
+   Swipe right from chat still opens the project sidebar. Inputs, editors, code blocks and terminal
+   controls keep their own gestures; the buttons always work.
+2. Browse the project's registered root directory. Expand folders, filter loaded filenames,
+   toggle hidden files, refresh, or create a file/folder with the tree's toolbar.
+3. Tap a Markdown file for its rendered preview and **Edit source** to change it. Other supported
+   text files open in the shared desktop CodeMirror editor. **File options** contains Find in file,
+   wrap, Vim, copy and reload. **Save** writes to the daemon machine, not the phone.
+4. Use the open-file strip to switch documents; the folder button returns to the directory tree.
+   Chat/file drafts survive navigation and connection replacement. Another client's edit triggers
+   conflict review instead of silently replacing its work. Dirty file close/disconnect asks in-app.
+5. Open **Tabs and panes** from chat to manage sessions. A tab groups one or more agent/terminal
+   panes. Mobile displays one selected pane; desktop may show the same panes side by side.
+   File documents are separate client-local editor tabs, not new daemon panes or processes.
+
+Unsaved file drafts are memory-only: save before reloading or closing the app. Browser navigation
+has an unsaved-change guard where supported; mobile OS force-quit cannot be intercepted. The same
+desktop limits apply (UTF-8 text up to 1 MiB, no symlinks/binary previews, no rename/delete).
+See [file behavior and safety boundaries](../../docs/project-files.md).
+
 ### Later: managed cloud connections
 
 Create `apps/mobile/.env.local` from `.env.example`. Set the real HTTPS
@@ -243,3 +272,7 @@ coding-provider fixture (not the mobile demo server). A second desktop protocol 
 verifies shared edits/session IDs, chat/approvals, terminal input, draft-preserving
 reconnects, disconnect without stopping work, cold links and zero cloud API requests.
 It does not claim a real provider account or physical device was tested.
+The direct suite also exercises real directory reads, Markdown links, file/folder creation,
+explicit saves, competing disk edits, in-app discard guards, draft-preserving reconnects,
+file-view swipes and 320/390/430px editor layouts. File tests use disposable temporary projects;
+they never edit the user's existing workspace.
