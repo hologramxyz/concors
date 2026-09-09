@@ -1,0 +1,59 @@
+name: Mobile iOS native
+
+on:
+  pull_request:
+    paths:
+      - "apps/mobile/**"
+      - "apps/desktop/src/**"
+      - "packages/client-core/**"
+      - "packages/protocol/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/mobile-ios.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  simulator:
+    name: Native iOS glass and composer
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      APP_VARIANT: preview
+      EXPO_PUBLIC_DEMO: "true"
+      EXPO_NO_TELEMETRY: "1"
+      CI: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @concors/mobile assets
+      - name: Create isolated iOS 26 simulator
+        id: simulator
+        run: |
+          MOBILE_SIMULATOR_ID=$(xcrun simctl create "Concors Glass CI" com.apple.CoreSimulator.SimDeviceType.iPhone-17 com.apple.CoreSimulator.SimRuntime.iOS-26-5)
+          echo "id=$MOBILE_SIMULATOR_ID" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$MOBILE_SIMULATOR_ID"
+          xcrun simctl bootstatus "$MOBILE_SIMULATOR_ID" -b
+      - name: Build and install unsigned native Release app
+        working-directory: apps/mobile
+        run: pnpm exec expo run:ios --configuration Release --no-bundler --device "${{ steps.simulator.outputs.id }}"
+      - name: Install native UI test runner
+        run: brew install mobile-dev-inc/tap/maestro
+      - name: Exercise real SwiftUI controls and native text input
+        run: maestro --device "${{ steps.simulator.outputs.id }}" test --test-output-dir apps/mobile/test-results/native apps/mobile/e2e/native/glass.yaml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mobile-ios-native-evidence
+          path: apps/mobile/test-results/native/
