@@ -4,9 +4,35 @@
 
 Client/demo/shared lifecycle/protocol integration/build profiles are implemented.
 No signed IPA/AAB, store release or production validation is implied by bundle export.
-Test the UI now; have Pierre implement [server contracts](mobile-backend.md); prepare
+Test the UI now; implement the [authenticated workspace bridge](mobile-backend.md) on
+the newly added machine agent; prepare
 team-owned Expo/Apple/Google accounts in parallel. Live end-to-end testing requires a
 provisioned daemon behind the authenticated gateway.
+
+## Next implementation slices
+
+1. **Selector polish (client):** tab/pane and machine bottom drawers are implemented;
+   choose a pane to navigate, and keep the sidebar open when choosing a machine.
+2. **Live workspace (companion backend change):** retain the machine agent's existing
+   TLS/JWT access layer, add an authenticated Concors v1 bridge to the loopback daemon,
+   and advertise that capability. Agree the versioned route/handshake before wiring
+   the native transport. The earlier one-use `/connect` proposal is not deployed.
+3. **First real acceptance:** identify a non-customer test account/machine, run
+   `pnpm --filter @concors/mobile live:preflight`, then prove that desktop and phone see
+   the same real project, tabs, agent history and tool events. Test send, approval,
+   interrupt and terminal input, plus background/reconnect without duplicate commands.
+   Preflight itself is read-only and cannot satisfy this acceptance.
+4. **Installed previews, in parallel:** link team Expo/Apple/Google accounts, produce
+   signed preview builds, and execute the device matrix below. Safari demo success
+   is not evidence of native WebView, signing, background or notification correctness.
+5. **Release services and submission:** finish push/revocation, account deletion,
+   public policy/support/deletion pages and domain association files; resolve the
+   storefront billing/provisioning policy; collect evidence before enabling production.
+
+The client now has an API method for the actual machine JWT endpoint and retains agent
+metadata. It does not silently connect the chat UI to the terminal-only protocol.
+Live testing still needs the selected account/machine; native builds need team-owned
+project and signing configuration. The production checklist remains intentionally false.
 
 The mobile client now reuses the desktop workspace, including account creation,
 machine provisioning and billing/checkout UI. Commands still run remotely and the

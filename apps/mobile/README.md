@@ -35,12 +35,15 @@ phone-size mode. Select **Explore demo**; it opens straight into the agent chat.
 4. Tap your **name/avatar** at the bottom of the sidebar for the animated Account drawer,
    then **Settings** (or **Sign out**). The settings
    picker contains account, appearance, notifications, SSH, billing, machines and diagnostics.
-   Search opens an animated bottom drawer without dismissing the sidebar.
+   Search and the machine selector open animated bottom drawers without dismissing the sidebar.
+   The machine drawer shows each machine's current status and selection.
 5. Use the floating glass **…** at the top for **New tab** or **Add pane to this tab**,
    then choose Agent, Terminal, Codex, Claude Code or OpenCode.
    That same menu offers rename, pane profile and confirmed close (no left/right reordering).
    The sidebar button, picker and actions button are separate translucent, backdrop-blurred controls.
-   The picker shows tab headings with pane counts and indented panes; tapping it again closes it.
+   The picker opens a bottom drawer with tab headings, pane counts and indented panes.
+   Choose a pane to switch views, or dismiss with Close, Escape or the backdrop.
+   Tapping the covered trigger hits the backdrop and closes the drawer without reopening it.
    Desktop-only split/arrange/resize actions are intentionally absent on phones.
 6. Add a project from the sidebar's animated drawer (open/create/clone). Expand tool calls, diffs,
    plans, thinking and sub-agent updates. Try `ask me a question` for an input request.
@@ -103,6 +106,25 @@ Create `apps/mobile/.env.local` from `.env.example`. Set the real HTTPS
 `EXPO_PUBLIC_API_URL`, disable `EXPO_PUBLIC_DEMO`, then run `pnpm mobile:dev`.
 Native sign-up/sign-in, inventory and organization switching use the existing API.
 Unavailable gateway/push/deletion capabilities are shown honestly; failures are retryable.
+
+The latest upstream machine agent provides authenticated terminal sessions, not the
+Concourse workspace/chat protocol. Its `/token` API is now supported in the shared API
+client, but is deliberately **not wired to the workspace transport** until the authenticated
+bridge is implemented. See [the current backend assessment](../../docs/mobile-backend.md).
+
+With an existing session credential supplied privately through your local environment,
+run the read-only prerequisite check from the repository root:
+
+```bash
+pnpm --filter @concors/mobile live:preflight
+```
+
+It requires `CONCORS_PREFLIGHT_API_URL` (HTTPS), `CONCORS_PREFLIGHT_MACHINE_ID` and
+`CONCORS_PREFLIGHT_TOKEN`. Do not put the token in command arguments, source control,
+`EXPO_PUBLIC_*` variables or chat. The command only reads the account, machines and
+advertised capabilities. It does not provision anything, mint access tokens, create
+sessions or verify a live chat. Missing workspace capability returns a nonzero exit
+status with an explanation; a successful preflight only permits attempting the next test.
 
 For private integration testing, `EXPO_PUBLIC_DEV_DAEMON_URL` accepts a clean WSS
 gateway URL. It supplies **no authentication itself**: use an already protected private
