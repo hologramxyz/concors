@@ -75,7 +75,7 @@ const config: ExpoConfig = {
       "expo-notifications",
       {
         icon: "./assets/notification-icon.png",
-        color: "#335dce",
+        color: "#20211f",
         defaultChannel: "agent-attention",
       },
     ],
