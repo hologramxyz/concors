@@ -202,6 +202,7 @@ describe("ApiClient billing", () => {
   it("reads the billing status", async () => {
     const status = {
       configured: true,
+      testMode: true,
       hasPaymentMethod: true,
       card: { brand: "visa", last4: "4242", expMonth: 9, expYear: 2027 },
       paymentFailedAt: null,
@@ -248,5 +249,48 @@ describe("ApiClient billing", () => {
 
     await expect(client(fetch).listInvoices()).resolves.toEqual([invoice]);
     expect(lastCall(fetch).url).toBe("https://api.example/api/v1/billing/invoices");
+  });
+});
+
+describe("verified billing checkout and subscriptions", () => {
+  it("keeps checkout confirmation explicitly scoped to the organization", async () => {
+    const fetch = vi.fn(async () =>
+      json({ sessionId: "cs_test_1", url: "https://checkout.stripe.test/s" }),
+    );
+    const api = client(fetch);
+    await expect(api.createBillingSetup({ organizationId: "org1" })).resolves.toEqual({
+      sessionId: "cs_test_1",
+      url: "https://checkout.stripe.test/s",
+    });
+    expect(JSON.parse(String(lastCall(fetch).init.body))).toEqual({ organizationId: "org1" });
+    fetch.mockResolvedValue(json({ status: "complete" }));
+    await expect(api.confirmBillingSetup("cs_test_1", { organizationId: "org1" })).resolves.toEqual(
+      { status: "complete" },
+    );
+    expect(lastCall(fetch).url).toBe("https://api.example/api/v1/billing/setup/confirm");
+    expect(JSON.parse(String(lastCall(fetch).init.body))).toEqual({
+      sessionId: "cs_test_1",
+      organizationId: "org1",
+    });
+  });
+  it("validates subscriptions and sends the organization scope", async () => {
+    const subscription = {
+      id: "sub_1",
+      machineId: "m1",
+      machineName: "build-agent",
+      region: "US-EAST-VA",
+      size: "small",
+      status: "active",
+      monthlyPrice: MACHINE.monthlyPrice,
+      currentPeriodEnd: MACHINE.paidUntil,
+      cancelAtPeriodEnd: false,
+    };
+    const fetch = vi.fn(async () => json({ subscriptions: [subscription] }));
+    await expect(
+      client(fetch).listMachineSubscriptions({ organizationId: "org 2" }),
+    ).resolves.toEqual([subscription]);
+    expect(lastCall(fetch).url).toBe(
+      "https://api.example/api/v1/billing/subscriptions?organizationId=org+2",
+    );
   });
 });

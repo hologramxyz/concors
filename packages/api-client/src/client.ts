@@ -4,6 +4,11 @@ import { ApiError, ApiNetworkError } from "./errors.ts";
 import {
   AuthResponseSchema,
   BillingStatusSchema,
+  SetupCheckoutSchema,
+  SetupConfirmationSchema,
+  SubscriptionListSchema,
+  type SetupCheckout,
+  type MachineSubscription,
   ErrorBodySchema,
   InvoiceListSchema,
   MachineCatalogSchema,
@@ -19,6 +24,7 @@ import {
   type BillingStatus,
   type Invoice,
   type Machine,
+  type Money,
   type MachineCatalog,
   type MachineCosts,
   type Me,
@@ -56,6 +62,7 @@ export interface OrganizationScope {
 }
 
 export interface CreateMachineInput extends OrganizationScope {
+  readonly expectedMonthlyPrice?: Money;
   /** Lowercase letters, digits and hyphens; unique among the organization's live machines. */
   readonly name: string;
   /** Region id from the catalog. */
@@ -272,6 +279,29 @@ export class ApiClient {
       schema: RedirectSchema,
     });
     return data.url;
+  }
+
+  async createBillingSetup(scope: OrganizationScope = {}): Promise<SetupCheckout> {
+    const { data } = await this.#request("POST", "/api/v1/billing/setup", {
+      body: scope,
+      schema: SetupCheckoutSchema,
+    });
+    return data;
+  }
+
+  async confirmBillingSetup(sessionId: string, scope: OrganizationScope = {}) {
+    const { data } = await this.#request("POST", "/api/v1/billing/setup/confirm", {
+      body: { ...scope, sessionId },
+      schema: SetupConfirmationSchema,
+    });
+    return data;
+  }
+
+  async listMachineSubscriptions(scope: OrganizationScope = {}): Promise<MachineSubscription[]> {
+    const { data } = await this.#request("GET", withScope("/api/v1/billing/subscriptions", scope), {
+      schema: SubscriptionListSchema,
+    });
+    return data.subscriptions;
   }
 
   /** URL of the Stripe customer portal (change card, download invoices). 404 before any card. */
