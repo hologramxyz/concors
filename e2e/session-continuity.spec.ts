@@ -49,12 +49,14 @@ test("Codex and Claude panes reconnect to the same processes, then recover lost 
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await page.getByRole("button", { name: "Pane actions", exact: true }).click();
     await page.getByRole("menuitemradio", { name: "Codex", exact: true }).click();
-    await expect(page.getByLabel("Terminal output")).toContainText("SESSION_PID:");
+    await expect(page.getByLabel("Terminal output").filter({ visible: true })).toContainText(
+      "SESSION_PID:",
+    );
     await page.getByRole("button", { name: "Pane actions", exact: true }).click();
     await page.getByRole("menuitem", { name: "Split horizontally", exact: true }).click();
     await page.getByRole("button", { name: "Pane actions", exact: true }).last().click();
     await page.getByRole("menuitemradio", { name: "Claude Code", exact: true }).click();
-    const terminals = page.getByLabel("Terminal output");
+    const terminals = page.getByLabel("Terminal output").filter({ visible: true });
     await expect(terminals).toHaveCount(2);
     await expect(terminals.last()).toContainText("SESSION_PID:");
     const pids = await terminals.allTextContents();
@@ -62,7 +64,7 @@ test("Codex and Claude panes reconnect to the same processes, then recover lost 
       .locator("[data-pane-id]")
       .evaluateAll((nodes) => nodes.map((n) => n.getAttribute("data-pane-id")));
     await second.goto("/");
-    await expect(second.getByLabel("Terminal output")).toHaveCount(2);
+    await expect(second.getByLabel("Terminal output").filter({ visible: true })).toHaveCount(2);
     await gateway.close();
     live = false;
     await expect(terminals.first()).toContainText("SESSION_PID:");
@@ -89,9 +91,9 @@ test("Codex and Claude panes reconnect to the same processes, then recover lost 
     process.kill(host.pid, "SIGKILL");
     await expect(terminals.first()).toContainText("RECOVERY_PICKER_READY", { timeout: 20000 });
     await expect(terminals.last()).toContainText("RECOVERY_PICKER_READY", { timeout: 20000 });
-    await expect(second.getByLabel("Terminal output").last()).toContainText(
-      "RECOVERY_PICKER_READY",
-    );
+    await expect(
+      second.getByLabel("Terminal output").filter({ visible: true }).last(),
+    ).toContainText("RECOVERY_PICKER_READY");
     await expect(page.getByText("Session interrupted", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Start new session" })).toHaveCount(0);
     await expect(page.getByRole("alert")).toHaveCount(0);
