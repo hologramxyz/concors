@@ -10,7 +10,7 @@ import { NewTabMenu } from "./new-tab-menu";
 import { TAB_PROFILES } from "./tab-profiles";
 import { ContextMenu } from "radix-ui";
 import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { FolderOpen, Pencil, Pin, Plus, X } from "lucide-react";
+import { FolderOpen, Pencil, Plus, X } from "lucide-react";
 import type { PaneProfile, WorkspaceOperation, WorkspaceSnapshot } from "@concors/protocol";
 import { Button } from "@/components/ui/button";
 import { FormDialog } from "./form-dialog";
@@ -289,26 +289,6 @@ export function ProjectWorkspace({
               onCreate={createTab}
             />
           </div>
-          {project.directoryMode === "follow" && (
-            <button
-              type="button"
-              aria-label="Pin to this folder"
-              title={`Pin ${project.directory}. This workspace currently follows its first terminal.`}
-              disabled={!canEdit}
-              onClick={() =>
-                onCommand({
-                  kind: "project.pin",
-                  projectId: project.id,
-                  expectedVersion: project.version,
-                  directory: project.directory,
-                })
-              }
-              className="flex shrink-0 items-center gap-1 rounded p-1 text-ui text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
-            >
-              <Pin className="size-4" />
-              <span className="hidden sm:inline">Pin folder</span>
-            </button>
-          )}
           <FilesToggle />
         </div>
         {launchError && (

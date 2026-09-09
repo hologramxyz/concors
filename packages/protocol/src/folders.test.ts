@@ -63,19 +63,6 @@ it("keeps existing projects pinned and anchors fresh workspaces to their origina
   expect(f.state().projects[0]?.directoryMode).toBe("pinned");
   expect(f.state().projects[0]?.followPaneId).toBeUndefined();
 });
-it("requires the displayed directory when pinning, and preserves the anchor on conflict", () => {
-  const f = fixture();
-  expect(() =>
-    f.run({ kind: "project.pin", projectId: f.projectId, expectedVersion: 1, directory: "/stale" }),
-  ).toThrow("Folder changed");
-  f.run({
-    kind: "project.pin",
-    projectId: f.projectId,
-    expectedVersion: 1,
-    directory: "/home/dev",
-  });
-  expect(f.state().projects[0]?.directoryMode).toBe("pinned");
-});
 it("inherits the source pane directory without retargeting other panes", () => {
   const f = fixture();
   const source = f.state().projects[0]!.tabs[0]!.nodes[0]!;

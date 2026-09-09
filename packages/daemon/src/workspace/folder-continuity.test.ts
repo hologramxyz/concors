@@ -127,12 +127,11 @@ it("follows only the original shell and saves open files to their original folde
       });
       store.observeDirectory(sessionId, second, second);
     }
-    run({ kind: "project.pin", projectId, expectedVersion: 3, directory: second });
     store.observeDirectory(sessionId, first, first);
     expect(store.snapshot().projects[0]).toMatchObject({
-      directory: second,
-      name: "second",
-      directoryMode: "pinned",
+      directory: first,
+      name: "first",
+      directoryMode: "follow",
     });
     expect(store.observeDirectory(id(), root, root)).toBe(false);
   } finally {

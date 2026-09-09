@@ -75,21 +75,11 @@ test("new workspaces follow the original shell, inherit folders and preserve ope
     await tree.getByRole("button", { name: "same.ts", exact: true }).click();
     await expect(editor).toContainText("const other = 2");
     await expect(page.getByRole("button", { name: /^same.ts/ })).toHaveCount(3); // two tabs and one file tree entry
-    await page.getByRole("button", { name: "Pin to this folder", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Pin to this folder", exact: true })).toHaveCount(
-      0,
-    );
     await page.getByRole("button", { name: "Terminal", exact: true }).click();
     await cd(page, panes.first(), src);
-    await page.waitForTimeout(650);
-    await expect(page.getByRole("heading", { name: "another-folder", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "folder-flow", exact: true })).toBeVisible();
     await second.reload();
-    await expect(
-      second.getByRole("heading", { name: "another-folder", exact: true }),
-    ).toBeVisible();
-    await expect(
-      second.getByRole("button", { name: "Pin to this folder", exact: true }),
-    ).toHaveCount(0);
+    await expect(second.getByRole("heading", { name: "folder-flow", exact: true })).toBeVisible();
     await page.screenshot({ path: "test-results/folder-workspaces-desktop.png" });
     expect(
       await page

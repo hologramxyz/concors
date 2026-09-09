@@ -111,14 +111,6 @@ export function applyWorkspaceOperation(
       if (op.kind === "project.remove") {
         state.projects = state.projects.filter((p) => p.id !== project.id);
         if (state.selection?.projectId === project.id) state.selection = null;
-      } else if (op.kind === "project.pin") {
-        if (project.directory !== op.directory)
-          throw new WorkspaceOperationError(
-            "CONFLICT",
-            "Folder changed. Review it before pinning.",
-          );
-        project.directoryMode = "pinned";
-        delete project.followPaneId;
       } else if (op.kind === "tab.create") {
         claim(op.tabId);
         claim(op.paneId);
