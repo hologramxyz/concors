@@ -6,6 +6,7 @@ import {
   OrganizationSchema,
 } from "@concors/api-client";
 import { ClientMessageSchema, DaemonMessageSchema } from "@concors/protocol";
+import { NativeSurfaceSchema, NativeSurfaceEventSchema } from "./native-surfaces.ts";
 
 const id = z.string().min(1).max(200);
 const scope = z.object({ organizationId: id.optional() });
@@ -64,6 +65,7 @@ export const MobileStateSchema = z.object({
   capabilities: MobileCapabilitiesSchema,
   demo: z.boolean(),
   native: z.boolean(),
+  nativeChrome: z.boolean().optional(),
   systemDark: z.boolean(),
   preferences: MobilePreferencesSchema,
   pushEnabled: z.boolean(),
@@ -95,6 +97,16 @@ export const MobileActionSchema = z.discriminatedUnion("kind", [
 export type MobileAction = z.infer<typeof MobileActionSchema>;
 export const MobileRendererMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("ready") }),
+  z.object({
+    type: z.literal("native-surfaces"),
+    scope: id,
+    connectionId: id.nullable(),
+    surfaces: z.array(NativeSurfaceSchema).max(8),
+    viewport: z.object({
+      width: z.number().positive().max(10000),
+      height: z.number().positive().max(10000),
+    }),
+  }),
   z.object({ type: z.literal("protocol"), connectionId: id, message: ClientMessageSchema }),
   z.object({
     type: z.literal("action"),
@@ -106,6 +118,13 @@ export const MobileRendererMessageSchema = z.discriminatedUnion("type", [
 export type MobileRendererMessage = z.infer<typeof MobileRendererMessageSchema>;
 export const MobileHostMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("state"), state: MobileStateSchema }),
+  z.object({
+    type: z.literal("native-event"),
+    scope: id,
+    connectionId: id.nullable(),
+    surfaceId: id,
+    event: NativeSurfaceEventSchema,
+  }),
   z.object({ type: z.literal("protocol"), connectionId: id, message: DaemonMessageSchema }),
   z.object({
     type: z.literal("result"),
