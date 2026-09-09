@@ -48,6 +48,7 @@ export function MobileSelect({
           sideOffset={6}
           collisionPadding={12}
           className="mobile-select-content"
+          onEscapeKeyDown={(event) => event.stopPropagation()}
         >
           <Select.ScrollUpButton className="mobile-select-scroll">
             <ChevronUp className="size-4" />

@@ -157,6 +157,7 @@ function MobileWorkspace({ host }: { host: MobileState }) {
     prior?.blur();
     sidebar.current?.querySelector<HTMLElement>("button")?.focus({ preventScroll: true });
     const keydown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
       if (
         document.querySelector(
           '[role="dialog"]:not([aria-label="Workspace sidebar"]), [role="menu"], [role="listbox"]',
