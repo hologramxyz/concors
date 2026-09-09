@@ -11,6 +11,10 @@ export default function SignInScreen() {
   const theme = useTheme();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [signingUp, setSigningUp] = useState(false);
+  const submit = () =>
+    signingUp ? auth.signUp(name, email, password) : auth.signIn(email, password);
   if (auth.me) return <Redirect href="/(app)" />;
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
@@ -50,6 +54,15 @@ export default function SignInScreen() {
             </Button>
           ) : (
             <>
+              {signingUp && (
+                <Field
+                  label="Name"
+                  value={name}
+                  onChangeText={setName}
+                  autoComplete="name"
+                  maxLength={200}
+                />
+              )}
               <Field
                 label="Email"
                 value={email}
@@ -65,23 +78,47 @@ export default function SignInScreen() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
-                autoComplete="current-password"
-                textContentType="password"
+                autoComplete={signingUp ? "new-password" : "current-password"}
+                textContentType={signingUp ? "newPassword" : "password"}
                 onSubmitEditing={() => {
-                  if (email && password && !auth.loading) void auth.signIn(email, password);
+                  if (
+                    email &&
+                    password &&
+                    !auth.loading &&
+                    (!signingUp || (name.trim() && password.length >= 8))
+                  )
+                    void submit();
                 }}
               />
               <Button
-                disabled={auth.loading || !email.trim() || !password}
+                disabled={
+                  auth.loading ||
+                  !email.trim() ||
+                  !password ||
+                  (signingUp && (!name.trim() || password.length < 8))
+                }
                 onPress={() => {
-                  void auth.signIn(email, password);
+                  void submit();
                 }}
               >
-                {auth.loading ? "Checking session…" : "Sign in"}
+                {auth.loading ? "Checking session…" : signingUp ? "Create account" : "Sign in"}
+              </Button>
+              <Button
+                secondary
+                disabled={auth.loading}
+                onPress={() => {
+                  setSigningUp((value) => !value);
+                  setPassword("");
+                }}
+              >
+                {signingUp
+                  ? "Already have an account? Sign in"
+                  : "New to Concors? Create an account"}
               </Button>
               <Copy muted size={13}>
-                Sign in with your existing Concors account. Your machines and agents continue
-                running while you’re away.
+                {signingUp
+                  ? "Use at least 8 characters for your password. Email verification may be required before signing in."
+                  : "Your machines and agents continue running while you’re away."}
               </Copy>
             </>
           )}
