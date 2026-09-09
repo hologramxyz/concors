@@ -3,7 +3,7 @@
 > A cross-platform client and runtime for orchestrating coding agents locally and in the cloud.
 
 Concors lets you run coding agents such as **Claude Code**, **Codex** and **OpenCode** either on your
-own machine or on a persistent VPS, and drive them from desktop or the new iOS/Android companion.
+own machine or on a persistent VPS, and drive them from desktop or the new iOS/Android client.
 
 > **Status: early-stage.** This repository currently contains the project foundation — the
 > synchronized workspace UI, project opening/creation/cloning, and real terminal sessions with shell/Codex/Claude Code/OpenCode
@@ -53,7 +53,8 @@ Node/TypeScript daemon  (concors-daemon)
 - **API client** (`packages/api-client`) — `ApiClient`, a fetch-based client for the Concors
   control plane (`concors-server`): accounts, organizations, cloud machines. Also host-agnostic, so
   the mobile app shares it.
-- **Mobile client** (`apps/mobile`) — Expo SDK 57 / React Native for iOS and Android.
+- **Mobile client** (`apps/mobile`) — Expo SDK 57 / React Native hosts the shared desktop
+  chat/workspace UI with a swipe sidebar, bottom composer and top tab/pane picker.
   [Try the no-account demo](apps/mobile/README.md) and see the [release gates](docs/mobile-release.md).
 - **Client core** (`packages/client-core`) — host-independent lifecycle, secure token-store
   adapter, transcript merging and notification routing helpers.

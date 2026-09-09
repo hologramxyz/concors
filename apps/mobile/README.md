@@ -1,12 +1,14 @@
 # Concors mobile
 
-One React Native / Expo SDK 57 client for iPhone and Android: Expo Router, SecureStore,
-Expo Notifications, and the existing Concors API/daemon protocol. The terminal is
-bundled xterm.js in an isolated offline WebView, not a remote website.
+Expo SDK 57 / React Native hosts the **actual Concors desktop React workspace** in a
+bundled, offline WebView. The phone shell is chat-first: bottom composer, swipeable
+push sidebar, top tab/pane picker, and modal settings. There is no bottom navigation
+and no second implementation of chat/tool rendering.
 
-**Status: client implementation and testable preview; not store-submission ready.**
+**Status: implemented client and interactive preview, not store-submission ready.**
 Production connectivity, push and deletion require the [server contracts](../../docs/mobile-backend.md).
-Signed builds require team-owned developer accounts. See the [release runbook](../../docs/mobile-release.md).
+Signed builds and physical device checks require team-owned accounts/devices.
+See the [parity matrix](../../docs/mobile-parity.md) and [release runbook](../../docs/mobile-release.md).
 
 ## Try it now — no daemon or account needed
 
@@ -17,88 +19,106 @@ pnpm install --frozen-lockfile
 pnpm mobile:demo
 ```
 
-Open the URL printed by Expo (normally <http://localhost:8081>) in browser phone-size
-device mode. Select **Explore demo → Development → Agent conversation**. Approve the
-request and send a message. Go back and open **Terminal 2** to try input, extra keys,
-reload, and explicit stop confirmation. Commands/responses are simulated through real
-protocol schemas. Creation is deliberately unsupported in this fixed fixture. Refresh
-resets the demo and signs you out; browser credentials are held only in memory.
+Open the printed URL (normally <http://localhost:8081>) in a phone browser or browser
+phone-size mode. Select **Explore demo**; it opens straight into the agent chat.
+
+1. Tap the bottom composer. Enter inserts a newline; the send button submits.
+   Allow the pending request, then send a message to see streaming.
+2. While the approval is pending or an agent is working, send a follow-up to queue it.
+   Attach a small file; switch to Terminal 2 with the top picker and back.
+   Drafts, attachments and queued messages survive pane/tab navigation.
+3. Swipe right on the conversation to open Projects / Agents / Servers.
+   The workspace moves right. Swipe left, press Close sidebar, or tap the workspace
+   to return. Code blocks/terminal controls retain their own gestures.
+4. Open **Settings** in the sidebar: account, theme/corners, notifications, SSH,
+   billing and diagnostics are a drawer over the same workspace.
+5. Use **+** at the top for a new tab; **…** for rename, reorder, split, configure,
+   arrange/resize and confirmed close. The picker groups panes within their tabs.
+6. Add a project from the sidebar (open/create/clone). Expand tool calls, diffs,
+   plans, thinking and sub-agent updates. Try `ask me a question` for an input request.
+   Model, effort, permissions, plan and speed controls use the desktop components.
+7. Select **Terminal 2** for the shared xterm terminal: type, use extra keys,
+   reload the renderer or explicitly stop the process after confirmation.
+
+Everything in the demo is simulated, including commands, repository setup, SSH,
+billing and machines. New demo machines remain in simulated provisioning; use the
+original machine for workspace tests. Refresh resets the fixture and signs out;
+browser credentials are memory-only. The demo cannot verify a live gateway or push.
 
 ## Run on a phone / simulator
 
-Install [Xcode or Android Studio prerequisites](https://docs.expo.dev/guides/local-app-overview/).
 Use development builds, **not Expo Go**, for the complete native integration.
+Install [Xcode or Android Studio prerequisites](https://docs.expo.dev/guides/local-app-overview/).
 
 ```bash
-# macOS + Xcode: iOS simulator (add --device for an attached iPhone)
+# macOS + Xcode; add --device for an attached iPhone
 EXPO_PUBLIC_DEMO=true pnpm --filter @concors/mobile ios
 # Android Studio + emulator or USB-debugging device
 EXPO_PUBLIC_DEMO=true pnpm --filter @concors/mobile android
 ```
 
-On PowerShell, set `$env:EXPO_PUBLIC_DEMO="true"` before the command instead. Stop and
-restart Metro when changing demo/real environment variables. Alternatively use EAS
-development/simulator builds after linking the team's Expo project (release runbook).
-Native push needs physical devices, APNs/FCM credentials and the push service; the demo
-cannot test real delivery.
+On PowerShell set `$env:EXPO_PUBLIC_DEMO="true"` first. Restart Metro after changing
+demo/real environment variables. EAS development/preview builds are also configured;
+link the team's Expo project as described in the release runbook. Native push needs
+physical devices, APNs/FCM credentials and the server integration.
+
+Tapping the real textarea focuses the system keyboard. Mobile Enter inserts a newline;
+Ctrl/Command+Enter sends. Dictation uses the phone keyboard's microphone, not browser
+speech recognition. Attachment capture/selection may request iOS photo/camera/audio
+permission only when explicitly chosen in the system file picker.
 
 ## Connect to the real service
 
-Create `apps/mobile/.env.local` using `.env.example` as a guide. Set the real HTTPS
-`EXPO_PUBLIC_API_URL`, disable `EXPO_PUBLIC_DEMO`, then restart with `pnpm mobile:dev`.
-The current server supports native bearer sign-in and machine inventory. Missing
-mobile capabilities show remote access/push/deletion as unavailable; other failures
-remain visible/retryable.
+Create `apps/mobile/.env.local` from `.env.example`. Set the real HTTPS
+`EXPO_PUBLIC_API_URL`, disable `EXPO_PUBLIC_DEMO`, then run `pnpm mobile:dev`.
+Native sign-up/sign-in, inventory and organization switching use the existing API.
+Unavailable gateway/push/deletion capabilities are shown honestly; failures are retryable.
 
-For private integration tests only, `EXPO_PUBLIC_DEV_DAEMON_URL` accepts a clean WSS
-gateway URL. This override provides **no authentication itself**: use an already
-protected private network/gateway, never expose a bare daemon publicly. It requires
-a real signed-in account/machine selection and bypasses cloud ticket/machine-ID checks.
-Production ignores it. It is not a production access mechanism.
+For private integration testing, `EXPO_PUBLIC_DEV_DAEMON_URL` accepts a clean WSS
+gateway URL. It supplies **no authentication itself**: use an already protected private
+network/gateway, never expose a bare daemon publicly. It requires a real signed-in
+account/machine selection and bypasses cloud ticket/machine-ID checks. Production
+ignores it. This is not a production access mechanism.
 
-`EXPO_PUBLIC_*` values ship in the app: never put secrets in them. Native session tokens
-use device-only secure storage, hydrated before requests. Transcripts/workspace/terminal
-buffers are in-memory on the phone; the daemon remains authoritative.
+`EXPO_PUBLIC_*` values ship in the app: never put secrets in them. Native tokens use
+device-only SecureStore. Transcripts, drafts, workspace and terminal buffers are
+in-memory; the daemon remains authoritative. Reloading the renderer discards unsent
+in-memory drafts. Switching panes does not.
 
-## Implemented scope
+## Source sharing and boundaries
 
-- Existing-account sign-in/restoration, organization switching and sign-out.
-- Machine inventory, capability-gated WSS tickets, projects/tabs/panes; mobile navigation
-  preserves desktop split geometry.
-- Create chat/shell/Codex/Claude Code/OpenCode tabs in existing projects; start/recover
-  sessions through the daemon. Unified chat follows the daemon's Codex adapter only.
-- Streamed chat/history, tool details, approvals/questions, queue/interrupt and advertised
-  model selection.
-- Terminal replay, sequence-gap resync, ownership/input/resize, extra keys, renderer
-  reload, detach-on-leave and separately confirmed process stop.
-- Foreground/network reconnect with fresh tickets/snapshots, no background socket
-  assumption or automatic replay of user mutations.
-- Opt-in push registration/refresh/revocation, validated notification navigation and
-  account-deletion confirmation, all capability-gated.
-- Light/dark presentation, labeled controls, large touch targets and existing-brand icons.
+- `apps/desktop/src/mobile/` is a responsive entry beside the desktop UI, not a fork.
+  It imports the existing composer/timeline/tool/markdown/plan, project controls,
+  xterm terminal, machines, settings and command palette.
+- `apps/mobile/src/workspace/` owns the Expo host, lifecycle, OS clipboard and renderer.
+- `packages/client-core` shares connection lifecycle, token persistence, notification
+  validation and schema-validated protocol/account bridge contracts.
+- The renderer has no credentials, connection tickets, generic fetch RPC, filesystem
+  access, remote scripts or its own network socket. External HTTPS/email links require
+  host confirmation. Navigation is otherwise denied.
+- Phone project/tab/pane selection is local; explicit layout edits use authoritative,
+  version-checked daemon operations. Navigation never sends a process stop.
+- Servers matches the desktop placeholder until server discovery exists upstream.
+  Unified chat uses the same daemon Codex adapter; other profiles are terminals.
+- Billing/provisioning views are source-shared. **Store policy review is a release
+  gate**, not an assumption that desktop checkout can ship unchanged in every store.
 
-Project creation/cloning, provisioning/payment, server previews and arbitrary layout
-editing stay in desktop for this companion release. Cross-organization notification
-links require selecting that organization first. Unauthorized/stale destinations fail closed.
+`pnpm assets` builds the shared offline workspace and generates icons from the desktop
+SVG. Generated HTML and native `ios/`/`android/` projects are ignored. No mobile client
+imports daemon or Tauri runtime implementations.
 
 ## Verification
 
 ```bash
 pnpm mobile:test
-pnpm --filter @concors/api-client test
 pnpm --filter @concors/mobile typecheck
 pnpm exec playwright install chromium
 pnpm test:mobile:e2e
 pnpm mobile:build
 ```
 
-`mobile:build` exports iOS/Android Hermes bundles and web assets, **not signed IPA/AABs**.
-Browser tests exercise the fixture and terminal bridge, not real APNs/FCM or a live daemon.
-See the release runbook for the required native/manual matrix.
-
-`app/` contains routes; `src/` separates agents, terminal, auth, platform adapters and the
-opt-in demo. `packages/client-core` shares lifecycle, token persistence, notification
-validation and transcript merging. No client imports daemon/Tauri implementations.
-`pnpm assets` generates icons from the existing desktop SVG and offline terminal HTML
-from installed xterm packages. HTML and native `ios/`/`android/` projects are generated
-and ignored. Expo-native peers are pinned to avoid incompatible automatic resolution.
+The browser suite covers chat, approvals, streaming, attachments, queue/draft retention,
+model controls, touch swipes, keyboard-sized layouts, project/tab/pane edits, tools,
+settings, terminal and cold links. `mobile:build` exports iOS/Android Hermes bundles and
+web assets, **not signed IPA/AABs**. These checks do not replace the physical-device,
+real-backend, accessibility and store-policy matrix in the release runbook.

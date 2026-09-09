@@ -8,9 +8,12 @@ Test the UI now; have Pierre implement [server contracts](mobile-backend.md); pr
 team-owned Expo/Apple/Google accounts in parallel. Live end-to-end testing requires a
 provisioned daemon behind the authenticated gateway.
 
-First release: existing-account companion, no subscription purchase, machine provisioning,
-checkout links or downloaded-code execution on the phone. Commands run remotely. This
-scope is **not a guarantee of approval**: review the actual service against
+The mobile client now reuses the desktop workspace, including account creation,
+machine provisioning and billing/checkout UI. Commands still run remotely and the
+application UI is bundled, not downloaded at runtime. **Billing and provisioning need
+a storefront-specific policy decision before production**; do not assume the desktop
+checkout flow can ship unchanged. The production readiness checklist blocks release
+until this audit is complete. This scope is **not a guarantee of approval**: review the actual service against
 [Apple guidelines](https://developer.apple.com/app-store/review/guidelines/) and Play
 policies, particularly remote execution and digital services.
 
@@ -82,7 +85,10 @@ backgrounding or APNs/FCM.
   terminal throughout review. Explain remote execution; do not use customer data.
 - Recheck encryption/export compliance (current HTTPS/WSS config declares no non-exempt
   encryption), dependency privacy manifests and permissions in the generated binary.
-  Microphone/media permissions are blocked in config.
+  Android broad media/storage/recording permissions remain blocked. iOS attachment
+  selection/capture includes purpose descriptions for photos, camera and video audio;
+  exercise permission denial as well as success. Chat dictation uses the OS keyboard.
+  See the [WebView upload requirements](https://github.com/react-native-webview/react-native-webview/blob/master/docs/Guide.md#add-support-for-file-upload).
 - Start required closed testing early. Applicable new personal Google accounts require
   12 opted-in testers continuously for 14 days before production access; check the
   [current account requirements](https://support.google.com/googleplay/android-developer/answer/14151465).
