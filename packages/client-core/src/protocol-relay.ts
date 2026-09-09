@@ -19,6 +19,7 @@ export type RelayConnection = Pick<
   | "executeWorkspace"
   | "requestAgent"
   | "requestProject"
+  | "requestFile"
   | "requestTerminal"
   | "sendTerminalInput"
 >;
@@ -77,6 +78,9 @@ export function createProtocolRelay(
           break;
         case "project.request":
           emit(await connection.requestProject(message.operation, message.requestId));
+          break;
+        case "file.request":
+          emit(await connection.requestFile(message.operation, message.requestId));
           break;
         case "terminal.request": {
           const operation = message.operation;
