@@ -35,7 +35,7 @@ export type WorkspaceTab = z.infer<typeof WorkspaceTabSchema>;
 export const WorkspaceProjectSchema = z.object({
   id: Id,
   name: Name,
-  directory: z.string().trim().min(1).max(4096),
+  directory: z.string().min(1).max(4096),
   directoryMode: z.enum(["follow", "pinned"]).optional(),
   followPaneId: Id.optional(),
   version: Version,

@@ -86,9 +86,9 @@ export class TerminalManager {
                 return;
               const { directory, root } = await directoryIdentity(observed);
               if (this.#closed || runtime.info.status !== "running") return;
+              const changed = this.#store.observeDirectory(runtime.info.id, directory, root);
               runtime.observeDirectory(directory);
-              if (this.#store.observeDirectory(runtime.info.id, directory, root))
-                this.#workspaceChanged();
+              if (changed) this.#workspaceChanged();
             } catch {
               /* A deleted or inaccessible folder must not disrupt its running shell. */
             }

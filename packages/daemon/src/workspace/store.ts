@@ -189,9 +189,13 @@ export class WorkspaceStore {
       pane.directory = directory;
       if (project.directoryMode === "follow" && project.followPaneId === pane.id) {
         project.directory = root;
-        project.name = root.split(/[\\/]/).filter(Boolean).at(-1)?.slice(0, 120) || root;
+        project.name =
+          root.split(/[\\/]/).filter(Boolean).at(-1)?.trim().slice(0, 120) || "Workspace";
       }
       state.revision++;
+      WorkspaceSnapshotSchema.parse(state);
+      if (Buffer.byteLength(JSON.stringify(state)) > 512 * 1024)
+        throw new Error("Workspace metadata exceeds 512 KiB");
       this.rememberDirectories(state);
       this.#db.prepare("UPDATE workspace SET snapshot = ? WHERE id = 1").run(JSON.stringify(state));
       this.#db.exec("COMMIT");
@@ -204,8 +208,11 @@ export class WorkspaceStore {
 
   projectSetups(): ProjectSetup[] {
     return this.#db
-      .prepare("SELECT setup FROM project_setups ORDER BY rowid")
+      .prepare(
+        "SELECT setup FROM project_setups ORDER BY (json_extract(setup, '$.status') = 'working') DESC, rowid DESC LIMIT 64",
+      )
       .all()
+      .reverse()
       .map((row) => ProjectSetupSchema.parse(JSON.parse(String(row["setup"]))));
   }
   reserveProjectSetup(request: ProjectRequest, setup: ProjectSetup): boolean {
@@ -219,8 +226,6 @@ export class WorkspaceStore {
         throw new Error("Project setup ID already used with different parameters");
       return false;
     }
-    if (this.projectSetups().length >= 64)
-      throw new Error("Project setup history limit reached (64)");
     this.#db
       .prepare("INSERT INTO project_setups (id, request, setup) VALUES (?, ?, ?)")
       .run(setup.id, JSON.stringify(request), JSON.stringify(setup));

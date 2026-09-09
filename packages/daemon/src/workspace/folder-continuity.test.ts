@@ -117,6 +117,16 @@ it("follows only the original shell and saves open files to their original folde
     expect(await readFile(join(first, "same.txt"), "utf8")).toBe("saved draft");
     expect(await readFile(join(second, "same.txt"), "utf8")).toBe("other folder");
     expect(() => store.fileDirectory(projectId, root)).toThrow("does not belong");
+    if (process.platform !== "win32") {
+      const whitespaceFolder = join(root, "   ");
+      await mkdir(whitespaceFolder);
+      store.observeDirectory(sessionId, whitespaceFolder, whitespaceFolder);
+      expect(store.snapshot().projects[0]).toMatchObject({
+        name: "Workspace",
+        directory: whitespaceFolder,
+      });
+      store.observeDirectory(sessionId, second, second);
+    }
     run({ kind: "project.pin", projectId, expectedVersion: 3, directory: second });
     store.observeDirectory(sessionId, first, first);
     expect(store.snapshot().projects[0]).toMatchObject({
