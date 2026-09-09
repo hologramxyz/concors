@@ -20,11 +20,6 @@ const config: ExpoConfig = {
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false,
       NSAppTransportSecurity: { NSAllowsArbitraryLoads: false },
-      NSPhotoLibraryUsageDescription: "Choose a photo to attach to an agent message.",
-      NSCameraUsageDescription:
-        "Take a photo or video only when you choose to attach one to an agent message.",
-      NSMicrophoneUsageDescription:
-        "Include audio only when you choose to record a video attachment. Keyboard dictation is managed by iOS.",
     },
     ...(production ? { associatedDomains: ["applinks:concors.dev"] } : {}),
   },
@@ -38,6 +33,7 @@ const config: ExpoConfig = {
       monochromeImage: "./assets/notification-icon.png",
     },
     blockedPermissions: [
+      "android.permission.CAMERA",
       "android.permission.RECORD_AUDIO",
       "android.permission.READ_MEDIA_IMAGES",
       "android.permission.READ_MEDIA_VIDEO",

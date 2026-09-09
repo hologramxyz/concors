@@ -1,0 +1,83 @@
+name: Mobile Android native
+
+on:
+  pull_request:
+    paths:
+      - "apps/mobile/**"
+      - "apps/desktop/src/**"
+      - "packages/client-core/**"
+      - "packages/protocol/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/mobile-android.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    name: Android release build and native UI
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      APP_VARIANT: preview
+      EXPO_PUBLIC_DEMO: "true"
+      EXPO_NO_TELEMETRY: "1"
+      CI: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @concors/mobile assets
+      - name: Generate native Android project
+        working-directory: apps/mobile
+        run: pnpm exec expo prebuild --platform android --no-install
+      - name: Build standalone APK and AAB with a disposable debug signing key
+        # Preview identity and demo data only. Neither artifact may be submitted to a store.
+        working-directory: apps/mobile/android
+        run: ./gradlew :app:assembleRelease :app:bundleRelease -PreactNativeArchitectures=arm64-v8a,x86_64 --max-workers=2 --no-daemon
+      - name: Audit target SDK, permissions and 16 KB native alignment
+        run: node apps/mobile/scripts/android-artifact-check.mjs apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+      - name: Install pinned native UI test runner
+        run: |
+          curl --fail --location --retry 3 https://github.com/mobile-dev-inc/Maestro/releases/download/cli-2.10.0/maestro.zip --output "$RUNNER_TEMP/maestro.zip"
+          echo '29b675e10cc12080e445e9bfb2e2b4e4dfb9c0f2e30d5884120d258b5e1cd991  maestro.zip' | (cd "$RUNNER_TEMP" && sha256sum --check)
+          unzip -q "$RUNNER_TEMP/maestro.zip" -d "$RUNNER_TEMP/maestro-cli"
+          echo "$RUNNER_TEMP/maestro-cli/maestro/bin" >> "$GITHUB_PATH"
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Exercise installed Android workspace and keyboard
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          arch: x86_64
+          target: google_apis
+          profile: pixel_7
+          disable-animations: true
+          script: |
+            adb install apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+            maestro test --test-output-dir apps/mobile/test-results/android apps/mobile/e2e/native/android.yaml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mobile-android-native-evidence
+          path: |
+            apps/mobile/test-results/android/
+            apps/mobile/android/app/build/outputs/apk/release/*.apk
+            apps/mobile/android/app/build/outputs/bundle/release/*.aab
