@@ -55,11 +55,14 @@ Phone-specific behavior:
   exposing geometry. Each menu targets its own row, including unselected tabs/panes.
   Closing the last pane warns that its tab will also close; hardware close shortcuts remain.
 - Files opens full-screen from the right, with a directory tree and separate open-file strip.
-  Swipe right from chat or the terminal opens it, swipe left returns; the sidebar retains the
+  Swipe left from chat or the terminal opens it, swipe right returns; the sidebar retains the
   opposite gesture. Horizontal terminal gestures are handled before xterm can consume them;
   vertical gestures and taps retain terminal behavior.
   Tree, CodeMirror, Markdown, file links, create, explicit save and conflict review are desktop code.
   Editors preserve their own gestures and do not automatically summon the keyboard on opening.
+  The Files header shares the chat header's translucent CSS glass surfaces, button dimensions,
+  pressed states and accessibility fallback. Its project pill returns to the directory, replacing
+  the separate folder icon. Swiping the header does not activate its buttons.
   Dirty-close/disconnect dialogs are in-app, since sandboxed web renderers cannot use browser modals.
   The host supplies a browser unload guard. Unsaved documents remain memory-only; force-quit/reload
   can discard them, so save first. File access requires the current daemon's file capabilities.

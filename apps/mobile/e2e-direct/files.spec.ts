@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { DaemonConnection, describeDaemonEndpoint } from "@concors/daemon-client";
 import { swipe } from "../e2e/support/swipe";
 
-async function setup(page: Page) {
+async function setup(page: Page, projectName = "Mobile file test") {
   const root = await mkdtemp(join(tmpdir(), "concors-mobile-files-"));
   await mkdir(join(root, "src"));
   await writeFile(join(root, "src/main.ts"), "export const answer = 42;\nconsole.log(answer);\n");
@@ -37,7 +37,7 @@ async function setup(page: Page) {
     });
     expect(result.outcome.status).toBe("accepted");
   };
-  await execute({ kind: "project.add", projectId, name: "Mobile file test", directory: root });
+  await execute({ kind: "project.add", projectId, name: projectName, directory: root });
   const project = desktop.workspace?.projects.find((item) => item.id === projectId);
   if (!project) throw new Error("Test project was not created");
   await execute({
@@ -68,6 +68,83 @@ async function setup(page: Page) {
     },
   };
 }
+
+test("Files keeps shared glass controls and an icon-free directory breadcrumb in tree and editor views", async ({
+  page,
+}) => {
+  const projectName = "A long project directory name that must fit comfortably on a small phone";
+  const { ui, cleanup } = await setup(page, projectName);
+  try {
+    const toggle = ui.getByRole("button", { name: "Project files", exact: true });
+    const chatStyle = await toggle.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        background: style.backgroundColor,
+        blur: style.backdropFilter,
+        radius: style.borderRadius,
+      };
+    });
+    await toggle.click();
+    const files = ui.getByRole("region", { name: "Project files", exact: true });
+    const header = files.locator(".mobile-files-header");
+    const back = header.getByRole("button", { name: "Back to chat" });
+    const directory = header.getByRole("button", { name: "Browse project directory" });
+    await expect(header.getByRole("button")).toHaveCount(2);
+    await expect(header.locator(".mobile-glass")).toHaveCount(2);
+    await expect(header.locator("svg")).toHaveCount(1);
+    await expect(directory).toContainText(projectName);
+    await expect(directory).toHaveAttribute("aria-current", "page");
+    await expect(back).toHaveCSS("border-radius", chatStyle.radius);
+    for (const width of [320, 390, 430]) {
+      await page.setViewportSize({ width, height: 700 });
+      for (const control of [back, directory]) {
+        await expect(control).toHaveCSS("background-color", chatStyle.background);
+        await expect(control).toHaveCSS("backdrop-filter", chatStyle.blur);
+        await expect(control).toHaveCSS("height", "48px");
+      }
+      expect(await header.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(
+        false,
+      );
+    }
+    await files.getByRole("button", { name: "src", exact: true }).click();
+    await files.getByRole("button", { name: "main.ts", exact: true }).click();
+    const code = files.getByRole("textbox", { name: "Code editor: src/main.ts" });
+    await expect(code).toContainText("42");
+    await expect(directory).not.toHaveAttribute("aria-current", "page");
+    await code.fill("Unsaved draft stays here when I browse the directory");
+    const radius = await directory.evaluate((element) => getComputedStyle(element).borderRadius);
+    const box = await directory.boundingBox();
+    if (!box) throw new Error("Files directory breadcrumb is missing");
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await expect(directory).toHaveCSS("border-radius", radius);
+    await expect(directory).toHaveCSS("background-color", chatStyle.background);
+    await page.mouse.up();
+    await expect(files.getByRole("button", { name: "main.ts", exact: true })).toBeVisible();
+    await expect(directory).toHaveAttribute("aria-current", "page");
+    await files
+      .getByRole("navigation", { name: "Open files" })
+      .getByRole("button", { name: /^main.ts/ })
+      .click();
+    await expect(code).toContainText("Unsaved draft stays here");
+    // The title is also a swipe handle; dragging it must not activate its directory action.
+    await page.setViewportSize({ width: 390, height: 700 });
+    await swipe(page, { x: 90, y: 30 }, { x: 350, y: 30 });
+    await expect(ui.locator(".mobile-files")).toHaveCSS("transform", "matrix(1, 0, 0, 1, 390, 0)");
+    await swipe(page, { x: 350, y: 240 }, { x: 35, y: 240 });
+    await expect(code).toContainText("Unsaved draft stays here");
+    await expect(directory).not.toHaveAttribute("aria-current", "page");
+    await page.screenshot({
+      path: "apps/mobile/test-results/direct/mobile-files-glass.png",
+      animations: "disabled",
+    });
+    await page.emulateMedia({ forcedColors: "active" });
+    await expect(back).toHaveCSS("backdrop-filter", "none");
+    await expect(directory).toHaveCSS("backdrop-filter", "none");
+  } finally {
+    await cleanup();
+  }
+});
 
 test("terminal taps and horizontal swipes open real files and the sidebar without losing the session", async ({
   page,
@@ -117,15 +194,15 @@ test("terminal taps and horizontal swipes open real files and the sidebar withou
     await swipe(page, { x: 170, y }, { x: 173, y: y + 180 });
     await expect(shell).toHaveAttribute("data-files-open", "false");
     await expect(shell).toHaveAttribute("data-sidebar-open", "false");
-    await swipe(page, { x: 55, y }, { x: 335, y });
+    await swipe(page, { x: 335, y }, { x: 55, y });
     await expect(files.getByRole("button", { name: "README.md", exact: true })).toBeVisible();
     await expect(shell).toHaveAttribute("data-sidebar-open", "false");
-    await swipe(page, { x: 320, y: 30 }, { x: 70, y: 30 });
+    await swipe(page, { x: 70, y: 30 }, { x: 320, y: 30 });
     await closed();
-    await swipe(page, { x: 335, y }, { x: 55, y });
+    await swipe(page, { x: 55, y }, { x: 335, y });
     await expect(shell).toHaveAttribute("data-sidebar-open", "true");
     await expect(shell).toHaveAttribute("data-files-open", "false");
-    await swipe(page, { x: 30, y: 240 }, { x: 300, y: 240 });
+    await swipe(page, { x: 200, y: 240 }, { x: 30, y: 240 });
     await expect(shell).toHaveAttribute("data-sidebar-open", "false");
     await expect(picker).toHaveAttribute("data-value", selection);
     expect(terminalSession()).toBe(terminalId);
@@ -292,7 +369,7 @@ test("mobile file browsing supports Markdown links, safe creation, hidden files 
         });
       await client.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
     };
-    await swipe(35, 350);
+    await swipe(350, 35);
     await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-files-open", "true");
     const files = ui.getByRole("region", { name: "Project files", exact: true });
     await expect(files.getByRole("button", { name: "README.md", exact: true })).toBeVisible();
@@ -342,9 +419,9 @@ test("mobile file browsing supports Markdown links, safe creation, hidden files 
       path: "apps/mobile/test-results/direct/mobile-file-tree.png",
       animations: "disabled",
     });
-    await swipe(320, 80, 30);
+    await swipe(80, 320, 30);
     await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-files-open", "false");
-    await swipe(330, 30);
+    await swipe(30, 330);
     await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "true");
   } finally {
     await cleanup();
