@@ -39,8 +39,12 @@ export function WorkspaceActions({
   execute,
   command,
   onSelect,
-  onNewTab,
   onNewPane,
+  kind,
+  label,
+  keyboard = false,
+  showTrigger = true,
+  onComplete,
 }: {
   project: WorkspaceProject;
   tab: WorkspaceTab;
@@ -49,8 +53,12 @@ export function WorkspaceActions({
   execute(operation: WorkspaceOperation): Promise<void>;
   command(operation: WorkspaceOperation): void;
   onSelect(target: MobileTarget): void;
-  onNewTab(): void;
   onNewPane(): void;
+  kind: "tab" | "pane";
+  label: string;
+  keyboard?: boolean;
+  showTrigger?: boolean;
+  onComplete?(): void;
 }) {
   const [rename, setRename] = useState(false);
   const [closing, setClosing] = useState<"pane" | "tab" | null>(null);
@@ -62,54 +70,61 @@ export function WorkspaceActions({
     tabId: tab.id,
     paneId: pane.id,
   };
-  useCommand("close-pane", canEdit, () => setClosing("pane"));
-  useCommand("close-tab", canEdit, () => setClosing("tab"));
+  useCommand("close-pane", canEdit && keyboard && kind === "pane", () => setClosing("pane"));
+  useCommand("close-tab", canEdit && keyboard && kind === "tab", () => setClosing("tab"));
   return (
     <>
-      <DropdownMenu>
-        <DropdownMenuTrigger className="mobile-icon mobile-glass" aria-label="Tab and pane actions">
-          <Ellipsis />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-64">
-          <DropdownMenuItem disabled={!canEdit || project.tabs.length >= 32} onSelect={onNewTab}>
-            <Plus /> New tab
-          </DropdownMenuItem>
-          <DropdownMenuItem disabled={!canEdit || tabPanes(tab).length >= 32} onSelect={onNewPane}>
-            <Plus /> Add pane to this tab
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuLabel>{tab.name}</DropdownMenuLabel>
-          <DropdownMenuItem disabled={!canEdit} onSelect={() => setRename(true)}>
-            <Pencil />
-            Rename tab
-          </DropdownMenuItem>
-          <DropdownMenuItem disabled={!canEdit} onSelect={() => setClosing("tab")}>
-            <X />
-            Close tab…
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuLabel>Current pane</DropdownMenuLabel>
-          <DropdownMenuItem disabled={!canEdit} onSelect={() => setClosing("pane")}>
-            <X />
-            Close pane…
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuLabel>Pane profile</DropdownMenuLabel>
-          <DropdownMenuRadioGroup
-            value={pane.profile}
-            onValueChange={(profile) =>
-              command({ kind: "pane.configure", ...target, profile: profile as PaneProfile })
-            }
-          >
-            {Object.entries(PROFILE_LABELS).map(([value, label]) => (
-              <DropdownMenuRadioItem key={value} value={value} disabled={!canEdit}>
-                <PaneProfileIcon profile={value as PaneProfile} />
-                {label}
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {showTrigger && (
+        <DropdownMenu>
+          <DropdownMenuTrigger className="mobile-icon mobile-row-actions" aria-label={label}>
+            <Ellipsis />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-64">
+            {kind === "tab" ? (
+              <>
+                <DropdownMenuItem
+                  disabled={!canEdit || tabPanes(tab).length >= 32}
+                  onSelect={onNewPane}
+                >
+                  <Plus /> Add pane to this tab
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>{tab.name}</DropdownMenuLabel>
+                <DropdownMenuItem disabled={!canEdit} onSelect={() => setRename(true)}>
+                  <Pencil />
+                  Rename tab
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={!canEdit} onSelect={() => setClosing("tab")}>
+                  <X />
+                  Close tab…
+                </DropdownMenuItem>
+              </>
+            ) : (
+              <>
+                <DropdownMenuItem disabled={!canEdit} onSelect={() => setClosing("pane")}>
+                  <X />
+                  Close pane…
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>Pane profile</DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={pane.profile}
+                  onValueChange={(profile) =>
+                    command({ kind: "pane.configure", ...target, profile: profile as PaneProfile })
+                  }
+                >
+                  {Object.entries(PROFILE_LABELS).map(([value, label]) => (
+                    <DropdownMenuRadioItem key={value} value={value} disabled={!canEdit}>
+                      <PaneProfileIcon profile={value as PaneProfile} />
+                      {label}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
       {error && (
         <Dialog open onOpenChange={() => setError(null)}>
           <DialogContent>
@@ -133,7 +148,7 @@ export function WorkspaceActions({
               expectedVersion: project.version,
               tabId: tab.id,
               name: values["name"] ?? "",
-            })
+            }).then(() => onComplete?.())
           }
         />
       )}
