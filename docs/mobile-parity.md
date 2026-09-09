@@ -13,6 +13,10 @@ foreground lifecycle, push, and external-link policy. An explicitly validated br
 relays protocol messages and allowlisted account actions; account credentials and
 connection tickets never enter the renderer. All UI code/fonts/styles are packaged
 with the app. The renderer cannot fetch a remote application or open its own socket.
+New desktop account methods outside the mobile allowlist show an explicit unavailable
+message inside settings rather than crashing the workspace. In particular, the newer
+VPS subscription listing and billing setup-session flow are not mobile-enabled yet;
+sharing their views does not automatically authorize those API operations.
 
 Direct desktop previews now use the same daemon as desktop without cloud login or a
 simulated account. The actual machine ID comes from its snapshot. Direct mode blocks
@@ -104,6 +108,14 @@ Implementation/verification checklist (updated as each slice lands):
 - [x] Rich interactive demo and parity-focused browser tests.
 - [x] iOS/Android Hermes and web export, native project generation, Expo Doctor 21/21.
 - [x] Desktop regression cases and refreshed private preview.
+- [x] Native Expo UI glass headers and Expo GlassEffect agent input; unsigned iOS 26
+      simulator Release build and native UI acceptance passed, with screenshots inspected.
+
+The native glass implementation was exercised on iPhone 17 / iOS 26.5 with Xcode 26.6.
+The test covers native input/expansion, option sheets, Files navigation, draft retention
+and the tabs/panes drawer. Physical-device, older-iOS, Reduce Transparency and Android
+accessibility checks remain release gates; fallbacks are implemented but not claimed
+as physically verified.
 
 Verification on 2026-09-09: 246 unit tests pass (one opt-in API integration test is
 skipped), all 21 phone browser scenarios pass, and all 27 desktop browser scenarios
