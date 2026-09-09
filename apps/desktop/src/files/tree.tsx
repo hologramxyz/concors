@@ -1,9 +1,22 @@
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
-import { ChevronRight, FileCode2, Folder, FolderOpen, Link2, RefreshCw, X } from "lucide-react";
+import {
+  ChevronRight,
+  Eye,
+  EyeOff,
+  FileCode2,
+  FilePlus2,
+  Folder,
+  FolderOpen,
+  FolderPlus,
+  Link2,
+  RefreshCw,
+  X,
+} from "lucide-react";
 import type { FileEntry, WorkspaceProject } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { Button } from "@/components/ui/button";
 import { useFiles } from "./context";
+import { CreateEntry } from "./create-entry";
 
 export function FileTree({
   project,
@@ -15,8 +28,38 @@ export function FileTree({
   onClose(): void;
 }) {
   const files = useFiles();
+  const connection = useContext(TerminalConnectionContext);
   const [generation, setGeneration] = useState(0);
   const [filter, setFilter] = useState("");
+  const [creating, setCreating] = useState<"file" | "directory" | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [showHidden, setShowHidden] = useState(() => {
+    try {
+      return localStorage.getItem("concors.files.show-hidden") === "true";
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem("concors.files.show-hidden", String(showHidden));
+    } catch {
+      /* Keep the current preference when storage is unavailable. */
+    }
+  }, [showHidden]);
+  const canCreate =
+    connection?.state.status === "ready" &&
+    connection.state.daemon.capabilities?.includes("project-file-create");
+  const toggle = useCallback(
+    (path: string) =>
+      setExpanded((current) => {
+        const next = new Set(current);
+        if (next.has(path)) next.delete(path);
+        else next.add(path);
+        return next;
+      }),
+    [],
+  );
   const panel = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (open)
@@ -37,18 +80,62 @@ export function FileTree({
         <FolderOpen className="size-4" />
         <h2 className="flex-1 text-ui font-medium">Files</h2>
         <Button
-          size="icon-xs"
+          size="icon-sm"
           variant="ghost"
-          aria-label="Refresh file tree"
-          onClick={() => setGeneration((value) => value + 1)}
+          aria-label="Close files"
+          title="Close files"
+          onClick={onClose}
         >
-          <RefreshCw />
-        </Button>
-        <Button size="icon-xs" variant="ghost" aria-label="Close files" onClick={onClose}>
-          <X />
+          <X className="size-4" />
         </Button>
       </div>
-      <div className="p-2">
+      <div
+        role="group"
+        aria-label="File actions"
+        className="mx-2 flex shrink-0 items-center gap-1 border-b px-1 pb-2 text-muted-foreground"
+      >
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          aria-label="New file"
+          disabled={!canCreate}
+          title={canCreate ? "New file" : "Update or reconnect the machine to create files"}
+          onClick={() => setCreating("file")}
+        >
+          <FilePlus2 className="size-4" />
+        </Button>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          aria-label="New folder"
+          disabled={!canCreate}
+          title={canCreate ? "New folder" : "Update or reconnect the machine to create folders"}
+          onClick={() => setCreating("directory")}
+        >
+          <FolderPlus className="size-4" />
+        </Button>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          aria-label={showHidden ? "Hide hidden files" : "Show hidden files"}
+          title={showHidden ? "Hide hidden files" : "Show hidden files"}
+          aria-pressed={showHidden}
+          className={showHidden ? "bg-muted text-foreground" : undefined}
+          onClick={() => setShowHidden((value) => !value)}
+        >
+          {showHidden ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
+        </Button>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          aria-label="Refresh file tree"
+          title="Refresh file tree"
+          onClick={() => setGeneration((value) => value + 1)}
+        >
+          <RefreshCw className="size-4" />
+        </Button>
+      </div>
+      <div className="shrink-0 p-2">
         <input
           aria-label="Filter loaded files"
           placeholder="Filter loaded files…"
@@ -57,25 +144,56 @@ export function FileTree({
           className="h-8 w-full rounded-md border bg-transparent px-2 text-ui outline-none focus-visible:ring-1 focus-visible:ring-primary"
         />
       </div>
+      {creating && (
+        <CreateEntry
+          key={creating}
+          project={project}
+          kind={creating}
+          onCancel={() => {
+            setCreating(null);
+            panel.current?.querySelector<HTMLInputElement>("input")?.focus({ preventScroll: true });
+          }}
+          onCreated={(entry) => {
+            setCreating(null);
+            setFilter("");
+            if (entry.path.split("/").some((part) => part.startsWith("."))) setShowHidden(true);
+            setExpanded((current) => {
+              const next = new Set(current);
+              const parts = entry.path.split("/");
+              if (entry.kind === "file") parts.pop();
+              while (parts.length) {
+                next.add(parts.join("/"));
+                parts.pop();
+              }
+              return next;
+            });
+            setGeneration((value) => value + 1);
+            if (entry.kind === "file") {
+              files.open(project, { path: entry.path });
+              if (!files.sidebar.docked) onClose();
+            } else
+              panel.current
+                ?.querySelector<HTMLInputElement>("input")
+                ?.focus({ preventScroll: true });
+          }}
+        />
+      )}
       <div className="min-h-0 flex-1 overflow-auto pb-3" aria-label={`${project.name} directory`}>
         <Directory
-          key={`${project.id}:${generation}`}
           project={project}
           path=""
           depth={0}
           filter={filter.toLowerCase()}
+          showHidden={showHidden}
+          expanded={expanded}
+          onToggle={toggle}
+          generation={generation}
           onOpen={(entry) => {
             files.open(project, { path: entry.path });
             if (!files.sidebar.docked) onClose();
           }}
         />
       </div>
-      <p
-        title={project.directory}
-        className="truncate border-t px-3 py-2 font-mono text-xs text-muted-foreground"
-      >
-        {project.directory}
-      </p>
     </div>
   );
 }
@@ -84,19 +202,26 @@ function Directory({
   path,
   depth,
   filter,
+  showHidden,
+  expanded,
+  onToggle,
+  generation,
   onOpen,
 }: {
   project: WorkspaceProject;
   path: string;
   depth: number;
   filter: string;
+  showHidden: boolean;
+  expanded: Set<string>;
+  onToggle(path: string): void;
+  generation: number;
   onOpen(entry: FileEntry): void;
 }) {
   const connection = useContext(TerminalConnectionContext);
   const status = connection?.state.status;
   const epoch = connection?.workspace?.epoch;
   const [entries, setEntries] = useState<FileEntry[] | null>(null);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [truncated, setTruncated] = useState(false);
   const [retry, setRetry] = useState(0);
@@ -134,17 +259,7 @@ function Directory({
     return () => {
       cancelled = true;
     };
-  }, [connection, status, epoch, project.id, path, retry]);
-  const toggle = useCallback(
-    (path: string) =>
-      setExpanded((current) => {
-        const next = new Set(current);
-        if (next.has(path)) next.delete(path);
-        else next.add(path);
-        return next;
-      }),
-    [],
-  );
+  }, [connection, status, epoch, project.id, path, retry, generation]);
   if (error)
     return (
       <div role="alert" className="space-y-2 p-3 text-ui text-muted-foreground">
@@ -163,6 +278,7 @@ function Directory({
   return (
     <ul className="m-0 list-none p-0">
       {entries
+        .filter((entry) => showHidden || !entry.name.startsWith("."))
         .filter((entry) => entry.kind === "directory" || entry.name.toLowerCase().includes(filter))
         .map((entry) => {
           const directory = entry.kind === "directory",
@@ -186,7 +302,7 @@ function Directory({
                 }
                 disabled={!supported}
                 aria-expanded={directory ? open : undefined}
-                onClick={() => (directory ? toggle(entry.path) : onOpen(entry))}
+                onClick={() => (directory ? onToggle(entry.path) : onOpen(entry))}
                 className="flex w-full items-center gap-1.5 py-1.5 pr-3 text-left text-ui hover:bg-muted focus-visible:bg-muted focus-visible:outline-none disabled:opacity-40"
                 style={{ paddingLeft: `${12 + Math.min(depth, 12) * 14}px` }}
               >
@@ -197,7 +313,7 @@ function Directory({
                 ) : (
                   <span className="w-3 shrink-0" />
                 )}
-                <Icon className="size-3.5 shrink-0 text-muted-foreground" />
+                <Icon className="size-4 shrink-0 text-muted-foreground" />
                 <span className="truncate">{entry.name}</span>
               </button>
               {directory && open && (
@@ -206,13 +322,25 @@ function Directory({
                   path={entry.path}
                   depth={depth + 1}
                   filter={filter}
+                  showHidden={showHidden}
+                  expanded={expanded}
+                  onToggle={onToggle}
+                  generation={generation}
                   onOpen={onOpen}
                 />
               )}
             </li>
           );
         })}
-      {!entries.length && <li className="px-3 py-2 text-ui text-muted-foreground">Empty folder</li>}
+      {!entries.some(
+        (entry) =>
+          (showHidden || !entry.name.startsWith(".")) &&
+          (entry.kind === "directory" || entry.name.toLowerCase().includes(filter)),
+      ) && (
+        <li className="px-3 py-2 text-ui text-muted-foreground">
+          {filter ? "No matching files" : entries.length ? "No visible files" : "Empty folder"}
+        </li>
+      )}
       {truncated && (
         <li className="px-3 py-2 text-ui text-muted-foreground">
           Showing the first 2,000 entries. Browse this folder in a terminal to see all entries.
