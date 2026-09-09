@@ -1,5 +1,6 @@
 import { useCommand } from "@/shortcuts/context";
 import { shortcutLabel } from "@/shortcuts/bindings";
+import { PaneProfileIcon } from "./profile-icon";
 import { TAB_PROFILES } from "./tab-profiles";
 import { useContext, useState } from "react";
 import { CompactLayoutContext } from "@/components/compact-layout";
@@ -28,15 +29,30 @@ export function NewTabMenu({
   onCreate,
   empty = false,
   keyboard = false,
+  paneTarget,
+  tabLimitReached = false,
 }: {
   disabled: boolean;
   onCreate: (profile: PaneProfile, name?: string) => void;
   empty?: boolean;
   keyboard?: boolean;
+  tabLimitReached?: boolean;
+  paneTarget?:
+    { name: string; disabled: boolean; onCreate(profile: PaneProfile): void } | undefined;
 }) {
   const compact = useContext(CompactLayoutContext);
+  const [destination, setDestination] = useState<"tab" | "pane">("tab");
+  const addingPane = compact && destination === "pane" && !!paneTarget;
+  const createDisabled = disabled || (addingPane ? paneTarget.disabled : tabLimitReached);
+  const create = (profile: PaneProfile, name?: string) => {
+    if (addingPane) paneTarget.onCreate(profile);
+    else onCreate(profile, name);
+  };
   const [open, setOpen] = useState(false);
-  useCommand("new-tab", keyboard && !disabled, () => setOpen(true));
+  useCommand("new-tab", keyboard && !disabled, () => {
+    setDestination("tab");
+    setOpen(true);
+  });
   const [configuring, setConfiguring] = useState(false);
   return (
     <>
@@ -46,7 +62,10 @@ export function NewTabMenu({
             className={empty ? "mobile-new-empty" : "mobile-icon"}
             aria-label={empty ? "Create a tab" : "New tab"}
             disabled={disabled}
-            onClick={() => setOpen(true)}
+            onClick={() => {
+              setDestination("tab");
+              setOpen(true);
+            }}
           >
             <Plus className="size-5" />
             {empty && "Create a tab"}
@@ -54,27 +73,58 @@ export function NewTabMenu({
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>New tab</DialogTitle>
+                <DialogTitle>{addingPane ? "Add pane" : "New tab"}</DialogTitle>
                 <DialogDescription>
-                  Start an agent conversation or a terminal in this project.
+                  {addingPane
+                    ? `Add a session inside “${paneTarget.name}”. Mobile shows one pane at a time; desktop adds it beside the current pane.`
+                    : "Create a separate tab with its first chat or terminal pane."}
                 </DialogDescription>
               </DialogHeader>
+              {paneTarget && (
+                <div
+                  className="mobile-session-destination"
+                  role="group"
+                  aria-label="Create in workspace"
+                >
+                  <button
+                    type="button"
+                    aria-pressed={!addingPane}
+                    onClick={() => setDestination("tab")}
+                  >
+                    New tab
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={addingPane}
+                    onClick={() => setDestination("pane")}
+                  >
+                    Add pane to this tab
+                  </button>
+                </div>
+              )}
+              {createDisabled && !disabled && (
+                <p role="status" className="text-sm text-muted-foreground">
+                  {addingPane
+                    ? "This tab has reached its 32-pane limit."
+                    : "This project has reached its 32-tab limit."}
+                </p>
+              )}
               <div className="mobile-session-list">
                 {[...TAB_PROFILES]
                   .sort((a, b) => Number(b.profile === "chat") - Number(a.profile === "chat"))
-                  .map(({ profile, label, icon: Icon }) => (
+                  .map(({ profile, label }) => (
                     <button
                       key={profile}
                       type="button"
                       aria-label={label}
-                      disabled={disabled}
+                      disabled={createDisabled}
                       onClick={() => {
                         setOpen(false);
-                        onCreate(profile);
+                        create(profile);
                       }}
                     >
                       <span className="mobile-session-icon">
-                        <Icon />
+                        <PaneProfileIcon profile={profile} />
                       </span>
                       <span>
                         <span className="block font-medium">{label}</span>
@@ -88,19 +138,21 @@ export function NewTabMenu({
                       </span>
                     </button>
                   ))}
-                <button
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => {
-                    setOpen(false);
-                    setConfiguring(true);
-                  }}
-                >
-                  <span className="mobile-session-icon">
-                    <SlidersHorizontal />
-                  </span>
-                  <span>Configure terminal profile…</span>
-                </button>
+                {!addingPane && (
+                  <button
+                    type="button"
+                    disabled={createDisabled}
+                    onClick={() => {
+                      setOpen(false);
+                      setConfiguring(true);
+                    }}
+                  >
+                    <span className="mobile-session-icon">
+                      <SlidersHorizontal />
+                    </span>
+                    <span>Configure terminal profile…</span>
+                  </button>
+                )}
               </div>
             </DialogContent>
           </Dialog>

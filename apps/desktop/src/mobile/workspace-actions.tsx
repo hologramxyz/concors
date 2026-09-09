@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useCommand } from "@/shortcuts/context";
-import { Ellipsis, Pencil, X, ArrowLeft, ArrowRight } from "lucide-react";
+import { Ellipsis, Pencil, X } from "lucide-react";
 import type {
   PaneProfile,
   WorkspaceOperation,
@@ -28,7 +28,8 @@ import {
 } from "@/components/ui/dialog";
 import { FormDialog } from "@/workspace/form-dialog";
 import { Button } from "@/components/ui/button";
-import { PROFILE_LABELS, type PaneNode } from "./selection";
+import { PaneProfileIcon } from "@/workspace/profile-icon";
+import { PROFILE_LABELS, tabPanes, type PaneNode } from "./selection";
 
 export function WorkspaceActions({
   project,
@@ -57,7 +58,6 @@ export function WorkspaceActions({
     tabId: tab.id,
     paneId: pane.id,
   };
-  const index = project.tabs.findIndex((item) => item.id === tab.id);
   useCommand("close-pane", canEdit, () => setClosing("pane"));
   useCommand("close-tab", canEdit, () => setClosing("tab"));
   return (
@@ -71,36 +71,6 @@ export function WorkspaceActions({
           <DropdownMenuItem disabled={!canEdit} onSelect={() => setRename(true)}>
             <Pencil />
             Rename tab
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            disabled={!canEdit || index <= 0}
-            onSelect={() =>
-              command({
-                kind: "tab.move",
-                projectId: project.id,
-                expectedVersion: project.version,
-                tabId: tab.id,
-                index: index - 1,
-              })
-            }
-          >
-            <ArrowLeft />
-            Move tab left
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            disabled={!canEdit || index >= project.tabs.length - 1}
-            onSelect={() =>
-              command({
-                kind: "tab.move",
-                projectId: project.id,
-                expectedVersion: project.version,
-                tabId: tab.id,
-                index: index + 1,
-              })
-            }
-          >
-            <ArrowRight />
-            Move tab right
           </DropdownMenuItem>
           <DropdownMenuItem disabled={!canEdit} onSelect={() => setClosing("tab")}>
             <X />
@@ -122,6 +92,7 @@ export function WorkspaceActions({
           >
             {Object.entries(PROFILE_LABELS).map(([value, label]) => (
               <DropdownMenuRadioItem key={value} value={value} disabled={!canEdit}>
+                <PaneProfileIcon profile={value as PaneProfile} />
                 {label}
               </DropdownMenuRadioItem>
             ))}
@@ -165,6 +136,9 @@ export function WorkspaceActions({
           <DialogHeader>
             <DialogTitle>Close {closing}?</DialogTitle>
             <DialogDescription>
+              {closing === "pane" &&
+                tabPanes(tab).length === 1 &&
+                "This is the tab’s last pane, so the tab will also close. "}
               This removes the saved {closing} on all connected devices. Machine processes remain
               governed by the daemon's session lifecycle.
             </DialogDescription>
