@@ -7,8 +7,8 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Concors brand tokens from concors-web main (7397675): cobalt, paper, ink,
- * Geist typography, and quiet rules, adapted to light and dark workspaces.
+ * Neutral application colors: paper, ink, and quiet rules in both themes.
+ * Geist typography and the brand mark connect the client to the landing page.
  * shadcn components read these through the `@theme inline` mapping below.
  */
 @theme inline {
@@ -72,10 +72,8 @@
 
 :root {
   --corner-radius: 0.375rem;
-  --brand-cobalt: #335dce;
-  --brand-soft: #a6bdff;
-  --brand-tint: #dfe6fa;
-  --brand-selection: #c7d5ff;
+  color-scheme: light;
+  --selection: #deded9;
 
   --background: #f4f3ef;
   --foreground: #20211f;
@@ -83,26 +81,26 @@
   --card-foreground: var(--foreground);
   --popover: oklch(1 0 0);
   --popover-foreground: var(--foreground);
-  --primary: var(--brand-cobalt);
+  --primary: var(--foreground);
   --primary-foreground: #ffffff;
-  --secondary: oklch(0.965 0.003 280);
+  --secondary: oklch(0.965 0 0);
   --secondary-foreground: var(--foreground);
-  --muted: oklch(0.965 0.003 280);
+  --muted: oklch(0.965 0 0);
   --muted-foreground: #65665f;
-  --accent: oklch(0.955 0.005 280);
+  --accent: oklch(0.955 0 0);
   --accent-foreground: var(--foreground);
   --destructive: oklch(0.6 0.2 25);
   --border: #d3d3cb;
   --input: #d3d3cb;
-  --ring: var(--brand-cobalt);
+  --ring: var(--foreground);
   --success: oklch(0.7 0.17 150);
   --warning: oklch(0.78 0.16 75);
 
   --sidebar: #ecebe6;
-  --sidebar-foreground: oklch(0.4 0.015 280);
+  --sidebar-foreground: oklch(0.4 0 0);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: oklch(0.935 0.006 280);
+  --sidebar-accent: oklch(0.935 0 0);
   --sidebar-accent-foreground: var(--foreground);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
@@ -117,14 +115,16 @@
 }
 
 .dark {
+  color-scheme: dark;
+  --selection: #3b3b3b;
   --background: #141414;
   --foreground: #ededed;
   --card: #1b1b1b;
   --card-foreground: var(--foreground);
   --popover: #1f1f1f;
   --popover-foreground: var(--foreground);
-  --primary: var(--brand-cobalt);
-  --primary-foreground: #ffffff;
+  --primary: var(--foreground);
+  --primary-foreground: var(--background);
   --secondary: #242424;
   --secondary-foreground: var(--foreground);
   --muted: #242424;
@@ -134,7 +134,7 @@
   --destructive: oklch(0.68 0.19 25);
   --border: oklch(1 0 0 / 8%);
   --input: oklch(1 0 0 / 10%);
-  --ring: var(--brand-soft);
+  --ring: var(--foreground);
   --success: oklch(0.72 0.16 150);
   --warning: oklch(0.8 0.15 75);
 
@@ -156,6 +156,8 @@
   html {
     @apply font-sans text-[13px] antialiased;
     font-feature-settings: "cv11", "ss01";
+    accent-color: var(--primary);
+    -webkit-tap-highlight-color: color-mix(in srgb, var(--foreground) 12%, transparent);
     -webkit-text-size-adjust: 100%;
   }
 
@@ -192,8 +194,8 @@
   }
 
   ::selection {
-    background: var(--brand-selection);
-    color: #20211f;
+    background: var(--selection);
+    color: var(--foreground);
   }
 }
 
@@ -456,13 +458,6 @@
 }
 .dark .syntax-token {
   color: var(--token-dark);
-}
-
-/* Cobalt actions stay solid; lighter brand ink keeps links legible on dark surfaces. */
-@layer utilities {
-  .dark .text-primary {
-    color: var(--brand-soft);
-  }
 }
 
 :root {
