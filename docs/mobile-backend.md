@@ -19,6 +19,12 @@ for this direct connection. Desktop's working direct path does not use the propo
 cloud ticket endpoint either. No `concors-server` files or services were changed for
 direct mobile testing. Login/empty-state product design remains deferred.
 
+Project file browsing/editing also uses that existing connection: schema-validated
+`file.request` / `file.result` operations are relayed by the host. The daemon must advertise
+`project-files`, and `project-file-create` separately for creation. An older running desktop
+daemon needs an update before files become available; no cloud gateway or filesystem HTTP
+endpoint is introduced. The renderer still has no credentials or independent network access.
+
 ## What exists now (2026-09-09)
 
 Upstream server revision
