@@ -1,0 +1,117 @@
+name: Daemon release
+
+on:
+  push:
+    tags: [daemon-v*]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daemon-release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: ${{ github.ref_name }}
+  GH_REPO: ${{ github.repository }}
+
+jobs:
+  build:
+    name: Build and test Linux release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require a commit on main
+        run: git merge-base --is-ancestor HEAD origin/main
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Verify tag matches daemon version
+        id: version
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          const { version } = JSON.parse(readFileSync('packages/daemon/package.json', 'utf8'));
+          if (process.env.RELEASE_TAG !== `daemon-v${version}`) {
+            throw new Error(`Tag ${process.env.RELEASE_TAG} must match daemon-v${version}`);
+          }
+          appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\n`);
+          NODE
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm daemon:package
+
+      - name: Test release on clean Ubuntu 24.04
+        env:
+          DAEMON_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          docker run --rm --network none \
+            -e DAEMON_VERSION \
+            -v "$PWD/packages/daemon/dist/release/concors-daemon-linux-x64.tar.gz:/artifact.tar.gz:ro" \
+            -v "$PWD/packages/daemon/scripts/smoke-bundle.ts:/smoke-bundle.ts:ro" \
+            ubuntu:24.04 sh -ec '
+              for tool in node npm pnpm python3 gcc g++ cc make clang; do
+                if command -v "$tool"; then echo "Unexpected preinstalled tool: $tool"; exit 1; fi
+              done
+              mkdir /opt/concors
+              tar -xzf /artifact.tar.gz -C /opt/concors
+              test "$(/opt/concors/concors-daemon/bin/concors-daemon --version)" = "$DAEMON_VERSION"
+              /opt/concors/concors-daemon/bin/node /smoke-bundle.ts --release /opt/concors/concors-daemon
+            '
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: daemon-linux-x64
+          path: packages/daemon/dist/release/concors-daemon-linux-x64.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  publish:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: daemon-linux-x64
+
+      - name: Create release with tested archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DAEMON_VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          gh release create "$RELEASE_TAG" concors-daemon-linux-x64.tar.gz \
+            --verify-tag --title "$RELEASE_TAG" --latest=false \
+            --notes "Concors daemon $DAEMON_VERSION for Ubuntu 24.04 x86_64. Extract concors-daemon-linux-x64.tar.gz and run concors-daemon/bin/concors-daemon; Node and native PTY files are included."
+
+  verify-download:
+    name: Verify release download with read token
+    needs: [build, publish]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Download published asset and check version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DAEMON_VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          gh release download "$RELEASE_TAG" -p 'concors-daemon-linux-x64.tar.gz'
+          tar -xzf concors-daemon-linux-x64.tar.gz
+          test "$(concors-daemon/bin/concors-daemon --version)" = "$DAEMON_VERSION"
