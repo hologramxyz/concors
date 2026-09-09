@@ -242,9 +242,9 @@ test("touch swipes reveal and dismiss the push sidebar", async ({ page }) => {
       });
     await client.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
   };
-  await swipe(285, 25);
-  await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "true");
   await swipe(25, 285);
+  await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "true");
+  await swipe(200, 25);
   await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "false");
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
 });
@@ -270,23 +270,34 @@ test("Files responds in the demo and terminal swipes keep both panels reachable"
   await expect(shell).toHaveAttribute("data-sidebar-open", "false");
   await touchSwipe(page, { x: 100, y: 240 }, { x: 115, y: 240 });
   await expect(shell).toHaveAttribute("data-files-open", "false");
-  await touchSwipe(page, { x: 55, y: 250 }, { x: 335, y: 250 });
+  await touchSwipe(page, { x: 335, y: 250 }, { x: 55, y: 250 });
   await expect(files.getByRole("status")).toContainText("The demo has no filesystem");
   await expect(shell).toHaveAttribute("data-sidebar-open", "false");
-  await touchSwipe(page, { x: 320, y: 300 }, { x: 70, y: 300 });
+  await touchSwipe(page, { x: 70, y: 300 }, { x: 320, y: 300 });
   await expect(shell).toHaveAttribute("data-files-open", "false");
   await expect(ui.locator(".mobile-files")).toHaveCSS(
     "transform",
     `matrix(1, 0, 0, 1, ${width}, 0)`,
   );
-  await touchSwipe(page, { x: 335, y: 250 }, { x: 55, y: 250 });
+  await touchSwipe(page, { x: 55, y: 250 }, { x: 335, y: 250 });
   await expect(shell).toHaveAttribute("data-sidebar-open", "true");
-  await touchSwipe(page, { x: 30, y: 240 }, { x: 300, y: 240 });
+  await touchSwipe(page, { x: 200, y: 240 }, { x: 30, y: 240 });
   await expect(shell).toHaveAttribute("data-sidebar-open", "false");
   await expect(ui.getByRole("combobox", { name: "Tabs and panes" })).toHaveAttribute(
     "data-value",
     activeTerminal,
   );
+  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  const popup = await ui
+    .getByRole("button", { name: "Actions for Concors", exact: true })
+    .boundingBox();
+  if (!popup) throw new Error("Project menu trigger is missing");
+  const y = popup.y + popup.height / 2;
+  await touchSwipe(page, { x: popup.x + popup.width / 2, y }, { x: 30, y });
+  await expect(shell).toHaveAttribute("data-sidebar-open", "true");
+  await expect(ui.getByRole("menu")).toBeVisible();
+  await ui.getByRole("menu").press("Escape");
+  await expect(shell).toHaveAttribute("data-sidebar-open", "true");
 });
 test("tab and pane changes use the authoritative workspace operations", async ({ page }) => {
   const ui = await enter(page);

@@ -30,8 +30,8 @@ phone-size mode. Select **Explore demo**; it opens straight into the agent chat.
 2. While the approval is pending or an agent is working, send a follow-up to queue it.
    Attach a small file; switch to Terminal · Pane 2 with the top picker and back.
    Drafts, attachments and queued messages survive pane/tab navigation.
-3. Swipe left on the conversation or terminal to open Projects / Agents / Servers.
-   The workspace moves right. Swipe right, press Close sidebar, or tap the workspace
+3. Swipe right on the conversation or terminal to open Projects / Agents / Servers.
+   The workspace moves right. Swipe left, press Close sidebar, or tap the workspace
    to return. Vertical terminal scrolling and taps still work; code blocks and terminal
    toolbar controls retain their own gestures.
 4. Tap your **name/avatar** at the bottom of the sidebar for the animated Account drawer,
@@ -172,14 +172,17 @@ and advertise `project-files` (plus `project-file-create` for creation). Updatin
 alone cannot enable files on an older running daemon. No control-plane/server PR is needed.
 Upgrade/restart that daemon when it is safe for your sessions, or test with a separate current daemon.
 
-1. Open a project, then tap the top-right **Files** button. Swipe right on chat or the terminal
-   to open Files; swipe left on the file surface or tap **Back to chat** to return.
-   Swipe left from chat or the terminal opens the project sidebar. Inputs, editors, code blocks and
+1. Open a project, then tap the top-right **Files** button. Swipe left on chat or the terminal
+   to open Files; swipe right on the file surface or header, or tap **Back to chat**, to return.
+   Swipe right from chat or the terminal opens the project sidebar. Inputs, editors, code blocks and
    terminal toolbar controls keep their own gestures; vertical terminal gestures never navigate.
    The Files button and navigation also work on older/offline daemons, with an explanation of
    what is missing. They do not invent a filesystem or bypass the daemon's capabilities.
 2. Browse the project's registered root directory. Expand folders, filter loaded filenames,
    toggle hidden files, refresh, or create a file/folder with the tree's toolbar.
+   The Files header keeps the same glass back button and project pill in the directory and editor.
+   Tap that project pill to return to the directory without losing an open file's draft; there is
+   no separate redundant folder icon in this header.
 3. Tap a Markdown file for its rendered preview and **Edit source** to change it. Other supported
    text files open in the shared desktop CodeMirror editor. **File options** contains Find in file,
    wrap, Vim, copy and reload. **Save** writes to the daemon machine, not the phone.
@@ -194,6 +197,23 @@ Unsaved file drafts are memory-only: save before reloading or closing the app. B
 has an unsaved-change guard where supported; mobile OS force-quit cannot be intercepted. The same
 desktop limits apply (UTF-8 text up to 1 MiB, no symlinks/binary previews, no rename/delete).
 See [file behavior and safety boundaries](../../docs/project-files.md).
+
+### Glass rendering: web styling versus native iOS
+
+The current workspace headers are HTML inside the shared WebView, including in an iOS build.
+Their translucent CSS/backdrop-filter styling is **not native iOS Liquid Glass**. Neither
+`@expo/ui` nor `expo-glass-effect` is currently an app dependency; installing one alone would not
+convert the existing DOM controls.
+
+Native headers would need to live in the Expo host and send navigation actions to the shared
+renderer. [Expo UI's SwiftUI buttons](https://docs.expo.dev/versions/latest/sdk/ui/swift-ui/button/)
+support `buttonStyle('glass')` on iOS 26+ with Xcode 26. For custom React Native surfaces,
+[Expo GlassEffect](https://docs.expo.dev/versions/latest/sdk/glass-effect/) provides `GlassView`
+with runtime availability checks. The implementation must retain accessible fallbacks for older
+iOS/Android, respect Reduce Transparency, and avoid duplicate native/DOM controls.
+
+That native-header migration is not implemented yet. Verifying it requires an actual native
+build on supported iOS; the Safari/Tailscale web preview cannot prove native rendering.
 
 ### Later: managed cloud connections
 
