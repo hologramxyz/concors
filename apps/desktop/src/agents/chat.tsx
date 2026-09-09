@@ -210,7 +210,7 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
       </div>
       {!atBottom && (
         <button
-          className="z-10 mx-auto -mt-9 mb-2 flex items-center gap-1 rounded-full border bg-background px-3 py-1 text-xs shadow"
+          className="z-10 mx-auto -mt-9 mb-2 flex items-center gap-1 rounded-xl border bg-background px-3 py-1 text-xs shadow"
           onClick={() => {
             follow.current = true;
             if (scroll.current) scroll.current.scrollTop = scroll.current.scrollHeight;

@@ -24,6 +24,7 @@ import { navItemFor, type View } from "@/navigation";
 import { settingsNavItemFor, type SettingsPage } from "@/settings/navigation";
 import { SettingsSidebar } from "@/settings/settings-sidebar";
 import { useTheme } from "@/theme/use-theme";
+import { useCornerStyle } from "@/theme/use-corner-style";
 import { SettingsView } from "@/views/settings-view";
 import { ProjectSetupDialog } from "@/workspace/project-setup-dialog";
 import {
@@ -74,6 +75,7 @@ function AppContent() {
   const [endpoint, setEndpoint] = useState<DaemonEndpoint | null>(null);
   const connection = useDaemonConnection(endpoint);
   const theme = useTheme();
+  const corners = useCornerStyle();
   const auth = useAuth(api);
   const machines = localEndpoint
     ? [{ id: LOCAL_ID, name: "This computer", url: localEndpoint.url }, ...bookmarks]
@@ -212,7 +214,8 @@ function AppContent() {
     (project) => project.id === workspace.selection?.projectId,
   );
 
-  const sidebarToggle = sidebarCollapsed && (
+  const appSidebarCollapsed = view !== "settings" && sidebarCollapsed;
+  const sidebarToggle = appSidebarCollapsed && (
     <button
       id="expand-sidebar"
       type="button"
@@ -235,10 +238,8 @@ function AppContent() {
             <div className="flex h-dvh w-full overflow-hidden bg-sidebar">
               {view === "settings" ? (
                 <SettingsSidebar
-                  collapsed={sidebarCollapsed}
                   page={settingsPage}
                   onBack={() => setView(settingsReturnView.current)}
-                  onCollapse={() => toggleSidebar(true)}
                   onNavigate={setSettingsPage}
                 />
               ) : (
@@ -275,7 +276,7 @@ function AppContent() {
                 />
               )}
               <div
-                className={`workspace-surface my-2 mr-2 flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-background shadow-xs ${sidebarCollapsed ? "ml-2" : ""}`}
+                className={`workspace-surface my-2 mr-2 flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-background shadow-xs ${appSidebarCollapsed ? "ml-2" : ""}`}
               >
                 {!(view === "projects" && activeProject) && (
                   <header className="flex h-11 shrink-0 items-center gap-2 border-b px-4">
@@ -314,6 +315,8 @@ function AppContent() {
                       state={connection.state}
                       theme={theme.preference}
                       onSetTheme={theme.setPreference}
+                      cornerStyle={corners.preference}
+                      onSetCornerStyle={corners.setPreference}
                       auth={account}
                       onSignOut={signOut}
                       onSetActiveOrganization={(organizationId) => {
