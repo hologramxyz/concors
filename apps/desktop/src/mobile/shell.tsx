@@ -3,6 +3,8 @@ import { FolderOpen, PanelLeft, Plus, Search, Settings, Server, ChevronDown } fr
 import type { MobileState, MobileTarget } from "@concors/client-core";
 import type { PaneProfile, WorkspaceOperation, WorkspaceSnapshot } from "@concors/protocol";
 import { ShortcutProvider } from "@/shortcuts/provider";
+import { useCommand } from "@/shortcuts/context";
+import { ShortcutGuide } from "@/shortcuts/guide";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { AgentsProvider } from "@/agents/state";
@@ -58,6 +60,7 @@ function MobileWorkspace({ host }: { host: MobileState }) {
   const [machinesOpen, setMachinesOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [addingProject, setAddingProject] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const mutating = useRef(false);
@@ -266,6 +269,36 @@ function MobileWorkspace({ host }: { host: MobileState }) {
     setSidebarOpen(false);
     setSettingsOpen(true);
   };
+  const unobscured =
+    !sidebarOpen &&
+    !settingsOpen &&
+    !machinesOpen &&
+    !paletteOpen &&
+    !addingProject &&
+    !shortcutsOpen;
+  const cycleTab = (delta: number) => {
+    if (!project || !tab) return;
+    const next =
+      project.tabs[(project.tabs.indexOf(tab) + delta + project.tabs.length) % project.tabs.length];
+    if (next) select({ projectId: project.id, tabId: next.id });
+  };
+  const cyclePane = (delta: number) => {
+    if (!project || !tab || !pane) return;
+    const panes = tabPanes(tab);
+    const next = panes[panes.findIndex((item) => item.id === pane.id) + delta];
+    if (next) select({ projectId: project.id, tabId: tab.id, paneId: next.id });
+  };
+  const commandsAvailable = unobscured || paletteOpen;
+  useCommand("search", commandsAvailable, () => setPaletteOpen((open) => !open));
+  useCommand("settings", commandsAvailable, openSettings);
+  useCommand("shortcuts", commandsAvailable, () => setShortcutsOpen(true));
+  useCommand("new-project", commandsAvailable && canEdit, () => setAddingProject(true));
+  useCommand("previous-tab", commandsAvailable && !!tab, () => cycleTab(-1));
+  useCommand("next-tab", commandsAvailable && !!tab, () => cycleTab(1));
+  useCommand("focus-left", commandsAvailable && !!pane, () => cyclePane(-1));
+  useCommand("focus-up", commandsAvailable && !!pane, () => cyclePane(-1));
+  useCommand("focus-right", commandsAvailable && !!pane, () => cyclePane(1));
+  useCommand("focus-down", commandsAvailable && !!pane, () => cyclePane(1));
   return (
     <CompactLayoutContext value={true}>
       <TerminalConnectionContext value={connection}>
@@ -458,6 +491,7 @@ function MobileWorkspace({ host }: { host: MobileState }) {
                     )}
                     {project && (
                       <NewTabMenu
+                        keyboard={commandsAvailable}
                         disabled={!canEdit || project.tabs.length >= 32}
                         onCreate={createTab}
                       />
@@ -496,15 +530,7 @@ function MobileWorkspace({ host }: { host: MobileState }) {
                       Reconnecting… Saved workspace is read-only.
                     </p>
                   )}
-                  <PaneVisibilityContext
-                    value={
-                      !sidebarOpen &&
-                      !settingsOpen &&
-                      !machinesOpen &&
-                      !paletteOpen &&
-                      !addingProject
-                    }
-                  >
+                  <PaneVisibilityContext value={unobscured}>
                     <main className="mobile-pane" data-pane-id={pane?.id}>
                       {project && tab && pane ? (
                         pane.profile === "chat" ? (
@@ -572,6 +598,7 @@ function MobileWorkspace({ host }: { host: MobileState }) {
               host={host}
               connectionState={connection?.state ?? { status: "disconnected" }}
             />
+            <ShortcutGuide open={shortcutsOpen} onOpenChange={setShortcutsOpen} compact />
             <Dialog open={machinesOpen} onOpenChange={setMachinesOpen}>
               <DialogContent className="mobile-settings-drawer">
                 <DialogHeader>
