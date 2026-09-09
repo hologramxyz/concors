@@ -151,13 +151,13 @@ it("preserves a real process, shell environment, cwd, screen, and bindings acros
       return null;
     }
   };
-  // Normalize both sides: macOS has /var aliases; Windows may use 8.3 TMPDIR names.
-  // Use the same native realpath API for actual and expected, including Windows 8.3 expansion.
+  // The probe reports process.cwd() exactly as the OS spells it, which need not match the path we
+  // created: macOS puts the temp directory behind the /var → /private/var symlink, and Windows may
+  // hand the shell an 8.3 short name (RUNNER~1). Canonicalize both sides before comparing.
+  const canonical = async (value: Awaited<ReturnType<typeof state>>) =>
+    value === null ? null : { ...value, cwd: await realpath(value.cwd) };
   await expect
-    .poll(async () => {
-      const current = await state();
-      return current && { ...current, cwd: await realpath(current.cwd) };
-    })
+    .poll(async () => canonical(await state()))
     .toMatchObject({ cwd: await realpath(cwd), env: "kept" });
   const before = (await state())!;
   const host = await ensureSessionHost(directory, launch);

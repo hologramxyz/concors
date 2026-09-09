@@ -156,8 +156,28 @@
     overscroll-behavior: none;
   }
 
+  /* Tailwind v4's preflight resets buttons to `cursor: default`. Everything a user can click gets
+     the hand cursor, including Radix/cmdk items that are divs with ARIA roles. Disabled controls
+     keep the default cursor. */
   button:not(:disabled),
-  [role="button"]:not(:disabled) {
+  select:not(:disabled),
+  summary,
+  a[href],
+  label:has(> input:not(:disabled)),
+  input:where([type="checkbox"], [type="radio"], [type="range"], [type="file"]):not(:disabled),
+  :where(
+    [role="button"],
+    [role="link"],
+    [role="tab"],
+    [role="option"],
+    [role="menuitem"],
+    [role="menuitemcheckbox"],
+    [role="menuitemradio"],
+    [role="switch"],
+    [role="checkbox"],
+    [role="radio"],
+    [role="combobox"]
+  ):not(:disabled, [data-disabled=""], [data-disabled="true"], [aria-disabled="true"]) {
     cursor: pointer;
   }
 
