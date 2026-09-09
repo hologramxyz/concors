@@ -12,6 +12,7 @@ export const LayoutNodeSchema = z.discriminatedUnion("kind", [
     kind: z.literal("pane"),
     profile: PaneProfileSchema,
     sessionId: Id.nullable(),
+    directory: z.string().min(1).max(4096).optional(),
   }),
   z.object({
     id: Id,
@@ -35,6 +36,8 @@ export const WorkspaceProjectSchema = z.object({
   id: Id,
   name: Name,
   directory: z.string().trim().min(1).max(4096),
+  directoryMode: z.enum(["follow", "pinned"]).optional(),
+  followPaneId: Id.optional(),
   version: Version,
   tabs: z.array(WorkspaceTabSchema).max(32),
 });
@@ -57,10 +60,17 @@ export const WorkspaceOperationSchema = z.discriminatedUnion("kind", [
     projectId: Id,
     name: Name,
     directory: z.string().trim().min(1).max(4096),
+    directoryMode: z.enum(["follow", "pinned"]).optional(),
   }),
   z.object({ kind: z.literal("project.remove"), ...ProjectTarget }),
   z.object({
+    kind: z.literal("project.pin"),
+    ...ProjectTarget,
+    directory: z.string().min(1).max(4096),
+  }),
+  z.object({
     kind: z.literal("tab.create"),
+    sourcePaneId: Id.optional(),
     ...ProjectTarget,
     tabId: Id,
     paneId: Id,
