@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, readFile, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -151,7 +151,9 @@ it("preserves a real process, shell environment, cwd, screen, and bindings acros
       return null;
     }
   };
-  await expect.poll(state).toMatchObject({ cwd, env: "kept" });
+  // macOS exposes TMPDIR through /var, while process.cwd() resolves /private/var.
+  // Compare the physical directory without weakening the working-directory assertion.
+  await expect.poll(state).toMatchObject({ cwd: await realpath(cwd), env: "kept" });
   const before = (await state())!;
   const host = await ensureSessionHost(directory, launch);
   await first.close();
