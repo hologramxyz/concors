@@ -16,7 +16,7 @@ test("create and clone projects on the daemon machine and sync to another browse
   try {
     await Promise.all([signedIn(page), signedIn(second)]);
     await page.goto("/");
-    await second.goto("http://localhost:1420");
+    await second.goto(test.info().project.use.baseURL ?? "http://localhost:1420");
     await page.getByRole("button", { name: "Add project", exact: true }).first().click();
     await page.getByLabel("Project source").selectOption("create");
     await page.getByLabel("Project name", { exact: true }).fill(projectName);
