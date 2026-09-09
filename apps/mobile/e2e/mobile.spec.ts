@@ -13,6 +13,11 @@ async function paneCount(ui: FrameLocator, count: number) {
   await expect(ui.getByRole("option")).toHaveCount(count);
   await ui.getByRole("option").first().press("Escape");
 }
+async function closePickerSheet(ui: FrameLocator, name = "Tabs and panes") {
+  const sheet = ui.getByRole("dialog", { name, exact: true });
+  await sheet.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(sheet).toHaveCount(0);
+}
 async function openSettings(ui: FrameLocator) {
   await ui.getByRole("button", { name: /^Account:/ }).click();
   await ui
@@ -426,7 +431,7 @@ test("composer expands on focus, preserves portaled controls, and collapses afte
   await expect(primary).toHaveAttribute("aria-label", "Queue message");
   await ui.getByRole("combobox", { name: "Tabs and panes" }).tap();
   await expect(form).toHaveAttribute("data-expanded", "false");
-  await ui.getByRole("combobox", { name: "Tabs and panes" }).tap();
+  await closePickerSheet(ui);
   await input.click();
   await page.setViewportSize({ width: 393, height: 420 });
   await expect(form).toHaveAttribute("data-expanded", "true");
@@ -458,20 +463,28 @@ test("composer expands on focus, preserves portaled controls, and collapses afte
   expect(centered).toBe(true);
 });
 
-test("tab picker toggles on repeated taps and groups panes beneath their tabs", async ({
+test("tab picker opens a bottom sheet, dismisses without reopening and groups panes beneath tabs", async ({
   page,
 }) => {
   const ui = await enter(page);
   const picker = ui.getByRole("combobox", { name: "Tabs and panes" });
   const list = ui.getByRole("listbox", { name: "Tabs and panes" });
   for (let i = 0; i < 3; i++) {
+    const trigger = await picker.boundingBox();
+    if (!trigger) throw new Error("Picker trigger is not visible");
     await picker.tap();
     await expect(list).toBeVisible();
+    await expect(ui.getByRole("dialog", { name: "Tabs and panes", exact: true })).toHaveAttribute(
+      "data-mobile-drawer",
+      "true",
+    );
     await expect(list.getByRole("group")).toHaveCount(1);
     await expect(list.getByRole("option")).toHaveCount(2);
-    await picker.tap();
+    // A second tap at the trigger's position lands on the modal scrim: close only.
+    await page.touchscreen.tap(trigger.x + trigger.width / 2, trigger.y + trigger.height / 2);
     await expect(list).toHaveCount(0);
     await expect(picker).toHaveAttribute("aria-expanded", "false");
+    await expect(picker).toBeFocused();
   }
   await picker.press("ArrowDown");
   await expect(list.getByRole("option").first()).toBeFocused();
@@ -500,7 +513,7 @@ test("tab picker toggles on repeated taps and groups panes beneath their tabs", 
   await picker.click();
   await expect(list.getByRole("group")).toHaveCount(1);
   await expect(list.getByRole("option")).toHaveCount(3);
-  await picker.click();
+  await closePickerSheet(ui);
   await ui.getByRole("button", { name: "Tab and pane actions" }).click();
   await ui.getByRole("menuitem", { name: "New tab", exact: true }).click();
   await ui
@@ -570,8 +583,9 @@ test("glass controls retain their shape and composer height animates with reduce
   expect(normal.background).toMatch(/(?:\/|,)\s*0\.38\)/);
   expect(normal.blur).toContain("blur(24px)");
   await picker.tap();
-  await expect(picker).toHaveCSS("border-radius", normal.radius);
-  await expect(picker).toHaveCSS("background-color", normal.background);
+  const coveredPicker = ui.locator('.mobile-header [role="combobox"]');
+  await expect(coveredPicker).toHaveCSS("border-radius", normal.radius);
+  await expect(coveredPicker).toHaveCSS("background-color", normal.background);
   await expect(ui.locator(".mobile-picker-help")).toHaveCount(0);
   const list = ui.getByRole("listbox", { name: "Tabs and panes" });
   expect(
@@ -580,7 +594,7 @@ test("glass controls retain their shape and composer height animates with reduce
       .first()
       .evaluate((el) => getComputedStyle(el, "::before").content),
   ).toBe("none");
-  await picker.tap();
+  await closePickerSheet(ui);
   await expect(form).toHaveAttribute("data-expanded", "false");
   await form.evaluate(async (el) =>
     Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished.catch(() => undefined))),
@@ -663,4 +677,29 @@ test("compact account footer and machine management live in settings", async ({ 
       .getByRole("dialog", { name: "Settings", exact: true })
       .getByText("Development", { exact: true }),
   ).toBeVisible();
+});
+
+test("machine sheet preserves the sidebar, selected status, and focus", async ({ page }) => {
+  const ui = await enter(page);
+  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  const picker = ui.getByRole("combobox", { name: "Machine", exact: true });
+  await picker.click();
+  const sheet = ui.getByRole("dialog", { name: "Machine", exact: true });
+  await expect(sheet).toHaveAttribute("data-mobile-drawer", "true");
+  await expect(sheet).toHaveCSS("animation-name", "mobile-drawer-in");
+  const selected = sheet.getByRole("option", { name: /Development/ });
+  await expect(selected).toHaveAttribute("aria-selected", "true");
+  await expect(selected).toContainText("running");
+  await selected.click();
+  await expect(sheet).toHaveCount(0);
+  await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "true");
+  await expect(picker).toBeFocused();
+  await picker.click();
+  await sheet.press("Escape");
+  await expect(sheet).toHaveCount(0);
+  await expect(picker).toBeFocused();
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await picker.click();
+  await expect(sheet).toHaveCSS("animation-name", "none");
+  await closePickerSheet(ui, "Machine");
 });
