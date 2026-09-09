@@ -1,7 +1,7 @@
 import { oscDirectory } from "./working-directory.ts";
 import { terminalEnvironment } from "./environment.ts";
 import { terminalAgentActivity } from "./agent-activity.ts";
-import * as pty from "node-pty";
+import * as pty from "@lydell/node-pty";
 import headless from "@xterm/headless";
 import serialize from "@xterm/addon-serialize";
 import type { TerminalEvent, TerminalInfo } from "@concors/protocol";
