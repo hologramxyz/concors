@@ -13,10 +13,17 @@ test("workspace shortcuts create, search, split and close the active pane withou
     await expect(
       page.getByRole("button", { name: "Add project", exact: true }).first(),
     ).toBeEnabled();
-    const shortcutButton = page.getByRole("button", { name: "Keyboard shortcuts", exact: true });
-    await shortcutButton.hover();
-    await expect(page.getByRole("tooltip")).toContainText("Ctrl+Shift+/");
-    await shortcutButton.click();
+    await expect(page.getByRole("button", { name: "Keyboard shortcuts", exact: true })).toHaveCount(
+      0,
+    );
+    await page.getByRole("button", { name: /^Account:/ }).click();
+    await expect(page.getByRole("menuitem")).toHaveText([
+      "Settings",
+      "Keyboard shortcuts",
+      "Sign out",
+    ]);
+    await page.getByRole("menuitem", { name: "Keyboard shortcuts", exact: true }).click();
+    await expect(page.getByRole("menu")).toHaveCount(0);
     await expect(
       page.getByRole("heading", { name: "Keyboard shortcuts", exact: true }),
     ).toBeVisible();
@@ -157,6 +164,35 @@ test("workspace shortcuts create, search, split and close the active pane withou
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("account menu opens shortcuts with the keyboard and leaves the global binding available", async ({
+  page,
+}) => {
+  await signedIn(page);
+  await page.goto("/");
+  const account = page.getByRole("button", { name: /^Account:/ });
+  await account.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("menuitem", { name: "Settings", exact: true })).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(
+    page.getByRole("menuitem", { name: "Keyboard shortcuts", exact: true }),
+  ).toBeFocused();
+  await page.screenshot({ path: "test-results/account-menu-shortcuts.png" });
+  await page.keyboard.press("Enter");
+  const guide = page.getByRole("dialog", { name: "Keyboard shortcuts", exact: true });
+  await expect(guide).toBeVisible();
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expect.poll(() => guide.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+  await page.keyboard.press("Escape");
+  await expect(guide).toHaveCount(0);
+  await expect(account).toBeFocused();
+  await page.keyboard.press("Control+Shift+Slash");
+  await expect(guide).toBeVisible();
+  await expect(guide).toContainText("Ctrl+Shift+/");
+  await page.keyboard.press("Escape");
+  await expect(guide).toHaveCount(0);
 });
 
 test("Mac workspace shortcuts use physical Control and display matching hints", async ({
