@@ -386,6 +386,20 @@ test("compact account footer and machine management live in settings", async ({ 
   expect(height).toBeLessThanOrEqual(64);
   await ui.getByRole("combobox", { name: "Machine", exact: true }).click();
   await expect(ui.getByRole("option", { name: /Development/ })).toBeVisible();
+  const bounds = await ui.getByRole("option", { name: /Development/ }).boundingBox();
+  if (!bounds) throw new Error("Machine option is not visible");
+  const client = await page.context().newCDPSession(page);
+  const x = bounds.x + bounds.width * 0.8,
+    y = bounds.y + bounds.height / 2;
+  await client.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
+  for (let step = 1; step <= 8; step++) {
+    await client.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [{ x: x - (bounds.width * 0.6 * step) / 8, y }],
+    });
+  }
+  await client.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "true");
   await ui.getByRole("option").first().press("Escape");
   await openSettings(ui);
   await choose(ui, "Settings section", "machines");

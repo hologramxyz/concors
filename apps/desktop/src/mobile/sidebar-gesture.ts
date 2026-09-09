@@ -28,6 +28,8 @@ export function useSidebarGesture(open: boolean, onChange: (open: boolean) => vo
       onPointerDown(event: PointerEvent) {
         if (event.pointerType === "mouse" || event.button !== 0) return;
         const target = event.target as HTMLElement;
+        // React portals bubble through this shell, but their popups own their gestures.
+        if (!event.currentTarget.contains(target)) return;
         if (
           !open &&
           target.closest(
