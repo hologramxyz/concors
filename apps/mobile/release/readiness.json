@@ -1,7 +1,7 @@
 {
   "Apple and Google developer accounts verified; identifiers and signing owned by Concors": false,
   "Production native sign-in and session revocation tested": false,
-  "Production daemon installation, authenticated gateway and connection tickets available": false,
+  "Production daemon installation and authenticated workspace/chat gateway available": false,
   "Account deletion handles personal organizations, machines, subscriptions and retained records": false,
   "Privacy, support and external account-deletion URLs are live": false,
   "Push registration, revocation, delivery and cold-start routing tested on iOS and Android": false,

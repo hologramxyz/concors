@@ -20,15 +20,17 @@ Phone-specific behavior:
   Swipe back, press the mobile menu icon, or tap the workspace scrim to close it.
 - A compact name/avatar trigger opens an animated Account bottom drawer with Settings and Sign out.
   Machine management is a settings section; the sidebar header has no redundant product title.
-- Search, Settings, Add Project and New Tab use the shared Radix dialog with animated
+- Tabs/panes, Machine, Search, Settings, Add Project and New Tab use the shared Radix dialog with animated
   bottom-sheet presentation, focus restoration and reduced-motion support.
-  Opening Search leaves the sidebar visible behind it.
+  Opening Search or choosing a machine leaves the sidebar visible behind it.
 - Separate backdrop-blurred glass controls contain the sidebar toggle, picker and actions menu,
   with matching rounded pressed states and opaque fallbacks for reduced transparency.
   The picker uses a tab/pane breadcrumb and lightly indented
   pane options under named tab headings with counts, without hierarchy lines or guide text.
-  Non-modal popovers toggle on a
-  repeated trigger tap and support arrow keys, Home/End, typeahead and Escape.
+  Tab/pane and machine selection open bottom drawers with scrollable, touch-sized options.
+  The backdrop, Close button and Escape dismiss them and restore focus. Tapping the
+  covered trigger dismisses via the backdrop without reopening. The settings section
+  picker remains a popover. Both presentations support arrow keys, Home/End and typeahead.
   Navigation is device-local; explicit create/rename/profile/close edits update the shared workspace.
 - The composer collapses to a single line with attachment and primary actions.
   Text-field focus animates the measured height to reveal model, effort and permission icons,
@@ -79,16 +81,17 @@ Implementation/verification checklist (updated as each slice lands):
 - [x] iOS/Android Hermes and web export, native project generation, Expo Doctor 21/21.
 - [x] Desktop regression cases and refreshed private preview.
 
-Verification on 2026-09-09: 218 unit tests pass (one opt-in API integration test is
-skipped), all 19 phone browser scenarios pass, and all 19 desktop browser scenarios
+Verification on 2026-09-09: 224 unit tests pass (one opt-in API integration test is
+skipped), all 20 phone browser scenarios pass, and all 19 desktop browser scenarios
 pass in a single isolated-port run.
 CI exposed a notification-test setup race: a ready label from an older project did not
 prove the separate control socket had received the newly created agent. The test now
 awaits its own project/session; three consecutive isolated notification runs pass.
 The phone suite covers 320/375/390/430px toolbars, contained picker chevrons, repeated
-touch toggles, hierarchical tab/pane creation and closing, collapsed/expanded composer
+backdrop dismissal without reopening, hierarchical tab/pane creation and closing, collapsed/expanded composer
 focus and keyboard dismissal, single centered send/stop actions,
-drawer focus/animations/reduced motion, sidebar-preserving search, account menus and machine management.
+drawer focus/animations/reduced motion, sidebar-preserving search and machine selection,
+account menus and machine management.
 The appearance scenario additionally exercises theme
 and corner preferences. A local-WebView test removes the browser UUID helper and
 verifies new-tab requests still use secure, valid IDs. The private static preview was opened at iPhone size for
@@ -99,7 +102,13 @@ To run desktop acceptance beside an existing checkout, use
 `CONCORS_E2E_WEB_PORT=1447 pnpm test:workspace:e2e`. Alternate-origin handling is
 confined to test fixtures; it does not relax the production daemon allowlist.
 
-Production gateway, push service and deletion backend remain external release gates.
+The latest upstream machine agent adds TLS, machine JWTs and tmux sessions, but not
+Concourse workspace/chat messages. The API client now preserves its install/certificate
+metadata and validates `/token` responses. A read-only `live:preflight` command checks
+account/machine/capability prerequisites; neither that command nor terminal-agent
+installation proves a live workspace works. See [the protocol integration gap](mobile-backend.md).
+
+Authenticated workspace access, push service and deletion backend remain external release gates.
 Store billing-policy review and physical iOS/Android keyboard, gestures, file picker,
 clipboard and accessibility checks are required before claiming submission readiness.
 The optional local WebKit check could not run because this host lacks WebKit's Linux
