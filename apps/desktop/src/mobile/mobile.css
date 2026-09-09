@@ -207,7 +207,7 @@ aside[aria-label="Agent notifications"] {
   max-height: 128px;
 }
 .mobile-pane form:has([data-agent-composer]) {
-  border-radius: 22px;
+  border-radius: calc(var(--corner-radius) * 3.6);
 }
 .mobile-pane form:has([data-agent-composer]) button {
   min-height: 36px;
@@ -311,7 +311,7 @@ aside[aria-label="Agent notifications"] {
   max-width: none !important;
   height: min(92%, 900px);
   max-height: 100%;
-  border-radius: 24px 24px 0 0 !important;
+  border-radius: calc(var(--corner-radius) * 4) calc(var(--corner-radius) * 4) 0 0 !important;
   display: flex !important;
   flex-direction: column;
   gap: 16px;
