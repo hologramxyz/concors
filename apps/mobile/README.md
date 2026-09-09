@@ -22,10 +22,12 @@ pnpm mobile:demo
 Open the printed URL (normally <http://localhost:8081>) in a phone browser or browser
 phone-size mode. Select **Explore demo**; it opens straight into the agent chat.
 
-1. Tap the bottom composer. Enter inserts a newline; the send button submits.
+1. The bottom composer starts as a compact single line. Tap to expand it and open
+   the keyboard; tap outside or dismiss the keyboard to collapse without losing your draft.
+   Enter inserts a newline; the send button submits.
    Allow the pending request, then send a message to see streaming.
 2. While the approval is pending or an agent is working, send a follow-up to queue it.
-   Attach a small file; switch to Terminal 2 with the top picker and back.
+   Attach a small file; switch to Terminal · Pane 2 with the top picker and back.
    Drafts, attachments and queued messages survive pane/tab navigation.
 3. Swipe right on the conversation to open Projects / Agents / Servers.
    The workspace moves right. Swipe left, press Close sidebar, or tap the workspace
@@ -33,15 +35,38 @@ phone-size mode. Select **Explore demo**; it opens straight into the agent chat.
 4. Tap your **name/avatar → Settings** at the bottom of the sidebar. The settings
    picker contains account, appearance, notifications, SSH, billing, machines and diagnostics.
    Search opens an animated bottom drawer without dismissing the sidebar.
-5. Use **+** at the top for the new-session drawer; **…** for rename, reorder,
-   profile and confirmed close. The styled picker groups panes within their tabs.
+5. Use the floating glass **+** at the top for **New tab** or **Add pane to this tab**,
+   then choose Agent, Terminal, Codex, Claude Code or OpenCode.
+   **…** offers rename, pane profile and confirmed close (no left/right reordering).
+   The picker shows tab headings with pane counts and indented panes; tapping it again closes it.
    Desktop-only split/arrange/resize actions are intentionally absent on phones.
 6. Add a project from the sidebar's animated drawer (open/create/clone). Expand tool calls, diffs,
    plans, thinking and sub-agent updates. Try `ask me a question` for an input request.
-   Model, effort and permissions use icon-only desktop controls. **More composer options**
-   contains plan, speed, context usage and keyboard dictation. Send stays on the same row.
-7. Select **Terminal 2** for the shared xterm terminal: type, use extra keys,
+   Model, effort and permissions use icon-only desktop controls when expanded.
+   Context usage and dictation are directly visible; the sliders button contains only
+   Plan and Speed. Dictation focuses the native keyboard and explains how to use its microphone.
+   There is one primary button: Stop while working with an empty draft, Queue for a follow-up,
+   or Send when idle.
+7. Select **Terminal · Pane 2** for the shared xterm terminal: type, use extra keys,
    reload the renderer or explicitly stop the process after confirmation.
+
+### Tabs versus panes
+
+A project contains tabs; each tab contains one or more panes. A pane is a chat or
+terminal view. The initial demo has one tab, **Mobile launch**, with an **Agent**
+pane and a **Terminal** pane—not two tabs.
+
+- **New tab** creates a separate group with its first pane.
+- **Add pane to this tab** keeps a new session alongside the current work, inside that tab.
+- Select any indented pane under any tab to open it. Mobile shows one at a time;
+  desktop can show that same tab's panes side by side.
+- Navigation changes only this device's selected view. Adding, renaming, changing a
+  profile or closing updates the shared workspace on connected devices.
+- Adding a pane uses the existing shared split operation (beside the selected pane
+  on desktop); mobile does not expose split directions. Closing the last pane also closes its tab.
+- A pane profile changes the kind of view; it is not a way to create another pane.
+  Closing a pane removes its saved view, not a promise to terminate its remote process.
+  Use the agent/terminal's explicit stop control to stop work.
 
 Everything in the demo is simulated, including commands, repository setup, SSH,
 billing and machines. New demo machines remain in simulated provisioning; use the

@@ -94,6 +94,7 @@ test("shared composer preserves attachments and queued messages across pane chan
 });
 test("model, effort, permissions, plan and speed use the desktop controls", async ({ page }) => {
   const ui = await enter(page);
+  await ui.getByRole("textbox", { name: "Message Codex" }).click();
   for (const [control, option, value] of [
     ["Agent and model", "Codex", "demo-codex"],
     ["Thinking effort", "High", "high"],
@@ -114,6 +115,7 @@ test("model, effort, permissions, plan and speed use the desktop controls", asyn
   );
   await ui.getByRole("button", { name: "More composer options" }).click();
   await ui.getByRole("button", { name: "Allow once", exact: true }).click();
+  await expect(ui.getByRole("button", { name: "Allow once", exact: true })).toHaveCount(0);
   await ui.getByRole("textbox", { name: "Message Codex" }).fill("ask me a question");
   await ui.getByRole("button", { name: "Send message", exact: true }).click();
   await expect(ui.getByText("Which platform should I verify?")).toBeVisible();
@@ -172,7 +174,9 @@ test("tab and pane changes use the authoritative workspace operations", async ({
     "Second conversation",
   );
   await ui.getByRole("button", { name: "Tab and pane actions" }).click();
-  await expect(ui.getByRole("menuitem", { name: /Split|New pane|Arrange panes/ })).toHaveCount(0);
+  await expect(
+    ui.getByRole("menuitem", { name: /Split|New pane|Arrange panes|Move tab/ }),
+  ).toHaveCount(0);
   await ui.getByRole("menuitem", { name: "Close pane…", exact: true }).click();
   await ui.getByRole("button", { name: "Close pane", exact: true }).click();
   await paneCount(ui, 2);
@@ -304,12 +308,13 @@ test("compact toolbar keeps icon controls and send on one row at phone widths", 
   const ui = await enter(page);
   for (const width of [320, 375, 390, 430]) {
     await page.setViewportSize({ width, height: 664 });
+    await ui.getByRole("textbox", { name: "Message Codex" }).click();
     const metrics = await ui.locator(".mobile-composer-toolbar").evaluate((toolbar) => {
       const bounds = toolbar.getBoundingClientRect();
       return [...toolbar.querySelectorAll("button")].map((button) => {
         const rect = button.getBoundingClientRect();
         return {
-          top: rect.top,
+          top: rect.top + rect.height / 2,
           left: rect.left,
           right: rect.right,
           start: bounds.left,
@@ -373,6 +378,133 @@ test("search and project sheets animate above the open sidebar and restore focus
   await ui.getByRole("button", { name: "Add project", exact: true }).click();
   await expect(project).toHaveCSS("animation-name", "none");
   await expect(project.getByRole("textbox", { name: "Project name" })).toHaveValue("");
+});
+
+test("composer expands on focus, preserves portaled controls, and collapses after keyboard dismissal", async ({
+  page,
+}) => {
+  const ui = await enter(page);
+  const form = ui.locator(".mobile-composer");
+  const input = ui.getByRole("textbox", { name: "Message Codex" });
+  const primary = form.locator(".mobile-composer-primary button");
+  await expect(form).toHaveAttribute("data-expanded", "false");
+  await expect(form.getByRole("button")).toHaveCount(2);
+  await expect(primary).toHaveCount(1);
+  await expect(primary).toHaveAttribute("aria-label", "Interrupt agent");
+  const collapsedBounds = await form.boundingBox();
+  if (!collapsedBounds) throw new Error("Collapsed composer is not visible");
+  expect(collapsedBounds.height).toBeLessThanOrEqual(60);
+  await input.click();
+  await expect(form).toHaveAttribute("data-expanded", "true");
+  for (const name of [
+    "Agent and model",
+    "Thinking effort",
+    "Permission mode",
+    "Context window",
+    "Start dictation",
+  ]) {
+    await expect(form.getByRole("button", { name, exact: true })).toBeVisible();
+  }
+  await form.getByRole("button", { name: "Context window", exact: true }).click();
+  await expect(ui.getByText(/cumulative tokens/)).toBeVisible();
+  await expect(form).toHaveAttribute("data-expanded", "true");
+  await ui.getByText(/cumulative tokens/).press("Escape");
+  await input.fill("Keep this multiline\ndraft");
+  await expect(primary).toHaveCount(1);
+  await expect(primary).toHaveAttribute("aria-label", "Queue message");
+  await ui.getByRole("combobox", { name: "Tabs and panes" }).tap();
+  await expect(form).toHaveAttribute("data-expanded", "false");
+  await ui.getByRole("combobox", { name: "Tabs and panes" }).tap();
+  await input.click();
+  await page.setViewportSize({ width: 393, height: 420 });
+  await expect(form).toHaveAttribute("data-expanded", "true");
+  // A toolbar button can keep focus after the OS dismisses the keyboard.
+  await form.getByRole("button", { name: "Attach files" }).focus();
+  await page.setViewportSize({ width: 393, height: 851 });
+  await expect(form).toHaveAttribute("data-expanded", "false");
+  await expect(input).not.toBeFocused();
+  await expect(input).toHaveValue("Keep this multiline\ndraft");
+  await input.click();
+  await page.setViewportSize({ width: 393, height: 420 });
+  await form.getByRole("button", { name: "Context window", exact: true }).click();
+  await page.setViewportSize({ width: 393, height: 851 });
+  await expect(form).toHaveAttribute("data-expanded", "true");
+  await expect(ui.getByText(/cumulative tokens/)).toBeVisible();
+  await ui.getByText(/cumulative tokens/).press("Escape");
+  await input.fill("");
+  await primary.click();
+  await expect(primary).toHaveAttribute("aria-label", "Send message");
+  const centered = await primary.evaluate((button) => {
+    const b = button.getBoundingClientRect(),
+      s = button.querySelector("svg")?.getBoundingClientRect();
+    if (!s) return false;
+    return (
+      Math.abs(b.x + b.width / 2 - s.x - s.width / 2) < 1 &&
+      Math.abs(b.y + b.height / 2 - s.y - s.height / 2) < 1
+    );
+  });
+  expect(centered).toBe(true);
+});
+
+test("tab picker toggles on repeated taps and groups panes beneath their tabs", async ({
+  page,
+}) => {
+  const ui = await enter(page);
+  const picker = ui.getByRole("combobox", { name: "Tabs and panes" });
+  const list = ui.getByRole("listbox", { name: "Tabs and panes" });
+  for (let i = 0; i < 3; i++) {
+    await picker.tap();
+    await expect(list).toBeVisible();
+    await expect(list.getByRole("group")).toHaveCount(1);
+    await expect(list.getByRole("option")).toHaveCount(2);
+    await picker.tap();
+    await expect(list).toHaveCount(0);
+    await expect(picker).toHaveAttribute("aria-expanded", "false");
+  }
+  await picker.press("ArrowDown");
+  await expect(list.getByRole("option").first()).toBeFocused();
+  await list.getByRole("option").first().press("End");
+  await expect(list.getByRole("option").last()).toBeFocused();
+  await list.getByRole("option").last().press("Enter");
+  await expect(picker).toHaveAttribute("data-value", activeTerminal);
+  await expect(ui.getByLabel("Terminal output", { exact: true })).toBeVisible();
+  await choose(ui, "Tabs and panes", activeChat);
+  await ui.getByRole("button", { name: "New tab", exact: true }).click();
+  let drawer = ui.getByRole("dialog", { name: "New tab", exact: true });
+  for (const name of ["Codex", "Claude Code", "OpenCode"]) {
+    await expect(
+      drawer.getByRole("button", { name, exact: true }).locator(".mobile-session-icon svg"),
+    ).toHaveCount(1);
+  }
+  await drawer.getByRole("button", { name: "Add pane to this tab", exact: true }).click();
+  drawer = ui.getByRole("dialog", { name: "Add pane", exact: true });
+  await drawer.getByRole("button", { name: "Agent", exact: true }).click();
+  await expect(picker).toContainText("Mobile launch");
+  await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
+  const addedPane = await picker.getAttribute("data-value");
+  if (!addedPane) throw new Error("New pane was not selected");
+  expect(addedPane?.startsWith(ids.tab + ":")).toBe(true);
+  await picker.click();
+  await expect(list.getByRole("group")).toHaveCount(1);
+  await expect(list.getByRole("option")).toHaveCount(3);
+  await picker.click();
+  await ui.getByRole("button", { name: "New tab", exact: true }).click();
+  await ui
+    .getByRole("dialog", { name: "New tab", exact: true })
+    .getByRole("button", { name: "Agent", exact: true })
+    .click();
+  await expect(picker).not.toHaveAttribute("data-value", addedPane);
+  await picker.click();
+  await expect(list.getByRole("group")).toHaveCount(2);
+  await expect(list.getByRole("group").first().getByRole("option")).toHaveCount(3);
+  await expect(list.getByRole("group").last().getByRole("option")).toHaveCount(1);
+  await list.locator(`[data-value="${addedPane}"]`).click();
+  await ui.getByRole("button", { name: "Tab and pane actions" }).click();
+  await ui.getByRole("menuitem", { name: "Close pane…", exact: true }).click();
+  await ui.getByRole("button", { name: "Close pane", exact: true }).click();
+  await picker.click();
+  await expect(list.getByRole("group")).toHaveCount(2);
+  await expect(list.getByRole("group").first().getByRole("option")).toHaveCount(2);
 });
 
 test("compact account footer and machine management live in settings", async ({ page }) => {

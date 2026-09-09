@@ -22,14 +22,23 @@ Phone-specific behavior:
 - Search, Settings, Add Project and New Tab use the shared Radix dialog with animated
   bottom-sheet presentation, focus restoration and reduced-motion support.
   Opening Search leaves the sidebar visible behind it.
-- Styled, grouped pickers share accessible touch-sized options for tabs/panes, machines
-  and settings. The header has one title and a contained chevron, without a project subtitle.
-  Navigation is device-local; explicit rename/reorder/profile/close edits update the shared workspace.
-- Model, effort and permissions are icon-only. Plan, speed, context and dictation live
-  under More, keeping send/queue/interrupt on the same toolbar row down to 320px width.
+- Floating glass header groups contain navigation and workspace actions, with opaque
+  fallbacks for reduced transparency. The picker uses a tab/pane breadcrumb and indented
+  pane options under named tab headings with counts. Non-modal popovers toggle on a
+  repeated trigger tap and support arrow keys, Home/End, typeahead and Escape.
+  Navigation is device-local; explicit create/rename/profile/close edits update the shared workspace.
+- The composer collapses to a single line with attachment and primary actions.
+  Focus expands model, effort and permission icons, directly visible context/dictation,
+  and a sliders popover for Plan/Speed. Owned portaled controls preserve expansion.
+  Keyboard dismissal or an outside click collapses it without losing the draft.
+  One centered primary action shows Stop while active with an empty draft, Queue with
+  follow-up content, or Send when idle. Controls fit a single row down to 320px width.
 - Desktop split/placement/arrangement/resize controls and commands are intentionally
   absent on phones. Existing desktop split panes remain accessible in the top picker.
-- Project, tab, and pane controls remain available as touch menus.
+- The new-session drawer distinguishes New Tab from Add Pane to This Tab and includes
+  locally packaged provider logos. Add Pane uses the shared split operation without
+  exposing desktop geometry. The actions menu omits tab left/right moves and warns that
+  closing the last pane also closes its tab.
 - Drafts, attachments, queues and uncertain-send retry IDs survive pane/tab navigation
   and foreground socket replacement. They remain memory-only and account scoped;
   a full renderer reload discards unsent input. Changing machines starts a new draft scope.
@@ -38,17 +47,17 @@ Phone-specific behavior:
 
 ## Source parity
 
-| Area          | Shared implementation                                                       | Phone behavior                                                                                                   |
-| ------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| Composer      | `agents/composer.tsx`, `draft.ts`, Paseo submit logic                       | Attachments, queue, retry, model/effort/permissions/plan/speed/context, interrupt; native keyboard dictation     |
-| Conversation  | `agents/chat.tsx`, `timeline-item.tsx`, `markdown.tsx`, `plan-progress.tsx` | Same history, streaming, approvals/questions, thinking, tool/MCP/diff/sub-agent rendering and copy actions       |
-| Projects      | `workspace/project-setup-dialog.tsx`, `project-actions.tsx`                 | Open/create/clone/remove; setup continues remotely                                                               |
-| Tabs/panes    | Protocol workspace reducer, `workspace/new-tab-menu.tsx`                    | Local grouped selector; new-session drawer; rename/reorder/profile/confirmed close; no desktop geometry controls |
-| Terminal      | `terminal/terminal-pane.tsx`, `surface.tsx` and xterm                       | Same replay, input ownership, resize/recovery; extra key strip and confirmed stop                                |
-| Settings      | `views/settings-view.tsx` and `settings/*`                                  | Drawer: account/orgs, theme/corners, SSH, billing, native-safe diagnostics                                       |
-| Notifications | Shared attention engine, provider and sound settings                        | Foreground notices; native opt-in push remains backend gated                                                     |
-| Machines      | `machines/machines-view.tsx`                                                | Shared inventory/provisioning/lifecycle controls inside Settings                                                 |
-| Servers       | Same empty state as desktop                                                 | No discovered servers until upstream discovery exists                                                            |
+| Area          | Shared implementation                                                       | Phone behavior                                                                                               |
+| ------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Composer      | `agents/composer.tsx`, `draft.ts`, Paseo submit logic                       | Attachments, queue, retry, model/effort/permissions/plan/speed/context, interrupt; native keyboard dictation |
+| Conversation  | `agents/chat.tsx`, `timeline-item.tsx`, `markdown.tsx`, `plan-progress.tsx` | Same history, streaming, approvals/questions, thinking, tool/MCP/diff/sub-agent rendering and copy actions   |
+| Projects      | `workspace/project-setup-dialog.tsx`, `project-actions.tsx`                 | Open/create/clone/remove; setup continues remotely                                                           |
+| Tabs/panes    | Protocol workspace reducer, `workspace/new-tab-menu.tsx`                    | Hierarchical picker; new-tab/add-pane drawer; rename/profile/confirmed close; no desktop geometry controls   |
+| Terminal      | `terminal/terminal-pane.tsx`, `surface.tsx` and xterm                       | Same replay, input ownership, resize/recovery; extra key strip and confirmed stop                            |
+| Settings      | `views/settings-view.tsx` and `settings/*`                                  | Drawer: account/orgs, theme/corners, SSH, billing, native-safe diagnostics                                   |
+| Notifications | Shared attention engine, provider and sound settings                        | Foreground notices; native opt-in push remains backend gated                                                 |
+| Machines      | `machines/machines-view.tsx`                                                | Shared inventory/provisioning/lifecycle controls inside Settings                                             |
+| Servers       | Same empty state as desktop                                                 | No discovered servers until upstream discovery exists                                                        |
 
 Paths above are relative to `apps/desktop/src/`. The earlier mobile-only chat and
 terminal renderers were removed. Tauri-specific APIs are replaced by narrow native
@@ -65,9 +74,11 @@ Implementation/verification checklist (updated as each slice lands):
 - [x] Desktop regression cases and refreshed private preview.
 
 Verification on 2026-09-09: 218 unit tests pass (one opt-in API integration test is
-skipped), 15 phone browser scenarios pass, and all 19 desktop browser scenarios pass
+skipped), 17 phone browser scenarios pass, and all 19 desktop browser scenarios pass
 across isolated-port runs (17 initially, the two multi-client cases passed on isolated retry).
-The phone suite covers 320/375/390/430px toolbars, contained picker chevrons,
+The phone suite covers 320/375/390/430px toolbars, contained picker chevrons, repeated
+touch toggles, hierarchical tab/pane creation and closing, collapsed/expanded composer
+focus and keyboard dismissal, single centered send/stop actions,
 drawer focus/animations/reduced motion, sidebar-preserving search, account menus and machine management.
 The appearance scenario additionally exercises theme
 and corner preferences. A local-WebView test removes the browser UUID helper and
