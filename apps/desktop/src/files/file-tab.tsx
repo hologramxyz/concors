@@ -13,7 +13,8 @@ import { AgentMarkdown, CopyButton } from "@/agents/markdown";
 import { Button } from "@/components/ui/button";
 import type { FileOperation } from "@concors/protocol";
 import { useFiles, type OpenFile } from "./context";
-const CodeEditor = lazy(() => import("./code-editor"));
+import { loadCodeEditor } from "./editor-loader";
+const CodeEditor = lazy(loadCodeEditor);
 
 export function FileTabLabel({ file }: { file: OpenFile }) {
   const state = useSyncExternalStore(file.document.subscribe, file.document.getSnapshot);
@@ -28,7 +29,7 @@ export function FileTabLabel({ file }: { file: OpenFile }) {
         title={file.path}
         aria-pressed={files.active[file.scope] === file.id}
         onClick={() => files.select(file.scope, file.id)}
-        className="flex max-w-52 items-center gap-1.5 px-2 py-1 text-xs"
+        className="flex max-w-52 items-center gap-1.5 px-2 py-1 text-ui"
       >
         <FileCode2 className="size-3.5 shrink-0" />
         <span className="truncate">{file.path.split("/").pop()}</span>
@@ -107,13 +108,13 @@ export function FileTab({ file }: { file: OpenFile }) {
       <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b px-3 py-2">
         <span
           title={file.path}
-          className="min-w-20 flex-1 truncate font-mono text-xs text-muted-foreground"
+          className="min-w-20 flex-1 truncate font-mono text-ui text-muted-foreground"
         >
           {file.path}
         </span>
         {/\.(md|markdown)$/i.test(file.path) && (
           <Button
-            size="xs"
+            size="sm"
             variant="ghost"
             onClick={() => setMode({ preview: !preview, navigation: file.navigation })}
           >
@@ -121,7 +122,7 @@ export function FileTab({ file }: { file: OpenFile }) {
           </Button>
         )}
         <Button
-          size="xs"
+          size="sm"
           variant="ghost"
           aria-pressed={vimEnabled}
           onClick={() => {
@@ -159,7 +160,7 @@ export function FileTab({ file }: { file: OpenFile }) {
           <RefreshCw />
         </Button>
         <Button
-          size="xs"
+          size="sm"
           variant="outline"
           disabled={!available || state.busy || !dirty || state.changed}
           onClick={save}
@@ -169,23 +170,23 @@ export function FileTab({ file }: { file: OpenFile }) {
         </Button>
       </div>
       {!available && (
-        <p role="status" className="border-b px-3 py-2 text-xs text-muted-foreground">
+        <p role="status" className="border-b px-3 py-2 text-ui text-muted-foreground">
           Disconnected. Your draft is kept; reconnect to save.
         </p>
       )}
       {state.error && (
-        <p role="alert" className="border-b px-3 py-2 text-xs text-destructive">
+        <p role="alert" className="border-b px-3 py-2 text-ui text-destructive">
           {state.error}
         </p>
       )}
       {state.changed && (
         <div
           role="status"
-          className="flex flex-wrap items-center gap-2 border-b bg-muted/40 px-3 py-2 text-xs"
+          className="flex flex-wrap items-center gap-2 border-b bg-muted/40 px-3 py-2 text-ui"
         >
           <span className="flex-1">This file changed on the machine. Your version is kept.</span>
           <Button
-            size="xs"
+            size="sm"
             variant="outline"
             disabled={!available || state.busy}
             onClick={() => {
@@ -199,10 +200,10 @@ export function FileTab({ file }: { file: OpenFile }) {
       )}
       {compare && state.disk && (
         <div className="flex max-h-[45%] min-h-0 flex-col border-b bg-muted/20">
-          <div className="flex flex-wrap items-center gap-2 px-3 py-2 text-xs">
+          <div className="flex flex-wrap items-center gap-2 px-3 py-2 text-ui">
             <span className="flex-1">Latest version on disk</span>
             <Button
-              size="xs"
+              size="sm"
               variant="outline"
               onClick={() => {
                 if (!dirty || window.confirm("Discard your draft and use the disk version?")) {
@@ -214,7 +215,7 @@ export function FileTab({ file }: { file: OpenFile }) {
               Use disk version
             </Button>
             <Button
-              size="xs"
+              size="sm"
               variant="outline"
               disabled={state.busy || !available}
               onClick={() => {
@@ -231,7 +232,7 @@ export function FileTab({ file }: { file: OpenFile }) {
               Keep my draft
             </Button>
           </div>
-          <pre className="min-h-0 overflow-auto px-3 pb-3 font-mono text-xs">
+          <pre className="min-h-0 overflow-auto px-3 pb-3 font-mono text-ui">
             {state.disk.content}
           </pre>
         </div>
@@ -243,7 +244,16 @@ export function FileTab({ file }: { file: OpenFile }) {
               <AgentMarkdown sourcePath={file.path}>{state.content}</AgentMarkdown>
             </div>
           ) : (
-            <Suspense fallback={<p className="p-4 text-sm">Loading editor…</p>}>
+            <Suspense
+              fallback={
+                <pre
+                  aria-label={`Source of ${file.path}`}
+                  className="selectable h-full overflow-auto p-3 font-mono text-sm leading-relaxed"
+                >
+                  {state.content}
+                </pre>
+              }
+            >
               <CodeEditor
                 content={state.content}
                 path={file.path}
@@ -266,7 +276,7 @@ export function FileTab({ file }: { file: OpenFile }) {
           </p>
         )}
       </div>
-      <div className="shrink-0 border-t px-3 py-1 font-mono text-[10px] text-muted-foreground">
+      <div className="shrink-0 border-t px-3 py-1 font-mono text-xs text-muted-foreground">
         {dirty ? "Unsaved changes" : state.base ? "Saved on machine" : "File preview"} ·{" "}
         {vimEnabled ? "Vim · :w to save" : "⌘/Ctrl+S to save"}
       </div>
