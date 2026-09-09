@@ -1,3 +1,4 @@
+import { FilesProvider } from "@/files/provider";
 import { useCommand } from "@/shortcuts/context";
 import { ShortcutProvider } from "@/shortcuts/provider";
 import { ShortcutGuide } from "@/shortcuts/guide";
@@ -154,7 +155,10 @@ function AppContent() {
     [transport, memoryKey],
   );
   const openPalette = useCallback(() => setPaletteOpen(true), []);
-  const signOut = () => void auth.signOut();
+  const beforeLeaveFiles = useRef<(() => boolean) | null>(null);
+  const signOut = () => {
+    if (beforeLeaveFiles.current?.() !== false) void auth.signOut();
+  };
   const openSettings = () => {
     if (view !== "settings") settingsReturnView.current = view;
     setSettingsPage("account");
@@ -232,172 +236,175 @@ function AppContent() {
 
   return (
     <TerminalConnectionContext value={connection.transport}>
-      <NotificationProvider connection={connection.transport} onOpen={openAgent}>
-        <AgentsProvider connection={connection.transport}>
-          <TooltipProvider>
-            <div className="flex h-dvh w-full overflow-hidden bg-sidebar">
-              {view === "settings" ? (
-                <SettingsSidebar
-                  page={settingsPage}
-                  onBack={() => setView(settingsReturnView.current)}
-                  onNavigate={setSettingsPage}
-                />
-              ) : (
-                <AppSidebar
-                  collapsed={sidebarCollapsed}
-                  onCollapse={() => toggleSidebar(true)}
-                  execute={execute}
-                  onSelectAgent={openAgent}
-                  view={view}
-                  onOpenSettings={openSettings}
-                  onOpenCommandPalette={openPalette}
-                  onOpenShortcuts={() => setShortcutsOpen(true)}
-                  workspace={workspace}
-                  canEdit={canEdit}
-                  onSelectProject={selectProject}
-                  onAddProject={() => setAddingProject(true)}
-                  machines={machines}
-                  selectedMachineId={selectedMachineId}
-                  onSelectMachine={selectMachine}
-                  onAddMachine={(machine) => {
-                    if (machines.some((existing) => existing.url === machine.url))
-                      throw new Error("This machine connection is already saved");
-                    if (bookmarks.length >= 32)
-                      throw new Error("You can save up to 32 machine connections");
-                    const next = [...bookmarks, machine];
-                    localStorage.setItem(MACHINES_STORAGE_KEY, JSON.stringify(next));
-                    setBookmarks(next);
-                    setEndpoint(describeDaemonEndpoint(machine.url));
-                    setSelectedMachineId(machine.id);
-                    setView("projects");
-                  }}
-                  auth={account}
-                  onSignOut={signOut}
-                />
-              )}
-              <div
-                className={`workspace-surface my-2 mr-2 flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-background shadow-xs ${appSidebarCollapsed ? "ml-2" : ""}`}
-              >
-                {!(view === "projects" && activeProject) && (
-                  <header className="flex h-11 shrink-0 items-center gap-2 border-b px-4">
-                    {sidebarToggle}
-                    <h1 className="truncate text-[13px] font-medium">
-                      {view === "settings"
-                        ? settingsNavItemFor(settingsPage).label
-                        : navItemFor(view).label}
-                    </h1>
-                  </header>
+      <FilesProvider beforeLeaveRef={beforeLeaveFiles}>
+        <NotificationProvider connection={connection.transport} onOpen={openAgent}>
+          <AgentsProvider connection={connection.transport}>
+            <TooltipProvider>
+              <div className="flex h-dvh w-full overflow-hidden bg-sidebar">
+                {view === "settings" ? (
+                  <SettingsSidebar
+                    page={settingsPage}
+                    onBack={() => setView(settingsReturnView.current)}
+                    onNavigate={setSettingsPage}
+                  />
+                ) : (
+                  <AppSidebar
+                    collapsed={sidebarCollapsed}
+                    onCollapse={() => toggleSidebar(true)}
+                    execute={execute}
+                    onSelectAgent={openAgent}
+                    view={view}
+                    onOpenSettings={openSettings}
+                    onOpenCommandPalette={openPalette}
+                    onOpenShortcuts={() => setShortcutsOpen(true)}
+                    workspace={workspace}
+                    canEdit={canEdit}
+                    onSelectProject={selectProject}
+                    onAddProject={() => setAddingProject(true)}
+                    machines={machines}
+                    selectedMachineId={selectedMachineId}
+                    onSelectMachine={selectMachine}
+                    onAddMachine={(machine) => {
+                      if (machines.some((existing) => existing.url === machine.url))
+                        throw new Error("This machine connection is already saved");
+                      if (bookmarks.length >= 32)
+                        throw new Error("You can save up to 32 machine connections");
+                      const next = [...bookmarks, machine];
+                      localStorage.setItem(MACHINES_STORAGE_KEY, JSON.stringify(next));
+                      setBookmarks(next);
+                      setEndpoint(describeDaemonEndpoint(machine.url));
+                      setSelectedMachineId(machine.id);
+                      setView("projects");
+                    }}
+                    auth={account}
+                    onSignOut={signOut}
+                  />
                 )}
-                {error && (
-                  <div
-                    role="alert"
-                    className="flex items-center justify-between gap-3 border-b bg-destructive/5 px-4 py-2 text-xs text-destructive"
-                  >
-                    <span>{error}</span>
-                    <button type="button" onClick={() => setError(null)}>
-                      Dismiss
-                    </button>
-                  </div>
-                )}
-                {workspace && !connection.workspaceReady && (
-                  <div
-                    role="status"
-                    className="border-b bg-muted px-4 py-2 text-xs text-muted-foreground"
-                  >
-                    Reconnecting… Showing the last saved workspace. Editing resumes when connected.
-                  </div>
-                )}
-                <main className="min-h-0 flex-1 overflow-auto">
-                  {view === "settings" ? (
-                    <SettingsView
-                      page={settingsPage}
-                      endpoint={endpoint}
-                      state={connection.state}
-                      theme={theme.preference}
-                      onSetTheme={theme.setPreference}
-                      cornerStyle={corners.preference}
-                      onSetCornerStyle={corners.setPreference}
-                      auth={account}
-                      onSignOut={signOut}
-                      onSetActiveOrganization={(organizationId) => {
-                        setError(null);
-                        void auth
-                          .setActiveOrganization(organizationId)
-                          .catch((cause: unknown) => setError(describeAuthError(cause)));
-                      }}
-                    />
-                  ) : view === "projects" ? (
-                    workspace ? (
-                      <ProjectWorkspace
-                        sidebarToggle={sidebarToggle}
-                        onPaneFocus={(paneId) => {
-                          if (selection?.tabId)
-                            lastPanes.current.set(`${memoryKey}:${selection.tabId}`, paneId);
-                        }}
-                        focusRequest={paneFocus}
-                        workspace={workspace}
-                        canEdit={canEdit}
-                        onCommand={command}
-                        execute={execute}
-                        onAddProject={() => setAddingProject(true)}
-                      />
-                    ) : (
-                      <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
-                        <h2 className="text-lg font-medium">Connect to your workspace</h2>
-                        <p className="max-w-sm text-sm text-muted-foreground">
-                          Your projects and layouts will appear when this machine is connected.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={connection.reconnectNow}
-                          className="text-sm text-primary"
-                        >
-                          Reconnect
-                        </button>
-                      </div>
-                    )
-                  ) : view === "machines" ? (
-                    <MachinesView auth={account} />
-                  ) : (
-                    <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
-                      <Server className="size-10 text-muted-foreground/50" />
-                      <h2 className="text-lg font-medium">Your development servers</h2>
-                      <p className="max-w-sm text-sm text-muted-foreground">
-                        Automatic server discovery and preview links will be available in a later
-                        milestone.
-                      </p>
+                <div
+                  className={`workspace-surface my-2 mr-2 flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-background shadow-xs ${appSidebarCollapsed ? "ml-2" : ""}`}
+                >
+                  {!(view === "projects" && activeProject) && (
+                    <header className="flex h-11 shrink-0 items-center gap-2 border-b px-4">
+                      {sidebarToggle}
+                      <h1 className="truncate text-[13px] font-medium">
+                        {view === "settings"
+                          ? settingsNavItemFor(settingsPage).label
+                          : navItemFor(view).label}
+                      </h1>
+                    </header>
+                  )}
+                  {error && (
+                    <div
+                      role="alert"
+                      className="flex items-center justify-between gap-3 border-b bg-destructive/5 px-4 py-2 text-xs text-destructive"
+                    >
+                      <span>{error}</span>
+                      <button type="button" onClick={() => setError(null)}>
+                        Dismiss
+                      </button>
                     </div>
                   )}
-                </main>
+                  {workspace && !connection.workspaceReady && (
+                    <div
+                      role="status"
+                      className="border-b bg-muted px-4 py-2 text-xs text-muted-foreground"
+                    >
+                      Reconnecting… Showing the last saved workspace. Editing resumes when
+                      connected.
+                    </div>
+                  )}
+                  <main className="min-h-0 flex-1 overflow-auto">
+                    {view === "settings" ? (
+                      <SettingsView
+                        page={settingsPage}
+                        endpoint={endpoint}
+                        state={connection.state}
+                        theme={theme.preference}
+                        onSetTheme={theme.setPreference}
+                        cornerStyle={corners.preference}
+                        onSetCornerStyle={corners.setPreference}
+                        auth={account}
+                        onSignOut={signOut}
+                        onSetActiveOrganization={(organizationId) => {
+                          setError(null);
+                          void auth
+                            .setActiveOrganization(organizationId)
+                            .catch((cause: unknown) => setError(describeAuthError(cause)));
+                        }}
+                      />
+                    ) : view === "projects" ? (
+                      workspace ? (
+                        <ProjectWorkspace
+                          sidebarToggle={sidebarToggle}
+                          onPaneFocus={(paneId) => {
+                            if (selection?.tabId)
+                              lastPanes.current.set(`${memoryKey}:${selection.tabId}`, paneId);
+                          }}
+                          focusRequest={paneFocus}
+                          workspace={workspace}
+                          canEdit={canEdit}
+                          onCommand={command}
+                          execute={execute}
+                          onAddProject={() => setAddingProject(true)}
+                        />
+                      ) : (
+                        <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+                          <h2 className="text-lg font-medium">Connect to your workspace</h2>
+                          <p className="max-w-sm text-sm text-muted-foreground">
+                            Your projects and layouts will appear when this machine is connected.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={connection.reconnectNow}
+                            className="text-sm text-primary"
+                          >
+                            Reconnect
+                          </button>
+                        </div>
+                      )
+                    ) : view === "machines" ? (
+                      <MachinesView auth={account} />
+                    ) : (
+                      <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+                        <Server className="size-10 text-muted-foreground/50" />
+                        <h2 className="text-lg font-medium">Your development servers</h2>
+                        <p className="max-w-sm text-sm text-muted-foreground">
+                          Automatic server discovery and preview links will be available in a later
+                          milestone.
+                        </p>
+                      </div>
+                    )}
+                  </main>
+                </div>
               </div>
-            </div>
-            {addingProject && (
-              <ProjectSetupDialog
-                onClose={() => setAddingProject(false)}
-                onAdded={() => {
-                  setAddingProject(false);
-                  setView("projects");
-                }}
+              {addingProject && (
+                <ProjectSetupDialog
+                  onClose={() => setAddingProject(false)}
+                  onAdded={() => {
+                    setAddingProject(false);
+                    setView("projects");
+                  }}
+                />
+              )}
+              <ShortcutGuide open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+              <CommandPalette
+                canSelectProject={canEdit}
+                projects={workspace?.projects ?? []}
+                onSelectProject={selectProject}
+                open={paletteOpen}
+                onOpenChange={setPaletteOpen}
+                onNavigate={setView}
+                onReconnect={connection.reconnectNow}
+                canReconnect={
+                  connection.state.status === "disconnected" || connection.state.status === "error"
+                }
+                onSetTheme={theme.setPreference}
+                onSignOut={signOut}
               />
-            )}
-            <ShortcutGuide open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
-            <CommandPalette
-              canSelectProject={canEdit}
-              projects={workspace?.projects ?? []}
-              onSelectProject={selectProject}
-              open={paletteOpen}
-              onOpenChange={setPaletteOpen}
-              onNavigate={setView}
-              onReconnect={connection.reconnectNow}
-              canReconnect={
-                connection.state.status === "disconnected" || connection.state.status === "error"
-              }
-              onSetTheme={theme.setPreference}
-              onSignOut={signOut}
-            />
-          </TooltipProvider>
-        </AgentsProvider>
-      </NotificationProvider>
+            </TooltipProvider>
+          </AgentsProvider>
+        </NotificationProvider>
+      </FilesProvider>
     </TerminalConnectionContext>
   );
 }
