@@ -200,20 +200,40 @@ See [file behavior and safety boundaries](../../docs/project-files.md).
 
 ### Glass rendering: web styling versus native iOS
 
-The current workspace headers are HTML inside the shared WebView, including in an iOS build.
-Their translucent CSS/backdrop-filter styling is **not native iOS Liquid Glass**. Neither
-`@expo/ui` nor `expo-glass-effect` is currently an app dependency; installing one alone would not
-convert the existing DOM controls.
+The iOS workspace now uses [Expo UI SwiftUI buttons](https://docs.expo.dev/versions/latest/sdk/ui/swift-ui/button/)
+with `buttonStyle('glass')` for the sidebar, tabs/panes, Files, Back and directory controls.
+The agent composer uses a real React Native `TextInput` above an
+[Expo GlassEffect `GlassView`](https://docs.expo.dev/versions/latest/sdk/glass-effect/) background.
+These views sit **above** WKWebView, with chat scrolling behind the composer; they are not CSS
+effects or native blur painted over HTML text. The shared renderer reserves layout, hides its
+duplicate controls from touch/VoiceOver, and retains draft, attachment, queue, configuration and
+delivery logic. Native controls relay bounded, scope/connection-checked UI events to that logic.
+Open web drawers suppress the native layer so their focus traps and backdrops remain usable.
 
-Native headers would need to live in the Expo host and send navigation actions to the shared
-renderer. [Expo UI's SwiftUI buttons](https://docs.expo.dev/versions/latest/sdk/ui/swift-ui/button/)
-support `buttonStyle('glass')` on iOS 26+ with Xcode 26. For custom React Native surfaces,
-[Expo GlassEffect](https://docs.expo.dev/versions/latest/sdk/glass-effect/) provides `GlassView`
-with runtime availability checks. The implementation must retain accessible fallbacks for older
-iOS/Android, respect Reduce Transparency, and avoid duplicate native/DOM controls.
+The iOS-specific imports do not enter Android or Safari bundles. Android/web retain their shared
+controls and web styling. Older iOS or Reduce Transparency uses native bordered controls and an
+opaque composer. Both native glass availability checks run before mounting glass; accessibility
+changes are observed while running. Reduce Motion disables composer expansion animation.
+The model/effort/permission buttons open native action sheets. Dictation remains the iOS keyboard's
+microphone: the app never secretly starts recording. Attachments use the native document picker,
+retain the three-file/1 MiB limits, and remove their temporary cached copies after reading.
 
-That native-header migration is not implemented yet. Verifying it requires an actual native
-build on supported iOS; the Safari/Tailscale web preview cannot prove native rendering.
+EAS profiles pin the SDK 57/Xcode 26.6 image (see [Expo build infrastructure](https://docs.expo.dev/build-reference/infrastructure/)).
+Rebuild the native app after installing these packages; a Safari reload or JS-only update cannot
+add their native modules. To test on a Mac with Xcode 26+ and an iOS 26+ simulator:
+
+```bash
+pnpm install --frozen-lockfile
+APP_VARIANT=preview EXPO_PUBLIC_DEMO=true pnpm --filter @concors/mobile ios --configuration Release
+maestro test apps/mobile/e2e/native/glass.yaml
+```
+
+For a real iPhone, use the existing EAS development/preview profile or add `--device` to the local
+iOS build, using the private daemon configuration above instead of demo mode when testing real
+sessions. No signing credentials are committed. The `Mobile iOS native` PR check builds an unsigned
+iOS 26 simulator app and exercises native headers, input expansion, settings, Files, and draft
+preservation. Browser acceptance separately covers the bridge and the web/Android fallback;
+neither a passing web test nor an Expo export substitutes for the simulator/device test.
 
 ### Later: managed cloud connections
 

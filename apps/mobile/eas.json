@@ -1,7 +1,11 @@
 {
   "cli": { "version": ">= 18.0.0", "appVersionSource": "remote" },
   "build": {
-    "base": { "node": "24.14.0", "pnpm": "11.1.1" },
+    "base": {
+      "node": "24.14.0",
+      "pnpm": "11.1.1",
+      "ios": { "image": "macos-tahoe-26.5-xcode-26.6" }
+    },
     "development": {
       "extends": "base",
       "developmentClient": true,
