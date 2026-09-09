@@ -329,7 +329,7 @@ function Pane({
         ) : (
           <Terminal className="size-4 shrink-0 text-muted-foreground" />
         )}
-        <span className="min-w-0 flex-1 truncate text-[13px]" title={title}>
+        <span className="min-w-0 flex-1 truncate text-ui" title={title}>
           {title}
         </span>
         <DropdownMenu>
@@ -339,7 +339,7 @@ function Pane({
           >
             <Ellipsis className="size-4" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-72">
+          <DropdownMenuContent align="end" className="w-max max-w-[calc(100vw-16px)] min-w-[280px]">
             <DropdownMenuItem
               disabled={!canEdit || tab.nodes.length >= 63}
               onSelect={() =>
@@ -353,10 +353,10 @@ function Pane({
                 })
               }
             >
-              <Columns2 /> Split horizontally
+              <Columns2 /> <span className="whitespace-nowrap">Split horizontally</span>
               <span
                 aria-hidden="true"
-                className="ml-auto text-xs whitespace-nowrap text-muted-foreground"
+                className="ml-auto shrink-0 pl-4 text-xs whitespace-nowrap text-muted-foreground"
               >
                 {shortcutLabel("split-horizontal")}
               </span>
@@ -374,10 +374,10 @@ function Pane({
                 })
               }
             >
-              <Rows2 /> Split vertically
+              <Rows2 /> <span className="whitespace-nowrap">Split vertically</span>
               <span
                 aria-hidden="true"
-                className="ml-auto text-xs whitespace-nowrap text-muted-foreground"
+                className="ml-auto shrink-0 pl-4 text-xs whitespace-nowrap text-muted-foreground"
               >
                 {shortcutLabel("split-vertical")}
               </span>

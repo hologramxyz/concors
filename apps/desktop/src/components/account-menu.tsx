@@ -42,12 +42,12 @@ export function AccountMenu({ auth, onSignOut, onOpenSettings }: AccountMenuProp
           {initialOf(auth.user)}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px] font-medium">{auth.user.name}</span>
+          <span className="block truncate text-ui font-medium">{auth.user.name}</span>
         </span>
         <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" side="top" className="w-56">
-        <DropdownMenuLabel className="text-[13px] font-normal text-muted-foreground">
+        <DropdownMenuLabel className="text-ui font-normal text-muted-foreground">
           {org ? (org.isPersonal ? "Personal organization" : org.name) : "Signed in"}
           <span className="mt-1 block truncate text-foreground">{auth.user.name}</span>
           <span className="block truncate" title={auth.user.email}>
@@ -55,11 +55,11 @@ export function AccountMenu({ auth, onSignOut, onOpenSettings }: AccountMenuProp
           </span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem className="text-[13px]" onSelect={onOpenSettings}>
+        <DropdownMenuItem className="text-ui" onSelect={onOpenSettings}>
           <Settings aria-hidden="true" />
           Settings
         </DropdownMenuItem>
-        <DropdownMenuItem className="text-[13px]" onSelect={onSignOut}>
+        <DropdownMenuItem className="text-ui" onSelect={onSignOut}>
           <LogOut aria-hidden="true" />
           Sign out
         </DropdownMenuItem>

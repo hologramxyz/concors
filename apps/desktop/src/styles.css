@@ -12,6 +12,16 @@
  * shadcn components read these through the `@theme inline` mapping below.
  */
 @theme inline {
+  /* Keep compact rem-based spacing, but give text sizes explicit, readable values. */
+  --text-ui: 13px;
+  --text-ui--line-height: 1.4;
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-lg: 18px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 30px;
   --font-sans: "Geist Variable", ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono:
     "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono",
@@ -257,11 +267,14 @@
   padding: 0.85rem;
   border-radius: var(--radius-xl);
   background: var(--muted);
-  font-size: 0.75rem;
+  font-size: 14px;
 }
 .chat-markdown code {
   font-size: 0.85em;
   overflow-wrap: anywhere;
+}
+.chat-markdown pre code {
+  font-size: inherit;
 }
 .chat-markdown :not(pre) > code {
   border-radius: var(--radius-sm);
@@ -418,7 +431,7 @@
   line-height: 1.75;
 }
 .chat-markdown pre {
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.7;
 }
 .chat-markdown h1 {
@@ -495,4 +508,60 @@
   --terminal-bright-magenta: #dfbaff;
   --terminal-bright-cyan: #a0e1eb;
   --terminal-bright-white: #f5f5f5;
+}
+
+/* The file browser mirrors the main sidebar, outside the workspace's inset surface. */
+.files-sidebar-shell {
+  position: relative;
+  flex: none;
+  width: 0;
+  height: 100%;
+  overflow: hidden;
+  transition: width 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.files-sidebar-shell[data-open="true"] {
+  width: var(--files-sidebar-width);
+}
+.files-sidebar-content {
+  position: relative;
+  width: var(--files-sidebar-width);
+  transform: translateX(12px);
+  opacity: 0;
+  transition:
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 180ms ease;
+}
+.files-sidebar-shell[data-open="true"] > .files-sidebar-content {
+  transform: translateX(0);
+  opacity: 1;
+}
+.files-sidebar-shell[data-docked="false"] {
+  position: fixed;
+  inset: 0 0 0 auto;
+  z-index: 30;
+  height: 100dvh;
+}
+.files-toggle {
+  transition:
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 150ms;
+}
+@media (max-width: 1023px) {
+  .files-toggle {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    z-index: 40;
+  }
+}
+.files-sidebar-shell[data-resizing="true"],
+.files-sidebar-shell[data-resizing="true"] > .files-sidebar-content {
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .files-sidebar-shell,
+  .files-sidebar-content,
+  .files-toggle {
+    transition: none;
+  }
 }
