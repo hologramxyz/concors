@@ -1,3 +1,4 @@
+import { ProjectFileLinks } from "@/files/provider";
 import { neighborPane, type Direction } from "./pane-navigation";
 import { useTabVisible } from "./tab-visibility";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
@@ -418,7 +419,14 @@ function Pane({
           canEdit={canEdit}
         />
       ) : (
-        <ChatPane project={project} tab={tab} node={node} canEdit={canEdit} />
+        <ProjectFileLinks
+          project={{
+            ...project,
+            directory: agent?.directory ?? node.directory ?? project.directory,
+          }}
+        >
+          <ChatPane project={project} tab={tab} node={node} canEdit={canEdit} />
+        </ProjectFileLinks>
       )}
     </section>
   );
