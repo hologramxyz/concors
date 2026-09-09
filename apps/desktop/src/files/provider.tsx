@@ -1,6 +1,7 @@
 import { useContext, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { WorkspaceProject } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
+import { useFileSidebar } from "./sidebar-state";
 import { FileDocument } from "./document";
 import { resolveFileLink, type FileLocation } from "./links";
 import { FilesContext, FileLinkContext, fileScope, useFiles, type OpenFile } from "./context";
@@ -11,6 +12,7 @@ export function FilesProvider({
   children: ReactNode;
   beforeLeaveRef: RefObject<(() => boolean) | null>;
 }) {
+  const sidebar = useFileSidebar();
   const connection = useContext(TerminalConnectionContext);
   const [files, setFiles] = useState<OpenFile[]>([]);
   const [active, setActive] = useState<Record<string, string | null>>({});
@@ -96,7 +98,9 @@ export function FilesProvider({
       [file.scope]: current[file.scope] === file.id ? null : (current[file.scope] ?? null),
     }));
   };
-  return <FilesContext value={{ files, active, open, select, close }}>{children}</FilesContext>;
+  return (
+    <FilesContext value={{ files, active, open, select, close, sidebar }}>{children}</FilesContext>
+  );
 }
 export function ProjectFileLinks({
   project,

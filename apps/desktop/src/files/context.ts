@@ -1,5 +1,6 @@
 import { createContext, useContext } from "react";
 import type { WorkspaceProject } from "@concors/protocol";
+import type { FileSidebarState } from "./sidebar-state";
 import type { FileDocument } from "./document";
 import type { FileLocation } from "./links";
 
@@ -13,6 +14,7 @@ export interface OpenFile {
   navigation: number;
 }
 interface FilesState {
+  sidebar: FileSidebarState;
   files: OpenFile[];
   active: Record<string, string | null>;
   open(project: WorkspaceProject, location: FileLocation): void;
