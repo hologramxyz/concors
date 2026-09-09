@@ -71,6 +71,7 @@ describe("WebSocket handshake", () => {
         capabilities: [
           "project-files",
           "project-file-create",
+          "folder-workspaces",
           "agent-chat",
           "agent-attention",
           "agent-composer",

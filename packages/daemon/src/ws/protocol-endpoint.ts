@@ -141,8 +141,11 @@ export function registerProtocolEndpoint(
           void files.request(message).then((result) => send(socket, result));
         else if (message.type === "agent.request")
           void agents.request(message).then((result) => send(socket, result));
-        else if (message.type === "project.request") send(socket, projects.request(message));
-        else if (message.type === "terminal.input")
+        else if (message.type === "project.request") {
+          if (message.operation.kind === "browse")
+            void projects.browse(message).then((result) => send(socket, result));
+          else send(socket, projects.request(message));
+        } else if (message.type === "terminal.input")
           terminals.input(viewer, message.sessionId, message.data);
         else void terminals.request(viewer, message).then((result) => send(socket, result));
       } else if (message.type === "workspace.subscribe") {

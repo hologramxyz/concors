@@ -1,3 +1,4 @@
+import { oscDirectory } from "./working-directory.ts";
 import { terminalEnvironment } from "./environment.ts";
 import { terminalAgentActivity } from "./agent-activity.ts";
 import * as pty from "node-pty";
@@ -27,6 +28,7 @@ export class TerminalRuntime {
   #paused = false;
   #stopped = false;
   #title = "";
+  reportedDirectory: string | null = null;
   #resolveExit: () => void = () => undefined;
   readonly #exit: Promise<void>;
   readonly #save: (info: TerminalInfo) => void;
@@ -46,6 +48,10 @@ export class TerminalRuntime {
       rows: info.rows,
       scrollback: 500,
       allowProposedApi: true,
+    });
+    this.#screen.parser.registerOscHandler(7, (data) => {
+      if (this.info.profile === "shell") this.reportedDirectory = oscDirectory(data);
+      return true;
     });
     this.#serializer = new serialize.SerializeAddon();
     this.#screen.loadAddon(this.#serializer);
@@ -126,6 +132,17 @@ export class TerminalRuntime {
 
   get pid(): number {
     return this.#pty.pid;
+  }
+
+  observeDirectory(directory: string): void {
+    if (
+      this.info.status !== "running" ||
+      this.#disposed ||
+      this.info.currentDirectory === directory
+    )
+      return;
+    this.info = { ...this.info, currentDirectory: directory };
+    this.#save(this.info);
   }
 
   detectAgent(agent: TerminalInfo["detectedAgent"]): void {
