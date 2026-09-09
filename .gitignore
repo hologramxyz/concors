@@ -42,6 +42,7 @@ Thumbs.db
 apps/mobile/android/
 apps/mobile/ios/
 apps/mobile/assets/terminal-html.ts
+apps/mobile/assets/workspace-html.ts
 *.jks
 *.keystore
 *.p8
