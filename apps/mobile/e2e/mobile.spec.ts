@@ -1,69 +1,87 @@
 import { expect, test, type Page } from "@playwright/test";
-
-async function openWorkspace(page: Page) {
+import { ids } from "../src/demo/fixtures";
+const workspace = (page: Page) => page.frameLocator('iframe[title="Concors workspace"]');
+async function enter(page: Page) {
   await page.goto("/");
-  await page.getByRole("button", { name: "Explore demo", exact: true }).click();
-  await page.getByRole("button", { name: "Development", exact: true }).click();
-  await expect(page.getByText("Mobile launch", { exact: true }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Explore demo" }).click();
+  const ui = workspace(page);
+  await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
+  return ui;
 }
-
-test("phone preview signs in, approves a request, and streams a conversation", async ({
-  page,
-}, info) => {
-  const errors: string[] = [];
-  page.on("pageerror", (error) => errors.push(error.message));
-  await openWorkspace(page);
-  await page.getByRole("button", { name: "Agent conversation", exact: true }).click();
-  await expect(page.getByText("Run the test suite?", { exact: true })).toBeVisible();
-  await page.screenshot({ path: info.outputPath("mobile-approval.png") });
-  await page.getByRole("button", { name: "Approve", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
-  await page.getByRole("textbox", { name: "Message", exact: true }).fill("Test the mobile client");
-  await page.getByRole("button", { name: "Send message", exact: true }).click();
-  await expect(page.getByText(/This is a simulated response.*actual output here\./)).toBeVisible();
-  await page.screenshot({ path: info.outputPath("mobile-chat.png") });
-  expect(errors).toEqual([]);
-});
-
-test("bundled terminal starts, accepts input, reloads, and confirms stopping", async ({
-  page,
-}, info) => {
-  await openWorkspace(page);
-  await page.getByRole("button", { name: "Terminal 2", exact: true }).click();
-  const frame = page.frameLocator('iframe[title="Interactive terminal"]');
-  await expect(page.getByRole("button", { name: "Show keyboard", exact: true })).toBeEnabled();
-  await page.getByRole("button", { name: "Show keyboard", exact: true }).click();
-  await frame.locator(".xterm-helper-textarea").pressSequentially("ls");
-  await frame.locator(".xterm-helper-textarea").press("Enter");
-  await expect(frame.locator(".xterm-accessibility-tree")).toContainText("ls");
-  await page.getByRole("button", { name: "Reload terminal", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Show keyboard", exact: true })).toBeEnabled();
-  await page.screenshot({ path: info.outputPath("mobile-terminal.png") });
-  expect(
-    await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight),
-  ).toBeLessThanOrEqual(1);
-  await page.getByRole("button", { name: "Stop session", exact: true }).click();
-  await expect(page.getByText("This stops the process for every connected device.")).toBeVisible();
-  await page.getByRole("button", { name: "Confirm stop", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Take control", exact: true })).toBeDisabled();
-});
-
-test("cold links require sign-in, then resolve only authorized sessions; sign-out clears access", async ({
+test("chat-first shell reuses desktop approvals, streaming and bottom composer", async ({
   page,
 }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  const ui = await enter(page);
+  await expect(page.getByRole("tablist")).toHaveCount(0);
+  await ui.getByRole("button", { name: "Allow once", exact: true }).click();
+  await ui.getByRole("textbox", { name: "Message Codex" }).fill("Review the mobile client");
+  await ui.getByRole("button", { name: "Send message", exact: true }).click();
+  await expect(ui.getByText(/This is a simulated response/)).toBeVisible();
+  await expect(ui.getByRole("button", { name: "Send message", exact: true })).toBeVisible();
+  const metrics = await ui.locator("[data-agent-composer]").evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      top: rect.top,
+      bottom: rect.bottom,
+      height: window.innerHeight,
+      overflow: document.documentElement.scrollWidth > window.innerWidth,
+    };
+  });
+  expect(metrics.top).toBeGreaterThan(metrics.height / 2);
+  expect(metrics.bottom).toBeLessThan(metrics.height);
+  expect(metrics.overflow).toBe(false);
+  expect(errors).toEqual([]);
+});
+test("sidebar pushes the workspace and settings opens as a drawer over the same draft", async ({
+  page,
+}) => {
+  const ui = await enter(page);
+  await ui.getByRole("textbox", { name: "Message Codex" }).fill("Keep this draft");
+  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  const sidebar = ui.getByRole("dialog", { name: "Workspace sidebar" });
+  await expect(sidebar).toBeVisible();
+  await expect(sidebar.getByText("Projects", { exact: true })).toBeVisible();
+  await expect(sidebar.getByText("Agents", { exact: true })).toBeVisible();
+  await expect(sidebar.getByText("Servers", { exact: true })).toBeVisible();
+  await expect
+    .poll(() => ui.getByTestId("mobile-workspace").evaluate((el) => el.getBoundingClientRect().x))
+    .toBeGreaterThan(250);
+  await ui.getByRole("button", { name: "Return to workspace" }).click();
+  await expect(ui.getByRole("textbox", { name: "Message Codex" })).toHaveValue("Keep this draft");
+  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  await sidebar.getByRole("button", { name: "Settings" }).click();
+  const settings = ui.getByRole("dialog", { name: "Settings", exact: true });
+  await expect(settings).toBeVisible();
+  await settings.getByLabel("Settings section").selectOption("appearance");
+  await expect(settings.getByRole("button", { name: "Theme", exact: true })).toBeVisible();
+  await settings.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(ui.getByRole("textbox", { name: "Message Codex" })).toHaveValue("Keep this draft");
+});
+test("top select switches split panes and cold session links survive sign-in", async ({ page }) => {
   await page.goto(
-    "/session?machineId=11111111-1111-4111-8111-111111111111&projectId=33333333-3333-4333-8333-333333333333&sessionId=66666666-6666-4666-8666-666666666666",
+    `/session?machineId=${ids.machine}&projectId=${ids.project}&sessionId=${ids.agent}`,
   );
-  await page.getByRole("button", { name: "Explore demo", exact: true }).click();
-  await expect(page.getByRole("textbox", { name: "Message", exact: true })).toBeVisible();
-  // Web credentials deliberately live in memory only, never local/session storage.
+  await page.getByRole("button", { name: "Explore demo" }).click();
+  const ui = workspace(page);
+  await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
+  await ui
+    .getByRole("combobox", { name: "Tabs and panes" })
+    .selectOption(`${ids.tab}:${ids.terminalPane}`);
+  await expect(ui.getByLabel("Terminal output", { exact: true })).toBeVisible();
+  await ui.locator(".xterm-helper-textarea").pressSequentially("ls");
+  await ui.locator(".xterm-helper-textarea").press("Enter");
+  await expect(ui.locator(".xterm-accessibility-tree")).toContainText("ls");
+  await ui.getByRole("combobox", { name: "Tabs and panes" }).selectOption(`${ids.tab}:${ids.pane}`);
+  await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
+  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  await ui.getByRole("button", { name: "Settings", exact: true }).click();
+  await ui.getByRole("button", { name: "Sign out", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Explore demo" })).toBeVisible();
   expect(
     await page.evaluate(() =>
-      Object.keys(localStorage).filter((key) => /token|session|auth/i.test(key)),
+      Object.keys(localStorage).filter((key) => /auth|token|session/i.test(key)),
     ),
   ).toEqual([]);
-  await page.getByRole("button", { name: /back/i }).click();
-  await page.getByRole("tab", { name: /Settings/ }).click();
-  await page.getByRole("button", { name: "Sign out", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Explore demo", exact: true })).toBeVisible();
 });

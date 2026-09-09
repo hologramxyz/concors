@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { AppState } from "react-native";
-import { router, Stack } from "expo-router";
+import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { focusManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { configureRequestIds } from "@concors/client-core";
 import { randomUUID } from "expo-crypto";
 import { AuthProvider, useAuth } from "../src/auth/provider";
 import { MachineProvider } from "../src/connection/provider";
-import { Button, useTheme } from "../src/ui";
+import { useTheme } from "../src/ui";
 import { api } from "../src/auth/runtime";
 import { useCapabilities } from "../src/queries";
 import { usePushNavigation } from "../src/platform/notifications";
@@ -64,23 +64,7 @@ function AppStack() {
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="sign-in" options={{ headerShown: false }} />
         <Stack.Screen name="(app)" options={{ headerShown: false }} />
-        <Stack.Screen
-          name="session"
-          options={{
-            title: "Session",
-            headerLeft: () => (
-              <Button
-                secondary
-                onPress={() => {
-                  if (router.canGoBack()) router.back();
-                  else router.replace("/(app)/workspace");
-                }}
-              >
-                Back
-              </Button>
-            ),
-          }}
-        />
+        <Stack.Screen name="session" options={{ headerShown: false }} />
       </Stack>
     </>
   );

@@ -26,6 +26,7 @@ export default [
       "apps/mobile/android/**",
       "apps/mobile/ios/**",
       "apps/mobile/assets/terminal-html.ts",
+      "apps/mobile/assets/workspace-html.ts",
       "**/test-results/**",
       "**/playwright-report/**",
     ],
