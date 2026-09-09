@@ -1,15 +1,20 @@
 # Project files
 
 The Files button beside project tabs opens a right-hand directory tree on the connected machine.
-Opening a file adds a client-local file tab beside the existing agent and terminal tabs. The drawer
-is docked on wide screens and overlays the editor on narrow screens. It lists dotfiles, loads
-folders on expansion, and can refresh or filter the filenames already loaded.
+Opening a file adds a client-local file tab beside the existing agent and terminal tabs. The browser is a full-window-height second sidebar outside the inset workspace surface. Its
+left edge supports pointer dragging, arrow-key resizing, Home/End limits, and double-click reset.
+Width is remembered on this client. Opening/closing moves the workspace and Files toggle together;
+reduced motion disables the transition. Narrow screens use a full-height overlay with room for the
+toggle beside it. It lists dotfiles, loads folders on expansion, and can refresh or filter the
+filenames already loaded. Expanded folders stay open when the sidebar closes and reopens.
 
 ## Viewing and editing
 
 Text files open in a themed CodeMirror editor with syntax highlighting, line numbers, search,
 word wrap, and optional Vim bindings. Save explicitly with the toolbar, Command/Ctrl+S, or Vim
-`:w`. Markdown opens as a rendered preview with an Edit source toggle. Raw HTML does not execute;
+`:w`. The editor module preloads when approaching or opening the Files button. If a slow
+connection delays that module, the file's source is already visible while editing initializes.
+Markdown opens as a rendered preview with an Edit source toggle. Raw HTML does not execute;
 images are omitted, matching the existing safe chat renderer.
 
 Agent Markdown file links and file paths in tool results open the same file tabs. Project-relative
@@ -66,6 +71,7 @@ no workspace schema migration or control-plane change is needed. Paseo's Apache-
 Unit coverage exercises traversal and symlinks, read limits, UTF-8/BOM/CRLF, executable permissions,
 concurrent saves, agent edits, lost acknowledgements, draft retention, and link resolution.
 `e2e/files.spec.ts` exercises real daemon file reads/writes, Markdown and agent links, switching file
-tabs, discard protection, conflict review, Vim `:w`, and a narrow viewport. The browser tests mock
+tabs, discard protection, conflict review, Vim `:w`, full-height sidebar resizing, remembered width,
+reduced motion, text sizes, a delayed editor download, and a narrow viewport. The browser tests mock
 control-plane account responses and agent inference, as the existing acceptance suite does; file
 operations use real temporary projects on the daemon.

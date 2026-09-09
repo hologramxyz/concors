@@ -3,8 +3,13 @@ import { signedIn } from "./signed-in.ts";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Page } from "@playwright/test";
+import type { Page, Locator } from "@playwright/test";
 
+async function bounds(locator: Locator) {
+  const rect = await locator.boundingBox();
+  if (!rect) throw new Error("Expected a visible element");
+  return rect;
+}
 async function project(page: Page) {
   const root = mkdtempSync(join(tmpdir(), "concors-file-ui-"));
   mkdirSync(join(root, "src"));
@@ -129,6 +134,92 @@ test("agent file links open Markdown and code tabs without leaving the workspace
     await expect(page.getByRole("textbox", { name: "Code editor: src/main.ts" })).toBeVisible();
     expect(new URL(page.url()).pathname).toBe("/");
   } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("files behave as a full-height resizable sidebar with readable type", async ({ page }) => {
+  const root = await project(page);
+  try {
+    const toggle = page.getByRole("button", { name: "Toggle project files" });
+    const before = await bounds(toggle);
+    const tree = await openSource(page);
+    await expect.poll(async () => Math.round((await bounds(tree)).width)).toBe(320);
+    const rect = await bounds(tree);
+    expect(rect.y).toBe(0);
+    expect(rect.height).toBe(page.viewportSize()?.height);
+    await expect.poll(async () => Math.round(before.x - (await bounds(toggle)).x)).toBe(320);
+    const fontSize = (selector: string) =>
+      page
+        .locator(selector)
+        .first()
+        .evaluate((node) => getComputedStyle(node).fontSize);
+    expect(
+      await tree
+        .getByRole("button", { name: "src", exact: true })
+        .evaluate((node) => getComputedStyle(node).fontSize),
+    ).toBe("13px");
+    expect(await fontSize('[aria-label="Project tabs"] button')).toBe("13px");
+    expect(await fontSize(".cm-content")).toBe("14px");
+    await page.screenshot({ path: "test-results/files-sidebar.png" });
+    const handle = page.getByRole("separator", { name: "Resize files sidebar" });
+    const grip = await bounds(handle);
+    await page.mouse.move(grip.x + grip.width / 2, grip.y + 100);
+    await page.mouse.down();
+    await page.mouse.move(grip.x + grip.width / 2 - 100, grip.y + 100, { steps: 8 });
+    await page.mouse.up();
+    await expect(handle).toHaveAttribute("aria-valuenow", "420");
+    await handle.focus();
+    await page.keyboard.press("ArrowLeft");
+    await expect(handle).toHaveAttribute("aria-valuenow", "436");
+    await page.getByRole("button", { name: "Close files", exact: true }).click();
+    await expect(tree).toHaveCount(0);
+    await expect(toggle).toBeFocused();
+    await toggle.click();
+    await expect(handle).toHaveAttribute("aria-valuenow", "436");
+    await expect(tree.getByRole("button", { name: "main.ts", exact: true })).toBeVisible();
+    await expect
+      .poll(() => page.evaluate(() => localStorage.getItem("concors.files.sidebar-width")))
+      .toBe("436");
+    await page.reload();
+    await toggle.click();
+    await expect(handle).toHaveAttribute("aria-valuenow", "436");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    expect(await tree.evaluate((node) => getComputedStyle(node).transitionDuration)).toBe("0s");
+    await handle.press("Home");
+    await expect(handle).toHaveAttribute("aria-valuenow", "240");
+    await handle.dblclick();
+    await expect(handle).toHaveAttribute("aria-valuenow", "320");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a slow editor download shows the file immediately instead of a loading-editor message", async ({
+  page,
+}) => {
+  let release!: () => void;
+  const download = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/files/code-editor.tsx*", async (route) => {
+    await download;
+    await route.continue();
+  });
+  const root = await project(page);
+  try {
+    await page.getByRole("button", { name: "Toggle project files" }).click();
+    const tree = page.getByRole("complementary", { name: "Project files" });
+    await tree.getByRole("button", { name: "src", exact: true }).click();
+    await tree.getByRole("button", { name: "main.ts", exact: true }).click();
+    await expect(page.getByLabel("Source of src/main.ts")).toContainText(
+      "export const answer = 42;",
+    );
+    await expect(page.getByText("Loading editor…", { exact: true })).toHaveCount(0);
+    release();
+    await expect(page.getByRole("textbox", { name: "Code editor: src/main.ts" })).toBeVisible();
+  } finally {
+    release();
     rmSync(root, { recursive: true, force: true });
   }
 });
