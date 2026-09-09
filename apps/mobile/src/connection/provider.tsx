@@ -66,16 +66,23 @@ export function MachineProvider({
   children,
   scope,
   direct = false,
+  enabled,
 }: {
   children: ReactNode;
   scope: string;
   direct?: boolean;
+  enabled: boolean;
 }) {
   const [selection, setSelection] = useState<{ scope: string; id: string | null } | null>(null);
   const machineId = selection?.scope === scope ? selection.id : null;
   const selectMachine = useCallback((id: string | null) => setSelection({ scope, id }), [scope]);
   return (
-    <MachineSession machineId={machineId} selectMachine={selectMachine} direct={direct}>
+    <MachineSession
+      machineId={machineId}
+      selectMachine={selectMachine}
+      direct={direct}
+      enabled={enabled}
+    >
       {children}
     </MachineSession>
   );
@@ -85,21 +92,23 @@ function MachineSession({
   machineId,
   selectMachine,
   direct,
+  enabled,
 }: {
   children: ReactNode;
   machineId: string | null;
   selectMachine(id: string | null): void;
   direct: boolean;
+  enabled: boolean;
 }) {
   const controller = useMemo(
     () =>
-      direct || machineId
+      enabled && (direct || machineId)
         ? new ConnectionController(
             () => createConnection(machineId),
             direct ? undefined : (machineId ?? undefined),
           )
         : null,
-    [machineId, direct],
+    [machineId, direct, enabled],
   );
   const connection = useSyncExternalStore(
     controller?.subscribe ?? noSubscribe,

@@ -15,6 +15,7 @@ it("direct access allows workspace controls but never cloud account actions", ()
     { kind: "retry" },
     { kind: "sign-out" },
     { kind: "clipboard", text: "copy" },
+    { kind: "withdraw-ai-consent" },
   ] as const) {
     expect(() => assertWorkspaceActionAllowed(true, false, action)).not.toThrow();
     expect(() => assertWorkspaceActionAllowed(false, false, action)).toThrow("Sign in");
