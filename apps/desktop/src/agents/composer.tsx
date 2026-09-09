@@ -46,6 +46,7 @@ export function AgentComposer({
   const [nativeExpanded, setNativeExpanded] = useState(false);
   const [nativeHeight, setNativeHeight] = useState(56);
   const [editAck, setEditAck] = useState(0);
+  const nativeEditSequence = useRef(0);
   const nativeField = useRef<HTMLDivElement>(null);
   const expanded = native ? nativeExpanded : webExpanded;
   const [keyboardHelp, setKeyboardHelp] = useState(false);
@@ -341,7 +342,14 @@ export function AgentComposer({
     },
     (event) => {
       if (event.kind === "text") {
-        if (connected && !busy && !uncertain && agent.threadId && event.sequence > editAck) {
+        if (
+          connected &&
+          !busy &&
+          !uncertain &&
+          agent.threadId &&
+          event.sequence > nativeEditSequence.current
+        ) {
+          nativeEditSequence.current = event.sequence;
           setDraft(event.text);
           setEditAck(event.sequence);
         }

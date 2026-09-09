@@ -93,6 +93,7 @@ export const MobileActionSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("clipboard"), text: z.string().max(1_000_000) }),
   z.object({ kind: z.literal("preferences"), preferences: MobilePreferencesSchema }),
   z.object({ kind: z.literal("file-guard"), active: z.boolean() }),
+  z.object({ kind: z.literal("dismiss-keyboard") }),
 ]);
 export type MobileAction = z.infer<typeof MobileActionSchema>;
 export const MobileRendererMessageSchema = z.discriminatedUnion("type", [

@@ -83,6 +83,39 @@ test("native surface bridge preserves navigation, drafts, settings, attachments 
         : null;
     })
     .toEqual(["Native draft survives navigation", 1, true]);
+  const typing = await snapshot(page);
+  const field = typing?.surfaces.find((item) => item.content.kind === "composer");
+  const typingFrame = page.frames().find((item) => item !== page.mainFrame());
+  if (!typing || !field || !typingFrame) throw new Error("Missing native composer");
+  await typingFrame.evaluate(
+    (messages) => {
+      for (const message of messages) (window as TestWindow).concorsMobileReceive?.(message);
+    },
+    [
+      {
+        type: "native-event",
+        scope: typing.scope,
+        connectionId: typing.connectionId,
+        surfaceId: field.id,
+        event: { kind: "text", text: "Native draft survives navigation", sequence: 3 },
+      },
+      {
+        type: "native-event",
+        scope: typing.scope,
+        connectionId: typing.connectionId,
+        surfaceId: field.id,
+        event: { kind: "text", text: "Stale keystroke must not win", sequence: 2 },
+      },
+    ] satisfies MobileHostMessage[],
+  );
+  await expect
+    .poll(async () => {
+      const content = (await snapshot(page))?.surfaces.find(
+        (item) => item.content.kind === "composer",
+      )?.content;
+      return content?.kind === "composer" ? [content.draft, content.editAck] : null;
+    })
+    .toEqual(["Native draft survives navigation", 3]);
   await event(page, "button", "Project files", { kind: "press", control: "activate" });
   await expect(ui.locator(".mobile-files")).toHaveAttribute("data-open", "true");
   await expect

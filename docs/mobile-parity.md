@@ -1,9 +1,11 @@
 # Mobile / desktop parity
 
 The mobile client uses a bundled, offline rendering of the actual Concors React UI,
-inside the Expo native host. Chat, composer, markdown, tool calls, plans, terminal,
-project setup/actions, and account/appearance/SSH/billing views are source-shared,
-not reimplemented approximations. The mobile entry lives beside the desktop UI;
+inside the Expo native host. Chat, composer business logic, markdown, tool calls, plans, terminal,
+project setup/actions, and account/appearance/SSH/billing views are source-shared.
+iOS headers and the composer field/toolbar render natively above WKWebView using Expo UI and
+Expo GlassEffect; a scoped UI bridge invokes the shared navigation and agent logic.
+Android/web retain the shared DOM controls. The mobile entry lives beside the desktop UI;
 desktop UI does not move into domain packages.
 
 The host owns authentication, SecureStore, machine access, socket reconnect,
@@ -21,7 +23,7 @@ restricted private endpoint. The simulated demo remains a separate, mutually exc
 Phone-specific behavior:
 
 - No bottom navigation. The existing chat composer occupies the bottom of the workspace;
-  tapping its textarea opens the platform keyboard.
+  tapping its text field opens the platform keyboard.
 - A swipeable Projects / Agents / Servers sidebar pushes the workspace to the right.
   Swipe back, press the mobile menu icon, or tap the workspace scrim to close it.
 - A compact name/avatar trigger opens an animated Account bottom drawer with Settings and Sign out.
@@ -29,7 +31,8 @@ Phone-specific behavior:
 - Tabs/panes, Machine, Search, Settings, Add Project and New Tab use the shared Radix dialog with animated
   bottom-sheet presentation, focus restoration and reduced-motion support.
   Opening Search or choosing a machine leaves the sidebar visible behind it.
-- Separate backdrop-blurred glass controls contain the sidebar toggle, picker and Files button,
+- Separate glass controls contain the sidebar toggle, picker and Files button (native SwiftUI
+  glass on supported iOS builds; CSS backdrop blur in the web/Android renderer),
   with matching rounded pressed states and opaque fallbacks for reduced transparency.
   The picker uses a tab/pane breadcrumb and lightly indented
   pane options under named tab headings with counts, without hierarchy lines or guide text.
@@ -42,7 +45,8 @@ Phone-specific behavior:
 - The composer collapses to a single line with attachment and primary actions.
   Text-field focus animates the measured height to reveal model, effort and permission icons,
   context/dictation on the right beside the primary button,
-  and a sliders popover for Plan/Speed. Owned portaled controls preserve expansion.
+  and a sliders control for Plan/Speed. iOS uses native action sheets for composer options;
+  web/Android use popovers. Owned option controls preserve expansion.
   Keyboard dismissal or an outside click collapses it without losing the draft.
   Height/content animations respect reduced motion; collapsed action taps do not move their target.
   One centered primary action shows Stop while active with an empty draft, Queue with
@@ -60,7 +64,7 @@ Phone-specific behavior:
   vertical gestures and taps retain terminal behavior.
   Tree, CodeMirror, Markdown, file links, create, explicit save and conflict review are desktop code.
   Editors preserve their own gestures and do not automatically summon the keyboard on opening.
-  The Files header shares the chat header's translucent CSS glass surfaces, button dimensions,
+  The Files header shares the chat header's native/web glass surfaces, button dimensions,
   pressed states and accessibility fallback. Its project pill returns to the directory, replacing
   the separate folder icon. Swiping the header does not activate its buttons.
   Dirty-close/disconnect dialogs are in-app, since sandboxed web renderers cannot use browser modals.

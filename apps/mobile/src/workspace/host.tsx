@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { Alert, KeyboardAvoidingView, Linking, Platform, useColorScheme, View } from "react-native";
+import {
+  Alert,
+  Keyboard,
+  KeyboardAvoidingView,
+  Linking,
+  Platform,
+  useColorScheme,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams } from "expo-router";
 import * as Clipboard from "expo-clipboard";
@@ -163,6 +171,9 @@ function SignedInWorkspace() {
   const action = async (action: MobileAction): Promise<unknown> => {
     assertWorkspaceActionAllowed(auth.direct, !!auth.me, action);
     switch (action.kind) {
+      case "dismiss-keyboard":
+        Keyboard.dismiss();
+        return;
       case "file-guard":
         fileGuard.current = action.active;
         return;

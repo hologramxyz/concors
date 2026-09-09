@@ -186,7 +186,7 @@ Upgrade/restart that daemon when it is safe for your sessions, or test with a se
 3. Tap a Markdown file for its rendered preview and **Edit source** to change it. Other supported
    text files open in the shared desktop CodeMirror editor. **File options** contains Find in file,
    wrap, Vim, copy and reload. **Save** writes to the daemon machine, not the phone.
-4. Use the open-file strip to switch documents; the folder button returns to the directory tree.
+4. Use the open-file strip to switch documents; the project pill returns to the directory tree.
    Chat/file drafts survive navigation and connection replacement. Another client's edit triggers
    conflict review instead of silently replacing its work. Dirty file close/disconnect asks in-app.
 5. Open **Tabs and panes** from chat to manage sessions. A tab groups one or more agent/terminal
@@ -224,7 +224,7 @@ add their native modules. To test on a Mac with Xcode 26+ and an iOS 26+ simulat
 
 ```bash
 pnpm install --frozen-lockfile
-APP_VARIANT=preview EXPO_PUBLIC_DEMO=true pnpm --filter @concors/mobile ios --configuration Release
+APP_VARIANT=preview EXPO_PUBLIC_DEMO=true EXPO_PUBLIC_DEV_DAEMON_URL= pnpm --filter @concors/mobile ios --configuration Release
 maestro test apps/mobile/e2e/native/glass.yaml
 ```
 
