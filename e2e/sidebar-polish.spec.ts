@@ -59,7 +59,7 @@ test("GitHub clone images fall back cleanly and project hover spans the action b
     expect(hovered).not.toBe("rgba(0, 0, 0, 0)");
     await row.getByRole("button", { name: "Sidebar images", exact: true }).hover();
     await expect(row).toHaveCSS("background-color", hovered);
-    const add = nav.getByRole("button", { name: "New workspace", exact: true });
+    const add = nav.getByRole("button", { name: "Open workspace menu", exact: true });
     const header = add.locator("../..");
     await add.hover();
     await expect(header).toHaveCSS("background-color", hovered);

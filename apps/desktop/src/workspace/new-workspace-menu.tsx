@@ -1,4 +1,4 @@
-import { ChevronDown, FolderOpen, GitBranch, Plus } from "lucide-react";
+import { FolderOpen, GitBranch, Plus } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,23 +16,14 @@ export function NewWorkspaceMenu({
 }) {
   return (
     <div className="flex items-center">
-      <button
-        type="button"
-        aria-label="New workspace"
-        title="New workspace"
-        disabled={disabled}
-        onClick={onNew}
-        className="rounded p-1 text-muted-foreground hover:text-sidebar-foreground disabled:opacity-40"
-      >
-        <Plus className="size-4" />
-      </button>
       <DropdownMenu>
         <DropdownMenuTrigger
           aria-label="Open workspace menu"
+          title="Open workspace menu"
           disabled={disabled}
           className="rounded p-1 text-muted-foreground hover:text-sidebar-foreground disabled:opacity-40"
         >
-          <ChevronDown className="size-3.5" />
+          <Plus className="size-4" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
           <DropdownMenuItem onSelect={onNew}>
