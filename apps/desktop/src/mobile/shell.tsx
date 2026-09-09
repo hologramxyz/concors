@@ -358,12 +358,12 @@ function MobileWorkspace({ host }: { host: MobileState }) {
                   <div className="px-3 pb-3">
                     <MobileSelect
                       label="Machine"
+                      presentation="sheet"
                       value={host.machineId ?? ""}
                       placeholder="Choose a machine"
                       onValueChange={(machineId) => {
                         setLocal({ machineId, target: {} });
                         runHost({ kind: "select-machine", machineId });
-                        setSidebarOpen(false);
                       }}
                       groups={[
                         {
@@ -461,6 +461,7 @@ function MobileWorkspace({ host }: { host: MobileState }) {
                         <MobileSelect
                           className="mobile-picker mobile-glass"
                           label="Tabs and panes"
+                          presentation="sheet"
                           hierarchy
                           selectedLabel={
                             <span className="mobile-picker-breadcrumb">
