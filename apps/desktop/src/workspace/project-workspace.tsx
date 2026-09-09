@@ -11,6 +11,7 @@ import type { PaneProfile, WorkspaceOperation, WorkspaceSnapshot } from "@concor
 import { Button } from "@/components/ui/button";
 import { FormDialog } from "./form-dialog";
 import { PaneLayout } from "./pane-layout";
+import { VisitedTab } from "./visited-tab";
 
 export function ProjectWorkspace({
   workspace,
@@ -238,11 +239,6 @@ export function ProjectWorkspace({
           />
         </div>
       </div>
-      {launching && (
-        <p role="status" className="border-b px-3 py-1 text-xs text-muted-foreground">
-          Starting session…
-        </p>
-      )}
       {launchError && (
         <div
           role="alert"
@@ -256,15 +252,18 @@ export function ProjectWorkspace({
       )}
       <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
         {selected ? (
-          <PaneLayout
-            key={selected.id}
-            focusRequest={focusRequest ?? null}
-            onPaneFocus={onPaneFocus}
-            tab={selected}
-            project={project}
-            canEdit={canEdit && !launching}
-            onCommand={onCommand}
-          />
+          project.tabs.map((tab) => (
+            <VisitedTab key={tab.id} active={tab.id === selected.id}>
+              <PaneLayout
+                focusRequest={tab.id === selected.id ? (focusRequest ?? null) : null}
+                onPaneFocus={onPaneFocus}
+                tab={tab}
+                project={project}
+                canEdit={canEdit && !launching && tab.id === selected.id}
+                onCommand={onCommand}
+              />
+            </VisitedTab>
+          ))
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
             <p>No tabs in this project yet.</p>

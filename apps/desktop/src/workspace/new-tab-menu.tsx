@@ -192,19 +192,23 @@ export function NewTabMenu({
             <Plus className="size-4" />
             {empty && "Create a tab"}
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-52">
+          <DropdownMenuContent className="w-64">
             {TAB_PROFILES.map(({ profile, label, icon: Icon }) => (
               <DropdownMenuItem
                 key={profile}
                 disabled={disabled}
                 onSelect={() => onCreate(profile)}
               >
-                <Icon />
+                <Icon className="size-4 shrink-0" />
                 {label}
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
-            <DropdownMenuItem disabled={disabled} onSelect={() => setConfiguring(true)}>
+            <DropdownMenuItem
+              className="whitespace-nowrap"
+              disabled={disabled}
+              onSelect={() => setConfiguring(true)}
+            >
               <SlidersHorizontal /> Configure terminal profile…
             </DropdownMenuItem>
           </DropdownMenuContent>

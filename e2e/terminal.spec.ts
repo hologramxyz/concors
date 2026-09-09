@@ -24,15 +24,19 @@ test("two devices use the same terminal and recover its screen after reload", as
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
     await expect(page.getByRole("button", { name: "Start terminal", exact: true })).toHaveCount(0);
-    await expect(page.getByLabel("Terminal output")).toBeVisible();
+    await expect(page.getByLabel("Terminal output").filter({ visible: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Take control", exact: true })).toHaveCount(0);
 
     await expect
       .poll(() =>
-        page.getByLabel("Terminal output").evaluate((element) => ({
-          horizontal: element.scrollWidth > element.clientWidth,
-          vertical: element.scrollHeight > element.clientHeight,
-        })),
+        page
+          .getByLabel("Terminal output")
+          .filter({ visible: true })
+          .filter({ visible: true })
+          .evaluate((element) => ({
+            horizontal: element.scrollWidth > element.clientWidth,
+            vertical: element.scrollHeight > element.clientHeight,
+          })),
       )
       .toEqual({ horizontal: false, vertical: false });
     await page.keyboard.type("printf 'hello-%s\\n' shared-terminal");
@@ -60,16 +64,22 @@ test("two devices use the same terminal and recover its screen after reload", as
     );
     await page.screenshot({ path: "test-results/terminal-neutral-dark.png" });
     await second.goto(test.info().project.use.baseURL ?? "http://localhost:1420");
-    await expect(second.getByLabel("Terminal output")).toContainText("hello-shared-terminal");
+    await expect(second.getByLabel("Terminal output").filter({ visible: true })).toContainText(
+      "hello-shared-terminal",
+    );
     await second.reload();
-    await expect(second.getByLabel("Terminal output")).toContainText("hello-shared-terminal");
+    await expect(second.getByLabel("Terminal output").filter({ visible: true })).toContainText(
+      "hello-shared-terminal",
+    );
     await expect(
       second.locator(".xterm-rows span").getByText("TRUE_GREEN", { exact: true }),
     ).toHaveCSS("color", "rgb(12, 200, 140)");
-    await second.getByLabel("Terminal output").click();
+    await second.getByLabel("Terminal output").filter({ visible: true }).click();
     await second.keyboard.type("printf 'second-%s\\n' device");
     await second.keyboard.press("Enter");
-    await expect(page.getByLabel("Terminal output")).toContainText("second-device");
+    await expect(page.getByLabel("Terminal output").filter({ visible: true })).toContainText(
+      "second-device",
+    );
     await second.keyboard.type("exit");
     await second.keyboard.press("Enter");
     await expect(

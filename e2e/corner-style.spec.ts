@@ -25,8 +25,10 @@ test("corner styles update the live workspace and portaled controls, sync, and p
       .click();
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
-    await expect(page.getByLabel("Message Codex")).toBeEnabled();
-    await page.getByLabel("Message Codex").fill("Keep this draft while changing corners");
+    await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
+    await page
+      .getByRole("textbox", { name: "Message Codex" })
+      .fill("Keep this draft while changing corners");
     const model = page.getByRole("button", { name: "Agent and model", exact: true });
     await expect(model).toBeEnabled();
     await model.click();
@@ -47,7 +49,7 @@ test("corner styles update the live workspace and portaled controls, sync, and p
 
     const surfaces: Locator[] = [
       page.locator(".workspace-surface"),
-      page.getByLabel("Message Codex").locator(".."),
+      page.getByRole("textbox", { name: "Message Codex" }).locator(".."),
       page.locator("[data-tab-id]").first(),
       page
         .getByRole("navigation", { name: "Primary" })
@@ -84,7 +86,7 @@ test("corner styles update the live workspace and portaled controls, sync, and p
     await expect(second.getByRole("radio", { name: "Rounded", exact: true })).toBeChecked();
     for (const [index, surface] of surfaces.entries())
       await expect.poll(() => radius(surface)).toBeGreaterThan(subtle[index] ?? 0);
-    await expect(page.getByLabel("Message Codex")).toHaveValue(
+    await expect(page.getByRole("textbox", { name: "Message Codex" })).toHaveValue(
       "Keep this draft while changing corners",
     );
     await second.emulateMedia({ colorScheme: "dark" });

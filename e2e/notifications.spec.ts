@@ -109,10 +109,11 @@ test("notifications deduplicate across windows, open chat, and sync unread witho
     await expect.poll(() => control.agents.find((a) => a.id === id)?.attention?.seen).toBe(true);
     await expect(page.getByLabel("Unread agent update")).toHaveCount(0);
     await expect(second.getByLabel("Unread agent update")).toHaveCount(0);
-    await opened.getByRole("button", { name: /^Account:/ }).click();
-    await opened.getByRole("menuitem", { name: "Settings", exact: true }).click();
+    // A retained but hidden chat must still notify and remain unread.
+    await opened.getByRole("button", { name: "Terminal", exact: true }).click();
     await control.requestAgent({ kind: "send", sessionId: id, text: "question" }, randomUUID());
     await expect.poll(count).toBe(2);
+    await expect.poll(() => control.agents.find((a) => a.id === id)?.attention?.seen).toBe(false);
     // Reload both windows: old attention must not replay.
     await page.reload();
     await second.reload();
