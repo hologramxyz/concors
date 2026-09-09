@@ -1,5 +1,6 @@
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -20,20 +21,24 @@ const light = {
   text: "#20211f",
   muted: "#65665f",
   border: "#d3d3cb",
-  accent: "#335dce",
-  tint: "#e4eafb",
+  accent: "#20211f",
+  onAccent: "#ffffff",
+  tint: "#e8e8e3",
+  selection: "#deded9",
   danger: "#a62f35",
   success: "#327344",
   warning: "#946615",
 };
 const dark: typeof light = {
   background: "#141414",
-  surface: "#20231f",
+  surface: "#1b1b1b",
   text: "#ededed",
-  muted: "#a4a89f",
-  border: "#3c4138",
-  accent: "#a6bdff",
-  tint: "#29354f",
+  muted: "#a0a0a0",
+  border: "#3c3c3c",
+  accent: "#ededed",
+  onAccent: "#141414",
+  tint: "#292929",
+  selection: "#3b3b3b",
   danger: "#ff969b",
   success: "#9cce94",
   warning: "#e5c37a",
@@ -109,11 +114,15 @@ export function Button({
           alignItems: "center",
           justifyContent: "center",
           opacity: disabled ? 0.45 : pressed ? 0.7 : 1,
-          backgroundColor: secondary ? theme.tint : danger ? "#a62f35" : "#335dce",
+          backgroundColor: secondary ? theme.tint : danger ? "#a62f35" : theme.accent,
         },
       ]}
     >
-      <Copy weight="600" size={15} style={{ color: secondary ? theme.accent : "#ffffff" }}>
+      <Copy
+        weight="600"
+        size={15}
+        style={{ color: secondary ? theme.accent : danger ? "#ffffff" : theme.onAccent }}
+      >
         {children}
       </Copy>
     </Pressable>
@@ -130,11 +139,15 @@ export function Field({ label, ...props }: TextInputProps & { label: string }) {
         {...props}
         accessibilityLabel={label}
         placeholderTextColor={theme.muted}
+        selectionColor={Platform.OS === "ios" ? theme.accent : theme.selection}
+        cursorColor={theme.accent}
+        selectionHandleColor={theme.accent}
         style={[
           {
             minHeight: 48,
             borderWidth: 1,
             borderColor: theme.border,
+            outlineColor: theme.accent,
             borderRadius: 10,
             paddingHorizontal: 13,
             paddingVertical: 11,
@@ -180,9 +193,10 @@ export function Notice({ children }: { children: ReactNode }) {
   );
 }
 export function Loading({ label = "Loading…" }: { label?: string }) {
+  const theme = useTheme();
   return (
     <View style={{ padding: 32, alignItems: "center", gap: 12 }}>
-      <ActivityIndicator />
+      <ActivityIndicator color={theme.accent} />
       <Copy muted>{label}</Copy>
     </View>
   );
