@@ -526,13 +526,9 @@ export function AgentComposer({
           </div>
         </div>
       </form>
-      {(uploading || !connected || configuring) && (
+      {uploading && (
         <p role="status" className="px-2 text-[12px] text-muted-foreground">
-          {uploading
-            ? "Reading attachments…"
-            : !connected
-              ? "Reconnecting…"
-              : "Updating agent settings…"}
+          Reading attachments…
         </p>
       )}
     </div>
