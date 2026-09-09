@@ -12,6 +12,12 @@ relays protocol messages and allowlisted account actions; account credentials an
 connection tickets never enter the renderer. All UI code/fonts/styles are packaged
 with the app. The renderer cannot fetch a remote application or open its own socket.
 
+Direct desktop previews now use the same daemon as desktop without cloud login or a
+simulated account. The actual machine ID comes from its snapshot. Direct mode blocks
+cloud API actions and only exposes appearance/connection settings; Disconnect detaches
+the client without stopping remote work. This mode is preview-only and requires a
+restricted private endpoint. The simulated demo remains a separate, mutually exclusive mode.
+
 Phone-specific behavior:
 
 - No bottom navigation. The existing chat composer occupies the bottom of the workspace;
@@ -81,9 +87,19 @@ Implementation/verification checklist (updated as each slice lands):
 - [x] iOS/Android Hermes and web export, native project generation, Expo Doctor 21/21.
 - [x] Desktop regression cases and refreshed private preview.
 
-Verification on 2026-09-09: 224 unit tests pass (one opt-in API integration test is
+Verification on 2026-09-09: 230 unit tests pass (one opt-in API integration test is
 skipped), all 20 phone browser scenarios pass, and all 19 desktop browser scenarios
 pass in a single isolated-port run.
+The new direct acceptance scenario also passes against an isolated real daemon and
+PTY with a deterministic coding-provider fixture: a desktop protocol client and the
+phone share edits, agent/tool approvals and terminal IDs, preserve drafts on reconnect,
+and disconnect without stopping work or calling a cloud API. This is not a claim of
+real-provider or physical-device testing. Four adapter tests verify identity/origin
+denials, restricted paths, WebSocket forwarding and configuration validation. A
+read-only probe through the private WSS route returned the existing desktop daemon's
+exact machine, project, tab and pane IDs; it did not mutate that workspace.
+Initial local browser runs hit process crashes; both complete regression suites passed
+on retry with browser temporary files moved from the crowded RAM-backed `/tmp` to disk.
 CI exposed a notification-test setup race: a ready label from an older project did not
 prove the separate control socket had received the newly created agent. The test now
 awaits its own project/session; three consecutive isolated notification runs pass.
@@ -94,7 +110,7 @@ drawer focus/animations/reduced motion, sidebar-preserving search and machine se
 account menus and machine management.
 The appearance scenario additionally exercises theme
 and corner preferences. A local-WebView test removes the browser UUID helper and
-verifies new-tab requests still use secure, valid IDs. The private static preview was opened at iPhone size for
+verifies new-tab requests still use secure, valid IDs. The earlier simulated static preview was opened at iPhone size for
 chat/sidebar/settings/terminal screenshots with no page errors. Other Tailscale routes
 were unchanged; mobile preview is tailnet-only, not Funnel.
 
@@ -108,7 +124,7 @@ metadata and validates `/token` responses. A read-only `live:preflight` command 
 account/machine/capability prerequisites; neither that command nor terminal-agent
 installation proves a live workspace works. See [the protocol integration gap](mobile-backend.md).
 
-Authenticated workspace access, push service and deletion backend remain external release gates.
+Managed cloud workspace access, push service and deletion backend remain external release gates.
 Store billing-policy review and physical iOS/Android keyboard, gestures, file picker,
 clipboard and accessibility checks are required before claiming submission readiness.
 The optional local WebKit check could not run because this host lacks WebKit's Linux

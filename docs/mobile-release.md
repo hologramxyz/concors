@@ -4,34 +4,38 @@
 
 Client/demo/shared lifecycle/protocol integration/build profiles are implemented.
 No signed IPA/AAB, store release or production validation is implied by bundle export.
-Test the UI now; implement the [authenticated workspace bridge](mobile-backend.md) on
-the newly added machine agent; prepare
-team-owned Expo/Apple/Google accounts in parallel. Live end-to-end testing requires a
-provisioned daemon behind the authenticated gateway.
+Test the real workspace now using the [direct desktop connection](../apps/mobile/README.md#first-connect-to-the-same-daemon-as-desktop).
+It reuses the existing daemon over a private tunnel without a cloud login or server PR.
+Prepare team-owned Expo/Apple/Google accounts in parallel. Managed cloud access requires
+the separate [authenticated workspace bridge](mobile-backend.md) on the new machine agent.
 
 ## Next implementation slices
 
 1. **Selector polish (client):** tab/pane and machine bottom drawers are implemented;
    choose a pane to navigate, and keep the sidebar open when choosing a machine.
-2. **Live workspace (companion backend change):** retain the machine agent's existing
+2. **Direct live workspace (client PR):** connect the phone to the same desktop daemon
+   through the restricted private tunnel. Test shared IDs, chat/tool history, approvals,
+   terminal input and reconnects. The preview-only direct mode is implemented; cloud
+   login and a fake inventory entry are not required. Defer the login/empty-state design.
+3. **Managed cloud workspace (later companion backend change):** retain the machine agent's existing
    TLS/JWT access layer, add an authenticated Concors v1 bridge to the loopback daemon,
    and advertise that capability. Agree the versioned route/handshake before wiring
    the native transport. The earlier one-use `/connect` proposal is not deployed.
-3. **First real acceptance:** identify a non-customer test account/machine, run
+4. **Cloud acceptance:** identify a non-customer test account/machine, run
    `pnpm --filter @concors/mobile live:preflight`, then prove that desktop and phone see
    the same real project, tabs, agent history and tool events. Test send, approval,
    interrupt and terminal input, plus background/reconnect without duplicate commands.
    Preflight itself is read-only and cannot satisfy this acceptance.
-4. **Installed previews, in parallel:** link team Expo/Apple/Google accounts, produce
+5. **Installed previews, in parallel:** link team Expo/Apple/Google accounts, produce
    signed preview builds, and execute the device matrix below. Safari demo success
    is not evidence of native WebView, signing, background or notification correctness.
-5. **Release services and submission:** finish push/revocation, account deletion,
+6. **Release services and submission:** finish push/revocation, account deletion,
    public policy/support/deletion pages and domain association files; resolve the
    storefront billing/provisioning policy; collect evidence before enabling production.
 
 The client now has an API method for the actual machine JWT endpoint and retains agent
 metadata. It does not silently connect the chat UI to the terminal-only protocol.
-Live testing still needs the selected account/machine; native builds need team-owned
+Managed-cloud testing still needs the selected account/machine; native builds need team-owned
 project and signing configuration. The production checklist remains intentionally false.
 
 The mobile client now reuses the desktop workspace, including account creation,

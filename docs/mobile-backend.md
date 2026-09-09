@@ -1,8 +1,23 @@
 # Mobile backend integration contract
 
-This is a **source-verified integration assessment plus proposals**, not a claim that
-the current deployment or a real mobile session has been tested. No `concors-server`
+The managed-cloud sections are a **source-verified integration assessment plus
+proposals**, not a claim that a deployed cloud workspace bridge has been tested.
+Direct desktop testing is a separate path, described below. No `concors-server`
 implementation is included in this client PR.
+
+## Direct desktop milestone: no server PR required
+
+Mobile can now connect directly to the existing Concors daemon, just as desktop does,
+using an explicitly configured private WSS endpoint. It has a separate preview-only
+connection session with no fabricated cloud account or machine inventory. The host
+receives the real machine ID and workspace over the shared protocol. A loopback-only
+Tailscale identity/origin adapter is included for browser testing without weakening
+the daemon's local-origin policy. See [direct setup and testing](../apps/mobile/README.md#first-connect-to-the-same-daemon-as-desktop).
+
+The cloud bridge below is a separate managed-service milestone, not a prerequisite
+for this direct connection. Desktop's working direct path does not use the proposed
+cloud ticket endpoint either. No `concors-server` files or services were changed for
+direct mobile testing. Login/empty-state product design remains deferred.
 
 ## What exists now (2026-09-09)
 
@@ -51,8 +66,9 @@ if required by the agreed browser handshake, not as a parallel replacement acces
 
 The shared API now supports `getMachineAccessToken()` with response shape, requested-machine
 and expiry validation, but it is **not wired into the mobile workspace transport**.
-The existing client still gates workspace connections on mobile capabilities and the
-earlier ticket contract below. Enable/change that path only when a real bridge supports it.
+The cloud connection path still gates access on mobile capabilities and the earlier
+ticket contract below. Direct desktop mode does not use either endpoint. Enable/change
+the cloud path only when a real bridge supports it.
 
 Run `pnpm --filter @concors/mobile live:preflight` with private environment configuration
 described in the [mobile README](../apps/mobile/README.md). It reads account, machine and
