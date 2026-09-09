@@ -57,7 +57,7 @@ export default [
   },
   {
     files: [
-      "apps/mobile/scripts/*.mjs",
+      "apps/mobile/scripts/*.{mjs,mts}",
       "apps/mobile/app.config.ts",
       "apps/mobile/vitest.config.ts",
     ],
@@ -80,7 +80,7 @@ export default [
   // Boundary: clients must not import daemon internals.
   {
     files: [
-      "apps/**/*.{ts,tsx}",
+      "apps/**/*.{ts,tsx,mts}",
       "packages/api-client/**/*.ts",
       "packages/daemon-client/**/*.ts",
       "packages/protocol/**/*.ts",

@@ -13,6 +13,7 @@
     "build": "pnpm assets && expo export --platform all",
     "typecheck": "pnpm assets && tsc --noEmit",
     "test": "vitest run",
+    "live:preflight": "node scripts/live-preflight.mts",
     "release:check": "node scripts/release-check.mjs",
     "eas-build-post-install": "pnpm assets",
     "eas-build-pre-install": "node scripts/production-guard.mjs"
