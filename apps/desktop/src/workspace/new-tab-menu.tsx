@@ -2,7 +2,7 @@ import { useCommand } from "@/shortcuts/context";
 import { shortcutLabel } from "@/shortcuts/bindings";
 import { PaneProfileIcon } from "./profile-icon";
 import { TAB_PROFILES } from "./tab-profiles";
-import { useContext, useState } from "react";
+import { useContext, useRef, useState, type ReactNode } from "react";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import { Plus, SlidersHorizontal } from "lucide-react";
 import type { PaneProfile } from "@concors/protocol";
@@ -31,16 +31,19 @@ export function NewTabMenu({
   keyboard = false,
   paneTarget,
   tabLimitReached = false,
+  renderTrigger,
 }: {
   disabled: boolean;
   onCreate: (profile: PaneProfile, name?: string) => void;
   empty?: boolean;
   keyboard?: boolean;
   tabLimitReached?: boolean;
+  renderTrigger?: (open: (destination?: "tab" | "pane") => void) => ReactNode;
   paneTarget?:
     { name: string; disabled: boolean; onCreate(profile: PaneProfile): void } | undefined;
 }) {
   const compact = useContext(CompactLayoutContext);
+  const triggerContainer = useRef<HTMLSpanElement>(null);
   const [destination, setDestination] = useState<"tab" | "pane">("tab");
   const addingPane = compact && destination === "pane" && !!paneTarget;
   const createDisabled = disabled || (addingPane ? paneTarget.disabled : tabLimitReached);
@@ -54,24 +57,41 @@ export function NewTabMenu({
     setOpen(true);
   });
   const [configuring, setConfiguring] = useState(false);
+  const restoreTriggerFocus = (event: Event) => {
+    if (!compact || !renderTrigger) return;
+    event.preventDefault();
+    requestAnimationFrame(() => {
+      if (!document.querySelector('[data-slot="dialog-content"][data-state="open"]'))
+        triggerContainer.current?.querySelector("button")?.focus({ preventScroll: true });
+    });
+  };
   return (
     <>
       {compact ? (
         <>
-          <button
-            className={empty ? "mobile-new-empty" : "mobile-icon"}
-            aria-label={empty ? "Create a tab" : "New tab"}
-            disabled={disabled}
-            onClick={() => {
-              setDestination("tab");
-              setOpen(true);
-            }}
-          >
-            <Plus className="size-5" />
-            {empty && "Create a tab"}
-          </button>
+          {renderTrigger ? (
+            <span ref={triggerContainer} className="contents">
+              {renderTrigger((destination = "tab") => {
+                setDestination(destination);
+                setOpen(true);
+              })}
+            </span>
+          ) : (
+            <button
+              className={empty ? "mobile-new-empty" : "mobile-icon"}
+              aria-label={empty ? "Create a tab" : "New tab"}
+              disabled={disabled}
+              onClick={() => {
+                setDestination("tab");
+                setOpen(true);
+              }}
+            >
+              <Plus className="size-5" />
+              {empty && "Create a tab"}
+            </button>
+          )}
           <Dialog open={open} onOpenChange={setOpen}>
-            <DialogContent>
+            <DialogContent onCloseAutoFocus={restoreTriggerFocus}>
               <DialogHeader>
                 <DialogTitle>{addingPane ? "Add pane" : "New tab"}</DialogTitle>
                 <DialogDescription>
@@ -191,7 +211,7 @@ export function NewTabMenu({
         </DropdownMenu>
       )}
       <Dialog open={configuring} onOpenChange={setConfiguring}>
-        <DialogContent>
+        <DialogContent onCloseAutoFocus={restoreTriggerFocus}>
           <form
             onSubmit={(event) => {
               event.preventDefault();

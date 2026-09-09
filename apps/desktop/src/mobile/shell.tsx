@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { FolderOpen, Menu, Plus, Search, Server } from "lucide-react";
+import { Ellipsis, FolderOpen, Menu, Plus, Search, Server } from "lucide-react";
 import type { MobileState, MobileTarget } from "@concors/client-core";
 import type { PaneProfile, WorkspaceOperation, WorkspaceSnapshot } from "@concors/protocol";
 import { ShortcutProvider } from "@/shortcuts/provider";
@@ -24,6 +24,12 @@ import { PaneProfileIcon } from "@/workspace/profile-icon";
 import { TAB_PROFILES } from "@/workspace/tab-profiles";
 import { CommandPalette } from "@/components/command-palette";
 import { AccountMenu } from "@/components/account-menu";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { embeddedConnection, getHostState, hostAction, subscribeHost } from "./bridge";
 import { resolveMobileSelection, tabPanes, PROFILE_LABELS } from "./selection";
@@ -341,7 +347,6 @@ function MobileWorkspace({ host }: { host: MobileState }) {
                     >
                       <Menu />
                     </button>
-                    <span className="font-medium">Concors</span>
                     <button
                       className="mobile-icon ml-auto"
                       aria-label="Search workspace"
@@ -442,80 +447,97 @@ function MobileWorkspace({ host }: { host: MobileState }) {
                     aria-hidden={sidebarOpen || undefined}
                   >
                     <header className="mobile-header">
-                      <div className="mobile-header-navigation mobile-glass">
-                        <button
-                          id="mobile-sidebar-toggle"
-                          className="mobile-icon"
-                          aria-label="Open sidebar"
-                          aria-controls="mobile-sidebar"
-                          aria-expanded={sidebarOpen}
-                          onClick={() => setSidebarOpen(true)}
-                        >
-                          <Menu />
-                        </button>
-                        {project && tab && pane ? (
-                          <MobileSelect
-                            className="mobile-picker"
-                            label="Tabs and panes"
-                            hierarchy
-                            selectedLabel={
-                              <span className="mobile-picker-breadcrumb">
-                                <span>{tab.name}</span>
-                                <span>
-                                  {PROFILE_LABELS[pane.profile]} · Pane{" "}
-                                  {tabPanes(tab).findIndex((item) => item.id === pane.id) + 1}
-                                </span>
+                      <button
+                        id="mobile-sidebar-toggle"
+                        className="mobile-icon mobile-glass"
+                        aria-label="Open sidebar"
+                        aria-controls="mobile-sidebar"
+                        aria-expanded={sidebarOpen}
+                        onClick={() => setSidebarOpen(true)}
+                      >
+                        <Menu />
+                      </button>
+                      {project && tab && pane ? (
+                        <MobileSelect
+                          className="mobile-picker mobile-glass"
+                          label="Tabs and panes"
+                          hierarchy
+                          selectedLabel={
+                            <span className="mobile-picker-breadcrumb">
+                              <span>{tab.name}</span>
+                              <span>
+                                {PROFILE_LABELS[pane.profile]} · Pane{" "}
+                                {tabPanes(tab).findIndex((item) => item.id === pane.id) + 1}
                               </span>
-                            }
-                            value={`${tab.id}:${pane.id}`}
-                            onValueChange={(value) => {
-                              const [tabId, paneId] = value.split(":");
-                              select({ projectId: project.id, tabId, paneId });
-                            }}
-                            groups={project.tabs.map((item) => ({
-                              label: item.name,
-                              options: tabPanes(item).map((node, index) => ({
-                                value: `${item.id}:${node.id}`,
-                                label: `${PROFILE_LABELS[node.profile]} · Pane ${index + 1}`,
-                                icon: <PaneProfileIcon profile={node.profile} />,
-                              })),
-                            }))}
-                          />
-                        ) : (
-                          <h1 className="min-w-0 flex-1 truncate text-base font-medium">
-                            {project?.name ?? "Concors"}
-                          </h1>
-                        )}
-                      </div>
+                            </span>
+                          }
+                          value={`${tab.id}:${pane.id}`}
+                          onValueChange={(value) => {
+                            const [tabId, paneId] = value.split(":");
+                            select({ projectId: project.id, tabId, paneId });
+                          }}
+                          groups={project.tabs.map((item) => ({
+                            label: item.name,
+                            options: tabPanes(item).map((node, index) => ({
+                              value: `${item.id}:${node.id}`,
+                              label: `${PROFILE_LABELS[node.profile]} · Pane ${index + 1}`,
+                              icon: <PaneProfileIcon profile={node.profile} />,
+                            })),
+                          }))}
+                        />
+                      ) : (
+                        <h1 className="min-w-0 flex-1 truncate text-base font-medium">
+                          {project?.name ?? "Concors"}
+                        </h1>
+                      )}
                       {project && (
-                        <div className="mobile-header-actions mobile-glass">
-                          <NewTabMenu
-                            keyboard={commandsAvailable}
-                            disabled={!canEdit}
-                            tabLimitReached={project.tabs.length >= 32}
-                            paneTarget={
-                              tab && pane
-                                ? {
-                                    name: tab.name,
-                                    disabled: tabPanes(tab).length >= 32,
-                                    onCreate: createPane,
-                                  }
-                                : undefined
-                            }
-                            onCreate={createTab}
-                          />
-                          {tab && pane && (
-                            <WorkspaceActions
-                              project={project}
-                              tab={tab}
-                              pane={pane}
-                              canEdit={canEdit}
-                              execute={execute}
-                              command={command}
-                              onSelect={select}
-                            />
-                          )}
-                        </div>
+                        <NewTabMenu
+                          keyboard={commandsAvailable}
+                          disabled={!canEdit}
+                          tabLimitReached={project.tabs.length >= 32}
+                          paneTarget={
+                            tab && pane
+                              ? {
+                                  name: tab.name,
+                                  disabled: tabPanes(tab).length >= 32,
+                                  onCreate: createPane,
+                                }
+                              : undefined
+                          }
+                          onCreate={createTab}
+                          renderTrigger={(open) =>
+                            tab && pane ? (
+                              <WorkspaceActions
+                                project={project}
+                                tab={tab}
+                                pane={pane}
+                                canEdit={canEdit}
+                                execute={execute}
+                                command={command}
+                                onSelect={select}
+                                onNewTab={() => open("tab")}
+                                onNewPane={() => open("pane")}
+                              />
+                            ) : (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger
+                                  className="mobile-icon mobile-glass"
+                                  aria-label="Tab and pane actions"
+                                >
+                                  <Ellipsis />
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    disabled={!canEdit}
+                                    onSelect={() => open("tab")}
+                                  >
+                                    <Plus /> New tab
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            )
+                          }
+                        />
                       )}
                     </header>
                     {(error || host.message) && (

@@ -92,6 +92,64 @@ body {
 .mobile-sidebar-footer > button {
   min-height: 44px;
 }
+.mobile-account-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 4px 8px;
+  border-radius: var(--radius-lg);
+  text-align: left;
+  font-size: 14px;
+  font-weight: 500;
+}
+.mobile-account-trigger:is(:active, [data-state="open"]) {
+  background: var(--sidebar-accent);
+}
+.mobile-account-avatar {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-size: 13px;
+  font-weight: 600;
+}
+.mobile-account-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.mobile-account-identity .mobile-account-avatar {
+  width: 44px;
+  height: 44px;
+  font-size: 18px;
+}
+.mobile-account-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mobile-account-actions button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 12px;
+  border-radius: var(--radius-lg);
+  text-align: left;
+}
+.mobile-account-actions button:is(:hover, :active) {
+  background: var(--muted);
+}
+.mobile-account-actions svg {
+  width: 20px;
+  height: 20px;
+  color: var(--muted-foreground);
+}
 .mobile-workspace {
   position: absolute;
   inset: 0;
@@ -108,7 +166,6 @@ body {
 }
 .mobile-header {
   position: relative;
-  z-index: 30;
   display: flex;
   align-items: center;
   flex-shrink: 0;
@@ -118,22 +175,11 @@ body {
   padding: 10px 12px 14px;
   pointer-events: none;
 }
-.mobile-header-navigation,
-.mobile-header-actions {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  padding: 2px;
+.mobile-header .mobile-glass {
+  position: relative;
+  z-index: 30;
   pointer-events: auto;
-}
-.mobile-header-navigation {
-  flex: 1;
-}
-.mobile-header-actions {
-  flex-shrink: 0;
-}
-.mobile-glass {
-  border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
   border-radius: calc(var(--corner-radius) * 3.5);
   background: var(--background);
   box-shadow:
@@ -142,18 +188,17 @@ body {
     0 1px 3px #00000008;
 }
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .mobile-glass {
-    background: color-mix(in srgb, var(--background) 78%, transparent);
-    -webkit-backdrop-filter: blur(18px) saturate(1.5);
-    backdrop-filter: blur(18px) saturate(1.5);
+  .mobile-header .mobile-glass {
+    background: color-mix(in srgb, var(--background) 38%, transparent);
+    -webkit-backdrop-filter: blur(24px) saturate(1.6);
+    backdrop-filter: blur(24px) saturate(1.6);
   }
 }
 .mobile-header .mobile-icon {
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   color: var(--foreground);
-}
-.mobile-header .mobile-icon:active {
-  background: color-mix(in srgb, var(--foreground) 8%, transparent);
 }
 .mobile-header h1 {
   padding-right: 12px;
@@ -238,13 +283,41 @@ body {
 }
 .mobile-picker {
   flex: 1;
-  background: transparent;
-  border: 0;
-  border-radius: 24px;
-  padding: 4px 10px 4px 2px;
+  padding: 5px 14px;
   gap: 6px;
-  min-height: 44px;
+  min-height: 48px;
   font-size: 13px;
+}
+.mobile-header .mobile-picker {
+  border-radius: calc(var(--corner-radius) * 3.5);
+}
+/* Tint lives on the same rounded surface in every state, never an opaque inset pill. */
+.mobile-header .mobile-glass:is(:active, [data-state="open"]) {
+  background: var(--background);
+  border-color: color-mix(in srgb, var(--border) 50%, transparent);
+}
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .mobile-header .mobile-glass:is(:active, [data-state="open"]) {
+    background: color-mix(in srgb, var(--background) 38%, transparent);
+  }
+}
+.mobile-glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+.mobile-glass:is(:active, [data-state="open"])::before {
+  opacity: 1;
+}
+@media (hover: hover) {
+  .mobile-glass:hover::before {
+    opacity: 1;
+  }
 }
 .mobile-select-content {
   z-index: 70;
@@ -301,13 +374,6 @@ body {
 .mobile-pane-picker {
   width: min(340px, calc(100vw - 24px));
 }
-.mobile-picker-help {
-  padding: 8px 10px 10px;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--muted-foreground);
-  border-bottom: 1px solid var(--border);
-}
 .mobile-pane-picker .mobile-select-label {
   display: flex;
   align-items: center;
@@ -326,20 +392,22 @@ body {
   color: var(--muted-foreground);
   font-size: 11px;
   font-weight: 400;
+  border-radius: 8px;
+  padding: 2px 6px;
+  background: var(--muted);
 }
 .mobile-pane-picker .mobile-select-option {
-  width: calc(100% - 16px);
-  margin-left: 16px;
-  position: relative;
+  width: calc(100% - 8px);
+  margin-left: 8px;
+  border-radius: calc(var(--corner-radius) * 1.6);
 }
-.mobile-pane-picker .mobile-select-option::before {
-  content: "";
-  position: absolute;
-  left: -8px;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: var(--border);
+.mobile-pane-picker .mobile-select-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: calc(var(--corner-radius) * 1.2);
+  background: var(--muted);
 }
 .mobile-pane-picker .mobile-select-group + .mobile-select-group {
   margin-top: 8px;
@@ -647,13 +715,36 @@ aside[aria-label="Agent notifications"] {
   flex-wrap: nowrap;
   gap: 0;
   padding: 0;
-  justify-content: space-between;
+  justify-content: flex-start;
 }
 .mobile-composer-settings {
-  display: contents;
+  display: flex;
+  align-items: center;
 }
-.mobile-composer-settings[hidden] {
+.mobile-composer-settings[hidden],
+.mobile-composer-utilities[hidden] {
   display: none;
+}
+.mobile-composer-utilities {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+}
+.mobile-composer-primary {
+  margin-left: 0;
+}
+.mobile-composer[data-expanded="true"] :is(.mobile-composer-settings, .mobile-composer-utilities) {
+  animation: mobile-composer-controls-in 200ms ease both;
+}
+@keyframes mobile-composer-controls-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 .mobile-composer-toolbar button {
   display: inline-flex;
@@ -717,15 +808,13 @@ aside[aria-label="Agent notifications"] {
     gap: 6px;
     padding-inline: 8px;
   }
-  .mobile-header-navigation .mobile-icon {
-    width: 40px;
-  }
   .mobile-composer-toolbar button {
     width: 32px;
   }
 }
 @media (prefers-reduced-transparency: reduce), (forced-colors: active) {
-  .mobile-glass {
+  .mobile-header .mobile-glass,
+  .mobile-header .mobile-glass:is(:active, [data-state="open"]) {
     background: var(--background);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
@@ -849,10 +938,13 @@ aside[aria-label="Agent notifications"] {
   }
   [data-mobile-drawer],
   .mobile-drawer-overlay,
-  .mobile-select-content {
+  .mobile-select-content,
+  .mobile-composer-settings,
+  .mobile-composer-utilities {
     animation: none !important;
   }
-  .mobile-select-chevron svg {
+  .mobile-select-chevron svg,
+  .mobile-glass::before {
     transition: none;
   }
 }

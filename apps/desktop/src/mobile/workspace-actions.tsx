@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useCommand } from "@/shortcuts/context";
-import { Ellipsis, Pencil, X } from "lucide-react";
+import { Ellipsis, Pencil, Plus, X } from "lucide-react";
 import type {
   PaneProfile,
   WorkspaceOperation,
@@ -39,6 +39,8 @@ export function WorkspaceActions({
   execute,
   command,
   onSelect,
+  onNewTab,
+  onNewPane,
 }: {
   project: WorkspaceProject;
   tab: WorkspaceTab;
@@ -47,6 +49,8 @@ export function WorkspaceActions({
   execute(operation: WorkspaceOperation): Promise<void>;
   command(operation: WorkspaceOperation): void;
   onSelect(target: MobileTarget): void;
+  onNewTab(): void;
+  onNewPane(): void;
 }) {
   const [rename, setRename] = useState(false);
   const [closing, setClosing] = useState<"pane" | "tab" | null>(null);
@@ -63,10 +67,17 @@ export function WorkspaceActions({
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger className="mobile-icon" aria-label="Tab and pane actions">
+        <DropdownMenuTrigger className="mobile-icon mobile-glass" aria-label="Tab and pane actions">
           <Ellipsis />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-64">
+          <DropdownMenuItem disabled={!canEdit || project.tabs.length >= 32} onSelect={onNewTab}>
+            <Plus /> New tab
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled={!canEdit || tabPanes(tab).length >= 32} onSelect={onNewPane}>
+            <Plus /> Add pane to this tab
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
           <DropdownMenuLabel>{tab.name}</DropdownMenuLabel>
           <DropdownMenuItem disabled={!canEdit} onSelect={() => setRename(true)}>
             <Pencil />

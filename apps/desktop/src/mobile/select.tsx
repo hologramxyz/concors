@@ -113,9 +113,6 @@ export function MobileSelect({
             }
           }}
         >
-          {hierarchy && (
-            <p className="mobile-picker-help">Tabs organize your work. Choose a pane to open it.</p>
-          )}
           {groups.map((group, index) => (
             <div
               key={index}
