@@ -20,3 +20,5 @@ export * from "./terminal.ts";
 export * from "./projects.ts";
 
 export * from "./agents.ts";
+
+export * from "./files.ts";
