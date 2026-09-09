@@ -182,6 +182,10 @@ body {
   background: var(--background);
   font-size: 16px;
 }
+aside[aria-label="Agent notifications"] {
+  top: 64px;
+  bottom: auto;
+}
 .mobile-pane {
   display: flex;
   flex-direction: column;
@@ -341,5 +345,30 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .mobile-workspace {
     transition: none;
+  }
+}
+/* The operating system reduces the available height when the software keyboard opens. */
+@media (max-height: 600px) {
+  .mobile-header {
+    min-height: 48px;
+  }
+  .mobile-pane [data-agent-composer] {
+    min-height: 48px;
+    max-height: 80px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+  .mobile-pane .agent-control-value > span {
+    display: none;
+  }
+  .mobile-pane [aria-label="Agent tasks"] > div {
+    max-height: 80px;
+  }
+  .mobile-pane [data-composer-queue] {
+    max-height: 44px;
+  }
+  .mobile-pane [data-chat-footer] {
+    padding-top: 4px;
+    padding-bottom: 4px;
   }
 }

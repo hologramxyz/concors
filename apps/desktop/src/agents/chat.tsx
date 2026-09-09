@@ -2,6 +2,7 @@ import { completedTurnFooters } from "./duration";
 import { AgentComposer } from "./composer";
 import { TimelineItem } from "./timeline-item";
 import { useViewedAgent } from "@/notifications/context";
+import { CompactLayoutContext, PaneVisibilityContext } from "@/components/compact-layout";
 import { useContext, useEffect, useRef, useState } from "react";
 import { ArrowDown } from "lucide-react";
 import type {
@@ -114,7 +115,8 @@ export function ChatPane({
 }
 
 export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boolean }) {
-  useViewedAgent(sessionId);
+  const compact = useContext(CompactLayoutContext);
+  useViewedAgent(sessionId, useContext(PaneVisibilityContext));
   const connection = useContext(TerminalConnectionContext);
   const agent = useAgents().find((a) => a.id === sessionId);
   const conversation = useConversation(sessionId);
@@ -156,6 +158,27 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
       setBusy(false);
     }
   };
+  const pendingInputs = agent?.pending.map((pending) => (
+    <PendingInput
+      key={pending.id}
+      pending={pending}
+      disabled={!connected || busy}
+      onRespond={(value) =>
+        run(() => perform({ kind: "respond", sessionId, pendingId: pending.id, ...value }))
+      }
+    />
+  ));
+  const problem = error ?? conversation.error ?? agent?.error;
+  const feedback = (
+    <>
+      {pendingInputs}
+      {problem && (
+        <p role="alert" className="text-xs text-destructive">
+          {problem}
+        </p>
+      )}
+    </>
+  );
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="Agent conversation">
       <div
@@ -197,6 +220,7 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
             .map((item) => (
               <TimelineItem key={item.id} item={item} workedFor={footers.durations.get(item.id)} />
             ))}
+          {compact && feedback}
           {active && (
             <Activity startedAt={agent.turnStartedAt}>
               {agent?.status === "starting"
@@ -221,23 +245,12 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
           Latest
         </button>
       )}
-      <div className="max-h-[55%] shrink-0 overflow-y-auto px-3 pt-2 pb-3">
+      <div
+        data-chat-footer
+        className={`${compact ? "" : "max-h-[55%] overflow-y-auto"} shrink-0 px-3 pt-2 pb-3`}
+      >
         <div className="mx-auto max-w-5xl space-y-3">
-          {agent?.pending.map((pending) => (
-            <PendingInput
-              key={pending.id}
-              pending={pending}
-              disabled={!connected || busy}
-              onRespond={(value) =>
-                run(() => perform({ kind: "respond", sessionId, pendingId: pending.id, ...value }))
-              }
-            />
-          ))}
-          {(error || conversation.error || agent?.error) && (
-            <p role="alert" className="text-xs text-destructive">
-              {error ?? conversation.error ?? agent?.error}
-            </p>
-          )}
+          {!compact && feedback}
           {latestPlan && <PlanProgress compact item={latestPlan} />}
           {agent && (
             <AgentComposer

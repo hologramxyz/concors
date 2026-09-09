@@ -1,4 +1,4 @@
-import { useAgentDraft } from "./draft";
+import { useAgentDraft, type InputDraft as Draft } from "./draft";
 import { isProviderModelsQueryLoading } from "./paseo/model-loading";
 import { useContext, useEffect, useRef, useState } from "react";
 import {
@@ -15,7 +15,7 @@ import {
   Square,
   X,
 } from "lucide-react";
-import type { AgentInfo, AgentSettings, AgentAttachment, AgentOperation } from "@concors/protocol";
+import type { AgentInfo, AgentSettings, AgentAttachment } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { submitAgentInput } from "./paseo/submit";
 import { ControlPicker } from "./control-picker";
@@ -24,15 +24,6 @@ import { CodexIcon } from "./paseo/codex-icon";
 import { useDictation } from "./dictation";
 import { CompactLayoutContext } from "@/components/compact-layout";
 const defaults: AgentSettings = { model: null, effort: null, mode: "default" };
-interface Draft {
-  message: string;
-  attachments: AgentAttachment[];
-}
-interface Attempt {
-  id: string;
-  draft: Draft;
-  operation: Extract<AgentOperation, { kind: "send" }>;
-}
 export function AgentComposer({
   agent,
   connected,
@@ -45,17 +36,25 @@ export function AgentComposer({
   const connection = useContext(TerminalConnectionContext);
   const compact = useContext(CompactLayoutContext);
   const [keyboardHelp, setKeyboardHelp] = useState(false);
-  const { draft, setDraft, attachments, setAttachments } = useAgentDraft(connection, agent.id);
-  const [busy, setBusy] = useState(false),
-    [uploading, setUploading] = useState(false),
+  const {
+    draft,
+    setDraft,
+    attachments,
+    setAttachments,
+    queue,
+    setQueue,
+    uncertain,
+    setUncertain,
+    busy,
+    setBusy,
+    attempt: attemptRef,
+    sending: sendingRef,
+  } = useAgentDraft(connection, agent.id);
+  const [uploading, setUploading] = useState(false),
     [configuring, setConfiguring] = useState(false),
     [loadingModels, setLoadingModels] = useState(false),
     [error, setError] = useState<string | null>(null);
-  const [queue, setQueue] = useState<Draft[]>([]),
-    [uncertain, setUncertain] = useState(false);
-  const attempt = useRef<Attempt | null>(null),
-    sending = useRef(false),
-    textarea = useRef<HTMLTextAreaElement>(null),
+  const textarea = useRef<HTMLTextAreaElement>(null),
     picker = useRef<HTMLInputElement>(null);
   const advanced =
     connection?.state.status === "ready" &&
@@ -115,7 +114,7 @@ export function AgentComposer({
   };
   const send = async (input: Draft) => {
     if (!connection) throw new Error("Machine is disconnected");
-    const next = attempt.current ?? {
+    const next = attemptRef.current ?? {
       id: crypto.randomUUID(),
       draft: input,
       operation: {
@@ -125,32 +124,32 @@ export function AgentComposer({
         attachments: input.attachments,
       },
     };
-    attempt.current = next;
+    attemptRef.current = next;
     try {
       const result = await connection.requestAgent(next.operation, next.id);
       if (result.outcome.status === "error") {
-        attempt.current = null;
+        attemptRef.current = null;
         setUncertain(false);
         throw new Error(result.outcome.message);
       }
       setQueue((q) => q.filter((entry) => entry !== next.draft));
-      attempt.current = null;
+      attemptRef.current = null;
       setUncertain(false);
     } catch (e) {
-      if (attempt.current) setUncertain(true);
+      if (attemptRef.current) setUncertain(true);
       throw e;
     }
   };
   const submit = async (input: Draft = { message: draft, attachments }, queued = false) => {
-    if (sending.current) return;
-    sending.current = true;
+    if (sendingRef.current) return;
+    sendingRef.current = true;
     try {
       return await submitAgentInput({
         message: input.message,
         attachments: input.attachments,
         canSubmit: connected && !busy && !uploading && !configuring && !!agent.threadId,
         isAgentRunning: active,
-        forceSend: attempt.current !== null,
+        forceSend: attemptRef.current !== null,
         submitBehavior: "preserve-and-lock",
         queueMessage: (value) => {
           setQueue((q) => [...q, value]);
@@ -170,12 +169,12 @@ export function AgentComposer({
         setIsProcessing: setBusy,
       });
     } finally {
-      sending.current = false;
+      sendingRef.current = false;
     }
   };
   const queueHead = queue[0];
   useEffect(() => {
-    if (active || !queueHead || !connected || busy || uncertain || sending.current) return;
+    if (active || !queueHead || !connected || busy || uncertain || sendingRef.current) return;
     void submit(queueHead, true);
     // Queue delivery is triggered by authoritative agent state; failures require explicit retry.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -208,30 +207,41 @@ export function AgentComposer({
   const effortModel = models.find((m) => m.id === (settings.model ?? agent.model));
   return (
     <div className="space-y-2">
-      {queue.map((entry, i) => (
+      {!!queue.length && (
         <div
-          key={i}
-          className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-[12px]"
+          data-composer-queue
+          className={compact ? "max-h-20 space-y-2 overflow-y-auto" : "space-y-2"}
         >
-          <span className="text-muted-foreground">Queued</span>
-          <span className="min-w-0 flex-1 truncate">
-            {entry.message || entry.attachments.map((a) => a.name).join(", ")}
-          </span>
-          {!active && !busy && !uncertain && (
-            <button type="button" className="text-primary" onClick={() => void submit(entry, true)}>
-              Send now
-            </button>
-          )}
-          <button
-            type="button"
-            aria-label="Remove queued message"
-            disabled={busy || uncertain}
-            onClick={() => setQueue((q) => q.filter((_, index) => index !== i))}
-          >
-            <X className="size-3" />
-          </button>
+          {queue.map((entry, i) => (
+            <div
+              key={i}
+              className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-[12px]"
+            >
+              <span className="text-muted-foreground">Queued</span>
+              <span className="min-w-0 flex-1 truncate">
+                {entry.message || entry.attachments.map((a) => a.name).join(", ")}
+              </span>
+              {!active && !busy && !uncertain && (
+                <button
+                  type="button"
+                  className="text-primary"
+                  onClick={() => void submit(entry, true)}
+                >
+                  Send now
+                </button>
+              )}
+              <button
+                type="button"
+                aria-label="Remove queued message"
+                disabled={busy || uncertain}
+                onClick={() => setQueue((q) => q.filter((_, index) => index !== i))}
+              >
+                <X className="size-3" />
+              </button>
+            </div>
+          ))}
         </div>
-      ))}
+      )}
       {(error || dictation.error) && (
         <p role="alert" className="text-[12px] text-destructive">
           {error ?? dictation.error}
@@ -244,8 +254,8 @@ export function AgentComposer({
             className="text-primary"
             onClick={() =>
               void submit(
-                attempt.current?.draft,
-                !!attempt.current && queue.includes(attempt.current.draft),
+                attemptRef.current?.draft,
+                !!attemptRef.current && queue.includes(attemptRef.current.draft),
               )
             }
           >
@@ -268,7 +278,10 @@ export function AgentComposer({
         className="rounded-2xl border bg-background p-2 shadow-sm focus-within:border-primary/40"
       >
         {attachments.length > 0 && (
-          <div className="flex flex-wrap gap-2 px-2 py-1">
+          <div
+            data-composer-attachments
+            className={`flex flex-wrap gap-2 px-2 py-1 ${compact ? "max-h-16 overflow-y-auto" : ""}`}
+          >
             {attachments.map((file, i) => (
               <div
                 key={i}

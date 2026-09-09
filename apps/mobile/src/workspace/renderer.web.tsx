@@ -5,6 +5,25 @@ import type { WorkspaceRendererHandle, WorkspaceRendererProps } from "./renderer
 export const WorkspaceRenderer = forwardRef<WorkspaceRendererHandle, WorkspaceRendererProps>(
   function WorkspaceRenderer({ onMessage, onError }, ref) {
     const frame = useRef<HTMLIFrameElement>(null);
+    useEffect(() => {
+      const viewport = window.visualViewport;
+      const resize = () => {
+        const element = frame.current;
+        const parent = element?.parentElement;
+        if (!element || !parent || !viewport) return;
+        const available = viewport.offsetTop + viewport.height - parent.getBoundingClientRect().top;
+        element.style.height = `${Math.max(1, Math.min(parent.clientHeight, available))}px`;
+      };
+      resize();
+      viewport?.addEventListener("resize", resize);
+      viewport?.addEventListener("scroll", resize);
+      window.addEventListener("resize", resize);
+      return () => {
+        viewport?.removeEventListener("resize", resize);
+        viewport?.removeEventListener("scroll", resize);
+        window.removeEventListener("resize", resize);
+      };
+    }, []);
     useImperativeHandle(
       ref,
       () => ({
