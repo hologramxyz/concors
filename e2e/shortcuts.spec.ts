@@ -11,7 +11,7 @@ test("workspace shortcuts create, search, split and close the active pane withou
     await signedIn(page);
     await page.goto("/");
     await expect(
-      page.getByRole("button", { name: "New workspace", exact: true }).first(),
+      page.getByRole("button", { name: "Open workspace menu", exact: true }).first(),
     ).toBeEnabled();
     const shortcutButton = page.getByRole("button", { name: "Keyboard shortcuts", exact: true });
     await shortcutButton.hover();
@@ -173,7 +173,7 @@ test("Mac workspace shortcuts use physical Control and display matching hints", 
     await signedIn(page);
     await page.goto("/");
     await expect(
-      page.getByRole("button", { name: "New workspace", exact: true }).first(),
+      page.getByRole("button", { name: "Open workspace menu", exact: true }).first(),
     ).toBeEnabled();
     await page.keyboard.press("Control+Shift+n");
     await expect(page.getByRole("dialog")).toHaveCount(0);

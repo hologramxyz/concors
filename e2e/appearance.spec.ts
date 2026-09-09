@@ -12,7 +12,7 @@ test("appearance follows the system and uses a shared neutral terminal/chat surf
     await signedIn(page);
     await page.emulateMedia({ colorScheme: "dark" });
     await page.goto("/");
-    await page.getByRole("button", { name: "New workspace", exact: true }).first().waitFor();
+    await page.getByRole("button", { name: "Open workspace menu", exact: true }).first().waitFor();
     await expect(page.locator("html")).toHaveClass(/dark/);
     await seedProject(page, "Appearance acceptance", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();

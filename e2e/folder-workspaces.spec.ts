@@ -10,7 +10,7 @@ async function cd(page: Page, pane: Locator, directory: string) {
   await page.keyboard.type(`cd '${directory.replaceAll("'", "'\\''")}'`);
   await page.keyboard.press("Enter");
 }
-test("one-click workspaces follow the original shell, inherit folders and preserve open files", async ({
+test("new workspaces follow the original shell, inherit folders and preserve open files", async ({
   page,
   browser,
 }) => {
@@ -34,8 +34,9 @@ test("one-click workspaces follow the original shell, inherit folders and preser
     await second.goto("http://localhost:1420");
     await page
       .getByRole("navigation", { name: "Primary" })
-      .getByRole("button", { name: "New workspace", exact: true })
+      .getByRole("button", { name: "Open workspace menu", exact: true })
       .click();
+    await page.getByRole("menuitem", { name: "New workspace", exact: true }).click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     const panes = page.getByRole("region", { name: "Terminal pane", exact: true });
     await expect(panes).toHaveCount(1);
