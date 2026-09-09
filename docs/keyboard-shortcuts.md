@@ -1,5 +1,8 @@
 # Workspace keyboard shortcuts
 
+Open the user menu at the bottom of the sidebar and choose **Keyboard shortcuts** to view the
+shortcut reference. It is also available through search or Ctrl+Shift+/.
+
 Use physical Control on macOS as well as Linux/Windows. `→` between keys denotes a sequence:
 press and release the first chord, then press the next key. A small action picker shows choices
 and disabled actions; Escape, clicking outside, or leaving the window cancels. Holding a key
