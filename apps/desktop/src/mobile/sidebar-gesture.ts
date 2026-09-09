@@ -46,12 +46,19 @@ export function useSidebarGesture(
         const target = event.target as HTMLElement;
         // React portals bubble through this shell, but their popups own their gestures.
         if (!event.currentTarget.contains(target)) return;
+        // Popup triggers can open on pointer-down, before a drag is recognized.
+        // They must keep the entire gesture instead of leaving a menu behind a closed sidebar.
+        if (target.closest('[aria-haspopup]:not([aria-haspopup="false"])')) return;
         // xterm's hidden textarea is part of its surface, not a composer/editor.
         // Navigation can start there too; only claim a clear horizontal gesture.
         const terminal = target.closest(".concors-terminal");
+        // The Files title/back controls also act as a drag handle. A tap still
+        // reaches the button; an intentional swipe suppresses its trailing click.
+        const fileHeader = target.closest(".mobile-files-header");
         if (
           (!open || protectInputs) &&
-          (target.closest("button, a, .cm-editor, [role=dialog], [role=menu]") ||
+          (target.closest(".cm-editor, [role=dialog], [role=menu]") ||
+            (!fileHeader && target.closest("button, a")) ||
             (!terminal && target.closest("input, textarea, select, pre, [contenteditable]")))
         )
           return;

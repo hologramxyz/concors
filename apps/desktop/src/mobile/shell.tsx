@@ -118,11 +118,11 @@ function MobileWorkspaceContent({
     project && workspace ? fileScope(workspace.machineId, workspace.epoch, project.id) : "";
   const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
   const gesture = useSidebarGesture(sidebarOpen, setSidebarOpen, width, {
-    direction: -1,
+    direction: 1,
     enabled: !files.sidebar.open,
   });
   const filesGesture = useSidebarGesture(files.sidebar.open, files.sidebar.setOpen, viewportWidth, {
-    direction: 1,
+    direction: -1,
     enabled: !sidebarOpen,
     protectInputs: true,
   });
