@@ -80,10 +80,10 @@ export function Activity({
   }, [startedAt]);
   const elapsed = startedAt ? (now - Date.parse(startedAt)) / 1000 : null;
   return (
-    <div role="status" className="flex items-center gap-2 py-3 text-[14px] text-muted-foreground">
+    <div role="status" className="flex items-center gap-2 py-3 text-sm text-muted-foreground">
       <BrailleSpinner />
       {elapsed !== null && Number.isFinite(elapsed) && (
-        <span aria-label="Elapsed time" className="text-[12px] text-muted-foreground tabular-nums">
+        <span aria-label="Elapsed time" className="text-xs text-muted-foreground tabular-nums">
           {formatDuration(elapsed)}
         </span>
       )}

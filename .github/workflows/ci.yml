@@ -65,6 +65,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Disable unused Chrome package source
+        if: runner.os == 'Linux'
+        # Its package index can fail apt-get update; Tauri only needs Ubuntu libraries.
+        run: sudo rm -f /etc/apt/sources.list.d/google-chrome*.list /etc/apt/sources.list.d/google-chrome*.sources
+
       - name: Install Tauri system dependencies
         if: runner.os == 'Linux'
         run: |
@@ -105,6 +110,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+      - name: Disable unused Chrome package source
+        # Playwright downloads its own Chromium; this runner-provided apt source is unused.
+        run: sudo rm -f /etc/apt/sources.list.d/google-chrome*.list /etc/apt/sources.list.d/google-chrome*.sources
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:

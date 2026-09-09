@@ -15,7 +15,7 @@ export function SettingsSidebar({ page, onBack, onNavigate }: SettingsSidebarPro
       <nav
         id="app-sidebar"
         aria-label="Settings"
-        className="flex h-full w-[216px] flex-col bg-sidebar text-[13px] text-sidebar-foreground"
+        className="flex h-full w-[216px] flex-col bg-sidebar text-ui text-sidebar-foreground"
       >
         <div className="m-2 flex h-9 items-center gap-1">
           <button
@@ -29,7 +29,7 @@ export function SettingsSidebar({ page, onBack, onNavigate }: SettingsSidebarPro
         </div>
 
         <div className="px-4 pt-4 pb-3">
-          <h1 className="text-[14px] font-semibold text-sidebar-accent-foreground">Settings</h1>
+          <h1 className="text-sm font-semibold text-sidebar-accent-foreground">Settings</h1>
         </div>
 
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-2 py-2">
@@ -37,7 +37,7 @@ export function SettingsSidebar({ page, onBack, onNavigate }: SettingsSidebarPro
             <section key={group.label} aria-labelledby={`settings-group-${group.label}`}>
               <h2
                 id={`settings-group-${group.label}`}
-                className="mb-1 px-2 text-[11px] font-medium tracking-wide text-muted-foreground"
+                className="mb-1 px-2 text-xs font-medium tracking-wide text-muted-foreground"
               >
                 {group.label}
               </h2>

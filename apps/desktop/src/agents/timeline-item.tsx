@@ -1,3 +1,5 @@
+import { useContext } from "react";
+import { FileLinkContext } from "@/files/context";
 import { formatDuration } from "./duration";
 import { extractToolCallFilePath } from "./paseo/extract-tool-call-file-path";
 import { useState } from "react";
@@ -19,6 +21,7 @@ export function TimelineItem({
   item: AgentItem;
   workedFor?: string | undefined;
 }) {
+  const openFile = useContext(FileLinkContext);
   const [open, setOpen] = useState(false);
   const data = item.presentation;
   if (item.kind === "user" || item.kind === "assistant")
@@ -39,7 +42,7 @@ export function TimelineItem({
           <div className="mt-2 flex items-center gap-2">
             <CopyButton text={item.text} />
             {workedFor && (
-              <span className="text-[12px] text-muted-foreground">Worked for {workedFor}</span>
+              <span className="text-xs text-muted-foreground">Worked for {workedFor}</span>
             )}
           </div>
         )}
@@ -48,7 +51,7 @@ export function TimelineItem({
   if (data?.type === "plan" || item.kind === "plan") return <PlanProgress item={item} />;
   if (item.kind === "system")
     return (
-      <article className="flex items-center gap-2 text-[12px] text-muted-foreground">
+      <article className="flex items-center gap-2 text-xs text-muted-foreground">
         <span>
           {item.id === `turn:${item.turnId}` &&
           item.status === "completed" &&
@@ -123,16 +126,16 @@ export function TimelineItem({
         ) : (
           <Icon className="size-4 shrink-0 text-muted-foreground" />
         )}
-        <span className={`shrink-0 text-[14px] font-medium ${running ? "agent-shimmer" : ""}`}>
+        <span className={`shrink-0 text-sm font-medium ${running ? "agent-shimmer" : ""}`}>
           {display.displayName}
         </span>
         <span
-          className={`min-w-0 flex-1 truncate text-[14px] text-muted-foreground ${running ? "agent-shimmer" : ""}`}
+          className={`min-w-0 flex-1 truncate text-sm text-muted-foreground ${running ? "agent-shimmer" : ""}`}
         >
           {display.summary ?? item.text}
         </span>
         {item.status === "failed" || item.status === "interrupted" ? (
-          <span className="text-[12px] text-muted-foreground">{item.status}</span>
+          <span className="text-xs text-muted-foreground">{item.status}</span>
         ) : null}
         {hasDetails && (
           <ChevronRight
@@ -141,7 +144,7 @@ export function TimelineItem({
         )}
       </button>
       {data?.children?.map((child) => (
-        <div key={child.id} className="border-t px-4 py-3 text-[14px]">
+        <div key={child.id} className="border-t px-4 py-3 text-sm">
           <div className="flex items-center gap-2">
             {["running", "pending", "inProgress"].includes(child.status) ? (
               <BrailleSpinner />
@@ -158,7 +161,7 @@ export function TimelineItem({
           </div>
           {child.message && (
             <details className="mt-2">
-              <summary className="cursor-pointer text-[12px] text-muted-foreground">
+              <summary className="cursor-pointer text-xs text-muted-foreground">
                 Agent update
               </summary>
               <div className="mt-2">
@@ -170,16 +173,30 @@ export function TimelineItem({
         </div>
       ))}
       {open && (
-        <div className="chat-scroll max-h-96 overflow-auto border-t p-4 text-[13px] leading-6">
+        <div className="chat-scroll max-h-96 overflow-auto border-t p-4 text-ui leading-6">
           <div className="mb-2 flex justify-end">
             <CopyButton text={item.detail || item.text} label="Copy tool output" />
           </div>
-          {filePath && <p className="mb-2 truncate font-mono text-muted-foreground">{filePath}</p>}
+          {filePath && (
+            <button
+              type="button"
+              className="mb-2 block max-w-full truncate font-mono text-muted-foreground hover:underline"
+              onClick={() => openFile?.(filePath)}
+            >
+              {filePath}
+            </button>
+          )}
           {data?.type === "files" && data.files?.length ? (
             data.files.map((file) => (
               <div key={file.path} className="mb-3">
                 <div className="mb-2 flex items-center gap-2">
-                  <p className="flex-1 font-mono font-medium">{file.path}</p>
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 truncate text-left font-mono font-medium hover:underline"
+                    onClick={() => openFile?.(file.path)}
+                  >
+                    {file.path}
+                  </button>
                   <CopyButton label="Copy diff" text={file.diff} />
                 </div>
                 <pre className="overflow-x-auto font-mono">

@@ -286,7 +286,7 @@ function PendingInput({
             <summary className="cursor-pointer text-xs text-muted-foreground">
               Review request details
             </summary>
-            <pre className="chat-scroll mt-2 max-h-40 overflow-auto text-[11px] break-words whitespace-pre-wrap">
+            <pre className="chat-scroll mt-2 max-h-40 overflow-auto text-xs break-words whitespace-pre-wrap">
               {pending.detail}
             </pre>
           </details>

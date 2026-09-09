@@ -57,7 +57,7 @@ export function AgentSidebar({
     })),
   ].toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   if (!agents.length)
-    return <p className="px-2 py-2 text-[13px] text-muted-foreground">No agents yet.</p>;
+    return <p className="px-2 py-2 text-ui text-muted-foreground">No agents yet.</p>;
   return (
     <ul className="mt-1 space-y-0.5">
       {agents.map((agent) => {
@@ -71,7 +71,7 @@ export function AgentSidebar({
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[13px] hover:bg-sidebar-accent"
+                  className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-ui hover:bg-sidebar-accent"
                   onClick={() => onSelect(agent.id)}
                 >
                   <span

@@ -16,6 +16,11 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@codemirror/commands": "6.10.4",
+    "@codemirror/language": "6.12.4",
+    "@codemirror/search": "6.7.1",
+    "@codemirror/state": "6.7.4",
+    "@codemirror/view": "6.43.11",
     "@concors/api-client": "workspace:*",
     "@concors/client-core": "workspace:*",
     "@concors/daemon-client": "workspace:*",
@@ -23,6 +28,7 @@
     "@fontsource-variable/geist": "^5.3.0",
     "@fontsource-variable/geist-mono": "^5.3.0",
     "@getpaseo/highlight": "0.7.2",
+    "@replit/codemirror-vim": "6.3.0",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-opener": "^2.5.5",
     "@xterm/addon-fit": "0.11.0",

@@ -20,9 +20,7 @@ const port = Number(process.env["CONCORS_E2E_DAEMON_PORT"] ?? 7429);
 if (![7429, 7430].includes(port)) throw new Error("Invalid fixture daemon port");
 const server = createDaemonServer(loadDaemonConfig({ port, logLevel: "warn" }, {}), {
   workspacePath: join(directory, "workspace.sqlite"),
-  ...(port === 7429
-    ? { agentProviderFactory: (_cwd, handler) => new TestAgentProvider(handler) }
-    : {}),
+  agentProviderFactory: (_cwd, handler) => new TestAgentProvider(handler),
 });
 // Test-only origin adaptation for a second local checkout. Production retains its
 // fixed allowlist; only this exact localhost acceptance origin is adapted here.

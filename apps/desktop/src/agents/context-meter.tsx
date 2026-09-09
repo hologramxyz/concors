@@ -54,7 +54,7 @@ export function ContextMeter({ context }: { context: AgentInfo["context"] }) {
           data-composer-surface={composerSurface}
           side="top"
           sideOffset={8}
-          className="z-50 rounded-xl border bg-popover p-4 text-[14px] shadow-lg"
+          className="z-50 rounded-xl border bg-popover p-4 text-sm shadow-lg"
         >
           <p className="font-medium">Context window</p>
           <p className="mt-2 text-muted-foreground">
@@ -63,7 +63,7 @@ export function ContextMeter({ context }: { context: AgentInfo["context"] }) {
               : "Usage will appear after the agent reports it."}
           </p>
           {context && (
-            <p className="mt-1 text-[12px] text-muted-foreground">
+            <p className="mt-1 text-xs text-muted-foreground">
               {formatTokenCount(context.total)} cumulative tokens
             </p>
           )}
