@@ -81,7 +81,16 @@ export function subscribeHost(listener: (message: MobileHostMessage) => void) {
 export function getHostState() {
   return state;
 }
-export function hostAction(action: MobileAction): Promise<unknown> {
+let beforeLeave: (() => boolean | Promise<boolean>) | null = null;
+export function guardMobileLeave(guard: () => boolean | Promise<boolean>) {
+  beforeLeave = guard;
+  return () => {
+    if (beforeLeave === guard) beforeLeave = null;
+  };
+}
+export async function hostAction(action: MobileAction): Promise<unknown> {
+  if (["sign-out", "delete-account"].includes(action.kind) && beforeLeave && !(await beforeLeave()))
+    return;
   if (!state) return Promise.reject(new Error("Mobile host is not ready"));
   const scope = state.scope;
   const requestId = crypto.randomUUID();
