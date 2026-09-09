@@ -20,6 +20,7 @@ import { ProjectSetupDialog } from "@/workspace/project-setup-dialog";
 import { ProjectImage } from "@/workspace/project-image";
 import { SidebarSection } from "@/components/sidebar-section";
 import { NewTabMenu } from "@/workspace/new-tab-menu";
+import { PaneProfileIcon } from "@/workspace/profile-icon";
 import { TAB_PROFILES } from "@/workspace/tab-profiles";
 import { CommandPalette } from "@/components/command-palette";
 import { AccountMenu } from "@/components/account-menu";
@@ -257,6 +258,27 @@ function MobileWorkspace({ host }: { host: MobileState }) {
         setError(cause instanceof Error ? cause.message : "Could not create tab"),
       );
   };
+  const createPane = (profile: PaneProfile) => {
+    if (!project || !tab || !pane) return;
+    const newPaneId = crypto.randomUUID();
+    setError(null);
+    // Keep the shared layout tree valid; mobile still displays only the selected leaf.
+    void execute({
+      kind: "pane.split",
+      projectId: project.id,
+      expectedVersion: project.version,
+      tabId: tab.id,
+      paneId: pane.id,
+      newPaneId,
+      splitId: crypto.randomUUID(),
+      axis: "horizontal",
+      profile,
+    })
+      .then(() => select({ projectId: project.id, tabId: tab.id, paneId: newPaneId }))
+      .catch((cause: unknown) =>
+        setError(cause instanceof Error ? cause.message : "Could not add pane"),
+      );
+  };
   const runHost = (action: Parameters<typeof hostAction>[0]) => {
     setError(null);
     void hostAction(action).catch((cause: unknown) =>
@@ -420,55 +442,80 @@ function MobileWorkspace({ host }: { host: MobileState }) {
                     aria-hidden={sidebarOpen || undefined}
                   >
                     <header className="mobile-header">
-                      <button
-                        id="mobile-sidebar-toggle"
-                        className="mobile-icon"
-                        aria-label="Open sidebar"
-                        aria-controls="mobile-sidebar"
-                        aria-expanded={sidebarOpen}
-                        onClick={() => setSidebarOpen(true)}
-                      >
-                        <Menu />
-                      </button>
-                      {project && tab && pane ? (
-                        <MobileSelect
-                          className="mobile-picker"
-                          label="Tabs and panes"
-                          value={`${tab.id}:${pane.id}`}
-                          onValueChange={(value) => {
-                            const [tabId, paneId] = value.split(":");
-                            select({ projectId: project.id, tabId, paneId });
-                          }}
-                          groups={project.tabs.map((item) => ({
-                            label: item.name,
-                            options: tabPanes(item).map((node, index) => ({
-                              value: `${item.id}:${node.id}`,
-                              label: `${item.name} · ${PROFILE_LABELS[node.profile]} ${index + 1}`,
-                            })),
-                          }))}
-                        />
-                      ) : (
-                        <h1 className="min-w-0 flex-1 truncate text-base font-medium">
-                          {project?.name ?? "Concors"}
-                        </h1>
-                      )}
+                      <div className="mobile-header-navigation mobile-glass">
+                        <button
+                          id="mobile-sidebar-toggle"
+                          className="mobile-icon"
+                          aria-label="Open sidebar"
+                          aria-controls="mobile-sidebar"
+                          aria-expanded={sidebarOpen}
+                          onClick={() => setSidebarOpen(true)}
+                        >
+                          <Menu />
+                        </button>
+                        {project && tab && pane ? (
+                          <MobileSelect
+                            className="mobile-picker"
+                            label="Tabs and panes"
+                            hierarchy
+                            selectedLabel={
+                              <span className="mobile-picker-breadcrumb">
+                                <span>{tab.name}</span>
+                                <span>
+                                  {PROFILE_LABELS[pane.profile]} · Pane{" "}
+                                  {tabPanes(tab).findIndex((item) => item.id === pane.id) + 1}
+                                </span>
+                              </span>
+                            }
+                            value={`${tab.id}:${pane.id}`}
+                            onValueChange={(value) => {
+                              const [tabId, paneId] = value.split(":");
+                              select({ projectId: project.id, tabId, paneId });
+                            }}
+                            groups={project.tabs.map((item) => ({
+                              label: item.name,
+                              options: tabPanes(item).map((node, index) => ({
+                                value: `${item.id}:${node.id}`,
+                                label: `${PROFILE_LABELS[node.profile]} · Pane ${index + 1}`,
+                                icon: <PaneProfileIcon profile={node.profile} />,
+                              })),
+                            }))}
+                          />
+                        ) : (
+                          <h1 className="min-w-0 flex-1 truncate text-base font-medium">
+                            {project?.name ?? "Concors"}
+                          </h1>
+                        )}
+                      </div>
                       {project && (
-                        <NewTabMenu
-                          keyboard={commandsAvailable}
-                          disabled={!canEdit || project.tabs.length >= 32}
-                          onCreate={createTab}
-                        />
-                      )}
-                      {project && tab && pane && (
-                        <WorkspaceActions
-                          project={project}
-                          tab={tab}
-                          pane={pane}
-                          canEdit={canEdit}
-                          execute={execute}
-                          command={command}
-                          onSelect={select}
-                        />
+                        <div className="mobile-header-actions mobile-glass">
+                          <NewTabMenu
+                            keyboard={commandsAvailable}
+                            disabled={!canEdit}
+                            tabLimitReached={project.tabs.length >= 32}
+                            paneTarget={
+                              tab && pane
+                                ? {
+                                    name: tab.name,
+                                    disabled: tabPanes(tab).length >= 32,
+                                    onCreate: createPane,
+                                  }
+                                : undefined
+                            }
+                            onCreate={createTab}
+                          />
+                          {tab && pane && (
+                            <WorkspaceActions
+                              project={project}
+                              tab={tab}
+                              pane={pane}
+                              canEdit={canEdit}
+                              execute={execute}
+                              command={command}
+                              onSelect={select}
+                            />
+                          )}
+                        </div>
                       )}
                     </header>
                     {(error || host.message) && (
@@ -494,7 +541,11 @@ function MobileWorkspace({ host }: { host: MobileState }) {
                       </p>
                     )}
                     <PaneVisibilityContext value={unobscured}>
-                      <main className="mobile-pane" data-pane-id={pane?.id}>
+                      <main
+                        className="mobile-pane"
+                        data-pane-id={pane?.id}
+                        data-pane-profile={pane?.profile}
+                      >
                         {project && tab && pane ? (
                           pane.profile === "chat" ? (
                             <ChatPane
