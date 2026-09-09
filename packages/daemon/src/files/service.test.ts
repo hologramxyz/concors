@@ -79,8 +79,12 @@ describe("project files", () => {
       request(operation),
       request({ ...operation, content: "client two" }),
     ]);
-    expect(results.map((r) => r.status)).toEqual(["written", "conflict"]);
-    expect(await readFile(join(root, "hello.ts"), "utf8")).toBe("client one");
+    // Path resolution is asynchronous, so either request can reach the write queue first.
+    expect(results.map((r) => r.status).sort()).toEqual(["conflict", "written"]);
+    const winningContent = results[0].status === "written" ? "client one" : "client two";
+    const written = results.find((result) => result.status === "written");
+    expect(written).toMatchObject({ file: { content: winningContent } });
+    expect(await readFile(join(root, "hello.ts"), "utf8")).toBe(winningContent);
     await writeFile(join(root, "hello.ts"), "agent update");
     expect((await request(operation)).status).toBe("conflict");
     expect(await readFile(join(root, "hello.ts"), "utf8")).toBe("agent update");
