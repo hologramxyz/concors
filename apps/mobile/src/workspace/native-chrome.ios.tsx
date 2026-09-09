@@ -282,6 +282,7 @@ function Control({
 }) {
   const modifiers = [
     buttonStyle(primary ? "borderedProminent" : "plain"),
+    ...(primary ? [foregroundStyle(dark ? "#141414" : "#ffffff")] : []),
     buttonBorderShape("circle"),
     controlSize("regular"),
     disabled(!!blocked),
@@ -292,7 +293,7 @@ function Control({
     <Host
       style={[styles.control, { width }]}
       colorScheme={dark ? "dark" : "light"}
-      seedColor={primary ? (dark ? "#a6bdff" : "#335dce") : dark ? "#eeeeee" : "#222222"}
+      seedColor={dark ? "#ededed" : "#20211f"}
       ignoreSafeArea="all"
     >
       {options ? (
@@ -308,6 +309,8 @@ function Control({
                   "Cancel",
                 ],
                 cancelButtonIndex: options.length,
+                tintColor: dark ? "#ededed" : "#20211f",
+                cancelButtonTintColor: dark ? "#ededed" : "#20211f",
                 userInterfaceStyle: dark ? "dark" : "light",
               },
               (index) => {
@@ -496,6 +499,7 @@ function Composer({
         accessibilityLabel="Message your agent"
         placeholder={content.placeholder}
         placeholderTextColor={dark ? "#a3a3a3" : "#666"}
+        selectionColor={dark ? "#ededed" : "#20211f"}
         value={draft}
         editable={content.editable}
         multiline
