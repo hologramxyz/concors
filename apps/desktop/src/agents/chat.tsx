@@ -16,6 +16,7 @@ import { Activity } from "./activity";
 import { PlanProgress } from "./plan-progress";
 import { useAgents } from "./context";
 import { useConversation } from "./conversation";
+import { useTabVisible } from "@/workspace/tab-visibility";
 
 const button = "rounded-md border px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-40";
 export function ChatPane({
@@ -97,15 +98,6 @@ export function ChatPane({
               disabled
               className="min-h-16 w-full resize-none bg-transparent px-3 py-3 text-[16px] leading-relaxed outline-none"
             />
-            <p role="status" className="px-3 pb-2 text-xs text-muted-foreground">
-              {!canEdit
-                ? "Waiting for an editable connection…"
-                : !available
-                  ? "Waiting for a machine with agent support…"
-                  : error
-                    ? "Agent could not be prepared."
-                    : "Preparing agent…"}
-            </p>
           </div>
         </div>
       </div>
@@ -114,7 +106,7 @@ export function ChatPane({
 }
 
 export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boolean }) {
-  useViewedAgent(sessionId);
+  useViewedAgent(sessionId, useTabVisible());
   const connection = useContext(TerminalConnectionContext);
   const agent = useAgents().find((a) => a.id === sessionId);
   const conversation = useConversation(sessionId);
@@ -125,7 +117,7 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
   const [atBottom, setAtBottom] = useState(true);
   const footers = completedTurnFooters(conversation.items);
   const latestPlan = conversation.items.findLast((item) => item.kind === "plan");
-  const active = agent && ["starting", "working", "needs_input"].includes(agent.status);
+  const active = agent && ["working", "needs_input"].includes(agent.status);
   const connected = canEdit && connection?.state.status === "ready";
   useEffect(() => {
     if (follow.current && scroll.current) scroll.current.scrollTop = scroll.current.scrollHeight;
@@ -191,7 +183,6 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
               Load earlier messages
             </button>
           )}
-          {!conversation.ready && <Activity>Loading conversation…</Activity>}
           {conversation.items
             .filter((item) => !footers.hidden.has(item.id))
             .map((item) => (
@@ -199,11 +190,7 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
             ))}
           {active && (
             <Activity startedAt={agent.turnStartedAt}>
-              {agent?.status === "starting"
-                ? "Starting agent…"
-                : agent?.status === "needs_input"
-                  ? "Waiting for your input"
-                  : "Working…"}
+              {agent?.status === "needs_input" ? "Waiting for your input" : "Working…"}
             </Activity>
           )}
         </div>
