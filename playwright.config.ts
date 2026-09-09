@@ -21,14 +21,17 @@ export default defineConfig({
     {
       command: "node e2e/support/daemon.ts",
       url: "http://127.0.0.1:7429/health",
-      env: { CONCORS_DATA_DIR: join(dataDir, "first") },
+      env: { CONCORS_DATA_DIR: join(dataDir, "first"), CONCORS_E2E_UI_ORIGIN: baseURL },
       reuseExistingServer: false,
     },
     {
-      command:
-        "pnpm --filter @concors/daemon exec node src/cli.ts serve --ephemeral --port 7430 --log-level warn",
+      command: "node e2e/support/daemon.ts",
       url: "http://127.0.0.1:7430/health",
-      env: { CONCORS_DATA_DIR: join(dataDir, "second") },
+      env: {
+        CONCORS_DATA_DIR: join(dataDir, "second"),
+        CONCORS_E2E_UI_ORIGIN: baseURL,
+        CONCORS_E2E_DAEMON_PORT: "7430",
+      },
       reuseExistingServer: false,
     },
     {
