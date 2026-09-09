@@ -417,6 +417,28 @@ body {
   justify-content: center;
   padding: 4px;
 }
+[data-mobile-drawer].mobile-select-sheet {
+  display: flex;
+  flex-direction: column;
+  max-height: min(72dvh, 640px) !important;
+  gap: 16px;
+}
+[data-mobile-drawer].mobile-workspace-sheet {
+  min-height: min(38dvh, 280px);
+}
+.mobile-select-sheet > [data-slot="dialog-header"] {
+  flex-shrink: 0;
+}
+.mobile-select-sheet-list {
+  width: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 2px 2px;
+}
+.mobile-select-sheet-list .mobile-select-option {
+  min-height: 52px;
+}
 @keyframes mobile-picker-in {
   from {
     opacity: 0;
