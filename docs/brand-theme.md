@@ -3,10 +3,11 @@
 Reference: `concors-web` main, commit `7397675`, specifically `src/styles.css`,
 `src/App.tsx`, `src/main.tsx`, and `public/favicon.svg`.
 
-- Primary actions use the site's exact cobalt, `#335dce`, with white labels.
-- Dark-mode text accents and focus rings use the site's softer cobalt, `#a6bdff`.
-- Text selection uses `#c7d5ff`. Light surfaces use paper `#f4f3ef`, ink `#20211f`,
-  muted text `#65665f`, and rules `#d3d3cb`.
+- Primary actions use ink with white labels in light mode, and light gray with dark labels in dark mode.
+- Selected controls, focus rings, resize handles, badges, and links use neutral foreground colors.
+- Native form controls inherit the same neutral accent. Text selection uses soft gray in both themes.
+- The application retains its paper surfaces, Geist typography, and geometric brand mark; cobalt
+  belongs to the landing page, not the client interface.
 - Geist and Geist Mono are bundled locally for offline desktop/mobile use.
 - The sign-in wordmark and browser favicon reuse the current geometric brand mark.
 
@@ -14,7 +15,7 @@ The dense workspace keeps its current tabs, pane geometry, and controls. Landing
 reveal effects, large uppercase marketing headings, and decorative grids aren't applied
 inside work panes.
 
-Terminal colors are explicit ANSI palettes for light and dark themes, with cobalt blues,
+Terminal colors are explicit ANSI palettes for light and dark themes, with ANSI blues,
 readable red/green/yellow/cyan/magenta colors, matching pane chrome, and a 13px Geist Mono
 font. Switching the app theme updates the renderer without restarting its session.
 Application-specified indexed and true-color values are preserved.
