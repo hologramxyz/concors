@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { resolveFileLink } from "./links";
 describe("project file links", () => {
   it("resolves agent references and Markdown-relative links with line locations", () => {
+    expect(resolveFileLink("README.md:4", "/repo")).toEqual({ path: "README.md", line: 4 });
     expect(resolveFileLink("src/main.ts:42:3", "/repo")).toEqual({ path: "src/main.ts", line: 42 });
     expect(resolveFileLink("/repo/src/main.ts#L9-L12", "/repo")).toEqual({
       path: "src/main.ts",
