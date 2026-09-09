@@ -16,9 +16,21 @@ process.env["PATH"] = installTestCodexProfile(directory) + delimiter + (process.
 installTestClaudeProfile(directory);
 // Keep shell startup files from replacing the harmless test executable in PATH.
 if (process.platform !== "win32") process.env["SHELL"] = "/bin/sh";
-const server = createDaemonServer(loadDaemonConfig({ port: 7429, logLevel: "warn" }, {}), {
+const port = Number(process.env["CONCORS_E2E_DAEMON_PORT"] ?? 7429);
+if (![7429, 7430].includes(port)) throw new Error("Invalid fixture daemon port");
+const server = createDaemonServer(loadDaemonConfig({ port, logLevel: "warn" }, {}), {
   workspacePath: join(directory, "workspace.sqlite"),
-  agentProviderFactory: (_cwd, handler) => new TestAgentProvider(handler),
+  ...(port === 7429
+    ? { agentProviderFactory: (_cwd, handler) => new TestAgentProvider(handler) }
+    : {}),
 });
+// Test-only origin adaptation for a second local checkout. Production retains its
+// fixed allowlist; only this exact localhost acceptance origin is adapted here.
+const uiOrigin = process.env["CONCORS_E2E_UI_ORIGIN"];
+if (uiOrigin && new URL(uiOrigin).hostname === "localhost") {
+  server.app.addHook("onRequest", async (request) => {
+    if (request.headers.origin === uiOrigin) request.headers.origin = "http://localhost:1420";
+  });
+}
 await server.listen();
 for (const signal of ["SIGINT", "SIGTERM"] as const) process.on(signal, () => void server.close());
