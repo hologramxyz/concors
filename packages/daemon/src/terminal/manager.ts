@@ -1,3 +1,4 @@
+import { directoryIdentity, shellDirectory } from "./working-directory.ts";
 import { detectTerminalAgent, readTerminalProcesses } from "./agent-process.ts";
 import { randomUUID } from "node:crypto";
 import { realpath, stat } from "node:fs/promises";
@@ -16,6 +17,8 @@ export class TerminalManager {
   #queue: Promise<unknown> = Promise.resolve();
   #closed = false;
   #scanning = false;
+  #observing = false;
+  readonly #directoryPoll: ReturnType<typeof setInterval>;
   readonly #agentPoll: ReturnType<typeof setInterval>;
 
   constructor(
@@ -23,6 +26,10 @@ export class TerminalManager {
     workspaceChanged: () => void,
     terminalChanged: (session: TerminalInfo) => void = () => undefined,
   ) {
+    this.#directoryPoll = setInterval(() => {
+      void this.scanDirectories();
+    }, 400);
+    this.#directoryPoll.unref();
     this.#agentPoll = setInterval(() => {
       void this.scanAgents();
     }, 1000);
@@ -56,6 +63,39 @@ export class TerminalManager {
       // Process enumeration can be unavailable temporarily; retain the last observed state.
     } finally {
       this.#scanning = false;
+    }
+  }
+
+  private async scanDirectories(): Promise<void> {
+    if (this.#closed || this.#observing) return;
+    this.#observing = true;
+    try {
+      await Promise.all(
+        [...this.#runtimes.values()]
+          .filter(
+            (runtime) => runtime.info.profile === "shell" && runtime.info.status === "running",
+          )
+          .map(async (runtime) => {
+            try {
+              const native = await shellDirectory(runtime.pid);
+              const observed = native ?? runtime.reportedDirectory;
+              if (
+                !observed ||
+                observed === (runtime.info.currentDirectory ?? runtime.info.directory)
+              )
+                return;
+              const { directory, root } = await directoryIdentity(observed);
+              if (this.#closed || runtime.info.status !== "running") return;
+              runtime.observeDirectory(directory);
+              if (this.#store.observeDirectory(runtime.info.id, directory, root))
+                this.#workspaceChanged();
+            } catch {
+              /* A deleted or inaccessible folder must not disrupt its running shell. */
+            }
+          }),
+      );
+    } finally {
+      this.#observing = false;
     }
   }
 
@@ -154,9 +194,11 @@ export class TerminalManager {
     const lost = op.recover && pane.sessionId ? this.#store.terminal(pane.sessionId) : null;
     if (op.recover && (!lost || lost.status !== "interrupted"))
       throw new Error("This terminal does not need recovery");
-    if (!isAbsolute(project.directory))
+    const startingDirectory =
+      lost?.currentDirectory ?? lost?.directory ?? pane.directory ?? project.directory;
+    if (!isAbsolute(startingDirectory))
       throw new Error("Use an absolute project directory on this machine");
-    const directory = await realpath(project.directory);
+    const directory = await realpath(startingDirectory);
     if (!(await stat(directory)).isDirectory()) throw new Error("Project path is not a directory");
     const recoveryProfile = lost?.detectedAgent ?? pane.profile;
     const command = resolveProfile(
@@ -225,6 +267,7 @@ export class TerminalManager {
   close(): void {
     this.#closed = true;
     clearInterval(this.#agentPoll);
+    clearInterval(this.#directoryPoll);
     for (const runtime of this.#runtimes.values()) runtime.dispose();
     this.#runtimes.clear();
   }
