@@ -130,11 +130,19 @@ function MobileWorkspace({ host }: { host: MobileState }) {
     if (handledTarget.current === targetKey) return;
     const target = JSON.parse(targetKey) as MobileTarget;
     if (!target.machineId) return;
-    if (!host.machines.length) return;
-    if (!host.machines.some((machine) => machine.id === target.machineId)) {
+    if (host.direct ? !host.machineId : !host.machines.length) return;
+    if (
+      host.direct
+        ? host.machineId !== target.machineId
+        : !host.machines.some((machine) => machine.id === target.machineId)
+    ) {
       // An external native notification/deep link is an imperative navigation event.
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setError("This session's machine is not available in your current organization.");
+      setError(
+        host.direct
+          ? "This link belongs to a different desktop daemon."
+          : "This session's machine is not available in your current organization.",
+      );
       return;
     }
     handledTarget.current = targetKey;
@@ -144,7 +152,7 @@ function MobileWorkspace({ host }: { host: MobileState }) {
           setError(cause instanceof Error ? cause.message : "Could not open session"),
       );
     setLocal({ machineId: target.machineId, target });
-  }, [targetKey, host.machines, host.machineId]);
+  }, [targetKey, host.machines, host.machineId, host.direct]);
   // One available machine can connect automatically; choosing another always remains explicit.
   useEffect(() => {
     if (
@@ -293,7 +301,7 @@ function MobileWorkspace({ host }: { host: MobileState }) {
   };
   const openSettings = () => {
     setSidebarOpen(false);
-    setSettingsPage("account");
+    setSettingsPage(host.direct ? "appearance" : "account");
     setSettingsOpen(true);
   };
   const unobscured =
@@ -360,20 +368,34 @@ function MobileWorkspace({ host }: { host: MobileState }) {
                       label="Machine"
                       presentation="sheet"
                       value={host.machineId ?? ""}
-                      placeholder="Choose a machine"
+                      placeholder={host.direct ? "Connecting to desktop…" : "Choose a machine"}
                       onValueChange={(machineId) => {
                         setLocal({ machineId, target: {} });
                         runHost({ kind: "select-machine", machineId });
                       }}
                       groups={[
                         {
-                          label: "Your machines",
-                          options: host.machines.map((machine) => ({
-                            value: machine.id,
-                            label: machine.name,
-                            icon: <Server />,
-                            description: machine.status,
-                          })),
+                          label: host.direct ? "Direct connection" : "Your machines",
+                          options: host.direct
+                            ? host.machineId
+                              ? [
+                                  {
+                                    value: host.machineId,
+                                    label: "Desktop daemon",
+                                    icon: <Server />,
+                                    description:
+                                      host.phase === "ready"
+                                        ? "Connected · real workspace"
+                                        : host.phase,
+                                  },
+                                ]
+                              : []
+                            : host.machines.map((machine) => ({
+                                value: machine.id,
+                                label: machine.name,
+                                icon: <Server />,
+                                description: machine.status,
+                              })),
                         },
                       ]}
                     />
@@ -426,11 +448,31 @@ function MobileWorkspace({ host }: { host: MobileState }) {
                     </SidebarSection>
                   </nav>
                   <div className="mobile-sidebar-footer">
-                    <AccountMenu
-                      auth={{ status: "signed-in", ...host.me, organizations: host.organizations }}
-                      onOpenSettings={openSettings}
-                      onSignOut={() => runHost({ kind: "sign-out" })}
-                    />
+                    {host.me ? (
+                      <AccountMenu
+                        auth={{
+                          status: "signed-in",
+                          ...host.me,
+                          organizations: host.organizations,
+                        }}
+                        onOpenSettings={openSettings}
+                        onSignOut={() => runHost({ kind: "sign-out" })}
+                      />
+                    ) : (
+                      <button
+                        className="flex w-full items-center gap-3 rounded-xl p-3 text-left hover:bg-sidebar-accent"
+                        aria-label="Desktop connection settings"
+                        onClick={openSettings}
+                      >
+                        <Server className="size-5" />
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium">Desktop connection</span>
+                          <span className="block text-xs text-muted-foreground">
+                            Private test · no cloud account
+                          </span>
+                        </span>
+                      </button>
+                    )}
                   </div>
                 </aside>
                 <div
@@ -661,7 +703,7 @@ function MobileWorkspace({ host }: { host: MobileState }) {
                   if (view === "settings") openSettings();
                   else if (view === "machines") {
                     setSidebarOpen(false);
-                    setSettingsPage("machines");
+                    setSettingsPage(host.direct ? "advanced" : "machines");
                     setSettingsOpen(true);
                   } else setSidebarOpen(true);
                 }}

@@ -18,6 +18,8 @@ import { hostAction } from "./bridge";
 import { NotificationSettings } from "@/notifications/settings";
 import { MachinesView } from "@/machines/machines-view";
 import { MobileSelect } from "./select";
+import { AppearanceSettings } from "@/settings/appearance-settings";
+import { AdvancedSettings } from "@/settings/advanced-settings";
 
 export function SettingsDrawer({
   open,
@@ -66,7 +68,11 @@ export function SettingsDrawer({
       <DialogContent className="mobile-settings-drawer">
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
-          <DialogDescription>Your account and this device.</DialogDescription>
+          <DialogDescription>
+            {host.direct
+              ? "Your connected desktop and this device."
+              : "Your account and this device."}
+          </DialogDescription>
         </DialogHeader>
         <MobileSelect
           label="Settings section"
@@ -75,16 +81,18 @@ export function SettingsDrawer({
           groups={SETTINGS_NAV_GROUPS.map((group) => ({
             label: group.label,
             options: [
-              ...group.items.map(({ page, label, icon: Icon }) => ({
-                value: page,
-                label,
-                icon: <Icon />,
-              })),
-              ...(group.label === "Workspace"
+              ...group.items
+                .filter((item) => !host.direct || ["appearance", "advanced"].includes(item.page))
+                .map(({ page, label, icon: Icon }) => ({
+                  value: page,
+                  label,
+                  icon: <Icon />,
+                })),
+              ...(group.label === "Workspace" && !host.direct
                 ? [{ value: "machines", label: "Machines", icon: <Server /> }]
                 : []),
             ],
-          }))}
+          })).filter((group) => group.options.length)}
         />
         <div className="mobile-settings-body">
           {error && (
@@ -97,7 +105,63 @@ export function SettingsDrawer({
               Demo · Account actions are simulated.
             </p>
           )}
-          {page === "machines" ? (
+          {host.direct ? (
+            <div className="space-y-5 p-4">
+              {page === "appearance" ? (
+                <AppearanceSettings
+                  theme={host.preferences.theme}
+                  cornerStyle={host.preferences.corners}
+                  onSetTheme={(theme) =>
+                    void run(() =>
+                      hostAction({
+                        kind: "preferences",
+                        preferences: { ...host.preferences, theme },
+                      }),
+                    )
+                  }
+                  onSetCornerStyle={(corners) =>
+                    void run(() =>
+                      hostAction({
+                        kind: "preferences",
+                        preferences: { ...host.preferences, corners },
+                      }),
+                    )
+                  }
+                />
+              ) : (
+                <AdvancedSettings
+                  endpoint={null}
+                  endpointLabel={host.endpointLabel}
+                  state={connectionState}
+                />
+              )}
+              <Section
+                title="Direct desktop connection"
+                description="Real sessions on your connected computer. Cloud account, billing and push settings are not part of this private test."
+              >
+                <p className="py-3 text-xs break-all text-muted-foreground">
+                  Machine ID: {host.machineId ?? "Waiting for daemon…"}
+                </p>
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => void run(() => hostAction({ kind: "retry" }))}
+                  >
+                    Reconnect
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => void run(() => hostAction({ kind: "sign-out" }))}
+                  >
+                    Disconnect desktop
+                  </Button>
+                </div>
+                <p className="pt-3 text-sm text-muted-foreground">
+                  Disconnecting does not stop agents or terminals.
+                </p>
+              </Section>
+            </div>
+          ) : page === "machines" && host.me ? (
             <MachinesView
               auth={{ status: "signed-in", ...host.me, organizations: host.organizations }}
             />
@@ -135,7 +199,7 @@ export function SettingsDrawer({
                 )}
               </Section>
             </div>
-          ) : (
+          ) : host.me && page !== "machines" ? (
             <SettingsView
               page={page}
               endpoint={null}
@@ -163,8 +227,8 @@ export function SettingsDrawer({
                 void run(() => hostAction({ kind: "switch-organization", organizationId }))
               }
             />
-          )}
-          {page === "account" && (
+          ) : null}
+          {page === "account" && !host.direct && (
             <div className="px-4 pb-4">
               <Section title="Help and privacy" description="Concors support and data practices.">
                 <div className="flex gap-3 py-3">

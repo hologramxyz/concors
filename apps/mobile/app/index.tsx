@@ -15,7 +15,7 @@ export default function SignInScreen() {
   const [signingUp, setSigningUp] = useState(false);
   const submit = () =>
     signingUp ? auth.signUp(name, email, password) : auth.signIn(email, password);
-  if (auth.me) return <Redirect href="/(app)" />;
+  if (auth.me || auth.direct) return <Redirect href="/(app)" />;
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
       <KeyboardAvoidingView
@@ -43,7 +43,22 @@ export default function SignInScreen() {
             </Notice>
           )}
           {auth.error && <Notice>{auth.error}</Notice>}
-          {config.demo ? (
+          {config.developmentDaemon ? (
+            <>
+              <Notice>
+                Live desktop connection · This opens your real workspace. Commands run on the
+                connected computer. Keep Tailscale connected.
+              </Notice>
+              <Copy muted>{new URL(config.developmentDaemon).host}</Copy>
+              <Button disabled={auth.loading} onPress={auth.connectDirect}>
+                Connect to desktop
+              </Button>
+              <Copy muted size={13}>
+                No cloud login is needed for this private test. Disconnecting leaves your desktop
+                sessions running.
+              </Copy>
+            </>
+          ) : config.demo ? (
             <Button
               disabled={auth.loading}
               onPress={() => {

@@ -28,13 +28,18 @@ import { Button, Copy } from "../ui";
 import { WorkspaceRenderer } from "./renderer";
 import type { WorkspaceRendererHandle } from "./renderer-types";
 import { dispatchMobileApi } from "./api";
+import { assertWorkspaceActionAllowed } from "./access";
 
 const defaults: MobilePreferences = { theme: "system", corners: "subtle", sound: false };
 export function WorkspaceHost() {
   const auth = useAuth();
   // A fresh renderer/session nonce on account or organization change rejects stale bridge actions.
-  if (!auth.me) return null;
-  return <SignedInWorkspace key={`${auth.me.user.id}:${auth.me.session.activeOrganizationId}`} />;
+  if (!auth.me && !auth.direct) return null;
+  return (
+    <SignedInWorkspace
+      key={auth.direct ? "direct" : `${auth.me?.user.id}:${auth.me?.session.activeOrganizationId}`}
+    />
+  );
 }
 function SignedInWorkspace() {
   const auth = useAuth();
@@ -56,6 +61,7 @@ function SignedInWorkspace() {
   const organizations = useQuery({
     queryKey: ["organizations", auth.me?.user.id],
     queryFn: () => api.listOrganizations(),
+    enabled: !!auth.me && !auth.direct,
   });
   const transport = connection.phase === "ready" && !failed ? connection.transport : null;
   const connectionId = useMemo(
@@ -99,51 +105,59 @@ function SignedInWorkspace() {
     };
   }, [userId]);
   const target = MobileTargetSchema.safeParse(params);
-  const state: MobileState | null = auth.me
-    ? {
-        scope,
-        me: auth.me,
-        organizations: organizations.data ?? [],
-        machines: machines.data ?? [],
-        machineId,
-        connectionId,
-        phase: connection.phase,
-        message: machines.isError
-          ? "Could not load machines. Retry when connected."
-          : organizations.isError
-            ? "Could not load organizations. Retry when connected."
-            : connection.message,
-        capabilities: {
-          ...(capabilities.data ?? NO_MOBILE_CAPABILITIES),
-          remoteAccess:
-            config.demo || !!config.developmentDaemon || !!capabilities.data?.remoteAccess,
-        },
-        demo: config.demo,
-        native: Platform.OS !== "web",
-        systemDark,
-        preferences,
-        pushEnabled: push,
-        target: target.success ? target.data : {},
-        supportUrl: config.supportUrl,
-        privacyUrl: config.privacyUrl,
-        apiUrl: config.apiUrl,
-        endpointLabel: config.demo
-          ? "In-memory demo"
-          : transport
-            ? "Authenticated native gateway"
-            : "Not connected",
-      }
-    : null;
+  const state: MobileState | null =
+    auth.me || auth.direct
+      ? {
+          scope,
+          me: auth.me,
+          direct: auth.direct,
+          organizations: organizations.data ?? [],
+          machines: machines.data ?? [],
+          machineId,
+          connectionId,
+          phase: connection.phase,
+          message: machines.isError
+            ? "Could not load machines. Retry when connected."
+            : organizations.isError
+              ? "Could not load organizations. Retry when connected."
+              : connection.message,
+          capabilities: {
+            ...(capabilities.data ?? NO_MOBILE_CAPABILITIES),
+            remoteAccess: config.demo || auth.direct || !!capabilities.data?.remoteAccess,
+          },
+          demo: config.demo,
+          native: Platform.OS !== "web",
+          systemDark,
+          preferences,
+          pushEnabled: push,
+          target: target.success ? target.data : {},
+          supportUrl: config.supportUrl,
+          privacyUrl: config.privacyUrl,
+          apiUrl: config.apiUrl,
+          endpointLabel: auth.direct
+            ? `Direct desktop daemon${config.developmentDaemon ? ` · ${new URL(config.developmentDaemon).host}` : ""}`
+            : config.demo
+              ? "In-memory demo"
+              : transport
+                ? "Authenticated native gateway"
+                : "Not connected",
+        }
+      : null;
   const latest = useRef({
     state,
     action: async (_action: MobileAction): Promise<unknown> => undefined,
   });
   const action = async (action: MobileAction): Promise<unknown> => {
-    if (!auth.me) throw new Error("Sign in again");
+    assertWorkspaceActionAllowed(auth.direct, !!auth.me, action);
     switch (action.kind) {
       case "api":
         return dispatchMobileApi(api, action.call);
       case "select-machine":
+        if (auth.direct) {
+          if (action.machineId !== machineId)
+            throw new Error("This is not the connected desktop daemon.");
+          return;
+        }
         if (!machines.data?.some((machine) => machine.id === action.machineId))
           throw new Error("Machine is unavailable in this organization");
         if (!state?.capabilities.remoteAccess)
@@ -167,6 +181,7 @@ function SignedInWorkspace() {
         await auth.refresh();
         return;
       case "push":
+        if (!auth.me) throw new Error("Sign in again");
         if (!capabilities.data?.pushNotifications)
           throw new Error("Push is not available on this server");
         if (action.enabled) await enablePush(api, auth.me.user.id);

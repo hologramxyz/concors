@@ -53,7 +53,8 @@ export const MobilePreferencesSchema = z.object({
 export type MobilePreferences = z.infer<typeof MobilePreferencesSchema>;
 export const MobileStateSchema = z.object({
   scope: id,
-  me: MeSchema,
+  me: MeSchema.nullable(),
+  direct: z.boolean().default(false),
   organizations: z.array(OrganizationSchema),
   machines: z.array(MachineSchema),
   machineId: id.nullable(),

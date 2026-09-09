@@ -5,6 +5,7 @@ import { AppState } from "react-native";
 import { api } from "./runtime";
 import { tokenStore } from "../platform/storage";
 import { disablePush } from "../platform/notifications";
+import { config } from "../config";
 
 interface AuthState {
   me: Me | null;
@@ -12,6 +13,8 @@ interface AuthState {
   error: string | null;
 }
 interface AuthContextValue extends AuthState {
+  direct: boolean;
+  connectDirect(): void;
   signIn(email: string, password: string): Promise<void>;
   signUp(name: string, email: string, password: string): Promise<void>;
   signOut(): Promise<void>;
@@ -27,8 +30,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const query = useQueryClient();
   const generation = useRef(0);
   const changingSession = useRef(false);
+  const [direct, setDirect] = useState(false);
   const [state, setState] = useState<AuthState>({ me: null, loading: true, error: null });
   const refresh = async () => {
+    // A private-daemon test session is not a cloud login. Do not hydrate or send account tokens.
+    if (config.developmentDaemon) {
+      setState({ me: null, loading: false, error: null });
+      return;
+    }
     if (changingSession.current) return;
     const attempt = ++generation.current;
     try {
@@ -68,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const signIn = async (email: string, password: string) => {
+    if (config.developmentDaemon) throw new Error("Cloud login is unavailable in direct mode.");
     if (changingSession.current) return;
     changingSession.current = true;
     const attempt = ++generation.current;
@@ -96,6 +106,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
   const signOut = async () => {
+    if (config.developmentDaemon) {
+      generation.current++;
+      setDirect(false);
+      query.clear();
+      setState({ me: null, loading: false, error: null });
+      return;
+    }
     if (changingSession.current) return;
     changingSession.current = true;
     generation.current++;
@@ -123,6 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     changingSession.current = false;
   };
   const signUp = async (name: string, email: string, password: string) => {
+    if (config.developmentDaemon) throw new Error("Cloud signup is unavailable in direct mode.");
     if (changingSession.current) return;
     changingSession.current = true;
     const attempt = ++generation.current;
@@ -153,6 +171,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
   return (
-    <AuthContext value={{ ...state, signIn, signUp, signOut, refresh }}>{children}</AuthContext>
+    <AuthContext
+      value={{
+        ...state,
+        direct,
+        connectDirect: () => {
+          if (!config.developmentDaemon) throw new Error("No private daemon is configured.");
+          query.clear();
+          setState({ me: null, loading: false, error: null });
+          setDirect(true);
+        },
+        signIn,
+        signUp,
+        signOut,
+        refresh,
+      }}
+    >
+      {children}
+    </AuthContext>
   );
 }

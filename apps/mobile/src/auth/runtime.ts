@@ -7,6 +7,8 @@ export const demo = config.demo
   : null;
 // No Vite proxy or browser cookies are needed by the native app: ApiClient sends a bearer token.
 const nativeFetch: typeof fetch = async (input, init) => {
+  if (config.developmentDaemon)
+    throw new Error("Cloud API calls are disabled in direct-daemon mode.");
   if (demo) return (await demo).fetch(input, init);
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), 15_000);
