@@ -1,5 +1,6 @@
 import { terminalTheme } from "./theme";
-import { useContext, useEffect, useRef, useState } from "react";
+import { useContext, useLayoutEffect, useRef, useState } from "react";
+import { useTabVisible } from "@/workspace/tab-visibility";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import type { TerminalInfo, TerminalOperation } from "@concors/protocol";
@@ -22,13 +23,15 @@ export function TerminalSurface({
   recovering?: boolean;
 }) {
   const connection = useContext(TerminalConnectionContext);
+  const visible = useTabVisible();
+  const refresh = useRef<(() => void) | null>(null);
   const host = useRef<HTMLDivElement>(null);
   const [session, setSession] = useState<TerminalInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reconnecting, setReconnecting] = useState(false);
   const isRecovering = recovering || session?.status === "interrupted";
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!host.current || !connection) return;
     let disposed = false,
       owner = false,
@@ -41,6 +44,9 @@ export function TerminalSurface({
     let queuedInput = "";
     const terminal = new Terminal({
       cursorBlink: true,
+      cursorStyle: "bar",
+      cursorInactiveStyle: "bar",
+      cursorWidth: 1,
       fontSize: 13,
       lineHeight: 1.2,
       fontFamily: '"Geist Mono Variable", "SF Mono", Consolas, monospace',
@@ -52,6 +58,7 @@ export function TerminalSurface({
     const fit = new FitAddon();
     terminal.loadAddon(fit);
     const element = host.current;
+    const isVisible = () => element.getClientRects().length > 0;
     terminal.open(element);
     fit.fit();
     const themeObserver = new MutationObserver(() => {
@@ -62,7 +69,7 @@ export function TerminalSurface({
       attributeFilter: ["class"],
     });
     void document.fonts.ready.then(() => {
-      if (disposed) return;
+      if (disposed || !isVisible()) return;
       fit.fit();
       if (owner) void request({ kind: "resize", sessionId, ...dimensions() }).catch(report);
     });
@@ -118,6 +125,7 @@ export function TerminalSurface({
           const focusedPane = focused?.closest("[data-pane-id]");
           if (
             document.visibilityState === "visible" &&
+            isVisible() &&
             !focused?.closest('[role="dialog"], [role="alertdialog"], [role="menu"]') &&
             (!focusedPane || focusedPane === element.closest("[data-pane-id]"))
           )
@@ -161,7 +169,7 @@ export function TerminalSurface({
         setSession(event.session);
         setError(null);
         setReconnecting(false);
-        if (running && event.ownerId === null) claim(true);
+        if (running && event.ownerId === null && isVisible()) claim(true);
       } else if (event.type === "terminal.output" && event.sessionId === sessionId) {
         if (event.sequence <= sequence) return;
         if (event.sequence !== sequence + 1) {
@@ -192,11 +200,18 @@ export function TerminalSurface({
       }
     });
     let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+    refresh.current = () => {
+      if (disposed || !isVisible()) return;
+      fit.fit();
+      terminal.refresh(0, terminal.rows - 1);
+      if (owner) void request({ kind: "resize", sessionId, ...dimensions() }).catch(report);
+      else if (running) claim(true);
+    };
     const observer = new ResizeObserver(() => {
       clearTimeout(resizeTimer);
-      if (owner)
+      if (owner && isVisible())
         resizeTimer = setTimeout(() => {
-          if (!disposed && owner)
+          if (!disposed && owner && isVisible())
             void request({ kind: "resize", sessionId, ...dimensions() }).catch(report);
         }, 100);
     });
@@ -219,6 +234,7 @@ export function TerminalSurface({
     attach();
     return () => {
       disposed = true;
+      refresh.current = null;
       clearTimeout(resizeTimer);
       observer.disconnect();
       themeObserver.disconnect();
@@ -234,6 +250,9 @@ export function TerminalSurface({
       terminal.dispose();
     };
   }, [connection, sessionId]);
+  useLayoutEffect(() => {
+    if (visible) refresh.current?.();
+  }, [visible]);
 
   return (
     <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
