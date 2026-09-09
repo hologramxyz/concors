@@ -102,6 +102,57 @@ test("chat-first shell reuses desktop approvals, streaming and bottom composer",
   expect(metrics.overflow).toBe(false);
   expect(errors).toEqual([]);
 });
+test("mobile header, terminal and host share one background in light and dark mode", async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  await page.emulateMedia({ colorScheme: "light" });
+  const ui = await enter(page);
+  const header = ui.locator(".mobile-header");
+  await expect(header.getByRole("button", { name: "Project files", exact: true })).toBeVisible();
+  await expect(header.getByRole("button", { name: "Workspace actions", exact: true })).toHaveCount(
+    0,
+  );
+  await choose(ui, "Tabs and panes", activeTerminal);
+  const terminal = ui.getByLabel("Terminal output", { exact: true });
+  await expect(terminal).toBeVisible();
+  for (const [index, colorScheme] of (["light", "dark", "light"] as const).entries()) {
+    if (index > 0) {
+      await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+      await openSettings(ui);
+      await choose(ui, "Settings section", "appearance");
+      await ui.getByRole("button", { name: "Theme", exact: true }).click();
+      await ui
+        .getByRole("menuitem", { name: colorScheme === "dark" ? "Dark" : "Light", exact: true })
+        .click();
+      await ui
+        .getByRole("dialog", { name: "Settings", exact: true })
+        .getByRole("button", { name: "Close", exact: true })
+        .click();
+    }
+    const color = colorScheme === "dark" ? "rgb(20, 20, 20)" : "rgb(244, 243, 239)";
+    await expect(ui.getByTestId("mobile-workspace")).toHaveCSS("background-color", color);
+    await expect(terminal.locator("..")).toHaveCSS("background-color", color);
+    // xterm sets this inline from its theme, so assert the renderer as well as pane CSS.
+    await expect(terminal.locator(".xterm-scrollable-element")).toHaveCSS(
+      "background-color",
+      color,
+    );
+    await expect(ui.locator(".mobile-terminal-controls")).toHaveCSS("background-color", color);
+    await expect(page.locator('iframe[title="Concors workspace"]')).toHaveCSS(
+      "background-color",
+      color,
+    );
+    await expect(page.getByTestId("workspace-safe-area")).toHaveCSS("background-color", color);
+    await page.screenshot({ path: `apps/mobile/test-results/mobile-terminal-${colorScheme}.png` });
+  }
+  await choose(ui, "Tabs and panes", activeChat);
+  await expect(ui.getByLabel("Agent conversation", { exact: true })).toHaveCSS(
+    "background-color",
+    "rgb(244, 243, 239)",
+  );
+});
+
 test("shared composer preserves attachments and queued messages across pane changes", async ({
   page,
 }) => {
