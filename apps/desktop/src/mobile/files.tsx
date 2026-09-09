@@ -7,7 +7,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
-import { ArrowLeft, FolderOpen } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import type { WorkspaceProject, WorkspaceSnapshot } from "@concors/protocol";
 import { FilesProvider, ProjectFileLinks } from "@/files/provider";
 import { FilePromptsContext } from "@/files/prompts";
@@ -187,18 +187,18 @@ export function MobileFiles({
         <button className="mobile-icon mobile-glass" aria-label="Back to chat" onClick={close}>
           <ArrowLeft />
         </button>
-        <div className="min-w-0 flex-1">
-          <h1>Files</h1>
-          <p>{project?.name ?? "Choose a project"}</p>
-        </div>
-        <button
-          className="mobile-icon mobile-glass"
-          aria-label="Browse project directory"
-          aria-pressed={browsing}
-          onClick={() => setDirectoryFor(navigation)}
-        >
-          <FolderOpen />
-        </button>
+        <h1 className="mobile-files-location">
+          <button
+            className="mobile-files-directory mobile-glass"
+            aria-label="Browse project directory"
+            aria-current={browsing ? "page" : undefined}
+            title={project?.directory}
+            onClick={() => setDirectoryFor(navigation)}
+          >
+            <span>Files</span>
+            <span>{project?.name ?? "Choose a project"}</span>
+          </button>
+        </h1>
       </header>
       {documents.length > 0 && (
         <nav
