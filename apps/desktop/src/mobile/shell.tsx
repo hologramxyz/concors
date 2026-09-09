@@ -37,6 +37,8 @@ import { preloadCodeEditor } from "@/files/editor-loader";
 import { TabVisibility } from "@/workspace/tab-visibility";
 import { MobileSelect } from "./select";
 import type { SettingsPage } from "@/settings/navigation";
+import { NativeSurfaces } from "./native-surfaces";
+import { NativeHeaderButton } from "./native-header-button";
 
 const subscribeState = (listener: () => void) =>
   subscribeHost((message) => {
@@ -47,7 +49,9 @@ export function MobileApp() {
   return host ? (
     <ShortcutProvider>
       <TooltipProvider>
-        <MobileWorkspace key={host.scope} host={host} />
+        <NativeSurfaces key={host.scope} host={host}>
+          <MobileWorkspace host={host} />
+        </NativeSurfaces>
       </TooltipProvider>
     </ShortcutProvider>
   ) : (
@@ -126,6 +130,19 @@ function MobileWorkspaceContent({
     enabled: !sidebarOpen,
     protectInputs: true,
   });
+  useEffect(() => {
+    const swipe = (event: Event) => {
+      const right = (event as CustomEvent<string>).detail === "right";
+      if (files.sidebar.open) {
+        if (right) files.sidebar.setOpen(false);
+      } else if (sidebarOpen) {
+        if (!right) setSidebarOpen(false);
+      } else if (right) setSidebarOpen(true);
+      else files.sidebar.setOpen(true);
+    };
+    document.addEventListener("concors-native-swipe", swipe);
+    return () => document.removeEventListener("concors-native-swipe", swipe);
+  }, [files.sidebar, sidebarOpen]);
   useEffect(() => {
     const resize = () => {
       setWidth(Math.min(320, window.innerWidth * 0.84));
@@ -554,7 +571,8 @@ function MobileWorkspaceContent({
                 aria-hidden={sidebarOpen || files.sidebar.open || undefined}
               >
                 <header className="mobile-header">
-                  <button
+                  <NativeHeaderButton
+                    icon="menu"
                     id="mobile-sidebar-toggle"
                     className="mobile-icon mobile-glass"
                     aria-label="Open sidebar"
@@ -563,7 +581,7 @@ function MobileWorkspaceContent({
                     onClick={() => setSidebarOpen(true)}
                   >
                     <Menu />
-                  </button>
+                  </NativeHeaderButton>
                   {project ? (
                     <NewTabMenu
                       keyboard={commandsAvailable}
@@ -603,7 +621,8 @@ function MobileWorkspaceContent({
                   ) : (
                     <h1 className="min-w-0 flex-1 truncate text-base font-medium">Workspace</h1>
                   )}
-                  <button
+                  <NativeHeaderButton
+                    icon="files"
                     id="mobile-files-toggle"
                     className="mobile-icon mobile-glass"
                     aria-label="Project files"
@@ -619,7 +638,7 @@ function MobileWorkspaceContent({
                     }}
                   >
                     <FolderOpen />
-                  </button>
+                  </NativeHeaderButton>
                 </header>
                 {(error || host.message) && (
                   <div role="alert" className="mobile-notice">

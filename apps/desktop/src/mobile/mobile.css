@@ -1098,6 +1098,36 @@ aside[aria-label="Agent notifications"] {
   color: var(--popover-foreground);
   box-shadow: 0 8px 28px #00000020;
 }
+
+/* Native controls sit above WKWebView; these retain layout only, never a second focus target. */
+[data-native-surface="true"] {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+.mobile-pane .mobile-composer[data-native-composer="true"] {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.mobile-pane [aria-label="Agent conversation"]:has([data-native-composer="true"]) {
+  position: relative;
+}
+.mobile-pane
+  [aria-label="Agent conversation"]:has([data-native-composer="true"])
+  [data-chat-footer] {
+  position: absolute;
+  bottom: 0;
+  inset-inline: 0;
+  background: transparent;
+}
+.mobile-pane
+  [aria-label="Agent conversation"]:has([data-native-composer="true"])
+  [aria-label="Chat timeline"] {
+  padding-bottom: var(--native-composer-inset, 88px);
+  scroll-padding-bottom: var(--native-composer-inset, 88px);
+}
 .mobile-composer-options-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

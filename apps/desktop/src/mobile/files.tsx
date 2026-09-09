@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { guardMobileLeave, hostAction } from "./bridge";
+import { NativeHeaderButton } from "./native-header-button";
 
 export function MobileFilesProvider({
   children,
@@ -184,11 +185,19 @@ export function MobileFiles({
       }}
     >
       <header className="mobile-files-header">
-        <button className="mobile-icon mobile-glass" aria-label="Back to chat" onClick={close}>
+        <NativeHeaderButton
+          icon="back"
+          className="mobile-icon mobile-glass"
+          aria-label="Back to chat"
+          onClick={close}
+        >
           <ArrowLeft />
-        </button>
+        </NativeHeaderButton>
         <h1 className="mobile-files-location">
-          <button
+          <NativeHeaderButton
+            icon="chevron"
+            nativeTitle="Files"
+            subtitle={project?.name ?? "Choose a project"}
             className="mobile-files-directory mobile-glass"
             aria-label="Browse project directory"
             aria-current={browsing ? "page" : undefined}
@@ -197,7 +206,7 @@ export function MobileFiles({
           >
             <span>Files</span>
             <span>{project?.name ?? "Choose a project"}</span>
-          </button>
+          </NativeHeaderButton>
         </h1>
       </header>
       {documents.length > 0 && (

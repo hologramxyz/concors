@@ -12,6 +12,7 @@ import {
 import { PaneProfileIcon } from "@/workspace/profile-icon";
 import { PROFILE_LABELS, tabPanes, type PaneNode } from "./selection";
 import { WorkspaceActions } from "./workspace-actions";
+import { useNativeSurface } from "@/components/native-surface";
 
 /** Navigation and management share a drawer, with separate buttons (never nested option actions). */
 export function WorkspacePicker({
@@ -41,6 +42,24 @@ export function WorkspacePicker({
   const id = useId();
   const trigger = useRef<HTMLButtonElement>(null);
   const content = useRef<HTMLDivElement>(null);
+  const subtitle =
+    pane && tab
+      ? `${PROFILE_LABELS[pane.profile]} · Pane ${tabPanes(tab).findIndex((item) => item.id === pane.id) + 1}`
+      : "Tabs and panes";
+  const native = useNativeSurface(
+    trigger,
+    {
+      kind: "button",
+      icon: "chevron",
+      label: "Tabs and panes",
+      title: tab?.name ?? project.name,
+      subtitle,
+      disabled: false,
+    },
+    (event) => {
+      if (event.kind === "press") setOpen((value) => !value);
+    },
+  );
   const choose = (tabId: string, paneId?: string) => {
     setOpen(false);
     onSelect({ projectId: project.id, tabId, paneId });
@@ -75,6 +94,9 @@ export function WorkspacePicker({
         <DialogTrigger asChild>
           <button
             ref={trigger}
+            data-native-surface={native || undefined}
+            aria-hidden={native || undefined}
+            tabIndex={native ? -1 : undefined}
             className="mobile-select-trigger mobile-picker mobile-glass"
             type="button"
             role="combobox"
