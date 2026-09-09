@@ -172,7 +172,8 @@ test("sidebar pushes the workspace and settings opens as a drawer over the same 
   await expect(settings).toBeVisible();
   await settings.getByLabel("Settings section").selectOption("appearance");
   await expect(settings.getByRole("button", { name: "Theme", exact: true })).toBeVisible();
-  await settings.getByRole("radio", { name: "Square", exact: true }).check();
+  await settings.getByText("Square", { exact: true }).click();
+  await expect(settings.getByRole("radio", { name: "Square", exact: true })).toBeChecked();
   await expect(settings).toHaveCSS("border-top-left-radius", "0px");
   await settings.getByRole("button", { name: "Theme", exact: true }).click();
   await ui.getByRole("menuitem", { name: "Dark", exact: true }).click();
