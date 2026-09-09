@@ -60,6 +60,7 @@ export const WorkspaceRenderer = forwardRef<WorkspaceRendererHandle, WorkspaceRe
           width: "100%",
           height: "100%",
           background: "#f4f3ef",
+          touchAction: "pan-y",
         }}
       />
     );

@@ -51,6 +51,7 @@ body {
   background: var(--sidebar-accent);
 }
 .mobile-sidebar-content {
+  touch-action: pan-y;
   min-height: 0;
   flex: 1;
   overflow-y: auto;
@@ -198,6 +199,7 @@ aside[aria-label="Agent notifications"] {
   background: var(--background);
 }
 .mobile-pane [aria-label="Chat timeline"] {
+  touch-action: pan-y;
   padding: 16px;
 }
 .mobile-pane [data-agent-composer] {
