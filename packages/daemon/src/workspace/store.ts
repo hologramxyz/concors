@@ -47,6 +47,7 @@ export class WorkspaceStore {
         throw new Error(`Unsupported workspace database version: ${String(version)}`);
       this.#db.exec(`
         CREATE TABLE IF NOT EXISTS workspace (id INTEGER PRIMARY KEY CHECK (id = 1), snapshot TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS project_directories (project_id TEXT NOT NULL, directory TEXT NOT NULL, PRIMARY KEY(project_id, directory));
         CREATE TABLE IF NOT EXISTS commands (id TEXT PRIMARY KEY, payload TEXT NOT NULL, result TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS terminals (id TEXT PRIMARY KEY, request_id TEXT UNIQUE NOT NULL, request TEXT NOT NULL, info TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS project_setups (id TEXT PRIMARY KEY, request TEXT NOT NULL, setup TEXT NOT NULL);
@@ -114,6 +115,12 @@ export class WorkspaceStore {
         // Keep snapshot frames below the protocol's transport limit.
         if (Buffer.byteLength(JSON.stringify(snapshot)) > 512 * 1024)
           throw new WorkspaceOperationError("LIMIT_EXCEEDED", "Workspace metadata exceeds 512 KiB");
+        this.rememberDirectories(current);
+        this.rememberDirectories(snapshot);
+        if (command.operation.kind === "project.remove")
+          this.#db
+            .prepare("DELETE FROM project_directories WHERE project_id = ?")
+            .run(command.operation.projectId);
         this.#db
           .prepare("UPDATE workspace SET snapshot = ? WHERE id = 1")
           .run(JSON.stringify(snapshot));
@@ -132,6 +139,63 @@ export class WorkspaceStore {
         .run(command.commandId, payload, JSON.stringify(result));
       this.#db.exec("COMMIT");
       return { result, snapshot, changed: result.outcome.status === "accepted" };
+    } catch (error) {
+      this.#db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  private rememberDirectories(state: WorkspaceSnapshot): void {
+    const insert = this.#db.prepare(
+      "INSERT OR IGNORE INTO project_directories (project_id, directory) VALUES (?, ?)",
+    );
+    for (const project of state.projects) {
+      insert.run(project.id, project.directory);
+      for (const node of project.tabs.flatMap((tab) => tab.nodes))
+        if (node.kind === "pane" && node.directory) insert.run(project.id, node.directory);
+    }
+  }
+
+  /** File tabs keep their original root even when the workspace follows a terminal elsewhere. */
+  fileDirectory(projectId: string, requested?: string): string {
+    const project = this.snapshot().projects.find((item) => item.id === projectId);
+    if (!project) throw new Error("Project is no longer available.");
+    const directory = requested ?? project.directory;
+    if (
+      directory !== project.directory &&
+      !this.#db
+        .prepare("SELECT 1 FROM project_directories WHERE project_id = ? AND directory = ?")
+        .get(projectId, directory)
+    )
+      throw new Error("This folder does not belong to the workspace.");
+    return directory;
+  }
+
+  /** Observations change the snapshot revision, not the user's layout edit version. */
+  observeDirectory(sessionId: string, directory: string, root: string): boolean {
+    const state = this.snapshot();
+    const project = state.projects.find((item) =>
+      item.tabs.some((tab) =>
+        tab.nodes.some((node) => node.kind === "pane" && node.sessionId === sessionId),
+      ),
+    );
+    const pane = project?.tabs
+      .flatMap((tab) => tab.nodes)
+      .find((node) => node.kind === "pane" && node.sessionId === sessionId);
+    if (!project || !pane || pane.kind !== "pane" || pane.directory === directory) return false;
+    this.#db.exec("BEGIN IMMEDIATE");
+    try {
+      this.rememberDirectories(state);
+      pane.directory = directory;
+      if (project.directoryMode === "follow" && project.followPaneId === pane.id) {
+        project.directory = root;
+        project.name = root.split(/[\\/]/).filter(Boolean).at(-1)?.slice(0, 120) || root;
+      }
+      state.revision++;
+      this.rememberDirectories(state);
+      this.#db.prepare("UPDATE workspace SET snapshot = ? WHERE id = 1").run(JSON.stringify(state));
+      this.#db.exec("COMMIT");
+      return true;
     } catch (error) {
       this.#db.exec("ROLLBACK");
       throw error;
