@@ -1,4 +1,5 @@
-import { useId, useState, useRef, useEffect, type ReactNode } from "react";
+import { useContext, useId, useState, useRef, useEffect, type ReactNode } from "react";
+import { ComposerSurfaceContext } from "./composer-expansion";
 import { Popover } from "radix-ui";
 import { Check, Search } from "lucide-react";
 
@@ -33,6 +34,7 @@ export function ControlPicker({
     [query, setQuery] = useState(""),
     [active, setActive] = useState(0);
   const id = useId();
+  const composerSurface = useContext(ComposerSurfaceContext);
   const trigger = useRef<HTMLButtonElement>(null),
     restoreFocus = useRef(false);
   useEffect(() => {
@@ -74,6 +76,7 @@ export function ControlPicker({
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
+          data-composer-surface={composerSurface}
           side="top"
           align="start"
           sideOffset={8}
