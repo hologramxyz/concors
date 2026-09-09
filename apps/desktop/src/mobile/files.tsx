@@ -125,12 +125,16 @@ export function MobileFiles({
   project,
   workspace,
   available,
+  connected,
+  demo,
   offset,
   dragging,
 }: {
   project: WorkspaceProject | null;
   workspace: WorkspaceSnapshot | null;
   available: boolean;
+  connected: boolean;
+  demo: boolean;
   offset: number;
   dragging: boolean;
 }) {
@@ -214,10 +218,23 @@ export function MobileFiles({
               {available ? (
                 <FileTree key={scope} project={project} open={open && browsing} onClose={close} />
               ) : (
-                <p role="status" className="p-5 text-sm text-muted-foreground">
-                  Reconnect to a daemon with project file support to browse this directory. Your
-                  open file drafts are kept.
-                </p>
+                <div role="status" className="space-y-2 p-5 text-sm text-muted-foreground">
+                  <p className="font-medium text-foreground">
+                    {demo
+                      ? "Connect a machine to browse files"
+                      : connected
+                        ? "File access needs a newer daemon"
+                        : "Waiting for your machine"}
+                  </p>
+                  <p>
+                    {demo
+                      ? "The demo has no filesystem. Connect to a desktop daemon with project file support to browse and edit real files."
+                      : connected
+                        ? "This daemon does not support project files. Connect to an updated desktop daemon to browse and edit this directory. Updating the mobile app alone does not enable file access."
+                        : "File browsing will resume when the desktop daemon reconnects."}
+                  </p>
+                  {documents.length > 0 && <p>Your open files and unsaved drafts are kept.</p>}
+                </div>
               )}
             </div>
             {active && (

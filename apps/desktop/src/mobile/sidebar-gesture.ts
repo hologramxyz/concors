@@ -35,15 +35,24 @@ export function useSidebarGesture(
     dragging: offset !== null,
     handlers: {
       onPointerDown(event: PointerEvent) {
+        // A new deliberate tap is not the synthetic click following the last drag.
+        if (event.isPrimary) suppressClickUntil.current = 0;
         if (!enabled || event.pointerType === "mouse" || event.button !== 0) return;
+        if (!event.isPrimary) {
+          gesture.current = null;
+          setOffset(null);
+          return;
+        }
         const target = event.target as HTMLElement;
         // React portals bubble through this shell, but their popups own their gestures.
         if (!event.currentTarget.contains(target)) return;
+        // xterm's hidden textarea is part of its surface, not a composer/editor.
+        // Navigation can start there too; only claim a clear horizontal gesture.
+        const terminal = target.closest(".concors-terminal");
         if (
           (!open || protectInputs) &&
-          target.closest(
-            "input, textarea, select, button, a, pre, [contenteditable], .cm-editor, .concors-terminal, [role=dialog], [role=menu]",
-          )
+          (target.closest("button, a, .cm-editor, [role=dialog], [role=menu]") ||
+            (!terminal && target.closest("input, textarea, select, pre, [contenteditable]")))
         )
           return;
         gesture.current = {
@@ -68,7 +77,12 @@ export function useSidebarGesture(
           return;
         }
         if (Math.abs(x) < 12 && !current.moved) return;
+        if (!current.moved && Math.abs(x) < Math.abs(y) * 1.5) return;
         current.moved = true;
+        // Run in the shell's capture phase, before terminal handlers can consume
+        // the gesture. Vertical scrolling, taps and input are left untouched.
+        event.preventDefault();
+        event.stopPropagation();
         event.currentTarget.setPointerCapture(event.pointerId);
         setOffset(Math.min(width, Math.max(0, current.start + x)));
       },

@@ -116,15 +116,14 @@ function MobileWorkspaceContent({
   );
   const scope =
     project && workspace ? fileScope(workspace.machineId, workspace.epoch, project.id) : "";
-  const canOpenFiles =
-    !!project && (filesAvailable || files.files.some((file) => file.scope === scope));
   const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
   const gesture = useSidebarGesture(sidebarOpen, setSidebarOpen, width, {
+    direction: -1,
     enabled: !files.sidebar.open,
   });
   const filesGesture = useSidebarGesture(files.sidebar.open, files.sidebar.setOpen, viewportWidth, {
-    direction: -1,
-    enabled: !sidebarOpen && canOpenFiles,
+    direction: 1,
+    enabled: !sidebarOpen,
     protectInputs: true,
   });
   useEffect(() => {
@@ -383,19 +382,19 @@ function MobileWorkspaceContent({
             className="mobile-shell"
             data-sidebar-open={sidebarOpen}
             data-files-open={files.sidebar.open}
-            onPointerDown={(event) => {
+            onPointerDownCapture={(event) => {
               gesture.handlers.onPointerDown(event);
               filesGesture.handlers.onPointerDown(event);
             }}
-            onPointerMove={(event) => {
+            onPointerMoveCapture={(event) => {
               gesture.handlers.onPointerMove(event);
               filesGesture.handlers.onPointerMove(event);
             }}
-            onPointerUp={(event) => {
+            onPointerUpCapture={(event) => {
               gesture.handlers.onPointerUp(event);
               filesGesture.handlers.onPointerUp(event);
             }}
-            onPointerCancel={(event) => {
+            onPointerCancelCapture={(event) => {
               gesture.handlers.onPointerCancel(event);
               filesGesture.handlers.onPointerCancel(event);
             }}
@@ -610,12 +609,7 @@ function MobileWorkspaceContent({
                     aria-label="Project files"
                     aria-controls="mobile-project-files"
                     aria-expanded={files.sidebar.open}
-                    disabled={!canOpenFiles}
-                    title={
-                      canOpenFiles
-                        ? "Browse project files"
-                        : "Update or reconnect the daemon to browse project files"
-                    }
+                    title="Browse project files"
                     onPointerEnter={preloadCodeEditor}
                     onFocus={preloadCodeEditor}
                     onClick={() => {
@@ -722,6 +716,8 @@ function MobileWorkspaceContent({
               project={project}
               workspace={workspace}
               available={filesAvailable}
+              connected={ready}
+              demo={host.demo}
               offset={filesGesture.offset}
               dragging={filesGesture.dragging}
             />
