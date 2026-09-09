@@ -354,6 +354,7 @@ test("search and project sheets animate above the open sidebar and restore focus
   const search = ui.getByRole("dialog", { name: "Search workspace", exact: true });
   await expect(search).toHaveAttribute("data-mobile-drawer", "true");
   await expect(search).toHaveCSS("animation-name", "mobile-drawer-in");
+  await expect(search).toHaveCSS("border-bottom-left-radius", "0px");
   await expect(search.getByRole("option", { name: /New pane|Split/ })).toHaveCount(0);
   await expect(shell).toHaveAttribute("data-sidebar-open", "true");
   await search.getByRole("combobox").fill("no-such-project");
