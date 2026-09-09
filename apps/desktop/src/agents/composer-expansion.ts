@@ -29,8 +29,16 @@ export function useComposerExpansion(compact: boolean) {
       if (!owns(event.target)) collapse();
     };
     const focus = (event: FocusEvent) => {
-      if (owns(event.target)) setExpanded(true);
-      else if (!pointerActive && event.target !== document.body) collapse();
+      if (owns(event.target)) {
+        // The collapsed attach/send buttons must not move underneath a tap.
+        // Only text input or an already-open portaled control expands the form.
+        if (
+          event.target instanceof Element &&
+          (event.target.matches("[data-agent-composer]") ||
+            event.target.closest("[data-composer-surface]")?.tagName !== "FORM")
+        )
+          setExpanded(true);
+      } else if (!pointerActive && event.target !== document.body) collapse();
     };
     const viewport = window.visualViewport;
     let width = window.innerWidth;
