@@ -48,6 +48,7 @@ export type MobileTarget = z.infer<typeof MobileTargetSchema>;
 export const MobilePreferencesSchema = z.object({
   theme: z.enum(["system", "light", "dark"]),
   corners: z.enum(["square", "subtle", "rounded"]),
+  sound: z.boolean().default(false),
 });
 export type MobilePreferences = z.infer<typeof MobilePreferencesSchema>;
 export const MobileStateSchema = z.object({

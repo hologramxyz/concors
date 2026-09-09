@@ -14,6 +14,7 @@ import { Section } from "@/views/settings-primitives";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { hostAction } from "./bridge";
+import { NotificationSettings } from "@/notifications/settings";
 
 export function SettingsDrawer({
   open,
@@ -93,6 +94,15 @@ export function SettingsDrawer({
           )}
           {page === "notifications" ? (
             <div className="p-4">
+              <NotificationSettings
+                native
+                onSetSound={async (sound) => {
+                  await hostAction({
+                    kind: "preferences",
+                    preferences: { ...host.preferences, sound },
+                  });
+                }}
+              />
               <Section
                 title="Agent notifications"
                 description="Get notified when an agent finishes or needs your input. Code and prompts stay out of notification payloads."

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { FolderOpen, PanelLeft, Plus, Search, Settings, Server, ChevronDown } from "lucide-react";
 import type { MobileState, MobileTarget } from "@concors/client-core";
 import type { PaneProfile, WorkspaceOperation, WorkspaceSnapshot } from "@concors/protocol";
@@ -6,7 +6,9 @@ import { ShortcutProvider } from "@/shortcuts/provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { AgentsProvider } from "@/agents/state";
-import { CompactLayoutContext } from "@/components/compact-layout";
+import { CompactLayoutContext, PaneVisibilityContext } from "@/components/compact-layout";
+import { NotificationProvider } from "@/notifications/provider";
+import { setNotificationPreferences } from "@/notifications/preferences";
 import { AgentSidebar } from "@/agents/list";
 import { ChatPane } from "@/agents/chat";
 import { TerminalPane } from "@/terminal/terminal-pane";
@@ -94,6 +96,7 @@ function MobileWorkspace({ host }: { host: MobileState }) {
     document.documentElement.classList.toggle("dark", dark);
     document.documentElement.style.colorScheme = dark ? "dark" : "light";
     document.documentElement.dataset["cornerStyle"] = host.preferences.corners;
+    setNotificationPreferences({ sound: host.preferences.sound, desktop: false });
   }, [host.preferences, host.systemDark]);
   useEffect(() => {
     if (!connection) return;
@@ -202,7 +205,14 @@ function MobileWorkspace({ host }: { host: MobileState }) {
   };
   const selectProject = (projectId: string) =>
     select(memories.current.get(`${host.machineId}:${projectId}`) ?? { projectId });
-  const openAgent = (sessionId: string) => select({ sessionId });
+  const openAgent = useCallback(
+    (sessionId: string) => {
+      setLocal({ machineId: host.machineId, target: { sessionId } });
+      setSidebarOpen(false);
+      setError(null);
+    },
+    [host.machineId],
+  );
   const execute = async (operation: WorkspaceOperation) => {
     if (!connection?.workspace || !ready || mutating.current)
       throw new Error("Wait for the workspace to be ready");
@@ -259,336 +269,356 @@ function MobileWorkspace({ host }: { host: MobileState }) {
   return (
     <CompactLayoutContext value={true}>
       <TerminalConnectionContext value={connection}>
-        <AgentsProvider connection={connection}>
-          <div className="mobile-shell" {...gesture.handlers} data-sidebar-open={sidebarOpen}>
-            <aside
-              ref={sidebar}
-              id="mobile-sidebar"
-              role={sidebarOpen ? "dialog" : undefined}
-              aria-label="Workspace sidebar"
-              aria-modal={sidebarOpen || undefined}
-              aria-hidden={!sidebarOpen}
-              inert={!sidebarOpen}
-              className="mobile-sidebar"
-              style={{ width }}
-            >
-              <div className="mobile-sidebar-head">
-                <button
-                  className="mobile-icon"
-                  aria-label="Close sidebar"
-                  onClick={() => setSidebarOpen(false)}
-                >
-                  <PanelLeft />
-                </button>
-                <span className="font-medium">Concors</span>
-                <button
-                  className="mobile-icon ml-auto"
-                  aria-label="Search workspace"
-                  onClick={() => {
-                    setSidebarOpen(false);
-                    setPaletteOpen(true);
-                  }}
-                >
-                  <Search />
-                </button>
-              </div>
-              <div className="px-3 pb-3">
-                <label className="sr-only" htmlFor="mobile-machine">
-                  Machine
-                </label>
-                <select
-                  id="mobile-machine"
-                  className="mobile-select"
-                  value={host.machineId ?? ""}
-                  onChange={(event) => {
-                    setLocal({ machineId: event.target.value, target: {} });
-                    runHost({ kind: "select-machine", machineId: event.target.value });
-                    setSidebarOpen(false);
-                  }}
-                >
-                  <option value="" disabled>
-                    Choose a machine
-                  </option>
-                  {host.machines.map((machine) => (
-                    <option key={machine.id} value={machine.id}>
-                      {machine.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <nav aria-label="Primary" className="mobile-sidebar-content">
-                <SidebarSection
-                  title="Projects"
-                  action={
-                    <button
-                      className="mobile-icon"
-                      aria-label="Add project"
-                      disabled={!canEdit}
-                      onClick={() => setAddingProject(true)}
-                    >
-                      <Plus />
-                    </button>
-                  }
-                >
-                  <ul>
-                    {workspace?.projects.map((item) => (
-                      <li
-                        className={`group mobile-project ${project?.id === item.id ? "bg-sidebar-accent" : ""}`}
-                        key={item.id}
-                      >
-                        <button
-                          aria-current={project?.id === item.id ? "page" : undefined}
-                          title={item.directory}
-                          onClick={() => selectProject(item.id)}
-                        >
-                          <ProjectImage source={null} />
-                          <span className="truncate">{item.name}</span>
-                        </button>
-                        <ProjectActions project={item} canEdit={canEdit} execute={execute} />
-                      </li>
-                    ))}
-                  </ul>
-                  {!workspace?.projects.length && (
-                    <p className="px-2 py-3 text-sm text-muted-foreground">
-                      Add a project to organize your tabs and panes.
-                    </p>
-                  )}
-                </SidebarSection>
-                <SidebarSection title="Agents">
-                  <AgentSidebar onSelect={openAgent} workspace={workspace} />
-                </SidebarSection>
-                <SidebarSection title="Servers">
-                  <p className="px-2 py-3 text-sm text-muted-foreground">No servers discovered.</p>
-                  <button
-                    className="mobile-sidebar-row"
-                    onClick={() => {
-                      setSidebarOpen(false);
-                      setMachinesOpen(true);
-                    }}
-                  >
-                    <Server className="size-4" />
-                    Manage machines
-                  </button>
-                </SidebarSection>
-              </nav>
-              <div className="mobile-sidebar-footer">
-                <button className="mobile-sidebar-row" aria-label="Settings" onClick={openSettings}>
-                  <Settings className="size-5" />
-                  <span className="flex-1 text-left">Settings</span>
-                  <span className="mobile-avatar">{host.me.user.name[0]?.toUpperCase()}</span>
-                </button>
-                <p className="truncate px-3 text-xs text-muted-foreground">{host.me.user.email}</p>
-                {host.demo && (
-                  <span className="px-3 text-xs text-muted-foreground">
-                    Demo · Simulated sessions
-                  </span>
-                )}
-              </div>
-            </aside>
-            <div
-              className="mobile-workspace"
-              data-testid="mobile-workspace"
-              style={{
-                transform: `translateX(${gesture.offset}px)`,
-                transition: gesture.dragging ? "none" : undefined,
-              }}
-            >
-              <div
-                className="mobile-main"
-                inert={sidebarOpen}
-                aria-hidden={sidebarOpen || undefined}
+        <NotificationProvider connection={connection} onOpen={openAgent} inAppOnly>
+          <AgentsProvider connection={connection}>
+            <div className="mobile-shell" {...gesture.handlers} data-sidebar-open={sidebarOpen}>
+              <aside
+                ref={sidebar}
+                id="mobile-sidebar"
+                role={sidebarOpen ? "dialog" : undefined}
+                aria-label="Workspace sidebar"
+                aria-modal={sidebarOpen || undefined}
+                aria-hidden={!sidebarOpen}
+                inert={!sidebarOpen}
+                className="mobile-sidebar"
+                style={{ width }}
               >
-                <header className="mobile-header">
+                <div className="mobile-sidebar-head">
                   <button
-                    id="mobile-sidebar-toggle"
                     className="mobile-icon"
-                    aria-label="Open sidebar"
-                    aria-controls="mobile-sidebar"
-                    aria-expanded={sidebarOpen}
-                    onClick={() => setSidebarOpen(true)}
+                    aria-label="Close sidebar"
+                    onClick={() => setSidebarOpen(false)}
                   >
                     <PanelLeft />
                   </button>
-                  {project && tab && pane ? (
-                    <div className="mobile-picker">
-                      <span className="mobile-project-title">{project.name}</span>
-                      <select
-                        aria-label="Tabs and panes"
-                        value={`${tab.id}:${pane.id}`}
-                        onChange={(event) => {
-                          const [tabId, paneId] = event.target.value.split(":");
-                          select({ projectId: project.id, tabId, paneId });
-                        }}
+                  <span className="font-medium">Concors</span>
+                  <button
+                    className="mobile-icon ml-auto"
+                    aria-label="Search workspace"
+                    onClick={() => {
+                      setSidebarOpen(false);
+                      setPaletteOpen(true);
+                    }}
+                  >
+                    <Search />
+                  </button>
+                </div>
+                <div className="px-3 pb-3">
+                  <label className="sr-only" htmlFor="mobile-machine">
+                    Machine
+                  </label>
+                  <select
+                    id="mobile-machine"
+                    className="mobile-select"
+                    value={host.machineId ?? ""}
+                    onChange={(event) => {
+                      setLocal({ machineId: event.target.value, target: {} });
+                      runHost({ kind: "select-machine", machineId: event.target.value });
+                      setSidebarOpen(false);
+                    }}
+                  >
+                    <option value="" disabled>
+                      Choose a machine
+                    </option>
+                    {host.machines.map((machine) => (
+                      <option key={machine.id} value={machine.id}>
+                        {machine.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <nav aria-label="Primary" className="mobile-sidebar-content">
+                  <SidebarSection
+                    title="Projects"
+                    action={
+                      <button
+                        className="mobile-icon"
+                        aria-label="Add project"
+                        disabled={!canEdit}
+                        onClick={() => setAddingProject(true)}
                       >
-                        {project.tabs.map((item) => (
-                          <optgroup key={item.id} label={item.name}>
-                            {tabPanes(item).map((node, index) => (
-                              <option key={node.id} value={`${item.id}:${node.id}`}>
-                                {item.name} · {PROFILE_LABELS[node.profile]} {index + 1}
-                              </option>
-                            ))}
-                          </optgroup>
-                        ))}
-                      </select>
-                      <ChevronDown className="size-4" aria-hidden="true" />
-                    </div>
-                  ) : (
-                    <h1 className="min-w-0 flex-1 truncate text-base font-medium">
-                      {project?.name ?? "Concors"}
-                    </h1>
-                  )}
-                  {project && (
-                    <NewTabMenu
-                      disabled={!canEdit || project.tabs.length >= 32}
-                      onCreate={createTab}
-                    />
-                  )}
-                  {project && tab && pane && (
-                    <WorkspaceActions
-                      project={project}
-                      tab={tab}
-                      pane={pane}
-                      canEdit={canEdit}
-                      execute={execute}
-                      command={command}
-                      onSelect={select}
-                    />
-                  )}
-                </header>
-                {(error || host.message) && (
-                  <div role="alert" className="mobile-notice">
-                    <span>{error ?? host.message}</span>
+                        <Plus />
+                      </button>
+                    }
+                  >
+                    <ul>
+                      {workspace?.projects.map((item) => (
+                        <li
+                          className={`group mobile-project ${project?.id === item.id ? "bg-sidebar-accent" : ""}`}
+                          key={item.id}
+                        >
+                          <button
+                            aria-current={project?.id === item.id ? "page" : undefined}
+                            title={item.directory}
+                            onClick={() => selectProject(item.id)}
+                          >
+                            <ProjectImage source={null} />
+                            <span className="truncate">{item.name}</span>
+                          </button>
+                          <ProjectActions project={item} canEdit={canEdit} execute={execute} />
+                        </li>
+                      ))}
+                    </ul>
+                    {!workspace?.projects.length && (
+                      <p className="px-2 py-3 text-sm text-muted-foreground">
+                        Add a project to organize your tabs and panes.
+                      </p>
+                    )}
+                  </SidebarSection>
+                  <SidebarSection title="Agents">
+                    <AgentSidebar onSelect={openAgent} workspace={workspace} />
+                  </SidebarSection>
+                  <SidebarSection title="Servers">
+                    <p className="px-2 py-3 text-sm text-muted-foreground">
+                      No servers discovered.
+                    </p>
                     <button
+                      className="mobile-sidebar-row"
                       onClick={() => {
-                        setError(null);
-                        runHost({ kind: "retry" });
-                        runHost({ kind: "refresh" });
+                        setSidebarOpen(false);
+                        setMachinesOpen(true);
                       }}
                     >
-                      Retry
+                      <Server className="size-4" />
+                      Manage machines
                     </button>
-                    <button onClick={() => setError(null)} aria-label="Dismiss error">
-                      ×
-                    </button>
-                  </div>
-                )}
-                {workspace && !ready && (
-                  <p role="status" className="mobile-notice">
-                    Reconnecting… Saved workspace is read-only.
+                  </SidebarSection>
+                </nav>
+                <div className="mobile-sidebar-footer">
+                  <button
+                    className="mobile-sidebar-row"
+                    aria-label="Settings"
+                    onClick={openSettings}
+                  >
+                    <Settings className="size-5" />
+                    <span className="flex-1 text-left">Settings</span>
+                    <span className="mobile-avatar">{host.me.user.name[0]?.toUpperCase()}</span>
+                  </button>
+                  <p className="truncate px-3 text-xs text-muted-foreground">
+                    {host.me.user.email}
                   </p>
-                )}
-                <main className="mobile-pane" data-pane-id={pane?.id}>
-                  {project && tab && pane ? (
-                    pane.profile === "chat" ? (
-                      <ChatPane
-                        key={`${host.machineId}:${pane.id}`}
-                        project={project}
-                        tab={tab}
-                        node={pane}
-                        canEdit={canEdit}
-                      />
+                  {host.demo && (
+                    <span className="px-3 text-xs text-muted-foreground">
+                      Demo · Simulated sessions
+                    </span>
+                  )}
+                </div>
+              </aside>
+              <div
+                className="mobile-workspace"
+                data-testid="mobile-workspace"
+                style={{
+                  transform: `translateX(${gesture.offset}px)`,
+                  transition: gesture.dragging ? "none" : undefined,
+                }}
+              >
+                <div
+                  className="mobile-main"
+                  inert={sidebarOpen}
+                  aria-hidden={sidebarOpen || undefined}
+                >
+                  <header className="mobile-header">
+                    <button
+                      id="mobile-sidebar-toggle"
+                      className="mobile-icon"
+                      aria-label="Open sidebar"
+                      aria-controls="mobile-sidebar"
+                      aria-expanded={sidebarOpen}
+                      onClick={() => setSidebarOpen(true)}
+                    >
+                      <PanelLeft />
+                    </button>
+                    {project && tab && pane ? (
+                      <div className="mobile-picker">
+                        <span className="mobile-project-title">{project.name}</span>
+                        <select
+                          aria-label="Tabs and panes"
+                          value={`${tab.id}:${pane.id}`}
+                          onChange={(event) => {
+                            const [tabId, paneId] = event.target.value.split(":");
+                            select({ projectId: project.id, tabId, paneId });
+                          }}
+                        >
+                          {project.tabs.map((item) => (
+                            <optgroup key={item.id} label={item.name}>
+                              {tabPanes(item).map((node, index) => (
+                                <option key={node.id} value={`${item.id}:${node.id}`}>
+                                  {item.name} · {PROFILE_LABELS[node.profile]} {index + 1}
+                                </option>
+                              ))}
+                            </optgroup>
+                          ))}
+                        </select>
+                        <ChevronDown className="size-4" aria-hidden="true" />
+                      </div>
                     ) : (
-                      <TerminalPane
-                        key={`${host.machineId}:${pane.id}`}
+                      <h1 className="min-w-0 flex-1 truncate text-base font-medium">
+                        {project?.name ?? "Concors"}
+                      </h1>
+                    )}
+                    {project && (
+                      <NewTabMenu
+                        disabled={!canEdit || project.tabs.length >= 32}
+                        onCreate={createTab}
+                      />
+                    )}
+                    {project && tab && pane && (
+                      <WorkspaceActions
                         project={project}
                         tab={tab}
-                        node={pane}
+                        pane={pane}
                         canEdit={canEdit}
+                        execute={execute}
+                        command={command}
+                        onSelect={select}
                       />
-                    )
-                  ) : (
-                    <div className="mobile-empty">
-                      <FolderOpen className="size-8 text-muted-foreground" />
-                      <h1>
-                        {local.target.sessionId && workspace
-                          ? "Session unavailable"
-                          : project
-                            ? "Start a conversation"
-                            : "Your workspace, wherever you are"}
-                      </h1>
-                      <p>
-                        {!host.capabilities.remoteAccess
-                          ? "Remote access is not available on this Concors server yet."
-                          : host.machineId && !workspace
-                            ? "Connecting to your projects and agents…"
-                            : "Open a project from the sidebar or add one to get started."}
-                      </p>
-                      {project ? (
-                        <NewTabMenu empty disabled={!canEdit} onCreate={createTab} />
-                      ) : (
-                        <Button variant="outline" onClick={() => setSidebarOpen(true)}>
-                          Open workspace sidebar
-                        </Button>
-                      )}
-                      {ready && !project && (
-                        <Button onClick={() => setAddingProject(true)}>Add project</Button>
-                      )}
+                    )}
+                  </header>
+                  {(error || host.message) && (
+                    <div role="alert" className="mobile-notice">
+                      <span>{error ?? host.message}</span>
+                      <button
+                        onClick={() => {
+                          setError(null);
+                          runHost({ kind: "retry" });
+                          runHost({ kind: "refresh" });
+                        }}
+                      >
+                        Retry
+                      </button>
+                      <button onClick={() => setError(null)} aria-label="Dismiss error">
+                        ×
+                      </button>
                     </div>
                   )}
-                </main>
+                  {workspace && !ready && (
+                    <p role="status" className="mobile-notice">
+                      Reconnecting… Saved workspace is read-only.
+                    </p>
+                  )}
+                  <PaneVisibilityContext
+                    value={
+                      !sidebarOpen &&
+                      !settingsOpen &&
+                      !machinesOpen &&
+                      !paletteOpen &&
+                      !addingProject
+                    }
+                  >
+                    <main className="mobile-pane" data-pane-id={pane?.id}>
+                      {project && tab && pane ? (
+                        pane.profile === "chat" ? (
+                          <ChatPane
+                            key={`${host.machineId}:${pane.id}`}
+                            project={project}
+                            tab={tab}
+                            node={pane}
+                            canEdit={canEdit}
+                          />
+                        ) : (
+                          <TerminalPane
+                            key={`${host.machineId}:${pane.id}`}
+                            project={project}
+                            tab={tab}
+                            node={pane}
+                            canEdit={canEdit}
+                          />
+                        )
+                      ) : (
+                        <div className="mobile-empty">
+                          <FolderOpen className="size-8 text-muted-foreground" />
+                          <h1>
+                            {local.target.sessionId && workspace
+                              ? "Session unavailable"
+                              : project
+                                ? "Start a conversation"
+                                : "Your workspace, wherever you are"}
+                          </h1>
+                          <p>
+                            {!host.capabilities.remoteAccess
+                              ? "Remote access is not available on this Concors server yet."
+                              : host.machineId && !workspace
+                                ? "Connecting to your projects and agents…"
+                                : "Open a project from the sidebar or add one to get started."}
+                          </p>
+                          {project ? (
+                            <NewTabMenu empty disabled={!canEdit} onCreate={createTab} />
+                          ) : (
+                            <Button variant="outline" onClick={() => setSidebarOpen(true)}>
+                              Open workspace sidebar
+                            </Button>
+                          )}
+                          {ready && !project && (
+                            <Button onClick={() => setAddingProject(true)}>Add project</Button>
+                          )}
+                        </div>
+                      )}
+                    </main>
+                  </PaneVisibilityContext>
+                </div>
+                {sidebarOpen && (
+                  <button
+                    className="mobile-scrim"
+                    aria-label="Return to workspace"
+                    onClick={() => setSidebarOpen(false)}
+                    tabIndex={-1}
+                  />
+                )}
               </div>
-              {sidebarOpen && (
-                <button
-                  className="mobile-scrim"
-                  aria-label="Return to workspace"
-                  onClick={() => setSidebarOpen(false)}
-                  tabIndex={-1}
-                />
-              )}
             </div>
-          </div>
-          <SettingsDrawer
-            open={settingsOpen}
-            onOpenChange={setSettingsOpen}
-            host={host}
-            connectionState={connection?.state ?? { status: "disconnected" }}
-          />
-          <Dialog open={machinesOpen} onOpenChange={setMachinesOpen}>
-            <DialogContent className="mobile-settings-drawer">
-              <DialogHeader>
-                <DialogTitle>Machines</DialogTitle>
-                <DialogDescription>Your organization's cloud machines.</DialogDescription>
-              </DialogHeader>
-              <div className="mobile-settings-body">
-                <MachinesView
-                  auth={{ status: "signed-in", ...host.me, organizations: host.organizations }}
-                />
-              </div>
-            </DialogContent>
-          </Dialog>
-          {addingProject && (
-            <ProjectSetupDialog
-              onClose={() => setAddingProject(false)}
-              onAdded={() => {
-                setAddingProject(false);
-                setSidebarOpen(false);
-                if (connection?.workspace?.selection)
-                  select({
-                    projectId: connection.workspace.selection.projectId,
-                    tabId: connection.workspace.selection.tabId ?? undefined,
-                  });
-              }}
+            <SettingsDrawer
+              open={settingsOpen}
+              onOpenChange={setSettingsOpen}
+              host={host}
+              connectionState={connection?.state ?? { status: "disconnected" }}
             />
-          )}
-          <CommandPalette
-            projects={workspace?.projects ?? []}
-            canSelectProject={!!workspace}
-            onSelectProject={selectProject}
-            open={paletteOpen}
-            onOpenChange={setPaletteOpen}
-            onNavigate={(view) => {
-              if (view === "settings") openSettings();
-              else if (view === "machines") setMachinesOpen(true);
-              else setSidebarOpen(true);
-            }}
-            onReconnect={() => runHost({ kind: "retry" })}
-            canReconnect={!ready}
-            onSetTheme={(theme) =>
-              runHost({ kind: "preferences", preferences: { ...host.preferences, theme } })
-            }
-            onSignOut={() => runHost({ kind: "sign-out" })}
-          />
-        </AgentsProvider>
+            <Dialog open={machinesOpen} onOpenChange={setMachinesOpen}>
+              <DialogContent className="mobile-settings-drawer">
+                <DialogHeader>
+                  <DialogTitle>Machines</DialogTitle>
+                  <DialogDescription>Your organization's cloud machines.</DialogDescription>
+                </DialogHeader>
+                <div className="mobile-settings-body">
+                  <MachinesView
+                    auth={{ status: "signed-in", ...host.me, organizations: host.organizations }}
+                  />
+                </div>
+              </DialogContent>
+            </Dialog>
+            {addingProject && (
+              <ProjectSetupDialog
+                onClose={() => setAddingProject(false)}
+                onAdded={() => {
+                  setAddingProject(false);
+                  setSidebarOpen(false);
+                  if (connection?.workspace?.selection)
+                    select({
+                      projectId: connection.workspace.selection.projectId,
+                      tabId: connection.workspace.selection.tabId ?? undefined,
+                    });
+                }}
+              />
+            )}
+            <CommandPalette
+              projects={workspace?.projects ?? []}
+              canSelectProject={!!workspace}
+              onSelectProject={selectProject}
+              open={paletteOpen}
+              onOpenChange={setPaletteOpen}
+              onNavigate={(view) => {
+                if (view === "settings") openSettings();
+                else if (view === "machines") setMachinesOpen(true);
+                else setSidebarOpen(true);
+              }}
+              onReconnect={() => runHost({ kind: "retry" })}
+              canReconnect={!ready}
+              onSetTheme={(theme) =>
+                runHost({ kind: "preferences", preferences: { ...host.preferences, theme } })
+              }
+              onSignOut={() => runHost({ kind: "sign-out" })}
+            />
+          </AgentsProvider>
+        </NotificationProvider>
       </TerminalConnectionContext>
     </CompactLayoutContext>
   );
