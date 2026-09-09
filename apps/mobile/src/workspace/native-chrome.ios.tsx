@@ -157,6 +157,7 @@ function HeaderButton({
   emit: Emit;
 }) {
   const latest = useRef(emit);
+  const suppressPressUntil = useRef(0);
   useEffect(() => {
     latest.current = emit;
   });
@@ -167,16 +168,32 @@ function HeaderButton({
       PanResponder.create({
         onMoveShouldSetPanResponderCapture: (_, gesture) =>
           Math.abs(gesture.dx) > 20 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.5,
+        onPanResponderGrant: () => {
+          suppressPressUntil.current = Infinity;
+        },
         onPanResponderRelease: (_, gesture) => {
+          // Deferred native gesture callback, not evaluated while constructing PanResponder.
+          // eslint-disable-next-line react-hooks/purity
+          suppressPressUntil.current = Date.now() + 350;
           if (Math.abs(gesture.dx) > 60)
             latest.current({ kind: "swipe", direction: gesture.dx > 0 ? "right" : "left" });
+        },
+        onPanResponderTerminate: () => {
+          // eslint-disable-next-line react-hooks/purity
+          suppressPressUntil.current = Date.now() + 350;
         },
       }),
     [],
   );
   const pill = !!content.title;
   return (
-    <View style={styles.fill} {...pan.panHandlers}>
+    <View
+      style={styles.fill}
+      {...pan.panHandlers}
+      onTouchStart={() => {
+        suppressPressUntil.current = 0;
+      }}
+    >
       <Host
         style={styles.fill}
         colorScheme={dark ? "dark" : "light"}
@@ -186,6 +203,7 @@ function HeaderButton({
         <Button
           testID={`native-header-${content.icon}`}
           onPress={() => {
+            if (Date.now() < suppressPressUntil.current) return;
             Keyboard.dismiss();
             emit({ kind: "press", control: "activate" });
           }}
