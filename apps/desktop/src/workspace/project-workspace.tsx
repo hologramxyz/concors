@@ -10,7 +10,7 @@ import { NewTabMenu } from "./new-tab-menu";
 import { TAB_PROFILES } from "./tab-profiles";
 import { ContextMenu } from "radix-ui";
 import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { FolderOpen, Pencil, Plus, X } from "lucide-react";
+import { FolderOpen, Pencil, Pin, Plus, X } from "lucide-react";
 import type { PaneProfile, WorkspaceOperation, WorkspaceSnapshot } from "@concors/protocol";
 import { Button } from "@/components/ui/button";
 import { FormDialog } from "./form-dialog";
@@ -26,6 +26,7 @@ export function ProjectWorkspace({
   onCommand,
   execute,
   onAddProject,
+  onOpenFolder,
 }: {
   workspace: WorkspaceSnapshot;
   sidebarToggle?: ReactNode;
@@ -35,6 +36,7 @@ export function ProjectWorkspace({
   onCommand: (operation: WorkspaceOperation) => void;
   execute: (operation: WorkspaceOperation) => Promise<void>;
   onAddProject: () => void;
+  onOpenFolder: (mode: "open" | "clone") => void;
 }) {
   const connection = useContext(TerminalConnectionContext);
   const files = useFiles();
@@ -51,6 +53,7 @@ export function ProjectWorkspace({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace.selection?.tabId, scope, focusRequest?.requestId]);
   const creating = useRef(false);
+  const lastFocusedPane = useRef<string | null>(null);
   const [launching, setLaunching] = useState(false);
   const [launchError, setLaunchError] = useState<string | null>(null);
   const [dragging, setDragging] = useState<{ projectId: string; tabId: string } | null>(null);
@@ -95,21 +98,26 @@ export function ProjectWorkspace({
       <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
         <FolderOpen className="size-10 text-muted-foreground/50" />
         <div>
-          <h2 className="text-lg font-medium">Your projects, in one place</h2>
+          <h2 className="text-lg font-medium">Start working on this machine</h2>
           <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-            Add a project folder, then organize your work in tabs and split panes. Your layout stays
-            with the machine.
+            Open a terminal and navigate to your code. Your workspace follows its folder.
           </p>
         </div>
         <Button onClick={onAddProject} disabled={!canEdit}>
           <Plus />
-          Add project
+          New workspace
+        </Button>
+        <Button variant="ghost" onClick={() => onOpenFolder("open")} disabled={!canEdit}>
+          Open folder…
         </Button>
       </div>
     );
   const createTab = (profile: PaneProfile, name?: string) => {
     files.select(scope, null);
     if (!connection?.workspace || !canEdit || creating.current) return;
+    const sourcePane =
+      selected?.nodes.find((node) => node.kind === "pane" && node.id === lastFocusedPane.current) ??
+      selected?.nodes.find((node) => node.kind === "pane");
     const tabId = crypto.randomUUID();
     const paneId = crypto.randomUUID();
     creating.current = true;
@@ -124,6 +132,7 @@ export function ProjectWorkspace({
         paneId,
         name: name || (TAB_PROFILES.find((item) => item.profile === profile)?.label ?? "Terminal"),
         profile,
+        ...(sourcePane ? { sourcePaneId: sourcePane.id } : {}),
       });
       // Each mounted pane starts its own session, including split and converted panes.
     })()
@@ -280,6 +289,26 @@ export function ProjectWorkspace({
               onCreate={createTab}
             />
           </div>
+          {project.directoryMode === "follow" && (
+            <button
+              type="button"
+              aria-label="Pin to this folder"
+              title={`Pin ${project.directory}. This workspace currently follows its first terminal.`}
+              disabled={!canEdit}
+              onClick={() =>
+                onCommand({
+                  kind: "project.pin",
+                  projectId: project.id,
+                  expectedVersion: project.version,
+                  directory: project.directory,
+                })
+              }
+              className="flex shrink-0 items-center gap-1 rounded p-1 text-ui text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
+            >
+              <Pin className="size-4" />
+              <span className="hidden sm:inline">Pin folder</span>
+            </button>
+          )}
           <FilesToggle />
         </div>
         {launchError && (
@@ -295,14 +324,21 @@ export function ProjectWorkspace({
         )}
         <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
           <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-            {activeFile && <FileTab key={activeFile.id} file={activeFile} />}
+            {activeFile && (
+              <ProjectFileLinks project={{ ...project, directory: activeFile.directory }}>
+                <FileTab key={activeFile.id} file={activeFile} />
+              </ProjectFileLinks>
+            )}
             {project.tabs.map((tab) => {
               const active = !activeFile && tab.id === selected?.id;
               return (
                 <VisitedTab key={tab.id} active={active}>
                   <PaneLayout
                     focusRequest={active ? (focusRequest ?? null) : null}
-                    onPaneFocus={onPaneFocus}
+                    onPaneFocus={(paneId) => {
+                      lastFocusedPane.current = paneId;
+                      onPaneFocus?.(paneId);
+                    }}
                     tab={tab}
                     project={project}
                     canEdit={canEdit && !launching && active}
