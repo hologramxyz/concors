@@ -1,4 +1,4 @@
-import { useAgentDraft, type InputDraft as Draft } from "./draft";
+import { AgentDraftScopeContext, useAgentDraft, type InputDraft as Draft } from "./draft";
 import { isProviderModelsQueryLoading } from "./paseo/model-loading";
 import { useContext, useEffect, useRef, useState } from "react";
 import {
@@ -49,7 +49,7 @@ export function AgentComposer({
     setBusy,
     attempt: attemptRef,
     sending: sendingRef,
-  } = useAgentDraft(connection, agent.id);
+  } = useAgentDraft(useContext(AgentDraftScopeContext) ?? connection, agent.id);
   const [uploading, setUploading] = useState(false),
     [configuring, setConfiguring] = useState(false),
     [loadingModels, setLoadingModels] = useState(false),
