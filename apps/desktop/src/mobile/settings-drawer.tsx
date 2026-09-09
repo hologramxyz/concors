@@ -130,6 +130,8 @@ export function SettingsDrawer({
             <SettingsView
               page={page}
               endpoint={null}
+              apiUrl={host.apiUrl}
+              endpointLabel={host.endpointLabel}
               state={connectionState}
               theme={host.preferences.theme}
               cornerStyle={host.preferences.corners}

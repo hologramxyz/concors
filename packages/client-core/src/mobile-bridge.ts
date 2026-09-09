@@ -69,6 +69,8 @@ export const MobileStateSchema = z.object({
   target: MobileTargetSchema,
   supportUrl: z.string(),
   privacyUrl: z.string(),
+  apiUrl: z.string(),
+  endpointLabel: z.string(),
 });
 export type MobileState = z.infer<typeof MobileStateSchema>;
 export const MobileActionSchema = z.discriminatedUnion("kind", [

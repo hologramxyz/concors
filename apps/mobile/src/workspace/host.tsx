@@ -126,6 +126,12 @@ function SignedInWorkspace() {
         target: target.success ? target.data : {},
         supportUrl: config.supportUrl,
         privacyUrl: config.privacyUrl,
+        apiUrl: config.apiUrl,
+        endpointLabel: config.demo
+          ? "In-memory demo"
+          : transport
+            ? "Authenticated native gateway"
+            : "Not connected",
       }
     : null;
   const latest = useRef({
