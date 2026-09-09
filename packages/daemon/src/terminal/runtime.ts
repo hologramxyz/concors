@@ -148,6 +148,7 @@ export class TerminalRuntime {
       this.info.detectedAgent ?? this.info.profile,
       this.#title,
       lines,
+      this.info.agentActivity,
     );
     if ((this.info.agentActivity ?? "unknown") === agentActivity) return;
     this.info = { ...this.info, agentActivity };
@@ -163,7 +164,7 @@ export class TerminalRuntime {
           return;
         }
         this.#coalescer.flush();
-        let data = this.#serializer.serialize({ scrollback: 200 });
+        let data = this.#serializer.serialize({ scrollback: 500 });
         if (Buffer.byteLength(data) > 1024 * 1024)
           data = this.#serializer.serialize({ scrollback: 0 });
         viewer.send({

@@ -1,5 +1,7 @@
+import { useContext } from "react";
+import { FileLinkContext } from "@/files/context";
 import { Children, isValidElement, useState, lazy, Suspense, type ReactNode } from "react";
-import Markdown from "react-markdown";
+import Markdown, { defaultUrlTransform } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Check, Copy } from "lucide-react";
 const HighlightedCode = lazy(() => import("./highlighted-code"));
@@ -61,16 +63,42 @@ function CodeBlock({ children }: { children?: ReactNode }) {
     </div>
   );
 }
-export function AgentMarkdown({ children }: { children: string }) {
+export function AgentMarkdown({ children, sourcePath }: { children: string; sourcePath?: string }) {
+  const openFile = useContext(FileLinkContext);
   return (
     <div className="chat-markdown min-w-0 break-words">
       <Markdown
         remarkPlugins={[remarkGfm]}
+        urlTransform={(url) =>
+          openFile &&
+          (/^file:\/\//i.test(url) ||
+            /^[a-z]:[\\/]/i.test(url) ||
+            /^[^:/]+\.[^:/]+:\d+(?::\d+)?$/.test(url))
+            ? url
+            : defaultUrlTransform(url)
+        }
         components={{
           pre: CodeBlock,
           img: () => null,
           a: ({ children: content, ...props }) => (
-            <a {...props} target="_blank" rel="noopener noreferrer">
+            <a
+              {...props}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(event) => {
+                if (!props.href || !openFile) return;
+                if (openFile(props.href, sourcePath)) event.preventDefault();
+                else if (
+                  /^file:\/\//i.test(props.href) ||
+                  !/^(?:[a-z][a-z\d+.-]*:|#|\/\/)/i.test(props.href)
+                ) {
+                  event.preventDefault();
+                  window.alert(
+                    "This file link is outside the current project or cannot be opened.",
+                  );
+                }
+              }}
+            >
               {content}
             </a>
           ),

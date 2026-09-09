@@ -25,16 +25,16 @@ export function AccountMenu({ auth, onSignOut, onOpenSettings }: AccountMenuProp
         className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left hover:bg-sidebar-accent aria-expanded:bg-sidebar-accent"
         aria-label={`Account: ${auth.user.name}`}
       >
-        <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+        <span className="flex size-7 shrink-0 items-center justify-center rounded-4xl bg-primary text-xs font-semibold text-primary-foreground">
           {initialOf(auth.user)}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px] font-medium">{auth.user.name}</span>
+          <span className="block truncate text-ui font-medium">{auth.user.name}</span>
         </span>
         <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" side="top" className="w-56">
-        <DropdownMenuLabel className="text-[13px] font-normal text-muted-foreground">
+        <DropdownMenuLabel className="text-ui font-normal text-muted-foreground">
           {org ? (org.isPersonal ? "Personal organization" : org.name) : "Signed in"}
           <span className="mt-1 block truncate text-foreground">{auth.user.name}</span>
           <span className="block truncate" title={auth.user.email}>
@@ -42,11 +42,11 @@ export function AccountMenu({ auth, onSignOut, onOpenSettings }: AccountMenuProp
           </span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem className="text-[13px]" onSelect={onOpenSettings}>
+        <DropdownMenuItem className="text-ui" onSelect={onOpenSettings}>
           <Settings aria-hidden="true" />
           Settings
         </DropdownMenuItem>
-        <DropdownMenuItem className="text-[13px]" onSelect={onSignOut}>
+        <DropdownMenuItem className="text-ui" onSelect={onSignOut}>
           <LogOut aria-hidden="true" />
           Sign out
         </DropdownMenuItem>

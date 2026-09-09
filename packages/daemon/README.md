@@ -1,6 +1,6 @@
 # @concors/daemon
 
-The Concors daemon is the long-lived runtime that will host coding-agent sessions (Claude Code, Codex,
+The Concors machine runtime hosts coding-agent sessions (Claude Code, Codex,
 OpenCode, …). It is an independent Node.js process that speaks [`@concors/protocol`](../protocol) and
 knows nothing about Tauri, React, or any particular client.
 
@@ -11,17 +11,18 @@ laptop:  Concors desktop ──▶ concors-daemon (bundled, 127.0.0.1)
 VPS:     Concors desktop ──▶ concors-daemon (systemd service, wss://)
 ```
 
-## Status
+## Runtime and restart behavior
 
-Foundation only. What exists today:
+`concors-daemon serve` is a reconnectable gateway. A detached session host owns PTYs, agent providers,
+workspace state, and pending work. Restarting the gateway preserves live sessions and clients reattach
+automatically. See [session continuity](../../docs/session-recovery.md) for host-loss recovery,
+one-time migration, private local transport, runtime upgrades, and service-manager configuration.
 
-- `concors-daemon --version`
-- `concors-daemon serve [--host] [--port] [--log-level]`
-- `GET /health` → `{ "status": "ok" }`
-- `/ws` WebSocket endpoint implementing the protocol handshake (`client.hello` → `daemon.ready`)
-- graceful shutdown on `SIGINT` / `SIGTERM` (closes client sockets first)
-
-No agent integration, PTYs, filesystem, or Git functionality yet.
+- `serve [--host] [--port] [--log-level]`: start/reconnect the gateway.
+- `stop-host`: deliberately stop the runtime and all sessions; stop the gateway first.
+- `serve --ephemeral`: own sessions in this process, intended for isolated tests/temporary machines.
+- `GET /health`: gateway and session-host readiness.
+- `/ws`: the existing Concors protocol, forwarded without replaying user input.
 
 ## Development
 
@@ -46,7 +47,8 @@ Configuration (flags win over environment variables):
 src/
 ├── cli.ts                   argument parsing, `serve`, signal handling
 ├── config.ts                DaemonConfig (Zod-validated: flags > env > defaults)
-├── server.ts                Fastify app: /health + WebSocket registration, lifecycle
+├── hosting/                 persistent host discovery, lifecycle, and restartable gateway
+├── server.ts                session-host Fastify app and protocol lifecycle
 ├── state.ts                 DaemonState — single source of truth for daemon.ready
 ├── version.ts               DAEMON_VERSION (inlined from package.json at build time)
 └── ws/protocol-endpoint.ts  per-connection handshake handling

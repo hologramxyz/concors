@@ -19,7 +19,7 @@ test("projects open a terminal immediately and new tabs start the chosen profile
       .click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(page.getByRole("banner")).toHaveCount(0);
-    await expect(page.getByLabel("Terminal output")).toBeVisible();
+    await expect(page.getByLabel("Terminal output").filter({ visible: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Start terminal", exact: true })).toHaveCount(0);
     await expect(page.getByText("A terminal for this project")).toHaveCount(0);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
@@ -34,17 +34,19 @@ test("projects open a terminal immediately and new tabs start the chosen profile
     await page.getByLabel("Terminal profile", { exact: true }).selectOption("shell");
     await page.getByRole("button", { name: "Start session", exact: true }).click();
     await expect(page.getByRole("button", { name: "Development", exact: true })).toBeVisible();
-    await expect(page.getByLabel("Terminal output")).toBeVisible();
+    await expect(page.getByLabel("Terminal output").filter({ visible: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Start terminal", exact: true })).toHaveCount(0);
     const tab = page.getByLabel("Project tabs").locator("[data-tab-id]").last();
     const bounds = await tab.boundingBox();
     expect(bounds?.height).toBeLessThanOrEqual(25);
-    await page.getByLabel("Terminal output").click();
+    await page.getByLabel("Terminal output").filter({ visible: true }).click();
     await page.keyboard.type("printf 'configured-%s\\n' session");
     await page.keyboard.press("Enter");
-    await expect(page.getByLabel("Terminal output")).toContainText("configured-session");
+    await expect(page.getByLabel("Terminal output").filter({ visible: true })).toContainText(
+      "configured-session",
+    );
     const sidebar = page.getByRole("navigation", { name: "Primary" });
-    const before = await page.getByLabel("Terminal output").boundingBox();
+    const before = await page.getByLabel("Terminal output").filter({ visible: true }).boundingBox();
     await page.getByRole("button", { name: "Collapse sidebar" }).click();
     await expect(sidebar).toBeHidden();
     await expect(page.locator(".sidebar-shell")).toHaveAttribute("inert", "");
@@ -56,9 +58,15 @@ test("projects open a terminal immediately and new tabs start the chosen profile
       page.getByRole("heading", { name: "Profile controls", exact: true }),
     ).toBeVisible();
     await expect
-      .poll(async () => (await page.getByLabel("Terminal output").boundingBox())?.width ?? 0)
+      .poll(
+        async () =>
+          (await page.getByLabel("Terminal output").filter({ visible: true }).boundingBox())
+            ?.width ?? 0,
+      )
       .toBeGreaterThan(before?.width ?? 0);
-    await expect(page.getByLabel("Terminal output")).toContainText("configured-session");
+    await expect(page.getByLabel("Terminal output").filter({ visible: true })).toContainText(
+      "configured-session",
+    );
     await page.screenshot({ path: "test-results/sidebar-collapsed.png" });
     await page.keyboard.press("Enter");
     await expect(sidebar).toBeVisible();

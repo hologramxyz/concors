@@ -1,3 +1,4 @@
+import { ProjectFiles } from "../files/service.ts";
 import { AgentManager, type AgentProviderFactory } from "../agents/manager.ts";
 import { ProjectManager } from "../projects/manager.ts";
 import { randomUUID } from "node:crypto";
@@ -58,6 +59,7 @@ export function registerProtocolEndpoint(
     socket.send(JSON.stringify(message));
   };
 
+  const files = new ProjectFiles(options.workspace);
   const projects = new ProjectManager(options.workspace, () => {
     for (const target of subscribers) {
       send(target, { type: "workspace.snapshot", snapshot: options.workspace.snapshot() });
@@ -125,7 +127,8 @@ export function registerProtocolEndpoint(
         message.type === "terminal.request" ||
         message.type === "terminal.input" ||
         message.type === "project.request" ||
-        message.type === "agent.request"
+        message.type === "agent.request" ||
+        message.type === "file.request"
       ) {
         if (!subscribers.has(socket)) {
           send(socket, {
@@ -134,7 +137,9 @@ export function registerProtocolEndpoint(
           });
           return;
         }
-        if (message.type === "agent.request")
+        if (message.type === "file.request")
+          void files.request(message).then((result) => send(socket, result));
+        else if (message.type === "agent.request")
           void agents.request(message).then((result) => send(socket, result));
         else if (message.type === "project.request") send(socket, projects.request(message));
         else if (message.type === "terminal.input")

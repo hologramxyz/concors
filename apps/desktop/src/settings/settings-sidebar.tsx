@@ -1,34 +1,21 @@
-import { ArrowLeft, PanelLeftClose } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { cn } from "cn";
 
 import { SETTINGS_NAV_GROUPS, type SettingsPage } from "./navigation";
 
 interface SettingsSidebarProps {
-  readonly collapsed: boolean;
   readonly page: SettingsPage;
   readonly onBack: () => void;
-  readonly onCollapse: () => void;
   readonly onNavigate: (page: SettingsPage) => void;
 }
 
-export function SettingsSidebar({
-  collapsed,
-  page,
-  onBack,
-  onCollapse,
-  onNavigate,
-}: SettingsSidebarProps) {
+export function SettingsSidebar({ page, onBack, onNavigate }: SettingsSidebarProps) {
   return (
-    <div
-      className="sidebar-shell"
-      data-collapsed={collapsed}
-      inert={collapsed}
-      aria-hidden={collapsed ? true : undefined}
-    >
+    <div className="sidebar-shell">
       <nav
         id="app-sidebar"
         aria-label="Settings"
-        className="flex h-full w-[216px] flex-col bg-sidebar text-[13px] text-sidebar-foreground"
+        className="flex h-full w-[216px] flex-col bg-sidebar text-ui text-sidebar-foreground"
       >
         <div className="m-2 flex h-9 items-center gap-1">
           <button
@@ -39,22 +26,10 @@ export function SettingsSidebar({
             <ArrowLeft className="size-4 shrink-0" aria-hidden="true" />
             <span className="truncate">Back to app</span>
           </button>
-          <button
-            id="collapse-sidebar"
-            type="button"
-            aria-label="Collapse sidebar"
-            title="Collapse sidebar"
-            aria-controls="app-sidebar"
-            aria-expanded={true}
-            onClick={onCollapse}
-            className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
-          >
-            <PanelLeftClose className="size-4" aria-hidden="true" />
-          </button>
         </div>
 
         <div className="px-4 pt-4 pb-3">
-          <h1 className="text-[14px] font-semibold text-sidebar-accent-foreground">Settings</h1>
+          <h1 className="text-sm font-semibold text-sidebar-accent-foreground">Settings</h1>
         </div>
 
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-2 py-2">
@@ -62,7 +37,7 @@ export function SettingsSidebar({
             <section key={group.label} aria-labelledby={`settings-group-${group.label}`}>
               <h2
                 id={`settings-group-${group.label}`}
-                className="mb-1 px-2 text-[11px] font-medium tracking-wide text-muted-foreground"
+                className="mb-1 px-2 text-xs font-medium tracking-wide text-muted-foreground"
               >
                 {group.label}
               </h2>
