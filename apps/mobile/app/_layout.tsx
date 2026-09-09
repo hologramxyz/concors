@@ -36,11 +36,12 @@ export default function RootLayout() {
   );
 }
 function Navigation() {
-  const { me } = useAuth();
+  const { me, direct } = useAuth();
   const capabilities = useCapabilities();
   usePushNavigation(api, me?.user.id, capabilities.data?.pushNotifications ?? false);
   return (
     <MachineProvider
+      direct={direct}
       scope={`${me?.user.id ?? "signed-out"}:${me?.session.activeOrganizationId ?? "none"}`}
     >
       <AppStack />

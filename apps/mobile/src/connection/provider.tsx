@@ -35,7 +35,7 @@ export function useMachine() {
   if (!value) throw new Error("Missing MachineProvider");
   return value;
 }
-async function createConnection(machineId: string) {
+async function createConnection(machineId: string | null) {
   const client = {
     kind: "mobile" as const,
     name: "concors-mobile",
@@ -49,11 +49,12 @@ async function createConnection(machineId: string) {
       webSocketFactory: (await demo).socket,
     });
   if (config.developmentDaemon) {
-    const url = new URL(config.developmentDaemon);
-    if (url.protocol !== "wss:" || url.username || url.password || url.search || url.hash)
-      throw new Error("The development gateway requires a clean WSS URL.");
-    return new DaemonConnection({ endpoint: describeDaemonEndpoint(url.href), client });
+    return new DaemonConnection({
+      endpoint: describeDaemonEndpoint(config.developmentDaemon),
+      client,
+    });
   }
+  if (!machineId) throw new Error("Choose a machine first.");
   const ticket = await api.connectMachine(machineId);
   return new DaemonConnection({
     endpoint: describeDaemonEndpoint(ticket.url),
@@ -61,12 +62,20 @@ async function createConnection(machineId: string) {
     webSocketFactory: (url) => new WebSocket(url, ["concors.v1", `ticket.${ticket.ticket}`]),
   });
 }
-export function MachineProvider({ children, scope }: { children: ReactNode; scope: string }) {
+export function MachineProvider({
+  children,
+  scope,
+  direct = false,
+}: {
+  children: ReactNode;
+  scope: string;
+  direct?: boolean;
+}) {
   const [selection, setSelection] = useState<{ scope: string; id: string | null } | null>(null);
   const machineId = selection?.scope === scope ? selection.id : null;
   const selectMachine = useCallback((id: string | null) => setSelection({ scope, id }), [scope]);
   return (
-    <MachineSession machineId={machineId} selectMachine={selectMachine}>
+    <MachineSession machineId={machineId} selectMachine={selectMachine} direct={direct}>
       {children}
     </MachineSession>
   );
@@ -75,20 +84,22 @@ function MachineSession({
   children,
   machineId,
   selectMachine,
+  direct,
 }: {
   children: ReactNode;
   machineId: string | null;
   selectMachine(id: string | null): void;
+  direct: boolean;
 }) {
   const controller = useMemo(
     () =>
-      machineId
+      direct || machineId
         ? new ConnectionController(
             () => createConnection(machineId),
-            config.developmentDaemon ? undefined : machineId,
+            direct ? undefined : (machineId ?? undefined),
           )
         : null,
-    [machineId],
+    [machineId, direct],
   );
   const connection = useSyncExternalStore(
     controller?.subscribe ?? noSubscribe,
@@ -129,7 +140,12 @@ function MachineSession({
   }, [controller]);
   return (
     <MachineContext
-      value={{ machineId, selectMachine, connection, retry: controller?.retry ?? noop }}
+      value={{
+        machineId: direct ? (connection.workspace?.machineId ?? null) : machineId,
+        selectMachine,
+        connection,
+        retry: controller?.retry ?? noop,
+      }}
     >
       {children}
     </MachineContext>
