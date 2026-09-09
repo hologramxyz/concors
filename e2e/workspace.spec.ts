@@ -1,3 +1,4 @@
+import { seedProject } from "./support/projects.ts";
 import type { WebSocketRoute } from "@playwright/test";
 import { test, expect, signedIn } from "./signed-in.ts";
 
@@ -39,18 +40,12 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
     });
     await Promise.all([signedIn(first), signedIn(second)]);
     await Promise.all([first.goto("/"), second.goto("http://localhost:1420")]);
-    await first.getByRole("button", { name: "Add project", exact: true }).first().click();
-    await first.getByLabel("Project name", { exact: true }).fill("Concors acceptance");
-    await first.getByLabel("Folder on this machine").fill("/tmp");
-    await first
-      .getByRole("dialog")
-      .getByRole("button", { name: "Add project", exact: true })
-      .click();
+    await seedProject(first, "Concors acceptance", "/tmp");
     await expect(
       second.getByRole("heading", { name: "Concors acceptance", exact: true }),
     ).toBeVisible();
     const sidebar = first.getByRole("navigation", { name: "Primary" });
-    const projectsSection = sidebar.getByRole("button", { name: "Projects", exact: true });
+    const projectsSection = sidebar.getByRole("button", { name: "Workspaces", exact: true });
     await projectsSection.click();
     await expect(projectsSection).toHaveAttribute("aria-expanded", "false");
     await expect(
@@ -141,7 +136,7 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
     await first.getByRole("button", { name: "Switch machine", exact: true }).click();
     await first.getByRole("menuitem", { name: "Second machine", exact: true }).click();
     await expect(
-      first.getByRole("heading", { name: "Your projects, in one place", exact: true }),
+      first.getByRole("heading", { name: "Start working on this machine", exact: true }),
     ).toBeVisible();
     await expect(
       second.getByRole("heading", { name: "Concors acceptance", exact: true }),
@@ -155,21 +150,21 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
       first.getByRole("button", { name: "Build and review", exact: true }),
     ).toHaveAttribute("aria-pressed", "true");
     await first.getByRole("button", { name: "Actions for Concors acceptance" }).click();
-    await first.getByRole("menuitem", { name: "Remove project…" }).click();
-    await expect(first.getByRole("dialog")).toContainText("Files on disk are kept.");
+    await first.getByRole("menuitem", { name: "Close workspace…" }).click();
+    await expect(first.getByRole("dialog")).toContainText("Files and running sessions are kept.");
     await expect(first.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
     await first.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(
       first.getByRole("heading", { name: "Concors acceptance", exact: true }),
     ).toBeVisible();
     await first.getByRole("button", { name: "Actions for Concors acceptance" }).click();
-    await first.getByRole("menuitem", { name: "Remove project…" }).click();
+    await first.getByRole("menuitem", { name: "Close workspace…" }).click();
     await first
       .getByRole("dialog")
-      .getByRole("button", { name: "Remove project", exact: true })
+      .getByRole("button", { name: "Close workspace", exact: true })
       .click();
     await expect(
-      second.getByRole("heading", { name: "Your projects, in one place" }),
+      second.getByRole("heading", { name: "Start working on this machine" }),
     ).toBeVisible();
     expect(errors).toEqual([]);
   } finally {

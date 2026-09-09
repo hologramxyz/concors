@@ -136,6 +136,7 @@ it("cancels setup without creating a usable project and recovers interrupted rec
   if (interrupted.operation.kind !== "start") throw new Error();
   store.reserveProjectSetup(interrupted, {
     ...interrupted.operation,
+    name: interrupted.operation.name ?? "Project",
     status: "working",
     progress: "Preparing",
   });
@@ -200,3 +201,63 @@ it.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
     }
   },
 );
+
+it("opens existing folders without a name and focuses canonical duplicates", async () => {
+  const { root, store, manager, request } = fixture();
+  const folder = join(root, "my-code");
+  mkdirSync(folder);
+  const open = request("open", folder);
+  if (open.operation.kind !== "start") throw new Error();
+  delete open.operation.name;
+  expect(manager.request(open).outcome.status).toBe("ok");
+  await expect.poll(() => store.projectSetups()[0]?.status).toBe("done");
+  const project = store.snapshot().projects[0]!;
+  expect(project.name).toBe("my-code");
+  manager.request(request("open", join(folder, ".")));
+  await expect.poll(() => store.projectSetups()[1]?.status).toBe("done");
+  expect(store.snapshot().projects).toHaveLength(1);
+  expect(store.snapshot().selection?.projectId).toBe(project.id);
+  expect(store.projectSetups()[1]?.projectId).toBe(project.id);
+});
+it("creates separate one-click workspaces and browses folders on this machine", async () => {
+  const { root, store, manager } = fixture();
+  const epoch = store.snapshot().epoch;
+  mkdirSync(join(root, "project-folder"));
+  writeFileSync(join(root, "not-a-folder"), "text");
+  const result = await manager.browse({
+    type: "project.request",
+    requestId: randomUUID(),
+    operation: { kind: "browse", epoch },
+  });
+  expect(result.outcome).toMatchObject({
+    status: "listed",
+    directory: await realpath(root),
+    entries: [{ name: "project-folder" }],
+  });
+  expect(
+    (
+      await manager.browse({
+        type: "project.request",
+        requestId: randomUUID(),
+        operation: { kind: "browse", epoch: randomUUID() },
+      })
+    ).outcome.status,
+  ).toBe("error");
+  for (let i = 0; i < 2; i++) {
+    const request: ProjectRequest = {
+      type: "project.request",
+      requestId: randomUUID(),
+      operation: { kind: "workspace", epoch, id: randomUUID() },
+    };
+    expect(manager.request(request).outcome.status).toBe("ok");
+    expect(manager.request(request).outcome.status).toBe("ok");
+    await expect.poll(() => store.projectSetups()[i]?.status).toBe("done");
+  }
+  expect(store.snapshot().projects).toHaveLength(2);
+  for (const project of store.snapshot().projects)
+    expect(project).toMatchObject({
+      directoryMode: "follow",
+      followPaneId: project.tabs[0]?.root,
+      directory: await realpath(root),
+    });
+});

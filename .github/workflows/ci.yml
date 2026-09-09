@@ -89,7 +89,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Session continuity on the native platform
-        run: pnpm --filter @concors/daemon exec vitest run src/hosting/gateway.test.ts src/terminal/profiles.test.ts
+        run: pnpm --filter @concors/daemon exec vitest run src/hosting/gateway.test.ts src/terminal/profiles.test.ts src/terminal/working-directory.test.ts src/projects/manager.test.ts src/workspace/folder-continuity.test.ts
       - run: pnpm desktop:web:build
 
       - name: cargo fmt

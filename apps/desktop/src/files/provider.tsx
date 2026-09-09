@@ -58,7 +58,7 @@ export function FilesProvider({
       return;
     }
     const scope = fileScope(workspace.machineId, workspace.epoch, project.id);
-    const id = `${scope}:${location.path}`;
+    const id = JSON.stringify([scope, project.directory, location.path]);
     if (!files.some((file) => file.id === id) && files.length >= 32) {
       window.alert("Close a file tab before opening more files (32 maximum).");
       return;
@@ -77,11 +77,13 @@ export function FilesProvider({
           scope,
           path: location.path,
           projectId: project.id,
+          directory: project.directory,
           location,
           navigation: 0,
           document: new FileDocument({
             projectId: project.id,
             epoch: workspace.epoch,
+            directory: project.directory,
             path: location.path,
           }),
         },
