@@ -14,6 +14,10 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     client: { kind: "desktop", name: "direct-acceptance-desktop", version: "0.1.0" },
   });
   const cloudRequests: string[] = [];
+  const workspaceSockets: string[] = [];
+  page.on("websocket", (socket) => {
+    if (new URL(socket.url()).pathname === "/ws") workspaceSockets.push(socket.url());
+  });
   const unsubscribe = desktop.subscribeWorkspace(() => undefined);
   const errors: string[] = [];
   page.on("request", (request) => {
@@ -59,6 +63,12 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await expect(page.getByRole("textbox", { name: "Email", exact: true })).toHaveCount(0);
     await expect(page.getByText(/Live desktop connection/)).toBeVisible();
     await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
+    await expect(page.getByText("Before you connect", { exact: true })).toBeVisible();
+    await expect(page.getByText(/Codex uses OpenAI/)).toBeVisible();
+    expect(workspaceSockets).toEqual([]);
+    await page.getByRole("button", { name: "Not now", exact: true }).click();
+    await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
+    await page.getByRole("button", { name: "Allow AI data sharing", exact: true }).click();
     const ui = page.frameLocator('iframe[title="Concors workspace"]');
     const input = ui.getByRole("textbox", { name: "Message Codex" });
     await expect(input).toBeEnabled();
@@ -130,9 +140,20 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
       `/session?machineId=${snapshot().machineId}&projectId=${projectId}&tabId=${tabId}&paneId=${paneId}`,
     );
     await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
+    // Browser preview storage is memory-only; a full navigation asks again.
+    await page.getByRole("button", { name: "Allow AI data sharing", exact: true }).click();
     await expect(input).toBeEnabled();
     await expect(ui.getByRole("log")).toContainText("Hello from Codex");
     await expect(input).toHaveValue("");
+    await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+    await ui.getByRole("button", { name: "Desktop connection settings" }).click();
+    await settings.getByRole("button", { name: "Review AI data sharing", exact: true }).click();
+    await settings.getByRole("button", { name: "Withdraw and disconnect", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "Allow AI data sharing", exact: true }),
+    ).toBeVisible();
+    await expect(page.locator('iframe[title="Concors workspace"]')).toHaveCount(0);
+    expect(desktop.terminals[0]?.status).toBe("running");
     expect(cloudRequests).toEqual([]);
     expect(errors).toEqual([]);
   } finally {

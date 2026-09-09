@@ -42,6 +42,7 @@ export function SettingsDrawer({
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [creatingMachine, setCreatingMachine] = useState(false);
+  const [withdrawingConsent, setWithdrawingConsent] = useState(false);
   // Support both desktop MachinesView contracts while main's controlled creation
   // flow lands. Mobile must never accept an arbitrary daemon URL from this form.
   const machineControls = {
@@ -241,6 +242,47 @@ export function SettingsDrawer({
               }
             />
           ) : null}
+          {!host.demo && (host.direct || page === "account") && (
+            <div className="px-4 pb-4">
+              <Section
+                title="AI data sharing"
+                description="Your messages, attachments and agent-read workspace content are shared with the AI provider configured on your machine."
+              >
+                {withdrawingConsent ? (
+                  <div className="space-y-3 py-3">
+                    <p className="text-sm text-muted-foreground">
+                      This disconnects the phone and discards unsent chat drafts. Save open files
+                      first. Agents already running continue; previously shared data is not deleted.
+                    </p>
+                    <div className="flex flex-wrap gap-3">
+                      <Button
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => setWithdrawingConsent(false)}
+                      >
+                        Keep my choice
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        disabled={busy}
+                        onClick={() => void run(() => hostAction({ kind: "withdraw-ai-consent" }))}
+                      >
+                        Withdraw and disconnect
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button
+                    className="my-3"
+                    variant="outline"
+                    onClick={() => setWithdrawingConsent(true)}
+                  >
+                    Review AI data sharing
+                  </Button>
+                )}
+              </Section>
+            </div>
+          )}
           {page === "account" && !host.direct && (
             <div className="px-4 pb-4">
               <Section title="Help and privacy" description="Concors support and data practices.">

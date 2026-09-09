@@ -89,7 +89,11 @@ export function guardMobileLeave(guard: () => boolean | Promise<boolean>) {
   };
 }
 export async function hostAction(action: MobileAction): Promise<unknown> {
-  if (["sign-out", "delete-account"].includes(action.kind) && beforeLeave && !(await beforeLeave()))
+  if (
+    ["sign-out", "delete-account", "withdraw-ai-consent"].includes(action.kind) &&
+    beforeLeave &&
+    !(await beforeLeave())
+  )
     return;
   if (!state) return Promise.reject(new Error("Mobile host is not ready"));
   const scope = state.scope;
