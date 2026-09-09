@@ -48,6 +48,9 @@
   --color-success: var(--success);
   --color-warning: var(--warning);
 
+  /* The unsuffixed rounded utility must follow the same preference as every sized radius. */
+  --radius: var(--corner-radius);
+  --radius-xs: calc(var(--radius) * 0.4);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -58,7 +61,7 @@
 }
 
 :root {
-  --radius: 0.375rem;
+  --corner-radius: 0.375rem;
   --brand-cobalt: #335dce;
   --brand-soft: #a6bdff;
   --brand-tint: #dfe6fa;
@@ -93,6 +96,14 @@
   --sidebar-accent-foreground: var(--foreground);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
+}
+
+:root[data-corner-style="square"] {
+  --corner-radius: 0rem;
+}
+
+:root[data-corner-style="rounded"] {
+  --corner-radius: 0.75rem;
 }
 
 .dark {
@@ -172,7 +183,7 @@
   background-color: var(--terminal-background);
 }
 .concors-terminal .xterm-scrollable-element > .scrollbar.vertical > .slider {
-  border-radius: 8px;
+  border-radius: var(--radius-xl);
   width: 6px !important;
   margin-left: 4px;
 }
@@ -201,7 +212,7 @@
     min-height: 24px;
     min-width: 24px;
     border: 2px solid transparent;
-    border-radius: 999px;
+    border-radius: var(--radius-xl);
     background: color-mix(in srgb, var(--muted-foreground) 35%, transparent);
     background-clip: padding-box;
   }
@@ -224,7 +235,7 @@
 .chat-markdown pre {
   overflow-x: auto;
   padding: 0.85rem;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-xl);
   background: var(--muted);
   font-size: 0.75rem;
 }
@@ -233,7 +244,7 @@
   overflow-wrap: anywhere;
 }
 .chat-markdown :not(pre) > code {
-  border-radius: 0.2rem;
+  border-radius: var(--radius-sm);
   background: var(--muted);
   padding: 0.1rem 0.25rem;
 }
@@ -354,7 +365,7 @@
   flex-shrink: 0;
   width: 28px;
   height: 28px;
-  border-radius: 6px;
+  border-radius: var(--radius-lg);
   color: var(--muted-foreground);
   cursor: pointer;
 }

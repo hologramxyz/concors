@@ -25,7 +25,7 @@ export function AccountMenu({ auth, onSignOut, onOpenSettings }: AccountMenuProp
         className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left hover:bg-sidebar-accent aria-expanded:bg-sidebar-accent"
         aria-label={`Account: ${auth.user.name}`}
       >
-        <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+        <span className="flex size-7 shrink-0 items-center justify-center rounded-4xl bg-primary text-xs font-semibold text-primary-foreground">
           {initialOf(auth.user)}
         </span>
         <span className="min-w-0 flex-1">
