@@ -9,9 +9,16 @@ import { Mono, Row, Section } from "@/views/settings-primitives";
 interface AdvancedSettingsProps {
   readonly endpoint: DaemonEndpoint | null;
   readonly state: ConnectionState;
+  readonly apiUrl?: string;
+  readonly endpointLabel?: string;
 }
 
-export function AdvancedSettings({ endpoint, state }: AdvancedSettingsProps) {
+export function AdvancedSettings({
+  endpoint,
+  state,
+  apiUrl = env.apiUrl,
+  endpointLabel,
+}: AdvancedSettingsProps) {
   return (
     <>
       <Section
@@ -20,7 +27,7 @@ export function AdvancedSettings({ endpoint, state }: AdvancedSettingsProps) {
       >
         <Row label="Endpoint">
           <span className="flex items-center gap-2">
-            <Mono>{endpoint?.url ?? "resolving…"}</Mono>
+            <Mono>{endpointLabel ?? endpoint?.url ?? "resolving…"}</Mono>
             {endpoint !== null && (
               <Badge variant="outline" className="tracking-wide uppercase">
                 {endpoint.kind}
@@ -47,7 +54,7 @@ export function AdvancedSettings({ endpoint, state }: AdvancedSettingsProps) {
           label="Concors API"
           hint="Control plane for accounts, organizations, and cloud machines."
         >
-          <Mono>{env.apiUrl}</Mono>
+          <Mono>{apiUrl}</Mono>
         </Row>
       </Section>
     </>
