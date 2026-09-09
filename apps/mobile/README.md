@@ -30,13 +30,16 @@ phone-size mode. Select **Explore demo**; it opens straight into the agent chat.
 3. Swipe right on the conversation to open Projects / Agents / Servers.
    The workspace moves right. Swipe left, press Close sidebar, or tap the workspace
    to return. Code blocks/terminal controls retain their own gestures.
-4. Open **Settings** in the sidebar: account, theme/corners, notifications, SSH,
-   billing and diagnostics are a drawer over the same workspace.
-5. Use **+** at the top for a new tab; **…** for rename, reorder, split, configure,
-   arrange/resize and confirmed close. The picker groups panes within their tabs.
-6. Add a project from the sidebar (open/create/clone). Expand tool calls, diffs,
+4. Tap your **name/avatar → Settings** at the bottom of the sidebar. The settings
+   picker contains account, appearance, notifications, SSH, billing, machines and diagnostics.
+   Search opens an animated bottom drawer without dismissing the sidebar.
+5. Use **+** at the top for the new-session drawer; **…** for rename, reorder,
+   profile and confirmed close. The styled picker groups panes within their tabs.
+   Desktop-only split/arrange/resize actions are intentionally absent on phones.
+6. Add a project from the sidebar's animated drawer (open/create/clone). Expand tool calls, diffs,
    plans, thinking and sub-agent updates. Try `ask me a question` for an input request.
-   Model, effort, permissions, plan and speed controls use the desktop components.
+   Model, effort and permissions use icon-only desktop controls. **More composer options**
+   contains plan, speed, context usage and keyboard dictation. Send stays on the same row.
 7. Select **Terminal 2** for the shared xterm terminal: type, use extra keys,
    reload the renderer or explicitly stop the process after confirmation.
 
