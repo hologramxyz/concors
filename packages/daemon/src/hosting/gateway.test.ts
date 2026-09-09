@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, readFile, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -151,7 +151,14 @@ it("preserves a real process, shell environment, cwd, screen, and bindings acros
       return null;
     }
   };
-  await expect.poll(state).toMatchObject({ cwd, env: "kept" });
+  // The probe reports process.cwd() exactly as the OS spells it, which need not match the path we
+  // created: macOS puts the temp directory behind the /var → /private/var symlink, and Windows may
+  // hand the shell an 8.3 short name (RUNNER~1). Canonicalize both sides before comparing.
+  const canonical = async (value: Awaited<ReturnType<typeof state>>) =>
+    value === null ? null : { ...value, cwd: await realpath(value.cwd) };
+  await expect
+    .poll(async () => canonical(await state()))
+    .toMatchObject({ cwd: await realpath(cwd), env: "kept" });
   const before = (await state())!;
   const host = await ensureSessionHost(directory, launch);
   await first.close();

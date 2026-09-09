@@ -56,17 +56,19 @@ export function detectTerminalAgent(
 
 /** A single bounded process snapshot is shared by every running shell on this machine. */
 export async function readTerminalProcesses(): Promise<TerminalProcess[]> {
-  const options = { timeout: 3000, maxBuffer: 4 * 1024 * 1024, windowsHide: true };
+  const maxBuffer = 4 * 1024 * 1024;
   if (process.platform === "win32") {
+    // Starting PowerShell and the first CIM query can take several seconds on a cold machine;
+    // scans are serialized by the caller, so a generous budget cannot pile up.
     const { stdout } = await execute(
       "powershell.exe",
       [
         "-NoProfile",
         "-NonInteractive",
         "-Command",
-        "@(Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,CommandLine) | ConvertTo-Json -Compress",
+        "@(Get-CimInstance -ClassName Win32_Process -Property ProcessId,ParentProcessId,CommandLine | Select-Object ProcessId,ParentProcessId,CommandLine) | ConvertTo-Json -Compress",
       ],
-      options,
+      { timeout: 15_000, maxBuffer, windowsHide: true },
     );
     const rows = JSON.parse(stdout) as {
       ProcessId: number;
@@ -79,7 +81,10 @@ export async function readTerminalProcesses(): Promise<TerminalProcess[]> {
       command: row.CommandLine ?? "",
     }));
   }
-  const { stdout } = await execute("ps", ["-ax", "-ww", "-o", "pid=,ppid=,args="], options);
+  const { stdout } = await execute("ps", ["-ax", "-ww", "-o", "pid=,ppid=,args="], {
+    timeout: 3000,
+    maxBuffer,
+  });
   return stdout.split("\n").flatMap((line) => {
     const match = /^\s*(\d+)\s+(\d+)\s+(.+)$/.exec(line);
     return match
