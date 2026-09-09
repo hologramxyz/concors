@@ -320,8 +320,10 @@ it.each(["codex", "claude"] as const)(
     await request(first.connection, { kind: "attach", sessionId: id });
     await request(first.connection, { kind: "claim", sessionId: id, cols: 80, rows: 24 });
     first.connection.sendTerminalInput(id, `${agent}\r`);
+    // Detection depends on a process-list scan; on Windows CI the first PowerShell/CIM query
+    // alone can take most of ten seconds.
     await expect
-      .poll(() => observer.connection.terminals.find((s) => s.id === id), { timeout: 10000 })
+      .poll(() => observer.connection.terminals.find((s) => s.id === id), { timeout: 20000 })
       .toMatchObject({ profile: "shell", detectedAgent: agent, status: "running" });
     for (const [command, activity] of [
       ["test-working", "working"],
@@ -353,5 +355,5 @@ it.each(["codex", "claude"] as const)(
       })
       .toBe(agent);
   },
-  30000,
+  45000,
 );
