@@ -16,4 +16,10 @@ it("allows internal previews but blocks a production build while release gates a
   });
   expect(production.status).toBe(1);
   expect(production.stderr).toContain("Not ready for store submission");
+  const local = spawnSync(process.execPath, [script], {
+    env: { ...process.env, EAS_BUILD_PROFILE: "custom-store", APP_VARIANT: "production" },
+    encoding: "utf8",
+  });
+  expect(local.status).toBe(1);
+  expect(local.stderr).toContain("Not ready for store submission");
 });
