@@ -22,7 +22,7 @@ pnpm mobile:demo
 Open the printed URL (normally <http://localhost:8081>) in a phone browser or browser
 phone-size mode. Select **Explore demo**; it opens straight into the agent chat.
 
-1. The bottom composer starts as a compact single line. Tap to expand it and open
+1. The bottom composer starts as a compact single line. Tap the text field to smoothly expand it and open
    the keyboard; tap outside or dismiss the keyboard to collapse without losing your draft.
    Enter inserts a newline; the send button submits.
    Allow the pending request, then send a message to see streaming.
@@ -32,18 +32,20 @@ phone-size mode. Select **Explore demo**; it opens straight into the agent chat.
 3. Swipe right on the conversation to open Projects / Agents / Servers.
    The workspace moves right. Swipe left, press Close sidebar, or tap the workspace
    to return. Code blocks/terminal controls retain their own gestures.
-4. Tap your **name/avatar → Settings** at the bottom of the sidebar. The settings
+4. Tap your **name/avatar** at the bottom of the sidebar for the animated Account drawer,
+   then **Settings** (or **Sign out**). The settings
    picker contains account, appearance, notifications, SSH, billing, machines and diagnostics.
    Search opens an animated bottom drawer without dismissing the sidebar.
-5. Use the floating glass **+** at the top for **New tab** or **Add pane to this tab**,
+5. Use the floating glass **…** at the top for **New tab** or **Add pane to this tab**,
    then choose Agent, Terminal, Codex, Claude Code or OpenCode.
-   **…** offers rename, pane profile and confirmed close (no left/right reordering).
+   That same menu offers rename, pane profile and confirmed close (no left/right reordering).
+   The sidebar button, picker and actions button are separate translucent, backdrop-blurred controls.
    The picker shows tab headings with pane counts and indented panes; tapping it again closes it.
    Desktop-only split/arrange/resize actions are intentionally absent on phones.
 6. Add a project from the sidebar's animated drawer (open/create/clone). Expand tool calls, diffs,
    plans, thinking and sub-agent updates. Try `ask me a question` for an input request.
    Model, effort and permissions use icon-only desktop controls when expanded.
-   Context usage and dictation are directly visible; the sliders button contains only
+   Context usage and dictation sit on the right beside the primary button; the sliders button contains only
    Plan and Speed. Dictation focuses the native keyboard and explains how to use its microphone.
    There is one primary button: Stop while working with an empty draft, Queue for a follow-up,
    or Send when idle.

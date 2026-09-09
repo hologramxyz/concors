@@ -15,7 +15,10 @@ async function paneCount(ui: FrameLocator, count: number) {
 }
 async function openSettings(ui: FrameLocator) {
   await ui.getByRole("button", { name: /^Account:/ }).click();
-  await ui.getByRole("menuitem", { name: "Settings", exact: true }).click();
+  await ui
+    .getByRole("dialog", { name: "Account", exact: true })
+    .getByRole("button", { name: "Settings", exact: true })
+    .click();
 }
 test("offline renderer supplies secure request IDs without the browser UUID helper", async ({
   page,
@@ -29,7 +32,8 @@ test("offline renderer supplies secure request IDs without the browser UUID help
   });
   const ui = await enter(page);
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
-  await ui.getByRole("button", { name: "New tab", exact: true }).click();
+  await ui.getByRole("button", { name: "Tab and pane actions" }).click();
+  await ui.getByRole("menuitem", { name: "New tab", exact: true }).click();
   await ui.getByRole("button", { name: "Agent", exact: true }).click();
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
   await paneCount(ui, 3);
@@ -163,7 +167,8 @@ test("touch swipes reveal and dismiss the push sidebar", async ({ page }) => {
 });
 test("tab and pane changes use the authoritative workspace operations", async ({ page }) => {
   const ui = await enter(page);
-  await ui.getByRole("button", { name: "New tab", exact: true }).click();
+  await ui.getByRole("button", { name: "Tab and pane actions" }).click();
+  await ui.getByRole("menuitem", { name: "New tab", exact: true }).click();
   await ui.getByRole("button", { name: "Agent", exact: true }).click();
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
   await ui.getByRole("button", { name: "Tab and pane actions" }).click();
@@ -309,6 +314,13 @@ test("compact toolbar keeps icon controls and send on one row at phone widths", 
   for (const width of [320, 375, 390, 430]) {
     await page.setViewportSize({ width, height: 664 });
     await ui.getByRole("textbox", { name: "Message Codex" }).click();
+    await ui.locator(".mobile-composer").evaluate(async (form) => {
+      await Promise.all(
+        form
+          .getAnimations({ subtree: true })
+          .map((animation) => animation.finished.catch(() => undefined)),
+      );
+    });
     const metrics = await ui.locator(".mobile-composer-toolbar").evaluate((toolbar) => {
       const bounds = toolbar.getBoundingClientRect();
       return [...toolbar.querySelectorAll("button")].map((button) => {
@@ -469,7 +481,8 @@ test("tab picker toggles on repeated taps and groups panes beneath their tabs", 
   await expect(picker).toHaveAttribute("data-value", activeTerminal);
   await expect(ui.getByLabel("Terminal output", { exact: true })).toBeVisible();
   await choose(ui, "Tabs and panes", activeChat);
-  await ui.getByRole("button", { name: "New tab", exact: true }).click();
+  await ui.getByRole("button", { name: "Tab and pane actions" }).click();
+  await ui.getByRole("menuitem", { name: "New tab", exact: true }).click();
   let drawer = ui.getByRole("dialog", { name: "New tab", exact: true });
   for (const name of ["Codex", "Claude Code", "OpenCode"]) {
     await expect(
@@ -488,7 +501,8 @@ test("tab picker toggles on repeated taps and groups panes beneath their tabs", 
   await expect(list.getByRole("group")).toHaveCount(1);
   await expect(list.getByRole("option")).toHaveCount(3);
   await picker.click();
-  await ui.getByRole("button", { name: "New tab", exact: true }).click();
+  await ui.getByRole("button", { name: "Tab and pane actions" }).click();
+  await ui.getByRole("menuitem", { name: "New tab", exact: true }).click();
   await ui
     .getByRole("dialog", { name: "New tab", exact: true })
     .getByRole("button", { name: "Agent", exact: true })
@@ -505,6 +519,115 @@ test("tab picker toggles on repeated taps and groups panes beneath their tabs", 
   await picker.click();
   await expect(list.getByRole("group")).toHaveCount(2);
   await expect(list.getByRole("group").first().getByRole("option")).toHaveCount(2);
+});
+
+test("glass controls retain their shape and composer height animates with reduced-motion support", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const animate = Element.prototype.animate;
+    Element.prototype.animate = function (keyframes, options) {
+      if (this.matches(".mobile-composer") && Array.isArray(keyframes)) {
+        this.setAttribute("data-test-motion-from", String(keyframes[0]?.height));
+        this.setAttribute("data-test-motion-to", String(keyframes.at(-1)?.height));
+        this.setAttribute(
+          "data-test-motion-count",
+          String(Number(this.getAttribute("data-test-motion-count") ?? 0) + 1),
+        );
+      }
+      return animate.call(this, keyframes, options);
+    };
+  });
+  const ui = await enter(page);
+  const input = ui.getByRole("textbox", { name: "Message Codex" });
+  const form = ui.locator(".mobile-composer");
+  await input.click();
+  await expect(form).toHaveAttribute("data-test-motion-count", "1");
+  const sizes = await form.evaluate((el) => ({
+    from: parseFloat(el.getAttribute("data-test-motion-from") ?? "0"),
+    to: parseFloat(el.getAttribute("data-test-motion-to") ?? "0"),
+  }));
+  expect(sizes.to - sizes.from).toBeGreaterThan(40);
+  await form.evaluate(async (el) =>
+    Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished.catch(() => undefined))),
+  );
+  const alignment = await form.evaluate((el) => {
+    const utility = el.querySelector(".mobile-composer-utilities")?.getBoundingClientRect();
+    const action = el.querySelector(".mobile-composer-primary")?.getBoundingClientRect();
+    return utility && action ? action.left - utility.right : null;
+  });
+  expect(alignment).toBe(0);
+  const header = ui.locator(".mobile-header");
+  await expect(header.getByRole("button")).toHaveCount(2);
+  await expect(header.locator(".mobile-glass")).toHaveCount(3);
+  await expect(header.getByRole("button", { name: "New tab", exact: true })).toHaveCount(0);
+  const picker = ui.getByRole("combobox", { name: "Tabs and panes" });
+  const normal = await picker.evaluate((el) => ({
+    radius: getComputedStyle(el).borderRadius,
+    background: getComputedStyle(el).backgroundColor,
+    blur: getComputedStyle(el).backdropFilter,
+  }));
+  expect(normal.background).toMatch(/(?:\/|,)\s*0\.38\)/);
+  expect(normal.blur).toContain("blur(24px)");
+  await picker.tap();
+  await expect(picker).toHaveCSS("border-radius", normal.radius);
+  await expect(picker).toHaveCSS("background-color", normal.background);
+  await expect(ui.locator(".mobile-picker-help")).toHaveCount(0);
+  const list = ui.getByRole("listbox", { name: "Tabs and panes" });
+  expect(
+    await list
+      .getByRole("option")
+      .first()
+      .evaluate((el) => getComputedStyle(el, "::before").content),
+  ).toBe("none");
+  await picker.tap();
+  await expect(form).toHaveAttribute("data-expanded", "false");
+  await form.evaluate(async (el) =>
+    Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished.catch(() => undefined))),
+  );
+  const animations = await form.getAttribute("data-test-motion-count");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await input.click();
+  await expect(form).toHaveAttribute("data-expanded", "true");
+  await expect(form).toHaveAttribute("data-test-motion-count", animations ?? "");
+  expect(await form.evaluate((el) => el.getAnimations({ subtree: true }).length)).toBe(0);
+});
+
+test("account opens a bottom drawer with settings, sign out and focus restoration", async ({
+  page,
+}) => {
+  const ui = await enter(page);
+  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  await expect(ui.locator(".mobile-sidebar-head")).not.toContainText("Concors");
+  const account = ui.getByRole("button", { name: /^Account:/ });
+  await account.click();
+  const drawer = ui.getByRole("dialog", { name: "Account", exact: true });
+  await expect(drawer).toHaveAttribute("data-mobile-drawer", "true");
+  await expect(drawer).toHaveCSS("animation-name", "mobile-drawer-in");
+  await expect(drawer.getByRole("button", { name: "Settings", exact: true })).toBeVisible();
+  await expect(drawer.getByRole("button", { name: "Sign out", exact: true })).toBeVisible();
+  const bounds = await drawer.evaluate((el) => ({
+    width: el.getBoundingClientRect().width,
+    bottom: el.getBoundingClientRect().bottom,
+    viewportWidth: innerWidth,
+    viewportHeight: innerHeight,
+  }));
+  expect(bounds.width).toBe(bounds.viewportWidth);
+  expect(bounds.bottom).toBeGreaterThanOrEqual(bounds.viewportHeight);
+  await drawer.press("Escape");
+  await expect(drawer).toHaveCount(0);
+  await expect(account).toBeFocused();
+  await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "true");
+  await account.click();
+  await drawer.getByRole("button", { name: "Settings", exact: true }).click();
+  const settings = ui.getByRole("dialog", { name: "Settings", exact: true });
+  await expect(settings).toBeVisible();
+  await expect(drawer).toHaveCount(0);
+  await settings.getByRole("button", { name: "Close", exact: true }).click();
+  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  await account.click();
+  await drawer.getByRole("button", { name: "Sign out", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Explore demo" })).toBeVisible();
 });
 
 test("compact account footer and machine management live in settings", async ({ page }) => {
