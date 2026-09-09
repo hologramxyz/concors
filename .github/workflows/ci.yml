@@ -133,6 +133,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:mobile:e2e
+      - run: pnpm test:mobile:direct
       - uses: actions/upload-artifact@v4
         if: always()
         with:
