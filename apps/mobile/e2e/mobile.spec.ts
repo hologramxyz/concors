@@ -1,8 +1,22 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type FrameLocator } from "@playwright/test";
 import { ids } from "../src/demo/fixtures";
 const workspace = (page: Page) => page.frameLocator('iframe[title="Concors workspace"]');
 const activeChat = `${ids.tab}:${ids.pane}`;
 const activeTerminal = `${ids.tab}:${ids.terminalPane}`;
+async function choose(ui: FrameLocator, label: string, value: string) {
+  await ui.getByRole("combobox", { name: label, exact: true }).click();
+  await ui.locator(`[role="option"][data-value="${value}"]`).click();
+}
+async function paneCount(ui: FrameLocator, count: number) {
+  const picker = ui.getByRole("combobox", { name: "Tabs and panes" });
+  await picker.click();
+  await expect(ui.getByRole("option")).toHaveCount(count);
+  await ui.getByRole("option").first().press("Escape");
+}
+async function openSettings(ui: FrameLocator) {
+  await ui.getByRole("button", { name: /^Account:/ }).click();
+  await ui.getByRole("menuitem", { name: "Settings", exact: true }).click();
+}
 test("offline renderer supplies secure request IDs without the browser UUID helper", async ({
   page,
 }) => {
@@ -16,11 +30,9 @@ test("offline renderer supplies secure request IDs without the browser UUID help
   const ui = await enter(page);
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
   await ui.getByRole("button", { name: "New tab", exact: true }).click();
-  await ui.getByRole("menuitem", { name: "Agent", exact: true }).click();
+  await ui.getByRole("button", { name: "Agent", exact: true }).click();
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
-  await expect(ui.getByRole("combobox", { name: "Tabs and panes" }).locator("option")).toHaveCount(
-    3,
-  );
+  await paneCount(ui, 3);
 });
 async function enter(page: Page) {
   await page.goto("/");
@@ -60,7 +72,6 @@ test("shared composer preserves attachments and queued messages across pane chan
 }) => {
   const ui = await enter(page);
   const composer = ui.getByRole("textbox", { name: "Message Codex" });
-  const picker = ui.getByRole("combobox", { name: "Tabs and panes" });
   await composer.fill("A queued follow-up");
   await ui.getByLabel("Upload files").setInputFiles({
     name: "notes.txt",
@@ -68,14 +79,14 @@ test("shared composer preserves attachments and queued messages across pane chan
     buffer: Buffer.from("Mobile parity"),
   });
   await expect(ui.getByLabel("Remove notes.txt")).toBeVisible();
-  await picker.selectOption(activeTerminal);
-  await picker.selectOption(activeChat);
+  await choose(ui, "Tabs and panes", activeTerminal);
+  await choose(ui, "Tabs and panes", activeChat);
   await expect(composer).toHaveValue("A queued follow-up");
   await expect(ui.getByLabel("Remove notes.txt")).toBeVisible();
   await ui.getByRole("button", { name: "Queue message", exact: true }).click();
   await expect(ui.locator("[data-composer-queue]")).toContainText("A queued follow-up");
-  await picker.selectOption(activeTerminal);
-  await picker.selectOption(activeChat);
+  await choose(ui, "Tabs and panes", activeTerminal);
+  await choose(ui, "Tabs and panes", activeChat);
   await expect(ui.locator("[data-composer-queue]")).toContainText("A queued follow-up");
   await ui.getByRole("button", { name: "Allow once", exact: true }).click();
   await expect(ui.getByText(/This is a simulated response/)).toBeVisible();
@@ -89,6 +100,8 @@ test("model, effort, permissions, plan and speed use the desktop controls", asyn
     ["Permission mode", "Auto-review", "auto-review"],
     ["Speed", "Fast", "fast"],
   ] as const) {
+    if (control === "Speed")
+      await ui.getByRole("button", { name: "More composer options" }).click();
     const button = ui.getByRole("button", { name: control, exact: true });
     await button.click();
     await ui.getByRole("option", { name: new RegExp(`^${option}`) }).click();
@@ -99,6 +112,7 @@ test("model, effort, permissions, plan and speed use the desktop controls", asyn
     "aria-pressed",
     "true",
   );
+  await ui.getByRole("button", { name: "More composer options" }).click();
   await ui.getByRole("button", { name: "Allow once", exact: true }).click();
   await ui.getByRole("textbox", { name: "Message Codex" }).fill("ask me a question");
   await ui.getByRole("button", { name: "Send message", exact: true }).click();
@@ -148,7 +162,7 @@ test("touch swipes reveal and dismiss the push sidebar", async ({ page }) => {
 test("tab and pane changes use the authoritative workspace operations", async ({ page }) => {
   const ui = await enter(page);
   await ui.getByRole("button", { name: "New tab", exact: true }).click();
-  await ui.getByRole("menuitem", { name: "Agent", exact: true }).click();
+  await ui.getByRole("button", { name: "Agent", exact: true }).click();
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
   await ui.getByRole("button", { name: "Tab and pane actions" }).click();
   await ui.getByRole("menuitem", { name: "Rename tab" }).click();
@@ -158,16 +172,10 @@ test("tab and pane changes use the authoritative workspace operations", async ({
     "Second conversation",
   );
   await ui.getByRole("button", { name: "Tab and pane actions" }).click();
-  await ui.getByRole("menuitem", { name: "Split horizontally" }).click();
-  await expect(ui.getByRole("combobox", { name: "Tabs and panes" }).locator("option")).toHaveCount(
-    4,
-  );
-  await ui.getByRole("button", { name: "Tab and pane actions" }).click();
+  await expect(ui.getByRole("menuitem", { name: /Split|New pane|Arrange panes/ })).toHaveCount(0);
   await ui.getByRole("menuitem", { name: "Close pane…", exact: true }).click();
   await ui.getByRole("button", { name: "Close pane", exact: true }).click();
-  await expect(ui.getByRole("combobox", { name: "Tabs and panes" }).locator("option")).toHaveCount(
-    3,
-  );
+  await paneCount(ui, 2);
 });
 test("sidebar pushes the workspace and settings opens as a drawer over the same draft", async ({
   page,
@@ -186,10 +194,10 @@ test("sidebar pushes the workspace and settings opens as a drawer over the same 
   await ui.getByRole("button", { name: "Return to workspace" }).click();
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toHaveValue("Keep this draft");
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
-  await sidebar.getByRole("button", { name: "Settings" }).click();
+  await openSettings(ui);
   const settings = ui.getByRole("dialog", { name: "Settings", exact: true });
   await expect(settings).toBeVisible();
-  await settings.getByLabel("Settings section").selectOption("appearance");
+  await choose(ui, "Settings section", "appearance");
   await expect(settings.getByRole("button", { name: "Theme", exact: true })).toBeVisible();
   await settings.getByText("Square", { exact: true }).click();
   await expect(settings.getByRole("radio", { name: "Square", exact: true })).toBeChecked();
@@ -211,17 +219,15 @@ test("top select switches split panes and cold session links survive sign-in", a
   await page.getByRole("button", { name: "Explore demo" }).click();
   const ui = workspace(page);
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
-  await ui
-    .getByRole("combobox", { name: "Tabs and panes" })
-    .selectOption(`${ids.tab}:${ids.terminalPane}`);
+  await choose(ui, "Tabs and panes", activeTerminal);
   await expect(ui.getByLabel("Terminal output", { exact: true })).toBeVisible();
   await ui.locator(".xterm-helper-textarea").pressSequentially("ls");
   await ui.locator(".xterm-helper-textarea").press("Enter");
   await expect(ui.locator(".xterm-accessibility-tree")).toContainText("ls");
-  await ui.getByRole("combobox", { name: "Tabs and panes" }).selectOption(`${ids.tab}:${ids.pane}`);
+  await choose(ui, "Tabs and panes", activeChat);
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
-  await ui.getByRole("button", { name: "Settings", exact: true }).click();
+  await openSettings(ui);
   await ui.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(page.getByRole("button", { name: "Explore demo" })).toBeVisible();
   expect(
@@ -262,15 +268,14 @@ test("project creation and shared settings remain available from the sidebar", a
   await expect(ui.getByRole("dialog", { name: "Add project" })).toHaveCount(0);
   await expect(ui.getByRole("heading", { name: "Phone project", exact: true })).toBeVisible();
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
-  await ui.getByRole("button", { name: "Settings", exact: true }).click();
-  const section = ui.getByLabel("Settings section");
-  await section.selectOption("notifications");
+  await openSettings(ui);
+  await choose(ui, "Settings section", "notifications");
   await expect(ui.getByRole("checkbox", { name: "Push notifications" })).toBeDisabled();
-  await section.selectOption("billing");
+  await choose(ui, "Settings section", "billing");
   await expect(ui.getByRole("dialog", { name: "Settings", exact: true })).toContainText("Billing");
-  await section.selectOption("ssh-keys");
+  await choose(ui, "Settings section", "ssh-keys");
   await expect(ui.getByRole("dialog", { name: "Settings", exact: true })).toContainText("SSH");
-  await section.selectOption("advanced");
+  await choose(ui, "Settings section", "advanced");
   await expect(ui.getByText("In-memory demo", { exact: true })).toBeVisible();
 });
 test("foreground reconnect preserves an unsent draft without replaying it", async ({ page }) => {
@@ -291,4 +296,101 @@ test("foreground reconnect preserves an unsent draft without replaying it", asyn
   await expect(ui.getByRole("log", { name: "Chat timeline" })).not.toContainText(
     "Do not lose this draft",
   );
+});
+
+test("compact toolbar keeps icon controls and send on one row at phone widths", async ({
+  page,
+}) => {
+  const ui = await enter(page);
+  for (const width of [320, 375, 390, 430]) {
+    await page.setViewportSize({ width, height: 664 });
+    const metrics = await ui.locator(".mobile-composer-toolbar").evaluate((toolbar) => {
+      const bounds = toolbar.getBoundingClientRect();
+      return [...toolbar.querySelectorAll("button")].map((button) => {
+        const rect = button.getBoundingClientRect();
+        return {
+          top: rect.top,
+          left: rect.left,
+          right: rect.right,
+          start: bounds.left,
+          end: bounds.right,
+        };
+      });
+    });
+    expect(new Set(metrics.map(({ top }) => Math.round(top))).size).toBe(1);
+    for (const rect of metrics) {
+      expect(rect.left).toBeGreaterThanOrEqual(rect.start);
+      expect(rect.right).toBeLessThanOrEqual(rect.end);
+    }
+    for (const label of ["Agent and model", "Thinking effort", "Permission mode"]) {
+      await expect(ui.getByRole("button", { name: label, exact: true })).toHaveText("");
+    }
+    const header = ui.locator(".mobile-header");
+    await expect(header).not.toContainText("Concors");
+    const chevronInside = await ui
+      .getByRole("combobox", { name: "Tabs and panes" })
+      .evaluate((picker) => {
+        const bounds = picker.getBoundingClientRect();
+        const chevron = picker.querySelector(".mobile-select-chevron")?.getBoundingClientRect();
+        if (!chevron) return false;
+        return (
+          chevron.right <= bounds.right &&
+          chevron.left >= bounds.left &&
+          chevron.top >= bounds.top &&
+          chevron.bottom <= bounds.bottom
+        );
+      });
+    expect(chevronInside).toBe(true);
+  }
+});
+
+test("search and project sheets animate above the open sidebar and restore focus", async ({
+  page,
+}) => {
+  const ui = await enter(page);
+  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  const shell = ui.locator(".mobile-shell");
+  await ui.getByRole("button", { name: "Search workspace", exact: true }).click();
+  const search = ui.getByRole("dialog", { name: "Search workspace", exact: true });
+  await expect(search).toHaveAttribute("data-mobile-drawer", "true");
+  await expect(search).toHaveCSS("animation-name", "mobile-drawer-in");
+  await expect(search.getByRole("option", { name: /New pane|Split/ })).toHaveCount(0);
+  await expect(shell).toHaveAttribute("data-sidebar-open", "true");
+  await search.getByRole("combobox").fill("no-such-project");
+  await expect(search.getByText("No results.")).toBeVisible();
+  await search.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(search).toHaveCount(0);
+  await expect(shell).toHaveAttribute("data-sidebar-open", "true");
+  await expect(ui.getByRole("button", { name: "Search workspace", exact: true })).toBeFocused();
+  await ui.getByRole("button", { name: "Add project", exact: true }).click();
+  const project = ui.getByRole("dialog", { name: "Add project", exact: true });
+  await expect(project).toHaveAttribute("data-mobile-drawer", "true");
+  await project.getByRole("textbox", { name: "Project name" }).fill("Discard this draft");
+  await project.getByRole("button", { name: "Close", exact: true }).first().click();
+  await expect(project).toHaveCount(0);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await ui.getByRole("button", { name: "Add project", exact: true }).click();
+  await expect(project).toHaveCSS("animation-name", "none");
+  await expect(project.getByRole("textbox", { name: "Project name" })).toHaveValue("");
+});
+
+test("compact account footer and machine management live in settings", async ({ page }) => {
+  const ui = await enter(page);
+  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  await expect(ui.getByRole("button", { name: "Settings", exact: true })).toHaveCount(0);
+  await expect(ui.getByRole("button", { name: "Manage machines", exact: true })).toHaveCount(0);
+  const height = await ui
+    .locator(".mobile-sidebar-footer")
+    .evaluate((footer) => footer.getBoundingClientRect().height);
+  expect(height).toBeLessThanOrEqual(64);
+  await ui.getByRole("combobox", { name: "Machine", exact: true }).click();
+  await expect(ui.getByRole("option", { name: /Development/ })).toBeVisible();
+  await ui.getByRole("option").first().press("Escape");
+  await openSettings(ui);
+  await choose(ui, "Settings section", "machines");
+  await expect(
+    ui
+      .getByRole("dialog", { name: "Settings", exact: true })
+      .getByText("Development", { exact: true }),
+  ).toBeVisible();
 });
