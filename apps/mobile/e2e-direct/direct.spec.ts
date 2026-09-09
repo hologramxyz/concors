@@ -80,7 +80,10 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     });
     const picker = ui.getByRole("combobox", { name: "Tabs and panes" });
     await expect(picker).toContainText("Renamed from desktop");
-    await ui.getByRole("button", { name: "Tab and pane actions" }).click();
+    await picker.click();
+    await ui
+      .getByRole("button", { name: "Actions for tab Renamed from desktop", exact: true })
+      .click();
     await ui.getByRole("menuitem", { name: "Add pane to this tab", exact: true }).click();
     await ui
       .getByRole("dialog", { name: "Add pane", exact: true })
@@ -99,7 +102,7 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await expect.poll(() => desktop.terminals.length).toBe(1);
     const terminalId = desktop.terminals[0]?.id;
     await picker.click();
-    await ui.locator(`[role="option"][data-value="${tabId}:${paneId}"]`).click();
+    await ui.locator(`[data-pane-choice][data-value="${tabId}:${paneId}"]`).click();
     await expect(input).toBeEnabled();
     await input.fill("Unsent draft survives reconnect");
     await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
