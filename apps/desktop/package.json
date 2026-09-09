@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@concors/api-client": "workspace:*",
+    "@concors/client-core": "workspace:*",
     "@concors/daemon-client": "workspace:*",
     "@concors/protocol": "workspace:*",
     "@fontsource-variable/geist": "^5.3.0",

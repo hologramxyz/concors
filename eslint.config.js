@@ -22,6 +22,12 @@ export default [
       "**/src-tauri/target/**",
       "**/src-tauri/gen/**",
       "pnpm-lock.yaml",
+      "apps/mobile/.expo/**",
+      "apps/mobile/android/**",
+      "apps/mobile/ios/**",
+      "apps/mobile/assets/terminal-html.ts",
+      "**/test-results/**",
+      "**/playwright-report/**",
     ],
   },
 
@@ -36,6 +42,30 @@ export default [
 
   // Desktop app (React + Vite)
   ...react.map((cfg) => ({ ...cfg, files: ["apps/desktop/src/**/*.{ts,tsx}"] })),
+  ...react.map((cfg) => ({
+    ...cfg,
+    files: [
+      "apps/mobile/app/**/*.{ts,tsx}",
+      "apps/mobile/src/**/*.{ts,tsx}",
+      "apps/mobile/scripts/terminal-document.js",
+    ],
+  })),
+  {
+    files: ["apps/mobile/**/*.{ts,tsx,mts}"],
+    rules: { "react-refresh/only-export-components": "off" },
+  },
+  {
+    files: [
+      "apps/mobile/scripts/*.mjs",
+      "apps/mobile/app.config.ts",
+      "apps/mobile/vitest.config.ts",
+    ],
+    ...nodeGlobals,
+  },
+  {
+    files: ["apps/mobile/**/*.{ts,tsx}"],
+    rules: { "@typescript-eslint/no-require-imports": ["error", { allow: ["\\.png$"] }] },
+  },
 
   // shadcn/ui primitives are generated code owned by the CLI: they export `*Variants` helpers next
   // to components, which Fast Refresh tolerates but the lint rule flags.

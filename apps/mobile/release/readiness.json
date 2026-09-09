@@ -1,0 +1,12 @@
+{
+  "Apple and Google developer accounts verified; identifiers and signing owned by Concors": false,
+  "Production native sign-in and session revocation tested": false,
+  "Production daemon installation, authenticated gateway and connection tickets available": false,
+  "Account deletion handles personal organizations, machines, subscriptions and retained records": false,
+  "Privacy, support and external account-deletion URLs are live": false,
+  "Push registration, revocation, delivery and cold-start routing tested on iOS and Android": false,
+  "Universal links and Android App Links verified on the production domain": false,
+  "Physical iPhone and Android installation, upgrade, keyboard, reconnect and accessibility tests passed": false,
+  "Store descriptions, screenshots, privacy disclosures, ratings and review access complete": false,
+  "Applicable Google Play closed testing and production access requirements satisfied": false
+}

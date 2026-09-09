@@ -26,6 +26,16 @@ import {
   type SshKey,
 } from "./schemas.ts";
 import { memoryTokenStore, type TokenStore } from "./token-store.ts";
+import {
+  AccountDeletionSchema,
+  MachineConnectionTicketSchema,
+  MobileCapabilitiesSchema,
+  NO_MOBILE_CAPABILITIES,
+  PushDeviceSchema,
+  type MobileCapabilities,
+  type MachineConnectionTicket,
+  type PushDevice,
+} from "./mobile.ts";
 
 export interface ApiClientOptions {
   /** Base URL of the control-plane API, e.g. `https://api.concors.dev`. */
@@ -291,6 +301,53 @@ export class ApiClient {
     return data.invoices;
   }
 
+  /** Optional mobile contracts. A 404 means this deployment has not implemented them yet. */
+  async getMobileCapabilities(): Promise<MobileCapabilities> {
+    try {
+      const { data } = await this.#request("GET", "/api/v1/mobile/capabilities", {
+        schema: MobileCapabilitiesSchema,
+      });
+      return data;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) return { ...NO_MOBILE_CAPABILITIES };
+      throw error;
+    }
+  }
+  async connectMachine(machineId: string): Promise<MachineConnectionTicket> {
+    const { data } = await this.#request(
+      "POST",
+      `/api/v1/machines/${encodeURIComponent(machineId)}/connect`,
+      {
+        body: {},
+        schema: MachineConnectionTicketSchema,
+      },
+    );
+    if (data.machineId !== machineId || Date.parse(data.expiresAt) <= Date.now() + 5_000)
+      throw new ApiError(
+        502,
+        "The machine connection ticket is invalid or expired",
+        "INVALID_TICKET",
+      );
+    return data;
+  }
+  async registerPushDevice(device: PushDevice): Promise<void> {
+    await this.#request("POST", "/api/v1/mobile/devices", {
+      body: PushDeviceSchema.parse(device),
+      schema: null,
+    });
+  }
+  async unregisterPushDevice(installationId: string): Promise<void> {
+    await this.#request("DELETE", `/api/v1/mobile/devices/${encodeURIComponent(installationId)}`, {
+      schema: null,
+    });
+  }
+  async deleteAccount(password: string): Promise<"deleted" | "scheduled"> {
+    const { data } = await this.#request("POST", "/api/v1/account/deletion", {
+      body: { password },
+      schema: AccountDeletionSchema,
+    });
+    return data.status;
+  }
   #rememberToken(response: Response, bodyToken: string | null): void {
     const token = response.headers.get(AUTH_TOKEN_HEADER) ?? bodyToken;
     if (token !== null && token !== "") this.tokens.set(token);
