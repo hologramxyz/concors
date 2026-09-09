@@ -1,3 +1,4 @@
+import { seedProject } from "./support/projects.ts";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,13 +11,7 @@ test("projects open a terminal immediately and new tabs start the chosen profile
   try {
     await signedIn(page);
     await page.goto("/");
-    await page.getByRole("button", { name: "Add project", exact: true }).first().click();
-    await page.getByLabel("Project name", { exact: true }).fill("Profile controls");
-    await page.getByLabel("Folder on this machine").fill(directory);
-    await page
-      .getByRole("dialog")
-      .getByRole("button", { name: "Add project", exact: true })
-      .click();
+    await seedProject(page, "Profile controls", directory);
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(page.getByRole("banner")).toHaveCount(0);
     await expect(page.getByLabel("Terminal output").filter({ visible: true })).toBeVisible();

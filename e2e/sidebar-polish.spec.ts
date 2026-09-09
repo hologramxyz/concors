@@ -1,4 +1,5 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { openFolder } from "./support/projects.ts";
+import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
@@ -38,14 +39,8 @@ test("GitHub clone images fall back cleanly and project hover spans the action b
     await page.goto("/");
     const nav = page.getByRole("navigation", { name: "Primary" });
     for (const name of ["Sidebar images", "Local sidebar"]) {
-      await nav.getByRole("button", { name: "Add project", exact: true }).click();
-      await page.getByLabel("Project source").selectOption("create");
-      await page.getByLabel("Project name", { exact: true }).fill(name);
-      await page.getByLabel("Folder on this machine").fill(join(directory, name));
-      await page
-        .getByRole("dialog")
-        .getByRole("button", { name: "Add project", exact: true })
-        .click();
+      await mkdir(join(directory, name));
+      await openFolder(page, join(directory, name));
       await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
     }
     const row = nav.getByRole("button", { name: "Sidebar images", exact: true }).locator("..");
@@ -64,11 +59,11 @@ test("GitHub clone images fall back cleanly and project hover spans the action b
     expect(hovered).not.toBe("rgba(0, 0, 0, 0)");
     await row.getByRole("button", { name: "Sidebar images", exact: true }).hover();
     await expect(row).toHaveCSS("background-color", hovered);
-    const add = nav.getByRole("button", { name: "Add project", exact: true });
-    const header = add.locator("..");
+    const add = nav.getByRole("button", { name: "New workspace", exact: true });
+    const header = add.locator("../..");
     await add.hover();
     await expect(header).toHaveCSS("background-color", hovered);
-    await nav.getByRole("button", { name: "Projects", exact: true }).hover();
+    await nav.getByRole("button", { name: "Workspaces", exact: true }).hover();
     await expect(header).toHaveCSS("background-color", hovered);
     missingImage = true;
     await page.reload();
