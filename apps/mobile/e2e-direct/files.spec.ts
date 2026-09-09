@@ -1,0 +1,232 @@
+import { test, expect, type Page } from "@playwright/test";
+import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DaemonConnection, describeDaemonEndpoint } from "@concors/daemon-client";
+
+async function setup(page: Page) {
+  const root = await mkdtemp(join(tmpdir(), "concors-mobile-files-"));
+  await mkdir(join(root, "src"));
+  await writeFile(join(root, "src/main.ts"), "export const answer = 42;\nconsole.log(answer);\n");
+  await writeFile(
+    join(root, "README.md"),
+    "# Mobile project files\n\nOpen [the source](src/main.ts#L2).\n",
+  );
+  await writeFile(join(root, ".hidden"), "private fixture\n");
+  const desktop = new DaemonConnection({
+    endpoint: describeDaemonEndpoint("ws://127.0.0.1:7440/ws"),
+    client: { kind: "desktop", name: "mobile-file-control", version: "0.1.0" },
+  });
+  const off = desktop.subscribeWorkspace(() => undefined);
+  await desktop.connect();
+  await expect.poll(() => desktop.workspace?.machineId).toBeTruthy();
+  const snapshot = desktop.workspace;
+  if (!snapshot) throw new Error("Daemon workspace was not received");
+  const projectId = crypto.randomUUID(),
+    tabId = crypto.randomUUID(),
+    paneId = crypto.randomUUID();
+  const execute = async (
+    operation: Parameters<DaemonConnection["executeWorkspace"]>[0]["operation"],
+  ) => {
+    const result = await desktop.executeWorkspace({
+      type: "workspace.command",
+      commandId: crypto.randomUUID(),
+      epoch: snapshot.epoch,
+      operation,
+    });
+    expect(result.outcome.status).toBe("accepted");
+  };
+  await execute({ kind: "project.add", projectId, name: "Mobile file test", directory: root });
+  const project = desktop.workspace?.projects.find((item) => item.id === projectId);
+  if (!project) throw new Error("Test project was not created");
+  await execute({
+    kind: "tab.create",
+    projectId,
+    expectedVersion: project.version,
+    tabId,
+    paneId,
+    name: "File review",
+    profile: "chat",
+  });
+  await page.goto(
+    `/session?machineId=${snapshot.machineId}&projectId=${projectId}&tabId=${tabId}&paneId=${paneId}`,
+  );
+  await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
+  const ui = page.frameLocator('iframe[title="Concors workspace"]');
+  await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
+  return {
+    root,
+    desktop,
+    ui,
+    cleanup: async () => {
+      desktop.disconnect();
+      off();
+      await rm(root, { recursive: true, force: true });
+    },
+  };
+}
+
+test("real mobile files preserve drafts, save explicitly and resolve competing disk edits", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  const { ui, root, desktop, cleanup } = await setup(page);
+  try {
+    const chat = ui.getByRole("textbox", { name: "Message Codex" });
+    await chat.fill("Keep this chat draft while I inspect files");
+    const agentId = desktop.agents[0]?.id;
+    await ui.getByRole("button", { name: "Project files", exact: true }).click();
+    const files = ui.getByRole("region", { name: "Project files", exact: true });
+    await expect(files.getByRole("button", { name: "src", exact: true })).toBeVisible();
+    expect(await files.evaluate((el) => el.ownerDocument.activeElement?.tagName)).toBe("BUTTON");
+    await files.getByRole("button", { name: "src", exact: true }).click();
+    await files.getByRole("button", { name: "main.ts", exact: true }).click();
+    const code = files.getByRole("textbox", { name: "Code editor: src/main.ts" });
+    await expect(code).toContainText("42");
+    await code.fill("export const answer = 43;\n");
+    expect(await readFile(join(root, "src/main.ts"), "utf8")).toContain("42");
+    await files.getByRole("button", { name: "Save", exact: true }).click();
+    await expect.poll(() => readFile(join(root, "src/main.ts"), "utf8")).toContain("43");
+    await code.fill("my unsaved file draft");
+    await files.getByRole("button", { name: "Back to chat" }).click();
+    await expect(chat).toHaveValue("Keep this chat draft while I inspect files");
+    expect(desktop.agents[0]?.id).toBe(agentId);
+    await ui.getByRole("button", { name: "Project files", exact: true }).click();
+    await files
+      .getByRole("navigation", { name: "Open files" })
+      .getByRole("button", { name: /^main.ts/ })
+      .click();
+    await expect(code).toContainText("my unsaved file draft");
+    await files.getByRole("button", { name: "Close src/main.ts file" }).click();
+    const confirm = ui.getByRole("dialog", { name: "Unsaved file changes", exact: true });
+    await expect(confirm).toBeVisible();
+    await confirm.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(code).toContainText("my unsaved file draft");
+    await writeFile(join(root, "src/main.ts"), "an agent changed this file\n");
+    await files.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(
+      files.getByText("This file changed on the machine. Your version is kept."),
+    ).toBeVisible();
+    expect(await readFile(join(root, "src/main.ts"), "utf8")).toBe("an agent changed this file\n");
+    await files.getByRole("button", { name: "Compare with disk" }).click();
+    await expect(files.getByText("an agent changed this file", { exact: true })).toBeVisible();
+    await files.getByRole("button", { name: "Keep my draft", exact: true }).click();
+    await confirm.getByRole("button", { name: "Continue", exact: true }).click();
+    await files.getByRole("button", { name: "Save", exact: true }).click();
+    await expect
+      .poll(() => readFile(join(root, "src/main.ts"), "utf8"))
+      .toBe("my unsaved file draft");
+    await code.fill("Draft retained during connection retry");
+    await files.getByRole("button", { name: "Back to chat" }).click();
+    await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+    await ui.getByRole("button", { name: "Desktop connection settings" }).click();
+    const settings = ui.getByRole("dialog", { name: "Settings", exact: true });
+    await settings.getByRole("button", { name: "Reconnect", exact: true }).click();
+    await settings.getByRole("button", { name: "Disconnect desktop", exact: true }).click();
+    await expect(confirm).toContainText("Discard unsaved file changes and disconnect?");
+    await confirm.getByRole("button", { name: "Cancel", exact: true }).click();
+    await settings.getByRole("button", { name: "Close", exact: true }).click();
+    await ui.getByRole("button", { name: "Project files", exact: true }).click();
+    await files
+      .getByRole("navigation", { name: "Open files" })
+      .getByRole("button", { name: /^main.ts/ })
+      .click();
+    await expect(code).toContainText("Draft retained during connection retry");
+    await files.getByRole("button", { name: "File options" }).click();
+    await ui.getByRole("menuitem", { name: "Find in file" }).click();
+    await expect(files.getByRole("textbox", { name: "Find", exact: true })).toBeVisible();
+    for (const width of [320, 390, 430]) {
+      await page.setViewportSize({ width, height: 700 });
+      expect(await files.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(false);
+    }
+    await files.getByRole("button", { name: "Save", exact: true }).click();
+    await expect
+      .poll(() => readFile(join(root, "src/main.ts"), "utf8"))
+      .toBe("Draft retained during connection retry");
+    expect(errors).toEqual([]);
+    await page.screenshot({
+      path: "apps/mobile/test-results/direct/mobile-file-editor.png",
+      animations: "disabled",
+    });
+  } finally {
+    await cleanup();
+  }
+});
+
+test("mobile file browsing supports Markdown links, safe creation, hidden files and opposing swipes", async ({
+  page,
+}) => {
+  const { ui, root, cleanup } = await setup(page);
+  try {
+    const client = await page.context().newCDPSession(page);
+    const swipe = async (from: number, to: number, y = 250) => {
+      await client.send("Input.dispatchTouchEvent", {
+        type: "touchStart",
+        touchPoints: [{ x: from, y }],
+      });
+      for (let step = 1; step <= 10; step++)
+        await client.send("Input.dispatchTouchEvent", {
+          type: "touchMove",
+          touchPoints: [{ x: from + ((to - from) * step) / 10, y }],
+        });
+      await client.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    };
+    await swipe(350, 35);
+    await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-files-open", "true");
+    const files = ui.getByRole("region", { name: "Project files", exact: true });
+    await expect(files.getByRole("button", { name: "README.md", exact: true })).toBeVisible();
+    await files.getByRole("button", { name: "README.md", exact: true }).click();
+    await expect(files.getByRole("heading", { name: "Mobile project files" })).toBeVisible();
+    await files.getByRole("link", { name: "the source", exact: true }).click();
+    await expect(
+      files.getByRole("textbox", { name: "Code editor: src/main.ts" }),
+    ).not.toBeFocused();
+    await expect(files.getByRole("textbox", { name: "Code editor: src/main.ts" })).toContainText(
+      "42",
+    );
+    await expect(
+      files
+        .getByRole("navigation", { name: "Open files" })
+        .getByRole("button", { name: /^main.ts/ }),
+    ).toHaveCount(1);
+    await files.getByRole("button", { name: "Browse project directory" }).click();
+    await expect(files.getByRole("button", { name: ".hidden", exact: true })).toHaveCount(0);
+    await files.getByRole("button", { name: "Show hidden files" }).click();
+    await expect(files.getByRole("button", { name: ".hidden", exact: true })).toBeVisible();
+    await files.getByRole("button", { name: "New folder", exact: true }).click();
+    await files.getByRole("textbox", { name: "New folder path" }).fill("notes");
+    await files.getByRole("button", { name: "Create", exact: true }).click();
+    await expect(files.getByRole("button", { name: "notes", exact: true })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    await files.getByRole("button", { name: "New file", exact: true }).click();
+    await files.getByRole("textbox", { name: "New file path" }).fill("notes/review.md");
+    await files.getByRole("button", { name: "Create", exact: true }).click();
+    await expect(files.getByRole("button", { name: "Edit source", exact: true })).toBeVisible();
+    expect(await readFile(join(root, "notes/review.md"), "utf8")).toBe("");
+    await files.getByRole("button", { name: "Browse project directory" }).click();
+    await files.getByRole("button", { name: "Refresh file tree" }).click();
+    await expect(files.getByRole("button", { name: "notes", exact: true })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    await files.getByRole("button", { name: "New file", exact: true }).click();
+    await files.getByRole("textbox", { name: "New file path" }).fill("src/main.ts");
+    await files.getByRole("button", { name: "Create", exact: true }).click();
+    await expect(files.getByRole("alert")).toBeVisible();
+    expect(await readFile(join(root, "src/main.ts"), "utf8")).toContain("42");
+    await files.getByRole("button", { name: "Cancel", exact: true }).click();
+    await page.screenshot({
+      path: "apps/mobile/test-results/direct/mobile-file-tree.png",
+      animations: "disabled",
+    });
+    await swipe(140, 380, 30);
+    await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-files-open", "false");
+    await swipe(30, 330);
+    await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "true");
+  } finally {
+    await cleanup();
+  }
+});
