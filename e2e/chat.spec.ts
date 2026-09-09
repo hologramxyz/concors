@@ -31,7 +31,7 @@ test("shared chat streams, handles approvals and removes detached sidebar entrie
       .getByRole("region", { name: "Agents", exact: true });
     await expect(agentList.getByRole("img", { name: "Agent status: Ready" })).toBeVisible();
     await expect(agentList.getByText("Chat acceptance", { exact: true })).toHaveCount(0);
-    await expect(page.getByLabel("Message Codex")).toBeEnabled();
+    await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
     await expect(page.getByRole("log")).toBeEmpty();
     await expect(page.getByText("Start a conversation", { exact: true })).toHaveCount(0);
     await expect(
@@ -49,9 +49,9 @@ test("shared chat streams, handles approvals and removes detached sidebar entrie
     await page.getByRole("button", { name: "Back to app", exact: true }).click();
     await agentList.getByRole("list").getByRole("button").first().click();
     await expect(page.getByRole("heading", { name: "Chat acceptance", exact: true })).toBeVisible();
-    await expect(page.getByLabel("Message Codex")).toBeFocused();
+    await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeFocused();
     await expect(page.getByRole("complementary", { name: "Agent sessions" })).toHaveCount(0);
-    await page.getByLabel("Message Codex").fill("hold this stream");
+    await page.getByRole("textbox", { name: "Message Codex" }).fill("hold this stream");
     await page.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(page.getByRole("log")).toContainText("Hello from");
     const status = agentList
@@ -61,7 +61,10 @@ test("shared chat streams, handles approvals and removes detached sidebar entrie
     await expect(
       page.getByRole("region", { name: "Agent pane", exact: true }).locator("header .truncate"),
     ).toHaveText("hold this stream");
-    await expect(status.locator("svg")).toHaveCSS("animation-name", "spin");
+    await expect(status.locator("svg g")).toHaveCSS("animation-name", "spin");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await expect(status.locator("svg g")).toHaveCSS("animation-name", "none");
+    await page.emulateMedia({ reducedMotion: "no-preference" });
     const row = agentList.getByRole("list").getByRole("button").first();
     expect((await row.boundingBox())?.height).toBeLessThanOrEqual(28);
     await expect(row.locator(".truncate")).toHaveCSS("white-space", "nowrap");
@@ -76,7 +79,7 @@ test("shared chat streams, handles approvals and removes detached sidebar entrie
     ).toHaveCount(1);
     await second.getByRole("button", { name: "Interrupt agent", exact: true }).click();
     await expect(page.getByLabel("Agent status: Interrupted").first()).toBeVisible();
-    await page.getByLabel("Message Codex").fill("approve command");
+    await page.getByRole("textbox", { name: "Message Codex" }).fill("approve command");
     await page.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(second.getByRole("region", { name: "Allow command execution?" })).toBeVisible();
     await second.getByRole("button", { name: "Decline", exact: true }).click();
@@ -88,12 +91,12 @@ test("shared chat streams, handles approvals and removes detached sidebar entrie
     await expect(agentList.getByRole("img").locator("svg")).toHaveCount(0);
 
     await expect(page.getByRole("button", { name: "Allow once", exact: true })).toHaveCount(0);
-    await page.getByLabel("Message Codex").fill("question");
+    await page.getByRole("textbox", { name: "Message Codex" }).fill("question");
     await page.getByRole("button", { name: "Send message", exact: true }).click();
     await second.getByRole("button", { name: "Blue", exact: true }).click();
     await second.getByRole("button", { name: "Submit answers", exact: true }).click();
     await expect(page.getByLabel("Agent status: Done").first()).toBeVisible();
-    await page.getByLabel("Message Codex").fill("hello again");
+    await page.getByRole("textbox", { name: "Message Codex" }).fill("hello again");
     await page.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(page.getByRole("log")).toContainText("Hello from Codex");
     const replyFooter = page.getByRole("article").filter({ hasText: "Hello from Codex" }).last();
@@ -103,7 +106,7 @@ test("shared chat streams, handles approvals and removes detached sidebar entrie
     ).toBeVisible();
     await page.getByRole("button", { name: "Pane actions" }).click();
     await page.getByRole("menuitemradio", { name: "Terminal", exact: true }).click();
-    await expect(page.locator(".xterm")).toBeVisible();
+    await expect(page.locator(".xterm").filter({ visible: true })).toBeVisible();
     await expect(agentList.getByRole("list").getByRole("button")).toHaveCount(0);
     const remoteAgents = second.getByRole("region", { name: "Agents", exact: true });
     await expect(remoteAgents.getByRole("list").getByRole("button")).toHaveCount(0);
@@ -111,7 +114,7 @@ test("shared chat streams, handles approvals and removes detached sidebar entrie
     await expect(remoteAgents.getByRole("list").getByRole("button")).toHaveCount(0);
     await page.getByRole("button", { name: "Pane actions" }).click();
     await page.getByRole("menuitemradio", { name: "Agent", exact: true }).click();
-    await expect(page.getByLabel("Message Codex")).toBeEnabled();
+    await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
     await expect(agentList.getByRole("list").getByRole("button")).toHaveCount(1);
     await page.getByRole("button", { name: "Close pane", exact: true }).click();
     await expect(agentList.getByRole("list").getByRole("button")).toHaveCount(0);

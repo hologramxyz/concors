@@ -640,7 +640,7 @@ export function AgentComposer({
             sending.
           </p>
         )}
-        {(uploading || !connected || configuring) && (
+        {(uploading || (compact && (!connected || configuring))) && (
           <p role="status" className="px-2 text-[12px] text-muted-foreground">
             {uploading
               ? "Reading attachments…"
