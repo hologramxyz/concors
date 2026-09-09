@@ -1,3 +1,4 @@
+import { NewWorkspaceMenu } from "@/workspace/new-workspace-menu";
 import { useContext, useEffect, useState } from "react";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { ProjectImage } from "@/workspace/project-image";
@@ -7,7 +8,7 @@ import { shortcutLabel } from "@/shortcuts/bindings";
 import { AgentSidebar } from "@/agents/list";
 import { ProjectActions } from "@/workspace/project-actions";
 import { SidebarSection } from "./sidebar-section";
-import { Keyboard, PanelLeftClose, Plus, Search } from "lucide-react";
+import { Keyboard, PanelLeftClose, Search } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "cn";
 import type { WorkspaceSnapshot, WorkspaceOperation } from "@concors/protocol";
@@ -29,6 +30,7 @@ interface AppSidebarProps {
   canEdit: boolean;
   onSelectProject: (id: string) => void;
   onAddProject: () => void;
+  onOpenFolder: (mode: "open" | "clone") => void;
   machines: MachineConnection[];
   selectedMachineId: string;
   onSelectMachine: (id: string) => void;
@@ -104,17 +106,13 @@ export function AppSidebar(props: AppSidebarProps) {
         </div>
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-2 py-3">
           <SidebarSection
-            title="Projects"
+            title="Workspaces"
             action={
-              <button
-                type="button"
-                aria-label="Add project"
+              <NewWorkspaceMenu
                 disabled={!props.canEdit}
-                onClick={props.onAddProject}
-                className="rounded p-1 text-muted-foreground hover:text-sidebar-foreground disabled:opacity-40"
-              >
-                <Plus className="size-4" />
-              </button>
+                onNew={props.onAddProject}
+                onOpen={props.onOpenFolder}
+              />
             }
           >
             <ul className="mt-1 space-y-0.5">
@@ -156,7 +154,7 @@ export function AppSidebar(props: AppSidebarProps) {
               ))}
               {props.workspace?.projects.length === 0 && (
                 <li className="px-2 py-3 text-ui leading-relaxed text-muted-foreground">
-                  Add a project to organize your tabs and panes.
+                  Start a workspace or open a folder.
                 </li>
               )}
             </ul>

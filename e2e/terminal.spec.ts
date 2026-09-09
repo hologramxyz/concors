@@ -1,3 +1,4 @@
+import { seedProject } from "./support/projects.ts";
 import { test, expect, signedIn } from "./signed-in.ts";
 
 test("two devices use the same terminal and recover its screen after reload", async ({
@@ -14,13 +15,7 @@ test("two devices use the same terminal and recover its screen after reload", as
     await page.emulateMedia({ colorScheme: "light" });
     await page.goto("/");
 
-    await page.getByRole("button", { name: "Add project", exact: true }).first().click();
-    await page.getByLabel("Project name", { exact: true }).fill("Terminal acceptance");
-    await page.getByLabel("Folder on this machine").fill(process.cwd());
-    await page
-      .getByRole("dialog")
-      .getByRole("button", { name: "Add project", exact: true })
-      .click();
+    await seedProject(page, "Terminal acceptance", process.cwd());
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
     await expect(page.getByRole("button", { name: "Start terminal", exact: true })).toHaveCount(0);

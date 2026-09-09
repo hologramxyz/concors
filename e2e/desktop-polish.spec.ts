@@ -1,3 +1,4 @@
+import { seedProject } from "./support/projects.ts";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -24,13 +25,7 @@ test("visited tabs retain terminal screens and chat drafts without reconnecting 
   try {
     await signedIn(page);
     await page.goto("/");
-    await page.getByRole("button", { name: "Add project", exact: true }).first().click();
-    await page.getByLabel("Project name", { exact: true }).fill("Desktop polish");
-    await page.getByLabel("Folder on this machine").fill(directory);
-    await page
-      .getByRole("dialog")
-      .getByRole("button", { name: "Add project", exact: true })
-      .click();
+    await seedProject(page, "Desktop polish", directory);
     const terminalPane = page.getByRole("region", { name: "Terminal pane", exact: true });
     await expect(
       terminalPane.getByLabel("Terminal output").filter({ visible: true }),

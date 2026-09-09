@@ -258,7 +258,12 @@ export class AgentManager {
       if (receipt) return this.result(request, receipt);
       if (op.kind === "start") {
         const project = this.#store.snapshot().projects.find((p) => p.id === op.projectId);
-        if (!project || !(await stat(project.directory)).isDirectory())
+        const pane = project?.tabs
+          .find((tab) => tab.id === op.tabId)
+          ?.nodes.find((node) => node.id === op.paneId);
+        const directory =
+          pane?.kind === "pane" ? (pane.directory ?? project?.directory) : project?.directory;
+        if (!project || !directory || !(await stat(directory)).isDirectory())
           throw new Error("Project folder is unavailable");
         const repeated = this.#store.agentReceipt(request);
         if (repeated) return this.result(request, repeated);
@@ -268,7 +273,7 @@ export class AgentManager {
           id: randomUUID(),
           projectId: project.id,
           name: "Codex",
-          directory: project.directory,
+          directory,
           provider: "codex",
           model: op.model ?? null,
           settings: { ...defaultSettings, model: op.model ?? null },

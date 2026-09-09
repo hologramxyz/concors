@@ -8,6 +8,7 @@ export interface OpenFile {
   id: string;
   scope: string;
   projectId: string;
+  directory: string;
   path: string;
   document: FileDocument;
   location: FileLocation;
