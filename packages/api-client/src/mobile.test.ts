@@ -26,6 +26,29 @@ function client(body: unknown, status = 200) {
   };
 }
 describe("optional mobile control-plane contract", () => {
+  it("supports upstream machine JWTs without conflating them with gateway tickets", async () => {
+    const access = {
+      machineId: "machine-1",
+      token: "eyJhbGciOiJFZERTQSJ9.eyJzdWIiOiJ1c2VyIn0.c2lnbmF0dXJl",
+      expiresAt: ticket.expiresAt,
+    };
+    const { api, fetch } = client(access);
+    expect(await api.getMachineAccessToken("machine-1")).toEqual(access);
+    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("https://api.example/api/v1/machines/machine-1/token");
+    expect(new Headers(init.headers).get("authorization")).toBe("Bearer session-token");
+    await expect(client(access).api.getMachineAccessToken("wrong")).rejects.toMatchObject({
+      code: "INVALID_MACHINE_TOKEN",
+    });
+    await expect(
+      client({ ...access, expiresAt: "2000-01-01T00:00:00.000Z" }).api.getMachineAccessToken(
+        "machine-1",
+      ),
+    ).rejects.toMatchObject({ code: "INVALID_MACHINE_TOKEN" });
+    await expect(
+      client({ ...access, token: "not-a-jwt" }).api.getMachineAccessToken("machine-1"),
+    ).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+  });
   it("treats only a missing capabilities route as unsupported", async () => {
     expect(await client({}, 404).api.getMobileCapabilities()).toEqual(NO_MOBILE_CAPABILITIES);
     await expect(client({}, 401).api.getMobileCapabilities()).rejects.toMatchObject({

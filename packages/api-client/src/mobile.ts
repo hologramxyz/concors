@@ -32,6 +32,17 @@ export const MachineConnectionTicketSchema = z.object({
   expiresAt: z.string().datetime(),
 });
 export type MachineConnectionTicket = z.infer<typeof MachineConnectionTicketSchema>;
+/** Actual upstream /machines/:id/token contract; not the proposed one-use gateway ticket. */
+export const MachineAccessTokenSchema = z.object({
+  machineId: z.string().min(1).max(128),
+  token: z
+    .string()
+    .min(16)
+    .max(8192)
+    .regex(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/),
+  expiresAt: z.string().datetime(),
+});
+export type MachineAccessToken = z.infer<typeof MachineAccessTokenSchema>;
 export const PushDeviceSchema = z.object({
   installationId: z.string().uuid(),
   token: z.string().min(1).max(512),

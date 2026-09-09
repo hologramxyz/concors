@@ -63,10 +63,12 @@ export { memoryTokenStore, type TokenStore } from "./token-store.ts";
 export {
   MobileCapabilitiesSchema,
   MachineConnectionTicketSchema,
+  MachineAccessTokenSchema,
   PushDeviceSchema,
   NO_MOBILE_CAPABILITIES,
   AccountDeletionSchema,
   type MobileCapabilities,
   type MachineConnectionTicket,
+  type MachineAccessToken,
   type PushDevice,
 } from "./mobile.ts";

@@ -114,6 +114,14 @@ export const MachineSchema = z.object({
   lastError: z.string().nullable(),
   ipv4: z.string().nullable(),
   ipv6: z.string().nullable(),
+  // Added by the machine-agent service; optional for older API deployments.
+  hostname: z.string().nullable().optional(),
+  certificateExpiresAt: z.string().datetime().nullable().optional(),
+  certificateError: z.string().nullable().optional(),
+  agentInstalledAt: z.string().datetime().nullable().optional(),
+  agentVersion: z.string().nullable().optional(),
+  agentSeenAt: z.string().datetime().nullable().optional(),
+  agentError: z.string().nullable().optional(),
   /** Login user; connect with `ssh <sshUser>@<ipv4>`. */
   sshUser: z.string(),
   /** Set once the machine accepts SSH. */
