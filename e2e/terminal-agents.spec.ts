@@ -7,7 +7,9 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
   page,
   browser,
 }) => {
-  test.setTimeout(45_000);
+  // Two clients exercise both provider lifecycles with repeated page reloads.
+  // Allow time for the complete flow and teardown; assertion deadlines stay at 5s.
+  test.setTimeout(90_000);
   const directory = await mkdtemp(join(tmpdir(), "concors-terminal-agents-"));
   const context = await browser.newContext();
   const second = await context.newPage();
