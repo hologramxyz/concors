@@ -9,7 +9,7 @@
     "web": "pnpm assets && expo start --web",
     "android": "pnpm assets && expo run:android",
     "ios": "pnpm assets && expo run:ios",
-    "assets": "node scripts/assets.mjs",
+    "assets": "node scripts/production-guard.mjs && node scripts/assets.mjs",
     "build": "pnpm assets && expo export --platform all",
     "typecheck": "pnpm assets && tsc --noEmit",
     "test": "vitest run",
