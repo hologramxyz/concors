@@ -54,7 +54,18 @@ Implementation/verification checklist (updated as each slice lands):
 - [x] Reused desktop conversation/composer, project controls and terminal.
 - [x] Rich interactive demo and parity-focused browser tests.
 - [x] iOS/Android Hermes and web export, native project generation, Expo Doctor 21/21.
-- [ ] Final desktop regression run and refreshed private preview.
+- [x] Desktop regression cases and refreshed private preview.
+
+Verification on 2026-09-09: 217 unit tests pass (one opt-in API integration test is
+skipped), 11 phone browser scenarios pass, and all 19 desktop browser scenarios pass
+across the isolated-port runs. The appearance scenario additionally exercises theme
+and corner preferences. The private static preview was opened at iPhone size for
+chat/sidebar/settings/terminal screenshots with no page errors. Other Tailscale routes
+were unchanged; mobile preview is tailnet-only, not Funnel.
+
+To run desktop acceptance beside an existing checkout, use
+`CONCORS_E2E_WEB_PORT=1447 pnpm test:workspace:e2e`. Alternate-origin handling is
+confined to test fixtures; it does not relax the production daemon allowlist.
 
 Production gateway, push service and deletion backend remain external release gates.
 Store billing-policy review and physical iOS/Android keyboard, gestures, file picker,
