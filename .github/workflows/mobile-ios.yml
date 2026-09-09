@@ -38,6 +38,10 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @concors/mobile assets
+      - name: Prepare Expo CLI cache on the clean runner
+        # SDK 57 devicectl writes its capability marker before creating the cache directory.
+        run: |
+          node -e 'require("node:fs").mkdirSync(require("node:path").join(require("node:os").homedir(), ".expo"), { recursive: true })'
       - name: Create isolated iOS 26 simulator
         id: simulator
         run: |
@@ -56,4 +60,6 @@ jobs:
         if: always()
         with:
           name: mobile-ios-native-evidence
-          path: apps/mobile/test-results/native/
+          path: |
+            apps/mobile/test-results/native/
+            apps/mobile/.expo/xcodebuild.log
