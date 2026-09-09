@@ -5,6 +5,9 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
   browser,
   page: first,
 }) => {
+  // This two-client flow includes a reload, a real reconnect delay, machine
+  // switching and teardown. Keep individual assertions on their normal deadline.
+  test.setTimeout(60_000);
   const otherDevice = await browser.newContext();
   let disconnected = false;
   const sockets: WebSocketRoute[] = [];
@@ -63,8 +66,8 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
     await second.getByRole("button", { name: "Pane actions", exact: true }).last().click();
     await second.getByRole("menuitemradio", { name: "Agent", exact: true }).click();
     await expect(first.getByRole("region", { name: "Agent pane", exact: true })).toHaveCount(1);
-    await expect(first.getByLabel("Message Codex")).toBeEnabled();
-    await expect(second.getByLabel("Message Codex")).toBeEnabled();
+    await expect(first.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
+    await expect(second.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
     await expect(first.getByRole("log", { name: "Chat timeline" })).toBeEmpty();
     await first.getByRole("separator", { name: "Resize split" }).focus();
     await first.keyboard.press("ArrowRight");

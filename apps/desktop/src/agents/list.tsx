@@ -30,7 +30,7 @@ export function AgentSidebar({
             ? "bg-red-500"
             : agent.status === "needs_input"
               ? "bg-amber-500"
-              : "bg-white",
+              : "bg-muted-foreground/60",
       unread: !!(agent.attention && !agent.attention.seen),
     })),
     ...visible.terminals.map((session) => ({
@@ -52,7 +52,7 @@ export function AgentSidebar({
             : session.agentActivity === "needs_input"
               ? "Needs input"
               : "Open in terminal",
-      color: session.agentActivity === "needs_input" ? "bg-amber-500" : "bg-white",
+      color: session.agentActivity === "needs_input" ? "bg-amber-500" : "bg-muted-foreground/60",
       unread: false,
     })),
   ].toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -88,9 +88,9 @@ export function AgentSidebar({
                     {running ? (
                       <AgentLoadingIcon />
                     ) : (
-                      <span
-                        className={`size-2.5 rounded-full border border-black/15 ${agent.color}`}
-                      />
+                      <span className="flex size-3.5 items-center justify-center rounded-full border border-current/20 text-muted-foreground">
+                        <span className={`size-1.5 rounded-full ${agent.color}`} />
+                      </span>
                     )}
                   </span>
                   <span className="min-w-0 flex-1 truncate">{agent.name}</span>
