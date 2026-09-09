@@ -1,0 +1,71 @@
+# Project files
+
+The Files button beside project tabs opens a right-hand directory tree on the connected machine.
+Opening a file adds a client-local file tab beside the existing agent and terminal tabs. The drawer
+is docked on wide screens and overlays the editor on narrow screens. It lists dotfiles, loads
+folders on expansion, and can refresh or filter the filenames already loaded.
+
+## Viewing and editing
+
+Text files open in a themed CodeMirror editor with syntax highlighting, line numbers, search,
+word wrap, and optional Vim bindings. Save explicitly with the toolbar, Command/Ctrl+S, or Vim
+`:w`. Markdown opens as a rendered preview with an Edit source toggle. Raw HTML does not execute;
+images are omitted, matching the existing safe chat renderer.
+
+Agent Markdown file links and file paths in tool results open the same file tabs. Project-relative
+paths, absolute paths inside the project, local `file://` URLs, and `:line` / `#Lline` suffixes are
+supported. Markdown links resolve relative to the document. External web links stay external.
+
+Draft text belongs to the file document, not the mounted editor. Switching tabs, projects, or
+machines does not throw it away. File tabs are scoped to the machine, workspace epoch, and project;
+opening the same path selects its existing tab. Closing a dirty tab or signing out asks before
+discarding changes. Browser reload/close uses the browser's unsaved-changes warning.
+
+## Saving on the machine
+
+`file.request` / `file.result` use the existing subscribed daemon connection. The daemon advertises
+`project-files`; older daemons leave the Files button disabled. The service resolves paths from the
+registered project directory, checks the workspace epoch, and rejects traversal, symbolic links,
+special files, non-UTF-8 data, binary data, and files larger than 1 MiB. Listings stop at 2,000 entries
+and say when truncated. There is no additional HTTP filesystem endpoint.
+
+Reads return a SHA-256 revision. Saves compare that revision, serialize Concors writes per path,
+write and sync a sibling temporary file, preserve ordinary permission bits, recheck the revision,
+and rename into place. An agent or another client's intervening edit produces a conflict instead
+of silently replacing their work. The client retains its draft and offers the latest disk text to
+review, reload, or explicitly replace. Typing during a save or reload does not disappear when the
+response arrives. Repeated identical saves can acknowledge an earlier save whose response was lost.
+
+The active file checks disk on focus and every five seconds. Checks flag changes without replacing
+the text being read or edited. This is optimistic conflict detection: unrelated processes do not
+participate in the write queue, and the filesystem does not provide a cross-process compare-and-swap
+between the final revision check and rename. Project path checks are not an OS security boundary
+against another process deliberately changing directories during an operation.
+
+## Deliberate limits
+
+- File tabs and unsaved drafts live in this client session; they are not synchronized or restored
+  after an app restart. Save before leaving. Undo/cursor history resets when an editor remounts.
+- This is a lightweight existing-file editor, without language servers, file creation/rename/delete,
+  binary/image previews, or a full-project search index.
+- Vim uses CodeMirror keybindings, not an embedded Neovim process.
+- The separate native mobile client is not changed by this PR. The desktop web UI's file drawer and
+  editor fit a narrow viewport with the app sidebar collapsed.
+- Native Tauri close-dialog behavior still needs a packaged-app check; browser behavior is covered.
+
+## References and validation
+
+Reviewed Paseo revision `a7a708bec99e935ee4b8c6f7314a4b9a9984cfa6`, specifically its
+`file-explorer-pane.tsx`, `file-pane/editor/view.web.tsx`, `file-pane/editor/extensions.web.ts`,
+`file-pane/editor/model.ts`, `panels/file-panel.tsx`, `file-explorer/preview-target.ts`, and server
+`file-explorer/service.ts`. The design follows its file panel, CodeMirror/Vim, Markdown toggle,
+and explicit version-aware save behavior. Concors uses its existing tabs and daemon transport;
+no workspace schema migration or control-plane change is needed. Paseo's Apache-2.0 license is in
+`third-party/paseo-LICENSE`.
+
+Unit coverage exercises traversal and symlinks, read limits, UTF-8/BOM/CRLF, executable permissions,
+concurrent saves, agent edits, lost acknowledgements, draft retention, and link resolution.
+`e2e/files.spec.ts` exercises real daemon file reads/writes, Markdown and agent links, switching file
+tabs, discard protection, conflict review, Vim `:w`, and a narrow viewport. The browser tests mock
+control-plane account responses and agent inference, as the existing acceptance suite does; file
+operations use real temporary projects on the daemon.
