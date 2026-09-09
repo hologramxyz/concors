@@ -1,5 +1,13 @@
-import { useCallback, useMemo, useSyncExternalStore, type SetStateAction } from "react";
+import {
+  createContext,
+  useCallback,
+  useMemo,
+  useSyncExternalStore,
+  type SetStateAction,
+} from "react";
 import type { AgentAttachment, AgentOperation } from "@concors/protocol";
+/** Mobile keeps a per-machine draft scope while its native socket pauses/reconnects. */
+export const AgentDraftScopeContext = createContext<object | null>(null);
 export interface InputDraft {
   message: string;
   attachments: AgentAttachment[];
