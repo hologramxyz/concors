@@ -219,6 +219,7 @@ export type CardSummary = z.infer<typeof CardSummarySchema>;
 export const BillingStatusSchema = z.object({
   /** False when the server runs without Stripe: machines are then free. */
   configured: z.boolean(),
+  testMode: z.boolean().default(false),
   hasPaymentMethod: z.boolean(),
   card: CardSummarySchema.nullable(),
   /** Set while the last invoice payment failed. */
@@ -246,3 +247,24 @@ export type Invoice = z.infer<typeof InvoiceSchema>;
 
 /** `GET /api/v1/billing/invoices` */
 export const InvoiceListSchema = z.object({ invoices: z.array(InvoiceSchema) });
+
+export const SetupCheckoutSchema = RedirectSchema.extend({ sessionId: z.string() });
+export type SetupCheckout = z.infer<typeof SetupCheckoutSchema>;
+export const SetupConfirmationSchema = z.object({
+  status: z.enum(["open", "complete", "expired"]),
+});
+export const MachineSubscriptionSchema = z.object({
+  id: z.string(),
+  machineId: z.string(),
+  machineName: z.string(),
+  region: z.string(),
+  size: z.string(),
+  status: z.string(),
+  monthlyPrice: MoneySchema.nullable(),
+  currentPeriodEnd: z.string().nullable(),
+  cancelAtPeriodEnd: z.boolean(),
+});
+export type MachineSubscription = z.infer<typeof MachineSubscriptionSchema>;
+export const SubscriptionListSchema = z.object({
+  subscriptions: z.array(MachineSubscriptionSchema),
+});

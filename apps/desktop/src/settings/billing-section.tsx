@@ -1,7 +1,8 @@
-import { ApiError, type BillingStatus, type Invoice, type Organization } from "@concors/api-client";
+import { ApiError, type Invoice, type Organization } from "@concors/api-client";
 import { CreditCard, ExternalLink } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { useBilling } from "@/billing/use-billing";
 import { api } from "@/auth/api";
 import { describeAuthError } from "@/auth/auth-state";
 import { formatMoney, formatMonthly } from "@/machines/format";
@@ -22,7 +23,8 @@ interface BillingSectionProps {
 export function BillingSection({ organization }: BillingSectionProps) {
   const organizationId = organization?.id;
   const scope = organizationId === undefined ? {} : { organizationId };
-  const [status, setStatus] = useState<BillingStatus | null>(null);
+  const billing = useBilling(organizationId ?? "");
+  const { status } = billing;
   const [invoices, setInvoices] = useState<readonly Invoice[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<"setup" | "portal" | null>(null);
@@ -30,10 +32,9 @@ export function BillingSection({ organization }: BillingSectionProps) {
 
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([api.getBillingStatus(scope), api.listInvoices(scope)])
-      .then(([loadedStatus, loadedInvoices]) => {
+    void Promise.all([api.listInvoices(scope)])
+      .then(([loadedInvoices]) => {
         if (cancelled) return;
-        setStatus(loadedStatus);
         setInvoices(loadedInvoices);
         setError(null);
       })
@@ -49,8 +50,11 @@ export function BillingSection({ organization }: BillingSectionProps) {
   function open(kind: "setup" | "portal") {
     setPending(kind);
     setError(null);
-    const url =
-      kind === "setup" ? api.createBillingSetupUrl(scope) : api.createBillingPortalUrl(scope);
+    if (kind === "setup") {
+      void billing.addCard().finally(() => setPending(null));
+      return;
+    }
+    const url = api.createBillingPortalUrl(scope);
     void url
       .then(openExternal)
       .catch((cause: unknown) => setError(describeApiError(cause)))
@@ -62,9 +66,9 @@ export function BillingSection({ organization }: BillingSectionProps) {
       title="Billing"
       description="Each machine is a monthly subscription charged in advance to this organization’s card."
     >
-      {error && (
+      {(error ?? billing.error) && (
         <p role="alert" className="py-2 text-sm text-destructive">
-          {error}
+          {error ?? billing.error}
         </p>
       )}
       {status === null && !error ? (
@@ -116,7 +120,7 @@ export function BillingSection({ organization }: BillingSectionProps) {
             <Button
               variant={status.hasPaymentMethod ? "outline" : "default"}
               size="sm"
-              disabled={pending !== null}
+              disabled={pending !== null || billing.checkout !== null}
               onClick={() => open("setup")}
             >
               <CreditCard data-icon="inline-start" aria-hidden="true" />
@@ -141,15 +145,33 @@ export function BillingSection({ organization }: BillingSectionProps) {
               variant="ghost"
               size="sm"
               disabled={pending !== null}
-              onClick={() => setGeneration((n) => n + 1)}
+              onClick={() => {
+                billing.refresh();
+                setGeneration((n) => n + 1);
+              }}
             >
               Refresh
             </Button>
           </div>
           <p className="pb-2 text-xs text-muted-foreground">
-            Cards are added on a Stripe page in your browser. Come back and refresh once you are
-            done.
+            Cards are added on a Stripe page in your browser. Your card updates here after setup.
           </p>
+          {billing.checkout && (
+            <div className="flex gap-2">
+              <Button
+                variant="link"
+                size="sm"
+                onClick={() => {
+                  if (billing.checkout) void openExternal(billing.checkout.url);
+                }}
+              >
+                Open Stripe again
+              </Button>
+              <Button variant="ghost" size="sm" onClick={billing.stopWaiting}>
+                Back to payment
+              </Button>
+            </div>
+          )}
           {invoices && invoices.length > 0 && (
             <div className="pt-2">
               <div className="mb-1 text-xs font-medium text-muted-foreground uppercase">

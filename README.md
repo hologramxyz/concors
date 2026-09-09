@@ -200,3 +200,24 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
 ## License
 
 [MIT](LICENSE)
+
+### Cloud VPS and test billing
+
+From the workspace’s machine menu, choose **Add a machine**, then **New machine**. Select the
+region and size, add an SSH public key if the workspace has none, and save a
+card on Stripe’s hosted page. Return to Concors and choose **Pay … and create
+VPS** to charge the first month and provision the server. The Machines page
+shows provisioning progress and SSH access. **Connect a machine** is disabled
+and marked **Coming soon**. Subscriptions appear under
+**Settings → Account → VPS subscriptions**, including their price, status,
+and renewal date.
+
+The control-plane API must have OVH provisioning and Stripe test billing
+configured. Prices come from that API’s Stripe account. Set the server’s
+`WEB_APP_URL` to the hosted client URL (`http://localhost:1420` in development)
+so Stripe can return to the confirmation page. VPS provisioning still uses real
+OVH resources when Stripe uses test payments.
+
+`pnpm exec playwright test e2e/vps-billing.spec.ts` covers creation, card setup,
+payment failure, subscription display, and the Stripe return pages with mocked
+control-plane/Stripe responses. It does not order a real VPS.
