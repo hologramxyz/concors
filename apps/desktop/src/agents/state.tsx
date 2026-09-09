@@ -44,7 +44,7 @@ export function AgentStatus({ agent }: { agent: AgentInfo }) {
     : null;
   return (
     <span
-      className="inline-flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground"
+      className="inline-flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground"
       aria-label={`Agent status: ${AGENT_STATUS[agent.status]}`}
     >
       <span

@@ -21,7 +21,7 @@ export function SidebarSection({
             aria-expanded={expanded}
             aria-controls={id}
             onClick={() => setExpanded(!expanded)}
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[13px] font-medium text-muted-foreground group-hover/section:text-sidebar-foreground"
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-ui font-medium text-muted-foreground group-hover/section:text-sidebar-foreground"
           >
             <ChevronRight
               className={`size-4 transition-transform ${expanded ? "rotate-90" : ""}`}
