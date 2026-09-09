@@ -1,4 +1,4 @@
-import { ChevronsUpDown, LogOut, Settings } from "lucide-react";
+import { ChevronsUpDown, Keyboard, LogOut, Settings } from "lucide-react";
 
 import { activeOrganization, initialOf, type SignedInAuth } from "@/auth/auth-state";
 import {
@@ -14,10 +14,16 @@ interface AccountMenuProps {
   readonly auth: SignedInAuth;
   readonly onSignOut: () => void;
   readonly onOpenSettings: () => void;
+  readonly onOpenShortcuts: () => void;
 }
 
-/** Sidebar footer: who is signed in, with settings and sign out. */
-export function AccountMenu({ auth, onSignOut, onOpenSettings }: AccountMenuProps) {
+/** Sidebar footer: who is signed in, with settings, shortcuts, and sign out. */
+export function AccountMenu({
+  auth,
+  onSignOut,
+  onOpenSettings,
+  onOpenShortcuts,
+}: AccountMenuProps) {
   const org = activeOrganization(auth);
   return (
     <DropdownMenu>
@@ -45,6 +51,10 @@ export function AccountMenu({ auth, onSignOut, onOpenSettings }: AccountMenuProp
         <DropdownMenuItem className="text-ui" onSelect={onOpenSettings}>
           <Settings aria-hidden="true" />
           Settings
+        </DropdownMenuItem>
+        <DropdownMenuItem className="text-ui" onSelect={onOpenShortcuts}>
+          <Keyboard aria-hidden="true" />
+          Keyboard shortcuts
         </DropdownMenuItem>
         <DropdownMenuItem className="text-ui" onSelect={onSignOut}>
           <LogOut aria-hidden="true" />
