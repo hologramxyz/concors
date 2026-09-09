@@ -1,3 +1,4 @@
+import { FileRequestSchema, type FileOperation, type FileResult } from "@concors/protocol";
 import {
   AgentRequestSchema,
   type AgentInfo,
@@ -107,6 +108,14 @@ export class DaemonConnection {
     string,
     {
       resolve: (result: AgentResult) => void;
+      reject: (error: Error) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
+  >();
+  readonly #fileRequests = new Map<
+    string,
+    {
+      resolve: (result: FileResult) => void;
       reject: (error: Error) => void;
       timer: ReturnType<typeof setTimeout>;
     }
@@ -234,6 +243,28 @@ export class DaemonConnection {
       } catch (error) {
         clearTimeout(timer);
         this.#projectRequests.delete(requestId);
+        reject(error);
+      }
+    });
+  }
+
+  requestFile(operation: FileOperation, requestId: string): Promise<FileResult> {
+    if (this.#state.status !== "ready" || !this.#workspace)
+      return Promise.reject(new Error("Workspace is disconnected"));
+    const request = FileRequestSchema.parse({ type: "file.request", requestId, operation });
+    if (this.#fileRequests.has(requestId))
+      return Promise.reject(new Error("Request is already pending"));
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.#fileRequests.delete(requestId);
+        reject(new Error("File request timed out. Reload from disk before retrying a save."));
+      }, 10000);
+      this.#fileRequests.set(requestId, { resolve, reject, timer });
+      try {
+        this.#socket?.send(JSON.stringify(request));
+      } catch (error) {
+        clearTimeout(timer);
+        this.#fileRequests.delete(requestId);
         reject(error);
       }
     });
@@ -452,6 +483,15 @@ export class DaemonConnection {
               for (const listener of this.#projectListeners) listener(message.setups);
             }
             break;
+          case "file.result": {
+            const pending = this.#fileRequests.get(message.requestId);
+            if (pending) {
+              clearTimeout(pending.timer);
+              this.#fileRequests.delete(message.requestId);
+              pending.resolve(message);
+            }
+            break;
+          }
           case "project.result": {
             const pending = this.#projectRequests.get(message.requestId);
             if (pending) {
@@ -598,6 +638,15 @@ export class DaemonConnection {
         pending.reject(new Error("Connection lost; check setup history after reconnecting"));
       }
       this.#projectRequests.clear();
+      for (const pending of this.#fileRequests.values()) {
+        clearTimeout(pending.timer);
+        pending.reject(
+          new Error(
+            "Connection lost. Your draft is kept; reload from disk before retrying a save.",
+          ),
+        );
+      }
+      this.#fileRequests.clear();
     }
     for (const listener of this.#listeners) {
       listener(state);
