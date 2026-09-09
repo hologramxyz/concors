@@ -43,6 +43,11 @@ function setup() {
       requestId,
       outcome: { status: "error", message: "fixture" },
     })),
+    requestFile: vi.fn<RelayConnection["requestFile"]>(async (_, requestId) => ({
+      type: "file.result",
+      requestId,
+      outcome: { status: "error", message: "fixture" },
+    })),
     requestTerminal: vi.fn<RelayConnection["requestTerminal"]>(async (_, requestId) => ({
       type: "terminal.result",
       requestId,
@@ -100,5 +105,38 @@ describe("offline UI protocol relay", () => {
     );
     await relay.receive({ type: "terminal.input", sessionId: id, data: "danger" });
     expect(connection.sendTerminalInput).toHaveBeenCalledOnce();
+  });
+  it("relays validated file operations with their original IDs and drops results after disposal", async () => {
+    const { connection, relay, messages } = setup();
+    await relay.receive(hello);
+    const operation = { kind: "read", projectId: id, epoch: id, path: "README.md" } as const;
+    await relay.receive({ type: "file.request", requestId: id, operation });
+    expect(connection.requestFile).toHaveBeenCalledWith(operation, id);
+    expect(messages.at(-1)).toMatchObject({ type: "file.result", requestId: id });
+    await expect(
+      relay.receive({
+        type: "file.request",
+        requestId: id,
+        operation: { kind: "delete", path: "/" },
+      }),
+    ).rejects.toThrow("Invalid");
+    type Result = Awaited<ReturnType<RelayConnection["requestFile"]>>;
+    let finish: ((result: Result) => void) | undefined;
+    const pendingResult = new Promise<Result>((resolve) => {
+      finish = resolve;
+    });
+    vi.mocked(connection.requestFile).mockReturnValueOnce(pendingResult);
+    const pendingRequest = relay.receive({ type: "file.request", requestId: id, operation });
+    const count = messages.length;
+    relay.dispose();
+    finish?.({
+      type: "file.result",
+      requestId: id,
+      outcome: { status: "error", message: "late fixture result" },
+    });
+    await pendingRequest;
+    await relay.receive({ type: "file.request", requestId: id, operation });
+    expect(messages).toHaveLength(count);
+    expect(connection.requestFile).toHaveBeenCalledTimes(2);
   });
 });
