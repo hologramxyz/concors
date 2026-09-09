@@ -62,19 +62,109 @@ Design constraints to keep in mind as the daemon grows (see the root README for 
 - Prefer streaming and back-pressure-aware designs; the process must stay cheap when idle and stable
   for days.
 
-## Packaging as a standalone executable (intended approach)
+## Native PTY distribution
 
-End users must not need Node installed. The plan is:
+The daemon pins [`@lydell/node-pty` 1.2.0-beta.15](https://www.npmjs.com/package/@lydell/node-pty?activeTab=readme),
+a platform-split distribution of upstream `node-pty` at the same version. It selects a prebuilt
+package through optional dependencies and never runs `node-gyp`. Do not install with
+`--no-optional` or copy an installed dependency tree between platforms.
 
-1. `tsup` with `noExternal: [/.*/]` bundles the daemon and **all** dependencies into one file.
-2. Node's [single executable application](https://nodejs.org/api/single-executable-applications.html)
-   tooling (`node --experimental-sea-config`, `postject`) embeds that file into a copy of the Node
-   binary, producing `concors-daemon-<target-triple>` for each platform.
-3. The Tauri app declares it under `bundle.externalBin` in `tauri.conf.json`, which places it next
-   to the app executable, and starts/stops it from the Rust side (`apps/desktop/src-tauri/src/daemon.rs`).
+| Option                        | Benefit                                                                                       | Cost                                                                                                                           |
+| ----------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Pinned `@lydell/node-pty`     | Published prebuilds for macOS, Linux, and Windows on x64/ARM64; no compiler or install script | Trust the distributor as well as upstream; follows an upstream prerelease; unsupported platforms cannot fall back to compiling |
+| Build our own prebuilds in CI | Control toolchains and retain upstream 1.1.0 if needed                                        | Maintain six native targets, Linux libc compatibility, macOS helpers, Windows ConPTY files, and native artifact distribution   |
 
-This is why `DAEMON_VERSION` is inlined at build time, why relative imports use explicit `.ts`
-extensions, and why nothing in the daemon reads its own `package.json` at runtime.
+We use the pinned distribution. It covers our platforms without introducing a native release
+pipeline. The old `node-pty@1.1.0` dependency, build-script allowance, and macOS patch are removed.
+`pnpm daemon:build` explicitly preserves executable permissions on macOS's `spawn-helper` when
+copying the native package; Windows's loader, worker scripts and ConPTY DLLs are copied together.
+The existing terminal/session tests continue to run on Linux, macOS, and Windows. CI also builds,
+relocates, and exercises each platform's bundle through a real PTY.
+
+## Self-contained daemon build
+
+`pnpm daemon:build` produces a directory that runs with Node 24 on the **build platform**:
+
+```text
+dist/
+├── cli.js                     daemon and JavaScript dependencies, including @concors/protocol
+├── cli.js.map
+├── package.json               name/version/type only; no workspace dependencies
+├── THIRD_PARTY_NOTICES.txt
+├── LICENSE
+└── node_modules/@lydell/node-pty-<platform>-<arch>/
+    ├── lib/                   native loader and platform support JavaScript
+    ├── prebuilds/             PTY addon, macOS helper, or Windows addons/DLLs
+    ├── package.json
+    └── LICENSE
+```
+
+All JavaScript dependencies (including the `@lydell/node-pty` selector) are inlined; only the
+selected platform's native package remains on disk. The version is taken from
+`packages/daemon/package.json` without embedding its `workspace:*` declarations. No dependency
+installation is needed after copying `dist/`. The build includes redistribution notices.
+
+Run `pnpm --filter @concors/daemon exec node scripts/smoke-bundle.ts` after building to test a
+copy outside the repository, including version, health, workspace subscription and real terminal
+input/output, resize and stop. This catches accidental dependencies on the repository's
+`node_modules` and missing native helper files. Native platform CI runs the same check.
+
+The desktop's local daemon API and lifecycle are unchanged. The built directory must stay
+alongside its native files. Tauri's future standalone sidecar packaging still needs to arrange
+that directory and its launcher; this change does not enable `bundle.externalBin` or introduce
+an incomplete single-executable build.
+
+## Linux release tarball (contract 4.4)
+
+On Linux x86_64 with Node 24, pnpm, and `tar`/xz available, run:
+
+```sh
+pnpm install --frozen-lockfile
+pnpm daemon:package
+```
+
+This builds `packages/daemon/dist/release/concors-daemon-linux-x64.tar.gz`. Packaging downloads the
+official Node **24.20.0** Linux x64 runtime and verifies its pinned SHA-256 before including it.
+The download requires network access only on the build machine. Update the runtime version and
+checksum together in `scripts/package-linux.ts` when adopting a Node security update, then rerun
+the Ubuntu acceptance check. The tarball uses the official runtime rather than copying a build
+host's potentially incompatible Node executable.
+
+It extracts into exactly one relocatable directory:
+
+```text
+concors-daemon/
+├── bin/
+│   ├── concors-daemon          executable POSIX launcher; execs the bundled Node
+│   └── node                   official Node runtime
+├── lib/
+│   ├── cli.js
+│   ├── package.json
+│   ├── THIRD_PARTY_NOTICES.txt
+│   └── node_modules/@lydell/node-pty-linux-x64/
+│       ├── lib/
+│       ├── prebuilds/linux-x64/pty.node
+│       ├── package.json
+│       └── LICENSE
+├── release.json               daemon version, Node version, platform and architecture
+├── LICENSE
+└── NODE_LICENSE
+```
+
+The installer may move this directory to `/opt/concors-daemon` and execute
+`/opt/concors-daemon/bin/concors-daemon`. Invoke the launcher at its installed path rather than
+symlinking it away from its sibling files. Paths containing spaces are supported. Arguments,
+signals and exit status pass through to Node; the existing session-host launch uses the same
+bundled Node and `lib/cli.js`. Source maps and build tooling are excluded from the tarball.
+
+The target needs only the normal Ubuntu 24.04 x86_64 runtime libraries and shell: no installed
+Node, npm, pnpm, Python, compiler, or network access is needed to start the daemon. Local mode
+still binds loopback. Providers such as Codex/Claude and project tools are installed separately.
+CI unpacks the tarball in a fresh `ubuntu:24.04` container with networking disabled and verifies
+`--version`, `serve --ephemeral`, HTTP health, and actual terminal operations.
+
+Tag-triggered publishing of this tarball as `daemon-v<semver>` is D3. This package command and
+layout provide its input; no release is published by building locally.
 
 ## Workspace persistence
 

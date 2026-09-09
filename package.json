@@ -26,7 +26,8 @@
     "daemon:build": "pnpm --filter @concors/daemon build",
     "daemon:start": "pnpm --filter @concors/daemon start",
     "daemon:test": "pnpm --filter @concors/daemon test",
-    "test:workspace:e2e": "playwright test"
+    "test:workspace:e2e": "playwright test",
+    "daemon:package": "pnpm daemon:build && pnpm --filter @concors/daemon package:linux"
   },
   "devDependencies": {
     "@concors/config": "workspace:*",
