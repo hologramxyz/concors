@@ -47,7 +47,7 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
       .click();
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
-    await page.getByLabel("Message Codex").waitFor();
+    await page.getByRole("textbox", { name: "Message Codex" }).waitFor();
     await expect(page.getByLabel("Agent and model")).toBeEnabled();
     await page.getByLabel("Agent and model", { exact: true }).click();
     await page.getByRole("combobox", { name: "Search agent and model" }).fill("Fixture");
@@ -75,7 +75,9 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     });
     await expect(page.getByRole("button", { name: "Remove notes.txt", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Start dictation", exact: true }).click();
-    await expect(page.getByLabel("Message Codex")).toHaveValue("dictated message");
+    await expect(page.getByRole("textbox", { name: "Message Codex" })).toHaveValue(
+      "dictated message",
+    );
     await page.getByRole("button", { name: "Stop dictation", exact: true }).click();
     await page.getByLabel("Plan mode", { exact: true }).click();
     await expect(page.getByLabel("Plan mode", { exact: true })).toHaveAttribute(
@@ -88,7 +90,7 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     await expect(page.getByLabel("Speed", { exact: true })).toBeEnabled();
     await expect(page.getByText("Enter to send", { exact: false })).toHaveCount(0);
     await expect(page.getByTestId("pane-agent-loading")).toHaveCount(0);
-    await page.getByLabel("Message Codex").fill("rich hold");
+    await page.getByRole("textbox", { name: "Message Codex" }).fill("rich hold");
     await page.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(page.getByRole("log")).toContainText("Attached: notes.txt");
     await expect(page.getByTestId("pane-agent-loading")).toBeVisible();
@@ -112,7 +114,10 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     await expect(elapsed).toBeVisible();
     const initialElapsed = await elapsed.innerText();
     await expect(elapsed).not.toHaveText(initialElapsed);
-    await expect(page.getByLabel("Message Codex")).toHaveCSS("font-size", "16px");
+    await expect(page.getByRole("textbox", { name: "Message Codex" })).toHaveCSS(
+      "font-size",
+      "16px",
+    );
     await expect(page.getByLabel("Agent plan")).toContainText("Implement the change");
     await page.getByLabel("Sub-agent activity").getByText("Agent update", { exact: true }).click();
     await expect(page.getByLabel("Sub-agent activity")).toContainText("Inspecting tests");
@@ -146,7 +151,7 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     await expect(page.getByLabel("Tool call").filter({ hasText: "fixture output" })).toBeVisible();
     await page.getByRole("button", { name: /^Edit/ }).click();
     await expect(page.getByText("+new line", { exact: true })).toBeVisible();
-    await page.getByLabel("Message Codex").fill("queued follow-up");
+    await page.getByRole("textbox", { name: "Message Codex" }).fill("queued follow-up");
     await page.getByRole("button", { name: "Queue message", exact: true }).click();
     await expect(page.getByText("Queued", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Interrupt agent", exact: true }).click();
@@ -168,8 +173,8 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     await page.screenshot({ path: "test-results/agent-composer.png" });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole("button", { name: "Collapse sidebar", exact: true }).click();
-    await expect(page.getByLabel("Message Codex")).toBeVisible();
-    const composer = await page.getByLabel("Message Codex").boundingBox();
+    await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
+    const composer = await page.getByRole("textbox", { name: "Message Codex" }).boundingBox();
     expect((composer?.x ?? 0) + (composer?.width ?? 0)).toBeLessThanOrEqual(390);
     await page.screenshot({ path: "test-results/agent-composer-mobile.png" });
     await page.getByRole("button", { name: "Pane actions", exact: true }).click();

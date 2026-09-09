@@ -71,21 +71,25 @@ test("directional pane sequences, tab cycling, project memory and immediate Agen
     // A terminal -> Agent -> terminal round-trip must keep navigating, not enter text selection.
     await upper.getByRole("button", { name: "Pane actions" }).click();
     await page.getByRole("menuitemradio", { name: "Agent", exact: true }).click();
-    await expect(upper.getByLabel("Message Codex")).toBeEnabled();
+    await expect(upper.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
     await panes.first().locator("textarea").focus();
     for (let i = 0; i < 3; i++) {
       await page.keyboard.press("Control+Shift+ArrowRight");
       await expect.poll(() => focusedPane(page)).toBe(upperId);
-      await expect(upper.getByLabel("Message Codex")).toBeFocused();
+      await expect(upper.getByRole("textbox", { name: "Message Codex" })).toBeFocused();
       await page.keyboard.press("Control+Shift+ArrowLeft");
       await expect.poll(() => focusedPane(page)).toBe(left);
     }
-    await upper.getByLabel("Message Codex").fill("draft stays while navigating");
+    await upper
+      .getByRole("textbox", { name: "Message Codex" })
+      .fill("draft stays while navigating");
     await page.keyboard.press("Control+Shift+ArrowLeft");
     await expect.poll(() => focusedPane(page)).toBe(left);
     await page.keyboard.press("Control+Shift+ArrowRight");
-    await expect(upper.getByLabel("Message Codex")).toBeFocused();
-    await expect(upper.getByLabel("Message Codex")).toHaveValue("draft stays while navigating");
+    await expect(upper.getByRole("textbox", { name: "Message Codex" })).toBeFocused();
+    await expect(upper.getByRole("textbox", { name: "Message Codex" })).toHaveValue(
+      "draft stays while navigating",
+    );
     await page.keyboard.press("Control+Shift+ArrowLeft");
     // Held directional keys may repeat; creation/close sequences may not.
     await page.evaluate(() =>
@@ -108,7 +112,7 @@ test("directional pane sequences, tab cycling, project memory and immediate Agen
     await expect.poll(() => focusedPane(page)).toBe(left);
     await sequence(page, "t", "Enter");
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
-    const input = page.getByLabel("Message Codex");
+    const input = page.getByRole("textbox", { name: "Message Codex" });
     await expect(input).toBeEnabled();
     await input.fill("keep these words");
     await page.keyboard.press("Control+Shift+ArrowLeft");
