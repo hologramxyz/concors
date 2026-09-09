@@ -1,7 +1,8 @@
 import { useCommand } from "@/shortcuts/context";
 import { shortcutLabel } from "@/shortcuts/bindings";
 import { TAB_PROFILES } from "./tab-profiles";
-import { useState } from "react";
+import { useContext, useState } from "react";
+import { CompactLayoutContext } from "@/components/compact-layout";
 import { Plus, SlidersHorizontal } from "lucide-react";
 import type { PaneProfile } from "@concors/protocol";
 import {
@@ -33,38 +34,110 @@ export function NewTabMenu({
   empty?: boolean;
   keyboard?: boolean;
 }) {
+  const compact = useContext(CompactLayoutContext);
   const [open, setOpen] = useState(false);
   useCommand("new-tab", keyboard && !disabled, () => setOpen(true));
   const [configuring, setConfiguring] = useState(false);
   return (
     <>
-      <DropdownMenu open={open} onOpenChange={setOpen}>
-        <DropdownMenuTrigger
-          title={`New tab (${shortcutLabel("new-tab")})`}
-          aria-label={empty ? "Create a tab" : "New tab"}
-          disabled={disabled}
-          className={
-            empty
-              ? "flex items-center gap-2 rounded-md border px-3 py-1.5 hover:bg-muted disabled:opacity-40"
-              : "shrink-0 rounded p-1 text-muted-foreground hover:bg-muted disabled:opacity-40"
-          }
-        >
-          <Plus className="size-4" />
-          {empty && "Create a tab"}
-        </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-52">
-          {TAB_PROFILES.map(({ profile, label, icon: Icon }) => (
-            <DropdownMenuItem key={profile} disabled={disabled} onSelect={() => onCreate(profile)}>
-              <Icon />
-              {label}
+      {compact ? (
+        <>
+          <button
+            className={empty ? "mobile-new-empty" : "mobile-icon"}
+            aria-label={empty ? "Create a tab" : "New tab"}
+            disabled={disabled}
+            onClick={() => setOpen(true)}
+          >
+            <Plus className="size-5" />
+            {empty && "Create a tab"}
+          </button>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>New tab</DialogTitle>
+                <DialogDescription>
+                  Start an agent conversation or a terminal in this project.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="mobile-session-list">
+                {[...TAB_PROFILES]
+                  .sort((a, b) => Number(b.profile === "chat") - Number(a.profile === "chat"))
+                  .map(({ profile, label, icon: Icon }) => (
+                    <button
+                      key={profile}
+                      type="button"
+                      aria-label={label}
+                      disabled={disabled}
+                      onClick={() => {
+                        setOpen(false);
+                        onCreate(profile);
+                      }}
+                    >
+                      <span className="mobile-session-icon">
+                        <Icon />
+                      </span>
+                      <span>
+                        <span className="block font-medium">{label}</span>
+                        <span className="mobile-select-description">
+                          {profile === "chat"
+                            ? "Chat with an agent, review tools and approve work"
+                            : profile === "shell"
+                              ? "Run commands on your machine"
+                              : `Open ${label} in an interactive terminal`}
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => {
+                    setOpen(false);
+                    setConfiguring(true);
+                  }}
+                >
+                  <span className="mobile-session-icon">
+                    <SlidersHorizontal />
+                  </span>
+                  <span>Configure terminal profile…</span>
+                </button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </>
+      ) : (
+        <DropdownMenu open={open} onOpenChange={setOpen}>
+          <DropdownMenuTrigger
+            title={`New tab (${shortcutLabel("new-tab")})`}
+            aria-label={empty ? "Create a tab" : "New tab"}
+            disabled={disabled}
+            className={
+              empty
+                ? "flex items-center gap-2 rounded-md border px-3 py-1.5 hover:bg-muted disabled:opacity-40"
+                : "shrink-0 rounded p-1 text-muted-foreground hover:bg-muted disabled:opacity-40"
+            }
+          >
+            <Plus className="size-4" />
+            {empty && "Create a tab"}
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-52">
+            {TAB_PROFILES.map(({ profile, label, icon: Icon }) => (
+              <DropdownMenuItem
+                key={profile}
+                disabled={disabled}
+                onSelect={() => onCreate(profile)}
+              >
+                <Icon />
+                {label}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem disabled={disabled} onSelect={() => setConfiguring(true)}>
+              <SlidersHorizontal /> Configure terminal profile…
             </DropdownMenuItem>
-          ))}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem disabled={disabled} onSelect={() => setConfiguring(true)}>
-            <SlidersHorizontal /> Configure terminal profile…
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
       <Dialog open={configuring} onOpenChange={setConfiguring}>
         <DialogContent>
           <form

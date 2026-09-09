@@ -14,9 +14,11 @@ import { Input } from "@/components/ui/input";
 export function ProjectSetupDialog({
   onClose,
   onAdded,
+  open = true,
 }: {
   onClose: () => void;
   onAdded: () => void;
+  open?: boolean;
 }) {
   const connection = useContext(TerminalConnectionContext);
   const [mode, setMode] = useState<ProjectSetup["mode"]>("open");
@@ -45,12 +47,23 @@ export function ProjectSetupDialog({
   }, [connection]);
   const active = setups.find((s) => s.id === activeId);
   useEffect(() => {
-    if (active?.status === "done") onAdded();
-  }, [active?.status, onAdded]);
+    if (open && active?.status === "done") onAdded();
+  }, [open, active?.status, onAdded]);
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
+    if (!open) {
+      setActiveId(null);
+      setName("");
+      setCustomDirectory(null);
+      setMode("open");
+      setError(null);
+    }
+  }
   const busy = pending || active?.status === "working";
   return (
     <Dialog
-      open
+      open={open}
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
