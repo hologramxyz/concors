@@ -16,6 +16,7 @@ Object.defineProperty(navigator, "clipboard", {
   },
 });
 document.addEventListener("click", (event) => {
+  if (event.defaultPrevented) return;
   const link = event.target instanceof Element ? event.target.closest("a[href]") : null;
   if (!link) return;
   event.preventDefault();

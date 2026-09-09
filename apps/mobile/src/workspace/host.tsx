@@ -58,6 +58,18 @@ function SignedInWorkspace() {
   const ready = useRef(false);
   const alive = useRef(true);
   const pending = useRef(new Set<string>());
+  const fileGuard = useRef(false);
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const guard = (event: BeforeUnloadEvent) => {
+      if (fileGuard.current) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", guard);
+    return () => window.removeEventListener("beforeunload", guard);
+  }, []);
   const organizations = useQuery({
     queryKey: ["organizations", auth.me?.user.id],
     queryFn: () => api.listOrganizations(),
@@ -150,6 +162,9 @@ function SignedInWorkspace() {
   const action = async (action: MobileAction): Promise<unknown> => {
     assertWorkspaceActionAllowed(auth.direct, !!auth.me, action);
     switch (action.kind) {
+      case "file-guard":
+        fileGuard.current = action.active;
+        return;
       case "api":
         return dispatchMobileApi(api, action.call);
       case "select-machine":
