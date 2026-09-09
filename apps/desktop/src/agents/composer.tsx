@@ -22,6 +22,7 @@ import { ControlPicker } from "./control-picker";
 import { ContextMeter } from "./context-meter";
 import { CodexIcon } from "./paseo/codex-icon";
 import { useDictation } from "./dictation";
+import { CompactLayoutContext } from "@/components/compact-layout";
 const defaults: AgentSettings = { model: null, effort: null, mode: "default" };
 interface Draft {
   message: string;
@@ -42,6 +43,8 @@ export function AgentComposer({
   onInterrupt: () => void;
 }) {
   const connection = useContext(TerminalConnectionContext);
+  const compact = useContext(CompactLayoutContext);
+  const [keyboardHelp, setKeyboardHelp] = useState(false);
   const { draft, setDraft, attachments, setAttachments } = useAgentDraft(connection, agent.id);
   const [busy, setBusy] = useState(false),
     [uploading, setUploading] = useState(false),
@@ -300,6 +303,7 @@ export function AgentComposer({
           }
           value={draft}
           rows={2}
+          enterKeyHint={compact ? "enter" : "send"}
           maxLength={16000}
           disabled={!connected || busy || uncertain || !agent.threadId}
           onChange={(e) => setDraft(e.target.value)}
@@ -318,7 +322,12 @@ export function AgentComposer({
                 mode: modes[(modes.indexOf(settings.mode) + 1) % modes.length] ?? "default",
               });
             }
-            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+            if (
+              e.key === "Enter" &&
+              !e.shiftKey &&
+              !e.nativeEvent.isComposing &&
+              (!compact || e.metaKey || e.ctrlKey)
+            ) {
               e.preventDefault();
               if (!uncertain) void submit();
             }
@@ -483,12 +492,19 @@ export function AgentComposer({
               type="button"
               aria-label={dictation.listening ? "Stop dictation" : "Start dictation"}
               title={
-                dictation.supported
-                  ? "Dictation uses your browser's speech service. Review the transcript before sending."
-                  : "Dictation is not supported by this browser."
+                compact
+                  ? "Use dictation on your phone's keyboard."
+                  : dictation.supported
+                    ? "Dictation uses your browser's speech service. Review the transcript before sending."
+                    : "Dictation is not supported by this browser."
               }
-              disabled={!dictation.supported || !connected || busy || uncertain}
-              onClick={dictation.toggle}
+              disabled={(!compact && !dictation.supported) || !connected || busy || uncertain}
+              onClick={() => {
+                if (compact) {
+                  textarea.current?.focus();
+                  setKeyboardHelp((value) => !value);
+                } else dictation.toggle();
+              }}
               className={`agent-control ${dictation.listening ? "bg-red-500/10 text-red-500" : "text-muted-foreground hover:bg-muted"}`}
             >
               <Mic className="size-4" />
@@ -526,6 +542,12 @@ export function AgentComposer({
           </div>
         </div>
       </form>
+      {compact && keyboardHelp && (
+        <p role="status" className="px-2 text-[12px] text-muted-foreground">
+          Use the microphone on your phone’s keyboard to dictate. Review your message before
+          sending.
+        </p>
+      )}
       {(uploading || !connected || configuring) && (
         <p role="status" className="px-2 text-[12px] text-muted-foreground">
           {uploading
