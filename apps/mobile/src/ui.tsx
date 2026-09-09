@@ -27,7 +27,7 @@ const light = {
   warning: "#946615",
 };
 const dark: typeof light = {
-  background: "#151714",
+  background: "#141414",
   surface: "#20231f",
   text: "#ededed",
   muted: "#a4a89f",

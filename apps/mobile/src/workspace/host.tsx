@@ -303,8 +303,9 @@ function SignedInWorkspace() {
       .finally(() => pending.current.delete(message.requestId));
   }, []);
   const dark = preferences.theme === "dark" || (preferences.theme === "system" && systemDark);
+  const backgroundColor = dark ? "#141414" : "#f4f3ef";
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: dark ? "#151714" : "#f4f3ef" }}>
+    <SafeAreaView testID="workspace-safe-area" style={{ flex: 1, backgroundColor }}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
@@ -327,6 +328,7 @@ function SignedInWorkspace() {
             <WorkspaceRenderer
               key={rendererKey}
               ref={renderer}
+              backgroundColor={backgroundColor}
               onMessage={onMessage}
               onError={() => setFailed(true)}
             />
