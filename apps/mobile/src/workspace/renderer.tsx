@@ -20,7 +20,9 @@ export const WorkspaceRenderer = forwardRef<WorkspaceRendererHandle, WorkspaceRe
         ref={view}
         source={{ html: workspaceHtml }}
         style={{ flex: 1, backgroundColor: "#f4f3ef" }}
-        originWhitelist={["about:*"]}
+        // Route every navigation through the deny-by-default callback. An origin excluded
+        // here would otherwise be handed to the OS by react-native-webview itself.
+        originWhitelist={["*"]}
         onShouldStartLoadWithRequest={(request) => request.url === "about:blank"}
         javaScriptEnabled
         domStorageEnabled={false}

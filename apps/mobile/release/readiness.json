@@ -8,5 +8,6 @@
   "Universal links and Android App Links verified on the production domain": false,
   "Physical iPhone and Android installation, upgrade, keyboard, reconnect and accessibility tests passed": false,
   "Store descriptions, screenshots, privacy disclosures, ratings and review access complete": false,
+  "Shared billing, provisioning and checkout flows reviewed against current storefront policies": false,
   "Applicable Google Play closed testing and production access requirements satisfied": false
 }
