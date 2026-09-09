@@ -83,12 +83,20 @@ test("real mobile files preserve drafts, save explicitly and resolve competing d
     await files.getByRole("button", { name: "src", exact: true }).click();
     await files.getByRole("button", { name: "main.ts", exact: true }).click();
     const code = files.getByRole("textbox", { name: "Code editor: src/main.ts" });
+    const unloadGuardActive = () =>
+      page.evaluate(() => {
+        const event = new Event("beforeunload", { cancelable: true });
+        window.dispatchEvent(event);
+        return event.defaultPrevented;
+      });
     await expect(code).toContainText("42");
     await code.fill("export const answer = 43;\n");
     expect(await readFile(join(root, "src/main.ts"), "utf8")).toContain("42");
     await files.getByRole("button", { name: "Save", exact: true }).click();
     await expect.poll(() => readFile(join(root, "src/main.ts"), "utf8")).toContain("43");
+    await expect.poll(unloadGuardActive).toBe(false);
     await code.fill("my unsaved file draft");
+    await expect.poll(unloadGuardActive).toBe(true);
     await files.getByRole("button", { name: "Back to chat" }).click();
     await expect(chat).toHaveValue("Keep this chat draft while I inspect files");
     expect(desktop.agents[0]?.id).toBe(agentId);
