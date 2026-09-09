@@ -44,10 +44,9 @@ export function TerminalSurface({
     let queuedInput = "";
     const terminal = new Terminal({
       cursorBlink: true,
-      cursorStyle: "bar",
-      cursorInactiveStyle: "bar",
-      cursorWidth: 1,
-      fontSize: 14,
+      cursorStyle: "block",
+      cursorInactiveStyle: "outline",
+      fontSize: 13,
       lineHeight: 1.2,
       fontFamily: '"Geist Mono Variable", "SF Mono", Consolas, monospace',
       scrollback: 1000,
