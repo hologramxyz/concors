@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Ellipsis, Trash2 } from "lucide-react";
+import { Ellipsis, Pin, Trash2 } from "lucide-react";
 import type { WorkspaceOperation, WorkspaceProject } from "@concors/protocol";
 import {
   DropdownMenu,
@@ -38,7 +38,25 @@ export function ProjectActions({
         >
           <Ellipsis className="size-4" />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-44">
+        <DropdownMenuContent align="start" className="w-56">
+          {project.directoryMode === "follow" && (
+            <DropdownMenuItem
+              disabled={!canEdit}
+              onSelect={() => {
+                void execute({
+                  kind: "project.pin",
+                  projectId: project.id,
+                  expectedVersion: project.version,
+                  directory: project.directory,
+                }).catch((cause: unknown) =>
+                  window.alert(cause instanceof Error ? cause.message : "Could not pin folder."),
+                );
+              }}
+            >
+              <Pin />
+              Pin to this folder
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem
             disabled={!canEdit}
             variant="destructive"
@@ -47,7 +65,7 @@ export function ProjectActions({
               setConfirming(true);
             }}
           >
-            <Trash2 /> Remove project…
+            <Trash2 /> Close workspace…
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -65,10 +83,10 @@ export function ProjectActions({
           }}
         >
           <DialogHeader>
-            <DialogTitle>Remove {project.name}?</DialogTitle>
+            <DialogTitle>Close {project.name}?</DialogTitle>
             <DialogDescription>
-              This removes the project and its saved tabs from this workspace on all connected
-              devices. Files on disk are kept.
+              This closes the workspace and its tabs on all connected devices. Files and running
+              sessions are kept.
             </DialogDescription>
           </DialogHeader>
           {error && (
@@ -98,12 +116,12 @@ export function ProjectActions({
                 })
                   .then(() => setConfirming(false))
                   .catch((cause: unknown) =>
-                    setError(cause instanceof Error ? cause.message : "Could not remove project"),
+                    setError(cause instanceof Error ? cause.message : "Could not close workspace"),
                   )
                   .finally(() => setPending(false));
               }}
             >
-              {pending ? "Removing…" : "Remove project"}
+              {pending ? "Closing…" : "Close workspace"}
             </Button>
           </DialogFooter>
         </DialogContent>

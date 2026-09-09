@@ -28,6 +28,7 @@ import { SettingsSidebar } from "@/settings/settings-sidebar";
 import { useTheme } from "@/theme/use-theme";
 import { useCornerStyle } from "@/theme/use-corner-style";
 import { SettingsView } from "@/views/settings-view";
+import { useNewWorkspace } from "@/workspace/use-new-workspace";
 import { ProjectSetupDialog } from "@/workspace/project-setup-dialog";
 import {
   MACHINES_STORAGE_KEY,
@@ -71,7 +72,7 @@ function AppContent() {
   const [localEndpoint, setLocalEndpoint] = useState<DaemonEndpoint | null>(null);
   const [bookmarks, setBookmarks] = useState<MachineConnection[]>(savedMachines);
   const [selectedMachineId, setSelectedMachineId] = useState(LOCAL_ID);
-  const [addingProject, setAddingProject] = useState(false);
+  const [addingProject, setAddingProject] = useState<"open" | "clone" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [endpoint, setEndpoint] = useState<DaemonEndpoint | null>(null);
@@ -127,6 +128,11 @@ function AppContent() {
   }, []);
 
   const transport = connection.transport;
+  const newWorkspace = useNewWorkspace(transport);
+  const startWorkspace = () => {
+    setView("projects");
+    newWorkspace.start();
+  };
   const openAgent = useCallback(
     (id: string) => {
       const target = findSessionPane(transport?.workspace ?? null, id);
@@ -168,7 +174,7 @@ function AppContent() {
 
   const signedIn = auth.state.status === "signed-in";
   useCommand("search", signedIn, () => setPaletteOpen((open) => !open));
-  useCommand("new-project", signedIn && canEdit, () => setAddingProject(true));
+  useCommand("new-project", signedIn && canEdit && !newWorkspace.busy, startWorkspace);
   useCommand("settings", signedIn, openSettings);
   useCommand("shortcuts", signedIn, () => setShortcutsOpen(true));
 
@@ -213,7 +219,7 @@ function AppContent() {
     setSelectedMachineId(id);
     setView("projects");
     setError(null);
-    setAddingProject(false);
+    setAddingProject(null);
   };
   const activeProject = workspace?.projects.find(
     (project) => project.id === workspace.selection?.projectId,
@@ -259,9 +265,10 @@ function AppContent() {
                     onOpenCommandPalette={openPalette}
                     onOpenShortcuts={() => setShortcutsOpen(true)}
                     workspace={workspace}
-                    canEdit={canEdit}
+                    canEdit={canEdit && !newWorkspace.busy}
                     onSelectProject={selectProject}
-                    onAddProject={() => setAddingProject(true)}
+                    onAddProject={startWorkspace}
+                    onOpenFolder={setAddingProject}
                     machines={machines}
                     selectedMachineId={selectedMachineId}
                     onSelectMachine={selectMachine}
@@ -343,10 +350,11 @@ function AppContent() {
                           }}
                           focusRequest={paneFocus}
                           workspace={workspace}
-                          canEdit={canEdit}
+                          canEdit={canEdit && !newWorkspace.busy}
                           onCommand={command}
                           execute={execute}
-                          onAddProject={() => setAddingProject(true)}
+                          onAddProject={startWorkspace}
+                          onOpenFolder={setAddingProject}
                         />
                       ) : (
                         <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
@@ -379,11 +387,23 @@ function AppContent() {
                 </div>
                 <FilesSidebar project={view === "projects" ? activeProject : undefined} />
               </div>
+              {newWorkspace.error && (
+                <div
+                  role="alert"
+                  className="fixed bottom-4 left-1/2 z-50 flex max-w-[90vw] -translate-x-1/2 items-center gap-3 rounded-md border bg-popover p-3 text-ui shadow-md"
+                >
+                  <span>{newWorkspace.error}</span>
+                  <button type="button" onClick={newWorkspace.dismiss} className="text-primary">
+                    Dismiss
+                  </button>
+                </div>
+              )}
               {addingProject && (
                 <ProjectSetupDialog
-                  onClose={() => setAddingProject(false)}
+                  mode={addingProject}
+                  onClose={() => setAddingProject(null)}
                   onAdded={() => {
-                    setAddingProject(false);
+                    setAddingProject(null);
                     setView("projects");
                   }}
                 />
