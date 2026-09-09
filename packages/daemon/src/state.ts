@@ -26,6 +26,7 @@ export class DaemonState {
       status: this.#status,
       capabilities: [
         "project-files",
+        "project-file-create",
         "agent-chat",
         "agent-attention",
         "agent-composer",
