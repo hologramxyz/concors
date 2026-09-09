@@ -26,7 +26,8 @@ export function NativeHeaderButton({
       disabled: !!props.disabled,
     },
     (event) => {
-      if (event.kind === "press" && !props.disabled) ref.current?.click();
+      if (event.kind === "press" && event.control === "activate" && !props.disabled)
+        ref.current?.click();
     },
   );
   return (

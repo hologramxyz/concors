@@ -177,7 +177,12 @@ function HeaderButton({
   const pill = !!content.title;
   return (
     <View style={styles.fill} {...pan.panHandlers}>
-      <Host style={styles.fill} colorScheme={dark ? "dark" : "light"} ignoreSafeArea="all">
+      <Host
+        style={styles.fill}
+        colorScheme={dark ? "dark" : "light"}
+        seedColor={dark ? "#eeeeee" : "#222222"}
+        ignoreSafeArea="all"
+      >
         <Button
           testID={`native-header-${content.icon}`}
           onPress={() => {
@@ -269,6 +274,7 @@ function Control({
     <Host
       style={[styles.control, { width }]}
       colorScheme={dark ? "dark" : "light"}
+      seedColor={primary ? (dark ? "#a6bdff" : "#335dce") : dark ? "#eeeeee" : "#222222"}
       ignoreSafeArea="all"
     >
       {options ? (
@@ -339,7 +345,6 @@ function Composer({
   const [picking, setPicking] = useState(false);
   const [width, setWidth] = useState(360);
   const presenting = useRef(false);
-  const keyboardVisible = useRef(false);
   const alive = useRef(true);
   const latest = useRef({ content, emit });
   useEffect(() => {
@@ -357,7 +362,7 @@ function Composer({
     );
   }, [content.draft, content.editAck]);
   const expanded = focused;
-  const height = expanded ? Math.min(280, Math.max(112, textHeight + 64)) : 56;
+  const height = expanded ? Math.min(208, Math.max(112, textHeight + 64)) : 56;
   const [motion] = useState(() => new Animated.Value(height));
   useEffect(() => {
     latest.current.emit({ kind: "height", height });
@@ -370,11 +375,7 @@ function Composer({
     return () => animation.stop();
   }, [height, motion, reduceMotion]);
   useEffect(() => {
-    const shown = Keyboard.addListener("keyboardDidShow", () => {
-      keyboardVisible.current = true;
-    });
     const listener = Keyboard.addListener("keyboardDidHide", () => {
-      keyboardVisible.current = false;
       if (presenting.current) return;
       input.current?.blur();
       setFocused(false);
@@ -382,7 +383,6 @@ function Composer({
     });
     return () => {
       listener.remove();
-      shown.remove();
     };
   }, []);
   const onPresent = (open: boolean) => {
@@ -413,7 +413,7 @@ function Composer({
         const file = new File(asset.uri);
         if (!asset.name || asset.name.length > 200)
           throw new Error("The attachment name is too long.");
-        if ((asset.size ?? file.size) > 1024 * 1024)
+        if (file.size > 1024 * 1024 || (asset.size ?? 0) > 1024 * 1024)
           throw new Error(`${asset.name} is larger than 1 MB.`);
         attachments.push({
           name: asset.name,

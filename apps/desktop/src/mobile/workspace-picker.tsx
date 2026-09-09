@@ -57,7 +57,7 @@ export function WorkspacePicker({
       disabled: false,
     },
     (event) => {
-      if (event.kind === "press") setOpen((value) => !value);
+      if (event.kind === "press" && event.control === "activate") setOpen((value) => !value);
     },
   );
   const choose = (tabId: string, paneId?: string) => {

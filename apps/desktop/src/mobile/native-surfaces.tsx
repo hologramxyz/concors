@@ -1,7 +1,7 @@
 import { useLayoutEffect, useState, type ReactNode } from "react";
 import type { MobileState, NativeSurface } from "@concors/client-core";
 import { NativeSurfaceContext, type NativeSurfaceRegistration } from "@/components/native-surface";
-import { sendHost, subscribeHost } from "./bridge";
+import { hostAction, sendHost, subscribeHost } from "./bridge";
 
 /** Geometry travels out; a bounded UI event travels back. Credentials never enter this layer. */
 function createRegistry() {
@@ -91,6 +91,15 @@ export function NativeSurfaces({ host, children }: { host: MobileState; children
     observer.observe(document.body, { subtree: true, childList: true, attributes: true });
     const resize = new ResizeObserver(track);
     resize.observe(document.documentElement);
+    const dismissKeyboard = (event: PointerEvent) => {
+      if (
+        !(event.target instanceof Element) ||
+        event.target.closest('[data-native-composer], input, textarea, [contenteditable="true"]')
+      )
+        return;
+      void hostAction({ kind: "dismiss-keyboard" }).catch(() => undefined);
+    };
+    document.addEventListener("pointerdown", dismissKeyboard, true);
     document.addEventListener("transitionrun", track, true);
     document.addEventListener("animationstart", track, true);
     document.addEventListener("pointermove", schedule, true);
@@ -122,6 +131,7 @@ export function NativeSurfaces({ host, children }: { host: MobileState; children
       document.removeEventListener("transitionrun", track, true);
       document.removeEventListener("animationstart", track, true);
       document.removeEventListener("pointermove", schedule, true);
+      document.removeEventListener("pointerdown", dismissKeyboard, true);
       document.removeEventListener("scroll", schedule, true);
       window.removeEventListener("resize", track);
     };
