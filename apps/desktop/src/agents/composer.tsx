@@ -1,6 +1,6 @@
 import { AgentDraftScopeContext, useAgentDraft, type InputDraft as Draft } from "./draft";
 import { isProviderModelsQueryLoading } from "./paseo/model-loading";
-import { useContext, useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ArrowUp,
   Brain,
@@ -26,6 +26,7 @@ import { CodexIcon } from "./paseo/codex-icon";
 import { useDictation } from "./dictation";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import { ComposerSurfaceContext, useComposerExpansion } from "./composer-expansion";
+import { useComposerMotion } from "./composer-motion";
 const defaults: AgentSettings = { model: null, effort: null, mode: "default" };
 export function AgentComposer({
   agent,
@@ -60,6 +61,7 @@ export function AgentComposer({
     [error, setError] = useState<string | null>(null);
   const textarea = useRef<HTMLTextAreaElement>(null),
     picker = useRef<HTMLInputElement>(null);
+  const form = useRef<HTMLFormElement>(null);
   const advanced =
     connection?.state.status === "ready" &&
     connection.state.daemon.capabilities?.includes("agent-composer");
@@ -74,13 +76,14 @@ export function AgentComposer({
   const dictation = useDictation((text) =>
     setDraft((value) => (value + (value ? " " : "") + text).slice(0, 16000)),
   );
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = textarea.current;
     if (el) {
       el.style.height = "auto";
       el.style.height = Math.min(el.scrollHeight, 192) + "px";
     }
   }, [draft, expanded]);
+  useComposerMotion(form, compact, expanded);
   const configure = async (next: AgentSettings) => {
     if (!connection || !advanced) return;
     setConfiguring(true);
@@ -331,6 +334,7 @@ export function AgentComposer({
           </div>
         )}
         <form
+          ref={form}
           data-composer-surface={owner}
           data-expanded={compact ? expanded : undefined}
           onSubmit={(e) => {
@@ -587,8 +591,12 @@ export function AgentComposer({
               ) : (
                 extraControls
               )}
-              {compact && utilityControls}
             </div>
+            {compact && (
+              <div className="mobile-composer-utilities" hidden={!expanded}>
+                {utilityControls}
+              </div>
+            )}
             <div className="mobile-composer-primary ml-auto flex items-center gap-1">
               {!compact && utilityControls}
               {showStop && (
