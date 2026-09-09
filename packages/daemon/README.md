@@ -163,8 +163,56 @@ still binds loopback. Providers such as Codex/Claude and project tools are insta
 CI unpacks the tarball in a fresh `ubuntu:24.04` container with networking disabled and verifies
 `--version`, `serve --ephemeral`, HTTP health, and actual terminal operations.
 
-Tag-triggered publishing of this tarball as `daemon-v<semver>` is D3. This package command and
-layout provide its input; no release is published by building locally.
+Building locally does not publish a release.
+
+## Publishing a daemon release
+
+The [Daemon release workflow](../../.github/workflows/daemon-release.yml) runs on pushes of
+`daemon-v*` tags. `packages/daemon/package.json` is the version source; the workflow fails if
+the tag is not exactly `daemon-v` followed by that version, or its commit is not on `main`.
+It builds with the frozen lockfile, packages the tarball above, and tests it in clean Ubuntu
+24.04 with no network, Node, or compilers, including a real PTY through `serve --ephemeral`.
+Only that tested archive is passed to the publishing job.
+
+1. Bump only the daemon's version in `packages/daemon/package.json` in a PR. Include any
+   required runtime changes, run CI, review, and merge. For the first release this is `0.2.0`.
+   All changes intended for the release must be merged before tagging.
+2. Fetch `main` and tag the merged commit after its CI passes. From a clean checkout:
+
+   ```sh
+   git switch main
+   git pull --ff-only origin main
+   test "$(node -p "require('./packages/daemon/package.json').version")" = 0.2.0
+   git tag -a daemon-v0.2.0 -m 'Concors daemon 0.2.0'
+   git push origin refs/tags/daemon-v0.2.0
+   ```
+
+   Use your normal GitHub credentials to push the tag; tags pushed with a workflow's
+   `GITHUB_TOKEN` do not trigger another workflow. Do not tag the unmerged PR branch.
+
+3. Watch **Daemon release** in GitHub Actions. It creates a published release named
+   `daemon-v0.2.0`, with asset `concors-daemon-linux-x64.tar.gz`. Daemon releases do not
+   replace the repository's global **Latest** release; installers address the exact tag.
+   Only the publishing job has `contents: write`; the final job downloads the published
+   asset using its separate `contents: read` token and verifies `--version`.
+4. Verify installer access from an empty download directory. For this private repository,
+   set `GH_TOKEN` through your secret manager to a fine-grained token with access to
+   `concors-dev/concors` and **Contents: read-only** (and any required organization approval):
+
+   ```sh
+   gh release download daemon-v0.2.0 \
+     --repo concors-dev/concors -p 'concors-daemon-linux-x64.tar.gz'
+   tar -xzf concors-daemon-linux-x64.tar.gz
+   ./concors-daemon/bin/concors-daemon --version  # 0.2.0
+   ```
+
+   The control-plane installer pins `DAEMON_VERSION=0.2.0` and caches this asset. Never move
+   a published tag or overwrite its asset: ship a new version for changed contents.
+
+No additional publishing secret is needed: GitHub supplies the workflow tokens. If a build
+or download fails transiently, rerun the failed jobs. If publication partially succeeds,
+inspect the release and asset before retrying; publishing deliberately fails for an existing
+release rather than replacing it.
 
 ## Workspace persistence
 
