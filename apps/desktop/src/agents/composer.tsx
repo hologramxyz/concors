@@ -4,6 +4,7 @@ import { useContext, useEffect, useRef, useState } from "react";
 import {
   ArrowUp,
   Brain,
+  Ellipsis,
   ListTodo,
   Zap,
   LoaderCircle,
@@ -19,6 +20,7 @@ import type { AgentInfo, AgentSettings, AgentAttachment } from "@concors/protoco
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { submitAgentInput } from "./paseo/submit";
 import { ControlPicker } from "./control-picker";
+import { Popover } from "radix-ui";
 import { ContextMeter } from "./context-meter";
 import { CodexIcon } from "./paseo/codex-icon";
 import { useDictation } from "./dictation";
@@ -205,6 +207,67 @@ export function AgentComposer({
     }
   };
   const effortModel = models.find((m) => m.id === (settings.model ?? agent.model));
+  const extraControls = (
+    <>
+      {agent.supportsPlan && (
+        <button
+          type="button"
+          aria-label="Plan mode"
+          aria-pressed={!!settings.planMode}
+          title="Plan mode: explore and plan with read-only access"
+          className={`agent-control ${settings.planMode ? "bg-primary/10 text-primary!" : ""}`}
+          disabled={!connected || busy || configuring}
+          onClick={() => void configure({ ...settings, planMode: !settings.planMode })}
+        >
+          <ListTodo className="size-4" />
+        </button>
+      )}
+      {!!effortModel?.serviceTiers?.length && (
+        <ControlPicker
+          label="Speed"
+          value={settings.serviceTier ?? ""}
+          icon={<Zap className={`size-4 ${settings.serviceTier ? "text-amber-500" : ""}`} />}
+          disabled={!connected || busy || configuring}
+          options={[
+            { id: "", label: "Default speed", icon: <Zap className="size-4" /> },
+            ...effortModel.serviceTiers.map((tier) => ({
+              ...tier,
+              icon: <Zap className="size-4" />,
+            })),
+          ]}
+          onSelect={(serviceTier) =>
+            void configure({ ...settings, serviceTier: serviceTier || null })
+          }
+        />
+      )}
+    </>
+  );
+  const utilityControls = (
+    <>
+      <ContextMeter context={agent.context} />
+      <button
+        type="button"
+        aria-label={dictation.listening ? "Stop dictation" : "Start dictation"}
+        title={
+          compact
+            ? "Use dictation on your phone's keyboard."
+            : dictation.supported
+              ? "Dictation uses your browser's speech service. Review the transcript before sending."
+              : "Dictation is not supported by this browser."
+        }
+        disabled={(!compact && !dictation.supported) || !connected || busy || uncertain}
+        onClick={() => {
+          if (compact) {
+            textarea.current?.focus();
+            setKeyboardHelp((value) => !value);
+          } else dictation.toggle();
+        }}
+        className={`agent-control ${dictation.listening ? "bg-red-500/10 text-red-500" : "text-muted-foreground hover:bg-muted"}`}
+      >
+        <Mic className="size-4" />
+      </button>
+    </>
+  );
   return (
     <div className="space-y-2">
       {!!queue.length && (
@@ -352,7 +415,9 @@ export function AgentComposer({
             {dictation.interim || "Listening… Click the microphone to finish."}
           </p>
         )}
-        <div className="flex flex-wrap items-center gap-1 px-1">
+        <div
+          className={`flex items-center gap-1 px-1 ${compact ? "mobile-composer-toolbar" : "flex-wrap"}`}
+        >
           <input
             ref={picker}
             type="file"
@@ -376,7 +441,7 @@ export function AgentComposer({
           </button>
           <ControlPicker
             label="Agent and model"
-            showValue
+            showValue={!compact}
             selectedLabel={
               models.find((model) => model.id === (settings.model ?? agent.model))?.label ??
               settings.model ??
@@ -412,7 +477,7 @@ export function AgentComposer({
           />
           <ControlPicker
             label="Thinking effort"
-            showValue
+            showValue={!compact}
             value={settings.effort ?? ""}
             icon={<Brain className="size-4" />}
             disabled={!advanced || !connected || busy || configuring}
@@ -432,7 +497,7 @@ export function AgentComposer({
           />
           <ControlPicker
             label="Permission mode"
-            showValue
+            showValue={!compact}
             value={settings.mode}
             icon={
               settings.mode === "auto-review" ? (
@@ -468,60 +533,37 @@ export function AgentComposer({
               void configure({ ...settings, mode: mode as AgentSettings["mode"] })
             }
           />
-          {agent.supportsPlan && (
-            <button
-              type="button"
-              aria-label="Plan mode"
-              aria-pressed={!!settings.planMode}
-              title="Plan mode: explore and plan with read-only access"
-              className={`agent-control ${settings.planMode ? "bg-primary/10 text-primary!" : ""}`}
-              disabled={!connected || busy || configuring}
-              onClick={() => void configure({ ...settings, planMode: !settings.planMode })}
-            >
-              <ListTodo className="size-4" />
-            </button>
-          )}
-          {!!effortModel?.serviceTiers?.length && (
-            <ControlPicker
-              label="Speed"
-              value={settings.serviceTier ?? ""}
-              icon={<Zap className={`size-4 ${settings.serviceTier ? "text-amber-500" : ""}`} />}
-              disabled={!connected || busy || configuring}
-              options={[
-                { id: "", label: "Default speed", icon: <Zap className="size-4" /> },
-                ...effortModel.serviceTiers.map((tier) => ({
-                  ...tier,
-                  icon: <Zap className="size-4" />,
-                })),
-              ]}
-              onSelect={(serviceTier) =>
-                void configure({ ...settings, serviceTier: serviceTier || null })
-              }
-            />
+          {compact ? (
+            <Popover.Root>
+              <Popover.Trigger
+                type="button"
+                className="agent-control"
+                aria-label="More composer options"
+                title="Plan, speed, context and dictation"
+              >
+                <Ellipsis className="size-4" />
+              </Popover.Trigger>
+              <Popover.Portal>
+                <Popover.Content
+                  side="top"
+                  align="start"
+                  sideOffset={8}
+                  collisionPadding={12}
+                  className="mobile-composer-options"
+                >
+                  <p className="mb-2 px-2 text-sm font-medium">Conversation options</p>
+                  <div className="mobile-composer-options-grid">
+                    {extraControls}
+                    {utilityControls}
+                  </div>
+                </Popover.Content>
+              </Popover.Portal>
+            </Popover.Root>
+          ) : (
+            extraControls
           )}
           <div className="ml-auto flex items-center gap-1">
-            <ContextMeter context={agent.context} />
-            <button
-              type="button"
-              aria-label={dictation.listening ? "Stop dictation" : "Start dictation"}
-              title={
-                compact
-                  ? "Use dictation on your phone's keyboard."
-                  : dictation.supported
-                    ? "Dictation uses your browser's speech service. Review the transcript before sending."
-                    : "Dictation is not supported by this browser."
-              }
-              disabled={(!compact && !dictation.supported) || !connected || busy || uncertain}
-              onClick={() => {
-                if (compact) {
-                  textarea.current?.focus();
-                  setKeyboardHelp((value) => !value);
-                } else dictation.toggle();
-              }}
-              className={`agent-control ${dictation.listening ? "bg-red-500/10 text-red-500" : "text-muted-foreground hover:bg-muted"}`}
-            >
-              <Mic className="size-4" />
-            </button>
+            {!compact && utilityControls}
             {active && (
               <button
                 type="button"
