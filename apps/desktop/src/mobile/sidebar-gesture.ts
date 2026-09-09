@@ -9,10 +9,12 @@ export function useSidebarGesture(open: boolean, onChange: (open: boolean) => vo
     moved: boolean;
   } | null>(null);
   const [offset, setOffset] = useState<number | null>(null);
+  const suppressClickUntil = useRef(0);
   const finish = (event: PointerEvent, cancelled = false) => {
     const current = gesture.current;
     if (!current || current.id !== event.pointerId) return;
     if (!cancelled && current.moved) {
+      suppressClickUntil.current = performance.now() + 400;
       const delta = event.clientX - current.x;
       onChange(open ? delta > -width * 0.25 : delta > width * 0.25);
     }
@@ -58,7 +60,7 @@ export function useSidebarGesture(open: boolean, onChange: (open: boolean) => vo
       onPointerUp: finish,
       onPointerCancel: (event: PointerEvent) => finish(event, true),
       onClickCapture(event: React.MouseEvent) {
-        if (offset !== null) {
+        if (offset !== null || performance.now() < suppressClickUntil.current) {
           event.preventDefault();
           event.stopPropagation();
         }
