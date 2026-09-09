@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Ellipsis, Pin, Trash2 } from "lucide-react";
+import { Ellipsis, Trash2 } from "lucide-react";
 import type { WorkspaceOperation, WorkspaceProject } from "@concors/protocol";
 import {
   DropdownMenu,
@@ -39,24 +39,6 @@ export function ProjectActions({
           <Ellipsis className="size-4" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-56">
-          {project.directoryMode === "follow" && (
-            <DropdownMenuItem
-              disabled={!canEdit}
-              onSelect={() => {
-                void execute({
-                  kind: "project.pin",
-                  projectId: project.id,
-                  expectedVersion: project.version,
-                  directory: project.directory,
-                }).catch((cause: unknown) =>
-                  window.alert(cause instanceof Error ? cause.message : "Could not pin folder."),
-                );
-              }}
-            >
-              <Pin />
-              Pin to this folder
-            </DropdownMenuItem>
-          )}
           <DropdownMenuItem
             disabled={!canEdit}
             variant="destructive"

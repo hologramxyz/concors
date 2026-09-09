@@ -64,11 +64,6 @@ export const WorkspaceOperationSchema = z.discriminatedUnion("kind", [
   }),
   z.object({ kind: z.literal("project.remove"), ...ProjectTarget }),
   z.object({
-    kind: z.literal("project.pin"),
-    ...ProjectTarget,
-    directory: z.string().min(1).max(4096),
-  }),
-  z.object({
     kind: z.literal("tab.create"),
     sourcePaneId: Id.optional(),
     ...ProjectTarget,
