@@ -10,6 +10,9 @@ import { runSessionHost, stopSessionHost, waitForSessionHost } from "./hosting/s
 
 import { DaemonConfigError, loadDaemonConfig } from "./config.ts";
 import { createDaemonServer } from "./server.ts";
+import { loadConfig, loadTls, ConfigError } from "./managed/config.ts";
+import { createTokenVerifier } from "./managed/auth.ts";
+import { createLogger } from "./managed/log.ts";
 import { DAEMON_VERSION } from "./version.ts";
 
 const USAGE = `concors-daemon ${DAEMON_VERSION}
@@ -27,6 +30,7 @@ Options:
   --host <host>    Interface to bind (default: 127.0.0.1, env: CONCORS_DAEMON_HOST)
   --port <port>    Port to bind, 0 = random free port (default: 7420, env: CONCORS_DAEMON_PORT)
   --log-level <l>  fatal|error|warn|info|debug|trace|silent (default: info, env: CONCORS_DAEMON_LOG_LEVEL)
+  --managed-config <path>  Managed TLS gateway config (env: CONCORS_DAEMON_MANAGED_CONFIG)
   --ephemeral      Own sessions in this process, for isolated tests and temporary machines
   -v, --version    Print the daemon version and exit
   -h, --help       Show this help
@@ -40,6 +44,7 @@ interface ParsedCli {
   readonly port: string | undefined;
   readonly logLevel: string | undefined;
   readonly ephemeral: boolean;
+  readonly managedConfig: string | undefined;
 }
 
 export function parseCli(argv: readonly string[]): ParsedCli {
@@ -53,6 +58,7 @@ export function parseCli(argv: readonly string[]): ParsedCli {
       host: { type: "string" },
       port: { type: "string" },
       "log-level": { type: "string" },
+      "managed-config": { type: "string" },
       ephemeral: { type: "boolean", default: false },
     },
   });
@@ -65,24 +71,47 @@ export function parseCli(argv: readonly string[]): ParsedCli {
     port: values.port,
     logLevel: values["log-level"],
     ephemeral: values.ephemeral,
+    managedConfig: values["managed-config"],
   };
 }
 
 async function serve(cli: ParsedCli): Promise<number> {
-  const config = loadDaemonConfig({ host: cli.host, port: cli.port, logLevel: cli.logLevel });
+  const managedPath = cli.managedConfig ?? process.env["CONCORS_DAEMON_MANAGED_CONFIG"];
+  if (managedPath !== undefined && cli.ephemeral)
+    throw new DaemonConfigError("--managed-config cannot be combined with --ephemeral");
+  const managedConfig = managedPath === undefined ? undefined : await loadConfig(managedPath);
+  const tls = managedConfig ? await loadTls(managedConfig.tlsDir) : undefined;
+  const config = loadDaemonConfig({
+    host: managedConfig ? "0.0.0.0" : cli.host,
+    port: managedConfig ? managedConfig.port : cli.port,
+    logLevel: cli.logLevel,
+  });
+  const logger = createLogger(undefined, config.logLevel);
   const dataDir = process.env["CONCORS_DATA_DIR"] ?? join(homedir(), ".concors");
   mkdirSync(dataDir, { recursive: true, mode: 0o700 });
   const server = cli.ephemeral
     ? createDaemonServer(config, { workspacePath: join(dataDir, "workspace.sqlite") })
-    : createPersistentGateway(config, dataDir, {
-        executable: process.execPath,
-        args: [
-          ...(isSea() ? [] : [fileURLToPath(import.meta.url)]),
-          "session-host",
-          "--log-level",
-          config.logLevel,
-        ],
-      });
+    : createPersistentGateway(
+        config,
+        dataDir,
+        {
+          executable: process.execPath,
+          args: [
+            ...(isSea() ? [] : [fileURLToPath(import.meta.url)]),
+            "session-host",
+            "--log-level",
+            config.logLevel,
+          ],
+        },
+        managedConfig && tls
+          ? {
+              config: managedConfig,
+              tls,
+              verifier: createTokenVerifier(managedConfig),
+              logger,
+            }
+          : undefined,
+      );
 
   const url = await server.listen();
   if (["info", "debug", "trace"].includes(config.logLevel))
@@ -145,7 +174,7 @@ export async function main(argv: readonly string[]): Promise<number> {
       try {
         return await serve(cli);
       } catch (err) {
-        if (err instanceof DaemonConfigError) {
+        if (err instanceof DaemonConfigError || err instanceof ConfigError) {
           console.error(err.message);
           return 2;
         }

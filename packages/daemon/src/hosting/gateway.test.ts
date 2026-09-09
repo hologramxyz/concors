@@ -8,6 +8,7 @@ import { createServer } from "node:http";
 import { afterEach, expect, it } from "vitest";
 import { DaemonConnection, describeDaemonEndpoint } from "@concors/daemon-client";
 import type { TerminalEvent, TerminalOperation, WorkspaceOperation } from "@concors/protocol";
+import { countHostSessions } from "../managed/sessions.ts";
 import { createPersistentGateway } from "./gateway.ts";
 import { ensureSessionHost, stopSessionHost } from "./session-host.ts";
 
@@ -109,6 +110,7 @@ it("preserves a real process, shell environment, cwd, screen, and bindings acros
     `const fs=require('node:fs'); let n=0; setInterval(()=>{const s={pid:process.pid,n:++n,cwd:process.cwd(),env:process.env.CONCORS_CONTINUITY};fs.writeFileSync(${JSON.stringify(probe)},JSON.stringify(s));process.stdout.write('HOST_COUNTER:'+n+'\\r\\n')},100);`,
   );
   const first = await gateway(directory);
+  expect(await countHostSessions(await ensureSessionHost(directory, launch))).toBe(0);
   const { c } = await connect(first.url);
   const projectId = randomUUID(),
     tabId = randomUUID(),
@@ -161,6 +163,7 @@ it("preserves a real process, shell environment, cwd, screen, and bindings acros
     .toMatchObject({ cwd: await realpath(cwd), env: "kept" });
   const before = (await state())!;
   const host = await ensureSessionHost(directory, launch);
+  expect(await countHostSessions(host)).toBe(1);
   await first.close();
   await expect.poll(async () => (await state())?.n ?? 0).toBeGreaterThan(before.n + 2);
   const second = await cliGateway(directory);
