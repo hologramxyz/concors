@@ -12,6 +12,8 @@ import {
 import { formatDate } from "@/lib/format-date";
 import { Row, Section } from "@/views/settings-primitives";
 
+import { SubscriptionsSection } from "./subscriptions-section";
+
 interface AccountSettingsProps {
   readonly auth: SignedInAuth;
   readonly onSignOut: () => void;
@@ -86,6 +88,14 @@ export function AccountSettings({
           )}
         </Row>
       </Section>
+
+      {organization && (
+        <SubscriptionsSection
+          key={organization.id}
+          organizationId={organization.id}
+          organizationName={organization.name}
+        />
+      )}
 
       <Section title="Session" description="Sessions last 30 days and renew while you use Concors.">
         <Row label="Expires">
