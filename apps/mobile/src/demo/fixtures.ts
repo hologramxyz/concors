@@ -4,7 +4,7 @@ import {
   TerminalInfoSchema,
   WorkspaceSnapshotSchema,
 } from "@concors/protocol";
-import { MeSchema } from "@concors/api-client";
+import { MeSchema, MachineSchema } from "@concors/api-client";
 
 export const ids = {
   machine: "11111111-1111-4111-8111-111111111111",
@@ -18,7 +18,7 @@ export const ids = {
   split: "99999999-9999-4999-8999-999999999999",
   approval: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
 };
-const date = "2026-09-08T12:00:00.000Z";
+const date = new Date(Date.now() - 60_000).toISOString();
 export const demoMe = MeSchema.parse({
   user: {
     id: "demo-user",
@@ -75,7 +75,25 @@ export const demoAgent = AgentInfoSchema.parse({
   provider: "codex",
   name: "Mobile launch",
   directory: "/home/alex/concors",
-  model: "Default",
+  model: "demo-codex",
+  settings: {
+    model: "demo-codex",
+    effort: "medium",
+    mode: "default",
+    planMode: false,
+    serviceTier: null,
+  },
+  models: [
+    {
+      id: "demo-codex",
+      label: "Codex",
+      efforts: ["low", "medium", "high"],
+      defaultEffort: "medium",
+      serviceTiers: [{ id: "fast", label: "Fast", description: "Simulated priority service" }],
+    },
+  ],
+  supportsPlan: true,
+  context: { used: 12400, limit: 200000, total: 18200 },
   threadId: "demo-thread",
   turnId: "demo-turn",
   status: "needs_input",
@@ -126,6 +144,98 @@ export const demoItems = [
     createdAt: date,
   }),
 ];
+demoItems.push(
+  ...[
+    {
+      kind: "tool",
+      title: "Thinking",
+      text: "Reuse the existing **Concors UI** and adapt navigation for a phone.",
+      detail: "",
+      presentation: { type: "thinking" },
+    },
+    {
+      kind: "plan",
+      title: "Mobile plan",
+      text: "Bring the workspace to mobile.",
+      detail: "",
+      presentation: {
+        type: "plan",
+        steps: [
+          { step: "Share chat, composer and tool rendering", status: "completed" },
+          { step: "Add sidebar and tab/pane navigation", status: "completed" },
+          { step: "Verify iPhone and Android interactions", status: "inProgress" },
+        ],
+      },
+    },
+    {
+      kind: "tool",
+      title: "exec_command",
+      text: "pnpm mobile:test",
+      detail: "Demo test runner\n18 checks passed. No commands were actually executed.",
+      presentation: { type: "shell", command: "pnpm mobile:test", exitCode: 0 },
+    },
+    {
+      kind: "tool",
+      title: "apply_patch",
+      text: "Update the mobile navigation",
+      detail: "--- a/navigation.ts\n+++ b/navigation.ts\n- bottomTabs: true\n+ sidebar: true",
+      presentation: {
+        type: "files",
+        files: [
+          {
+            path: "navigation.ts",
+            diff: "--- a/navigation.ts\n+++ b/navigation.ts\n- bottomTabs: true\n+ sidebar: true",
+          },
+        ],
+      },
+    },
+    {
+      kind: "tool",
+      title: "mcp.workspace.inspect",
+      text: "Inspect workspace",
+      detail: "Two panes found",
+      presentation: {
+        type: "mcp",
+        input: '{"project":"Concors"}',
+        output: '{"panes":2,"connected":true}',
+      },
+    },
+    {
+      kind: "tool",
+      title: "Agent",
+      text: "Review the mobile layout",
+      detail: "Layout review complete",
+      presentation: {
+        type: "sub_agent",
+        children: [
+          {
+            id: "demo-reviewer",
+            status: "completed",
+            message:
+              "The composer stays at the bottom and the **sidebar** reveals projects, agents and servers.",
+          },
+        ],
+      },
+    },
+    {
+      kind: "assistant",
+      title: "Codex",
+      text: "The workspace now uses the same chat components as desktop.\n\n- Swipe right to open the sidebar.\n- Use the selector above to switch panes.\n- Attach a file, change the model controls, or try `ask me a question`.\n\n\u0060\u0060\u0060typescript\nconst workspace = { sidebar: true, bottomTabs: false };\n\u0060\u0060\u0060\n\nEverything in this preview is simulated.",
+      detail: "",
+    },
+  ].map((item, index) =>
+    AgentItemSchema.parse({
+      sessionId: ids.agent,
+      turnId: "demo-turn",
+      id: `demo-rich-${index}`,
+      position: index + 2,
+      revision: 0,
+      status: "completed",
+      createdAt: date,
+      ...item,
+    }),
+  ),
+);
 export const demoTerminal = TerminalInfoSchema.parse({
   id: ids.terminal,
   projectId: ids.project,
@@ -138,7 +248,7 @@ export const demoTerminal = TerminalInfoSchema.parse({
   cols: 80,
   rows: 24,
 });
-export const demoMachine = {
+export const demoMachine = MachineSchema.parse({
   id: ids.machine,
   organizationId: "demo-org",
   createdByUserId: "demo-user",
@@ -161,4 +271,4 @@ export const demoMachine = {
   createdAt: date,
   updatedAt: date,
   deletedAt: null,
-};
+});
