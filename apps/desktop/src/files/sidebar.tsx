@@ -119,7 +119,12 @@ export function FilesSidebar({ project }: { project: WorkspaceProject | undefine
           }}
         />
         {project && visited && (
-          <FileTree key={scope} project={project} open={open} onClose={sidebar.close} />
+          <FileTree
+            key={`${scope}:${project.directory}`}
+            project={project}
+            open={open}
+            onClose={sidebar.close}
+          />
         )}
       </div>
     </aside>

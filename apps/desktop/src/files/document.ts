@@ -21,7 +21,7 @@ export class FileDocument {
   };
   private listeners = new Set<() => void>();
   private generation = 0;
-  readonly target: { projectId: string; epoch: string; path: string };
+  readonly target: { projectId: string; epoch: string; path: string; directory?: string };
   constructor(target: FileDocument["target"]) {
     this.target = target;
   }
