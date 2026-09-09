@@ -15,7 +15,7 @@ export function resolveFileLink(href: string, root: string, sourcePath = ""): Fi
     } catch {
       return null;
     }
-  } else if (/^[a-z][a-z\d+.-]*:/i.test(value) && !/^[a-z]:[\\/]/i.test(value)) return null;
+  }
   try {
     value = decodeURIComponent(value);
   } catch {
@@ -25,6 +25,7 @@ export function resolveFileLink(href: string, root: string, sourcePath = ""): Fi
   const suffix = value.match(/(?:#L?(\d+)(?:C\d+)?(?:-L?\d+)?|:(\d+)(?::\d+)?)$/i);
   const line = suffix ? Number(suffix[1] ?? suffix[2]) : undefined;
   if (suffix) value = value.slice(0, -suffix[0].length);
+  if (/^[a-z][a-z\d+.-]*:/i.test(value) && !/^[a-z]:[\\/]/i.test(value)) return null;
   value = value.replaceAll("\\", "/");
   let base = root.replaceAll("\\", "/").replace(/\/$/, "");
   if (/^\/[A-Za-z]:\//.test(value)) value = value.slice(1);

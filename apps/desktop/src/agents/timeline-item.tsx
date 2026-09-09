@@ -1,3 +1,5 @@
+import { useContext } from "react";
+import { FileLinkContext } from "@/files/context";
 import { formatDuration } from "./duration";
 import { extractToolCallFilePath } from "./paseo/extract-tool-call-file-path";
 import { useState } from "react";
@@ -19,6 +21,7 @@ export function TimelineItem({
   item: AgentItem;
   workedFor?: string | undefined;
 }) {
+  const openFile = useContext(FileLinkContext);
   const [open, setOpen] = useState(false);
   const data = item.presentation;
   if (item.kind === "user" || item.kind === "assistant")
@@ -174,12 +177,26 @@ export function TimelineItem({
           <div className="mb-2 flex justify-end">
             <CopyButton text={item.detail || item.text} label="Copy tool output" />
           </div>
-          {filePath && <p className="mb-2 truncate font-mono text-muted-foreground">{filePath}</p>}
+          {filePath && (
+            <button
+              type="button"
+              className="mb-2 block max-w-full truncate font-mono text-muted-foreground hover:underline"
+              onClick={() => openFile?.(filePath)}
+            >
+              {filePath}
+            </button>
+          )}
           {data?.type === "files" && data.files?.length ? (
             data.files.map((file) => (
               <div key={file.path} className="mb-3">
                 <div className="mb-2 flex items-center gap-2">
-                  <p className="flex-1 font-mono font-medium">{file.path}</p>
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 truncate text-left font-mono font-medium hover:underline"
+                    onClick={() => openFile?.(file.path)}
+                  >
+                    {file.path}
+                  </button>
                   <CopyButton label="Copy diff" text={file.diff} />
                 </div>
                 <pre className="overflow-x-auto font-mono">
