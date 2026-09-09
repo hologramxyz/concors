@@ -1,3 +1,4 @@
+import { FilesSidebar } from "@/files/sidebar";
 import { FilesProvider } from "@/files/provider";
 import { useCommand } from "@/shortcuts/context";
 import { ShortcutProvider } from "@/shortcuts/provider";
@@ -286,7 +287,7 @@ function AppContent() {
                   {!(view === "projects" && activeProject) && (
                     <header className="flex h-11 shrink-0 items-center gap-2 border-b px-4">
                       {sidebarToggle}
-                      <h1 className="truncate text-[13px] font-medium">
+                      <h1 className="truncate text-ui font-medium">
                         {view === "settings"
                           ? settingsNavItemFor(settingsPage).label
                           : navItemFor(view).label}
@@ -376,6 +377,7 @@ function AppContent() {
                     )}
                   </main>
                 </div>
+                <FilesSidebar project={view === "projects" ? activeProject : undefined} />
               </div>
               {addingProject && (
                 <ProjectSetupDialog

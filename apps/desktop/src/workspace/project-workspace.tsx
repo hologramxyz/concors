@@ -1,4 +1,4 @@
-import { FileTree } from "@/files/tree";
+import { FilesToggle } from "@/files/sidebar";
 import { FileTab, FileTabLabel } from "@/files/file-tab";
 import { useFiles, fileScope } from "@/files/context";
 import { ProjectFileLinks } from "@/files/provider";
@@ -38,12 +38,6 @@ export function ProjectWorkspace({
 }) {
   const connection = useContext(TerminalConnectionContext);
   const files = useFiles();
-  const [filesOpen, setFilesOpen] = useState(false);
-  const filesButton = useRef<HTMLButtonElement>(null);
-  const closeFiles = () => {
-    setFilesOpen(false);
-    filesButton.current?.focus();
-  };
   const scope = fileScope(
     workspace.machineId,
     workspace.epoch,
@@ -51,9 +45,6 @@ export function ProjectWorkspace({
   );
   const projectFiles = files.files.filter((file) => file.scope === scope);
   const activeFile = projectFiles.find((file) => file.id === files.active[scope]);
-  const canBrowse =
-    connection?.state.status === "ready" &&
-    connection.state.daemon.capabilities?.includes("project-files");
   useEffect(() => {
     files.select(scope, null);
     // Session navigation should reveal the session; background snapshots should not close files.
@@ -228,7 +219,7 @@ export function ProjectWorkspace({
                         files.select(scope, null);
                         onCommand({ kind: "selection.set", projectId: project.id, tabId: tab.id });
                       }}
-                      className="max-w-44 truncate px-2 py-0.5 text-[12px]"
+                      className="max-w-44 truncate px-2 py-0.5 text-ui"
                     >
                       {tab.name}
                     </button>
@@ -251,7 +242,7 @@ export function ProjectWorkspace({
                   </div>
                 </ContextMenu.Trigger>
                 <ContextMenu.Portal>
-                  <ContextMenu.Content className="z-50 min-w-40 rounded-lg border bg-popover p-1 text-[13px] text-popover-foreground shadow-md">
+                  <ContextMenu.Content className="z-50 min-w-40 rounded-lg border bg-popover p-1 text-ui text-popover-foreground shadow-md">
                     <ContextMenu.Item
                       disabled={!canEdit}
                       onSelect={() => setRenaming(tab.id)}
@@ -289,19 +280,7 @@ export function ProjectWorkspace({
               onCreate={createTab}
             />
           </div>
-          <button
-            ref={filesButton}
-            type="button"
-            aria-label="Toggle project files"
-            title={canBrowse ? "Project files" : "Update or reconnect the machine to browse files"}
-            aria-expanded={filesOpen}
-            aria-controls="project-file-tree"
-            disabled={!canBrowse}
-            onClick={() => setFilesOpen((open) => !open)}
-            className={`shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40 ${filesOpen ? "bg-muted text-foreground" : ""}`}
-          >
-            <FolderOpen className="size-4" />
-          </button>
+          <FilesToggle />
         </div>
         {launchError && (
           <div
@@ -339,7 +318,6 @@ export function ProjectWorkspace({
               </div>
             )}
           </div>
-          {filesOpen && <FileTree key={scope} project={project} onClose={closeFiles} />}
         </div>
         {renameTab && (
           <FormDialog

@@ -5,30 +5,37 @@ import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { Button } from "@/components/ui/button";
 import { useFiles } from "./context";
 
-export function FileTree({ project, onClose }: { project: WorkspaceProject; onClose(): void }) {
+export function FileTree({
+  project,
+  open,
+  onClose,
+}: {
+  project: WorkspaceProject;
+  open: boolean;
+  onClose(): void;
+}) {
   const files = useFiles();
   const [generation, setGeneration] = useState(0);
   const [filter, setFilter] = useState("");
-  const panel = useRef<HTMLElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    panel.current?.querySelector<HTMLInputElement>("input")?.focus();
-  }, []);
+    if (open)
+      panel.current?.querySelector<HTMLInputElement>("input")?.focus({ preventScroll: true });
+  }, [open]);
   return (
-    <aside
+    <div
       ref={panel}
-      id="project-file-tree"
-      aria-label="Project files"
       onKeyDown={(event) => {
         if (event.key === "Escape") {
           event.stopPropagation();
           onClose();
         }
       }}
-      className="absolute inset-y-0 right-0 z-20 flex w-[min(320px,100%)] flex-col border-l bg-background shadow-xl lg:relative lg:z-auto lg:w-72 lg:shrink-0 lg:shadow-none"
+      className="flex h-full min-h-0 flex-col"
     >
-      <div className="flex h-10 shrink-0 items-center gap-2 border-b px-3">
+      <div className="m-2 flex h-9 shrink-0 items-center gap-2 px-1">
         <FolderOpen className="size-4" />
-        <h2 className="flex-1 text-xs font-medium">Files</h2>
+        <h2 className="flex-1 text-ui font-medium">Files</h2>
         <Button
           size="icon-xs"
           variant="ghost"
@@ -47,7 +54,7 @@ export function FileTree({ project, onClose }: { project: WorkspaceProject; onCl
           placeholder="Filter loaded files…"
           value={filter}
           onChange={(event) => setFilter(event.target.value)}
-          className="h-8 w-full rounded-md border bg-transparent px-2 text-xs outline-none focus-visible:ring-1 focus-visible:ring-primary"
+          className="h-8 w-full rounded-md border bg-transparent px-2 text-ui outline-none focus-visible:ring-1 focus-visible:ring-primary"
         />
       </div>
       <div className="min-h-0 flex-1 overflow-auto pb-3" aria-label={`${project.name} directory`}>
@@ -59,17 +66,17 @@ export function FileTree({ project, onClose }: { project: WorkspaceProject; onCl
           filter={filter.toLowerCase()}
           onOpen={(entry) => {
             files.open(project, { path: entry.path });
-            if (window.innerWidth < 1024) onClose();
+            if (!files.sidebar.docked) onClose();
           }}
         />
       </div>
       <p
         title={project.directory}
-        className="truncate border-t px-3 py-2 font-mono text-[10px] text-muted-foreground"
+        className="truncate border-t px-3 py-2 font-mono text-xs text-muted-foreground"
       >
         {project.directory}
       </p>
-    </aside>
+    </div>
   );
 }
 function Directory({
@@ -140,7 +147,7 @@ function Directory({
   );
   if (error)
     return (
-      <div role="alert" className="space-y-2 p-3 text-xs text-muted-foreground">
+      <div role="alert" className="space-y-2 p-3 text-ui text-muted-foreground">
         {error}
         <Button size="xs" variant="outline" onClick={() => setRetry((value) => value + 1)}>
           Retry
@@ -149,7 +156,7 @@ function Directory({
     );
   if (!entries)
     return (
-      <p role="status" className="px-3 py-2 text-xs text-muted-foreground">
+      <p role="status" className="px-3 py-2 text-ui text-muted-foreground">
         Loading files…
       </p>
     );
@@ -180,7 +187,7 @@ function Directory({
                 disabled={!supported}
                 aria-expanded={directory ? open : undefined}
                 onClick={() => (directory ? toggle(entry.path) : onOpen(entry))}
-                className="flex w-full items-center gap-1.5 py-1.5 pr-3 text-left text-xs hover:bg-muted focus-visible:bg-muted focus-visible:outline-none disabled:opacity-40"
+                className="flex w-full items-center gap-1.5 py-1.5 pr-3 text-left text-ui hover:bg-muted focus-visible:bg-muted focus-visible:outline-none disabled:opacity-40"
                 style={{ paddingLeft: `${12 + Math.min(depth, 12) * 14}px` }}
               >
                 {directory ? (
@@ -205,9 +212,9 @@ function Directory({
             </li>
           );
         })}
-      {!entries.length && <li className="px-3 py-2 text-xs text-muted-foreground">Empty folder</li>}
+      {!entries.length && <li className="px-3 py-2 text-ui text-muted-foreground">Empty folder</li>}
       {truncated && (
-        <li className="px-3 py-2 text-xs text-muted-foreground">
+        <li className="px-3 py-2 text-ui text-muted-foreground">
           Showing the first 2,000 entries. Browse this folder in a terminal to see all entries.
         </li>
       )}
