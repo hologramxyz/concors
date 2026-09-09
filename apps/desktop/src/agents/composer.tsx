@@ -27,6 +27,7 @@ import { useDictation } from "./dictation";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import { ComposerSurfaceContext, useComposerExpansion } from "./composer-expansion";
 import { useComposerMotion } from "./composer-motion";
+import { NativeSurfaceContext, useNativeSurface } from "@/components/native-surface";
 const defaults: AgentSettings = { model: null, effort: null, mode: "default" };
 export function AgentComposer({
   agent,
@@ -39,7 +40,14 @@ export function AgentComposer({
 }) {
   const connection = useContext(TerminalConnectionContext);
   const compact = useContext(CompactLayoutContext);
-  const { owner, expanded, expand } = useComposerExpansion(compact);
+  const nativeHost = useContext(NativeSurfaceContext);
+  const native = compact && !!nativeHost;
+  const { owner, expanded: webExpanded, expand } = useComposerExpansion(compact && !native);
+  const [nativeExpanded, setNativeExpanded] = useState(false);
+  const [nativeHeight, setNativeHeight] = useState(56);
+  const [editAck, setEditAck] = useState(0);
+  const nativeField = useRef<HTMLDivElement>(null);
+  const expanded = native ? nativeExpanded : webExpanded;
   const [keyboardHelp, setKeyboardHelp] = useState(false);
   const {
     draft,
@@ -62,6 +70,24 @@ export function AgentComposer({
   const textarea = useRef<HTMLTextAreaElement>(null),
     picker = useRef<HTMLInputElement>(null);
   const form = useRef<HTMLFormElement>(null);
+  useLayoutEffect(() => {
+    if (!native) return;
+    const footer = form.current?.closest<HTMLElement>("[data-chat-footer]");
+    const chat = footer?.closest<HTMLElement>('[aria-label="Agent conversation"]');
+    if (!footer || !chat) return;
+    const reserve = () =>
+      chat.style.setProperty(
+        "--native-composer-inset",
+        `${footer.getBoundingClientRect().height + 16}px`,
+      );
+    const observer = new ResizeObserver(reserve);
+    observer.observe(footer);
+    reserve();
+    return () => {
+      observer.disconnect();
+      chat.style.removeProperty("--native-composer-inset");
+    };
+  }, [native]);
   const advanced =
     connection?.state.status === "ready" &&
     connection.state.daemon.capabilities?.includes("agent-composer");
@@ -83,7 +109,7 @@ export function AgentComposer({
       el.style.height = Math.min(el.scrollHeight, 192) + "px";
     }
   }, [draft, expanded]);
-  useComposerMotion(form, compact, expanded);
+  useComposerMotion(form, compact && !native, expanded);
   const configure = async (next: AgentSettings) => {
     if (!connection || !advanced) return;
     setConfiguring(true);
@@ -213,6 +239,160 @@ export function AgentComposer({
     }
   };
   const effortModel = models.find((m) => m.id === (settings.model ?? agent.model));
+  const controlsDisabled = !advanced || !connected || busy || configuring;
+  useNativeSurface(
+    nativeField,
+    {
+      kind: "composer",
+      draft,
+      editAck,
+      expanded,
+      editable: connected && !busy && !uncertain && !!agent.threadId,
+      placeholder: active ? "Add a follow-up to the queue…" : "Message your agent",
+      active,
+      canSend: connected && !uploading && !busy && !configuring && !uncertain && !!agent.threadId,
+      canStop: connected && !!agent.turnId && !agent.turnId.startsWith("pending:"),
+      hasAttachments: !!attachments.length,
+      attachEnabled: !!advanced && connected && !busy && !uploading && !uncertain,
+      controls: [
+        {
+          id: "model",
+          label: `Agent and model: ${settings.model ?? agent.model ?? "Machine default"}`,
+          icon: "model",
+          disabled: controlsDisabled || modelsLoading,
+          options: [
+            { id: "", label: "Machine default", selected: !settings.model },
+            ...models.map((model) => ({
+              id: model.id,
+              label: model.label,
+              selected: settings.model === model.id,
+            })),
+            { id: "__refresh__", label: "Refresh models", selected: false },
+          ],
+        },
+        {
+          id: "effort",
+          label: `Thinking effort: ${settings.effort ?? "Default"}`,
+          icon: "brain",
+          disabled: controlsDisabled,
+          options: [
+            {
+              id: "",
+              label: `Default (${effortModel?.defaultEffort ?? "automatic"})`,
+              selected: !settings.effort,
+            },
+            ...(effortModel?.efforts ?? []).map((effort) => ({
+              id: effort,
+              label: effort,
+              selected: settings.effort === effort,
+            })),
+          ],
+        },
+        {
+          id: "mode",
+          label: `Permission mode: ${settings.mode}`,
+          icon: "shield",
+          disabled: controlsDisabled,
+          options: [
+            {
+              id: "default",
+              label: "Default permissions · asks for approval",
+              selected: settings.mode === "default",
+            },
+            {
+              id: "auto-review",
+              label: "Auto-review · same sandbox",
+              selected: settings.mode === "auto-review",
+            },
+            {
+              id: "full-access",
+              label: "Full access · no approval prompts",
+              selected: settings.mode === "full-access",
+            },
+          ],
+        },
+        {
+          id: "options",
+          label: "Plan mode and speed",
+          icon: "options",
+          disabled: controlsDisabled,
+          options: [
+            ...(agent.supportsPlan
+              ? [
+                  {
+                    id: "plan",
+                    label: "Plan mode · read-only exploration",
+                    selected: !!settings.planMode,
+                  },
+                ]
+              : []),
+            { id: "speed:", label: "Default speed", selected: !settings.serviceTier },
+            ...(effortModel?.serviceTiers ?? []).map((tier) => ({
+              id: `speed:${tier.id}`,
+              label: tier.label,
+              selected: settings.serviceTier === tier.id,
+            })),
+          ],
+        },
+      ],
+      context: agent.context?.limit
+        ? `${agent.context.used.toLocaleString()} / ${agent.context.limit.toLocaleString()} tokens · ${Math.round((agent.context.used / agent.context.limit) * 100)}% used\n${agent.context.total.toLocaleString()} cumulative tokens`
+        : "Usage will appear after the agent reports it.",
+    },
+    (event) => {
+      if (event.kind === "text") {
+        if (connected && !busy && !uncertain && agent.threadId && event.sequence > editAck) {
+          setDraft(event.text);
+          setEditAck(event.sequence);
+        }
+      } else if (event.kind === "focus") setNativeExpanded(event.focused);
+      else if (event.kind === "height") setNativeHeight(event.height);
+      else if (event.kind === "attachments") {
+        if (!advanced || !connected || busy || uploading || uncertain) return;
+        if (attachments.length + event.attachments.length > 3)
+          setError("Attach up to three files per message.");
+        else setAttachments((value) => [...value, ...event.attachments].slice(0, 3));
+      } else if (event.kind === "press") {
+        if (event.control === "send") {
+          // Carry the native field's current value: a final keystroke can race a React render.
+          if (!uncertain) void submit({ message: event.text ?? draft, attachments });
+        } else if (event.control === "stop") {
+          if (connected && agent.turnId && !agent.turnId.startsWith("pending:")) onInterrupt();
+        } else if (!controlsDisabled) {
+          const value = event.value ?? "";
+          if (event.control === "model") {
+            if (value === "__refresh__") void refresh();
+            else if (!value || models.some((model) => model.id === value))
+              void configure({
+                ...settings,
+                model: value || null,
+                effort: null,
+                serviceTier: null,
+              });
+          } else if (
+            event.control === "effort" &&
+            (!value || effortModel?.efforts?.includes(value))
+          )
+            void configure({ ...settings, effort: value || null });
+          else if (
+            event.control === "mode" &&
+            ["default", "auto-review", "full-access"].includes(value)
+          )
+            void configure({ ...settings, mode: value as AgentSettings["mode"] });
+          else if (event.control === "options") {
+            if (value === "plan" && agent.supportsPlan)
+              void configure({ ...settings, planMode: !settings.planMode });
+            else if (
+              value.startsWith("speed:") &&
+              (!value.slice(6) ||
+                effortModel?.serviceTiers?.some((tier) => tier.id === value.slice(6)))
+            )
+              void configure({ ...settings, serviceTier: value.slice(6) || null });
+          }
+        }
+      }
+    },
+  );
   const extraControls = (
     <>
       {agent.supportsPlan && (
@@ -335,6 +515,7 @@ export function AgentComposer({
         )}
         <form
           ref={form}
+          data-native-composer={native || undefined}
           data-composer-surface={owner}
           data-expanded={compact ? expanded : undefined}
           onSubmit={(e) => {
@@ -380,259 +561,273 @@ export function AgentComposer({
               ))}
             </div>
           )}
-          <textarea
-            ref={textarea}
-            data-agent-composer
-            aria-label="Message Codex"
-            placeholder={
-              compact && !expanded
-                ? "Message your agent"
-                : active
-                  ? "Add a follow-up to the queue…"
-                  : "Ask your agent to build something…"
-            }
-            value={draft}
-            rows={compact && !expanded ? 1 : 2}
-            onFocus={compact ? expand : undefined}
-            onClick={compact ? expand : undefined}
-            enterKeyHint={compact ? "enter" : "send"}
-            maxLength={16000}
-            disabled={!connected || busy || uncertain || !agent.threadId}
-            onChange={(e) => setDraft(e.target.value)}
-            onPaste={(e) => {
-              if (e.clipboardData.files.length) {
-                e.preventDefault();
-                void addFiles(e.clipboardData.files);
-              }
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Tab" && e.shiftKey && !configuring && advanced) {
-                e.preventDefault();
-                const modes: AgentSettings["mode"][] = ["default", "auto-review", "full-access"];
-                void configure({
-                  ...settings,
-                  mode: modes[(modes.indexOf(settings.mode) + 1) % modes.length] ?? "default",
-                });
-              }
-              if (
-                e.key === "Enter" &&
-                !e.shiftKey &&
-                !e.nativeEvent.isComposing &&
-                (!compact || e.metaKey || e.ctrlKey)
-              ) {
-                e.preventDefault();
-                if (!uncertain) void submit();
-              }
-            }}
-            className="max-h-48 min-h-16 w-full resize-none bg-transparent px-3 py-3 text-[16px] leading-relaxed outline-none disabled:opacity-50"
-          />
-          {dictation.listening && (
-            <p role="status" className="px-3 pb-2 text-xs text-primary">
-              {dictation.interim || "Listening… Click the microphone to finish."}
-            </p>
-          )}
-          <div
-            className={`flex items-center gap-1 px-1 ${compact ? "mobile-composer-toolbar" : "flex-wrap"}`}
-          >
-            <input
-              ref={picker}
-              type="file"
-              multiple
-              className="hidden"
-              aria-label="Upload files"
-              onChange={(e) => {
-                if (e.target.files) void addFiles(e.target.files);
-                e.target.value = "";
-              }}
-            />
-            <button
-              type="button"
-              aria-label="Attach files"
-              title="Attach files or paste an image (up to three, 1 MB each)"
-              className="agent-control mobile-composer-attach"
-              disabled={!advanced || !connected || busy || uploading || uncertain}
-              onClick={() => picker.current?.click()}
-            >
-              <Plus className="size-4" />
-            </button>
-            <div
-              className={compact ? "mobile-composer-settings" : "contents"}
-              hidden={compact && !expanded}
-            >
-              <ControlPicker
-                label="Agent and model"
-                showValue={!compact}
-                selectedLabel={
-                  models.find((model) => model.id === (settings.model ?? agent.model))?.label ??
-                  settings.model ??
-                  agent.model ??
-                  "Machine default"
+          {native ? (
+            <div ref={nativeField} aria-hidden="true" style={{ height: nativeHeight }} />
+          ) : (
+            <>
+              <textarea
+                ref={textarea}
+                data-agent-composer
+                aria-label="Message Codex"
+                placeholder={
+                  compact && !expanded
+                    ? "Message your agent"
+                    : active
+                      ? "Add a follow-up to the queue…"
+                      : "Ask your agent to build something…"
                 }
-                value={settings.model ?? ""}
-                icon={
-                  modelsLoading ? <LoaderCircle className="size-4 animate-spin" /> : <CodexIcon />
-                }
-                disabled={!advanced || !connected || busy || configuring || modelsLoading}
-                options={[
-                  {
-                    id: "",
-                    label: "Machine default",
-                    description: agent.model ?? "Use this machine’s configured model",
-                    icon: <CodexIcon />,
-                  },
-                  ...models.map((model) => ({
-                    id: model.id,
-                    label: model.label,
-                    icon: <CodexIcon />,
-                  })),
-                ]}
-                onSelect={(model) =>
-                  void configure({
-                    ...settings,
-                    model: model || null,
-                    effort: null,
-                    serviceTier: null,
-                  })
-                }
-                footer={
-                  <button
-                    type="button"
-                    aria-label="Refresh agent models"
-                    disabled={modelsLoading}
-                    onClick={() => void refresh()}
-                    className="w-full border-t px-2 py-2 text-left text-xs text-muted-foreground hover:bg-muted"
-                  >
-                    Refresh models
-                  </button>
-                }
+                value={draft}
+                rows={compact && !expanded ? 1 : 2}
+                onFocus={compact ? expand : undefined}
+                onClick={compact ? expand : undefined}
+                enterKeyHint={compact ? "enter" : "send"}
+                maxLength={16000}
+                disabled={!connected || busy || uncertain || !agent.threadId}
+                onChange={(e) => setDraft(e.target.value)}
+                onPaste={(e) => {
+                  if (e.clipboardData.files.length) {
+                    e.preventDefault();
+                    void addFiles(e.clipboardData.files);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Tab" && e.shiftKey && !configuring && advanced) {
+                    e.preventDefault();
+                    const modes: AgentSettings["mode"][] = [
+                      "default",
+                      "auto-review",
+                      "full-access",
+                    ];
+                    void configure({
+                      ...settings,
+                      mode: modes[(modes.indexOf(settings.mode) + 1) % modes.length] ?? "default",
+                    });
+                  }
+                  if (
+                    e.key === "Enter" &&
+                    !e.shiftKey &&
+                    !e.nativeEvent.isComposing &&
+                    (!compact || e.metaKey || e.ctrlKey)
+                  ) {
+                    e.preventDefault();
+                    if (!uncertain) void submit();
+                  }
+                }}
+                className="max-h-48 min-h-16 w-full resize-none bg-transparent px-3 py-3 text-[16px] leading-relaxed outline-none disabled:opacity-50"
               />
-              <ControlPicker
-                label="Thinking effort"
-                showValue={!compact}
-                value={settings.effort ?? ""}
-                icon={<Brain className="size-4" />}
-                disabled={!advanced || !connected || busy || configuring}
-                options={[
-                  {
-                    id: "",
-                    label: `Default (${effortModel?.defaultEffort ?? "automatic"})`,
-                    icon: <Brain className="size-4" />,
-                  },
-                  ...(effortModel?.efforts ?? []).map((effort) => ({
-                    id: effort,
-                    label: effort.charAt(0).toUpperCase() + effort.slice(1),
-                    icon: <Brain className="size-4" />,
-                  })),
-                ]}
-                onSelect={(effort) => void configure({ ...settings, effort: effort || null })}
-              />
-              <ControlPicker
-                label="Permission mode"
-                showValue={!compact}
-                value={settings.mode}
-                icon={
-                  settings.mode === "auto-review" ? (
-                    <ShieldCheck className="size-4" />
-                  ) : settings.mode === "full-access" ? (
-                    <ShieldOff className="size-4 text-amber-500" />
-                  ) : (
-                    <Shield className="size-4" />
-                  )
-                }
-                disabled={!advanced || !connected || busy || configuring}
-                options={[
-                  {
-                    id: "default",
-                    label: "Default permissions",
-                    description: "Workspace access; asks when approval is needed.",
-                    icon: <Shield className="size-4" />,
-                  },
-                  {
-                    id: "auto-review",
-                    label: "Auto-review",
-                    description: "Same sandbox; eligible requests go to the reviewer agent.",
-                    icon: <ShieldCheck className="size-4" />,
-                  },
-                  {
-                    id: "full-access",
-                    label: "Full access",
-                    description: "File and network access without approval prompts.",
-                    icon: <ShieldOff className="size-4 text-amber-500" />,
-                  },
-                ]}
-                onSelect={(mode) =>
-                  void configure({ ...settings, mode: mode as AgentSettings["mode"] })
-                }
-              />
-              {compact ? (
-                <Popover.Root>
-                  <Popover.Trigger
-                    type="button"
-                    className="agent-control"
-                    aria-label="More composer options"
-                    title="Plan mode and speed"
-                  >
-                    <SlidersHorizontal className="size-4" />
-                  </Popover.Trigger>
-                  <Popover.Portal>
-                    <Popover.Content
-                      data-composer-surface={owner}
-                      side="top"
-                      align="start"
-                      sideOffset={8}
-                      collisionPadding={12}
-                      className="mobile-composer-options"
-                    >
-                      <p className="mb-2 px-2 text-sm font-medium">Conversation options</p>
-                      <div className="mobile-composer-options-grid">{extraControls}</div>
-                    </Popover.Content>
-                  </Popover.Portal>
-                </Popover.Root>
-              ) : (
-                extraControls
+              {dictation.listening && (
+                <p role="status" className="px-3 pb-2 text-xs text-primary">
+                  {dictation.interim || "Listening… Click the microphone to finish."}
+                </p>
               )}
-            </div>
-            {compact && (
-              <div className="mobile-composer-utilities" hidden={!expanded}>
-                {utilityControls}
-              </div>
-            )}
-            <div className="mobile-composer-primary ml-auto flex items-center gap-1">
-              {!compact && utilityControls}
-              {showStop && (
+              <div
+                className={`flex items-center gap-1 px-1 ${compact ? "mobile-composer-toolbar" : "flex-wrap"}`}
+              >
+                <input
+                  ref={picker}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  aria-label="Upload files"
+                  onChange={(e) => {
+                    if (e.target.files) void addFiles(e.target.files);
+                    e.target.value = "";
+                  }}
+                />
                 <button
                   type="button"
-                  aria-label="Interrupt agent"
-                  disabled={!connected || !agent.turnId || agent.turnId.startsWith("pending:")}
-                  onClick={onInterrupt}
-                  className="rounded-lg border p-2"
+                  aria-label="Attach files"
+                  title="Attach files or paste an image (up to three, 1 MB each)"
+                  className="agent-control mobile-composer-attach"
+                  disabled={!advanced || !connected || busy || uploading || uncertain}
+                  onClick={() => picker.current?.click()}
                 >
-                  <Square className="size-4" />
+                  <Plus className="size-4" />
                 </button>
-              )}
-              {(!compact || !showStop) && (
-                <button
-                  aria-label={active ? "Queue message" : "Send message"}
-                  disabled={
-                    !connected ||
-                    uploading ||
-                    busy ||
-                    configuring ||
-                    uncertain ||
-                    (!draft.trim() && !attachments.length) ||
-                    !agent.threadId
-                  }
-                  className="rounded-lg bg-primary p-2 text-primary-foreground disabled:opacity-30"
+                <div
+                  className={compact ? "mobile-composer-settings" : "contents"}
+                  hidden={compact && !expanded}
                 >
-                  {busy ? (
-                    <LoaderCircle className="size-4 animate-spin" />
+                  <ControlPicker
+                    label="Agent and model"
+                    showValue={!compact}
+                    selectedLabel={
+                      models.find((model) => model.id === (settings.model ?? agent.model))?.label ??
+                      settings.model ??
+                      agent.model ??
+                      "Machine default"
+                    }
+                    value={settings.model ?? ""}
+                    icon={
+                      modelsLoading ? (
+                        <LoaderCircle className="size-4 animate-spin" />
+                      ) : (
+                        <CodexIcon />
+                      )
+                    }
+                    disabled={!advanced || !connected || busy || configuring || modelsLoading}
+                    options={[
+                      {
+                        id: "",
+                        label: "Machine default",
+                        description: agent.model ?? "Use this machine’s configured model",
+                        icon: <CodexIcon />,
+                      },
+                      ...models.map((model) => ({
+                        id: model.id,
+                        label: model.label,
+                        icon: <CodexIcon />,
+                      })),
+                    ]}
+                    onSelect={(model) =>
+                      void configure({
+                        ...settings,
+                        model: model || null,
+                        effort: null,
+                        serviceTier: null,
+                      })
+                    }
+                    footer={
+                      <button
+                        type="button"
+                        aria-label="Refresh agent models"
+                        disabled={modelsLoading}
+                        onClick={() => void refresh()}
+                        className="w-full border-t px-2 py-2 text-left text-xs text-muted-foreground hover:bg-muted"
+                      >
+                        Refresh models
+                      </button>
+                    }
+                  />
+                  <ControlPicker
+                    label="Thinking effort"
+                    showValue={!compact}
+                    value={settings.effort ?? ""}
+                    icon={<Brain className="size-4" />}
+                    disabled={!advanced || !connected || busy || configuring}
+                    options={[
+                      {
+                        id: "",
+                        label: `Default (${effortModel?.defaultEffort ?? "automatic"})`,
+                        icon: <Brain className="size-4" />,
+                      },
+                      ...(effortModel?.efforts ?? []).map((effort) => ({
+                        id: effort,
+                        label: effort.charAt(0).toUpperCase() + effort.slice(1),
+                        icon: <Brain className="size-4" />,
+                      })),
+                    ]}
+                    onSelect={(effort) => void configure({ ...settings, effort: effort || null })}
+                  />
+                  <ControlPicker
+                    label="Permission mode"
+                    showValue={!compact}
+                    value={settings.mode}
+                    icon={
+                      settings.mode === "auto-review" ? (
+                        <ShieldCheck className="size-4" />
+                      ) : settings.mode === "full-access" ? (
+                        <ShieldOff className="size-4 text-amber-500" />
+                      ) : (
+                        <Shield className="size-4" />
+                      )
+                    }
+                    disabled={!advanced || !connected || busy || configuring}
+                    options={[
+                      {
+                        id: "default",
+                        label: "Default permissions",
+                        description: "Workspace access; asks when approval is needed.",
+                        icon: <Shield className="size-4" />,
+                      },
+                      {
+                        id: "auto-review",
+                        label: "Auto-review",
+                        description: "Same sandbox; eligible requests go to the reviewer agent.",
+                        icon: <ShieldCheck className="size-4" />,
+                      },
+                      {
+                        id: "full-access",
+                        label: "Full access",
+                        description: "File and network access without approval prompts.",
+                        icon: <ShieldOff className="size-4 text-amber-500" />,
+                      },
+                    ]}
+                    onSelect={(mode) =>
+                      void configure({ ...settings, mode: mode as AgentSettings["mode"] })
+                    }
+                  />
+                  {compact ? (
+                    <Popover.Root>
+                      <Popover.Trigger
+                        type="button"
+                        className="agent-control"
+                        aria-label="More composer options"
+                        title="Plan mode and speed"
+                      >
+                        <SlidersHorizontal className="size-4" />
+                      </Popover.Trigger>
+                      <Popover.Portal>
+                        <Popover.Content
+                          data-composer-surface={owner}
+                          side="top"
+                          align="start"
+                          sideOffset={8}
+                          collisionPadding={12}
+                          className="mobile-composer-options"
+                        >
+                          <p className="mb-2 px-2 text-sm font-medium">Conversation options</p>
+                          <div className="mobile-composer-options-grid">{extraControls}</div>
+                        </Popover.Content>
+                      </Popover.Portal>
+                    </Popover.Root>
                   ) : (
-                    <ArrowUp className="size-4" />
+                    extraControls
                   )}
-                </button>
-              )}
-            </div>
-          </div>
+                </div>
+                {compact && (
+                  <div className="mobile-composer-utilities" hidden={!expanded}>
+                    {utilityControls}
+                  </div>
+                )}
+                <div className="mobile-composer-primary ml-auto flex items-center gap-1">
+                  {!compact && utilityControls}
+                  {showStop && (
+                    <button
+                      type="button"
+                      aria-label="Interrupt agent"
+                      disabled={!connected || !agent.turnId || agent.turnId.startsWith("pending:")}
+                      onClick={onInterrupt}
+                      className="rounded-lg border p-2"
+                    >
+                      <Square className="size-4" />
+                    </button>
+                  )}
+                  {(!compact || !showStop) && (
+                    <button
+                      aria-label={active ? "Queue message" : "Send message"}
+                      disabled={
+                        !connected ||
+                        uploading ||
+                        busy ||
+                        configuring ||
+                        uncertain ||
+                        (!draft.trim() && !attachments.length) ||
+                        !agent.threadId
+                      }
+                      className="rounded-lg bg-primary p-2 text-primary-foreground disabled:opacity-30"
+                    >
+                      {busy ? (
+                        <LoaderCircle className="size-4 animate-spin" />
+                      ) : (
+                        <ArrowUp className="size-4" />
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
         </form>
         {compact && expanded && keyboardHelp && (
           <p role="status" className="px-2 text-xs text-muted-foreground">

@@ -139,6 +139,7 @@ function SignedInWorkspace() {
           },
           demo: config.demo,
           native: Platform.OS !== "web",
+          nativeChrome: Platform.OS === "ios",
           systemDark,
           preferences,
           pushEnabled: push,
@@ -252,6 +253,8 @@ function SignedInWorkspace() {
       renderer.current?.send({ type: "state", state: current.state });
       return;
     }
+    // Native surface messages are handled by the renderer's UI layer, not the action/API relay.
+    if (message.type === "native-surfaces") return;
     if (message.type === "protocol") {
       if (message.connectionId !== current.state.connectionId || !relay.current) return;
       void relay.current.receive(message.message).catch((cause: unknown) => {
