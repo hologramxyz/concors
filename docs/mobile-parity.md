@@ -82,6 +82,9 @@ Implementation/verification checklist (updated as each slice lands):
 Verification on 2026-09-09: 218 unit tests pass (one opt-in API integration test is
 skipped), all 19 phone browser scenarios pass, and all 19 desktop browser scenarios
 pass in a single isolated-port run.
+CI exposed a notification-test setup race: a ready label from an older project did not
+prove the separate control socket had received the newly created agent. The test now
+awaits its own project/session; three consecutive isolated notification runs pass.
 The phone suite covers 320/375/390/430px toolbars, contained picker chevrons, repeated
 touch toggles, hierarchical tab/pane creation and closing, collapsed/expanded composer
 focus and keyboard dismissal, single centered send/stop actions,
