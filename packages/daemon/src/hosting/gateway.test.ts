@@ -106,7 +106,7 @@ it("preserves a real process, shell environment, cwd, screen, and bindings acros
   const script = join(directory, "counter.cjs");
   await writeFile(
     script,
-    `const fs=require('node:fs'); let n=0; setInterval(()=>{const s={pid:process.pid,n:++n,cwd:process.cwd(),env:process.env.CONCORS_CONTINUITY};fs.writeFileSync(${JSON.stringify(probe)},JSON.stringify(s));process.stdout.write('HOST_COUNTER:'+n+'\\r\\n')},100);`,
+    `const fs=require('node:fs'); let n=0; setInterval(()=>{const s={pid:process.pid,n:++n,cwd:fs.realpathSync(process.cwd()),env:process.env.CONCORS_CONTINUITY};fs.writeFileSync(${JSON.stringify(probe)},JSON.stringify(s));process.stdout.write('HOST_COUNTER:'+n+'\\r\\n')},100);`,
   );
   const first = await gateway(directory);
   const { c } = await connect(first.url);
@@ -151,7 +151,7 @@ it("preserves a real process, shell environment, cwd, screen, and bindings acros
       return null;
     }
   };
-  // macOS exposes TMPDIR through /var, while process.cwd() resolves /private/var.
+  // Normalize both sides: macOS has /var aliases; Windows may use 8.3 TMPDIR names.
   // Compare the physical directory without weakening the working-directory assertion.
   await expect.poll(state).toMatchObject({ cwd: await realpath(cwd), env: "kept" });
   const before = (await state())!;
