@@ -11,6 +11,12 @@ export const FileRequestSchema = z.object({
     z.object({ kind: z.literal("list"), ...Target }),
     z.object({ kind: z.literal("read"), ...Target }),
     z.object({
+      kind: z.literal("create"),
+      ...Target,
+      path: Path.min(1),
+      entryKind: z.enum(["file", "directory"]),
+    }),
+    z.object({
       kind: z.literal("write"),
       ...Target,
       content: z.string().max(MAX_FILE_BYTES),
@@ -44,6 +50,7 @@ export const FileResultSchema = z.object({
     }),
     z.object({ status: z.literal("read"), file: ProjectFileSchema }),
     z.object({ status: z.literal("written"), file: ProjectFileSchema }),
+    z.object({ status: z.literal("created"), entry: FileEntrySchema }),
     z.object({ status: z.literal("conflict"), message: z.string() }),
     z.object({ status: z.literal("error"), message: z.string() }),
   ]),

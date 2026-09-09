@@ -98,6 +98,76 @@ describe("project files", () => {
     await writeFile(join(root, "hello.ts"), content);
     expect(await read()).toMatchObject({ status: "read", file: { content } });
   });
+  it("creates empty files and folders inside existing project directories", async () => {
+    expect(
+      await request({ kind: "create", projectId, epoch, path: "src", entryKind: "directory" }),
+    ).toMatchObject({ status: "created", entry: { name: "src", path: "src", kind: "directory" } });
+    expect((await stat(join(root, "src"))).isDirectory()).toBe(true);
+    expect(
+      await request({ kind: "create", projectId, epoch, path: "src/new.ts", entryKind: "file" }),
+    ).toMatchObject({ status: "created", entry: { path: "src/new.ts", kind: "file" } });
+    expect(await readFile(join(root, "src/new.ts"), "utf8")).toBe("");
+    expect(
+      await request({ kind: "create", projectId, epoch, path: ".env", entryKind: "file" }),
+    ).toMatchObject({ status: "created", entry: { name: ".env", kind: "file" } });
+  });
+  it("never replaces existing entries when creating, including concurrent creation", async () => {
+    for (const entryKind of ["file", "directory"] as const) {
+      expect(
+        await request({ kind: "create", projectId, epoch, path: "hello.ts", entryKind }),
+      ).toMatchObject({ status: "error", message: expect.stringContaining("already exists") });
+    }
+    expect(await readFile(join(root, "hello.ts"), "utf8")).toBe("export const hello = 1;\n");
+    const operation = {
+      kind: "create",
+      projectId,
+      epoch,
+      path: "new.txt",
+      entryKind: "file",
+    } as const;
+    const results = await Promise.all([request(operation), request(operation)]);
+    expect(results.map((r) => r.status).sort()).toEqual(["created", "error"]);
+    expect(await readFile(join(root, "new.txt"), "utf8")).toBe("");
+  });
+  it("rejects creation outside the project, through links, or with missing parents", async () => {
+    await mkdir(join(directory, "outside"));
+    await symlink(
+      join(directory, "outside"),
+      join(root, "link"),
+      process.platform === "win32" ? "junction" : "dir",
+    );
+    for (const entryKind of ["file", "directory"] as const) {
+      for (const path of [
+        "../escape",
+        "..\\escape",
+        join(directory, "escape"),
+        "C:\\escape",
+        "link/escape",
+        "link",
+        "missing/child",
+        ".",
+        "",
+      ]) {
+        expect((await request({ kind: "create", projectId, epoch, path, entryKind })).status).toBe(
+          "error",
+        );
+      }
+    }
+    expect(
+      (
+        await request({
+          kind: "create",
+          projectId,
+          epoch: randomUUID(),
+          path: "stale",
+          entryKind: "file",
+        })
+      ).status,
+    ).toBe("error");
+    await expect(stat(join(directory, "outside/escape"))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(stat(join(directory, "escape"))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(stat(join(root, "missing"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
   it("rejects traversal, absolute paths, stale epochs, missing projects, and symlink escapes", async () => {
     await writeFile(join(directory, "outside.txt"), "outside");
     for (const path of [

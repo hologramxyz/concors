@@ -70,6 +70,7 @@ describe("WebSocket handshake", () => {
         status: "ready",
         capabilities: [
           "project-files",
+          "project-file-create",
           "agent-chat",
           "agent-attention",
           "agent-composer",

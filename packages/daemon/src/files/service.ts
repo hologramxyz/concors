@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { constants } from "node:fs";
-import { lstat, open, opendir, realpath, rename, unlink } from "node:fs/promises";
+import { lstat, mkdir, open, opendir, realpath, rename, unlink } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
   MAX_DIRECTORY_ENTRIES,
@@ -32,6 +32,14 @@ export class ProjectFiles {
       const project = snapshot.projects.find((item) => item.id === operation.projectId);
       if (!project) throw new Error("Project is no longer available.");
       const root = await realpath(project.directory);
+      if (operation.kind === "create") {
+        const entry = await createProjectEntry(root, operation.path, operation.entryKind);
+        return {
+          type: "file.result",
+          requestId: request.requestId,
+          outcome: { status: "created", entry },
+        };
+      }
       const file = await resolveProjectPath(root, operation.path);
       let outcome: FileResult["outcome"];
       if (operation.kind === "list") {
@@ -98,7 +106,7 @@ export class ProjectFiles {
   }
 }
 
-async function resolveProjectPath(root: string, path: string): Promise<string> {
+function projectPath(root: string, path: string): string {
   if (
     path.includes("\0") ||
     isAbsolute(path) ||
@@ -111,6 +119,31 @@ async function resolveProjectPath(root: string, path: string): Promise<string> {
   const rel = relative(root, candidate);
   if (rel.startsWith(`..${sep}`) || rel === ".." || isAbsolute(rel))
     throw new Error("Choose a file inside this project.");
+  return candidate;
+}
+
+async function createProjectEntry(
+  root: string,
+  path: string,
+  kind: "file" | "directory",
+): Promise<FileEntry> {
+  const file = projectPath(root, path);
+  if (file === root) throw new Error("Enter a name inside this project.");
+  // Only the final entry may be missing. Every parent must exist inside the project without links.
+  await resolveProjectPath(root, relative(root, dirname(file)));
+  if (kind === "directory") {
+    await mkdir(file);
+  } else {
+    // Exclusive creation cannot replace an existing file, directory, or symbolic link.
+    const handle = await open(file, "wx");
+    await handle.close();
+  }
+  return { name: basename(file), path: relative(root, file).split(sep).join("/"), kind };
+}
+
+async function resolveProjectPath(root: string, path: string): Promise<string> {
+  const candidate = projectPath(root, path);
+  const rel = relative(root, candidate);
   let cursor = root;
   for (const part of rel.split(sep).filter(Boolean)) {
     cursor = join(cursor, part);
@@ -205,6 +238,8 @@ async function writeProjectFile(
 
 function fileError(error: unknown): string {
   if (error && typeof error === "object" && "code" in error) {
+    if (error.code === "EEXIST")
+      return "A file or folder with that name already exists. Choose another name.";
     if (error.code === "ENOENT") return "File or folder no longer exists. Refresh the file tree.";
     if (error.code === "EACCES" || error.code === "EPERM")
       return "The machine denied access to this file.";
