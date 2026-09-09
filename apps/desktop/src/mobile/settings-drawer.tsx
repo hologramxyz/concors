@@ -41,6 +41,17 @@ export function SettingsDrawer({
   const [deleting, setDeleting] = useState(false);
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
+  const [creatingMachine, setCreatingMachine] = useState(false);
+  // Support both desktop MachinesView contracts while main's controlled creation
+  // flow lands. Mobile must never accept an arbitrary daemon URL from this form.
+  const machineControls = {
+    focusedMachineId: host.machineId,
+    creating: creatingMachine,
+    onCreatingChange: setCreatingMachine,
+    onAddMachine: () => {
+      throw new Error("Use the mobile machine selector or the configured desktop connection.");
+    },
+  };
   const run = async (work: () => Promise<unknown>) => {
     if (busy) return;
     setBusy(true);
@@ -62,6 +73,7 @@ export function SettingsDrawer({
           setPassword("");
           setConfirmation("");
           setDeleting(false);
+          if (!next) setCreatingMachine(false);
         }
       }}
     >
@@ -164,6 +176,7 @@ export function SettingsDrawer({
           ) : page === "machines" && host.me ? (
             <MachinesView
               auth={{ status: "signed-in", ...host.me, organizations: host.organizations }}
+              {...machineControls}
             />
           ) : page === "notifications" ? (
             <div className="p-4">
