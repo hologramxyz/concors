@@ -19,9 +19,7 @@ let server: DaemonServer;
 let baseUrl: string;
 
 beforeEach(async () => {
-  server = createDaemonServer(loadDaemonConfig({ port: 0, logLevel: "silent" }, {}), {
-    handshakeTimeoutMs: 100,
-  });
+  server = createDaemonServer(loadDaemonConfig({ port: 0, logLevel: "silent" }, {}));
   baseUrl = await server.listen();
 });
 
@@ -71,12 +69,15 @@ describe("WebSocket handshake", () => {
         daemonVersion: DAEMON_VERSION,
         status: "ready",
         capabilities: [
+          "project-files",
+          "project-file-create",
           "agent-chat",
           "agent-attention",
           "agent-composer",
           "pane-rearrangement",
           "workspace-pane-rearrangement",
           "directional-pane-split",
+          "terminal-recovery",
         ],
       });
       expect(connection.state.status).toBe("ready");
@@ -105,6 +106,13 @@ describe("WebSocket handshake", () => {
   });
 
   it("drops clients that never say hello", async () => {
+    // Only this test needs a short deadline. Real handshakes use the production
+    // default so a busy runner cannot time out before validating the payload.
+    await server.close();
+    server = createDaemonServer(loadDaemonConfig({ port: 0, logLevel: "silent" }, {}), {
+      handshakeTimeoutMs: 100,
+    });
+    baseUrl = await server.listen();
     const { message, closeCode } = await rawHandshake(undefined);
     expect(message).toMatchObject({ type: "error", error: { code: "HANDSHAKE_TIMEOUT" } });
     expect(closeCode).toBe(1002);

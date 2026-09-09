@@ -3,6 +3,10 @@ import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
+import { fileURLToPath } from "node:url";
+import { isSea } from "node:sea";
+import { createPersistentGateway } from "./hosting/gateway.ts";
+import { runSessionHost, stopSessionHost, waitForSessionHost } from "./hosting/session-host.ts";
 
 import { DaemonConfigError, loadDaemonConfig } from "./config.ts";
 import { createDaemonServer } from "./server.ts";
@@ -16,12 +20,14 @@ Usage:
   concors-daemon --help
 
 Commands:
-  serve            Start the daemon and listen for Concors clients.
+  serve            Start a reconnectable gateway; sessions survive gateway restarts.
+  stop-host        Stop all sessions (stop the gateway first; for maintenance).
 
 Options:
   --host <host>    Interface to bind (default: 127.0.0.1, env: CONCORS_DAEMON_HOST)
   --port <port>    Port to bind, 0 = random free port (default: 7420, env: CONCORS_DAEMON_PORT)
   --log-level <l>  fatal|error|warn|info|debug|trace|silent (default: info, env: CONCORS_DAEMON_LOG_LEVEL)
+  --ephemeral      Own sessions in this process, for isolated tests and temporary machines
   -v, --version    Print the daemon version and exit
   -h, --help       Show this help
 `;
@@ -33,6 +39,7 @@ interface ParsedCli {
   readonly host: string | undefined;
   readonly port: string | undefined;
   readonly logLevel: string | undefined;
+  readonly ephemeral: boolean;
 }
 
 export function parseCli(argv: readonly string[]): ParsedCli {
@@ -46,6 +53,7 @@ export function parseCli(argv: readonly string[]): ParsedCli {
       host: { type: "string" },
       port: { type: "string" },
       "log-level": { type: "string" },
+      ephemeral: { type: "boolean", default: false },
     },
   });
 
@@ -56,6 +64,7 @@ export function parseCli(argv: readonly string[]): ParsedCli {
     host: values.host,
     port: values.port,
     logLevel: values["log-level"],
+    ephemeral: values.ephemeral,
   };
 }
 
@@ -63,24 +72,35 @@ async function serve(cli: ParsedCli): Promise<number> {
   const config = loadDaemonConfig({ host: cli.host, port: cli.port, logLevel: cli.logLevel });
   const dataDir = process.env["CONCORS_DATA_DIR"] ?? join(homedir(), ".concors");
   mkdirSync(dataDir, { recursive: true, mode: 0o700 });
-  const server = createDaemonServer(config, { workspacePath: join(dataDir, "workspace.sqlite") });
+  const server = cli.ephemeral
+    ? createDaemonServer(config, { workspacePath: join(dataDir, "workspace.sqlite") })
+    : createPersistentGateway(config, dataDir, {
+        executable: process.execPath,
+        args: [
+          ...(isSea() ? [] : [fileURLToPath(import.meta.url)]),
+          "session-host",
+          "--log-level",
+          config.logLevel,
+        ],
+      });
 
   const url = await server.listen();
-  server.app.log.info({ url, version: DAEMON_VERSION }, "concors-daemon ready");
+  if (["info", "debug", "trace"].includes(config.logLevel))
+    process.stdout.write(`concors-daemon ${DAEMON_VERSION} ready at ${url}\n`);
 
-  // Graceful shutdown: stop accepting work, close client sockets, then exit. Later this is also
-  // where agent sessions get terminated cleanly.
+  // Gateway shutdown detaches clients. The session host and its PTYs/providers keep running.
   return new Promise<number>((resolve) => {
     let exiting = false;
     const shutdown = (signal: NodeJS.Signals): void => {
       if (exiting) return;
       exiting = true;
-      server.app.log.info({ signal }, "shutting down");
+      if (["info", "debug", "trace"].includes(config.logLevel))
+        process.stdout.write(`Gateway stopping (${signal})\n`);
       server
         .close()
         .then(() => resolve(0))
         .catch((err: unknown) => {
-          server.app.log.error({ err }, "error during shutdown");
+          console.error(err);
           resolve(1);
         });
     };
@@ -109,6 +129,18 @@ export async function main(argv: readonly string[]): Promise<number> {
   }
 
   switch (cli.command) {
+    case "wait-host":
+      await waitForSessionHost(process.env["CONCORS_DATA_DIR"] ?? join(homedir(), ".concors"));
+      return 0;
+    case "session-host":
+      await runSessionHost(
+        process.env["CONCORS_DATA_DIR"] ?? join(homedir(), ".concors"),
+        loadDaemonConfig({ logLevel: cli.logLevel }),
+      );
+      return 0;
+    case "stop-host":
+      await stopSessionHost(process.env["CONCORS_DATA_DIR"] ?? join(homedir(), ".concors"));
+      return 0;
     case "serve":
       try {
         return await serve(cli);

@@ -22,11 +22,11 @@ test("dragging moves panes across the workspace without replacing sessions", asy
       .click();
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
-    await expect(page.locator(".xterm")).toBeVisible();
+    await expect(page.locator(".xterm").filter({ visible: true })).toBeVisible();
     await page.getByRole("button", { name: "Pane actions" }).click();
     await page.getByRole("menuitem", { name: "Split horizontally" }).click();
-    await expect(page.locator(".xterm")).toHaveCount(2);
-    const panes = page.locator("[data-pane-id]");
+    await expect(page.locator(".xterm").filter({ visible: true })).toHaveCount(2);
+    const panes = page.locator("[data-pane-id]").filter({ visible: true });
     const sourceId = await panes.first().getAttribute("data-pane-id");
     const targetId = await panes.last().getAttribute("data-pane-id");
     if (!sourceId || !targetId) throw new Error("Pane IDs missing");
@@ -34,10 +34,12 @@ test("dragging moves panes across the workspace without replacing sessions", asy
     await source.locator("textarea").focus();
     await page.keyboard.type("echo PANE_SESSION_PRESERVED");
     await page.keyboard.press("Enter");
-    await expect(source.getByLabel("Terminal output")).toContainText("PANE_SESSION_PRESERVED");
+    await expect(source.getByLabel("Terminal output").filter({ visible: true })).toContainText(
+      "PANE_SESSION_PRESERVED",
+    );
     await second.goto("/");
-    await expect(second.locator(".xterm")).toHaveCount(2);
-    const workspace = page.getByTestId("pane-workspace");
+    await expect(second.locator(".xterm").filter({ visible: true })).toHaveCount(2);
+    const workspace = page.getByTestId("pane-workspace").filter({ visible: true });
     const transfer = await page.evaluateHandle(() => new DataTransfer());
     await source.locator("header").dispatchEvent("dragstart", { dataTransfer: transfer });
     const overlay = page.getByTestId("pane-drop-targets");
@@ -55,10 +57,9 @@ test("dragging moves panes across the workspace without replacing sessions", asy
       .locator("header")
       .dragTo(workspace, { targetPosition: { x: bounds.width - 8, y: bounds.height / 2 } });
     await expect(panes.first()).toHaveAttribute("data-pane-id", targetId);
-    await expect(second.locator("[data-pane-id]").first()).toHaveAttribute(
-      "data-pane-id",
-      targetId,
-    );
+    await expect(
+      second.locator("[data-pane-id]").filter({ visible: true }).first(),
+    ).toHaveAttribute("data-pane-id", targetId);
     const box = await workspace.boundingBox();
     if (!box) throw new Error("Drop target is not visible");
     await source
@@ -72,14 +73,19 @@ test("dragging moves panes across the workspace without replacing sessions", asy
       "aria-orientation",
       "horizontal",
     );
-    await expect(source.getByLabel("Terminal output")).toContainText("PANE_SESSION_PRESERVED");
+    await expect(source.getByLabel("Terminal output").filter({ visible: true })).toContainText(
+      "PANE_SESSION_PRESERVED",
+    );
     await second.reload();
     await expect(second.getByRole("separator", { name: "Resize split" })).toHaveAttribute(
       "aria-orientation",
       "horizontal",
     );
     await expect(
-      second.locator(`[data-pane-id="${sourceId}"]`).getByLabel("Terminal output"),
+      second
+        .locator(`[data-pane-id="${sourceId}"]`)
+        .getByLabel("Terminal output")
+        .filter({ visible: true }),
     ).toContainText("PANE_SESSION_PRESERVED");
     await expect(page.getByRole("alert")).toHaveCount(0);
   } finally {

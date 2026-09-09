@@ -1,5 +1,6 @@
 import { terminalTheme } from "./theme";
-import { useContext, useEffect, useRef, useState } from "react";
+import { useContext, useLayoutEffect, useRef, useState } from "react";
+import { useTabVisible } from "@/workspace/tab-visibility";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import type { TerminalInfo, TerminalOperation } from "@concors/protocol";
@@ -12,19 +13,25 @@ export function TerminalSurface({
   onRestart,
   restartBusy,
   launchError,
+  recovering = false,
 }: {
   sessionId: string;
   canEdit: boolean;
   onRestart: () => void;
   restartBusy: boolean;
   launchError: string | null;
+  recovering?: boolean;
 }) {
   const connection = useContext(TerminalConnectionContext);
+  const visible = useTabVisible();
+  const refresh = useRef<(() => void) | null>(null);
   const host = useRef<HTMLDivElement>(null);
   const [session, setSession] = useState<TerminalInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reconnecting, setReconnecting] = useState(false);
+  const isRecovering = recovering || session?.status === "interrupted";
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!host.current || !connection) return;
     let disposed = false,
       owner = false,
@@ -37,6 +44,8 @@ export function TerminalSurface({
     let queuedInput = "";
     const terminal = new Terminal({
       cursorBlink: true,
+      cursorStyle: "block",
+      cursorInactiveStyle: "outline",
       fontSize: 13,
       lineHeight: 1.2,
       fontFamily: '"Geist Mono Variable", "SF Mono", Consolas, monospace',
@@ -48,6 +57,7 @@ export function TerminalSurface({
     const fit = new FitAddon();
     terminal.loadAddon(fit);
     const element = host.current;
+    const isVisible = () => element.getClientRects().length > 0;
     terminal.open(element);
     fit.fit();
     const themeObserver = new MutationObserver(() => {
@@ -58,12 +68,13 @@ export function TerminalSurface({
       attributeFilter: ["class"],
     });
     void document.fonts.ready.then(() => {
-      if (disposed) return;
+      if (disposed || !isVisible()) return;
       fit.fit();
       if (owner) void request({ kind: "resize", sessionId, ...dimensions() }).catch(report);
     });
     const report = (cause: unknown) => {
-      if (!disposed) setError(cause instanceof Error ? cause.message : "Terminal request failed");
+      if (!disposed && connection.state.status === "ready")
+        setError(cause instanceof Error ? cause.message : "Terminal request failed");
     };
     const request = async (operation: TerminalOperation) => {
       const result = await connection.requestTerminal(operation, crypto.randomUUID());
@@ -113,6 +124,7 @@ export function TerminalSurface({
           const focusedPane = focused?.closest("[data-pane-id]");
           if (
             document.visibilityState === "visible" &&
+            isVisible() &&
             !focused?.closest('[role="dialog"], [role="alertdialog"], [role="menu"]') &&
             (!focusedPane || focusedPane === element.closest("[data-pane-id]"))
           )
@@ -140,6 +152,7 @@ export function TerminalSurface({
     const unsubscribe = connection.onTerminal((event) => {
       if (disposed) return;
       if (event.type === "terminal.snapshot" && event.session.id === sessionId) {
+        const scrollFromBottom = terminal.buffer.active.baseY - terminal.buffer.active.viewportY;
         sequence = event.sequence;
         running = event.session.status === "running";
         viewerId = event.viewerId;
@@ -147,11 +160,15 @@ export function TerminalSurface({
         terminal.resize(event.session.cols, event.session.rows);
         // Queue the reset with its snapshot so back-to-back attaches cannot replay
         // two screens after a synchronous reset raced ahead of queued xterm writes.
-        terminal.write("\x1bc" + event.data);
+        terminal.write("\x1bc" + event.data, () => {
+          if (!disposed && scrollFromBottom > 0)
+            terminal.scrollToLine(Math.max(0, terminal.buffer.active.baseY - scrollFromBottom));
+        });
         terminal.options.disableStdin = !running;
         setSession(event.session);
         setError(null);
-        if (running && event.ownerId === null) claim(true);
+        setReconnecting(false);
+        if (running && event.ownerId === null && isVisible()) claim(true);
       } else if (event.type === "terminal.output" && event.sessionId === sessionId) {
         if (event.sequence <= sequence) return;
         if (event.sequence !== sequence + 1) {
@@ -182,11 +199,18 @@ export function TerminalSurface({
       }
     });
     let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+    refresh.current = () => {
+      if (disposed || !isVisible()) return;
+      fit.fit();
+      terminal.refresh(0, terminal.rows - 1);
+      if (owner) void request({ kind: "resize", sessionId, ...dimensions() }).catch(report);
+      else if (running) claim(true);
+    };
     const observer = new ResizeObserver(() => {
       clearTimeout(resizeTimer);
-      if (owner)
+      if (owner && isVisible())
         resizeTimer = setTimeout(() => {
-          if (!disposed && owner)
+          if (!disposed && owner && isVisible())
             void request({ kind: "resize", sessionId, ...dimensions() }).catch(report);
         }, 100);
     });
@@ -196,6 +220,8 @@ export function TerminalSurface({
     });
     const unsubscribeState = connection.subscribe((state) => {
       if (state.status !== "ready") {
+        setReconnecting(true);
+        setError(null);
         terminal.options.disableStdin = true;
         queuedInput = "";
         running = false;
@@ -207,6 +233,7 @@ export function TerminalSurface({
     attach();
     return () => {
       disposed = true;
+      refresh.current = null;
       clearTimeout(resizeTimer);
       observer.disconnect();
       themeObserver.disconnect();
@@ -222,18 +249,23 @@ export function TerminalSurface({
       terminal.dispose();
     };
   }, [connection, sessionId]);
+  useLayoutEffect(() => {
+    if (visible) refresh.current?.();
+  }, [visible]);
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      {session && !["running", "starting"].includes(session.status) && (
+    <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      {(isRecovering || reconnecting) && !launchError && (
+        <span
+          role="status"
+          className="absolute top-2 right-3 z-10 rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground"
+        >
+          Reconnecting…
+        </span>
+      )}
+      {session && !isRecovering && !["running", "starting"].includes(session.status) && (
         <div className="flex items-center justify-between border-b px-3 py-2 text-xs text-muted-foreground">
-          <span>
-            {session.status === "exited"
-              ? "Session ended"
-              : session.status === "interrupted"
-                ? "Session interrupted"
-                : "Session failed"}
-          </span>
+          <span>{session.status === "exited" ? "Session ended" : "Session failed"}</span>
           <button
             type="button"
             disabled={!canEdit || restartBusy}
@@ -244,15 +276,29 @@ export function TerminalSurface({
           </button>
         </div>
       )}
-      {(error || launchError || session?.error) && (
-        <p role="alert" className="shrink-0 px-2 py-1 text-xs text-destructive">
-          {error ?? launchError ?? session?.error}
-        </p>
+      {(launchError || (!isRecovering && (error || session?.error))) && (
+        <div
+          role="alert"
+          className="flex shrink-0 items-center gap-2 px-2 py-1 text-xs text-destructive"
+        >
+          <span>{launchError ?? error ?? session?.error}</span>
+          {isRecovering && (
+            <button
+              type="button"
+              disabled={!canEdit || restartBusy}
+              onClick={onRestart}
+              className="text-primary"
+            >
+              Retry connection
+            </button>
+          )}
+        </div>
       )}
       <div className="min-h-0 min-w-0 flex-1 overflow-hidden bg-[var(--terminal-background)] p-2">
         <div
           ref={host}
           aria-label="Terminal output"
+          aria-busy={!session || isRecovering || reconnecting}
           className="concors-terminal h-full w-full overflow-hidden"
         />
       </div>

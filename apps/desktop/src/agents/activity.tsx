@@ -1,15 +1,17 @@
 import { formatDuration } from "./duration";
 import { useEffect, useState } from "react";
-import { LoaderCircle } from "lucide-react";
 import { CodexIcon } from "./paseo/codex-icon";
 import { useAgents, AGENT_STATUS } from "./context";
 
 export function AgentLoadingIcon({ className = "size-4" }: { className?: string }) {
   return (
-    <LoaderCircle
-      aria-hidden="true"
-      className={`${className} animate-spin text-amber-500 motion-reduce:animate-none`}
-    />
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className={`${className} text-primary`}>
+      <circle cx="10" cy="10" r="7" stroke="currentColor" strokeWidth="1.5" opacity="0.2" />
+      <g className="origin-center animate-spin [animation-duration:1.4s] motion-reduce:animate-none">
+        <path d="M10 3a7 7 0 0 1 7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      </g>
+      <circle cx="10" cy="10" r="1.5" fill="currentColor" opacity="0.7" />
+    </svg>
   );
 }
 
@@ -78,10 +80,10 @@ export function Activity({
   }, [startedAt]);
   const elapsed = startedAt ? (now - Date.parse(startedAt)) / 1000 : null;
   return (
-    <div role="status" className="flex items-center gap-2 py-3 text-[14px] text-muted-foreground">
+    <div role="status" className="flex items-center gap-2 py-3 text-sm text-muted-foreground">
       <BrailleSpinner />
       {elapsed !== null && Number.isFinite(elapsed) && (
-        <span aria-label="Elapsed time" className="text-[12px] text-muted-foreground tabular-nums">
+        <span aria-label="Elapsed time" className="text-xs text-muted-foreground tabular-nums">
           {formatDuration(elapsed)}
         </span>
       )}

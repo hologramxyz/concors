@@ -63,7 +63,7 @@ export function AppSidebar(props: AppSidebarProps) {
       <nav
         id="app-sidebar"
         aria-label="Primary"
-        className="flex h-full w-[216px] flex-col bg-sidebar text-[13px] text-sidebar-foreground"
+        className="flex h-full w-[216px] flex-col bg-sidebar text-ui text-sidebar-foreground"
       >
         <div className="m-2 flex h-9 items-center justify-between gap-1">
           <MachineSwitcher
@@ -139,7 +139,7 @@ export function AppSidebar(props: AppSidebarProps) {
                         ? "page"
                         : undefined
                     }
-                    className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-[13px] disabled:opacity-50"
+                    className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-ui disabled:opacity-50"
                   >
                     <ProjectImage
                       key={images.get(project.id) ?? "folder"}
@@ -155,7 +155,7 @@ export function AppSidebar(props: AppSidebarProps) {
                 </li>
               ))}
               {props.workspace?.projects.length === 0 && (
-                <li className="px-2 py-3 text-[13px] leading-relaxed text-muted-foreground">
+                <li className="px-2 py-3 text-ui leading-relaxed text-muted-foreground">
                   Add a project to organize your tabs and panes.
                 </li>
               )}

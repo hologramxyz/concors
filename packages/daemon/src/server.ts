@@ -1,4 +1,5 @@
 import type { AgentProviderFactory } from "./agents/manager.ts";
+import { timingSafeEqual } from "node:crypto";
 import { HEALTH_PATH, type HealthResponse } from "@concors/protocol";
 import websocket from "@fastify/websocket";
 import Fastify, { type FastifyInstance } from "fastify";
@@ -9,6 +10,8 @@ import { DaemonState } from "./state.ts";
 import { registerProtocolEndpoint } from "./ws/protocol-endpoint.ts";
 
 export interface DaemonServerOptions {
+  /** Private session hosts accept only their local gateway's credential. */
+  readonly internalToken?: string;
   readonly agentProviderFactory?: AgentProviderFactory;
   /** Overrides for tests; production always uses the defaults. */
   readonly handshakeTimeoutMs?: number;
@@ -47,6 +50,14 @@ export function createDaemonServer(
     // Request IDs make WebSocket connection logs traceable without extra dependencies.
     genReqId: () => crypto.randomUUID(),
   });
+  if (options.internalToken) {
+    const expected = Buffer.from(`Bearer ${options.internalToken}`);
+    app.addHook("onRequest", async (request, reply) => {
+      const supplied = Buffer.from(request.headers.authorization ?? "");
+      if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected))
+        return reply.code(401).send({ error: "Unauthorized" });
+    });
+  }
 
   let closeConnections: () => Promise<void> = async () => undefined;
 

@@ -6,6 +6,7 @@ export function resolveProfile(
   profile: TerminalProfile,
   platform = process.platform,
   env = process.env,
+  resume = false,
 ): { command: string; args: string[] | string } {
   if (profile === "shell")
     return {
@@ -19,6 +20,14 @@ export function resolveProfile(
     platform === "win32"
       ? [profile + ".exe", profile + ".cmd", profile + ".bat", profile]
       : [profile];
+  // Open the provider's conversation picker; never guess a conversation or replay a prompt.
+  const args = resume
+    ? profile === "codex"
+      ? ["resume"]
+      : profile === "claude"
+        ? ["--resume"]
+        : []
+    : [];
   for (const directory of (env["PATH"] ?? env["Path"] ?? "").split(
     platform === "win32" ? ";" : delimiter,
   )) {
@@ -35,10 +44,10 @@ export function resolveProfile(
           const escaped = candidate.replace(/([()%!^"`<>&|;, *?])/g, "^$1");
           return {
             command: env["ComSpec"] ?? env["COMSPEC"] ?? "cmd.exe",
-            args: `/d /s /c "${escaped}"`,
+            args: `/d /s /c "${escaped}${args.length ? ` ${args.join(" ")}` : ""}"`,
           };
         }
-        return { command: candidate, args: [] };
+        return { command: candidate, args };
       } catch {
         /* Try the next PATH candidate. */
       }

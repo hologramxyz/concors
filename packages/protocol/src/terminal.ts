@@ -21,6 +21,7 @@ export type TerminalInfo = z.infer<typeof TerminalInfoSchema>;
 export const TerminalOperationSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("start"),
+    recover: z.boolean().optional(),
     epoch: Id,
     projectId: Id,
     tabId: Id,

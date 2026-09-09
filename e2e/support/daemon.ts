@@ -1,5 +1,8 @@
 import { delimiter } from "node:path";
-import { installTestCodexProfile } from "../../packages/daemon/src/terminal/testing/profile.ts";
+import {
+  installTestCodexProfile,
+  installTestClaudeProfile,
+} from "../../packages/daemon/src/terminal/testing/profile.ts";
 // Test-only server entry point. Production CLI never imports or enables this provider.
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
@@ -10,11 +13,15 @@ const directory = process.env["CONCORS_DATA_DIR"];
 if (!directory) throw new Error("Set an isolated acceptance-test directory");
 await mkdir(directory, { recursive: true });
 process.env["PATH"] = installTestCodexProfile(directory) + delimiter + (process.env["PATH"] ?? "");
+installTestClaudeProfile(directory);
 // Keep shell startup files from replacing the harmless test executable in PATH.
 if (process.platform !== "win32") process.env["SHELL"] = "/bin/sh";
-const server = createDaemonServer(loadDaemonConfig({ port: 7429, logLevel: "warn" }, {}), {
-  workspacePath: join(directory, "workspace.sqlite"),
-  agentProviderFactory: (_cwd, handler) => new TestAgentProvider(handler),
-});
+const server = createDaemonServer(
+  loadDaemonConfig({ port: process.env["CONCORS_E2E_DAEMON_PORT"] ?? 7429, logLevel: "warn" }, {}),
+  {
+    workspacePath: join(directory, "workspace.sqlite"),
+    agentProviderFactory: (_cwd, handler) => new TestAgentProvider(handler),
+  },
+);
 await server.listen();
 for (const signal of ["SIGINT", "SIGTERM"] as const) process.on(signal, () => void server.close());

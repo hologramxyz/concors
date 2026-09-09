@@ -47,6 +47,7 @@ jobs:
           curl -sf http://127.0.0.1:7420/health | grep -q '"status":"ok"'
           kill -TERM "$DAEMON_PID"
           wait "$DAEMON_PID"
+          node packages/daemon/dist/cli.js stop-host
 
   # Compile platform-specific notification bridges; packaged OS smoke tests remain separate.
   tauri:
@@ -59,6 +60,11 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+
+      - name: Disable unused Chrome package source
+        if: runner.os == 'Linux'
+        # Its package index can fail apt-get update; Tauri only needs Ubuntu libraries.
+        run: sudo rm -f /etc/apt/sources.list.d/google-chrome*.list /etc/apt/sources.list.d/google-chrome*.sources
 
       - name: Install Tauri system dependencies
         if: runner.os == 'Linux'
@@ -82,6 +88,8 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Session continuity on the native platform
+        run: pnpm --filter @concors/daemon exec vitest run src/hosting/gateway.test.ts src/terminal/profiles.test.ts
       - run: pnpm desktop:web:build
 
       - name: cargo fmt
@@ -98,6 +106,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+      - name: Disable unused Chrome package source
+        # Playwright downloads its own Chromium; this runner-provided apt source is unused.
+        run: sudo rm -f /etc/apt/sources.list.d/google-chrome*.list /etc/apt/sources.list.d/google-chrome*.sources
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
