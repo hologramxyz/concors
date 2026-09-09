@@ -1,54 +1,66 @@
 import { test, expect, signedIn } from "./signed-in.ts";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { randomUUID } from "node:crypto";
-import { tmpdir, homedir } from "node:os";
-import { join } from "node:path";
+import { openFolder } from "./support/projects.ts";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, join } from "node:path";
 
-test("create and clone projects on the daemon machine and sync to another browser", async ({
+test("browse and clone folders on the machine, derive names, and focus an existing workspace", async ({
   page,
   browser,
 }) => {
   const root = mkdtempSync(join(tmpdir(), "concors-browser-projects-"));
-  const projectName = `concors-default-${randomUUID()}`;
-  const defaultFolder = join(homedir(), "repos", projectName);
+  const folder = join(root, "my-project");
+  mkdirSync(folder);
   const context = await browser.newContext();
   const second = await context.newPage();
   try {
     await Promise.all([signedIn(page), signedIn(second)]);
     await page.goto("/");
     await second.goto("http://localhost:1420");
-    await page.getByRole("button", { name: "Add project", exact: true }).first().click();
-    await page.getByLabel("Project source").selectOption("create");
-    await page.getByLabel("Project name", { exact: true }).fill(projectName);
-    await expect(page.getByLabel("Folder on this machine")).toHaveValue(`~/repos/${projectName}`);
-    await page
-      .getByRole("dialog")
-      .getByRole("button", { name: "Add project", exact: true })
-      .click();
-    await expect(second.getByRole("heading", { name: projectName, exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Add project", exact: true }).first().click();
-    await page.getByLabel("Project source").selectOption("clone");
-    await page.getByLabel("Project name", { exact: true }).fill("Cloned from browser");
-    await expect(page.getByLabel("Folder on this machine")).toHaveValue(
-      "~/repos/Cloned-from-browser",
-    );
+    await openFolder(page, folder);
+    await expect(second.getByRole("heading", { name: "my-project", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Open workspace menu", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Clone repository…", exact: true }).click();
     await page.getByLabel("Repository URL or local path").fill(process.cwd());
-    await page.getByLabel("Folder on this machine").fill(join(root, "cloned"));
+    await expect(page.getByLabel("Destination folder")).toHaveValue(
+      `~/repos/${basename(process.cwd())}`,
+    );
+    await page.getByLabel("Destination folder").fill(join(root, "cloned"));
     await page
       .getByRole("dialog")
-      .getByRole("button", { name: "Add project", exact: true })
+      .getByRole("button", { name: "Clone repository", exact: true })
       .click();
-    await expect(
-      second.getByRole("heading", { name: "Cloned from browser", exact: true }),
-    ).toBeVisible();
+    await expect(second.getByRole("heading", { name: "cloned", exact: true })).toBeVisible();
     expect(readFileSync(join(root, "cloned", "README.md"), "utf8")).toContain("Concors");
+    await openFolder(page, folder);
+    await expect(second.getByRole("heading", { name: "my-project", exact: true })).toBeVisible();
+    await expect(
+      page
+        .getByRole("navigation", { name: "Primary" })
+        .getByRole("button", { name: "my-project", exact: true }),
+    ).toHaveCount(1);
     await second.reload();
-    await second.getByRole("button", { name: "Add project", exact: true }).first().click();
-    await expect(second.getByRole("region", { name: "Project setup history" })).toHaveCount(0);
-    await expect(second.getByRole("dialog")).not.toContainText("Cloned from browser");
+    await expect(second.getByRole("heading", { name: "my-project", exact: true })).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole("button", { name: "Open workspace menu", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Open folder…", exact: true }).click();
+    await expect(page.getByLabel("Folder path", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Go", exact: true })).toBeEnabled();
+    await page.getByLabel("Folder path", { exact: true }).fill(root);
+    await page.getByRole("button", { name: "Go", exact: true }).click();
+    await page.getByRole("button", { name: "my-project", exact: true }).last().click();
+    await expect(page.getByLabel("Folder path", { exact: true })).toHaveValue(folder);
+    await expect(page.getByRole("dialog")).not.toContainText("Project name");
+    const size = await page.getByRole("dialog").evaluate((element) => ({
+      width: element.clientWidth,
+      scroll: element.scrollWidth,
+      right: element.getBoundingClientRect().right,
+    }));
+    expect(size.scroll).toBeLessThanOrEqual(size.width);
+    expect(size.right).toBeLessThanOrEqual(390);
+    await page.screenshot({ path: "test-results/folders-mobile.png" });
   } finally {
     await context.close();
-    rmSync(defaultFolder, { recursive: true, force: true });
     rmSync(root, { recursive: true, force: true });
   }
 });

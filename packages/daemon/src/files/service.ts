@@ -31,7 +31,7 @@ export class ProjectFiles {
         throw new Error("Machine state changed. Reconnect before opening files.");
       const project = snapshot.projects.find((item) => item.id === operation.projectId);
       if (!project) throw new Error("Project is no longer available.");
-      const root = await realpath(project.directory);
+      const root = await realpath(this.workspace.fileDirectory(project.id, operation.directory));
       if (operation.kind === "create") {
         const entry = await createProjectEntry(root, operation.path, operation.entryKind);
         return {
