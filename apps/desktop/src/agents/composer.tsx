@@ -506,7 +506,7 @@ export function AgentComposer({
           </p>
         )}
         {uncertain && (
-          <div className="flex items-center gap-2 text-xs">
+          <div data-composer-delivery className="flex items-center gap-2 text-xs">
             <span>Delivery could not be confirmed.</span>
             <button
               className="text-primary"

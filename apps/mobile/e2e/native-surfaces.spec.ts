@@ -63,6 +63,14 @@ test("native surface bridge preserves navigation, drafts, settings, attachments 
     .toBe(true);
   await expect(ui.locator("[data-agent-composer]")).toHaveCount(0);
   await expect(ui.getByRole("button", { name: "Open sidebar", exact: true })).toHaveCount(0);
+  await expect(ui.getByLabel("Agent tasks", { exact: true })).not.toHaveCSS(
+    "background-color",
+    "rgba(0, 0, 0, 0)",
+  );
+  await expect(ui.locator('[data-native-composer="true"]')).toHaveCSS(
+    "background-color",
+    "rgba(0, 0, 0, 0)",
+  );
   const initial = await snapshot(page);
   if (!initial) throw new Error("No native snapshot");
   expect(initial?.surfaces.filter((item) => item.content.kind === "button")).toHaveLength(3);

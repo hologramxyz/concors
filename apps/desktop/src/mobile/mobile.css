@@ -1122,6 +1122,20 @@ aside[aria-label="Agent notifications"] {
   inset-inline: 0;
   background: transparent;
 }
+/* Only the native input floats over the timeline; auxiliary text must stay legible. */
+.mobile-pane
+  [aria-label="Agent conversation"]:has([data-native-composer="true"])
+  [data-chat-footer]
+  :is(
+    [aria-label="Agent tasks"],
+    [data-composer-queue],
+    [data-composer-attachments],
+    [data-composer-delivery],
+    [role="alert"]
+  ) {
+  background: var(--background);
+  border-radius: 12px;
+}
 .mobile-pane
   [aria-label="Agent conversation"]:has([data-native-composer="true"])
   [aria-label="Chat timeline"] {
