@@ -15,6 +15,7 @@
     "test": "vitest run",
     "live:preflight": "node scripts/live-preflight.mts",
     "release:check": "node scripts/release-check.mjs",
+    "candidate:check": "node scripts/release-check.mjs --candidate",
     "eas-build-post-install": "pnpm assets",
     "eas-build-pre-install": "node scripts/production-guard.mjs"
   },

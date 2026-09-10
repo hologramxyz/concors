@@ -21,12 +21,16 @@
       "env": { "APP_VARIANT": "preview" },
       "android": { "buildType": "apk" }
     },
-    "production": {
+    "candidate": {
       "extends": "base",
       "autoIncrement": true,
+      "distribution": "store",
       "environment": "production",
       "env": { "APP_VARIANT": "production", "EXPO_PUBLIC_DEMO": "false" },
       "android": { "buildType": "app-bundle" }
+    },
+    "production": {
+      "extends": "candidate"
     }
   },
   "submit": {
