@@ -15,7 +15,10 @@ import {
   ConnectionController,
   createManagedConnection,
   type ConnectionSnapshot,
+  parseHosts,
+  HostSchema,
 } from "@concors/client-core";
+import { deviceStorage, machineCredentials } from "../platform/storage";
 import { config } from "../config";
 import { api, demo } from "../auth/runtime";
 
@@ -39,7 +42,7 @@ export function useMachine() {
   if (!value) throw new Error("Missing MachineProvider");
   return value;
 }
-async function createConnection(machineId: string | null) {
+async function createConnection(machineId: string | null, scope: string, signal: AbortSignal) {
   const client = {
     kind: "mobile" as const,
     name: "concors-mobile",
@@ -59,7 +62,23 @@ async function createConnection(machineId: string | null) {
     });
   }
   if (!machineId) throw new Error("Choose a machine first.");
-  return createManagedConnection(api, machineId, client);
+  const key = `hosts.v1.${Array.from(scope, (char) => char.charCodeAt(0).toString(16)).join("-")}`;
+  const hosts = parseHosts(await deviceStorage.get(key));
+  if (signal.aborted) throw new Error("Connection cancelled");
+  return createManagedConnection(api, machineId, client, {
+    scope,
+    signal,
+    credentials: machineCredentials,
+    savedHost: hosts.find((host) => host.machineId === machineId),
+    saveHost: (host) =>
+      deviceStorage.set(
+        key,
+        JSON.stringify([
+          ...hosts.filter((saved) => saved.machineId !== host.machineId),
+          HostSchema.parse(host),
+        ]),
+      ),
+  });
 }
 export function MachineProvider({
   children,
@@ -77,6 +96,8 @@ export function MachineProvider({
   const selectMachine = useCallback((id: string | null) => setSelection({ scope, id }), [scope]);
   return (
     <MachineSession
+      key={scope}
+      scope={scope}
       machineId={machineId}
       selectMachine={selectMachine}
       direct={direct}
@@ -87,6 +108,7 @@ export function MachineProvider({
   );
 }
 function MachineSession({
+  scope,
   children,
   machineId,
   selectMachine,
@@ -94,6 +116,7 @@ function MachineSession({
   enabled,
 }: {
   children: ReactNode;
+  scope: string;
   machineId: string | null;
   selectMachine(id: string | null): void;
   direct: boolean;
@@ -103,12 +126,12 @@ function MachineSession({
     () =>
       enabled && (direct || machineId)
         ? new ConnectionController(
-            () => createConnection(machineId),
+            (signal) => createConnection(machineId, scope, signal),
             // Managed cloud IDs are token audiences; workspace IDs are a separate daemon namespace.
             config.demo ? (machineId ?? undefined) : undefined,
           )
         : null,
-    [machineId, direct, enabled],
+    [machineId, scope, direct, enabled],
   );
   const connection = useSyncExternalStore(
     controller?.subscribe ?? noSubscribe,

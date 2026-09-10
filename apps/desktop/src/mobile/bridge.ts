@@ -112,6 +112,8 @@ export function embeddedConnection(connectionId: string) {
   return new DaemonConnection({
     endpoint: describeDaemonEndpoint("wss://native.concors.invalid/ws"),
     client: { kind: "mobile", name: "concors-mobile-ui", version: "0.1.0" },
+    // Native WebView startup can delay both JS runtimes beyond a network socket handshake.
+    handshakeTimeoutMs: 30_000,
     webSocketFactory: () => new BridgeSocket(connectionId),
   });
 }

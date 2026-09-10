@@ -222,7 +222,8 @@ it("keeps an in-flight Agent chat turn and pending approval alive across gateway
     randomUUID(),
   );
   expect(started.outcome.status).toBe("ok");
-  await expect.poll(() => c.agents[0]?.status).toBe("idle");
+  // This starts a real worker process; cold Windows runners can exceed the default 1 s poll.
+  await expect.poll(() => c.agents[0]?.status, { timeout: 10_000 }).toBe("idle");
   const id = c.agents[0]!.id;
   await c.requestAgent({ kind: "send", sessionId: id, text: "hold the stream" }, randomUUID());
   await expect.poll(() => c.agents[0]?.status).toBe("working");
