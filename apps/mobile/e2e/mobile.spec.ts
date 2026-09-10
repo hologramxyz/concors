@@ -426,6 +426,22 @@ test("folder workspaces and shared settings remain available from the sidebar", 
   await choose(ui, "Settings section", "advanced");
   await expect(ui.getByText("In-memory demo", { exact: true })).toBeVisible();
 });
+test("new workspace completion opens its own project and closes the sidebar", async ({ page }) => {
+  const ui = await enter(page);
+  await ui.getByRole("textbox", { name: "Message Codex" }).fill("Keep my original draft");
+  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  await ui.getByRole("button", { name: "Open workspace menu", exact: true }).click();
+  await ui.getByRole("button", { name: "New workspace", exact: true }).click();
+  await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "false");
+  await expect(ui.getByRole("combobox", { name: "Tabs and panes", exact: true })).toContainText(
+    "New workspace",
+  );
+  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  await ui.getByRole("button", { name: "Concors", exact: true }).click();
+  await expect(ui.getByRole("textbox", { name: "Message Codex" })).toHaveValue(
+    "Keep my original draft",
+  );
+});
 test("foreground reconnect preserves an unsent draft without replaying it", async ({ page }) => {
   const ui = await enter(page);
   await ui.getByRole("textbox", { name: "Message Codex" }).fill("Do not lose this draft");

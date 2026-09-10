@@ -91,7 +91,6 @@ function MobileWorkspaceContent({
   const [settingsPage, setSettingsPage] = useState<SettingsPage | "machines">("account");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [addingProject, setAddingProject] = useState<"open" | "clone" | null>(null);
-  const newWorkspace = useNewWorkspace(connection);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -106,6 +105,15 @@ function MobileWorkspaceContent({
     target: host.target,
   });
   const memories = useRef(new Map<string, MobileTarget>());
+  const onWorkspaceCreated = useCallback(
+    (projectId: string) => {
+      setLocal({ machineId: host.machineId, target: { projectId } });
+      setSidebarOpen(false);
+      setError(null);
+    },
+    [host.machineId],
+  );
+  const newWorkspace = useNewWorkspace(connection, onWorkspaceCreated);
   const [width, setWidth] = useState(() => Math.min(320, window.innerWidth * 0.84));
   const sidebar = useRef<HTMLElement>(null);
   const workspace = replica?.machineId === host.machineId ? replica.workspace : null;
