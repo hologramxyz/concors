@@ -1,10 +1,11 @@
 import { useCommand } from "@/shortcuts/context";
 import { shortcutLabel } from "@/shortcuts/bindings";
 import { PaneProfileIcon } from "./profile-icon";
-import { TAB_PROFILES } from "./tab-profiles";
+import { paneProfiles } from "./tab-profiles";
+import { useTerminalProfiles } from "@/terminal/profiles-context";
 import { useContext, useRef, useState, type ReactNode } from "react";
 import { CompactLayoutContext } from "@/components/compact-layout";
-import { Plus, SlidersHorizontal } from "lucide-react";
+import { Plus, Settings2 } from "lucide-react";
 import type { PaneProfile } from "@concors/protocol";
 import {
   DropdownMenu,
@@ -19,10 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 
 export function NewTabMenu({
   disabled,
@@ -34,29 +32,36 @@ export function NewTabMenu({
   renderTrigger,
 }: {
   disabled: boolean;
-  onCreate: (profile: PaneProfile, name?: string) => void;
+  onCreate: (profile: PaneProfile, name?: string, terminalProfileId?: string) => void;
   empty?: boolean;
   keyboard?: boolean;
   tabLimitReached?: boolean;
   renderTrigger?: (open: (destination?: "tab" | "pane") => void) => ReactNode;
   paneTarget?:
-    { name: string; disabled: boolean; onCreate(profile: PaneProfile): void } | undefined;
+    | {
+        name: string;
+        disabled: boolean;
+        onCreate(profile: PaneProfile, terminalProfileId?: string): void;
+      }
+    | undefined;
 }) {
   const compact = useContext(CompactLayoutContext);
+  const profiles = useTerminalProfiles();
   const triggerContainer = useRef<HTMLSpanElement>(null);
+  const menuTransfersFocus = useRef(false);
   const [destination, setDestination] = useState<"tab" | "pane">("tab");
   const addingPane = compact && destination === "pane" && !!paneTarget;
   const createDisabled = disabled || (addingPane ? paneTarget.disabled : tabLimitReached);
-  const create = (profile: PaneProfile, name?: string) => {
-    if (addingPane) paneTarget.onCreate(profile);
-    else onCreate(profile, name);
+  const create = (profile: PaneProfile, name?: string, terminalProfileId?: string) => {
+    const id = profiles.supported ? terminalProfileId : undefined;
+    if (addingPane) paneTarget.onCreate(profile, id);
+    else onCreate(profile, name, id);
   };
   const [open, setOpen] = useState(false);
   useCommand("new-tab", keyboard && !disabled, () => {
     setDestination("tab");
     setOpen(true);
   });
-  const [configuring, setConfiguring] = useState(false);
   const restoreTriggerFocus = (event: Event) => {
     if (!compact || !renderTrigger) return;
     event.preventDefault();
@@ -130,17 +135,17 @@ export function NewTabMenu({
                 </p>
               )}
               <div className="mobile-session-list">
-                {[...TAB_PROFILES]
+                {paneProfiles(profiles.profiles)
                   .sort((a, b) => Number(b.profile === "chat") - Number(a.profile === "chat"))
-                  .map(({ profile, label }) => (
+                  .map(({ id, profile, label, terminalProfileId }) => (
                     <button
-                      key={profile}
+                      key={id}
                       type="button"
                       aria-label={label}
                       disabled={createDisabled}
                       onClick={() => {
                         setOpen(false);
-                        create(profile);
+                        create(profile, label, terminalProfileId);
                       }}
                     >
                       <span className="mobile-session-icon">
@@ -158,21 +163,30 @@ export function NewTabMenu({
                       </span>
                     </button>
                   ))}
-                {!addingPane && (
-                  <button
-                    type="button"
-                    disabled={createDisabled}
-                    onClick={() => {
-                      setOpen(false);
-                      setConfiguring(true);
-                    }}
-                  >
-                    <span className="mobile-session-icon">
-                      <SlidersHorizontal />
-                    </span>
-                    <span>Configure terminal profile…</span>
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    profiles.openSettings(true);
+                  }}
+                >
+                  <span className="mobile-session-icon">
+                    <Plus />
+                  </span>
+                  <span>Add terminal profile…</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    profiles.openSettings();
+                  }}
+                >
+                  <span className="mobile-session-icon">
+                    <Settings2 />
+                  </span>
+                  <span>Manage terminal profiles…</span>
+                </button>
               </div>
             </DialogContent>
           </Dialog>
@@ -192,85 +206,51 @@ export function NewTabMenu({
             <Plus className="size-4" />
             {empty && "Create a tab"}
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-64">
-            {TAB_PROFILES.map(({ profile, label, icon: Icon }) => (
-              <DropdownMenuItem
-                key={profile}
-                disabled={disabled}
-                onSelect={() => onCreate(profile)}
-              >
-                <Icon className="size-4 shrink-0" />
-                {label}
-              </DropdownMenuItem>
-            ))}
+          <DropdownMenuContent
+            className="w-72 max-w-[calc(100vw-16px)]"
+            onCloseAutoFocus={(event) => {
+              // The selected pane or settings page owns focus after selection.
+              if (menuTransfersFocus.current) event.preventDefault();
+              menuTransfersFocus.current = false;
+            }}
+          >
+            {paneProfiles(profiles.profiles).map(
+              ({ id, profile, label, icon: Icon, terminalProfileId }) => (
+                <DropdownMenuItem
+                  key={id}
+                  disabled={disabled}
+                  onSelect={() => {
+                    menuTransfersFocus.current = true;
+                    onCreate(profile, label, profiles.supported ? terminalProfileId : undefined);
+                  }}
+                >
+                  <Icon className="size-4 shrink-0" aria-hidden="true" />
+                  <span className="truncate">{label}</span>
+                </DropdownMenuItem>
+              ),
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="whitespace-nowrap"
-              disabled={disabled}
-              onSelect={() => setConfiguring(true)}
+              onSelect={() => {
+                menuTransfersFocus.current = true;
+                profiles.openSettings(true);
+              }}
             >
-              <SlidersHorizontal /> Configure terminal profile…
+              <Plus /> Add terminal profile…
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="whitespace-nowrap"
+              onSelect={() => {
+                menuTransfersFocus.current = true;
+                profiles.openSettings();
+              }}
+            >
+              <Settings2 /> Manage terminal profiles…
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       )}
-      <Dialog open={configuring} onOpenChange={setConfiguring}>
-        <DialogContent onCloseAutoFocus={restoreTriggerFocus}>
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              const data = new FormData(event.currentTarget);
-              onCreate(data.get("profile") as PaneProfile, String(data.get("name")).trim());
-              setConfiguring(false);
-            }}
-          >
-            <DialogHeader>
-              <DialogTitle>Configure terminal profile</DialogTitle>
-              <DialogDescription>
-                Choose a profile and name for this tab. It starts in the current pane’s folder.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="my-5 space-y-4">
-              <label className="block space-y-2">
-                <span>Tab name</span>
-                <Input
-                  name="name"
-                  required
-                  maxLength={120}
-                  placeholder="Development terminal"
-                  disabled={disabled}
-                />
-              </label>
-              <label className="block space-y-2">
-                <span>Terminal profile</span>
-                <select
-                  aria-label="Terminal profile"
-                  name="profile"
-                  defaultValue="shell"
-                  disabled={disabled}
-                  className="h-9 w-full rounded-md border bg-background px-2"
-                >
-                  {TAB_PROFILES.filter(({ profile }) => profile !== "chat").map(
-                    ({ profile, label }) => (
-                      <option key={profile} value={profile}>
-                        {label}
-                      </option>
-                    ),
-                  )}
-                </select>
-              </label>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setConfiguring(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={disabled}>
-                Start session
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }

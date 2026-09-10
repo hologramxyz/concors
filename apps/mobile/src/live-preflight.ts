@@ -13,26 +13,14 @@ export async function inspectLivePrerequisites(
     throw new Error("The selected machine is not available in the account's active organization.");
   const capabilities = await api.getMobileCapabilities();
   const blockers: string[] = [];
-  const paidPeriodEnded =
-    machine.cancelledAt !== null &&
-    (machine.paidUntil === null || !(Date.parse(machine.paidUntil) > Date.now()));
-  if (machine.status !== "running" || paidPeriodEnded) blockers.push("The machine is not running.");
-  if (!capabilities.remoteAccess)
+  try {
+    managedHost(machine);
+  } catch (cause) {
     blockers.push(
-      machine.agentInstalledAt
-        ? "A machine agent is installed, but this deployment does not advertise the Concourse workspace/chat bridge. Terminal access alone is not workspace parity."
-        : "The deployment does not advertise Concourse workspace access.",
+      cause instanceof ConnectionAccessError
+        ? cause.message
+        : "Managed connection metadata is invalid.",
     );
-  if (capabilities.remoteAccess && !blockers.length) {
-    try {
-      managedHost(machine);
-    } catch (cause) {
-      blockers.push(
-        cause instanceof ConnectionAccessError
-          ? cause.message
-          : "Managed connection metadata is invalid.",
-      );
-    }
   }
   return {
     authenticated: true,

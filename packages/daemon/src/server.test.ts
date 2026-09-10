@@ -69,6 +69,7 @@ describe("WebSocket handshake", () => {
         daemonVersion: DAEMON_VERSION,
         status: "ready",
         capabilities: [
+          "terminal-profiles",
           "project-files",
           "project-file-create",
           "folder-workspaces",

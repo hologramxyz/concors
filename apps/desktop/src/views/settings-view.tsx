@@ -10,10 +10,13 @@ import { BillingSection } from "@/settings/billing-section";
 import type { SettingsPage } from "@/settings/navigation";
 import { SshKeysSection } from "@/settings/ssh-keys-section";
 import { ShortcutSettings } from "@/settings/shortcut-settings";
+import { TerminalsSettings } from "@/settings/terminals-settings";
 import type { ThemePreference } from "@/theme/use-theme";
 import type { CornerStyle } from "@/theme/use-corner-style";
 
 interface SettingsViewProps {
+  readonly creatingTerminalProfile: boolean;
+  readonly onCreatingTerminalProfileChange: (creating: boolean) => void;
   readonly page: SettingsPage;
   readonly endpoint: DaemonEndpoint | null;
   readonly state: ConnectionState;
@@ -29,6 +32,8 @@ interface SettingsViewProps {
 }
 
 export function SettingsView({
+  creatingTerminalProfile,
+  onCreatingTerminalProfileChange,
   page,
   endpoint,
   state,
@@ -46,6 +51,14 @@ export function SettingsView({
   let content: ReactNode;
 
   switch (page) {
+    case "terminals":
+      content = (
+        <TerminalsSettings
+          creating={creatingTerminalProfile}
+          onCreatingChange={onCreatingTerminalProfileChange}
+        />
+      );
+      break;
     case "account":
       content = (
         <AccountSettings

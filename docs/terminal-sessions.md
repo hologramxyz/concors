@@ -87,3 +87,28 @@ sequences during streaming and snapshot replay. Resets are queued with snapshot 
 preventing overlapping attach responses from duplicating the displayed screen.
 A daemon update and new terminal sessions are required for the environment fix;
 the client palette updates existing sessions immediately.
+
+## Saved terminal profiles
+
+Open **Settings → Terminals** to add, edit, or delete profiles. Each profile has a name,
+executable command, and arguments (one argument per line; spaces inside a line stay together).
+Codex, Claude Code, and OpenCode are included initially. **Terminal** opens the machine's default
+shell, while **Agent** opens agent chat; both remain separate from the editable profile list.
+
+The plus-tab menu and pane actions use the same profile list and provider icons. **Add terminal
+profile…** opens the editor in Terminals settings; **Manage terminal profiles…** opens its list.
+A profile executes on the selected machine, in the pane's folder. Commands resolve through that
+machine's PATH or an executable path. Arguments are passed individually, without shell expansion;
+use an explicit shell command if you need a shell script.
+
+Profiles are saved in the machine's workspace database and synchronized with connected clients.
+Concurrent edits report a conflict instead of overwriting another client's change. Each pane
+keeps the profile definition selected when it was created or configured, so editing/deleting a
+profile does not change existing sessions. Splitting a pane keeps that definition, including if
+the profile has since been deleted. Select a profile again or open a new tab to use an edited
+version. Older daemons keep their built-in launch menus; editing requires the `terminal-profiles`
+capability.
+
+Gateway restarts preserve running processes. After loss of the session host, recovery retains
+the existing policy: detected Codex/Claude sessions open their native conversation picker, and
+other custom commands recover to a shell instead of automatically replaying arbitrary commands.

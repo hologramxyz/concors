@@ -6,11 +6,19 @@ import {
   Palette,
   Settings2,
   UserRound,
+  Terminal,
   type LucideIcon,
 } from "lucide-react";
 
 export type SettingsPage =
-  "account" | "appearance" | "shortcuts" | "notifications" | "billing" | "ssh-keys" | "advanced";
+  | "account"
+  | "appearance"
+  | "shortcuts"
+  | "notifications"
+  | "terminals"
+  | "billing"
+  | "ssh-keys"
+  | "advanced";
 
 export interface SettingsNavItem {
   readonly page: SettingsPage;
@@ -42,6 +50,7 @@ export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
   {
     label: "Workspace",
     items: [
+      { page: "terminals", label: "Terminals", icon: Terminal },
       { page: "billing", label: "Billing", icon: CreditCard },
       { page: "ssh-keys", label: "SSH keys", icon: KeyRound },
     ],
