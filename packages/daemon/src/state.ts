@@ -25,6 +25,7 @@ export class DaemonState {
       daemonVersion: DAEMON_VERSION,
       status: this.#status,
       capabilities: [
+        "terminal-profiles",
         "project-files",
         "project-file-create",
         "folder-workspaces",
