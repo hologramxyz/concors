@@ -4,9 +4,16 @@ import { demoMe, demoMachine } from "./demo/fixtures";
 import { inspectLivePrerequisites } from "./live-preflight";
 
 function api() {
+  const machine = {
+    ...demoMachine,
+    hostname: "m-test.concors.app",
+    agentSeenAt: new Date().toISOString(),
+    agentVersion: "0.2.0",
+    certificateExpiresAt: new Date(Date.now() + 86400_000).toISOString(),
+  };
   return {
     getMe: vi.fn(async () => demoMe),
-    listMachines: vi.fn(async () => [demoMachine]),
+    listMachines: vi.fn(async () => [machine as typeof demoMachine]),
     getMobileCapabilities: vi.fn(async () => ({ ...NO_MOBILE_CAPABILITIES })),
   };
 }
@@ -41,6 +48,7 @@ it("reports advertised prerequisites without claiming an end-to-end connection",
 });
 it("only treats a cancelled machine as available while its paid period remains active", async () => {
   const client = api();
+  const readyMachine = (await client.listMachines())[0]!;
   client.getMobileCapabilities.mockResolvedValue({ ...NO_MOBILE_CAPABILITIES, remoteAccess: true });
   for (const paidUntil of [null, "invalid", "2000-01-01T00:00:00.000Z"]) {
     client.listMachines.mockResolvedValue([
@@ -52,7 +60,7 @@ it("only treats a cancelled machine as available while its paid period remains a
   }
   client.listMachines.mockResolvedValue([
     {
-      ...demoMachine,
+      ...readyMachine,
       cancelledAt: "2026-09-01T00:00:00.000Z",
       paidUntil: new Date(Date.now() + 60_000).toISOString(),
     },

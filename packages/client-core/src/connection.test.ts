@@ -4,7 +4,7 @@ import {
   describeDaemonEndpoint,
   type WebSocketLike,
 } from "@concors/daemon-client";
-import { ConnectionController } from "./connection.ts";
+import { ConnectionAccessError, ConnectionController } from "./connection.ts";
 
 const machineId = "11111111-1111-4111-8111-111111111111";
 const snapshot = {
@@ -72,6 +72,25 @@ function setup() {
 }
 afterEach(() => vi.useRealTimers());
 describe("mobile connection lifecycle", () => {
+  it("stops automatically retrying revoked access until the user retries", async () => {
+    vi.useFakeTimers();
+    const create = vi.fn(async () => {
+      throw new ConnectionAccessError("Sign in again");
+    });
+    const controller = new ConnectionController(create);
+    controller.setAvailable(true);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(controller.getSnapshot()).toMatchObject({
+      phase: "error",
+      message: "Sign in again",
+      transport: null,
+    });
+    controller.retry();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(create).toHaveBeenCalledTimes(2);
+    controller.dispose();
+  });
   it("keeps a read-only snapshot in background and obtains fresh credentials on resume", async () => {
     const { controller, sockets, create } = setup();
     controller.setAvailable(true);

@@ -1,5 +1,7 @@
 import type { DaemonConnection } from "@concors/daemon-client";
 import type { AgentInfo, TerminalInfo, WorkspaceSnapshot } from "@concors/protocol";
+/** A user action is required; repeating the same access request must not loop indefinitely. */
+export class ConnectionAccessError extends Error {}
 export interface ConnectionSnapshot {
   phase: "idle" | "connecting" | "ready" | "reconnecting" | "paused" | "error";
   transport: DaemonConnection | null;
@@ -79,14 +81,18 @@ export class ConnectionController {
     this.connection?.disconnect();
     this.connection = null;
   }
-  private failed(): void {
+  private failed(cause?: unknown): void {
     if (!this.available || this.disposed) return;
     this.stopAttempt();
     this.publish({
       phase: "error",
       transport: null,
-      message: "Could not connect. Retrying automatically; your sessions stay on the machine.",
+      message:
+        cause instanceof ConnectionAccessError
+          ? cause.message
+          : "Could not connect. Retrying automatically; your sessions stay on the machine.",
     });
+    if (cause instanceof ConnectionAccessError) return;
     const delay = Math.min(1000 * 2 ** this.failures++, 30_000);
     this.timer = setTimeout(() => {
       void this.attempt();
@@ -144,8 +150,8 @@ export class ConnectionController {
         void connection.requestTerminal({ kind: "list" }, newRequestId()).catch(() => {
           /* Snapshots may arrive separately. */
         });
-    } catch {
-      if (current()) this.failed();
+    } catch (cause) {
+      if (current()) this.failed(cause);
     }
   }
 }
