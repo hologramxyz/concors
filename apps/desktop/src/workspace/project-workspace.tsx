@@ -112,7 +112,7 @@ export function ProjectWorkspace({
         </Button>
       </div>
     );
-  const createTab = (profile: PaneProfile, name?: string) => {
+  const createTab = (profile: PaneProfile, name?: string, terminalProfileId?: string) => {
     files.select(scope, null);
     if (!connection?.workspace || !canEdit || creating.current) return;
     const sourcePane =
@@ -132,6 +132,7 @@ export function ProjectWorkspace({
         paneId,
         name: name || (TAB_PROFILES.find((item) => item.profile === profile)?.label ?? "Terminal"),
         profile,
+        ...(terminalProfileId ? { terminalProfileId } : {}),
         ...(sourcePane ? { sourcePaneId: sourcePane.id } : {}),
       });
       // Each mounted pane starts its own session, including split and converted panes.

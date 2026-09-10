@@ -1,5 +1,4 @@
 import { AgentDraftScopeContext, useAgentDraft, type InputDraft as Draft } from "./draft";
-import { isProviderModelsQueryLoading } from "./paseo/model-loading";
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ArrowUp,
@@ -16,13 +15,20 @@ import {
   Square,
   X,
 } from "lucide-react";
-import type { AgentInfo, AgentSettings, AgentAttachment } from "@concors/protocol";
+import {
+  agentProviderNames,
+  type AgentInfo,
+  type AgentSettings,
+  type AgentAttachment,
+  type AgentProviderId,
+} from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { submitAgentInput } from "./paseo/submit";
 import { ControlPicker } from "./control-picker";
 import { Popover } from "radix-ui";
 import { ContextMeter } from "./context-meter";
-import { CodexIcon } from "./paseo/codex-icon";
+import { AgentModelPicker } from "./model-picker";
+import { useAgentModelSelection } from "./use-model-selection";
 import { useDictation } from "./dictation";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import { ComposerSurfaceContext, useComposerExpansion } from "./composer-expansion";
@@ -66,7 +72,6 @@ export function AgentComposer({
   } = useAgentDraft(useContext(AgentDraftScopeContext) ?? connection, agent.id);
   const [uploading, setUploading] = useState(false),
     [configuring, setConfiguring] = useState(false),
-    [loadingModels, setLoadingModels] = useState(false),
     [error, setError] = useState<string | null>(null);
   const textarea = useRef<HTMLTextAreaElement>(null),
     picker = useRef<HTMLInputElement>(null);
@@ -92,10 +97,6 @@ export function AgentComposer({
   const advanced =
     connection?.state.status === "ready" &&
     connection.state.daemon.capabilities?.includes("agent-composer");
-  const modelsLoading = isProviderModelsQueryLoading({
-    isLoading: agent.status === "starting",
-    isFetching: loadingModels,
-  });
   const active = ["starting", "working", "needs_input"].includes(agent.status);
   const showStop = active && (!compact || (!draft.trim() && !attachments.length));
   const settings = agent.settings ?? defaults,
@@ -130,21 +131,6 @@ export function AgentComposer({
       setError(e instanceof Error ? e.message : "Could not update agent settings");
     } finally {
       setConfiguring(false);
-    }
-  };
-  const refresh = async () => {
-    if (!connection || !advanced) return;
-    setLoadingModels(true);
-    try {
-      const result = await connection.requestAgent(
-        { kind: "refresh-models", sessionId: agent.id },
-        crypto.randomUUID(),
-      );
-      if (result.outcome.status === "error") throw new Error(result.outcome.message);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load models");
-    } finally {
-      setLoadingModels(false);
     }
   };
   const send = async (input: Draft) => {
@@ -239,6 +225,21 @@ export function AgentComposer({
       setUploading(false);
     }
   };
+  const nativeModels = useAgentModelSelection(
+    agent,
+    (model) => void configure({ ...settings, model, effort: null, serviceTier: null }),
+  );
+  const [nativeProviderPage, setNativeProviderPage] = useState<AgentProviderId | undefined>(
+    agent.provider,
+  );
+  useEffect(() => {
+    if (native && connected) void nativeModels.load();
+    // Native action sheets have no open event; load on connection/session changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [native, connected, agent.id]);
+  const nativeProvider = nativeModels.providers.find(
+    (provider) => provider.id === nativeProviderPage,
+  );
   const effortModel = models.find((m) => m.id === (settings.model ?? agent.model));
   const controlsDisabled = !advanced || !connected || busy || configuring;
   useNativeSurface(
@@ -258,23 +259,44 @@ export function AgentComposer({
       controls: [
         {
           id: "model",
-          label: `Agent and model: ${settings.model ?? agent.model ?? "Machine default"}`,
-          icon: "model",
-          disabled: controlsDisabled || modelsLoading,
-          options: [
-            { id: "", label: "Machine default", selected: !settings.model },
-            ...models.map((model) => ({
-              id: model.id,
-              label: model.label,
-              selected: settings.model === model.id,
-            })),
-            { id: "__refresh__", label: "Refresh models", selected: false },
-          ],
+          label: nativeProvider
+            ? `${agentProviderNames[nativeProvider.id]} · Agent and model`
+            : "Choose an agent provider",
+          icon: nativeProvider?.id === "codex" ? ("model" as const) : ("options" as const),
+          disabled: controlsDisabled || agent.status === "starting" || nativeModels.switching,
+          options: nativeProvider
+            ? [
+                { id: "__providers__", label: "← Back to providers", selected: false },
+                ...(!nativeProvider.error
+                  ? [
+                      {
+                        id: "",
+                        label: "Machine default",
+                        selected: nativeProvider.id === agent.provider && !settings.model,
+                      },
+                      ...nativeProvider.models.map((model) => ({
+                        id: model.id,
+                        label: model.label,
+                        selected:
+                          nativeProvider.id === agent.provider && settings.model === model.id,
+                      })),
+                    ]
+                  : []),
+              ]
+            : nativeModels.providers
+                .filter((provider) => !provider.error)
+                .map((provider) => ({
+                  id: provider.id,
+                  label:
+                    agentProviderNames[provider.id] +
+                    (provider.id === agent.provider ? " · Current chat" : " · Starts a new chat"),
+                  selected: provider.id === agent.provider,
+                })),
         },
         {
           id: "effort",
           label: `Thinking effort: ${settings.effort ?? "Default"}`,
-          icon: "brain",
+          icon: "brain" as const,
           disabled: controlsDisabled,
           options: [
             {
@@ -292,7 +314,7 @@ export function AgentComposer({
         {
           id: "mode",
           label: `Permission mode: ${settings.mode}`,
-          icon: "shield",
+          icon: "shield" as const,
           disabled: controlsDisabled,
           options: [
             {
@@ -315,7 +337,7 @@ export function AgentComposer({
         {
           id: "options",
           label: "Plan mode and speed",
-          icon: "options",
+          icon: "options" as const,
           disabled: controlsDisabled,
           options: [
             ...(agent.supportsPlan
@@ -335,7 +357,7 @@ export function AgentComposer({
             })),
           ],
         },
-      ],
+      ].filter((control) => agent.provider === "codex" || control.id === "model"),
       context: agent.context?.limit
         ? `${agent.context.used.toLocaleString()} / ${agent.context.limit.toLocaleString()} tokens · ${Math.round((agent.context.used / agent.context.limit) * 100)}% used\n${agent.context.total.toLocaleString()} cumulative tokens`
         : "Usage will appear after the agent reports it.",
@@ -369,14 +391,17 @@ export function AgentComposer({
         } else if (!controlsDisabled) {
           const value = event.value ?? "";
           if (event.control === "model") {
-            if (value === "__refresh__") void refresh();
-            else if (!value || models.some((model) => model.id === value))
-              void configure({
-                ...settings,
-                model: value || null,
-                effort: null,
-                serviceTier: null,
-              });
+            if (value === "__providers__") {
+              setNativeProviderPage(undefined);
+              void nativeModels.load();
+            } else if (!nativeProvider) {
+              const provider = nativeModels.providers.find(
+                (entry) => entry.id === value && !entry.error,
+              );
+              if (provider) setNativeProviderPage(provider.id);
+            } else if (!value || nativeProvider.models.some((model) => model.id === value)) {
+              void nativeModels.choose(value, nativeProvider.id);
+            }
           } else if (
             event.control === "effort" &&
             (!value || effortModel?.efforts?.includes(value))
@@ -416,7 +441,7 @@ export function AgentComposer({
           <ListTodo className="size-4" />
         </button>
       )}
-      {!!effortModel?.serviceTiers?.length && (
+      {agent.provider === "codex" && !!effortModel?.serviceTiers?.length && (
         <ControlPicker
           label="Speed"
           value={settings.serviceTier ?? ""}
@@ -500,9 +525,9 @@ export function AgentComposer({
             ))}
           </div>
         )}
-        {(error || dictation.error) && (
+        {(error || dictation.error || nativeModels.error) && (
           <p role="alert" className="text-xs text-destructive">
-            {error ?? dictation.error}
+            {error ?? dictation.error ?? nativeModels.error}
           </p>
         )}
         {uncertain && (
@@ -576,7 +601,7 @@ export function AgentComposer({
               <textarea
                 ref={textarea}
                 data-agent-composer
-                aria-label="Message Codex"
+                aria-label={`Message ${agentProviderNames[agent.provider]}`}
                 placeholder={
                   compact && !expanded
                     ? "Message your agent"
@@ -599,7 +624,13 @@ export function AgentComposer({
                   }
                 }}
                 onKeyDown={(e) => {
-                  if (e.key === "Tab" && e.shiftKey && !configuring && advanced) {
+                  if (
+                    e.key === "Tab" &&
+                    e.shiftKey &&
+                    !configuring &&
+                    advanced &&
+                    agent.provider === "codex"
+                  ) {
                     e.preventDefault();
                     const modes: AgentSettings["mode"][] = [
                       "default",
@@ -656,115 +687,76 @@ export function AgentComposer({
                   className={compact ? "mobile-composer-settings" : "contents"}
                   hidden={compact && !expanded}
                 >
-                  <ControlPicker
-                    label="Agent and model"
+                  <AgentModelPicker
+                    agent={agent}
                     showValue={!compact}
-                    selectedLabel={
-                      models.find((model) => model.id === (settings.model ?? agent.model))?.label ??
-                      settings.model ??
-                      agent.model ??
-                      "Machine default"
-                    }
-                    value={settings.model ?? ""}
-                    icon={
-                      modelsLoading ? (
-                        <LoaderCircle className="size-4 animate-spin" />
-                      ) : (
-                        <CodexIcon />
-                      )
-                    }
-                    disabled={!advanced || !connected || busy || configuring || modelsLoading}
-                    options={[
-                      {
-                        id: "",
-                        label: "Machine default",
-                        description: agent.model ?? "Use this machine’s configured model",
-                        icon: <CodexIcon />,
-                      },
-                      ...models.map((model) => ({
-                        id: model.id,
-                        label: model.label,
-                        icon: <CodexIcon />,
-                      })),
-                    ]}
+                    disabled={controlsDisabled}
                     onSelect={(model) =>
-                      void configure({
-                        ...settings,
-                        model: model || null,
-                        effort: null,
-                        serviceTier: null,
-                      })
-                    }
-                    footer={
-                      <button
-                        type="button"
-                        aria-label="Refresh agent models"
-                        disabled={modelsLoading}
-                        onClick={() => void refresh()}
-                        className="w-full border-t px-2 py-2 text-left text-xs text-muted-foreground hover:bg-muted"
-                      >
-                        Refresh models
-                      </button>
+                      void configure({ ...settings, model, effort: null, serviceTier: null })
                     }
                   />
-                  <ControlPicker
-                    label="Thinking effort"
-                    showValue={!compact}
-                    value={settings.effort ?? ""}
-                    icon={<Brain className="size-4" />}
-                    disabled={!advanced || !connected || busy || configuring}
-                    options={[
-                      {
-                        id: "",
-                        label: `Default (${effortModel?.defaultEffort ?? "automatic"})`,
-                        icon: <Brain className="size-4" />,
-                      },
-                      ...(effortModel?.efforts ?? []).map((effort) => ({
-                        id: effort,
-                        label: effort.charAt(0).toUpperCase() + effort.slice(1),
-                        icon: <Brain className="size-4" />,
-                      })),
-                    ]}
-                    onSelect={(effort) => void configure({ ...settings, effort: effort || null })}
-                  />
-                  <ControlPicker
-                    label="Permission mode"
-                    showValue={!compact}
-                    value={settings.mode}
-                    icon={
-                      settings.mode === "auto-review" ? (
-                        <ShieldCheck className="size-4" />
-                      ) : settings.mode === "full-access" ? (
-                        <ShieldOff className="size-4 text-amber-500" />
-                      ) : (
-                        <Shield className="size-4" />
-                      )
-                    }
-                    disabled={!advanced || !connected || busy || configuring}
-                    options={[
-                      {
-                        id: "default",
-                        label: "Default permissions",
-                        description: "Workspace access; asks when approval is needed.",
-                        icon: <Shield className="size-4" />,
-                      },
-                      {
-                        id: "auto-review",
-                        label: "Auto-review",
-                        description: "Same sandbox; eligible requests go to the reviewer agent.",
-                        icon: <ShieldCheck className="size-4" />,
-                      },
-                      {
-                        id: "full-access",
-                        label: "Full access",
-                        description: "File and network access without approval prompts.",
-                        icon: <ShieldOff className="size-4 text-amber-500" />,
-                      },
-                    ]}
-                    onSelect={(mode) =>
-                      void configure({ ...settings, mode: mode as AgentSettings["mode"] })
-                    }
-                  />
+                  {agent.provider === "codex" && (
+                    <ControlPicker
+                      label="Thinking effort"
+                      showValue={!compact}
+                      value={settings.effort ?? ""}
+                      icon={<Brain className="size-4" />}
+                      disabled={!advanced || !connected || busy || configuring}
+                      options={[
+                        {
+                          id: "",
+                          label: `Default (${effortModel?.defaultEffort ?? "automatic"})`,
+                          icon: <Brain className="size-4" />,
+                        },
+                        ...(effortModel?.efforts ?? []).map((effort) => ({
+                          id: effort,
+                          label: effort.charAt(0).toUpperCase() + effort.slice(1),
+                          icon: <Brain className="size-4" />,
+                        })),
+                      ]}
+                      onSelect={(effort) => void configure({ ...settings, effort: effort || null })}
+                    />
+                  )}
+                  {agent.provider === "codex" && (
+                    <ControlPicker
+                      label="Permission mode"
+                      showValue={!compact}
+                      value={settings.mode}
+                      icon={
+                        settings.mode === "auto-review" ? (
+                          <ShieldCheck className="size-4" />
+                        ) : settings.mode === "full-access" ? (
+                          <ShieldOff className="size-4 text-amber-500" />
+                        ) : (
+                          <Shield className="size-4" />
+                        )
+                      }
+                      disabled={!advanced || !connected || busy || configuring}
+                      options={[
+                        {
+                          id: "default",
+                          label: "Default permissions",
+                          description: "Workspace access; asks when approval is needed.",
+                          icon: <Shield className="size-4" />,
+                        },
+                        {
+                          id: "auto-review",
+                          label: "Auto-review",
+                          description: "Same sandbox; eligible requests go to the reviewer agent.",
+                          icon: <ShieldCheck className="size-4" />,
+                        },
+                        {
+                          id: "full-access",
+                          label: "Full access",
+                          description: "File and network access without approval prompts.",
+                          icon: <ShieldOff className="size-4 text-amber-500" />,
+                        },
+                      ]}
+                      onSelect={(mode) =>
+                        void configure({ ...settings, mode: mode as AgentSettings["mode"] })
+                      }
+                    />
+                  )}
                   {compact ? (
                     <Popover.Root>
                       <Popover.Trigger
