@@ -418,8 +418,9 @@ test("folder workspaces and shared settings remain available from the sidebar", 
   await openSettings(ui);
   await choose(ui, "Settings section", "notifications");
   await expect(ui.getByRole("checkbox", { name: "Push notifications" })).toBeDisabled();
-  await choose(ui, "Settings section", "billing");
-  await expect(ui.getByRole("dialog", { name: "Settings", exact: true })).toContainText("Billing");
+  await ui.getByRole("combobox", { name: "Settings section", exact: true }).click();
+  await expect(ui.getByRole("option", { name: "Billing", exact: true })).toHaveCount(0);
+  await ui.getByRole("option").first().press("Escape");
   await choose(ui, "Settings section", "ssh-keys");
   await expect(ui.getByRole("dialog", { name: "Settings", exact: true })).toContainText("SSH");
   await choose(ui, "Settings section", "advanced");
@@ -865,7 +866,14 @@ test("compact account footer and machine management live in settings", async ({ 
   await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "true");
   await ui.getByRole("option").first().press("Escape");
   await openSettings(ui);
+  await expect(
+    ui.getByRole("button", { name: /Billing portal|Add card|Subscribe|Cancel subscription/ }),
+  ).toHaveCount(0);
   await choose(ui, "Settings section", "machines");
+  await expect(
+    ui.getByRole("button", { name: /Create machine|Add machine|Cancel machine|Resume machine/ }),
+  ).toHaveCount(0);
+  await expect(ui.getByRole("button", { name: "Refresh machines", exact: true })).toBeVisible();
   await expect(
     ui
       .getByRole("dialog", { name: "Settings", exact: true })

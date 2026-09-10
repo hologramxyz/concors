@@ -3,6 +3,7 @@ import type { MobileApiCall } from "@concors/client-core";
 
 /** Exhaustive dispatch: renderer input is never used for arbitrary property access. */
 export function dispatchMobileApi(api: ApiClient, call: MobileApiCall) {
+  assertCompanionApiAllowed(call);
   switch (call.method) {
     case "getMachineCatalog":
       return api.getMachineCatalog();
@@ -33,4 +34,16 @@ export function dispatchMobileApi(api: ApiClient, call: MobileApiCall) {
     case "listInvoices":
       return api.listInvoices(...call.args);
   }
+}
+
+/** Product boundary applies to every mobile build, including renderer-originated RPCs. */
+export function assertCompanionApiAllowed(call: MobileApiCall) {
+  if (
+    !["listMachines", "getMachine", "listSshKeys", "addSshKey", "removeSshKey"].includes(
+      call.method,
+    )
+  )
+    throw new Error(
+      "Purchasing, subscriptions and billing are unavailable in the mobile companion.",
+    );
 }
