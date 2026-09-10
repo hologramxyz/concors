@@ -27,14 +27,12 @@ export const textContent = (value: unknown): string =>
         .filter(Boolean)
         .join("\n");
 export const modelCatalog = (models: { id: string; label: string; efforts?: string[] }[]) => ({
-  data: models
-    .slice(0, 100)
-    .map((m) => ({
-      model: m.id,
-      displayName: m.label,
-      supportedReasoningEfforts: (m.efforts ?? []).map((reasoningEffort) => ({ reasoningEffort })),
-      defaultReasoningEffort: null,
-    })),
+  data: models.slice(0, 100).map((m) => ({
+    model: m.id,
+    displayName: m.label,
+    supportedReasoningEfforts: (m.efforts ?? []).map((reasoningEffort) => ({ reasoningEffort })),
+    defaultReasoningEffort: null,
+  })),
 });
 export abstract class EventProvider implements ConversationProvider {
   protected threadId = "";
@@ -43,7 +41,10 @@ export abstract class EventProvider implements ConversationProvider {
   protected interrupted = false;
   private notifications = new Set<(method: string, params: unknown) => void>();
   private failures = new Set<(error: Error) => void>();
-  constructor(protected readonly onInput: InputHandler) {}
+  protected readonly onInput: InputHandler;
+  constructor(onInput: InputHandler) {
+    this.onInput = onInput;
+  }
   abstract initialize(): Promise<void>;
   abstract request(method: string, params?: unknown): Promise<unknown>;
   abstract close(): Promise<void>;

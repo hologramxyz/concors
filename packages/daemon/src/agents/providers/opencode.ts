@@ -16,11 +16,10 @@ export class OpenCodeProvider extends EventProvider {
   private password = randomBytes(32).toString("hex");
   private abort = new AbortController();
   private messages = new Map<string, string>();
-  constructor(
-    private cwd: string,
-    onInput: InputHandler,
-  ) {
+  private cwd: string;
+  constructor(cwd: string, onInput: InputHandler) {
     super(onInput);
+    this.cwd = cwd;
   }
   async initialize() {
     const child = launch(

@@ -13,11 +13,17 @@ export class JsonLines {
   >();
   private ended = false;
   private exit: Promise<void>;
+  private child: ChildProcessWithoutNullStreams;
+  private event: (value: Record<string, unknown>) => void;
+  private failure: (error: Error) => void;
   constructor(
-    private child: ChildProcessWithoutNullStreams,
-    private event: (value: Record<string, unknown>) => void,
-    private failure: (error: Error) => void,
+    child: ChildProcessWithoutNullStreams,
+    event: (value: Record<string, unknown>) => void,
+    failure: (error: Error) => void,
   ) {
+    this.child = child;
+    this.event = event;
+    this.failure = failure;
     this.exit = new Promise((resolve) => child.once("close", () => resolve()));
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk: string) => {
