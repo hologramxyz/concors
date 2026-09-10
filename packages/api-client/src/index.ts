@@ -38,6 +38,8 @@ export {
   MachineRegionSchema,
   MachineResponseSchema,
   MachineSchema,
+  MachineTokenSchema,
+  type MachineToken,
   MachineSizeSchema,
   MachineStatusSchema,
   MeSchema,
