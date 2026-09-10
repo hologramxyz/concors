@@ -27,7 +27,7 @@ export const textContent = (value: unknown): string =>
         .filter(Boolean)
         .join("\n");
 export const modelCatalog = (models: { id: string; label: string; efforts?: string[] }[]) => ({
-  data: models.slice(0, 100).map((m) => ({
+  data: models.map((m) => ({
     model: m.id,
     displayName: m.label,
     supportedReasoningEfforts: (m.efforts ?? []).map((reasoningEffort) => ({ reasoningEffort })),

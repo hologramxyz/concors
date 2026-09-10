@@ -1,5 +1,7 @@
 import { z } from "zod";
 const Id = z.string().uuid();
+export const MAX_AGENT_MODELS = 4096;
+export const AgentModelIdSchema = z.string().min(1).max(1024);
 export const AgentProviderIdSchema = z.enum(["codex", "claude", "opencode", "pi"]);
 export type AgentProviderId = z.infer<typeof AgentProviderIdSchema>;
 export const agentProviderNames: Record<AgentProviderId, string> = {
@@ -9,7 +11,7 @@ export const agentProviderNames: Record<AgentProviderId, string> = {
   pi: "Pi",
 };
 export const AgentModelSchema = z.object({
-  id: z.string(),
+  id: AgentModelIdSchema,
   label: z.string(),
   efforts: z.array(z.string()),
   defaultEffort: z.string().nullable(),
@@ -20,7 +22,7 @@ export const AgentModelSchema = z.object({
 });
 export const AgentProviderCatalogSchema = z.object({
   id: AgentProviderIdSchema,
-  models: z.array(AgentModelSchema).max(100),
+  models: z.array(AgentModelSchema).max(MAX_AGENT_MODELS),
   error: z.string().optional(),
 });
 export type AgentProviderCatalog = z.infer<typeof AgentProviderCatalogSchema>;
@@ -46,7 +48,7 @@ export const AgentPendingSchema = z.object({
 });
 export type AgentPending = z.infer<typeof AgentPendingSchema>;
 export const AgentSettingsSchema = z.object({
-  model: z.string().max(100).nullable().default(null),
+  model: AgentModelIdSchema.nullable().default(null),
   effort: z.string().min(1).max(100).nullable().default(null),
   mode: z.enum(["default", "auto-review", "full-access"]).default("default"),
   planMode: z.boolean().optional(),
@@ -92,7 +94,7 @@ export const AgentInfoSchema = z.object({
   model: z.string().nullable(),
   settings: AgentSettingsSchema.optional(),
   supportsPlan: z.boolean().optional(),
-  models: z.array(AgentModelSchema).max(100).optional(),
+  models: z.array(AgentModelSchema).max(MAX_AGENT_MODELS).optional(),
   context: z
     .object({
       used: z.number().nonnegative(),
@@ -148,7 +150,7 @@ export const AgentOperationSchema = z.discriminatedUnion("kind", [
     kind: z.literal("switch-provider"),
     sessionId: Id,
     provider: AgentProviderIdSchema,
-    model: z.string().min(1).max(100).nullable(),
+    model: AgentModelIdSchema.nullable(),
     expectedRevision: z.number().int().nonnegative(),
   }),
   z.object({
@@ -159,7 +161,7 @@ export const AgentOperationSchema = z.discriminatedUnion("kind", [
     tabId: Id,
     paneId: Id,
     expectedVersion: z.number().int().nonnegative(),
-    model: z.string().trim().min(1).max(100).optional(),
+    model: AgentModelIdSchema.optional(),
   }),
   z.object({
     kind: z.literal("read"),
