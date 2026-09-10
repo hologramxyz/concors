@@ -1,3 +1,4 @@
+import { copyFileSync } from "node:fs";
 import { delimiter } from "node:path";
 import {
   installTestCodexProfile,
@@ -14,13 +15,20 @@ if (!directory) throw new Error("Set an isolated acceptance-test directory");
 await mkdir(directory, { recursive: true });
 process.env["PATH"] = installTestCodexProfile(directory) + delimiter + (process.env["PATH"] ?? "");
 installTestClaudeProfile(directory);
+for (const provider of ["opencode", "pi"]) {
+  const suffix = process.platform === "win32" ? ".cmd" : "";
+  copyFileSync(
+    join(directory, "test-bin", "codex" + suffix),
+    join(directory, "test-bin", provider + suffix),
+  );
+}
 // Keep shell startup files from replacing the harmless test executable in PATH.
 if (process.platform !== "win32") process.env["SHELL"] = "/bin/sh";
 const server = createDaemonServer(
   loadDaemonConfig({ port: process.env["CONCORS_E2E_DAEMON_PORT"] ?? 7429, logLevel: "warn" }, {}),
   {
     workspacePath: join(directory, "workspace.sqlite"),
-    agentProviderFactory: (_cwd, handler) => new TestAgentProvider(handler),
+    agentProviderFactory: (_cwd, handler, provider) => new TestAgentProvider(handler, provider),
   },
 );
 await server.listen();

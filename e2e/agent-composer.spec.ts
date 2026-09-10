@@ -204,7 +204,7 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     expect(bounds.x).toBeGreaterThanOrEqual(0);
     expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
     await back.click();
-    await page.getByRole("option", { name: "Codex", exact: true }).click();
+    await page.getByRole("option", { name: /^Codex Current conversation$/ }).click();
     await expect(search).toBeVisible();
     await search.press("Escape");
     await page.getByRole("button", { name: "Pane actions", exact: true }).click();
