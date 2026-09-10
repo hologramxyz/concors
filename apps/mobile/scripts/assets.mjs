@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import sharp from "sharp";
 import { build } from "../../desktop/node_modules/vite/dist/node/index.js";
+import { providerSvg } from "./provider-assets.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const assets = path.join(root, "assets");
@@ -28,20 +29,17 @@ await sharp(Buffer.from(mark.replace('color="#20211f"', 'color="#ffffff"')))
   .toFile(path.join(assets, "notification-icon.png"));
 await sharp(Buffer.from(mark)).resize(512, 512).png().toFile(path.join(assets, "splash.png"));
 
-// Reuse the licensed desktop provider mark in the native composer, too.
-const codexSource = await readFile(
-  new URL("../../desktop/src/agents/paseo/codex-icon.tsx", import.meta.url),
-  "utf8",
-);
-const codexPath = codexSource.match(/<path d="([^"]+)"/)[1];
-await sharp(
-  Buffer.from(
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill-rule="evenodd" d="${codexPath}"/></svg>`,
-  ),
-)
-  .resize(72, 72)
-  .png()
-  .toFile(path.join(assets, "codex.png"));
+// Reuse the licensed desktop marks in the native composer; no duplicated logo geometry.
+for (const provider of ["codex", "claude", "opencode"]) {
+  const source = await readFile(
+    new URL(`../../desktop/src/agents/paseo/${provider}-icon.tsx`, import.meta.url),
+    "utf8",
+  );
+  await sharp(Buffer.from(providerSvg(source)))
+    .resize(72, 72, { fit: "contain", background: "#00000000" })
+    .png()
+    .toFile(path.join(assets, `${provider}.png`));
+}
 
 // Compile the actual desktop UI into a self-contained offline mobile renderer.
 // No remote URLs, runtime chunk fetches, Tauri APIs or credentials enter this document.
