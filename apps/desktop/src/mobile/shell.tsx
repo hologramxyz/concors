@@ -5,7 +5,6 @@ import type { MobileState, MobileTarget } from "@concors/client-core";
 import type { PaneProfile, WorkspaceOperation, WorkspaceSnapshot } from "@concors/protocol";
 import { ShortcutProvider } from "@/shortcuts/provider";
 import { useCommand } from "@/shortcuts/context";
-import { ShortcutGuide } from "@/shortcuts/guide";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { AgentsProvider } from "@/agents/state";
@@ -91,7 +90,6 @@ function MobileWorkspaceContent({
   const [settingsPage, setSettingsPage] = useState<SettingsPage | "machines">("account");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [addingProject, setAddingProject] = useState<"open" | "clone" | null>(null);
-  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const mutating = useRef(false);
@@ -366,18 +364,13 @@ function MobileWorkspaceContent({
       setError(cause instanceof Error ? cause.message : "Request failed"),
     );
   };
-  const openSettings = () => {
+  const openSettings = (page: SettingsPage = host.direct ? "appearance" : "account") => {
     setSidebarOpen(false);
-    setSettingsPage(host.direct ? "appearance" : "account");
+    setSettingsPage(page);
     setSettingsOpen(true);
   };
   const unobscured =
-    !sidebarOpen &&
-    !files.sidebar.open &&
-    !settingsOpen &&
-    !paletteOpen &&
-    !addingProject &&
-    !shortcutsOpen;
+    !sidebarOpen && !files.sidebar.open && !settingsOpen && !paletteOpen && !addingProject;
   const cycleTab = (delta: number) => {
     if (!project || !tab) return;
     const next =
@@ -393,8 +386,8 @@ function MobileWorkspaceContent({
   const commandsAvailable = unobscured || paletteOpen;
   const newPaneTab = project?.tabs.find((item) => item.id === paneDestination) ?? tab;
   useCommand("search", commandsAvailable, () => setPaletteOpen((open) => !open));
-  useCommand("settings", commandsAvailable, openSettings);
-  useCommand("shortcuts", commandsAvailable, () => setShortcutsOpen(true));
+  useCommand("settings", commandsAvailable, () => openSettings());
+  useCommand("shortcuts", commandsAvailable, () => openSettings("shortcuts"));
   useCommand("new-project", commandsAvailable && canEdit, newWorkspace.start);
   useCommand("previous-tab", commandsAvailable && !!tab, () => cycleTab(-1));
   useCommand("next-tab", commandsAvailable && !!tab, () => cycleTab(1));
@@ -545,15 +538,14 @@ function MobileWorkspaceContent({
                       ...host.me,
                       organizations: host.organizations,
                     }}
-                    onOpenSettings={openSettings}
-                    onOpenShortcuts={() => setShortcutsOpen(true)}
+                    onOpenSettings={() => openSettings()}
                     onSignOut={() => runHost({ kind: "sign-out" })}
                   />
                 ) : (
                   <button
                     className="flex w-full items-center gap-3 rounded-xl p-3 text-left hover:bg-sidebar-accent"
                     aria-label="Desktop connection settings"
-                    onClick={openSettings}
+                    onClick={() => openSettings()}
                   >
                     <Server className="size-5" />
                     <span className="min-w-0">
@@ -758,7 +750,6 @@ function MobileWorkspaceContent({
             page={settingsPage}
             onPageChange={setSettingsPage}
           />
-          <ShortcutGuide open={shortcutsOpen} onOpenChange={setShortcutsOpen} compact />
           {addingProject && (
             <ProjectSetupDialog
               mode={addingProject}

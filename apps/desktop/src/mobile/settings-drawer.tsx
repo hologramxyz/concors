@@ -20,6 +20,7 @@ import { ExistingMachines } from "./existing-machines";
 import { MobileSelect } from "./select";
 import { AppearanceSettings } from "@/settings/appearance-settings";
 import { AdvancedSettings } from "@/settings/advanced-settings";
+import { ShortcutSettings } from "@/settings/shortcut-settings";
 
 export function SettingsDrawer({
   open,
@@ -84,7 +85,10 @@ export function SettingsDrawer({
             options: [
               ...group.items
                 .filter((item) => item.page !== "billing")
-                .filter((item) => !host.direct || ["appearance", "advanced"].includes(item.page))
+                .filter(
+                  (item) =>
+                    !host.direct || ["appearance", "shortcuts", "advanced"].includes(item.page),
+                )
                 .map(({ page, label, icon: Icon }) => ({
                   value: page,
                   label,
@@ -107,7 +111,11 @@ export function SettingsDrawer({
               Demo · Account actions are simulated.
             </p>
           )}
-          {host.direct ? (
+          {page === "shortcuts" ? (
+            <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
+              <ShortcutSettings />
+            </div>
+          ) : host.direct ? (
             <div className="space-y-5 p-4">
               {page === "appearance" ? (
                 <AppearanceSettings
@@ -228,7 +236,7 @@ export function SettingsDrawer({
               }
             />
           ) : null}
-          {!host.demo && (host.direct || page === "account") && (
+          {!host.demo && ((host.direct && page !== "shortcuts") || page === "account") && (
             <div className="px-4 pb-4">
               <Section
                 title="AI data sharing"
