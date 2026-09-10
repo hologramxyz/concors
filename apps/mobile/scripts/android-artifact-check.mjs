@@ -36,8 +36,16 @@ export function elfSupports16KB(headers) {
   );
 }
 
+export function artifactArchitectures(value = "arm64-v8a,x86_64") {
+  const architectures = value.split(",");
+  if (architectures.some((architecture) => !["arm64-v8a", "x86_64"].includes(architecture)))
+    throw new Error("Expected arm64-v8a and/or x86_64 architectures");
+  return architectures;
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   const apk = resolve(process.argv[2] ?? "");
+  const architectures = artifactArchitectures(process.argv[3]);
   if (!apk.endsWith(".apk")) throw new Error("Pass the generated APK path");
   const sdk = process.env.ANDROID_HOME ?? process.env.ANDROID_SDK_ROOT;
   if (!sdk) throw new Error("ANDROID_HOME is required for aapt and zipalign");
@@ -55,8 +63,14 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   const directory = mkdtempSync(join(tmpdir(), "concors-apk-audit-"));
   try {
     // Extract only the known 64-bit native library directories into this newly created folder.
-    execFileSync("unzip", ["-q", apk, "lib/arm64-v8a/*.so", "lib/x86_64/*.so", "-d", directory]);
-    for (const architecture of ["arm64-v8a", "x86_64"]) {
+    execFileSync("unzip", [
+      "-q",
+      apk,
+      ...architectures.map((architecture) => `lib/${architecture}/*.so`),
+      "-d",
+      directory,
+    ]);
+    for (const architecture of architectures) {
       const folder = join(directory, "lib", architecture);
       const libraries = readdirSync(folder).filter((name) => name.endsWith(".so"));
       if (!libraries.length) failures.push(`No native libraries for ${architecture}`);
@@ -73,6 +87,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   }
   if (failures.length) throw new Error(failures.join("\n"));
   process.stdout.write(
-    "APK target SDK, restricted permissions, ZIP alignment and both 64-bit ELF architectures passed. Physical 16 KB-device testing is still required.\n",
+    `APK target SDK, restricted permissions, ZIP alignment and ${architectures.join(", ")} ELF architectures passed. Physical 16 KB-device testing is still required.\n`,
   );
 }

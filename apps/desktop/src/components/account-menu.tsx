@@ -1,5 +1,5 @@
 import { ChevronsUpDown, Keyboard, LogOut, Settings } from "lucide-react";
-import { useContext, useState } from "react";
+import { useContext, useRef, useState } from "react";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import {
   Dialog,
@@ -36,6 +36,8 @@ export function AccountMenu({
 }: AccountMenuProps) {
   const compact = useContext(CompactLayoutContext);
   const org = activeOrganization(auth);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const shortcutRequested = useRef(false);
   if (compact)
     return (
       <MobileAccountMenu
@@ -48,6 +50,7 @@ export function AccountMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
+        ref={trigger}
         className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left hover:bg-sidebar-accent aria-expanded:bg-sidebar-accent"
         aria-label={`Account: ${auth.user.name}`}
       >
@@ -59,7 +62,18 @@ export function AccountMenu({
         </span>
         <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" side="top" className="w-56">
+      <DropdownMenuContent
+        onCloseAutoFocus={(event) => {
+          if (!shortcutRequested.current) return;
+          shortcutRequested.current = false;
+          event.preventDefault();
+          trigger.current?.focus();
+          onOpenShortcuts();
+        }}
+        align="start"
+        side="top"
+        className="w-56"
+      >
         <DropdownMenuLabel className="text-ui font-normal text-muted-foreground">
           {org ? (org.isPersonal ? "Personal organization" : org.name) : "Signed in"}
           <span className="mt-1 block truncate text-foreground">{auth.user.name}</span>
@@ -72,7 +86,12 @@ export function AccountMenu({
           <Settings aria-hidden="true" />
           Settings
         </DropdownMenuItem>
-        <DropdownMenuItem className="text-ui" onSelect={onOpenShortcuts}>
+        <DropdownMenuItem
+          className="text-ui"
+          onSelect={() => {
+            shortcutRequested.current = true;
+          }}
+        >
           <Keyboard aria-hidden="true" />
           Keyboard shortcuts
         </DropdownMenuItem>

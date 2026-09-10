@@ -674,7 +674,12 @@ export function createDemoServer() {
           machines.push(machine);
           return response({ machine });
         }
-        return response({ machines });
+        return response({
+          machines: machines.map((machine) => ({
+            ...machine,
+            agentSeenAt: new Date().toISOString(),
+          })),
+        });
       }
       const machineId = path.match(/^\/api\/v1\/machines\/([^/]+)(\/resume)?$/);
       if (machineId) {

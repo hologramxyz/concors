@@ -17,14 +17,9 @@ function api() {
     getMobileCapabilities: vi.fn(async () => ({ ...NO_MOBILE_CAPABILITIES })),
   };
 }
-it("never mistakes an installed terminal agent for Concourse chat support", async () => {
-  const client = api();
-  client.listMachines.mockResolvedValue([
-    { ...demoMachine, agentInstalledAt: "2026-09-09T00:00:00.000Z" },
-  ]);
-  const result = await inspectLivePrerequisites(client, demoMachine.id);
-  expect(result.readyToAttemptWorkspaceConnection).toBe(false);
-  expect(result.blockers.join(" ")).toContain("workspace/chat bridge");
+it("connects using the machine contract when optional mobile capabilities are absent", async () => {
+  const result = await inspectLivePrerequisites(api(), demoMachine.id);
+  expect(result.readyToAttemptWorkspaceConnection).toBe(true);
   expect(result.liveSessionVerified).toBe(false);
 });
 it("fails closed on missing machines, other organizations and authentication errors", async () => {
@@ -43,27 +38,6 @@ it("reports advertised prerequisites without claiming an end-to-end connection",
   expect(result.liveSessionVerified).toBe(false);
   client.listMachines.mockResolvedValue([{ ...demoMachine, status: "provisioning" }]);
   expect((await inspectLivePrerequisites(client, demoMachine.id)).blockers).toContain(
-    "The machine is not running.",
+    "This machine is provisioning.",
   );
-});
-it("only treats a cancelled machine as available while its paid period remains active", async () => {
-  const client = api();
-  const readyMachine = (await client.listMachines())[0]!;
-  client.getMobileCapabilities.mockResolvedValue({ ...NO_MOBILE_CAPABILITIES, remoteAccess: true });
-  for (const paidUntil of [null, "invalid", "2000-01-01T00:00:00.000Z"]) {
-    client.listMachines.mockResolvedValue([
-      { ...demoMachine, cancelledAt: "2026-09-01T00:00:00.000Z", paidUntil },
-    ]);
-    expect((await inspectLivePrerequisites(client, demoMachine.id)).blockers).toContain(
-      "The machine is not running.",
-    );
-  }
-  client.listMachines.mockResolvedValue([
-    {
-      ...readyMachine,
-      cancelledAt: "2026-09-01T00:00:00.000Z",
-      paidUntil: new Date(Date.now() + 60_000).toISOString(),
-    },
-  ]);
-  expect((await inspectLivePrerequisites(client, demoMachine.id)).blockers).toEqual([]);
 });

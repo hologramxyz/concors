@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -15,9 +16,21 @@ export function ShortcutGuide({
   onOpenChange: (open: boolean) => void;
   compact?: boolean;
 }) {
+  const returnFocus = useRef<HTMLElement | null>(null);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent
+        className="sm:max-w-2xl"
+        onOpenAutoFocus={() => {
+          returnFocus.current =
+            document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        }}
+        onCloseAutoFocus={(event) => {
+          if (compact || !returnFocus.current?.isConnected) return;
+          event.preventDefault();
+          returnFocus.current.focus();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Keyboard shortcuts</DialogTitle>
           <DialogDescription>
