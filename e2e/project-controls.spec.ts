@@ -24,10 +24,14 @@ test("projects open a terminal immediately and new tabs start the chosen profile
     await page.keyboard.press("Escape");
     await expect(page.getByLabel("Project tabs").locator("[data-tab-id]")).toHaveCount(1);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Configure terminal profile…" }).click();
+    await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Terminal", exact: true })
+      .last()
+      .click({ button: "right" });
+    await page.getByRole("menuitem", { name: "Rename tab", exact: true }).click();
     await page.getByLabel("Tab name", { exact: true }).fill("Development");
-    await page.getByLabel("Terminal profile", { exact: true }).selectOption("shell");
-    await page.getByRole("button", { name: "Start session", exact: true }).click();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByRole("button", { name: "Development", exact: true })).toBeVisible();
     await expect(page.getByLabel("Terminal output").filter({ visible: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Start terminal", exact: true })).toHaveCount(0);
