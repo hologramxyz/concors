@@ -44,6 +44,7 @@ export function NewTabMenu({
 }) {
   const compact = useContext(CompactLayoutContext);
   const triggerContainer = useRef<HTMLSpanElement>(null);
+  const menuTransfersFocus = useRef(false);
   const [destination, setDestination] = useState<"tab" | "pane">("tab");
   const addingPane = compact && destination === "pane" && !!paneTarget;
   const createDisabled = disabled || (addingPane ? paneTarget.disabled : tabLimitReached);
@@ -192,12 +193,22 @@ export function NewTabMenu({
             <Plus className="size-4" />
             {empty && "Create a tab"}
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-64">
+          <DropdownMenuContent
+            className="w-64"
+            onCloseAutoFocus={(event) => {
+              // The new pane or configuration dialog owns focus after selection.
+              if (menuTransfersFocus.current) event.preventDefault();
+              menuTransfersFocus.current = false;
+            }}
+          >
             {TAB_PROFILES.map(({ profile, label, icon: Icon }) => (
               <DropdownMenuItem
                 key={profile}
                 disabled={disabled}
-                onSelect={() => onCreate(profile)}
+                onSelect={() => {
+                  menuTransfersFocus.current = true;
+                  onCreate(profile);
+                }}
               >
                 <Icon className="size-4 shrink-0" />
                 {label}
@@ -207,7 +218,10 @@ export function NewTabMenu({
             <DropdownMenuItem
               className="whitespace-nowrap"
               disabled={disabled}
-              onSelect={() => setConfiguring(true)}
+              onSelect={() => {
+                menuTransfersFocus.current = true;
+                setConfiguring(true);
+              }}
             >
               <SlidersHorizontal /> Configure terminal profile…
             </DropdownMenuItem>

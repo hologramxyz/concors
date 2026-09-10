@@ -239,21 +239,16 @@ maestro test apps/mobile/e2e/native/glass.yaml
 
 For a real iPhone, use the existing EAS development/preview profile or add `--device` to the local
 iOS build, using the private daemon configuration above instead of demo mode when testing real
-sessions. No signing credentials are committed. The `Mobile iOS native` PR check builds an ad-hoc-signed
-iOS 26 simulator app and exercises native headers, input expansion, settings, Files, and draft
-preservation. Browser acceptance separately covers the bridge and the web/Android fallback;
-neither a passing web test nor an Expo export substitutes for the simulator/device test.
+sessions. No signing credentials are committed. Native iOS and Android workflows are manual-only
+(`workflow_dispatch`); they do not run on pull requests. Native compilation and simulator startup
+exceed the PR time budget, and their latest UI runs have not passed. Run them explicitly when
+native validation is needed. Android manual runs build the optimized arm64/x86_64 release APK
+and AAB and audit SDK, permissions, and 16 KB alignment. iOS exercises native headers, composer,
+settings, Files, and draft persistence in an iOS 26 simulator.
 
-Native PR checks build a standalone app for one simulator architecture, with native compiler
-optimization and debug symbols disabled. Android compilation and emulator tests use separate
-runners to keep build output from exhausting emulator disk space. Gradle/native objects and
-CocoaPods/Xcode build products are cached. iOS uses the standard Intel runner with 14 GB RAM
-and starts its simulator after compilation. Simulator ad-hoc signing preserves the keychain
-entitlements required by SecureStore without Apple signing credentials. The UI flow preserves the fresh CI installation
-while local reruns still clear app state. Unused Reanimated/Worklets native modules are excluded from
-autolinking, including copies retained by optional peer dependencies. These checks retain the native UI flows and Android
-SDK, permission, and 16 KB alignment audits. Manually dispatch `Mobile Android native` to also
-build the optimized arm64/x86_64 release APK and AAB and audit both architectures. All CI apps
+Automatic PR jobs have a seven-minute timeout. Mobile browser, direct-daemon, and managed-host
+acceptance run as separate jobs so they do not accumulate into one long serial check.
+All CI apps
 use the preview identity and demo data; they are not store submission artifacts.
 
 ### Managed cloud connections
