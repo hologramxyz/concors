@@ -16,10 +16,12 @@ test("mobile saves and launches machine terminal profiles", async ({ page }) => 
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   const execute = async (operation: WorkspaceOperation) => {
+    const workspace = desktop.workspace;
+    if (!workspace) throw new Error("Desktop control client has no workspace snapshot");
     const result = await desktop.executeWorkspace({
       type: "workspace.command",
       commandId: crypto.randomUUID(),
-      epoch: desktop.workspace!.epoch,
+      epoch: workspace.epoch,
       operation,
     });
     expect(result.outcome.status).toBe("accepted");
