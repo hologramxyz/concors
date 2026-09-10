@@ -14,20 +14,16 @@ test("workspace shortcuts create, search, split and close the active pane withou
     await expect(
       page.getByRole("button", { name: "Open workspace menu", exact: true }).first(),
     ).toBeEnabled();
-    await expect(page.getByRole("button", { name: "Keyboard shortcuts", exact: true })).toHaveCount(
-      0,
-    );
+    await expect(page.getByRole("button", { name: "Shortcuts", exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: /^Account:/ }).click();
     await expect(page.getByRole("menuitem")).toHaveText(["Settings", "Sign out"]);
     await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
     await page
       .getByRole("navigation", { name: "Settings" })
-      .getByRole("button", { name: "Keyboard shortcuts", exact: true })
+      .getByRole("button", { name: "Shortcuts", exact: true })
       .click();
     await expect(page.getByRole("menu")).toHaveCount(0);
-    await expect(
-      page.getByRole("heading", { name: "Keyboard shortcuts", exact: true }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Shortcuts", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Back to app", exact: true }).click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await page.keyboard.press("Control+Shift+n");
@@ -75,11 +71,9 @@ test("workspace shortcuts create, search, split and close the active pane withou
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await page.keyboard.press("Control+Shift+k");
     await expect(page.getByRole("dialog")).toBeVisible();
-    await page.getByPlaceholder("Type a command or search…").fill("Keyboard shortcuts");
-    await page.getByRole("option", { name: /Keyboard shortcuts/ }).click();
-    await expect(
-      page.getByRole("heading", { name: "Keyboard shortcuts", exact: true }),
-    ).toBeVisible();
+    await page.getByPlaceholder("Type a command or search…").fill("Shortcuts");
+    await page.getByRole("option", { name: /Shortcuts/ }).click();
+    await expect(page.getByRole("heading", { name: "Shortcuts", exact: true })).toBeVisible();
     await expect(page.getByRole("main")).toContainText("Ctrl+Shift+P → Backspace");
     await page.getByRole("button", { name: "Back to app", exact: true }).click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -192,7 +186,7 @@ test("shortcuts have a dedicated settings page and the account menu only shows i
   const settings = page.getByRole("navigation", { name: "Settings" });
   const shortcuts = settings
     .getByRole("region", { name: "Personal" })
-    .getByRole("button", { name: "Keyboard shortcuts", exact: true });
+    .getByRole("button", { name: "Shortcuts", exact: true });
   await shortcuts.focus();
   await page.keyboard.press("Enter");
   await expect(shortcuts).toHaveAttribute("aria-current", "page");

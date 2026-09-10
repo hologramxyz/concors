@@ -35,7 +35,7 @@ export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
     items: [
       ACCOUNT_SETTINGS_ITEM,
       { page: "appearance", label: "Appearance", icon: Palette },
-      { page: "shortcuts", label: "Keyboard shortcuts", icon: Keyboard },
+      { page: "shortcuts", label: "Shortcuts", icon: Keyboard },
       { page: "notifications", label: "Notifications", icon: Bell },
     ],
   },

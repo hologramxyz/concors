@@ -16,7 +16,7 @@ export const BINDINGS = [
   { id: "close-pane", label: "Close pane", key: "p", then: "Backspace" },
   { id: "close-tab", label: "Close tab", key: "t", then: "Backspace" },
   { id: "settings", label: "Settings", key: "," },
-  { id: "shortcuts", label: "Keyboard shortcuts", key: "/" },
+  { id: "shortcuts", label: "Shortcuts", key: "/" },
 ] as const;
 export type CommandId = (typeof BINDINGS)[number]["id"];
 export type Sequence = "p" | "t";
