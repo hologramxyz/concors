@@ -6,6 +6,8 @@ import { FitAddon } from "@xterm/addon-fit";
 import type { TerminalInfo, TerminalOperation } from "@concors/protocol";
 import { TerminalConnectionContext } from "./connection-context";
 import "@xterm/xterm/css/xterm.css";
+import { CompactLayoutContext } from "@/components/compact-layout";
+import { MobileTerminalControls } from "./mobile-controls";
 
 export function TerminalSurface({
   sessionId,
@@ -23,6 +25,11 @@ export function TerminalSurface({
   recovering?: boolean;
 }) {
   const connection = useContext(TerminalConnectionContext);
+  const compact = useContext(CompactLayoutContext);
+  const [rendererVersion, setRendererVersion] = useState(0);
+  const controls = useRef<{ focus(): void; key(data: string): void; stop(): Promise<void> } | null>(
+    null,
+  );
   const visible = useTabVisible();
   const refresh = useRef<(() => void) | null>(null);
   const host = useRef<HTMLDivElement>(null);
@@ -59,7 +66,7 @@ export function TerminalSurface({
     const fit = new FitAddon();
     terminal.loadAddon(fit);
     const element = host.current;
-    const isVisible = () => element.getClientRects().length > 0;
+    const isVisible = () => element.getClientRects().length > 0 && !element.closest("[inert]");
     terminal.open(element);
     fit.fit();
     const themeObserver = new MutationObserver(() => {
@@ -147,6 +154,23 @@ export function TerminalSurface({
     // Focusing/clicking a terminal is the user's intent to type; no separate control button.
     const activate = () => {
       if (!owner) claim();
+    };
+    controls.current = {
+      focus() {
+        terminal.focus();
+        activate();
+      },
+      key(data) {
+        if (!running) return;
+        if (owner && !claiming) sendInput(data);
+        else {
+          queuedInput += data;
+          claim();
+        }
+      },
+      async stop() {
+        await request({ kind: "stop", sessionId });
+      },
     };
     element.addEventListener("pointerdown", activate);
     element.addEventListener("focusin", activate);
@@ -249,8 +273,9 @@ export function TerminalSurface({
       if (connection.state.status === "ready" && connection.workspace)
         void request({ kind: "detach", sessionId }).catch(() => undefined);
       terminal.dispose();
+      controls.current = null;
     };
-  }, [connection, sessionId]);
+  }, [connection, sessionId, rendererVersion]);
   useLayoutEffect(() => {
     if (visible) refresh.current?.();
   }, [visible]);
@@ -304,6 +329,18 @@ export function TerminalSurface({
           className="concors-terminal h-full w-full overflow-hidden"
         />
       </div>
+      {compact && (
+        <MobileTerminalControls
+          disabled={!canEdit || session?.status !== "running"}
+          onFocus={() => controls.current?.focus()}
+          onKey={(data) => controls.current?.key(data)}
+          onReload={() => setRendererVersion((value) => value + 1)}
+          onStop={async () => {
+            if (!controls.current) throw new Error("Terminal is disconnected");
+            await controls.current.stop();
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "appVersion": "0.1.0",
+  "releaseModel": "existing-account-companion",
+  "gates": [
+    {
+      "id": "developer-accounts",
+      "title": "Team-owned Expo, Apple and Google records, identifiers and signing",
+      "owner": "release owner",
+      "status": "blocked",
+      "evidence": []
+    },
+    {
+      "id": "production-auth",
+      "title": "Production native sign-in, recovery and session revocation",
+      "owner": "backend + QA",
+      "status": "blocked",
+      "evidence": []
+    },
+    {
+      "id": "production-workspace",
+      "title": "Authenticated production workspace/chat gateway and daemon lifecycle",
+      "owner": "backend",
+      "status": "blocked",
+      "evidence": []
+    },
+    {
+      "id": "account-deletion",
+      "title": "Deletion, shared organizations, machines, subscriptions and retained records",
+      "owner": "backend + privacy owner",
+      "status": "blocked",
+      "evidence": []
+    },
+    {
+      "id": "public-pages",
+      "title": "Live approved privacy, support and functioning web deletion request",
+      "owner": "website + privacy owner",
+      "status": "blocked",
+      "evidence": []
+    },
+    {
+      "id": "push",
+      "title": "Push delivery/revocation tested, or explicitly removed from the first release",
+      "owner": "backend + release owner",
+      "status": "blocked",
+      "evidence": []
+    },
+    {
+      "id": "domain-links",
+      "title": "Production Universal Links and Android App Links",
+      "owner": "website + signing owner",
+      "status": "blocked",
+      "evidence": []
+    },
+    {
+      "id": "physical-devices",
+      "title": "Physical iPhone and Android install, upgrade, keyboard, reconnect and accessibility",
+      "owner": "device QA",
+      "status": "blocked",
+      "evidence": []
+    },
+    {
+      "id": "store-material",
+      "title": "Store listing, real screenshots, privacy disclosures, ratings and review access",
+      "owner": "release + privacy owners",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "commerce-policy",
+      "title": "Signup, provisioning and billing approved for each intended storefront",
+      "owner": "product + policy review",
+      "status": "blocked",
+      "evidence": []
+    },
+    {
+      "id": "play-production-access",
+      "title": "Applicable Play verification, closed testing and production access",
+      "owner": "Google account owner",
+      "status": "blocked",
+      "evidence": []
+    },
+    {
+      "id": "ai-data-and-safety",
+      "title": "AI disclosure/consent, provider data handling and content safety/reporting",
+      "owner": "client + backend + privacy owner",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "id": "native-privacy-and-permissions",
+      "title": "Signed binary permissions, privacy report, SDK target and Android 16 KB compatibility",
+      "owner": "native QA + privacy owner",
+      "status": "pending",
+      "evidence": []
+    }
+  ]
+}

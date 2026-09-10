@@ -179,9 +179,9 @@ function AppContent() {
     [transport, memoryKey],
   );
   const openPalette = useCallback(() => setPaletteOpen(true), []);
-  const beforeLeaveFiles = useRef<(() => boolean) | null>(null);
-  const signOut = () => {
-    if (beforeLeaveFiles.current?.() !== false) void auth.signOut();
+  const beforeLeaveFiles = useRef<(() => boolean | Promise<boolean>) | null>(null);
+  const signOut = async () => {
+    if ((await beforeLeaveFiles.current?.()) !== false) void auth.signOut();
   };
   const openSettings = () => {
     if (view !== "settings") settingsReturnView.current = view;

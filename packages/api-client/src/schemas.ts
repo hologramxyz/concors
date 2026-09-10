@@ -120,6 +120,7 @@ export const MachineSchema = z.object({
   agentInstalledAt: z.string().nullable().optional(),
   agentVersion: z.string().nullable().optional(),
   agentSeenAt: z.string().nullable().optional(),
+  certificateError: z.string().nullable().optional(),
   agentError: z.string().nullable().optional(),
   /** Login user; connect with `ssh <sshUser>@<ipv4>`. */
   sshUser: z.string(),

@@ -28,7 +28,10 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
   try {
     await Promise.all([signedIn(first), signedIn(second)]);
     const managed = await managedHost(first);
-    await Promise.all([first.goto("/"), second.goto("http://localhost:1420")]);
+    await Promise.all([
+      first.goto("/"),
+      second.goto(test.info().project.use.baseURL ?? "http://localhost:1420"),
+    ]);
     await seedProject(first, "Concors acceptance", "/tmp");
     await expect(
       second.getByRole("heading", { name: "Concors acceptance", exact: true }),
