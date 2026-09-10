@@ -1,5 +1,5 @@
 import * as SecureStore from "expo-secure-store";
-import { HydratedTokenStore } from "@concors/client-core";
+import { HydratedTokenStore, MachineCredentialStore } from "@concors/client-core";
 
 const KEY = "concors.mobile.session.v1";
 export const tokenStore = new HydratedTokenStore({
@@ -20,3 +20,8 @@ export const deviceStorage = {
           keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
         }),
 };
+
+export const machineCredentials = new MachineCredentialStore({
+  read: () => deviceStorage.get("machine-token.v1"),
+  write: (value) => deviceStorage.set("machine-token.v1", value),
+});

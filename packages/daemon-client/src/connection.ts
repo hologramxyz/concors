@@ -72,8 +72,6 @@ export interface DaemonConnectionOptions {
   readonly handshakeTimeoutMs?: number;
   /** Override the WebSocket implementation (tests, custom transports). */
   readonly webSocketFactory?: WebSocketFactory;
-  /** Authentication subprotocols stay in the host transport, never in the endpoint URL. */
-  readonly protocols?: readonly string[];
 }
 
 export class DaemonConnectionError extends Error {
@@ -157,7 +155,6 @@ export class DaemonConnection {
   readonly #handshakeTimeoutMs: number;
   readonly #protocols: string | string[] | undefined;
   readonly #createSocket: WebSocketFactory;
-  readonly #protocols: string[] | undefined;
 
   constructor(options: DaemonConnectionOptions) {
     this.endpoint = options.endpoint;
@@ -166,7 +163,6 @@ export class DaemonConnection {
     this.#handshakeTimeoutMs = options.handshakeTimeoutMs ?? DEFAULT_HANDSHAKE_TIMEOUT_MS;
     this.#protocols = options.protocols;
     this.#createSocket = options.webSocketFactory ?? defaultWebSocketFactory;
-    this.#protocols = options.protocols ? [...options.protocols] : undefined;
   }
 
   get state(): ConnectionState {

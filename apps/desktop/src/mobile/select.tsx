@@ -14,6 +14,7 @@ export interface MobileSelectOption {
   label: string;
   icon?: ReactNode;
   description?: string;
+  disabled?: boolean;
 }
 
 /** Shared selection behavior; workspace/machine pickers use sheets, settings use popovers. */
@@ -47,8 +48,8 @@ export function MobileSelect({
   const focusSelection = (event: Event) => {
     const current = content.current;
     const option =
-      current?.querySelector<HTMLElement>('[aria-selected="true"]') ??
-      current?.querySelector<HTMLElement>('[role="option"]');
+      current?.querySelector<HTMLElement>('[aria-selected="true"]:not(:disabled)') ??
+      current?.querySelector<HTMLElement>('[role="option"]:not(:disabled)');
     if (option) {
       event.preventDefault();
       option.focus({ preventScroll: true });
@@ -56,7 +57,9 @@ export function MobileSelect({
     }
   };
   const navigate = (event: KeyboardEvent<HTMLElement>) => {
-    const options = [...(content.current?.querySelectorAll<HTMLElement>('[role="option"]') ?? [])];
+    const options = [
+      ...(content.current?.querySelectorAll<HTMLElement>('[role="option"]:not(:disabled)') ?? []),
+    ];
     const index = options.indexOf(document.activeElement as HTMLElement);
     let next: HTMLElement | undefined;
     if (event.key === "ArrowDown") next = options[(index + 1) % options.length];
@@ -133,11 +136,13 @@ export function MobileSelect({
           key={option.value}
           type="button"
           role="option"
+          disabled={option.disabled}
+          aria-disabled={option.disabled || undefined}
           aria-selected={value === option.value}
           tabIndex={value === option.value ? 0 : -1}
           data-value={option.value}
           data-label={option.label}
-          className="mobile-select-option"
+          className="mobile-select-option disabled:opacity-50"
           onClick={() => {
             setOpen(false);
             onValueChange(option.value);
