@@ -2,6 +2,8 @@ import { ProjectFileLinks } from "@/files/provider";
 import { neighborPane, type Direction } from "./pane-navigation";
 import { useTabVisible } from "./tab-visibility";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
+import { useTerminalProfiles } from "@/terminal/profiles-context";
+import { paneProfiles, TAB_PROFILES } from "./tab-profiles";
 import { useCommand } from "@/shortcuts/context";
 import { shortcutLabel } from "@/shortcuts/bindings";
 import type { PaneFocusRequest } from "./session-pane";
@@ -20,7 +22,7 @@ import { TerminalPane } from "@/terminal/terminal-pane";
 import { useContext, useEffect, useRef, useState } from "react";
 import { AgentPaneIcon } from "@/agents/activity";
 import { useAgents } from "@/agents/context";
-import { Columns2, Rows2, Ellipsis, Terminal, X } from "lucide-react";
+import { Columns2, Rows2, Ellipsis, Plus, Settings2, Terminal, X } from "lucide-react";
 import type {
   LayoutNode,
   PaneProfile,
@@ -295,7 +297,13 @@ function Pane({
     connection?.state.status === "ready" &&
     !!connection.state.daemon.capabilities?.includes("workspace-pane-rearrangement");
   const agent = useAgents().find((agent) => agent.id === node.sessionId);
-  const title = node.profile === "chat" ? (agent?.name ?? "Agent") : PROFILE_LABELS[node.profile];
+  const profiles = useTerminalProfiles();
+  const options = paneProfiles(profiles.profiles);
+  const PaneIcon =
+    TAB_PROFILES.find((item) => item.profile === (node.terminalProfile?.id ?? node.profile))
+      ?.icon ?? Terminal;
+  const label = node.terminalProfile?.name ?? PROFILE_LABELS[node.profile];
+  const title = node.profile === "chat" ? (agent?.name ?? "Agent") : label;
   const target = {
     projectId: project.id,
     expectedVersion: project.version,
@@ -306,7 +314,7 @@ function Pane({
     <section
       data-pane-id={node.id}
       tabIndex={-1}
-      aria-label={`${PROFILE_LABELS[node.profile]} pane`}
+      aria-label={`${label} pane`}
       className={`relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border outline-none ${node.profile === "chat" ? "bg-card" : "bg-[var(--terminal-background)] text-[var(--terminal-foreground)]"}`}
     >
       <header
@@ -328,7 +336,7 @@ function Pane({
         {node.profile === "chat" ? (
           <AgentPaneIcon sessionId={node.sessionId} />
         ) : (
-          <Terminal className="size-4 shrink-0 text-muted-foreground" />
+          <PaneIcon className="size-4 shrink-0 text-muted-foreground" />
         )}
         <span className="min-w-0 flex-1 truncate text-ui" title={title}>
           {title}
@@ -386,17 +394,34 @@ function Pane({
             <DropdownMenuSeparator />
             <DropdownMenuLabel>Pane profile</DropdownMenuLabel>
             <DropdownMenuRadioGroup
-              value={node.profile}
-              onValueChange={(profile) =>
-                onCommand({ kind: "pane.configure", ...target, profile: profile as PaneProfile })
-              }
+              value={node.terminalProfile?.id ?? node.profile}
+              onValueChange={(id) => {
+                const option = options.find((item) => item.id === id);
+                if (option)
+                  onCommand({
+                    kind: "pane.configure",
+                    ...target,
+                    profile: option.profile,
+                    ...(profiles.supported && option.terminalProfileId
+                      ? { terminalProfileId: option.terminalProfileId }
+                      : {}),
+                  });
+              }}
             >
-              {Object.entries(PROFILE_LABELS).map(([value, label]) => (
-                <DropdownMenuRadioItem key={value} value={value} disabled={!canEdit}>
-                  {label}
+              {options.map(({ id, label: optionLabel, icon: Icon }) => (
+                <DropdownMenuRadioItem key={id} value={id} disabled={!canEdit}>
+                  <Icon className="size-4 shrink-0" aria-hidden="true" />
+                  <span className="truncate">{optionLabel}</span>
                 </DropdownMenuRadioItem>
               ))}
             </DropdownMenuRadioGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => profiles.openSettings(true)}>
+              <Plus /> Add terminal profile…
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => profiles.openSettings()}>
+              <Settings2 /> Manage terminal profiles…
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
         <button
@@ -412,7 +437,7 @@ function Pane({
       </header>
       {node.profile !== "chat" ? (
         <TerminalPane
-          key={node.profile}
+          key={`${node.profile}:${node.terminalProfile?.id ?? ""}:${node.terminalProfile?.version ?? ""}`}
           project={project}
           tab={tab}
           node={node}

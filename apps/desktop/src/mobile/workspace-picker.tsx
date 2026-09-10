@@ -44,7 +44,7 @@ export function WorkspacePicker({
   const content = useRef<HTMLDivElement>(null);
   const subtitle =
     pane && tab
-      ? `${PROFILE_LABELS[pane.profile]} · Pane ${tabPanes(tab).findIndex((item) => item.id === pane.id) + 1}`
+      ? `${pane.terminalProfile?.name ?? PROFILE_LABELS[pane.profile]} · Pane ${tabPanes(tab).findIndex((item) => item.id === pane.id) + 1}`
       : "Tabs and panes";
   const native = useNativeSurface(
     trigger,
@@ -116,7 +116,7 @@ export function WorkspacePicker({
               <span>{tab?.name ?? project.name}</span>
               <span>
                 {pane && tab
-                  ? `${PROFILE_LABELS[pane.profile]} · Pane ${tabPanes(tab).findIndex((item) => item.id === pane.id) + 1}`
+                  ? `${pane.terminalProfile?.name ?? PROFILE_LABELS[pane.profile]} · Pane ${tabPanes(tab).findIndex((item) => item.id === pane.id) + 1}`
                   : "Tabs and panes"}
               </span>
             </span>
@@ -231,7 +231,7 @@ export function WorkspacePicker({
                         >
                           <PaneProfileIcon profile={node.profile} />
                           <span>
-                            {PROFILE_LABELS[node.profile]}
+                            {node.terminalProfile?.name ?? PROFILE_LABELS[node.profile]}
                             <small>Pane {index + 1}</small>
                           </span>
                           {tab?.id === item.id && pane?.id === node.id && (

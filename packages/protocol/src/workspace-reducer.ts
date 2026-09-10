@@ -4,6 +4,7 @@ import {
   type WorkspaceSnapshot,
   type WorkspaceTab,
 } from "./workspace.ts";
+import { DEFAULT_TERMINAL_PROFILES, terminalProfileKind } from "./terminal-profiles.ts";
 
 export class WorkspaceOperationError extends Error {
   override readonly name = "WorkspaceOperationError";
@@ -66,6 +67,20 @@ export function applyWorkspaceOperation(
   op: WorkspaceOperation,
 ): WorkspaceSnapshot {
   const state = WorkspaceSnapshotSchema.parse(current);
+  const profiles = state.terminalProfiles ?? DEFAULT_TERMINAL_PROFILES;
+  const selectedProfile = (profile: string, id?: string) => {
+    if (!id) return {};
+    const saved = requireValue(
+      profiles.find((item) => item.id === id),
+      "Terminal profile",
+    );
+    if (terminalProfileKind(saved.command) !== profile)
+      throw new WorkspaceOperationError(
+        "INVALID_OPERATION",
+        "Terminal profile does not match the pane type",
+      );
+    return { terminalProfile: { ...saved, args: [...saved.args] } };
+  };
   const allIds = new Set(
     state.projects.flatMap((p) => [
       p.id,
@@ -76,7 +91,28 @@ export function applyWorkspaceOperation(
     if (allIds.has(id)) throw new WorkspaceOperationError("INVALID_OPERATION", "ID already exists");
     allIds.add(id);
   };
-  if (op.kind === "project.add") {
+  if (op.kind === "terminal-profile.save" || op.kind === "terminal-profile.remove") {
+    const id = op.kind === "terminal-profile.save" ? op.profile.id : op.profileId;
+    const existing = profiles.find((item) => item.id === id);
+    if ((existing?.version ?? null) !== op.expectedVersion)
+      throw new WorkspaceOperationError(
+        "CONFLICT",
+        "This terminal profile changed on another client. Reopen it and try again.",
+      );
+    if (op.kind === "terminal-profile.save") {
+      if (!existing && profiles.length >= 64)
+        throw new WorkspaceOperationError(
+          "LIMIT_EXCEEDED",
+          "Maximum of 64 terminal profiles reached",
+        );
+      const saved = { ...op.profile, version: (existing?.version ?? -1) + 1 };
+      state.terminalProfiles = existing
+        ? profiles.map((item) => (item.id === id ? saved : item))
+        : [...profiles, saved];
+    } else {
+      state.terminalProfiles = profiles.filter((item) => item.id !== id);
+    }
+  } else if (op.kind === "project.add") {
     claim(op.projectId);
     if (op.directoryMode !== "follow" && state.projects.some((p) => p.directory === op.directory))
       throw new WorkspaceOperationError("INVALID_OPERATION", "Directory is already registered");
@@ -135,7 +171,16 @@ export function applyWorkspaceOperation(
           id: op.tabId,
           name: op.name,
           root: op.paneId,
-          nodes: [{ id: op.paneId, kind: "pane", profile: op.profile, sessionId: null, directory }],
+          nodes: [
+            {
+              id: op.paneId,
+              kind: "pane",
+              profile: op.profile,
+              ...selectedProfile(op.profile, op.terminalProfileId),
+              sessionId: null,
+              directory,
+            },
+          ],
         });
         state.selection = { projectId: project.id, tabId: op.tabId };
       } else {
@@ -236,7 +281,14 @@ export function applyWorkspaceOperation(
               throw new WorkspaceOperationError("INVALID_OPERATION", "Target is not a pane");
             if (op.kind === "pane.configure") {
               // Changing the view detaches its binding; runtime sessions remain alive and discoverable.
-              if (pane.profile !== op.profile) pane.sessionId = null;
+              const next = selectedProfile(op.profile, op.terminalProfileId);
+              if (
+                pane.profile !== op.profile ||
+                JSON.stringify(pane.terminalProfile) !== JSON.stringify(next.terminalProfile)
+              )
+                pane.sessionId = null;
+              if (next.terminalProfile) pane.terminalProfile = next.terminalProfile;
+              else delete pane.terminalProfile;
               pane.profile = op.profile;
             } else if (op.kind === "pane.split") {
               claim(op.newPaneId);
@@ -260,6 +312,16 @@ export function applyWorkspaceOperation(
                   id: op.newPaneId,
                   kind: "pane",
                   profile: op.profile,
+                  ...(op.terminalProfileId
+                    ? selectedProfile(op.profile, op.terminalProfileId)
+                    : pane.profile === op.profile && pane.terminalProfile
+                      ? {
+                          terminalProfile: {
+                            ...pane.terminalProfile,
+                            args: [...pane.terminalProfile.args],
+                          },
+                        }
+                      : {}),
                   sessionId: null,
                   directory: pane.directory ?? project.directory,
                 },
