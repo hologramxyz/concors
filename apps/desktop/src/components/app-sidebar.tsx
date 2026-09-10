@@ -25,7 +25,6 @@ interface AppSidebarProps {
   view: View;
   onOpenSettings: () => void;
   onOpenCommandPalette: () => void;
-  onOpenShortcuts: () => void;
   workspace: WorkspaceSnapshot | null;
   canEdit: boolean;
   onSelectProject: (id: string) => void;
@@ -173,7 +172,6 @@ export function AppSidebar(props: AppSidebarProps) {
             auth={props.auth}
             onSignOut={props.onSignOut}
             onOpenSettings={props.onOpenSettings}
-            onOpenShortcuts={props.onOpenShortcuts}
           />
         </div>
       </nav>
