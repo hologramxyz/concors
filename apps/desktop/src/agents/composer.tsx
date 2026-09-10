@@ -1,5 +1,4 @@
 import { useAgentDraft } from "./draft";
-import { isProviderModelsQueryLoading } from "./paseo/model-loading";
 import { useContext, useEffect, useRef, useState } from "react";
 import {
   ArrowUp,
@@ -46,7 +45,6 @@ export function AgentComposer({
   const [busy, setBusy] = useState(false),
     [uploading, setUploading] = useState(false),
     [configuring, setConfiguring] = useState(false),
-    [loadingModels, setLoadingModels] = useState(false),
     [error, setError] = useState<string | null>(null);
   const [queue, setQueue] = useState<Draft[]>([]),
     [uncertain, setUncertain] = useState(false);
@@ -57,10 +55,7 @@ export function AgentComposer({
   const advanced =
     connection?.state.status === "ready" &&
     connection.state.daemon.capabilities?.includes("agent-composer");
-  const modelsLoading = isProviderModelsQueryLoading({
-    isLoading: agent.status === "starting",
-    isFetching: loadingModels,
-  });
+  const modelsLoading = agent.status === "starting";
   const active = ["starting", "working", "needs_input"].includes(agent.status);
   const settings = agent.settings ?? defaults,
     models = agent.models ?? [];
@@ -93,21 +88,6 @@ export function AgentComposer({
       setError(e instanceof Error ? e.message : "Could not update agent settings");
     } finally {
       setConfiguring(false);
-    }
-  };
-  const refresh = async () => {
-    if (!connection || !advanced) return;
-    setLoadingModels(true);
-    try {
-      const result = await connection.requestAgent(
-        { kind: "refresh-models", sessionId: agent.id },
-        crypto.randomUUID(),
-      );
-      if (result.outcome.status === "error") throw new Error(result.outcome.message);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load models");
-    } finally {
-      setLoadingModels(false);
     }
   };
   const send = async (input: Draft) => {
@@ -375,17 +355,6 @@ export function AgentComposer({
             ]}
             onSelect={(model) =>
               void configure({ ...settings, model: model || null, effort: null, serviceTier: null })
-            }
-            footer={
-              <button
-                type="button"
-                aria-label="Refresh agent models"
-                disabled={modelsLoading}
-                onClick={() => void refresh()}
-                className="w-full border-t px-2 py-2 text-left text-xs text-muted-foreground hover:bg-muted"
-              >
-                Refresh models
-              </button>
             }
           />
           <ControlPicker
