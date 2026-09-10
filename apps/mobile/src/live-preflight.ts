@@ -1,4 +1,5 @@
 import type { ApiClient } from "@concors/api-client";
+import { managedHost, ConnectionAccessError } from "@concors/client-core";
 
 /** Read-only prerequisites, not a claim that a session or signed native build was tested. */
 export async function inspectLivePrerequisites(
@@ -22,6 +23,17 @@ export async function inspectLivePrerequisites(
         ? "A machine agent is installed, but this deployment does not advertise the Concourse workspace/chat bridge. Terminal access alone is not workspace parity."
         : "The deployment does not advertise Concourse workspace access.",
     );
+  if (capabilities.remoteAccess && !blockers.length) {
+    try {
+      managedHost(machine);
+    } catch (cause) {
+      blockers.push(
+        cause instanceof ConnectionAccessError
+          ? cause.message
+          : "Managed connection metadata is invalid.",
+      );
+    }
+  }
   return {
     authenticated: true,
     machineStatus: machine.status,

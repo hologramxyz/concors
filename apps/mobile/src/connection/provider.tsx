@@ -11,7 +11,11 @@ import {
 import { AppState, Platform } from "react-native";
 import * as Network from "expo-network";
 import { DaemonConnection, describeDaemonEndpoint } from "@concors/daemon-client";
-import { ConnectionController, type ConnectionSnapshot } from "@concors/client-core";
+import {
+  ConnectionController,
+  createManagedConnection,
+  type ConnectionSnapshot,
+} from "@concors/client-core";
 import { config } from "../config";
 import { api, demo } from "../auth/runtime";
 
@@ -55,12 +59,7 @@ async function createConnection(machineId: string | null) {
     });
   }
   if (!machineId) throw new Error("Choose a machine first.");
-  const ticket = await api.connectMachine(machineId);
-  return new DaemonConnection({
-    endpoint: describeDaemonEndpoint(ticket.url),
-    client,
-    webSocketFactory: (url) => new WebSocket(url, ["concors.v1", `ticket.${ticket.ticket}`]),
-  });
+  return createManagedConnection(api, machineId, client);
 }
 export function MachineProvider({
   children,
@@ -105,7 +104,8 @@ function MachineSession({
       enabled && (direct || machineId)
         ? new ConnectionController(
             () => createConnection(machineId),
-            direct ? undefined : (machineId ?? undefined),
+            // Managed cloud IDs are token audiences; workspace IDs are a separate daemon namespace.
+            config.demo ? (machineId ?? undefined) : undefined,
           )
         : null,
     [machineId, direct, enabled],
