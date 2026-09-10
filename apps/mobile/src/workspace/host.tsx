@@ -15,6 +15,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, NO_MOBILE_CAPABILITIES } from "@concors/api-client";
 import {
   createProtocolRelay,
+  machineAvailability,
   newRequestId,
   parseMobileRendererMessage,
   MobilePreferencesSchema,
@@ -145,7 +146,7 @@ function SignedInWorkspace() {
               : connection.message,
           capabilities: {
             ...(capabilities.data ?? NO_MOBILE_CAPABILITIES),
-            remoteAccess: config.demo || auth.direct || !!capabilities.data?.remoteAccess,
+            remoteAccess: !!auth.me || auth.direct,
           },
           demo: config.demo,
           native: Platform.OS !== "web",
@@ -190,10 +191,13 @@ function SignedInWorkspace() {
             throw new Error("This is not the connected desktop daemon.");
           return;
         }
-        if (!machines.data?.some((machine) => machine.id === action.machineId))
-          throw new Error("Machine is unavailable in this organization");
-        if (!state?.capabilities.remoteAccess)
-          throw new Error("Remote access is not enabled on this server yet");
+        {
+          const machine = machines.data?.find((item) => item.id === action.machineId);
+          if (!machine) throw new Error("Machine is unavailable in this organization");
+          const availability = machineAvailability(machine);
+          if (!config.demo && availability !== "connectable")
+            throw new Error(`This machine is ${availability}.`);
+        }
         selectMachine(action.machineId);
         return;
       case "retry":

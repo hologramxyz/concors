@@ -1,12 +1,26 @@
 appId: dev.concors.mobile.preview
+env:
+  FRESH_SIMULATOR: "false"
 ---
-- launchApp:
-    clearState: true
+# CI just installed and launched the app on a new simulator. Preserve that cold start
+# instead of clearing/relaunching it through XCTest; local reruns still reset state.
+- runFlow:
+    when:
+      true: ${FRESH_SIMULATOR == 'true'}
+    commands:
+      - launchApp:
+          stopApp: false
+- runFlow:
+    when:
+      true: ${FRESH_SIMULATOR != 'true'}
+    commands:
+      - launchApp:
+          clearState: true
 - tapOn: "Explore demo"
 - extendedWaitUntil:
     visible:
       id: native-agent-input
-    timeout: 30000
+    timeout: 45000
 - assertVisible:
     id: native-header-menu
 - assertVisible:
