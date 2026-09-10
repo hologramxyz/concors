@@ -10,6 +10,7 @@ export interface ControlOption {
 }
 export interface ControlGroup extends ControlOption {
   options: ControlOption[];
+  emptyMessage?: string | undefined;
 }
 export function ControlPicker({
   label,
@@ -22,6 +23,8 @@ export function ControlPicker({
   selectedGroupId,
   showValue = false,
   selectedLabel,
+  onOpen,
+  status,
 }: {
   label: string;
   value: string;
@@ -33,6 +36,8 @@ export function ControlPicker({
   selectedGroupId?: string;
   showValue?: boolean;
   selectedLabel?: string;
+  onOpen?: () => void;
+  status?: string | undefined;
 }) {
   const [open, setOpen] = useState(false),
     [query, setQuery] = useState(""),
@@ -78,6 +83,7 @@ export function ControlPicker({
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
+        if (next) onOpen?.();
         setQuery("");
         setActive(0);
         setGroupId(selectedGroupId);
@@ -192,8 +198,17 @@ export function ControlPicker({
                 )}
               </button>
             ))}
-            {!visible.length && <p className="p-3 text-sm text-muted-foreground">No matches</p>}
+            {!visible.length && (
+              <p className="p-3 text-sm text-muted-foreground">
+                {group?.emptyMessage ?? "No matches"}
+              </p>
+            )}
           </div>
+          {status && (
+            <p role="status" className="border-t px-2 py-2 text-xs text-muted-foreground">
+              {status}
+            </p>
+          )}
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
