@@ -1,12 +1,7 @@
 import { useState } from "react";
 import { useCommand } from "@/shortcuts/context";
-import { Ellipsis, Pencil, Plus, X } from "lucide-react";
-import type {
-  PaneProfile,
-  WorkspaceOperation,
-  WorkspaceProject,
-  WorkspaceTab,
-} from "@concors/protocol";
+import { Ellipsis, Pencil, Plus, Settings2, X } from "lucide-react";
+import type { WorkspaceOperation, WorkspaceProject, WorkspaceTab } from "@concors/protocol";
 import type { MobileTarget } from "@concors/client-core";
 import {
   DropdownMenu,
@@ -28,8 +23,9 @@ import {
 } from "@/components/ui/dialog";
 import { FormDialog } from "@/workspace/form-dialog";
 import { Button } from "@/components/ui/button";
-import { PaneProfileIcon } from "@/workspace/profile-icon";
-import { PROFILE_LABELS, tabPanes, type PaneNode } from "./selection";
+import { paneProfiles } from "@/workspace/tab-profiles";
+import { useTerminalProfiles } from "@/terminal/profiles-context";
+import { tabPanes, type PaneNode } from "./selection";
 
 export function WorkspaceActions({
   project,
@@ -60,6 +56,8 @@ export function WorkspaceActions({
   showTrigger?: boolean;
   onComplete?(): void;
 }) {
+  const profiles = useTerminalProfiles();
+  const options = paneProfiles(profiles.profiles);
   const [rename, setRename] = useState(false);
   const [closing, setClosing] = useState<"pane" | "tab" | null>(null);
   const [busy, setBusy] = useState(false);
@@ -108,18 +106,34 @@ export function WorkspaceActions({
                 <DropdownMenuSeparator />
                 <DropdownMenuLabel>Pane profile</DropdownMenuLabel>
                 <DropdownMenuRadioGroup
-                  value={pane.profile}
-                  onValueChange={(profile) =>
-                    command({ kind: "pane.configure", ...target, profile: profile as PaneProfile })
-                  }
+                  value={pane.terminalProfile?.id ?? pane.profile}
+                  onValueChange={(id) => {
+                    const option = options.find((item) => item.id === id);
+                    if (option)
+                      command({
+                        kind: "pane.configure",
+                        ...target,
+                        profile: option.profile,
+                        ...(profiles.supported && option.terminalProfileId
+                          ? { terminalProfileId: option.terminalProfileId }
+                          : {}),
+                      });
+                  }}
                 >
-                  {Object.entries(PROFILE_LABELS).map(([value, label]) => (
-                    <DropdownMenuRadioItem key={value} value={value} disabled={!canEdit}>
-                      <PaneProfileIcon profile={value as PaneProfile} />
-                      {label}
+                  {options.map(({ id, label, icon: Icon }) => (
+                    <DropdownMenuRadioItem key={id} value={id} disabled={!canEdit}>
+                      <Icon className="size-4 shrink-0" aria-hidden="true" />
+                      <span className="truncate">{label}</span>
                     </DropdownMenuRadioItem>
                   ))}
                 </DropdownMenuRadioGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => profiles.openSettings(true)}>
+                  <Plus /> Add terminal profile…
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => profiles.openSettings()}>
+                  <Settings2 /> Manage terminal profiles…
+                </DropdownMenuItem>
               </>
             )}
           </DropdownMenuContent>
