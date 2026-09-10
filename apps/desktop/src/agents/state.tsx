@@ -1,12 +1,14 @@
-import { AgentsContext, AGENT_STATUS } from "./context";
+import { AgentsContext, AgentStartedContext, AGENT_STATUS } from "./context";
 import { useEffect, useState } from "react";
 import type { DaemonConnection } from "@concors/daemon-client";
 import type { AgentInfo } from "@concors/protocol";
 export function AgentsProvider({
   connection,
+  onStarted,
   children,
 }: {
   connection: DaemonConnection | null;
+  onStarted?: ((sessionId: string) => void) | undefined;
   children: React.ReactNode;
 }) {
   const [replica, setReplica] = useState<{
@@ -22,7 +24,7 @@ export function AgentsProvider({
   );
   return (
     <AgentsContext value={replica?.connection === connection ? (replica?.agents ?? []) : []}>
-      {children}
+      <AgentStartedContext value={onStarted}>{children}</AgentStartedContext>
     </AgentsContext>
   );
 }

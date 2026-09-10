@@ -1,4 +1,5 @@
-import { useContext, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
+import { AgentStartedContext } from "./context";
 import {
   AgentProviderIdSchema,
   type AgentInfo,
@@ -8,6 +9,14 @@ import { TerminalConnectionContext } from "@/terminal/connection-context";
 
 export function useAgentModelSelection(agent: AgentInfo, onSelect: (model: string | null) => void) {
   const connection = useContext(TerminalConnectionContext);
+  const onStarted = useContext(AgentStartedContext);
+  const generation = useRef(0);
+  useEffect(
+    () => () => {
+      generation.current++;
+    },
+    [connection, agent.id],
+  );
   const [catalog, setCatalog] = useState<AgentProviderCatalog[]>([]);
   const [loading, setLoading] = useState(false),
     [switching, setSwitching] = useState(false),
@@ -49,6 +58,7 @@ export function useAgentModelSelection(agent: AgentInfo, onSelect: (model: strin
       return;
     }
     if (!connection) return;
+    const attempt = generation.current;
     setSwitching(true);
     setError(null);
     try {
@@ -62,10 +72,15 @@ export function useAgentModelSelection(agent: AgentInfo, onSelect: (model: strin
         },
         crypto.randomUUID(),
       );
+      // A late switch must not navigate a different pane, account or machine.
+      if (attempt !== generation.current) return;
       if (result.outcome.status === "error") throw new Error(result.outcome.message);
+      onStarted?.(result.outcome.conversation.agent.id);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not start provider");
+      if (attempt === generation.current)
+        setError(e instanceof Error ? e.message : "Could not start provider");
     } finally {
+      // Always release this hook's busy state if its connection was replaced.
       setSwitching(false);
     }
   };
