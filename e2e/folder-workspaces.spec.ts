@@ -85,7 +85,7 @@ test("new workspaces follow the original shell, inherit folders and preserve ope
       await page
         .locator(".sidebar-shell nav")
         .evaluate((element) => getComputedStyle(element).backgroundColor),
-    ).toBe("rgb(226, 225, 219)");
+    ).toBe("rgb(236, 235, 230)");
   } finally {
     await context.close();
     rmSync(root, { recursive: true, force: true });
