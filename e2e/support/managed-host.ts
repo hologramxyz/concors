@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 
 /** Real second daemon, discovered and authorized through a mocked control plane. */
-export async function managedHost(page: Page) {
+export async function managedHost(page: Page, includeUnavailable = false) {
   let tokens = 0;
   await page.route("**/api/v1/machines**", async (route) => {
     const request = route.request();
@@ -43,7 +43,32 @@ export async function managedHost(page: Page) {
     await route.fulfill({
       status: token ? 201 : 200,
       headers,
-      json: token ? { token: `test-token-${++tokens}` } : { machines: [machine] },
+      json: token
+        ? { token: `test-token-${++tokens}` }
+        : new URL(request.url()).pathname.endsWith("/second-machine")
+          ? { machine }
+          : {
+              machines: [
+                machine,
+                ...(includeUnavailable
+                  ? [
+                      {
+                        ...machine,
+                        id: "provisioning",
+                        name: "Provisioning machine",
+                        status: "provisioning",
+                        hostname: null,
+                      },
+                      {
+                        ...machine,
+                        id: "offline",
+                        name: "Offline machine",
+                        agentSeenAt: new Date(Date.now() - 120_000).toISOString(),
+                      },
+                    ]
+                  : []),
+              ],
+            },
     });
   });
   await page.routeWebSocket("wss://second.example/ws", (client) => {

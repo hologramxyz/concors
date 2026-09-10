@@ -1,4 +1,4 @@
-import { HydratedTokenStore } from "@concors/client-core";
+import { HydratedTokenStore, MachineCredentialStore } from "@concors/client-core";
 
 // Browser preview deliberately keeps credentials in memory. Native builds use SecureStore.
 let token: string | null = null;
@@ -16,3 +16,8 @@ export const deviceStorage = {
     else values.set(key, value);
   },
 };
+
+export const machineCredentials = new MachineCredentialStore({
+  read: () => deviceStorage.get("machine-token.v1"),
+  write: (value) => deviceStorage.set("machine-token.v1", value),
+});
