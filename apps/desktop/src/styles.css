@@ -96,7 +96,7 @@
   --success: oklch(0.7 0.17 150);
   --warning: oklch(0.78 0.16 75);
 
-  --sidebar: #ecebe6;
+  --sidebar: #e2e1db;
   --sidebar-foreground: oklch(0.4 0 0);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
@@ -117,7 +117,7 @@
 .dark {
   color-scheme: dark;
   --selection: #3b3b3b;
-  --background: #141414;
+  --background: #111111;
   --foreground: #ededed;
   --card: #1b1b1b;
   --card-foreground: var(--foreground);

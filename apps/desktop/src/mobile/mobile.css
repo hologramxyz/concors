@@ -4,6 +4,10 @@
   /* Match the native host's paper surface, independently of desktop inset colors. */
   --background: #f4f3ef;
 }
+:root.dark {
+  /* Match the native host independently of the desktop dark surface. */
+  --background: #141414;
+}
 :root,
 :root.dark {
   --terminal-background: var(--background);
