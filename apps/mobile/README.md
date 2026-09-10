@@ -244,6 +244,14 @@ iOS 26 simulator app and exercises native headers, input expansion, settings, Fi
 preservation. Browser acceptance separately covers the bridge and the web/Android fallback;
 neither a passing web test nor an Expo export substitutes for the simulator/device test.
 
+Native PR checks build a standalone app for one simulator architecture, with native compiler
+optimization and debug symbols disabled. Android compilation and emulator tests use separate
+runners to keep build output from exhausting emulator disk space. Gradle/native objects and
+CocoaPods/Xcode build products are cached. These checks retain the native UI flows and Android
+SDK, permission, and 16 KB alignment audits. Manually dispatch `Mobile Android native` to also
+build the optimized arm64/x86_64 release APK and AAB and audit both architectures. All CI apps
+use the preview identity and demo data; they are not store submission artifacts.
+
 ### Managed cloud connections
 
 Create `apps/mobile/.env.local` from `.env.example`. Set the real HTTPS

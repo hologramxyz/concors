@@ -22,7 +22,7 @@ jobs:
   simulator:
     name: Native iOS glass and composer
     runs-on: macos-26
-    timeout-minutes: 45
+    timeout-minutes: 20
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
       APP_VARIANT: preview
@@ -38,23 +38,58 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @concors/mobile assets
-      - name: Prepare Expo CLI cache on the clean runner
-        # SDK 57 devicectl writes its capability marker before creating the cache directory.
-        run: |
-          node -e 'require("node:fs").mkdirSync(require("node:path").join(require("node:os").homedir(), ".expo"), { recursive: true })'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            apps/mobile/ios/Pods
+            apps/mobile/ios/Podfile.lock
+            apps/mobile/ios/build
+            ~/Library/Caches/CocoaPods
+            ~/Library/Developer/Xcode/DerivedData/ConcorsCI
+          key: ios-native-v1-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml', 'apps/mobile/app.config.ts', '.github/workflows/mobile-ios.yml') }}-${{ github.sha }}
+          restore-keys: ios-native-v1-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml', 'apps/mobile/app.config.ts', '.github/workflows/mobile-ios.yml') }}-
+      - name: Generate native iOS project
+        working-directory: apps/mobile
+        run: pnpm exec expo prebuild --platform ios --no-install
+      - name: Install native dependencies
+        timeout-minutes: 4
+        working-directory: apps/mobile/ios
+        run: pod install
       - name: Create isolated iOS 26 simulator
+        timeout-minutes: 3
         id: simulator
         run: |
           MOBILE_SIMULATOR_ID=$(xcrun simctl create "Concors Glass CI" com.apple.CoreSimulator.SimDeviceType.iPhone-17 com.apple.CoreSimulator.SimRuntime.iOS-26-5)
           echo "id=$MOBILE_SIMULATOR_ID" >> "$GITHUB_OUTPUT"
           xcrun simctl boot "$MOBILE_SIMULATOR_ID"
           xcrun simctl bootstatus "$MOBILE_SIMULATOR_ID" -b
-      - name: Build and install unsigned native Release app
-        working-directory: apps/mobile
-        run: pnpm exec expo run:ios --configuration Release --no-bundler --device "${{ steps.simulator.outputs.id }}"
-      - name: Install native UI test runner
-        run: brew install mobile-dev-inc/tap/maestro
+      - name: Build and install one unsigned simulator architecture
+        timeout-minutes: 12
+        working-directory: apps/mobile/ios
+        run: |
+          set -o pipefail
+          mkdir -p ../test-results/native
+          MOBILE_WORKSPACE=$(find . -maxdepth 1 -name '*.xcworkspace' -print -quit)
+          MOBILE_SCHEME=$(basename "$MOBILE_WORKSPACE" .xcworkspace)
+          xcodebuild -workspace "$MOBILE_WORKSPACE" -scheme "$MOBILE_SCHEME" \
+            -configuration Release -sdk iphonesimulator \
+            -destination 'id=${{ steps.simulator.outputs.id }}' \
+            -derivedDataPath "$HOME/Library/Developer/Xcode/DerivedData/ConcorsCI" \
+            ARCHS="$(uname -m)" ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO \
+            COMPILER_INDEX_STORE_ENABLE=NO GCC_OPTIMIZATION_LEVEL=0 \
+            SWIFT_OPTIMIZATION_LEVEL=-Onone GCC_GENERATE_DEBUGGING_SYMBOLS=NO \
+            build > ../test-results/native/xcodebuild.log 2>&1 || { tail -100 ../test-results/native/xcodebuild.log; exit 1; }
+          MOBILE_APP=$(find "$HOME/Library/Developer/Xcode/DerivedData/ConcorsCI/Build/Products/Release-iphonesimulator" -maxdepth 1 -name '*.app' -print -quit)
+          xcrun simctl install '${{ steps.simulator.outputs.id }}' "$MOBILE_APP"
+      - name: Install pinned native UI test runner
+        timeout-minutes: 2
+        run: |
+          curl --fail --location --retry 3 https://github.com/mobile-dev-inc/Maestro/releases/download/cli-2.10.0/maestro.zip --output "$RUNNER_TEMP/maestro.zip"
+          echo '29b675e10cc12080e445e9bfb2e2b4e4dfb9c0f2e30d5884120d258b5e1cd991  maestro.zip' | (cd "$RUNNER_TEMP" && shasum -a 256 --check)
+          unzip -q "$RUNNER_TEMP/maestro.zip" -d "$RUNNER_TEMP/maestro-cli"
+          echo "$RUNNER_TEMP/maestro-cli/maestro/bin" >> "$GITHUB_PATH"
       - name: Exercise real SwiftUI controls and native text input
+        timeout-minutes: 3
         run: maestro --device "${{ steps.simulator.outputs.id }}" test --test-output-dir apps/mobile/test-results/native apps/mobile/e2e/native/glass.yaml
       - uses: actions/upload-artifact@v4
         if: always()
