@@ -1,4 +1,5 @@
-export const AI_CONSENT_VERSION = 1;
+// Reconfirm sharing when upgrading to the explicit multi-provider disclosure.
+export const AI_CONSENT_VERSION = 2;
 export const AI_CONSENT_KEY = "ai-sharing.v1";
 
 export interface ConsentRecord {
