@@ -16,7 +16,6 @@ interface AuthContextValue extends AuthState {
   direct: boolean;
   connectDirect(): void;
   signIn(email: string, password: string): Promise<void>;
-  signUp(name: string, email: string, password: string): Promise<void>;
   signOut(): Promise<void>;
   refresh(): Promise<void>;
 }
@@ -139,37 +138,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ me: null, loading: false, error });
     changingSession.current = false;
   };
-  const signUp = async (name: string, email: string, password: string) => {
-    if (config.developmentDaemon) throw new Error("Cloud signup is unavailable in direct mode.");
-    if (changingSession.current) return;
-    changingSession.current = true;
-    const attempt = ++generation.current;
-    setState({ me: null, loading: true, error: null });
-    try {
-      await tokenStore.hydrate();
-      tokenStore.set(null);
-      await api.signUpWithEmail({ name: name.trim(), email: email.trim(), password });
-      await tokenStore.flush();
-      if (!tokenStore.get()) throw new Error("Account created. Verify your email, then sign in.");
-      const me = await api.getMe();
-      if (attempt === generation.current) {
-        query.clear();
-        setState({ me, loading: false, error: null });
-      }
-    } catch (cause) {
-      if (attempt === generation.current)
-        setState({
-          me: null,
-          loading: false,
-          error:
-            cause instanceof Error
-              ? cause.message
-              : "Could not create account. Check your connection and retry.",
-        });
-    } finally {
-      changingSession.current = false;
-    }
-  };
   return (
     <AuthContext
       value={{
@@ -182,7 +150,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setDirect(true);
         },
         signIn,
-        signUp,
         signOut,
         refresh,
       }}

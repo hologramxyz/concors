@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { hostAction } from "./bridge";
 import { NotificationSettings } from "@/notifications/settings";
-import { MachinesView } from "@/machines/machines-view";
+import { ExistingMachines } from "./existing-machines";
 import { MobileSelect } from "./select";
 import { AppearanceSettings } from "@/settings/appearance-settings";
 import { AdvancedSettings } from "@/settings/advanced-settings";
@@ -41,18 +41,7 @@ export function SettingsDrawer({
   const [deleting, setDeleting] = useState(false);
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
-  const [creatingMachine, setCreatingMachine] = useState(false);
   const [withdrawingConsent, setWithdrawingConsent] = useState(false);
-  // Support both desktop MachinesView contracts while main's controlled creation
-  // flow lands. Mobile must never accept an arbitrary daemon URL from this form.
-  const machineControls = {
-    focusedMachineId: host.machineId,
-    creating: creatingMachine,
-    onCreatingChange: setCreatingMachine,
-    onAddMachine: () => {
-      throw new Error("Use the mobile machine selector or the configured desktop connection.");
-    },
-  };
   const run = async (work: () => Promise<unknown>) => {
     if (busy) return;
     setBusy(true);
@@ -74,7 +63,6 @@ export function SettingsDrawer({
           setPassword("");
           setConfirmation("");
           setDeleting(false);
-          if (!next) setCreatingMachine(false);
         }
       }}
     >
@@ -95,6 +83,7 @@ export function SettingsDrawer({
             label: group.label,
             options: [
               ...group.items
+                .filter((item) => item.page !== "billing")
                 .filter((item) => !host.direct || ["appearance", "advanced"].includes(item.page))
                 .map(({ page, label, icon: Icon }) => ({
                   value: page,
@@ -175,10 +164,7 @@ export function SettingsDrawer({
               </Section>
             </div>
           ) : page === "machines" && host.me ? (
-            <MachinesView
-              auth={{ status: "signed-in", ...host.me, organizations: host.organizations }}
-              {...machineControls}
-            />
+            <ExistingMachines host={host} onConnected={() => onOpenChange(false)} />
           ) : page === "notifications" ? (
             <div className="p-4">
               <NotificationSettings
@@ -215,7 +201,7 @@ export function SettingsDrawer({
             </div>
           ) : host.me && page !== "machines" ? (
             <SettingsView
-              page={page}
+              page={page === "billing" ? "account" : page}
               endpoint={null}
               apiUrl={host.apiUrl}
               endpointLabel={host.endpointLabel}
