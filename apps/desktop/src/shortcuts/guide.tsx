@@ -5,13 +5,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { BINDINGS, isMac, shortcutLabel } from "./bindings";
+import { BINDINGS, isMac, isCompactCommand, shortcutLabel } from "./bindings";
 export function ShortcutGuide({
   open,
   onOpenChange,
+  compact = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  compact?: boolean;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -26,7 +28,7 @@ export function ShortcutGuide({
           </DialogDescription>
         </DialogHeader>
         <dl className="max-h-[55vh] space-y-3 overflow-y-auto text-[15px]">
-          {BINDINGS.map((binding) => (
+          {BINDINGS.filter((binding) => !compact || isCompactCommand(binding.id)).map((binding) => (
             <div
               key={binding.id}
               className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center sm:gap-4"
@@ -40,15 +42,24 @@ export function ShortcutGuide({
             </div>
           ))}
         </dl>
+        {compact ? (
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            With an external keyboard, the same commands work on mobile. Arrow commands select the
+            previous or next pane in the top selector. Use Tab and pane actions to rename, reorder
+            or close tabs. Create and arrange split layouts on desktop.
+          </p>
+        ) : (
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            Outside terminals, ⌘K / Ctrl+K also opens search. Use Alt+Shift+Left/Right on a tab to
+            reorder it, or arrow keys on a split divider to resize panes.
+          </p>
+        )}
         <p className="text-sm leading-relaxed text-muted-foreground">
-          Outside terminals, ⌘K / Ctrl+K also opens search. Use Alt+Shift+Left/Right on a tab to
-          reorder it, or arrow keys on a split divider to resize panes.
-        </p>
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          P → Enter creates a pane to the right; P → an arrow chooses its position. T → Enter opens
-          the tab profile picker; T → Left/Right cycles tabs. Backspace after P/T closes the
-          pane/tab, leaving its sessions running. Ctrl+Shift+K searches projects and commands. The
-          desktop app also supports Ctrl+Tab / Ctrl+Shift+Tab; browsers keep those for browser tabs.
+          {!compact && "P → Enter creates a pane to the right; P → an arrow chooses its position. "}
+          T → Enter opens the tab profile picker; T → Left/Right cycles tabs. Backspace after P/T
+          closes the pane/tab, leaving its sessions running. Ctrl+Shift+K searches projects and
+          commands. The desktop app also supports Ctrl+Tab / Ctrl+Shift+Tab; browsers keep those for
+          browser tabs.
         </p>
       </DialogContent>
     </Dialog>

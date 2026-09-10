@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { InputGroup, InputGroupAddon } from "@/components/ui/input-group";
 import { SearchIcon, CheckIcon } from "lucide-react";
+import { CompactLayoutContext } from "@/components/compact-layout";
 
 function Command({ className, ...props }: React.ComponentProps<typeof CommandPrimitive>) {
   return (
@@ -38,19 +39,22 @@ function CommandDialog({
   className?: string;
   showCloseButton?: boolean;
 }) {
+  const compact = React.useContext(CompactLayoutContext);
   return (
     <Dialog {...props}>
-      <DialogHeader className="sr-only">
-        <DialogTitle>{title}</DialogTitle>
-        <DialogDescription>{description}</DialogDescription>
-      </DialogHeader>
       <DialogContent
         className={cn(
-          "top-[12vh] translate-y-0 overflow-hidden rounded-xl! p-0 sm:max-w-2xl",
+          compact
+            ? "mobile-search-drawer"
+            : "top-[12vh] translate-y-0 overflow-hidden rounded-xl! p-0 sm:max-w-2xl",
           className,
         )}
-        showCloseButton={showCloseButton}
+        showCloseButton={compact || showCloseButton}
       >
+        <DialogHeader className={compact ? undefined : "sr-only"}>
+          <DialogTitle>{compact ? "Search workspace" : title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
         {children}
       </DialogContent>
     </Dialog>

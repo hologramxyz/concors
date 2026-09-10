@@ -16,9 +16,10 @@ const client = { kind: "desktop", name: "concors-desktop", version: "0.1.0" } as
 // Bundled daemon on this machine …
 const local = new DaemonConnection({ endpoint: localDaemonEndpoint(), client });
 
-// … or the user's VPS. Same class, same protocol.
+// … or a managed VPS. Mint with api.mintMachineToken(machineId) immediately before connecting.
 const remote = new DaemonConnection({
-  endpoint: describeDaemonEndpoint("wss://remote-daemon.example", "My VPS"),
+  endpoint: describeDaemonEndpoint("wss://remote-daemon.example/ws", "My VPS"),
+  protocols: [`concors.bearer.${token}`],
   client,
 });
 
@@ -36,3 +37,10 @@ local.disconnect();
   daemon the app itself manages and a remote daemon over a flaky network.
 - Anything Node-specific (e.g. spawning the daemon process) is **out of scope** here; that belongs to
   the host integration layer (`apps/desktop/src/tauri`).
+
+The transport forwards `protocols` to the WebSocket constructor (and to a custom
+`webSocketFactory(url, protocols)`). Machine tokens must never be saved in profiles or URLs.
+Disconnect states expose `closeCode`; failed handshakes expose it in `error.details`. Browsers
+hide HTTP upgrade status codes, so the desktop retries an opaque upgrade failure once with a fresh
+token, then stops with an access/connectivity message. Explicit 401 or 4401 failures get one refresh
+before “Access revoked”. Normal network drops after connecting use exponential backoff.
