@@ -31,6 +31,7 @@ export class DaemonState {
         "agent-chat",
         "agent-attention",
         "agent-composer",
+        "agent-providers",
         "pane-rearrangement",
         "workspace-pane-rearrangement",
         "directional-pane-split",

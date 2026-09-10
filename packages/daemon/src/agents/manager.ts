@@ -3,7 +3,6 @@ import { saveAttachments } from "./attachments.ts";
 import type { AgentAttachment } from "@concors/protocol";
 import { normalizeCommandExecutionCommand } from "./codex/command-display.ts";
 import { randomUUID } from "node:crypto";
-import { spawn } from "node:child_process";
 import { stat } from "node:fs/promises";
 import { z } from "zod";
 import {
@@ -17,38 +16,18 @@ import {
 } from "@concors/protocol";
 import type { WorkspaceStore } from "../workspace/store.ts";
 import { resolveProfile } from "../terminal/profiles.ts";
-import { CodexAppServer } from "./codex/app-server.ts";
 import { mapCodexItem } from "./codex/items.ts";
 
-export type AgentProvider = Pick<
-  CodexAppServer,
-  "initialize" | "request" | "onNotification" | "onFailure" | "close"
->;
-export type AgentProviderFactory = (
-  directory: string,
-  onRequest: (method: string, params: unknown, id: string | number) => Promise<unknown>,
-) => AgentProvider;
-const createProvider: AgentProviderFactory = (cwd, onRequest) => {
-  const profile = resolveProfile("codex");
-  const args =
-    typeof profile.args === "string"
-      ? [
-          "/d",
-          "/s",
-          "/c",
-          profile.args.slice("/d /s /c ".length, -1) + ' app-server --listen stdio://"',
-        ]
-      : ["app-server", "--listen", "stdio://"];
-  return new CodexAppServer(
-    spawn(profile.command, args, {
-      cwd,
-      stdio: "pipe",
-      windowsHide: true,
-      ...(typeof profile.args === "string" ? { windowsVerbatimArguments: true } : {}),
-    }),
-    onRequest,
-  );
-};
+import { createProvider, type AgentProviderFactory } from "./providers/index.ts";
+import type { ConversationProvider as AgentProvider } from "./providers/contract.ts";
+import {
+  AgentProviderIdSchema,
+  agentProviderNames,
+  type AgentProviderCatalog,
+} from "@concors/protocol";
+export type { AgentProviderFactory } from "./providers/index.ts";
+export type { ConversationProvider as AgentProvider } from "./providers/contract.ts";
+
 const ObjectValue = z.record(z.string(), z.unknown());
 const Turn = z.object({
   id: z.string(),
@@ -80,6 +59,7 @@ export class AgentManager {
   readonly #factory: AgentProviderFactory;
   readonly #runtimes = new Map<string, Runtime>();
   #closed = false;
+  private catalogs = new Map<string, { expires: number; value: Promise<AgentProviderCatalog[]> }>();
   constructor(
     store: WorkspaceStore,
     emit: (event: AgentEvent) => void,
@@ -176,8 +156,10 @@ export class AgentManager {
       void idle[1].provider.close();
     }
     const info = this.#store.agent(id);
-    const provider = this.#factory(info.directory, (method, params, requestId) =>
-      this.approval(id, method, params, requestId),
+    const provider = this.#factory(
+      info.directory,
+      (method, params, requestId) => this.approval(id, method, params, requestId),
+      info.provider,
     );
     const runtime: Runtime = {
       provider,
@@ -254,15 +236,49 @@ export class AgentManager {
           });
         return this.result(request, op.sessionId);
       }
+      if (op.kind === "provider-catalog") {
+        const info = this.#store.agent(op.sessionId);
+        const providers = await this.catalog(info);
+        return {
+          type: "agent.result",
+          requestId: request.requestId,
+          outcome: {
+            status: "ok",
+            conversation: this.#store.agentConversation(info.id),
+            providers,
+          },
+        };
+      }
       const receipt = this.#store.agentReceipt(request);
       if (receipt) return this.result(request, receipt);
-      if (op.kind === "start") {
-        const project = this.#store.snapshot().projects.find((p) => p.id === op.projectId);
-        const pane = project?.tabs
-          .find((tab) => tab.id === op.tabId)
-          ?.nodes.find((node) => node.id === op.paneId);
+      if (op.kind === "switch-provider") {
+        const previous = this.#store.agent(op.sessionId);
+        if (previous.revision !== op.expectedRevision) throw new Error("Agent changed. Try again.");
+        if (previous.provider === op.provider) throw new Error("Choose a different provider");
+        const catalog = (await this.catalog(previous)).find((p) => p.id === op.provider);
+        if (!catalog || catalog.error)
+          throw new Error(catalog?.error ?? "Provider is not installed on this machine");
+        if (op.model && !catalog.models.some((m) => m.id === op.model))
+          throw new Error("That model is not available");
+      }
+      if (op.kind === "start" || op.kind === "switch-provider") {
+        const previous =
+          op.kind === "switch-provider" ? this.#store.agent(op.sessionId) : undefined;
+        const project = this.#store
+          .snapshot()
+          .projects.find(
+            (p) => p.id === (op.kind === "start" ? op.projectId : previous?.projectId),
+          );
+        const pane =
+          op.kind === "start"
+            ? project?.tabs
+                .find((tab) => tab.id === op.tabId)
+                ?.nodes.find((node) => node.id === op.paneId)
+            : undefined;
         const directory =
-          pane?.kind === "pane" ? (pane.directory ?? project?.directory) : project?.directory;
+          pane?.kind === "pane"
+            ? (pane.directory ?? project?.directory)
+            : (previous?.directory ?? project?.directory);
         if (!project || !directory || !(await stat(directory)).isDirectory())
           throw new Error("Project folder is unavailable");
         const repeated = this.#store.agentReceipt(request);
@@ -272,9 +288,9 @@ export class AgentManager {
         const info: AgentInfo = {
           id: randomUUID(),
           projectId: project.id,
-          name: "Codex",
+          name: agentProviderNames[op.provider ?? "codex"],
           directory,
-          provider: "codex",
+          provider: op.provider ?? "codex",
           model: op.model ?? null,
           settings: { ...defaultSettings, model: op.model ?? null },
           context: null,
@@ -308,6 +324,14 @@ export class AgentManager {
         return this.result(request, info.id);
       }
       if (op.kind === "configure") {
+        if (
+          info.provider !== "codex" &&
+          (op.settings.mode !== "default" ||
+            op.settings.planMode ||
+            op.settings.serviceTier ||
+            op.settings.effort)
+        )
+          throw new Error("This provider uses its native tool approvals and model defaults");
         if (info.revision !== op.expectedRevision)
           throw new Error("Agent settings changed. Try again.");
         if (
@@ -346,7 +370,10 @@ export class AgentManager {
         const turnId = `pending:${request.requestId}`;
         const next = {
           ...info,
-          name: info.name === "Codex" ? op.text.split("\n")[0]?.slice(0, 80) || "Codex" : info.name,
+          name:
+            info.name === agentProviderNames[info.provider]
+              ? op.text.split("\n")[0]?.slice(0, 80) || agentProviderNames[info.provider]
+              : info.name,
           status: "working" as const,
           turnId,
           turnStartedAt: new Date().toISOString(),
@@ -484,7 +511,12 @@ export class AgentManager {
       this.#store.agentConversation(id).items.some((i) => i.kind === "user" && i.turnId === turnId)
     )
       return;
-    this.item(id, turnId, mapped);
+    this.item(id, turnId, {
+      ...mapped,
+      ...(mapped.kind === "assistant"
+        ? { title: agentProviderNames[this.#store.agent(id).provider] }
+        : {}),
+    });
   }
   private notification(id: string, method: string, raw: unknown): void {
     const params = ObjectValue.parse(raw);
@@ -705,7 +737,7 @@ export class AgentManager {
       turnId: scope.turnId,
       kind: questions ? "questions" : "approval",
       title: questions
-        ? "Codex needs your input"
+        ? `${agentProviderNames[info.provider]} needs your input`
         : method.includes("fileChange")
           ? "Allow file changes?"
           : "Allow command execution?",
@@ -733,6 +765,61 @@ export class AgentManager {
     );
     this.update(id, { status: "needs_input", pending: [...info.pending, pending] });
     return result;
+  }
+  private catalog(info: AgentInfo): Promise<AgentProviderCatalog[]> {
+    const cached = this.catalogs.get(info.directory);
+    if (cached && cached.expires > Date.now()) return cached.value;
+    const value = Promise.all(
+      AgentProviderIdSchema.options.map(async (id) => {
+        try {
+          resolveProfile(id);
+        } catch {
+          return null;
+        }
+        if (id === info.provider && info.models?.length) return { id, models: info.models };
+        let provider: AgentProvider | undefined;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          provider = this.#factory(
+            info.directory,
+            async () => {
+              throw new Error("No prompts are sent during model discovery");
+            },
+            id,
+          );
+          const current = provider;
+          const models = await Promise.race([
+            (async () => {
+              await current.initialize();
+              return parseModels(await current.request("model/list", {}));
+            })(),
+            new Promise<never>((_, reject) => {
+              timer = setTimeout(() => reject(new Error("Model discovery timed out")), 15000);
+            }),
+          ]);
+          return {
+            id,
+            models,
+            ...(!models.length
+              ? { error: "No models available. Connect an account using the provider CLI." }
+              : {}),
+          };
+        } catch {
+          return {
+            id,
+            models: [],
+            error:
+              "Could not load models. Check the provider installation and sign in using its CLI.",
+          };
+        } finally {
+          clearTimeout(timer);
+          await provider?.close();
+        }
+      }),
+    ).then((items) => items.filter((item) => item !== null));
+    if (this.catalogs.size >= 32) this.catalogs.delete(this.catalogs.keys().next().value ?? "");
+    this.catalogs.set(info.directory, { expires: Date.now() + 30000, value });
+    return value;
   }
   async close(): Promise<void> {
     if (this.#closed) return;
