@@ -1,9 +1,23 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { version } from "./package.json";
+import eas from "./eas.json";
 
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.resetModules();
+});
+
+it("keeps candidate builds production-configured and candidate uploads internal-only", () => {
+  expect(eas.build.candidate).toMatchObject({
+    distribution: "store",
+    autoIncrement: true,
+    environment: "production",
+    env: { APP_VARIANT: "production", EXPO_PUBLIC_DEMO: "false" },
+    android: { buildType: "app-bundle" },
+  });
+  expect(eas.build.production).toEqual({ extends: "candidate" });
+  expect(eas.submit.candidate.android).toEqual({ track: "internal", releaseStatus: "draft" });
+  expect(eas.submit.candidate.ios).toEqual({});
 });
 
 it("uses the production identity for candidates without a development launcher scheme", async () => {
