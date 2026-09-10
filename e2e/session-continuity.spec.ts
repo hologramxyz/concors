@@ -30,6 +30,27 @@ test("Codex and Claude panes reconnect to the same processes, then recover lost 
     const second = await context.newPage();
     for (const client of [page, second]) {
       await signedIn(client);
+      if (new URL(test.info().project.use.baseURL ?? "http://localhost:1420").port !== "1420") {
+        // This private host intentionally only trusts the standard UI origin. For
+        // an alternate-port local checkout, forward through a native test socket;
+        // the real gateway/session host and reconnect assertions remain unchanged.
+        await client.routeWebSocket(`ws://127.0.0.1:${port}/ws`, (socket) => {
+          const upstream = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+          const pending: (string | Buffer)[] = [];
+          socket.onMessage((message) => {
+            if (upstream.readyState === WebSocket.OPEN) upstream.send(message);
+            else pending.push(message);
+          });
+          upstream.addEventListener("open", () => {
+            for (const message of pending) upstream.send(message);
+            pending.length = 0;
+          });
+          upstream.addEventListener("message", (event) => socket.send(String(event.data)));
+          upstream.addEventListener("close", () => socket.close());
+          upstream.addEventListener("error", () => socket.close());
+          socket.onClose(() => upstream.close());
+        });
+      }
       await client.addInitScript((target) => {
         const NativeWebSocket = window.WebSocket;
         window.WebSocket = class extends NativeWebSocket {

@@ -58,7 +58,7 @@ test("two devices use the same terminal and recover its screen after reload", as
       "rgb(27, 27, 27)",
     );
     await page.screenshot({ path: "test-results/terminal-neutral-dark.png" });
-    await second.goto("http://localhost:1420");
+    await second.goto(test.info().project.use.baseURL ?? "http://localhost:1420");
     await expect(second.getByLabel("Terminal output").filter({ visible: true })).toContainText(
       "hello-shared-terminal",
     );

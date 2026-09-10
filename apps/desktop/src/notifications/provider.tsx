@@ -10,10 +10,12 @@ export function NotificationProvider({
   connection,
   onOpen,
   children,
+  inAppOnly = false,
 }: {
   connection: DaemonConnection | null;
   onOpen: (id: string) => void;
   children: React.ReactNode;
+  inAppOnly?: boolean;
 }) {
   const views = useRef(new Map<string, number>());
   const dismiss = useRef<(id: string) => void>(() => undefined);
@@ -45,7 +47,10 @@ export function NotificationProvider({
     dismiss.current = clear;
     const engine = new AttentionEngine({
       focused,
-      preferences: getNotificationPreferences,
+      preferences: () => ({
+        ...getNotificationPreferences(),
+        ...(inAppOnly ? { desktop: true } : {}),
+      }),
       claim: (id) =>
         claimNotification(
           `${connection.workspace?.machineId ?? connection.endpoint.url}:${connection.workspace?.epoch ?? ""}`,
@@ -70,6 +75,7 @@ export function NotificationProvider({
           clear(notice.sessionId);
         };
         closes.set(notice.sessionId, { id: notice.id, close: () => undefined });
+        if (inAppOnly) return;
         void desktopNotice(notice, open)
           .then((close) => {
             if (disposed || closes.get(notice.sessionId)?.id !== notice.id) close();
@@ -149,7 +155,7 @@ export function NotificationProvider({
       window.removeEventListener("pointerdown", unlock);
       window.removeEventListener("keydown", unlock);
     };
-  }, [connection, onOpen]);
+  }, [connection, onOpen, inAppOnly]);
   return (
     <NotificationContext value={{ view }}>
       {children}

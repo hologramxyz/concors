@@ -15,6 +15,8 @@ import {
   MachineCostsSchema,
   MachineListSchema,
   MachineResponseSchema,
+  MachineTokenSchema,
+  type MachineToken,
   MeSchema,
   OrganizationListSchema,
   RedirectSchema,
@@ -32,6 +34,18 @@ import {
   type SshKey,
 } from "./schemas.ts";
 import { memoryTokenStore, type TokenStore } from "./token-store.ts";
+import {
+  AccountDeletionSchema,
+  MachineConnectionTicketSchema,
+  MachineAccessTokenSchema,
+  MobileCapabilitiesSchema,
+  NO_MOBILE_CAPABILITIES,
+  PushDeviceSchema,
+  type MobileCapabilities,
+  type MachineConnectionTicket,
+  type MachineAccessToken,
+  type PushDevice,
+} from "./mobile.ts";
 
 export interface ApiClientOptions {
   /** Base URL of the control-plane API, e.g. `https://api.concors.dev`. */
@@ -184,6 +198,19 @@ export class ApiClient {
     return data.machines;
   }
 
+  /** Mint immediately before opening a managed daemon connection; never persist this token. */
+  async mintMachineToken(id: string): Promise<MachineToken> {
+    const { data } = await this.#request(
+      "POST",
+      `/api/v1/machines/${encodeURIComponent(id)}/token`,
+      {
+        body: {},
+        schema: MachineTokenSchema,
+      },
+    );
+    return data;
+  }
+
   /**
    * Creates a machine: charges the first month (402 without a card on file or when it is
    * declined), then orders or reuses a VPS. Poll `getMachine` until `status` is `running`.
@@ -321,6 +348,69 @@ export class ApiClient {
     return data.invoices;
   }
 
+  /** Optional mobile contracts. A 404 means this deployment has not implemented them yet. */
+  async getMobileCapabilities(): Promise<MobileCapabilities> {
+    try {
+      const { data } = await this.#request("GET", "/api/v1/mobile/capabilities", {
+        schema: MobileCapabilitiesSchema,
+      });
+      return data;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) return { ...NO_MOBILE_CAPABILITIES };
+      throw error;
+    }
+  }
+  /** @deprecated Unimplemented historical proposal; managed clients use getMachineAccessToken. */
+  async connectMachine(machineId: string): Promise<MachineConnectionTicket> {
+    const { data } = await this.#request(
+      "POST",
+      `/api/v1/machines/${encodeURIComponent(machineId)}/connect`,
+      {
+        body: {},
+        schema: MachineConnectionTicketSchema,
+      },
+    );
+    if (data.machineId !== machineId || Date.parse(data.expiresAt) <= Date.now() + 5_000)
+      throw new ApiError(
+        502,
+        "The machine connection ticket is invalid or expired",
+        "INVALID_TICKET",
+      );
+    return data;
+  }
+  /** The native host owns this credential. Never put it in renderer state, logs or a URL. */
+  async getMachineAccessToken(machineId: string): Promise<MachineAccessToken> {
+    const { data } = await this.#request(
+      "POST",
+      `/api/v1/machines/${encodeURIComponent(machineId)}/token`,
+      { body: {}, schema: MachineAccessTokenSchema },
+    );
+    if (data.machineId !== machineId || Date.parse(data.expiresAt) <= Date.now() + 5_000)
+      throw new ApiError(
+        502,
+        "The machine access token is invalid or expired",
+        "INVALID_MACHINE_TOKEN",
+      );
+    return data;
+  }
+  async registerPushDevice(device: PushDevice): Promise<void> {
+    await this.#request("POST", "/api/v1/mobile/devices", {
+      body: PushDeviceSchema.parse(device),
+      schema: null,
+    });
+  }
+  async unregisterPushDevice(installationId: string): Promise<void> {
+    await this.#request("DELETE", `/api/v1/mobile/devices/${encodeURIComponent(installationId)}`, {
+      schema: null,
+    });
+  }
+  async deleteAccount(password: string): Promise<"deleted" | "scheduled"> {
+    const { data } = await this.#request("POST", "/api/v1/account/deletion", {
+      body: { password },
+      schema: AccountDeletionSchema,
+    });
+    return data.status;
+  }
   #rememberToken(response: Response, bodyToken: string | null): void {
     const token = response.headers.get(AUTH_TOKEN_HEADER) ?? bodyToken;
     if (token !== null && token !== "") this.tokens.set(token);

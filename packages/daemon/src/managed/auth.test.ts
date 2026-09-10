@@ -49,6 +49,7 @@ describe("createTokenVerifier", () => {
       userId: "user_1",
       sessionId: "session_1",
       organizationId: "org_1",
+      expiresAt: expect.any(Number),
     });
   });
 
@@ -56,6 +57,7 @@ describe("createTokenVerifier", () => {
     ["another machine", { aud: "machine_2" }],
     ["another issuer", { iss: "https://evil.example" }],
     ["expired", { exp: "-1m" }],
+    ["longer than the 15-minute access policy", { exp: "20m" }],
   ])("rejects a token for %s", async (_label, overrides) => {
     const { jwks, sign } = await signer();
     const verifier = createTokenVerifier({

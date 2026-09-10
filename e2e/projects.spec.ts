@@ -16,7 +16,7 @@ test("browse and clone folders on the machine, derive names, and focus an existi
   try {
     await Promise.all([signedIn(page), signedIn(second)]);
     await page.goto("/");
-    await second.goto("http://localhost:1420");
+    await second.goto(test.info().project.use.baseURL ?? "http://localhost:1420");
     await openFolder(page, folder);
     await expect(second.getByRole("heading", { name: "my-project", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Open workspace menu", exact: true }).click();

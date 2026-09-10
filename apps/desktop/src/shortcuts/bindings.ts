@@ -16,9 +16,11 @@ export const BINDINGS = [
   { id: "close-pane", label: "Close pane", key: "p", then: "Backspace" },
   { id: "close-tab", label: "Close tab", key: "t", then: "Backspace" },
   { id: "settings", label: "Settings", key: "," },
-  { id: "shortcuts", label: "Keyboard shortcuts", key: "/" },
+  { id: "shortcuts", label: "Shortcuts", key: "/" },
 ] as const;
 export type CommandId = (typeof BINDINGS)[number]["id"];
+/** Phones select a single saved pane; desktop split geometry is not a mobile action. */
+export const isCompactCommand = (id: CommandId) => id !== "new-pane" && !id.startsWith("split-");
 export type Sequence = "p" | "t";
 export const isMac = () => /Mac|iPhone|iPad/.test(navigator.platform);
 export function keyLabel(key: string): string {

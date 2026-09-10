@@ -221,10 +221,8 @@ test("create a workspace VPS with a test card, then view its subscription in Pro
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "build-agent" })).toBeVisible();
   await page.getByRole("button", { name: "Switch machine", exact: true }).click();
-  await expect(
-    page.getByRole("menuitem", { name: "build-agent Ordering server", exact: true }),
-  ).toBeVisible();
-  await page.getByRole("menuitem", { name: "build-agent Ordering server", exact: true }).click();
+  await expect(page.getByRole("menuitem", { name: /build-agent provisioning/i })).toBeVisible();
+  await page.getByRole("menuitem", { name: /build-agent provisioning/i }).click();
   await expect(page.locator("#cloud-machine-vps-1")).toBeVisible();
 
   await page.getByRole("button", { name: "Account: E2E User" }).click();
@@ -290,18 +288,14 @@ test("existing cloud machines appear directly in the switcher and refresh when r
   state.created = true;
   await page.goto("/");
   await page.getByRole("button", { name: "Switch machine", exact: true }).click();
-  await expect(
-    page.getByRole("menuitem", { name: "build-agent Ordering server", exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: /build-agent provisioning/i })).toBeVisible();
   await expect(
     page.getByRole("menuitem", { name: "This computer Selected", exact: true }),
   ).toBeVisible();
   await page.keyboard.press("Escape");
   state.created = false;
   await page.getByRole("button", { name: "Switch machine", exact: true }).click();
-  await expect(
-    page.getByRole("menuitem", { name: "build-agent Ordering server", exact: true }),
-  ).toHaveCount(0);
+  await expect(page.getByRole("menuitem", { name: /build-agent provisioning/i })).toHaveCount(0);
   await expect(page.getByRole("menuitem", { name: "Add a machine", exact: true })).toBeVisible();
 });
 

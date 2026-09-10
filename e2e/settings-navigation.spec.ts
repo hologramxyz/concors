@@ -46,6 +46,13 @@ test("settings replace the app sidebar with grouped pages and return to the app"
   await expect(page.getByRole("heading", { name: "Theme", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Profile", exact: true })).toHaveCount(0);
 
+  await settingsNavigation.getByRole("button", { name: "Shortcuts", exact: true }).click();
+  await expect(
+    page.locator("header").getByRole("heading", { name: "Shortcuts", exact: true }),
+  ).toBeVisible();
+  await expect(main.getByRole("heading", { name: "Panes", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Theme", exact: true })).toHaveCount(0);
+
   await settingsNavigation.getByRole("button", { name: "Notifications", exact: true }).click();
   await expect(
     page.locator("header").getByRole("heading", { name: "Notifications" }),
