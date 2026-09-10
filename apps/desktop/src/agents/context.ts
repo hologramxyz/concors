@@ -1,6 +1,10 @@
 import { createContext, useContext } from "react";
 import type { AgentInfo } from "@concors/protocol";
 export const AgentsContext = createContext<AgentInfo[]>([]);
+// Clients with local selection explicitly navigate after their own start/switch action.
+export const AgentStartedContext = createContext<((sessionId: string) => void) | undefined>(
+  undefined,
+);
 export function useAgents() {
   return useContext(AgentsContext);
 }

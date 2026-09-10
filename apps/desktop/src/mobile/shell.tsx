@@ -423,7 +423,7 @@ function MobileWorkspaceContent({
     >
       <AgentDraftScopeContext value={draftScope}>
         <NotificationProvider connection={connection} onOpen={openAgent} inAppOnly>
-          <AgentsProvider connection={connection}>
+          <AgentsProvider connection={connection} onStarted={openAgent}>
             <div
               className="mobile-shell"
               data-sidebar-open={sidebarOpen}
