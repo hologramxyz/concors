@@ -3,7 +3,7 @@ import { ApiError, type Me } from "@concors/api-client";
 import { useQueryClient } from "@tanstack/react-query";
 import { AppState } from "react-native";
 import { api } from "./runtime";
-import { tokenStore } from "../platform/storage";
+import { tokenStore, machineCredentials } from "../platform/storage";
 import { disablePush } from "../platform/notifications";
 import { config } from "../config";
 
@@ -61,8 +61,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
   useEffect(() => {
     // Bootstrap reads SecureStore/network asynchronously; it does not derive render state.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void refresh();
+    void machineCredentials
+      .clear()
+      .then(refresh)
+      .catch(() => {
+        setState({
+          me: null,
+          loading: false,
+          error: "Could not clear saved machine access. Retry sign-out.",
+        });
+      });
     const subscription = AppState.addEventListener("change", (next) => {
       if (next === "active") void refresh();
     });
@@ -131,6 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       error = "Signed out on this device. Server revocation will require a connection.";
     }
     try {
+      await machineCredentials.clear();
       await tokenStore.flush();
     } catch {
       error = "Could not remove the saved session. Retry sign-out before closing the app.";

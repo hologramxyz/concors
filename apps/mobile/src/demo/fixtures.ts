@@ -256,6 +256,8 @@ export const demoMachine = MachineSchema.parse({
   region: "US-EAST-VA",
   size: "medium",
   serviceName: "demo",
+  hostname: "demo.concors.invalid",
+  agentSeenAt: new Date().toISOString(),
   orderId: null,
   status: "running",
   ovhState: "running",

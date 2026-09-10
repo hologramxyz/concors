@@ -5,7 +5,7 @@ import { realpath, stat } from "node:fs/promises";
 import { isAbsolute } from "node:path";
 import type { TerminalRequest, TerminalResult, TerminalInfo } from "@concors/protocol";
 import type { WorkspaceStore } from "../workspace/store.ts";
-import { resolveProfile } from "./profiles.ts";
+import { resolveProfile, resolveTerminalCommand } from "./profiles.ts";
 import { TerminalRuntime, type TerminalViewer } from "./runtime.ts";
 
 /** One runtime registry per machine, independent of every connected UI. */
@@ -201,12 +201,21 @@ export class TerminalManager {
     const directory = await realpath(startingDirectory);
     if (!(await stat(directory)).isDirectory()) throw new Error("Project path is not a directory");
     const recoveryProfile = lost?.detectedAgent ?? pane.profile;
-    const command = resolveProfile(
-      op.recover ? recoveryProfile : pane.profile,
-      process.platform,
-      process.env,
-      !!op.recover,
-    );
+    const command =
+      pane.terminalProfile && !op.recover
+        ? resolveTerminalCommand(
+            pane.terminalProfile.command,
+            pane.terminalProfile.args,
+            process.platform,
+            process.env,
+            directory,
+          )
+        : resolveProfile(
+            op.recover ? recoveryProfile : pane.profile,
+            process.platform,
+            process.env,
+            !!op.recover,
+          );
     if (this.#closed || !viewer.active()) throw new Error("Connection closed before launch");
     if ([...this.#runtimes.values()].filter((r) => r.info.status === "running").length >= 16)
       throw new Error("Maximum of 16 running terminals reached; stop a session first");
@@ -221,6 +230,7 @@ export class TerminalManager {
       id: randomUUID(),
       projectId: project.id,
       profile: pane.profile,
+      ...(pane.terminalProfile ? { terminalProfile: pane.terminalProfile } : {}),
       directory,
       status: "starting",
       exitCode: null,

@@ -31,7 +31,7 @@ test("new workspaces follow the original shell, inherit folders and preserve ope
     await signedIn(page);
     await signedIn(second);
     await page.goto("/");
-    await second.goto("http://localhost:1420");
+    await second.goto(test.info().project.use.baseURL ?? "http://localhost:1420");
     await page
       .getByRole("navigation", { name: "Primary" })
       .getByRole("button", { name: "Open workspace menu", exact: true })
