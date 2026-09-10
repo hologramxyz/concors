@@ -48,6 +48,7 @@ export function NewTabMenu({
   const compact = useContext(CompactLayoutContext);
   const profiles = useTerminalProfiles();
   const triggerContainer = useRef<HTMLSpanElement>(null);
+  const menuTransfersFocus = useRef(false);
   const [destination, setDestination] = useState<"tab" | "pane">("tab");
   const addingPane = compact && destination === "pane" && !!paneTarget;
   const createDisabled = disabled || (addingPane ? paneTarget.disabled : tabLimitReached);
@@ -205,15 +206,23 @@ export function NewTabMenu({
             <Plus className="size-4" />
             {empty && "Create a tab"}
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-72 max-w-[calc(100vw-16px)]">
+          <DropdownMenuContent
+            className="w-72 max-w-[calc(100vw-16px)]"
+            onCloseAutoFocus={(event) => {
+              // The selected pane or settings page owns focus after selection.
+              if (menuTransfersFocus.current) event.preventDefault();
+              menuTransfersFocus.current = false;
+            }}
+          >
             {paneProfiles(profiles.profiles).map(
               ({ id, profile, label, icon: Icon, terminalProfileId }) => (
                 <DropdownMenuItem
                   key={id}
                   disabled={disabled}
-                  onSelect={() =>
-                    onCreate(profile, label, profiles.supported ? terminalProfileId : undefined)
-                  }
+                  onSelect={() => {
+                    menuTransfersFocus.current = true;
+                    onCreate(profile, label, profiles.supported ? terminalProfileId : undefined);
+                  }}
                 >
                   <Icon className="size-4 shrink-0" aria-hidden="true" />
                   <span className="truncate">{label}</span>
@@ -223,13 +232,19 @@ export function NewTabMenu({
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="whitespace-nowrap"
-              onSelect={() => profiles.openSettings(true)}
+              onSelect={() => {
+                menuTransfersFocus.current = true;
+                profiles.openSettings(true);
+              }}
             >
               <Plus /> Add terminal profile…
             </DropdownMenuItem>
             <DropdownMenuItem
               className="whitespace-nowrap"
-              onSelect={() => profiles.openSettings()}
+              onSelect={() => {
+                menuTransfersFocus.current = true;
+                profiles.openSettings();
+              }}
             >
               <Settings2 /> Manage terminal profiles…
             </DropdownMenuItem>

@@ -239,29 +239,37 @@ maestro test apps/mobile/e2e/native/glass.yaml
 
 For a real iPhone, use the existing EAS development/preview profile or add `--device` to the local
 iOS build, using the private daemon configuration above instead of demo mode when testing real
-sessions. No signing credentials are committed. The `Mobile iOS native` PR check builds an unsigned
-iOS 26 simulator app and exercises native headers, input expansion, settings, Files, and draft
-preservation. Browser acceptance separately covers the bridge and the web/Android fallback;
-neither a passing web test nor an Expo export substitutes for the simulator/device test.
+sessions. No signing credentials are committed. Native iOS and Android workflows are manual-only
+(`workflow_dispatch`); they do not run on pull requests. Native compilation and simulator startup
+exceed the PR time budget, and their latest UI runs have not passed. Run them explicitly when
+native validation is needed. Android manual runs build the optimized arm64/x86_64 release APK
+and AAB and audit SDK, permissions, and 16 KB alignment. iOS exercises native headers, composer,
+settings, Files, and draft persistence in an iOS 26 simulator.
 
-### Managed cloud connections — rollout gated
+Automatic PR jobs have a seven-minute timeout. Mobile browser, direct-daemon, and managed-host
+acceptance run as separate jobs so they do not accumulate into one long serial check.
+All CI apps
+use the preview identity and demo data; they are not store submission artifacts.
+
+### Managed cloud connections
 
 Create `apps/mobile/.env.local` from `.env.example`. Set the real HTTPS
 `EXPO_PUBLIC_API_URL`, disable `EXPO_PUBLIC_DEMO`, then run `pnpm mobile:dev`.
 Native sign-in, inventory and organization switching use the existing API.
 V1 is an existing-account companion: signup, purchasing, subscription management and
 billing links are absent, and commerce RPCs are blocked in the native host.
-Unavailable gateway/push/deletion capabilities are shown honestly; failures are retryable.
+Optional push/deletion capabilities are separate from managed machine access.
 
 The mobile host now connects using `/machines/:id/token` and the managed daemon's
 `/ws` endpoint with the `concors.bearer.<token>` subprotocol. Cloud machine IDs and
-daemon workspace IDs are separate namespaces. Short-lived machine JWTs remain only
-in native transport memory; the renderer never receives them.
+daemon workspace IDs are separate namespaces. Machine tokens are saved in device-only SecureStore before the socket opens and cleared
+on disconnect; the renderer never receives them. Host profiles and availability are shared
+with desktop through `@concors/client-core`. A 401/4401 re-mints once, then reports
+“Access revoked”; foreground events cannot bypass that limit.
 
-Server installer PR #1, opt-in capability discovery, and an updated daemon release
-with active-socket expiry must be reviewed and rolled out before cloud acceptance.
-The published daemon v0.2.0 predates this expiry fix. No cloud deployment or signed
-phone acceptance is claimed here. See [the backend contract](../../docs/mobile-backend.md).
+Machine access does not require the optional `/mobile/capabilities` endpoint.
+The published daemon v0.2.0 predates the mobile branch’s active-socket expiry fix;
+verify its rollout separately when checking the revocation deadline. See [the backend contract](../../docs/mobile-backend.md).
 
 With an existing session credential supplied privately through your local environment,
 run the read-only prerequisite check from the repository root:
@@ -274,7 +282,7 @@ It requires `CONCORS_PREFLIGHT_API_URL` (HTTPS), `CONCORS_PREFLIGHT_MACHINE_ID` 
 `CONCORS_PREFLIGHT_TOKEN`. Do not put the token in command arguments, source control,
 `EXPO_PUBLIC_*` variables or chat. The command only reads the account, machines and
 advertised capabilities. It does not provision anything, mint access tokens, create
-sessions or verify a live chat. Missing workspace capability returns a nonzero exit
+sessions or verify a live chat. Unavailable managed machine metadata returns a nonzero exit
 status with an explanation; a successful preflight only permits attempting the next test.
 
 `EXPO_PUBLIC_DEV_DAEMON_URL` supplies **no authentication itself**. The private tunnel
@@ -337,3 +345,17 @@ file-view and terminal swipes, session/input preservation after navigation and 3
 layouts. A compatibility test removes file capabilities and verifies the Files explanation sends no
 unsupported file requests. File tests use disposable temporary projects; they never edit the user's
 existing workspace.
+
+### Managed companion acceptance
+
+`pnpm test:mobile:managed` runs the mobile browser client and desktop UI against the
+same real terminal, with mocked machine discovery/token responses. It uses desktop
+port 15432, mobile port 8088 and isolated daemons on 7429/7430. This verifies the
+client integration, not native SecureStore or the deployed control plane.
+
+For live C2 acceptance, set `EXPO_PUBLIC_API_URL` to
+`https://concors-server-dev.up.railway.app`, leave demo/direct overrides disabled,
+and sign in on a phone and desktop with access to `test-vps-3`. Select that machine
+(`m-cjs3xaa6hk.dev.concors.app`), open the same terminal pane on both devices, and
+run `printf 'companion-%s\n' acceptance`. Confirm both viewers show the output.
+Background/resume the phone and confirm it returns to the same terminal.
