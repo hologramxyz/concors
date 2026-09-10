@@ -121,6 +121,11 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await expect(settings).toContainText(snapshot().machineId);
     await settings.getByRole("combobox", { name: "Settings section" }).click();
     await expect(ui.getByRole("option", { name: "Billing", exact: true })).toHaveCount(0);
+    await ui.getByRole("option", { name: "Shortcuts", exact: true }).click();
+    await expect(settings.getByRole("heading", { name: "Panes", exact: true })).toBeVisible();
+    await expect(settings).toContainText("With an external keyboard");
+    await expect(settings.getByText("New pane beside current", { exact: true })).toHaveCount(0);
+    await settings.getByRole("combobox", { name: "Settings section" }).click();
     await ui.getByRole("option", { name: "Appearance", exact: true }).click();
     await settings.getByRole("button", { name: "Reconnect", exact: true }).click();
     await settings.getByRole("button", { name: "Close", exact: true }).click();
