@@ -1,4 +1,4 @@
-import { accessSync, constants, statSync } from "node:fs";
+import { accessSync, constants, readFileSync, statSync } from "node:fs";
 import { delimiter, extname, join, resolve } from "node:path";
 import type { TerminalProfile } from "@concors/protocol";
 
@@ -62,7 +62,11 @@ export function resolveTerminalCommand(
           // ConPTY cannot execute npm .cmd shims directly. Pass a cmd.exe command line,
           // bypassing node-pty's executable argv quoting. Escape each argument separately.
           const escaped = candidate.replace(cmdMeta, "^$1");
-          const doubleEscape = /node_modules[\\/].bin[\\/][^\\/]+\.cmd$/i.test(candidate);
+          // Global npm shims and user launchers also forward through %*, outside
+          // node_modules/.bin. Their second cmd parse needs a second escaping pass.
+          const doubleEscape =
+            /node_modules[\\/].bin[\\/][^\\/]+\.cmd$/i.test(candidate) ||
+            readFileSync(candidate, "utf8").includes("%*");
           const argumentsLine = args.map((arg) => cmdArgument(arg, doubleEscape)).join(" ");
           return {
             command: env["ComSpec"] ?? env["COMSPEC"] ?? "cmd.exe",
