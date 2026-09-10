@@ -1,6 +1,8 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import type { ChildProcessWithoutNullStreams } from "node:child_process";
+import spawn from "cross-spawn";
 import type { AgentProviderId } from "@concors/protocol";
 import { resolveProfile } from "../../terminal/profiles.ts";
+
 export function launch(
   provider: AgentProviderId,
   args: string[],
@@ -8,19 +10,11 @@ export function launch(
   env = process.env,
 ): ChildProcessWithoutNullStreams {
   const profile = resolveProfile(provider, process.platform, env);
-  // Resolve npm cmd/bat shims through the same escaping used by terminal profiles.
-  const escaped = args.map((arg) => arg.replace(/([()%!^"`<>&|;, *?])/g, "^$1")).join(" ");
-  return spawn(
-    profile.command,
-    typeof profile.args === "string"
-      ? ["/d", "/s", "/c", profile.args.slice("/d /s /c ".length, -1) + ` ${escaped}"`]
-      : args,
-    {
-      cwd,
-      env,
-      stdio: "pipe",
-      windowsHide: true,
-      ...(typeof profile.args === "string" ? { windowsVerbatimArguments: true } : {}),
-    },
-  );
+  // cross-spawn handles npm's Windows shims and preserves argument boundaries, including JSON.
+  return spawn(process.platform === "win32" ? provider : profile.command, args, {
+    cwd,
+    env,
+    stdio: "pipe",
+    windowsHide: true,
+  }) as ChildProcessWithoutNullStreams;
 }

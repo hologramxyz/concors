@@ -29,6 +29,7 @@
     "@lydell/node-pty": "1.2.0-beta.15",
     "@xterm/addon-serialize": "0.14.0",
     "@xterm/headless": "6.0.0",
+    "cross-spawn": "7.0.6",
     "fastify": "^5.12.3",
     "jose": "^6.2.12",
     "ws": "^8.21.3",
@@ -36,6 +37,7 @@
   },
   "devDependencies": {
     "@concors/daemon-client": "workspace:*",
+    "@types/cross-spawn": "6.0.6",
     "@types/node": "^24.13.3",
     "@types/ws": "^8.18.1",
     "tsup": "^8.5.1",
