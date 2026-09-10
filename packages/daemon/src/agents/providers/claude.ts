@@ -6,6 +6,7 @@ import {
   type SDKUserMessage,
   type Options,
 } from "@anthropic-ai/claude-agent-sdk";
+import { launch } from "./launch.ts";
 import { resolveProfile } from "../../terminal/profiles.ts";
 import {
   EventProvider,
@@ -42,41 +43,54 @@ export class ClaudeProvider extends EventProvider {
     this.pending = [];
     this.threadId = resume ?? randomUUID();
     const generation = this.generation;
-    const self = this;
-    async function* prompts(): AsyncGenerator<SDKUserMessage> {
-      while (!self.closed && generation === self.generation) {
-        const item = self.pending.shift();
+    const prompts = async function* (provider: ClaudeProvider): AsyncGenerator<SDKUserMessage> {
+      while (!provider.closed && generation === provider.generation) {
+        const item = provider.pending.shift();
         if (item) yield item;
         else
           await new Promise<void>((resolve) => {
-            self.wake = resolve;
+            provider.wake = resolve;
           });
       }
-    }
+    };
     const executable = resolveProfile("claude").command;
     const options: Options = {
       cwd: this.cwd,
       pathToClaudeCodeExecutable: executable,
+      spawnClaudeCodeProcess: ({ args, cwd, env, signal }) => {
+        const child = launch("claude", args, cwd ?? this.cwd, env);
+        const abort = () => {
+          child.kill();
+        };
+        if (signal.aborted) abort();
+        else signal.addEventListener("abort", abort, { once: true });
+        child.once("close", () => signal.removeEventListener("abort", abort));
+        child.stderr.resume();
+        return child;
+      },
       includePartialMessages: true,
       settingSources: ["user", "project", "local"],
       permissionMode: "default",
       ...(resume ? { resume } : { sessionId: this.threadId }),
       canUseTool: async (name, input) => {
         if (name === "AskUserQuestion") {
-          const questions = array(input["questions"])
-            .slice(0, 3)
-            .map((raw, index) => {
-              const q = object(raw);
-              return {
-                id: String(index),
-                header: string(q["header"]),
-                question: string(q["question"]),
-                options: array(q["options"]).map((v) => {
-                  const o = object(v);
-                  return { label: string(o["label"]), description: string(o["description"]) };
-                }),
-              };
-            });
+          if (array(input["questions"]).length > 3)
+            return {
+              behavior: "deny",
+              message: "Ask at most three questions at a time in Concors",
+            };
+          const questions = array(input["questions"]).map((raw, index) => {
+            const q = object(raw);
+            return {
+              id: String(index),
+              header: string(q["header"]),
+              question: string(q["question"]),
+              options: array(q["options"]).map((v) => {
+                const o = object(v);
+                return { label: string(o["label"]), description: string(o["description"]) };
+              }),
+            };
+          });
           const response = object(
             await this.onInput(
               "item/tool/requestUserInput",
@@ -103,7 +117,7 @@ export class ClaudeProvider extends EventProvider {
           : { behavior: "deny", message: "Declined in Concors" };
       },
     };
-    const session = this.createQuery({ prompt: prompts(), options });
+    const session = this.createQuery({ prompt: prompts(this), options });
     this.session = session;
     void (async () => {
       try {
