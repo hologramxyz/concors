@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { FolderOpen, Menu, Plus, Search, Server } from "lucide-react";
+import { FolderOpen, Menu, Search, Server } from "lucide-react";
 import type { DaemonConnection } from "@concors/daemon-client";
 import type { MobileState, MobileTarget } from "@concors/client-core";
 import type { PaneProfile, WorkspaceOperation, WorkspaceSnapshot } from "@concors/protocol";
@@ -18,6 +18,8 @@ import { AgentDraftScopeContext } from "@/agents/draft";
 import { TerminalPane } from "@/terminal/terminal-pane";
 import { ProjectActions } from "@/workspace/project-actions";
 import { ProjectSetupDialog } from "@/workspace/project-setup-dialog";
+import { NewWorkspaceMenu } from "@/workspace/new-workspace-menu";
+import { useNewWorkspace } from "@/workspace/use-new-workspace";
 import { ProjectImage } from "@/workspace/project-image";
 import { SidebarSection } from "@/components/sidebar-section";
 import { NewTabMenu } from "@/workspace/new-tab-menu";
@@ -88,7 +90,8 @@ function MobileWorkspaceContent({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsPage, setSettingsPage] = useState<SettingsPage | "machines">("account");
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [addingProject, setAddingProject] = useState(false);
+  const [addingProject, setAddingProject] = useState<"open" | "clone" | null>(null);
+  const newWorkspace = useNewWorkspace(connection);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -384,7 +387,7 @@ function MobileWorkspaceContent({
   useCommand("search", commandsAvailable, () => setPaletteOpen((open) => !open));
   useCommand("settings", commandsAvailable, openSettings);
   useCommand("shortcuts", commandsAvailable, () => setShortcutsOpen(true));
-  useCommand("new-project", commandsAvailable && canEdit, () => setAddingProject(true));
+  useCommand("new-project", commandsAvailable && canEdit, newWorkspace.start);
   useCommand("previous-tab", commandsAvailable && !!tab, () => cycleTab(-1));
   useCommand("next-tab", commandsAvailable && !!tab, () => cycleTab(1));
   useCommand("focus-left", commandsAvailable && !!pane, () => cyclePane(-1));
@@ -488,14 +491,11 @@ function MobileWorkspaceContent({
                 <SidebarSection
                   title="Projects"
                   action={
-                    <button
-                      className="mobile-icon"
-                      aria-label="Add project"
-                      disabled={!canEdit}
-                      onClick={() => setAddingProject(true)}
-                    >
-                      <Plus />
-                    </button>
+                    <NewWorkspaceMenu
+                      disabled={!canEdit || newWorkspace.busy}
+                      onNew={newWorkspace.start}
+                      onOpen={setAddingProject}
+                    />
                   }
                 >
                   <ul>
@@ -518,7 +518,7 @@ function MobileWorkspaceContent({
                   </ul>
                   {!workspace?.projects.length && (
                     <p className="px-2 py-3 text-sm text-muted-foreground">
-                      Add a project to organize your tabs and panes.
+                      Open a folder or start a workspace to organize your tabs and panes.
                     </p>
                   )}
                 </SidebarSection>
@@ -538,6 +538,7 @@ function MobileWorkspaceContent({
                       organizations: host.organizations,
                     }}
                     onOpenSettings={openSettings}
+                    onOpenShortcuts={() => setShortcutsOpen(true)}
                     onSignOut={() => runHost({ kind: "sign-out" })}
                   />
                 ) : (
@@ -714,7 +715,7 @@ function MobileWorkspaceContent({
                             </Button>
                           )}
                           {ready && !project && (
-                            <Button onClick={() => setAddingProject(true)}>Add project</Button>
+                            <Button onClick={() => setAddingProject("open")}>Open folder</Button>
                           )}
                         </div>
                       )}
@@ -750,19 +751,26 @@ function MobileWorkspaceContent({
             onPageChange={setSettingsPage}
           />
           <ShortcutGuide open={shortcutsOpen} onOpenChange={setShortcutsOpen} compact />
-          <ProjectSetupDialog
-            open={addingProject}
-            onClose={() => setAddingProject(false)}
-            onAdded={() => {
-              setAddingProject(false);
-              setSidebarOpen(false);
-              if (connection?.workspace?.selection)
-                select({
-                  projectId: connection.workspace.selection.projectId,
-                  tabId: connection.workspace.selection.tabId ?? undefined,
-                });
-            }}
-          />
+          {addingProject && (
+            <ProjectSetupDialog
+              mode={addingProject}
+              onClose={() => setAddingProject(null)}
+              onAdded={() => {
+                setAddingProject(null);
+                setSidebarOpen(false);
+                if (connection?.workspace?.selection)
+                  select({
+                    projectId: connection.workspace.selection.projectId,
+                    tabId: connection.workspace.selection.tabId ?? undefined,
+                  });
+              }}
+            />
+          )}
+          {newWorkspace.error && (
+            <p role="alert" className="p-3 text-sm text-destructive">
+              {newWorkspace.error}
+            </p>
+          )}
           <CommandPalette
             projects={workspace?.projects ?? []}
             canSelectProject={!!workspace}

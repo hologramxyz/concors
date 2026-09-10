@@ -1,6 +1,6 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
 
 test("workspace shortcuts create, search, split and close the active pane without leaking into terminals", async ({
@@ -11,20 +11,30 @@ test("workspace shortcuts create, search, split and close the active pane withou
     await signedIn(page);
     await page.goto("/");
     await expect(
-      page.getByRole("button", { name: "Add project", exact: true }).first(),
+      page.getByRole("button", { name: "Open workspace menu", exact: true }).first(),
     ).toBeEnabled();
-    const shortcutButton = page.getByRole("button", { name: "Keyboard shortcuts", exact: true });
-    await shortcutButton.hover();
-    await expect(page.getByRole("tooltip")).toContainText("Ctrl+Shift+/");
-    await shortcutButton.click();
+    await expect(page.getByRole("button", { name: "Keyboard shortcuts", exact: true })).toHaveCount(
+      0,
+    );
+    await page.getByRole("button", { name: /^Account:/ }).click();
+    await expect(page.getByRole("menuitem")).toHaveText([
+      "Settings",
+      "Keyboard shortcuts",
+      "Sign out",
+    ]);
+    await page.getByRole("menuitem", { name: "Keyboard shortcuts", exact: true }).click();
+    await expect(page.getByRole("menu")).toHaveCount(0);
     await expect(
       page.getByRole("heading", { name: "Keyboard shortcuts", exact: true }),
     ).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await page.keyboard.press("Control+Shift+n");
-    await expect(page.getByRole("dialog")).toBeVisible();
-    await page.getByLabel("Project name", { exact: true }).fill("Keyboard project");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(page.locator(".concors-terminal .xterm").filter({ visible: true })).toHaveCount(1);
+    await page.getByRole("button", { name: "Open workspace menu", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Clone repository…", exact: true }).click();
+    await page.getByLabel("Repository URL or local path").focus();
     // Workspace actions must not escape a form dialog.
     await page.keyboard.press("Control+Shift+t");
     await expect(page.getByRole("menu")).toHaveCount(0);
@@ -42,13 +52,12 @@ test("workspace shortcuts create, search, split and close the active pane withou
         return event.defaultPrevented;
       }),
     ).toBe(false);
-    await page.getByLabel("Folder on this machine").fill(directory);
-    await page
-      .getByRole("dialog")
-      .getByRole("button", { name: "Add project", exact: true })
-      .click();
+    await page.keyboard.press("Escape");
+    await page.locator(".concors-terminal textarea").filter({ visible: true }).focus();
+    await page.keyboard.type(`cd '${directory}'`);
+    await page.keyboard.press("Enter");
     await expect(
-      page.getByRole("heading", { name: "Keyboard project", exact: true }),
+      page.getByRole("heading", { name: basename(directory), exact: true }),
     ).toBeVisible();
     await page.keyboard.press("Control+Shift+t");
     await page.keyboard.press("Enter");
@@ -144,10 +153,10 @@ test("workspace shortcuts create, search, split and close the active pane withou
     await expect(panes).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Codex", exact: true })).toHaveCount(0);
     await page.keyboard.press("Control+Shift+k");
-    await page.getByPlaceholder("Type a command or search…").fill("Keyboard project");
-    await page.getByRole("option", { name: "Keyboard project", exact: true }).click();
+    await page.getByPlaceholder("Type a command or search…").fill(basename(directory));
+    await page.getByRole("option", { name: basename(directory), exact: true }).click();
     await expect(
-      page.getByRole("heading", { name: "Keyboard project", exact: true }),
+      page.getByRole("heading", { name: basename(directory), exact: true }),
     ).toBeVisible();
     await page.keyboard.press("Control+Shift+k");
     await page.getByPlaceholder("Type a command or search…").fill("New tab");
@@ -157,6 +166,35 @@ test("workspace shortcuts create, search, split and close the active pane withou
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("account menu opens shortcuts with the keyboard and leaves the global binding available", async ({
+  page,
+}) => {
+  await signedIn(page);
+  await page.goto("/");
+  const account = page.getByRole("button", { name: /^Account:/ });
+  await account.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("menuitem", { name: "Settings", exact: true })).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(
+    page.getByRole("menuitem", { name: "Keyboard shortcuts", exact: true }),
+  ).toBeFocused();
+  await page.screenshot({ path: "test-results/account-menu-shortcuts.png" });
+  await page.keyboard.press("Enter");
+  const guide = page.getByRole("dialog", { name: "Keyboard shortcuts", exact: true });
+  await expect(guide).toBeVisible();
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expect.poll(() => guide.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+  await page.keyboard.press("Escape");
+  await expect(guide).toHaveCount(0);
+  await expect(account).toBeFocused();
+  await page.keyboard.press("Control+Shift+Slash");
+  await expect(guide).toBeVisible();
+  await expect(guide).toContainText("Ctrl+Shift+/");
+  await page.keyboard.press("Escape");
+  await expect(guide).toHaveCount(0);
 });
 
 test("Mac workspace shortcuts use physical Control and display matching hints", async ({
@@ -171,17 +209,15 @@ test("Mac workspace shortcuts use physical Control and display matching hints", 
     await signedIn(page);
     await page.goto("/");
     await expect(
-      page.getByRole("button", { name: "Add project", exact: true }).first(),
+      page.getByRole("button", { name: "Open workspace menu", exact: true }).first(),
     ).toBeEnabled();
     await page.keyboard.press("Control+Shift+n");
-    await page.getByLabel("Project name", { exact: true }).fill("Mac keyboard project");
-    await page.getByLabel("Folder on this machine").fill(directory);
-    await page
-      .getByRole("dialog")
-      .getByRole("button", { name: "Add project", exact: true })
-      .click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await page.locator(".concors-terminal textarea").filter({ visible: true }).focus();
+    await page.keyboard.type(`cd '${directory}'`);
+    await page.keyboard.press("Enter");
     await expect(
-      page.getByRole("heading", { name: "Mac keyboard project", exact: true }),
+      page.getByRole("heading", { name: basename(directory), exact: true }),
     ).toBeVisible();
     const panes = page.getByRole("region", { name: "Terminal pane", exact: true });
     await expect(panes).toHaveCount(1);

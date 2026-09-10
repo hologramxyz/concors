@@ -1,5 +1,9 @@
 /* Desktop terminals sit on inset cards; mobile uses one edge-to-edge workspace surface.
    Keep this on the root so xterm's theme and its surrounding CSS resolve the same color. */
+:root:not(.dark) {
+  /* Match the native host's paper surface, independently of desktop inset colors. */
+  --background: #f4f3ef;
+}
 :root,
 :root.dark {
   --terminal-background: var(--background);

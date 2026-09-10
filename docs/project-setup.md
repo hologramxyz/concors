@@ -1,48 +1,30 @@
-# Project setup
+# Workspaces and folders
 
-**Add project** offers three sources on the selected daemon machine. For a new folder or clone,
-enter a project name and the destination fills in as `~/repos/<name>`. Spaces and punctuation in
-the name become hyphens in the suggested folder name. You can edit the destination if needed.
+Choose **New workspace** from the sidebar’s **+** menu to open a terminal in the selected machine user's home directory. There is no setup form. Navigate with `cd`; the workspace name and Files root follow the original terminal's folder. Inside a Git checkout, they use the checkout root, so `cd src` does not rename the workspace. Linked worktrees keep their own identities.
 
-A bare folder name such as `test` resolves to `~/repos/test` on the daemon machine. `~/` expands to
-that machine user's home directory, not your browser computer's home. The daemon creates `~/repos`
-automatically for new projects when needed. For example, on a VPS running as `ubuntu`, `test`
-becomes `/home/ubuntu/repos/test`. `/home/repos` is a separate, usually unwritable location.
-Absolute paths remain supported for custom locations.
+Existing projects, opened folders, and clones keep their selected folder. Closing or changing the original terminal's profile keeps the workspace at its last folder; another split never silently becomes the identity source. Multiple fresh workspaces may start in home without sharing sessions.
 
-Sources:
+The same **+** menu also offers:
 
-- **Open existing folder** validates an existing directory and registers its canonical path.
-- **Create new folder** creates a new directory in repos or beneath an existing custom parent.
-- **Clone repository** clones an HTTPS URL, SSH URL/scp-style address, or absolute local repository
-  path into a new directory. Git must already be installed on the daemon machine.
+- **Open folder…** browses directories on the selected machine, including parent/home navigation, filtering, and an optional hidden-folder toggle. Entering an absolute path or `~/…` is also supported. The canonical folder name becomes the workspace name. Opening an already-open folder focuses its existing workspace and keeps its sessions.
+- **Clone repository…** accepts HTTPS, SSH/scp-style URLs, or an absolute local repository path. The destination defaults to `~/repos/<repository-name>` and remains editable. Concors creates `~/repos` when needed and never overwrites an existing destination. Git credentials and known hosts must already be configured on the machine.
 
-Create and clone use exclusive directory creation. They refuse to overwrite even an empty existing
-folder. Opening a folder that is already registered fails. The project appears in the sidebar only
-after setup and checkout succeed, and its selected project state is synchronized to other clients.
-Project removal remains metadata-only and never deletes files.
+A bare path resolves beneath the daemon user's `~/repos`; a tilde refers to the machine, not the client device. The directory browser is bounded to 500 folders / 10,000 scanned entries per response; a direct path remains available for larger directories. It does not traverse symlinks automatically, but an explicitly entered symlink is canonicalized when opened.
 
-Setup is a durable daemon job. Closing the dialog or disconnecting a browser does not cancel it.
-The dialog shows progress and **Cancel setup** only for the operation started in that dialog; it
-does not show past actions. Job records remain persisted for reconnect/recovery. Cancel
-terminates the active clone's process group on Unix or process tree on Windows. A cancelled or failed
-setup does not register a project. Permission errors suggest a writable location. A preservation
-message is shown only if setup actually created the destination. Remaining destination files are preserved for inspection; choose
-a new destination for another attempt or handle the old folder explicitly on the machine.
+## Continuity
 
-The SQLite database migrates from user_version 2 to 3. A job receipt is saved before filesystem work.
-Retrying an identical request (same request ID, setup ID and payload) returns its existing outcome
-without creating another folder or clone. After a restart, unfinished jobs become interrupted and
-are not silently restarted; projects registered just before a crash reconcile to completed jobs.
-The current limits are four concurrent setups, 64 persisted job records and 4 KiB of progress per
-job. History pruning and resumable partial clones remain future work.
+New tabs inherit the focused pane's last observed directory. Splits inherit their source pane's directory. New agent sessions use that captured launch folder. Existing agents keep their original folder; existing terminals keep running wherever their shell is located.
 
-Git runs directly with argument arrays, with interactive credential prompts disabled. SSH uses
-batch mode and strict host-key checking. Configure the machine's credential helper/SSH agent and
-known hosts before cloning private repositories. Embedded URL passwords and HTTPS usernames are
-rejected; credentials are not collected by the UI. Submodules are not automatically initialized.
+File tabs capture their folder when opened, including Markdown links and unsaved drafts. Browsing elsewhere changes the Files tree, not those tabs' read/save targets. Identical relative filenames in different folders are separate tabs. The daemon retains the previously authorized roots with the workspace, validates each file operation against them, and keeps the existing traversal, symlink, file-size, and revision checks. Closing a workspace removes its root authorizations without deleting its files.
 
-Validation includes real temporary directories and Git repositories, checkout contents, existing
-file preservation, failed clone registration, idempotent requests, cancellation and interrupted
-jobs. Chromium acceptance creates and clones through the UI, verifies another device sees the
-projects, and reloads setup history. Daemon tests run on Linux, macOS and Windows in CI.
+Linux observes the shell's `/proc/<pid>/cwd`; macOS uses `lsof` for that shell's cwd. Polling is every 400 ms, with no overlapping scans. Native observations take precedence over OSC 7 reports. Shells emitting local OSC 7 directory URLs provide a fallback. Windows shells without OSC 7 (including the default `cmd.exe`) retain their last known folder: use Open folder to select it explicitly. Concors does not rewrite shell startup files, parse prompts, or inject `cd` commands.
+
+The daemon publishes directory observations to all connected clients, including while the initiating client is disconnected. Observation revisions do not invalidate concurrent layout commands. A shell whose folder becomes unavailable keeps running with its last valid workspace metadata.
+
+## Setup jobs and compatibility
+
+Open/clone/new-workspace jobs survive closing the dialog or disconnecting. Up to four jobs run concurrently. The most recent 64 jobs (including any running jobs) are sent to clients; older retry receipts remain in SQLite, so opening folders is not subject to a lifetime history limit. Retrying the same request and setup IDs returns the same job. A daemon restart marks incomplete jobs interrupted rather than silently restarting clones. Created destination files remain available for inspection after failures or cancellation.
+
+The wire capability is `folder-workspaces`. New fields are optional: older saved projects keep their selected folder, and older clients can still open/create/clone named projects. A new SQLite table retains workspace folder authorizations; it is additive to schema version 4. Session launch directories remain distinct from observed current directories.
+
+Git uses argument arrays, disabled interactive credential prompts, strict SSH host-key checking, and no embedded URL passwords. The create-folder protocol operation remains available for existing clients. The desktop entry points are New workspace, Open folder, and Clone repository.

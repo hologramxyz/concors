@@ -1,3 +1,4 @@
+import { seedProject } from "./support/projects.ts";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,15 +12,9 @@ test("appearance follows the system and uses a shared neutral terminal/chat surf
     await signedIn(page);
     await page.emulateMedia({ colorScheme: "dark" });
     await page.goto("/");
-    await page.getByRole("button", { name: "Add project", exact: true }).first().waitFor();
+    await page.getByRole("button", { name: "Open workspace menu", exact: true }).first().waitFor();
     await expect(page.locator("html")).toHaveClass(/dark/);
-    await page.getByRole("button", { name: "Add project", exact: true }).first().click();
-    await page.getByLabel("Project name", { exact: true }).fill("Appearance acceptance");
-    await page.getByLabel("Folder on this machine").fill(directory);
-    await page
-      .getByRole("dialog")
-      .getByRole("button", { name: "Add project", exact: true })
-      .click();
+    await seedProject(page, "Appearance acceptance", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
     const terminal = page.getByRole("region", { name: "Terminal pane", exact: true });

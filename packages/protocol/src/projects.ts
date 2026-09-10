@@ -2,6 +2,8 @@ import { z } from "zod";
 const Id = z.string().uuid();
 export const ProjectSetupSchema = z.object({
   id: Id,
+  projectId: Id.optional(),
+  directoryMode: z.enum(["follow", "pinned"]).optional(),
   mode: z.enum(["open", "create", "clone"]),
   name: z.string().trim().min(1).max(120),
   directory: z.string().trim().min(1).max(4096),
@@ -24,6 +26,13 @@ export const ProjectRequestSchema = z.object({
         directory: true,
         repository: true,
       }).shape,
+      name: z.string().trim().max(120).optional(),
+    }),
+    z.object({ kind: z.literal("workspace"), epoch: Id, id: Id }),
+    z.object({
+      kind: z.literal("browse"),
+      epoch: Id,
+      directory: z.string().trim().max(4096).optional(),
     }),
     z.object({ kind: z.literal("cancel"), id: Id }),
   ]),
@@ -35,6 +44,14 @@ export const ProjectResultSchema = z.object({
   requestId: Id,
   outcome: z.discriminatedUnion("status", [
     z.object({ status: z.literal("ok") }),
+    z.object({
+      status: z.literal("listed"),
+      directory: z.string(),
+      parent: z.string().nullable(),
+      home: z.string(),
+      entries: z.array(z.object({ name: z.string(), directory: z.string() })).max(500),
+      truncated: z.boolean(),
+    }),
     z.object({ status: z.literal("error"), message: z.string() }),
   ]),
 });

@@ -1,3 +1,4 @@
+import { seedProject } from "./support/projects.ts";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,13 +17,7 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
   try {
     await Promise.all([signedIn(page), signedIn(second)]);
     await page.goto("/");
-    await page.getByRole("button", { name: "Add project", exact: true }).first().click();
-    await page.getByLabel("Project name", { exact: true }).fill("Terminal agents");
-    await page.getByLabel("Folder on this machine").fill(directory);
-    await page
-      .getByRole("dialog")
-      .getByRole("button", { name: "Add project", exact: true })
-      .click();
+    await seedProject(page, "Terminal agents", directory);
     await expect(page.getByRole("dialog")).toHaveCount(0);
     const agents = page
       .getByRole("navigation", { name: "Primary" })

@@ -1,3 +1,4 @@
+import { seedProject } from "./support/projects.ts";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,13 +17,7 @@ test("corner styles update the live workspace and portaled controls, sync, and p
   try {
     await signedIn(page);
     await page.goto("/");
-    await page.getByRole("button", { name: "Add project", exact: true }).first().click();
-    await page.getByLabel("Project name", { exact: true }).fill("Corner styles");
-    await page.getByLabel("Folder on this machine").fill(directory);
-    await page
-      .getByRole("dialog")
-      .getByRole("button", { name: "Add project", exact: true })
-      .click();
+    await seedProject(page, "Corner styles", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
@@ -106,12 +101,10 @@ test("corner styles update the live workspace and portaled controls, sync, and p
     await expect(second.getByRole("radio", { name: "Square", exact: true })).toBeChecked();
     await page.reload();
     await expect(page.locator(".workspace-surface")).toHaveCSS("border-radius", "0px");
-    await page.getByRole("button", { name: "Add project", exact: true }).click();
+    await page.getByRole("button", { name: "Open workspace menu", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Open folder…", exact: true }).click();
     await expect(page.getByRole("dialog")).toHaveCSS("border-radius", "0px");
-    await expect(page.getByLabel("Project name", { exact: true })).toHaveCSS(
-      "border-radius",
-      "0px",
-    );
+    await expect(page.getByLabel("Folder path", { exact: true })).toHaveCSS("border-radius", "0px");
     await page.keyboard.press("Escape");
     expect(errors).toEqual([]);
   } finally {

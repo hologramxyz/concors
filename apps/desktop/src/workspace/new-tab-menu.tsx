@@ -227,7 +227,7 @@ export function NewTabMenu({
             <DialogHeader>
               <DialogTitle>Configure terminal profile</DialogTitle>
               <DialogDescription>
-                Choose a profile and name for this tab. It starts in the project folder.
+                Choose a profile and name for this tab. It starts in the current pane’s folder.
               </DialogDescription>
             </DialogHeader>
             <div className="my-5 space-y-4">
