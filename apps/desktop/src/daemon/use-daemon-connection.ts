@@ -1,6 +1,6 @@
 import { WorkspaceOperationSchema } from "@concors/protocol";
 import {
-  DaemonConnection,
+  type DaemonConnection,
   type ConnectionState,
   type DaemonEndpoint,
 } from "@concors/daemon-client";
@@ -8,6 +8,8 @@ import type { ClientInfo, WorkspaceSnapshot, WorkspaceOperation } from "@concors
 import { useEffect, useRef, useState } from "react";
 
 import { detectPlatform } from "@/lib/platform";
+import { api } from "@/auth/api";
+import { connectHost } from "./connect-host";
 import { APP_VERSION } from "@/version";
 
 const CLIENT_INFO: ClientInfo = {
@@ -16,9 +18,6 @@ const CLIENT_INFO: ClientInfo = {
   version: APP_VERSION,
   platform: detectPlatform(),
 };
-
-const INITIAL_RETRY_MS = 1_000;
-const MAX_RETRY_MS = 30_000;
 
 export interface DaemonConnectionHandle {
   readonly state: ConnectionState;
@@ -35,111 +34,62 @@ export interface DaemonConnectionHandle {
  * when it drops. Backoff policy lives here (in the client app) on purpose: a bundled local daemon
  * and a remote VPS deserve different treatment, and that is a product decision, not a protocol one.
  */
-export function useDaemonConnection(endpoint: DaemonEndpoint | null): DaemonConnectionHandle {
+export function useDaemonConnection(
+  endpoint: DaemonEndpoint | null,
+  machineId = "local",
+  scope = "",
+): DaemonConnectionHandle {
+  const key = `${scope}:${machineId}:${endpoint?.url}`;
   const [transport, setTransport] = useState<DaemonConnection | null>(null);
-  const [state, setState] = useState<ConnectionState>({ status: "disconnected" });
-  const [replica, setReplica] = useState<{ url: string; snapshot: WorkspaceSnapshot } | null>(null);
+  const [state, setState] = useState<{ key: string; value: ConnectionState }>({
+    key,
+    value: { status: "disconnected" },
+  });
+  const [replica, setReplica] = useState<{ key: string; snapshot: WorkspaceSnapshot } | null>(null);
   const [workspaceReady, setWorkspaceReady] = useState(false);
   const activeConnection = useRef<DaemonConnection | null>(null);
   const retryNow = useRef<() => void>(() => undefined);
 
   useEffect(() => {
     if (endpoint === null) return;
-
-    let disposed = false;
-    let retryDelay = INITIAL_RETRY_MS;
-    let retryTimer: ReturnType<typeof setTimeout> | undefined;
-    let connection: DaemonConnection | null = null;
-    let unsubscribe: () => void = () => undefined;
-    let unsubscribeWorkspace: () => void = () => undefined;
-
-    const dropCurrent = (): void => {
-      // Unsubscribe first so the resulting "disconnected" event does not schedule a retry.
-      unsubscribe();
-      unsubscribeWorkspace();
-      unsubscribe = () => undefined;
-      connection?.disconnect();
-      connection = null;
-      activeConnection.current = null;
-      setTransport(null);
-    };
-
-    const scheduleRetry = (): void => {
-      if (disposed) return;
-      clearTimeout(retryTimer);
-      retryTimer = setTimeout(attempt, retryDelay);
-      retryDelay = Math.min(retryDelay * 2, MAX_RETRY_MS);
-    };
-
-    const attempt = (): void => {
-      if (disposed) return;
-      dropCurrent();
-      if (!navigator.onLine && endpoint.kind === "remote") {
-        setWorkspaceReady(false);
-        setState({ status: "disconnected", reason: "Device is offline" });
-        return;
-      }
-      const next = new DaemonConnection({ endpoint, client: CLIENT_INFO });
-      connection = next;
-      activeConnection.current = next;
-      setTransport(next);
-      setWorkspaceReady(false);
-      unsubscribeWorkspace = next.subscribeWorkspace((snapshot) => {
-        if (disposed || activeConnection.current !== next) return;
-        setReplica({ url: endpoint.url, snapshot });
+    const session = connectHost({
+      endpoint,
+      machineId,
+      api,
+      client: CLIENT_INFO,
+      isOnline: () => navigator.onLine,
+      onTransport: (next) => {
+        activeConnection.current = next;
+        setTransport(next);
+      },
+      onState: (value) => {
+        setState({ key, value });
+        if (value.status !== "ready") setWorkspaceReady(false);
+      },
+      onWorkspace: (snapshot) => {
+        setReplica({ key, snapshot });
         setWorkspaceReady(true);
-      });
-      unsubscribe = next.subscribe((s) => {
-        setState(s);
-        if (s.status !== "ready") setWorkspaceReady(false);
-        if (s.status === "ready") retryDelay = INITIAL_RETRY_MS;
-        if (s.status === "disconnected" || s.status === "error") scheduleRetry();
-      });
-      next.connect().catch(() => {
-        // Failure is already reflected in state (and a retry scheduled) by the subscriber above.
-      });
-    };
-
-    retryNow.current = () => {
-      retryDelay = INITIAL_RETRY_MS;
-      clearTimeout(retryTimer);
-      attempt();
-    };
-
-    const offline = (): void => {
-      // Loss of internet must not disable a daemon on this computer.
-      if (endpoint.kind === "local") return;
-      clearTimeout(retryTimer);
-      dropCurrent();
-      setWorkspaceReady(false);
-      setState({ status: "disconnected", reason: "Device is offline" });
-    };
-    const online = (): void => {
-      retryNow.current();
-    };
-    window.addEventListener("offline", offline);
-    window.addEventListener("online", online);
-    attempt();
-
+      },
+    });
+    retryNow.current = session.reconnect;
+    window.addEventListener("offline", session.offline);
+    window.addEventListener("online", session.resume);
     return () => {
-      disposed = true;
-      window.removeEventListener("offline", offline);
-      window.removeEventListener("online", online);
-      clearTimeout(retryTimer);
-      dropCurrent();
+      window.removeEventListener("offline", session.offline);
+      window.removeEventListener("online", session.resume);
+      session.dispose();
       retryNow.current = () => undefined;
-      setState({ status: "disconnected" });
     };
-  }, [endpoint]);
+  }, [endpoint, machineId, key]);
 
   return {
-    state,
-    transport: transport?.endpoint.url === endpoint?.url ? transport : null,
-    workspace: replica?.url === endpoint?.url ? (replica?.snapshot ?? null) : null,
-    workspaceReady: workspaceReady && replica?.url === endpoint?.url,
+    state: state.key === key ? state.value : { status: "disconnected" },
+    transport: state.key === key && transport?.endpoint.url === endpoint?.url ? transport : null,
+    workspace: replica?.key === key ? (replica?.snapshot ?? null) : null,
+    workspaceReady: workspaceReady && replica?.key === key,
     execute: async (operation) => {
       const connection = activeConnection.current;
-      if (!connection?.workspace || connection.endpoint.url !== endpoint?.url)
+      if (state.key !== key || !connection?.workspace || connection.endpoint.url !== endpoint?.url)
         throw new Error("Reconnect to edit this workspace");
       const result = await connection.executeWorkspace({
         type: "workspace.command",

@@ -114,13 +114,13 @@ export const MachineSchema = z.object({
   lastError: z.string().nullable(),
   ipv4: z.string().nullable(),
   ipv6: z.string().nullable(),
-  // Added by the machine-agent service; optional for older API deployments.
+  /** Managed daemon fields; optional for older control planes. */
   hostname: z.string().nullable().optional(),
-  certificateExpiresAt: z.string().datetime().nullable().optional(),
-  certificateError: z.string().nullable().optional(),
-  agentInstalledAt: z.string().datetime().nullable().optional(),
+  certificateExpiresAt: z.string().nullable().optional(),
+  agentInstalledAt: z.string().nullable().optional(),
   agentVersion: z.string().nullable().optional(),
-  agentSeenAt: z.string().datetime().nullable().optional(),
+  agentSeenAt: z.string().nullable().optional(),
+  certificateError: z.string().nullable().optional(),
   agentError: z.string().nullable().optional(),
   /** Login user; connect with `ssh <sshUser>@<ipv4>`. */
   sshUser: z.string(),
@@ -141,6 +141,10 @@ export type Machine = z.infer<typeof MachineSchema>;
 
 /** `GET/POST/DELETE /api/v1/machines[/:id]` and `POST /api/v1/machines/:id/resume` */
 export const MachineResponseSchema = z.object({ machine: MachineSchema });
+
+/** `POST /api/v1/machines/:id/token` */
+export const MachineTokenSchema = z.object({ token: z.string().min(1) });
+export type MachineToken = z.infer<typeof MachineTokenSchema>;
 
 /** `GET /api/v1/machines` */
 export const MachineListSchema = z.object({ machines: z.array(MachineSchema) });
