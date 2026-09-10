@@ -1,9 +1,9 @@
 import { accessSync, constants, statSync } from "node:fs";
 import { delimiter, extname, join } from "node:path";
-import type { TerminalProfile } from "@concors/protocol";
+import type { TerminalProfile, AgentProviderId } from "@concors/protocol";
 
 export function resolveProfile(
-  profile: TerminalProfile,
+  profile: TerminalProfile | AgentProviderId,
   platform = process.platform,
   env = process.env,
   resume = false,

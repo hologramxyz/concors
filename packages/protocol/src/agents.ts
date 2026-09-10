@@ -1,5 +1,29 @@
 import { z } from "zod";
 const Id = z.string().uuid();
+export const AgentProviderIdSchema = z.enum(["codex", "claude", "opencode", "pi"]);
+export type AgentProviderId = z.infer<typeof AgentProviderIdSchema>;
+export const agentProviderNames: Record<AgentProviderId, string> = {
+  codex: "Codex",
+  claude: "Claude Code",
+  opencode: "OpenCode",
+  pi: "Pi",
+};
+export const AgentModelSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  efforts: z.array(z.string()),
+  defaultEffort: z.string().nullable(),
+  serviceTiers: z
+    .array(z.object({ id: z.string(), label: z.string(), description: z.string() }))
+    .max(20)
+    .optional(),
+});
+export const AgentProviderCatalogSchema = z.object({
+  id: AgentProviderIdSchema,
+  models: z.array(AgentModelSchema).max(100),
+  error: z.string().optional(),
+});
+export type AgentProviderCatalog = z.infer<typeof AgentProviderCatalogSchema>;
 export const AgentQuestionSchema = z.object({
   id: z.string(),
   header: z.string(),
@@ -62,27 +86,13 @@ export type AgentPresentation = z.infer<typeof AgentPresentationSchema>;
 export const AgentInfoSchema = z.object({
   id: Id,
   projectId: Id,
-  provider: z.literal("codex"),
+  provider: AgentProviderIdSchema,
   name: z.string(),
   directory: z.string(),
   model: z.string().nullable(),
   settings: AgentSettingsSchema.optional(),
   supportsPlan: z.boolean().optional(),
-  models: z
-    .array(
-      z.object({
-        id: z.string(),
-        label: z.string(),
-        efforts: z.array(z.string()),
-        defaultEffort: z.string().nullable(),
-        serviceTiers: z
-          .array(z.object({ id: z.string(), label: z.string(), description: z.string() }))
-          .max(20)
-          .optional(),
-      }),
-    )
-    .max(100)
-    .optional(),
+  models: z.array(AgentModelSchema).max(100).optional(),
   context: z
     .object({
       used: z.number().nonnegative(),
@@ -133,8 +143,17 @@ export const AgentConversationSchema = z.object({
 });
 export type AgentConversation = z.infer<typeof AgentConversationSchema>;
 export const AgentOperationSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("provider-catalog"), sessionId: Id }),
+  z.object({
+    kind: z.literal("switch-provider"),
+    sessionId: Id,
+    provider: AgentProviderIdSchema,
+    model: z.string().min(1).max(100).nullable(),
+    expectedRevision: z.number().int().nonnegative(),
+  }),
   z.object({
     kind: z.literal("start"),
+    provider: AgentProviderIdSchema.optional(),
     epoch: Id,
     projectId: Id,
     tabId: Id,
@@ -183,7 +202,11 @@ export const AgentResultSchema = z.object({
   type: z.literal("agent.result"),
   requestId: Id,
   outcome: z.discriminatedUnion("status", [
-    z.object({ status: z.literal("ok"), conversation: AgentConversationSchema }),
+    z.object({
+      status: z.literal("ok"),
+      conversation: AgentConversationSchema,
+      providers: z.array(AgentProviderCatalogSchema).max(16).optional(),
+    }),
     z.object({ status: z.literal("error"), message: z.string() }),
   ]),
 });
