@@ -4,7 +4,7 @@
 
 Start with the [submission packet](../apps/mobile/release/submission-packet.md): draft
 store copy, data inventory, public URL audit, and ownership for each blocker. The first
-release's account/purchasing scope still needs product approval. Client-side AI disclosure
+release's existing-account companion scope is approved and enforced in the client. Client-side AI disclosure
 and explicit account-scoped consent are implemented; provider/privacy review and a
 functioning content-reporting service are separate requirements.
 
@@ -13,7 +13,7 @@ No signed IPA/AAB, store release or production validation is implied by bundle e
 Test the real workspace now using the [direct desktop connection](../apps/mobile/README.md#first-connect-to-the-same-daemon-as-desktop).
 It reuses the existing daemon over a private tunnel without a cloud login or server PR.
 Prepare team-owned Expo/Apple/Google accounts in parallel. Managed cloud access requires
-the separate [authenticated workspace bridge](mobile-backend.md) on the new machine agent.
+the [managed daemon rollout and capability discovery](mobile-backend.md).
 
 ## Next implementation slices
 
@@ -23,10 +23,10 @@ the separate [authenticated workspace bridge](mobile-backend.md) on the new mach
    through the restricted private tunnel. Test shared IDs, chat/tool history, approvals,
    terminal input and reconnects. The preview-only direct mode is implemented; cloud
    login and a fake inventory entry are not required. Defer the login/empty-state design.
-3. **Managed cloud workspace (later companion backend change):** retain the machine agent's existing
-   TLS/JWT access layer, add an authenticated Concors v1 bridge to the loopback daemon,
-   and advertise that capability. Agree the versioned route/handshake before wiring
-   the native transport. The earlier one-use `/connect` proposal is not deployed.
+3. **Managed cloud workspace:** the mobile transport now uses `/machines/:id/token`
+   and the managed daemon's `/ws` bearer subprotocol. Coordinate server installer PR #1,
+   the default-disabled mobile capability route, and a new daemon release containing
+   active-socket expiry enforcement before rollout. The old `/connect` proposal is unused.
 4. **Cloud acceptance:** identify a non-customer test account/machine, run
    `pnpm --filter @concors/mobile live:preflight`, then prove that desktop and phone see
    the same real project, tabs, agent history and tool events. Test send, approval,
@@ -44,12 +44,12 @@ metadata. It does not silently connect the chat UI to the terminal-only protocol
 Managed-cloud testing still needs the selected account/machine; native builds need team-owned
 project and signing configuration. The production checklist remains intentionally blocked/pending.
 
-The mobile client now reuses the desktop workspace, including account creation,
-machine provisioning and billing/checkout UI. Commands still run remotely and the
-application UI is bundled, not downloaded at runtime. **Billing and provisioning need
-a storefront-specific policy decision before production**; do not assume the desktop
-checkout flow can ship unchanged. The production readiness checklist blocks release
-until this audit is complete. This scope is **not a guarantee of approval**: review the actual service against
+The mobile client reuses the desktop workspace while excluding signup, machine
+provisioning, subscriptions and billing/checkout UI. The native API dispatcher rejects
+commerce calls as well. Commands run remotely and the application UI is bundled, not
+downloaded at runtime. The existing-account companion scope still needs storefront
+policy review, and the readiness checklist stays blocked until evidence is collected.
+This scope is **not a guarantee of approval**: review the actual service against
 [Apple guidelines](https://developer.apple.com/app-store/review/guidelines/) and Play
 policies, particularly remote execution and digital services.
 
