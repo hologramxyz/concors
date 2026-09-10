@@ -91,6 +91,29 @@ function startConnection() {
 }
 
 describe("DaemonConnection", () => {
+  it("passes bearer protocols to the native WebSocket constructor without changing the URL", async () => {
+    const socket = new FakeWebSocket("wss://daemon.example/ws");
+    const constructor = vi.fn(function () {
+      return socket;
+    });
+    vi.stubGlobal("WebSocket", constructor);
+    try {
+      const connection = new DaemonConnection({
+        endpoint: describeDaemonEndpoint(socket.url),
+        client,
+        protocols: ["concors.bearer.test-token"],
+      });
+      const ready = connection.connect();
+      expect(constructor).toHaveBeenCalledWith(socket.url, ["concors.bearer.test-token"]);
+      socket.serverOpen();
+      socket.serverSend(READY);
+      await ready;
+      connection.disconnect();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("sends client.hello on open and becomes ready on daemon.ready", async () => {
     const { connection, socket, states, ready } = startConnection();
 
@@ -158,7 +181,11 @@ describe("DaemonConnection", () => {
     await ready;
 
     socket.serverClose(1001, "daemon going away");
-    expect(connection.state).toEqual({ status: "disconnected", reason: "daemon going away" });
+    expect(connection.state).toEqual({
+      status: "disconnected",
+      reason: "daemon going away",
+      closeCode: 1001,
+    });
     expect(states.at(-1)).toBe("disconnected");
   });
 

@@ -15,6 +15,8 @@ import {
   MachineCostsSchema,
   MachineListSchema,
   MachineResponseSchema,
+  MachineTokenSchema,
+  type MachineToken,
   MeSchema,
   OrganizationListSchema,
   RedirectSchema,
@@ -194,6 +196,19 @@ export class ApiClient {
       schema: MachineListSchema,
     });
     return data.machines;
+  }
+
+  /** Mint immediately before opening a managed daemon connection; never persist this token. */
+  async mintMachineToken(id: string): Promise<MachineToken> {
+    const { data } = await this.#request(
+      "POST",
+      `/api/v1/machines/${encodeURIComponent(id)}/token`,
+      {
+        body: {},
+        schema: MachineTokenSchema,
+      },
+    );
+    return data;
   }
 
   /**

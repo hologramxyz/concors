@@ -50,10 +50,10 @@ export interface WebSocketLike {
   ): void;
 }
 
-export type WebSocketFactory = (url: string, protocols?: string[]) => WebSocketLike;
+export type WebSocketFactory = (url: string, protocols?: string | string[]) => WebSocketLike;
 
 export type ConnectionState =
-  | { readonly status: "disconnected"; readonly reason?: string }
+  | { readonly status: "disconnected"; readonly reason?: string; readonly closeCode?: number }
   | { readonly status: "connecting" }
   | { readonly status: "handshaking" }
   | { readonly status: "ready"; readonly daemon: DaemonInfo }
@@ -66,6 +66,8 @@ export interface DaemonConnectionOptions {
   /** Identity presented to the daemon during the handshake. */
   readonly client: ClientInfo;
   readonly protocolVersion?: ProtocolVersion;
+  /** WebSocket subprotocols, including managed-machine bearer authentication. */
+  readonly protocols?: string | string[];
   /** How long to wait for `daemon.ready` after the socket opens. */
   readonly handshakeTimeoutMs?: number;
   /** Override the WebSocket implementation (tests, custom transports). */
@@ -153,6 +155,7 @@ export class DaemonConnection {
   readonly #client: ClientInfo;
   readonly #protocolVersion: ProtocolVersion;
   readonly #handshakeTimeoutMs: number;
+  readonly #protocols: string | string[] | undefined;
   readonly #createSocket: WebSocketFactory;
   readonly #protocols: string[] | undefined;
 
@@ -161,6 +164,7 @@ export class DaemonConnection {
     this.#client = options.client;
     this.#protocolVersion = options.protocolVersion ?? PROTOCOL_VERSION;
     this.#handshakeTimeoutMs = options.handshakeTimeoutMs ?? DEFAULT_HANDSHAKE_TIMEOUT_MS;
+    this.#protocols = options.protocols;
     this.#createSocket = options.webSocketFactory ?? defaultWebSocketFactory;
     this.#protocols = options.protocols ? [...options.protocols] : undefined;
   }
@@ -395,9 +399,14 @@ export class DaemonConnection {
 
       try {
         socket = this.#createSocket(this.endpoint.url, this.#protocols);
-      } catch {
-        // A custom implementation may include authentication subprotocols in its exception.
-        fail(createProtocolError("INTERNAL_ERROR", "Could not open WebSocket"));
+      } catch (cause) {
+        fail(
+          createProtocolError("INTERNAL_ERROR", "Could not open WebSocket", {
+            ...(cause && typeof cause === "object" && "status" in cause
+              ? { status: cause.status }
+              : {}),
+          }),
+        );
         return;
       }
       this.#socket = socket;
@@ -557,7 +566,11 @@ export class DaemonConnection {
         // The WHATWG event carries no detail; the subsequent `close` event has the code.
         if (isCurrent() && this.#state.status === "connecting") {
           fail(
-            createProtocolError("INTERNAL_ERROR", `Could not reach daemon at ${this.endpoint.url}`),
+            createProtocolError(
+              "INTERNAL_ERROR",
+              `Could not reach daemon at ${this.endpoint.url}`,
+              { websocketUpgradeFailed: true },
+            ),
           );
         }
       });
@@ -572,6 +585,7 @@ export class DaemonConnection {
           const error = createProtocolError(
             "INTERNAL_ERROR",
             `Connection closed before handshake completed (code ${event.code})`,
+            { closeCode: event.code, websocketUpgradeFailed: this.#state.status === "connecting" },
           );
           if (wasCurrent) this.#setState({ status: "error", error });
           settleReject(error);
@@ -582,6 +596,7 @@ export class DaemonConnection {
           this.#setState({
             status: "disconnected",
             reason: event.reason || `closed (${event.code})`,
+            closeCode: event.code,
           });
         }
       });
@@ -659,9 +674,9 @@ export class DaemonConnection {
   }
 }
 
-function defaultWebSocketFactory(url: string, protocols?: string[]): WebSocketLike {
+function defaultWebSocketFactory(url: string, protocols?: string | string[]): WebSocketLike {
   if (typeof WebSocket === "undefined") {
     throw new Error("No global WebSocket implementation available; pass `webSocketFactory`.");
   }
-  return protocols ? new WebSocket(url, protocols) : new WebSocket(url);
+  return new WebSocket(url, protocols);
 }

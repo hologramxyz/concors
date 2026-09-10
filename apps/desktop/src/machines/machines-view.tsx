@@ -1,6 +1,3 @@
-import { describeDaemonEndpoint } from "@concors/daemon-client";
-import { FormDialog } from "@/workspace/form-dialog";
-import { MachineConnectionSchema, type MachineConnection } from "@/workspace/machines";
 import type { Machine } from "@concors/api-client";
 import { cn } from "cn";
 import { CalendarX, Check, Cloud, Copy, Plus, RefreshCw, Undo2 } from "lucide-react";
@@ -31,7 +28,6 @@ import { describeMachinesError, useMachines } from "./use-machines.ts";
 
 interface MachinesViewProps {
   readonly auth: SignedInAuth;
-  readonly onAddMachine: (machine: MachineConnection) => void;
   readonly focusedMachineId: string | null;
   readonly creating: boolean;
   readonly onCreatingChange: (creating: boolean) => void;
@@ -40,14 +36,12 @@ interface MachinesViewProps {
 /** Cloud machines of the active organization: list, create, cancel, and how to connect. */
 export function MachinesView({
   auth,
-  onAddMachine,
   focusedMachineId,
   creating,
   onCreatingChange: setCreating,
 }: MachinesViewProps) {
   const organization = activeOrganization(auth);
   const state = useMachines(organization?.id);
-  const [adding, setAdding] = useState(false);
   const [cancelling, setCancelling] = useState<Machine | null>(null);
   const [resuming, setResuming] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -147,29 +141,6 @@ export function MachinesView({
             </li>
           ))}
         </ul>
-      )}
-
-      {adding && (
-        <FormDialog
-          title="Connect a machine"
-          description="Connect an existing daemon through a trusted local or protected connection."
-          fields={[
-            { name: "name", label: "Machine name", placeholder: "Development machine" },
-            { name: "url", label: "Daemon URL", placeholder: "wss://your-machine.example/ws" },
-          ]}
-          submitLabel="Add connection"
-          onClose={() => setAdding(false)}
-          onSubmit={(values) => {
-            const endpoint = describeDaemonEndpoint(values["url"] ?? "");
-            const machine = MachineConnectionSchema.parse({
-              id: crypto.randomUUID(),
-              name: values["name"],
-              url: endpoint.url,
-            });
-            onAddMachine(machine);
-            return Promise.resolve();
-          }}
-        />
       )}
 
       {creating && state.catalog && organization && (
