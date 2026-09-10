@@ -956,7 +956,7 @@ test("machine sheet preserves the sidebar, selected status, and focus", async ({
   await expect(sheet).toHaveCSS("animation-name", "mobile-drawer-in");
   const selected = sheet.getByRole("option", { name: /Development/ });
   await expect(selected).toHaveAttribute("aria-selected", "true");
-  await expect(selected).toContainText("connectable");
+  await expect(selected).toContainText("Connected");
   await selected.click();
   await expect(sheet).toHaveCount(0);
   await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "true");

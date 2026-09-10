@@ -56,6 +56,11 @@ export function preferredConnection(host: Host): Connection | undefined {
 }
 
 export type HostAvailability = "connectable" | "provisioning" | "offline";
+/** An online machine is not necessarily the one this device has connected to. */
+export function machineStatusLabel(availability: HostAvailability, connected = false): string {
+  if (connected) return "Connected";
+  return { connectable: "Online", provisioning: "Provisioning", offline: "Offline" }[availability];
+}
 export function machineAvailability(
   machine: Pick<Machine, "status" | "hostname" | "agentSeenAt">,
   now = Date.now(),
