@@ -1,3 +1,4 @@
+import { Agent } from "undici";
 import { randomBytes } from "node:crypto";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
@@ -16,6 +17,7 @@ export class OpenCodeProvider extends EventProvider {
   private url = "";
   private password = randomBytes(32).toString("hex");
   private abort = new AbortController();
+  private dispatcher = new Agent({ connections: 4 });
   private messages = new Map<string, string>();
   private parts = new Map<string, { messageId: string; text: string }>();
   private cwd: string;
@@ -63,9 +65,10 @@ export class OpenCodeProvider extends EventProvider {
     // The CLI can announce its URL before the HTTP listener accepts connections.
     for (let attempt = 0; ; attempt++) {
       try {
-        await this.fetch("/global/health", {
+        const health = await this.fetch("/global/health", {
           signal: AbortSignal.any([this.abort.signal, AbortSignal.timeout(1000)]),
         });
+        await health.arrayBuffer();
         break;
       } catch (error) {
         if (attempt >= 9 || this.closed) throw error;
@@ -87,10 +90,11 @@ export class OpenCodeProvider extends EventProvider {
         encodeURIComponent(this.cwd),
       {
         ...init,
+        // Own sockets per runtime: a restarted CLI can reuse a recently closed port.
+        ...{ dispatcher: this.dispatcher },
         headers: {
           authorization: "Basic " + Buffer.from("concors:" + this.password).toString("base64"),
           "content-type": "application/json",
-          connection: "close",
           ...init.headers,
         },
         signal: init.signal ?? AbortSignal.any([this.abort.signal, AbortSignal.timeout(15000)]),
@@ -307,6 +311,7 @@ export class OpenCodeProvider extends EventProvider {
   async close() {
     this.closed = true;
     this.abort.abort();
+    await this.dispatcher.destroy();
     const child = this.child;
     if (!child || child.exitCode !== null || child.signalCode !== null) return;
     const exit = new Promise<void>((resolve) => child.once("close", () => resolve()));
