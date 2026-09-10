@@ -126,13 +126,16 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
     await expect(second.getByRole("button", { name: "Terminal", exact: true })).toHaveCount(0);
 
     await first.getByRole("button", { name: "Switch machine", exact: true }).click();
-    await first.getByRole("menuitem", { name: /Second machine connectable/i }).click();
+    await first.getByRole("menuitem", { name: /Second machine Online/i }).click();
     await expect(
       first.getByRole("heading", { name: "Start working on this machine", exact: true }),
     ).toBeVisible();
     await expect(
       second.getByRole("heading", { name: "Concors acceptance", exact: true }),
     ).toBeVisible();
+    await first.getByRole("button", { name: "Switch machine", exact: true }).click();
+    await expect(first.getByRole("menuitem", { name: "Second machine Connected" })).toBeVisible();
+    await first.keyboard.press("Escape");
     expect(managed.tokenCount()).toBe(1);
     await seedProject(first, "Managed acceptance", "/tmp", "ws://127.0.0.1:7430/ws");
     await first.getByRole("button", { name: "New tab", exact: true }).click();

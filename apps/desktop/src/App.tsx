@@ -306,6 +306,7 @@ function AppContent() {
                       onOpenFolder={setAddingProject}
                       hostScope={hostScope}
                       selectedHost={selectedHost}
+                      machineConnected={connection.state.status === "ready"}
                       onSelectMachine={selectMachine}
                       onViewCloud={(machineId) => {
                         setFocusedCloudMachineId(machineId ?? null);
