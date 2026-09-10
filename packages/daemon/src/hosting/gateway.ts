@@ -63,7 +63,10 @@ export function createPersistentGateway(
   async function authenticate(req: IncomingMessage): Promise<Principal> {
     const token = tokenFromRequest(req);
     if (!token || !managed) throw new Error("Unauthorized");
-    return managed.verifier.verify(token);
+    const principal = await managed.verifier.verify(token);
+    if (!Number.isFinite(principal.expiresAt) || principal.expiresAt <= Date.now())
+      throw new Error("Unauthorized");
+    return principal;
   }
   function ownHost(req: IncomingMessage): boolean {
     const header = req.headers.host?.toLowerCase();
@@ -97,6 +100,12 @@ export function createPersistentGateway(
         return;
       }
       if (principal) {
+        const expiry = setTimeout(
+          () => res.destroy(),
+          Math.max(0, principal.expiresAt - Date.now()),
+        );
+        expiry.unref();
+        res.once("close", () => clearTimeout(expiry));
         let path: string;
         try {
           path = publicPath(req);
@@ -189,6 +198,15 @@ export function createPersistentGateway(
         rejectUpgrade(downstream, 403);
         return;
       }
+      // The private host owns the sessions. Expiring this network socket detaches the
+      // device without stopping terminals/agents; a reconnect must mint fresh access.
+      // Destroy the stream rather than injecting a WS frame into possibly partial frames.
+      const expiry = setTimeout(
+        () => downstream.destroy(),
+        Math.max(0, principal.expiresAt - Date.now()),
+      );
+      expiry.unref();
+      downstream.once("close", () => clearTimeout(expiry));
     }
     if (
       (managed ? new URL(req.url ?? "/", "http://daemon").pathname !== "/ws" : req.url !== "/ws") ||

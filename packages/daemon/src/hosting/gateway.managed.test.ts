@@ -19,7 +19,7 @@ afterEach(async () => {
 const local = { host: "127.0.0.1", port: 0, logLevel: "silent" } as const;
 const launch = { executable: "unused", args: [] };
 
-async function fixture() {
+async function fixture(ttl = "15m") {
   const runtime = createDaemonServer(local, { internalToken: "host-secret" });
   const forwarded: { url: string; headers: IncomingHttpHeaders }[] = [];
   runtime.app.addHook("onRequest", async (request) => {
@@ -60,7 +60,7 @@ async function fixture() {
     .setIssuer(config.controlPlaneUrl)
     .setAudience(config.machineId)
     .setIssuedAt()
-    .setExpirationTime("15m")
+    .setExpirationTime(ttl)
     .setJti("j")
     .sign(privateKey);
   const logs: string[] = [];
@@ -102,6 +102,26 @@ async function refused(
   });
   return status;
 }
+
+it("expires an already authenticated socket and keeps the private host alive", async () => {
+  const f = await fixture("3s");
+  const ws = new WebSocket(f.url.replace("http:", "ws:") + "/ws", [`concors.bearer.${f.token}`], {
+    headers: { host: f.headers.host },
+  });
+  cleanups.push(async () => {
+    ws.terminate();
+  });
+  await once(ws, "open");
+  const closed = once(ws, "close");
+  await closed;
+  expect(f.stop).not.toHaveBeenCalled();
+  expect((await httpFetch(f.url + "/health", { headers: { host: f.headers.host } })).status).toBe(
+    200,
+  );
+  expect(
+    await refused(f.url + "/ws", { host: f.headers.host }, [`concors.bearer.${f.token}`]),
+  ).toBe(401);
+});
 
 it("keeps health open with version and authenticates all other HTTP requests before routing or host discovery", async () => {
   const f = await fixture();

@@ -17,6 +17,8 @@ export interface Principal {
   /** Login session (= device) the token was minted for. */
   sessionId: string;
   organizationId: string;
+  /** Absolute deadline for every authenticated transport, not just its upgrade. */
+  expiresAt: number;
 }
 
 export interface TokenVerifier {
@@ -71,7 +73,17 @@ export function createTokenVerifier(options: TokenVerifierOptions): TokenVerifie
       }
       if (typeof payload.jti !== "string" || !payload.jti)
         throw new TokenError("token is missing jti");
-      return { userId: sub, sessionId: sid, organizationId: org };
+      if (
+        typeof payload.exp !== "number" ||
+        typeof payload.iat !== "number" ||
+        !Number.isFinite(payload.exp) ||
+        !Number.isFinite(payload.iat) ||
+        payload.exp <= payload.iat ||
+        payload.exp - payload.iat > 900 ||
+        payload.iat > Date.now() / 1000 + 30
+      )
+        throw new TokenError("token lifetime exceeds the machine access policy");
+      return { userId: sub, sessionId: sid, organizationId: org, expiresAt: payload.exp * 1000 };
     },
   };
 }

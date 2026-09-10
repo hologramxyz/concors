@@ -1,0 +1,21 @@
+appId: dev.concors.mobile.preview
+---
+- launchApp:
+    clearState: true
+- tapOn: "Explore demo"
+- extendedWaitUntil:
+    visible: "Open sidebar"
+    timeout: 30000
+- tapOn: "Message Codex"
+- inputText: "Android draft survives navigation"
+- assertVisible: "Android draft survives navigation"
+- takeScreenshot: apps/mobile/test-results/android/composer-keyboard
+- hideKeyboard
+- tapOn: "Project files"
+- assertVisible: "Back to chat"
+- takeScreenshot: apps/mobile/test-results/android/files
+- tapOn: "Back to chat"
+- assertVisible: "Android draft survives navigation"
+- tapOn: "Tabs and panes"
+- assertVisible: "New tab"
+- takeScreenshot: apps/mobile/test-results/android/tabs-drawer

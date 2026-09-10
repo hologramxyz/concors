@@ -15,6 +15,7 @@ Useful loops:
 ```bash
 pnpm daemon:dev          # terminal 1
 pnpm desktop:dev         # terminal 2 (or pnpm desktop:web:dev without Rust)
+pnpm mobile:demo         # independent mobile preview; no daemon/account required
 ```
 
 Developing on a headless Linux box (VM/VPS)? Skip Tauri and run the UI as a web app:
@@ -26,7 +27,7 @@ startup, native menus) is simply skipped in the browser.
 Before opening a PR, run what CI runs:
 
 ```bash
-pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm daemon:build && pnpm desktop:web:build
+pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm daemon:build && pnpm desktop:web:build && pnpm mobile:build
 ```
 
 ## Architecture rules
@@ -35,8 +36,9 @@ Please read the [architecture section of the README](README.md#architecture) fir
 
 - **The protocol is the boundary.** Anything that crosses client ↔ daemon is defined in
   `packages/protocol` first, as a Zod schema. No Node-specific types may appear there.
-- **Clients never import the daemon.** `apps/*` may depend on `@concors/protocol`,
-  `@concors/daemon-client` and `@concors/api-client` only. ESLint enforces the daemon boundary.
+- **Clients never import the daemon.** Shared client dependencies include `@concors/protocol`,
+  `@concors/daemon-client`, `@concors/api-client` and `@concors/client-core`.
+  ESLint enforces the daemon boundary.
 - **The control plane is Pierre's.** `concors-server` is integrated, not modified, from this repo.
   Missing server contracts are documented (see `docs/auth.md`) rather than worked around.
 - **Tauri stays in its corner.** In the desktop frontend, `@tauri-apps/*` is imported only from

@@ -1,6 +1,8 @@
 import { LogOut, Monitor, Moon, RefreshCw, Sun } from "lucide-react";
+import { useContext } from "react";
+import { CompactLayoutContext } from "@/components/compact-layout";
 import { useCommands } from "@/shortcuts/context";
-import { shortcutLabel } from "@/shortcuts/bindings";
+import { isCompactCommand, shortcutLabel } from "@/shortcuts/bindings";
 import type { WorkspaceProject } from "@concors/protocol";
 
 import {
@@ -49,6 +51,7 @@ export function CommandPalette({
   onSignOut,
 }: CommandPaletteProps) {
   const commands = useCommands();
+  const compact = useContext(CompactLayoutContext);
 
   const run = (action: () => void) => () => {
     onOpenChange(false);
@@ -69,7 +72,7 @@ export function CommandPalette({
 
           <CommandGroup heading="Workspace">
             {commands.items
-              .filter((item) => item.id !== "search")
+              .filter((item) => item.id !== "search" && (!compact || isCompactCommand(item.id)))
               .map((item) => (
                 <CommandItem
                   key={item.id}

@@ -57,7 +57,7 @@ export function MachinesView({
   const empty = state.machines !== null && machines.length === 0;
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-3xl flex-col px-8 py-8">
+    <div data-machines-view className="mx-auto flex h-full w-full max-w-3xl flex-col px-8 py-8">
       <div className="mb-6 flex items-center justify-between gap-4">
         <div>
           <h2 className="text-[15px] font-semibold">Machines</h2>
