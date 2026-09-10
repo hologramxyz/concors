@@ -53,8 +53,14 @@ test("notifications deduplicate across windows, open chat, and sync unread witho
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
     await expect(page.getByLabel("Agent status: Ready").first()).toBeVisible();
+    // A ready label can belong to an older project, and this separate socket may
+    // receive the new workspace/session after the browser. Await this test's agent.
+    await expect
+      .poll(() => control.workspace?.projects.some((p) => p.directory === directory))
+      .toBe(true);
     const project = control.workspace?.projects.find((p) => p.directory === directory);
     assert(project);
+    await expect.poll(() => control.agents.some((a) => a.projectId === project.id)).toBe(true);
     const agent = control.agents.find((a) => a.projectId === project.id);
     assert(agent);
     const id = agent.id;

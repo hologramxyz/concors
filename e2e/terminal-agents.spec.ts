@@ -37,7 +37,7 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
     await expect(shellPane.getByLabel("Terminal output").filter({ visible: true })).toContainText(
       "CODEX_TERMINAL_READY",
     );
-    await second.goto("http://localhost:1420");
+    await second.goto(test.info().project.use.baseURL ?? "http://localhost:1420");
     const shellAgent = second
       .getByRole("navigation", { name: "Primary" })
       .getByRole("region", { name: "Agents", exact: true })
@@ -131,7 +131,7 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
       panes.last().getByLabel("Terminal output").filter({ visible: true }),
     ).toContainText("CODEX_TERMINAL_READY");
 
-    await second.goto("http://localhost:1420");
+    await second.goto(test.info().project.use.baseURL ?? "http://localhost:1420");
     const remoteAgents = second
       .getByRole("navigation", { name: "Primary" })
       .getByRole("region", { name: "Agents", exact: true });

@@ -1,0 +1,16 @@
+{
+  "status": "draft-needs-owner-approval",
+  "locale": "en-US",
+  "name": "Concors",
+  "iosSubtitle": "Your coding workspace, mobile",
+  "androidShortDescription": "Continue your coding agents, chat and terminals from your phone.",
+  "description": "Keep your coding work moving with Concors. Follow agent conversations, review tool requests, and continue terminal sessions on a connected machine.\n\nSwitch between projects, tabs and panes. Browse project files, read Markdown, inspect code and save edits. Your agents and terminals keep running on the connected machine when you leave the app.\n\nConcors requires an account and a compatible connected workspace. Commands and AI processing run on the connected machine and its configured providers, not on your phone. AI provider accounts and usage are governed by those providers. Review AI output and tool requests before acting on them.",
+  "iosKeywords": "coding,developer,terminal,agents,workspace,remote,code",
+  "suggestedIosCategory": "Developer Tools",
+  "suggestedAndroidCategory": "TOOLS",
+  "privacyUrl": "https://concors.dev/privacy",
+  "supportUrl": "https://concors.dev/support",
+  "deletionUrl": "https://concors.dev/account/delete",
+  "reviewerCredentials": null,
+  "note": "Draft only. Approve launch scope, public URLs, provider wording, categories and ratings before uploading. Keep reviewer credentials out of this repository. Do not advertise push or purchasing until shipped and verified."
+}

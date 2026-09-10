@@ -1,4 +1,6 @@
 import { Check, ChevronDown, LogOut } from "lucide-react";
+import { useContext } from "react";
+import { CompactLayoutContext } from "@/components/compact-layout";
 
 import { activeOrganization, initialOf, type SignedInAuth } from "@/auth/auth-state";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +28,7 @@ export function AccountSettings({
   onSetActiveOrganization,
 }: AccountSettingsProps) {
   const organization = activeOrganization(auth);
+  const compact = useContext(CompactLayoutContext);
 
   return (
     <>
@@ -55,7 +58,11 @@ export function AccountSettings({
 
       <Section
         title="Organization"
-        description="Cloud machines and billing belong to the active organization."
+        description={
+          compact
+            ? "Your machines belong to the active organization."
+            : "Cloud machines and billing belong to the active organization."
+        }
       >
         <Row label="Active organization">
           {auth.organizations.length > 1 ? (
@@ -89,7 +96,7 @@ export function AccountSettings({
         </Row>
       </Section>
 
-      {organization && (
+      {organization && !compact && (
         <SubscriptionsSection
           key={organization.id}
           organizationId={organization.id}

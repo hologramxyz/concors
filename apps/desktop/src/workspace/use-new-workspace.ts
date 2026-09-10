@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import type { DaemonConnection } from "@concors/daemon-client";
 
-export function useNewWorkspace(connection: DaemonConnection | null) {
+export function useNewWorkspace(
+  connection: DaemonConnection | null,
+  onCreated?: (projectId: string) => void,
+) {
   const active = useRef<{ connection: DaemonConnection; id: string } | null>(null);
   const [busy, setBusy] = useState<DaemonConnection | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -13,8 +16,9 @@ export function useNewWorkspace(connection: DaemonConnection | null) {
       active.current = null;
       setBusy(null);
       if (setup.status !== "done") setError(setup.progress);
+      else onCreated?.(setup.projectId ?? setup.id);
     });
-  }, [connection]);
+  }, [connection, onCreated]);
   const start = () => {
     if (
       !connection?.workspace ||

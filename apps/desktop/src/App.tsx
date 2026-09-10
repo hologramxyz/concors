@@ -2,15 +2,14 @@ import { FilesSidebar } from "@/files/sidebar";
 import { FilesProvider } from "@/files/provider";
 import { useCommand } from "@/shortcuts/context";
 import { ShortcutProvider } from "@/shortcuts/provider";
-import { ShortcutGuide } from "@/shortcuts/guide";
 import { findSessionPane, type PaneFocusRequest } from "@/workspace/session-pane";
 import { NotificationProvider } from "@/notifications/provider";
 import { AgentsProvider } from "@/agents/state";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
-import { describeDaemonEndpoint, type DaemonEndpoint } from "@concors/daemon-client";
+import type { DaemonEndpoint } from "@concors/daemon-client";
 import type { WorkspaceOperation } from "@concors/protocol";
 import { PanelLeftOpen, Server } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 
 import { api } from "@/auth/api";
 import { AuthScreen } from "@/auth/auth-screen";
@@ -20,7 +19,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { CommandPalette } from "@/components/command-palette";
 import { MachinesView } from "@/machines/machines-view";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { resolveStartupEndpoint } from "@/daemon/resolve-endpoint";
+import { resolveStartupEndpoint, resolveHostEndpoint } from "@/daemon/resolve-endpoint";
 import { useDaemonConnection } from "@/daemon/use-daemon-connection";
 import { navItemFor, type View } from "@/navigation";
 import { settingsNavItemFor, type SettingsPage } from "@/settings/navigation";
@@ -30,21 +29,8 @@ import { useCornerStyle } from "@/theme/use-corner-style";
 import { SettingsView } from "@/views/settings-view";
 import { useNewWorkspace } from "@/workspace/use-new-workspace";
 import { ProjectSetupDialog } from "@/workspace/project-setup-dialog";
-import {
-  MACHINES_STORAGE_KEY,
-  parseMachineConnections,
-  type MachineConnection,
-} from "@/workspace/machines";
+import { LOCAL_HOST, saveHost, type Host } from "@/workspace/machines";
 import { ProjectWorkspace } from "@/workspace/project-workspace";
-
-const LOCAL_ID = "00000000-0000-4000-8000-000000000000";
-function savedMachines() {
-  try {
-    return parseMachineConnections(localStorage.getItem(MACHINES_STORAGE_KEY));
-  } catch {
-    return [];
-  }
-}
 
 export function App() {
   const setup = new URLSearchParams(window.location.search).get("setup");
@@ -93,22 +79,26 @@ function AppContent() {
     window.location.pathname === "/settings/billing" ? "billing" : "account",
   );
   const settingsReturnView = useRef<Exclude<View, "settings">>("projects");
-  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [localEndpoint, setLocalEndpoint] = useState<DaemonEndpoint | null>(null);
-  const [bookmarks, setBookmarks] = useState<MachineConnection[]>(savedMachines);
-  const [selectedMachineId, setSelectedMachineId] = useState(LOCAL_ID);
+  const [selectionHost, setSelectionHost] = useState<{ scope: string; host: Host } | null>(null);
   const [addingProject, setAddingProject] = useState<"open" | "clone" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [endpoint, setEndpoint] = useState<DaemonEndpoint | null>(null);
-  const connection = useDaemonConnection(endpoint);
   const theme = useTheme();
   const corners = useCornerStyle();
   const auth = useAuth(api);
-  const machines = localEndpoint
-    ? [{ id: LOCAL_ID, name: "This computer", url: localEndpoint.url }, ...bookmarks]
-    : bookmarks;
+  const hostScope =
+    auth.state.status === "signed-in"
+      ? `${auth.state.user.id}:${activeOrganization(auth.state)?.id ?? ""}`
+      : "";
+  const selectedHost = selectionHost?.scope === hostScope ? selectionHost.host : LOCAL_HOST;
+  const selectedMachineId = selectedHost.machineId;
+  const endpoint = useMemo(
+    () => resolveHostEndpoint(selectedHost, localEndpoint),
+    [selectedHost, localEndpoint],
+  );
+  const connection = useDaemonConnection(hostScope ? endpoint : null, selectedMachineId, hostScope);
   const workspace = connection.workspace;
   const canEdit = connection.state.status === "ready" && connection.workspaceReady && !pending;
   const selection = workspace?.selection;
@@ -141,7 +131,6 @@ function AppContent() {
       .then((resolved) => {
         if (!cancelled) {
           setLocalEndpoint(resolved);
-          setEndpoint(resolved);
         }
       })
       .catch((cause: unknown) => {
@@ -188,21 +177,21 @@ function AppContent() {
     [transport, memoryKey],
   );
   const openPalette = useCallback(() => setPaletteOpen(true), []);
-  const beforeLeaveFiles = useRef<(() => boolean) | null>(null);
-  const signOut = () => {
-    if (beforeLeaveFiles.current?.() !== false) void auth.signOut();
+  const beforeLeaveFiles = useRef<(() => boolean | Promise<boolean>) | null>(null);
+  const signOut = async () => {
+    if ((await beforeLeaveFiles.current?.()) !== false) void auth.signOut();
   };
-  const openSettings = () => {
+  const openSettings = (page: SettingsPage) => {
     if (view !== "settings") settingsReturnView.current = view;
-    setSettingsPage("account");
+    setSettingsPage(page);
     setView("settings");
   };
 
   const signedIn = auth.state.status === "signed-in";
   useCommand("search", signedIn, () => setPaletteOpen((open) => !open));
   useCommand("new-project", signedIn && canEdit && !newWorkspace.busy, startWorkspace);
-  useCommand("settings", signedIn, openSettings);
-  useCommand("shortcuts", signedIn, () => setShortcutsOpen(true));
+  useCommand("settings", signedIn, () => openSettings("account"));
+  useCommand("shortcuts", signedIn, () => openSettings("shortcuts"));
 
   // Nothing but the sign-in screen exists for a signed-out user. All hooks run above this line.
   if (auth.state.status !== "signed-in") {
@@ -238,11 +227,10 @@ function AppContent() {
     setView("projects");
     command({ kind: "selection.set", projectId, tabId });
   };
-  const selectMachine = (id: string) => {
-    const machine = machines.find((item) => item.id === id);
-    if (!machine) return;
-    setEndpoint(describeDaemonEndpoint(machine.url));
-    setSelectedMachineId(id);
+  const selectMachine = (host: Host) => {
+    if (beforeLeaveFiles.current?.() === false) return;
+    saveHost(hostScope, host);
+    setSelectionHost({ scope: hostScope, host });
     setView("projects");
     setError(null);
     setAddingProject(null);
@@ -287,16 +275,15 @@ function AppContent() {
                     execute={execute}
                     onSelectAgent={openAgent}
                     view={view}
-                    onOpenSettings={openSettings}
+                    onOpenSettings={() => openSettings("account")}
                     onOpenCommandPalette={openPalette}
-                    onOpenShortcuts={() => setShortcutsOpen(true)}
                     workspace={workspace}
                     canEdit={canEdit && !newWorkspace.busy}
                     onSelectProject={selectProject}
                     onAddProject={startWorkspace}
                     onOpenFolder={setAddingProject}
-                    machines={machines}
-                    selectedMachineId={selectedMachineId}
+                    hostScope={hostScope}
+                    selectedHost={selectedHost}
                     onSelectMachine={selectMachine}
                     onViewCloud={(machineId) => {
                       setFocusedCloudMachineId(machineId ?? null);
@@ -331,12 +318,27 @@ function AppContent() {
                       </button>
                     </div>
                   )}
+                  {connection.state.status === "error" && (
+                    <div
+                      role="alert"
+                      className="flex items-center justify-between gap-3 border-b bg-destructive/5 px-4 py-2 text-xs text-destructive"
+                    >
+                      <span>{connection.state.error.message}</span>
+                      <button
+                        type="button"
+                        className="shrink-0 underline"
+                        onClick={connection.reconnectNow}
+                      >
+                        Retry connection
+                      </button>
+                    </div>
+                  )}
                   {workspace && !connection.workspaceReady && (
                     <div
                       role="status"
                       className="border-b bg-muted px-4 py-2 text-xs text-muted-foreground"
                     >
-                      Reconnecting… Showing the last saved workspace. Editing resumes when
+                      Connection lost. Showing the last saved workspace. Editing resumes when
                       connected.
                     </div>
                   )}
@@ -392,18 +394,6 @@ function AppContent() {
                       )
                     ) : view === "machines" ? (
                       <MachinesView
-                        onAddMachine={(machine) => {
-                          if (machines.some((existing) => existing.url === machine.url))
-                            throw new Error("This machine connection is already saved");
-                          if (bookmarks.length >= 32)
-                            throw new Error("You can save up to 32 machine connections");
-                          const next = [...bookmarks, machine];
-                          localStorage.setItem(MACHINES_STORAGE_KEY, JSON.stringify(next));
-                          setBookmarks(next);
-                          setEndpoint(describeDaemonEndpoint(machine.url));
-                          setSelectedMachineId(machine.id);
-                          setView("projects");
-                        }}
                         key={activeOrganization(account)?.id}
                         auth={account}
                         focusedMachineId={focusedCloudMachineId}
@@ -445,7 +435,6 @@ function AppContent() {
                   }}
                 />
               )}
-              <ShortcutGuide open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
               <CommandPalette
                 canSelectProject={canEdit}
                 projects={workspace?.projects ?? []}

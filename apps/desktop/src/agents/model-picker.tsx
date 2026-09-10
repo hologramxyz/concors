@@ -10,15 +10,7 @@ import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { ControlPicker } from "./control-picker";
 import { ProviderIcon } from "./provider-icon";
 
-export function AgentModelPicker({
-  agent,
-  disabled,
-  onSelect,
-}: {
-  agent: AgentInfo;
-  disabled: boolean;
-  onSelect: (model: string | null) => void;
-}) {
+export function useAgentModelSelection(agent: AgentInfo, onSelect: (model: string | null) => void) {
   const connection = useContext(TerminalConnectionContext);
   const [catalog, setCatalog] = useState<AgentProviderCatalog[]>([]);
   const [loading, setLoading] = useState(false),
@@ -81,11 +73,27 @@ export function AgentModelPicker({
       setSwitching(false);
     }
   };
+  return { currentModels, model, providers, load, choose, loading, switching, error };
+}
+
+export function AgentModelPicker({
+  agent,
+  disabled,
+  onSelect,
+  showValue = true,
+}: {
+  agent: AgentInfo;
+  disabled: boolean;
+  showValue?: boolean;
+  onSelect: (model: string | null) => void;
+}) {
+  const { currentModels, model, providers, load, choose, loading, switching, error } =
+    useAgentModelSelection(agent, onSelect);
   return (
     <>
       <ControlPicker
         label="Agent and model"
-        showValue
+        showValue={showValue}
         selectedLabel={
           currentModels.find((m) => m.id === model)?.label ?? model ?? "Machine default"
         }
