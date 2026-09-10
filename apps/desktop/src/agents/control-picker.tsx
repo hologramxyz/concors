@@ -1,12 +1,15 @@
 import { useId, useState, useRef, useEffect, type ReactNode } from "react";
 import { Popover } from "radix-ui";
-import { Check, Search } from "lucide-react";
+import { ArrowLeft, Check, ChevronRight, Search } from "lucide-react";
 
 export interface ControlOption {
   id: string;
   label: string;
   description?: string;
   icon?: ReactNode;
+}
+export interface ControlGroup extends ControlOption {
+  options: ControlOption[];
 }
 export function ControlPicker({
   label,
@@ -15,7 +18,8 @@ export function ControlPicker({
   icon,
   disabled,
   onSelect,
-  footer,
+  groups,
+  selectedGroupId,
   showValue = false,
   selectedLabel,
 }: {
@@ -24,16 +28,20 @@ export function ControlPicker({
   options: ControlOption[];
   icon: ReactNode;
   disabled?: boolean;
-  onSelect: (id: string) => void;
-  footer?: ReactNode;
+  onSelect: (id: string, groupId?: string) => void;
+  groups?: ControlGroup[];
+  selectedGroupId?: string;
   showValue?: boolean;
   selectedLabel?: string;
 }) {
   const [open, setOpen] = useState(false),
     [query, setQuery] = useState(""),
-    [active, setActive] = useState(0);
+    [active, setActive] = useState(0),
+    [groupId, setGroupId] = useState(selectedGroupId);
   const id = useId();
   const trigger = useRef<HTMLButtonElement>(null),
+    search = useRef<HTMLInputElement>(null),
+    list = useRef<HTMLDivElement>(null),
     restoreFocus = useRef(false);
   useEffect(() => {
     if (!open && !disabled && restoreFocus.current) {
@@ -43,12 +51,26 @@ export function ControlPicker({
   }, [open, disabled]);
   const currentLabel =
     selectedLabel ?? options.find((option) => option.id === value)?.label ?? value;
-  const visible = options.filter((o) =>
+  const group = groups?.find((item) => item.id === groupId);
+  const choosingProvider = !!groups && !group;
+  const searchLabel = choosingProvider ? "Providers" : label;
+  const visible = (groups ? (group?.options ?? groups) : options).filter((o) =>
     `${o.label} ${o.description ?? ""}`.toLowerCase().includes(query.toLowerCase()),
   );
+  const navigate = (next: string | undefined) => {
+    setGroupId(next);
+    setQuery("");
+    setActive(0);
+    if (list.current) list.current.scrollTop = 0;
+    search.current?.focus();
+  };
   const select = (next: string) => {
+    if (choosingProvider) {
+      navigate(next);
+      return;
+    }
     restoreFocus.current = true;
-    onSelect(next);
+    onSelect(next, group?.id);
     setOpen(false);
   };
   return (
@@ -58,6 +80,7 @@ export function ControlPicker({
         setOpen(next);
         setQuery("");
         setActive(0);
+        setGroupId(selectedGroupId);
       }}
     >
       <Popover.Trigger
@@ -92,11 +115,28 @@ export function ControlPicker({
             }
           }}
         >
+          {groups && (
+            <div className="flex min-h-10 items-center gap-2 border-b px-2 pb-1.5 text-sm">
+              {group && (
+                <button
+                  type="button"
+                  aria-label="Back to providers"
+                  onClick={() => navigate(undefined)}
+                  className="flex size-8 shrink-0 items-center justify-center rounded-md hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2"
+                >
+                  <ArrowLeft className="size-4" />
+                </button>
+              )}
+              {group?.icon}
+              <span className="truncate font-medium">{group?.label ?? "Providers"}</span>
+            </div>
+          )}
           <div className="flex items-center gap-2 border-b px-2 pt-1 pb-2 text-muted-foreground">
             <Search className="size-4" />
             <input
+              ref={search}
               role="combobox"
-              aria-label={`Search ${label.toLowerCase()}`}
+              aria-label={`Search ${searchLabel.toLowerCase()}`}
               aria-expanded="true"
               aria-controls={id}
               aria-activedescendant={visible[active] ? `${id}-${active}` : undefined}
@@ -105,14 +145,15 @@ export function ControlPicker({
                 setQuery(e.target.value);
                 setActive(0);
               }}
-              placeholder={label}
+              placeholder={searchLabel}
               className="min-w-0 flex-1 bg-transparent text-sm outline-none"
             />
           </div>
           <div
+            ref={list}
             id={id}
             role="listbox"
-            aria-label={label}
+            aria-label={searchLabel}
             className="chat-scroll max-h-72 overflow-auto py-1"
           >
             {visible.map((option, index) => (
@@ -120,7 +161,11 @@ export function ControlPicker({
                 type="button"
                 role="option"
                 id={`${id}-${index}`}
-                aria-selected={value === option.id}
+                aria-selected={
+                  choosingProvider
+                    ? selectedGroupId === option.id
+                    : (!groups || selectedGroupId === groupId) && value === option.id
+                }
                 key={option.id}
                 onMouseMove={() => setActive(index)}
                 onClick={() => select(option.id)}
@@ -135,12 +180,16 @@ export function ControlPicker({
                     </span>
                   )}
                 </span>
-                {value === option.id && <Check className="size-4 shrink-0" />}
+                {choosingProvider ? (
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                ) : (
+                  (!groups || selectedGroupId === groupId) &&
+                  value === option.id && <Check className="size-4 shrink-0" />
+                )}
               </button>
             ))}
             {!visible.length && <p className="p-3 text-sm text-muted-foreground">No matches</p>}
           </div>
-          {footer}
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
