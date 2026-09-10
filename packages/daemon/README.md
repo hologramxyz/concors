@@ -41,6 +41,35 @@ Configuration (flags win over environment variables):
 | `--port`      | `CONCORS_DAEMON_PORT`      | `7420`      |
 | `--log-level` | `CONCORS_DAEMON_LOG_LEVEL` | `info`      |
 
+## Managed machines
+
+Start the same gateway with the control plane's installer config:
+
+```sh
+concors-daemon serve --managed-config /etc/concors/daemon.json
+```
+
+`CONCORS_DAEMON_MANAGED_CONFIG` also selects the config file; the flag takes precedence. Managed
+mode binds `0.0.0.0` on the config's `port` (443 by default), using `fullchain.pem` and `privkey.pem`
+in `tlsDir` (`/etc/concors/tls` by default). The config requires `machineId`, `hostname`,
+`controlPlaneUrl`, and `agentToken`. Unreadable config or TLS files prevent startup. The config's
+port overrides local `--port` / `CONCORS_DAEMON_PORT`; `--ephemeral` cannot be combined with managed
+mode. Without the flag or environment variable, local operation is unchanged.
+
+Only the configured hostname is accepted in `Host`. `GET /health` is open and includes the daemon
+version. Other HTTP requests and WebSocket upgrades require an EdDSA machine token with the
+configured issuer and machine audience. Present it as `Sec-WebSocket-Protocol: concors.bearer.<token>`
+(the gateway echoes that protocol), `Authorization: Bearer <token>`, or `?token=` as a last resort.
+The gateway caches the control plane's JWKS for one hour, refreshing unknown key IDs subject to a
+30-second cooldown. Machine tokens and browser origins terminate at the gateway; the loopback
+session host still uses its private credential, and its maintenance routes remain private.
+
+After listening, the gateway posts version, process uptime, and live terminal count to the
+control plane every 30 seconds, using `Bearer <machineId>.<agentToken>` and a 10-second HTTP timeout.
+Counting uses the existing private session protocol. Gateway shutdown stops heartbeats and detaches
+clients without stopping the session host. Connection logs include `sub` and `sid`, never tokens.
+Use separate gateway and session-host service units as described in the session continuity guide.
+
 ## Source layout
 
 ```text
