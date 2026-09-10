@@ -1,6 +1,6 @@
 import { ChevronsUpDown, Keyboard, LogOut, Settings } from "lucide-react";
 
-import { activeOrganization, initialOf, type SignedInAuth } from "@/auth/auth-state";
+import { initialOf, type SignedInAuth } from "@/auth/auth-state";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,7 +24,6 @@ export function AccountMenu({
   onOpenSettings,
   onOpenShortcuts,
 }: AccountMenuProps) {
-  const org = activeOrganization(auth);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -41,8 +40,7 @@ export function AccountMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" side="top" className="w-56">
         <DropdownMenuLabel className="text-ui font-normal text-muted-foreground">
-          {org ? (org.isPersonal ? "Personal organization" : org.name) : "Signed in"}
-          <span className="mt-1 block truncate text-foreground">{auth.user.name}</span>
+          <span className="block truncate text-foreground">{auth.user.name}</span>
           <span className="block truncate" title={auth.user.email}>
             {auth.user.email}
           </span>
