@@ -18,8 +18,8 @@ import type { AgentInfo, AgentSettings, AgentAttachment, AgentOperation } from "
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { submitAgentInput } from "./paseo/submit";
 import { ControlPicker } from "./control-picker";
+import { AgentModelPicker } from "./model-picker";
 import { ContextMeter } from "./context-meter";
-import { CodexIcon } from "./paseo/codex-icon";
 import { useDictation } from "./dictation";
 const defaults: AgentSettings = { model: null, effort: null, mode: "default" };
 interface Draft {
@@ -55,7 +55,6 @@ export function AgentComposer({
   const advanced =
     connection?.state.status === "ready" &&
     connection.state.daemon.capabilities?.includes("agent-composer");
-  const modelsLoading = agent.status === "starting";
   const active = ["starting", "working", "needs_input"].includes(agent.status);
   const settings = agent.settings ?? defaults,
     models = agent.models ?? [];
@@ -332,29 +331,11 @@ export function AgentComposer({
           >
             <Plus className="size-4" />
           </button>
-          <ControlPicker
-            label="Agent and model"
-            showValue
-            selectedLabel={
-              models.find((model) => model.id === (settings.model ?? agent.model))?.label ??
-              settings.model ??
-              agent.model ??
-              "Machine default"
-            }
-            value={settings.model ?? ""}
-            icon={modelsLoading ? <LoaderCircle className="size-4 animate-spin" /> : <CodexIcon />}
-            disabled={!advanced || !connected || busy || configuring || modelsLoading}
-            options={[
-              {
-                id: "",
-                label: "Machine default",
-                description: agent.model ?? "Use this machine’s configured model",
-                icon: <CodexIcon />,
-              },
-              ...models.map((model) => ({ id: model.id, label: model.label, icon: <CodexIcon /> })),
-            ]}
+          <AgentModelPicker
+            agent={agent}
+            disabled={!advanced || !connected || busy || configuring}
             onSelect={(model) =>
-              void configure({ ...settings, model: model || null, effort: null, serviceTier: null })
+              void configure({ ...settings, model, effort: null, serviceTier: null })
             }
           />
           <ControlPicker
