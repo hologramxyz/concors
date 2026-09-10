@@ -38,7 +38,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @concors/mobile assets
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
+        id: native-cache
         with:
           path: |
             apps/mobile/ios/Pods
@@ -55,16 +56,8 @@ jobs:
         timeout-minutes: 4
         working-directory: apps/mobile/ios
         run: pod install
-      - name: Create isolated iOS 26 simulator
-        timeout-minutes: 3
-        id: simulator
-        run: |
-          MOBILE_SIMULATOR_ID=$(xcrun simctl create "Concors Glass CI" com.apple.CoreSimulator.SimDeviceType.iPhone-17 com.apple.CoreSimulator.SimRuntime.iOS-26-5)
-          echo "id=$MOBILE_SIMULATOR_ID" >> "$GITHUB_OUTPUT"
-          xcrun simctl boot "$MOBILE_SIMULATOR_ID"
-          xcrun simctl bootstatus "$MOBILE_SIMULATOR_ID" -b
-      - name: Build and install one unsigned simulator architecture
-        timeout-minutes: 12
+      - name: Build one unsigned simulator architecture
+        timeout-minutes: 13
         working-directory: apps/mobile/ios
         run: |
           set -o pipefail
@@ -73,12 +66,22 @@ jobs:
           MOBILE_SCHEME=$(basename "$MOBILE_WORKSPACE" .xcworkspace)
           xcodebuild -workspace "$MOBILE_WORKSPACE" -scheme "$MOBILE_SCHEME" \
             -configuration Release -sdk iphonesimulator \
-            -destination 'id=${{ steps.simulator.outputs.id }}' \
+            -destination 'generic/platform=iOS Simulator' -jobs 2 \
             -derivedDataPath "$HOME/Library/Developer/Xcode/DerivedData/ConcorsCI" \
             ARCHS="$(uname -m)" ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO GCC_OPTIMIZATION_LEVEL=0 \
             SWIFT_OPTIMIZATION_LEVEL=-Onone GCC_GENERATE_DEBUGGING_SYMBOLS=NO \
             build > ../test-results/native/xcodebuild.log 2>&1 || { tail -100 ../test-results/native/xcodebuild.log; exit 1; }
+      - name: Create isolated iOS 26 simulator
+        timeout-minutes: 3
+        id: simulator
+        run: |
+          MOBILE_SIMULATOR_ID=$(xcrun simctl create "Concors Glass CI" com.apple.CoreSimulator.SimDeviceType.iPhone-17 com.apple.CoreSimulator.SimRuntime.iOS-26-5)
+          echo "id=$MOBILE_SIMULATOR_ID" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$MOBILE_SIMULATOR_ID"
+          xcrun simctl bootstatus "$MOBILE_SIMULATOR_ID" -b
+      - name: Install simulator app
+        run: |
           MOBILE_APP=$(find "$HOME/Library/Developer/Xcode/DerivedData/ConcorsCI/Build/Products/Release-iphonesimulator" -maxdepth 1 -name '*.app' -print -quit)
           xcrun simctl install '${{ steps.simulator.outputs.id }}' "$MOBILE_APP"
       - name: Install pinned native UI test runner
@@ -91,6 +94,16 @@ jobs:
       - name: Exercise real SwiftUI controls and native text input
         timeout-minutes: 3
         run: maestro --device "${{ steps.simulator.outputs.id }}" test --test-output-dir apps/mobile/test-results/native apps/mobile/e2e/native/glass.yaml
+      - uses: actions/cache/save@v4
+        if: ${{ !cancelled() && steps.native-cache.outputs.cache-matched-key != steps.native-cache.outputs.cache-primary-key }}
+        with:
+          path: |
+            apps/mobile/ios/Pods
+            apps/mobile/ios/Podfile.lock
+            apps/mobile/ios/build
+            ~/Library/Caches/CocoaPods
+            ~/Library/Developer/Xcode/DerivedData/ConcorsCI
+          key: ${{ steps.native-cache.outputs.cache-primary-key }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:

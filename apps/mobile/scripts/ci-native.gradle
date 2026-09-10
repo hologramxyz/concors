@@ -1,11 +1,12 @@
 // PR simulator checks need native behavior, not optimizer/debug-symbol work.
+// Preserve NDEBUG to match the ABI of prebuilt React Native release libraries.
 // Applied only by CI via --init-script; manual release artifacts keep default flags.
 allprojects {
     ["com.android.application", "com.android.library"].each { pluginId ->
         plugins.withId(pluginId) {
             android.defaultConfig.externalNativeBuild.cmake.arguments(
-                "-DCMAKE_C_FLAGS_RELWITHDEBINFO=-O0 -g0",
-                "-DCMAKE_CXX_FLAGS_RELWITHDEBINFO=-O0 -g0"
+                "-DCMAKE_C_FLAGS_RELWITHDEBINFO=-O0 -g0 -DNDEBUG -fno-lto",
+                "-DCMAKE_CXX_FLAGS_RELWITHDEBINFO=-O0 -g0 -DNDEBUG -fno-lto"
             )
         }
     }
