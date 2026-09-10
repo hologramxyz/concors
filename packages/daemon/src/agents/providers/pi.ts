@@ -55,7 +55,9 @@ export class PiProvider extends EventProvider {
         this.cwd,
       ),
       (e) => {
-        void this.event(e).catch((error) => this.fail(error));
+        void this.event(e).catch((error) => {
+          if (this.rpc === rpc && !this.interrupted) this.fail(error);
+        });
       },
       (error) => {
         if (this.rpc === rpc) this.fail(error);
