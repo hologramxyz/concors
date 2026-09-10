@@ -9,6 +9,7 @@ import { AppearanceSettings } from "@/settings/appearance-settings";
 import { BillingSection } from "@/settings/billing-section";
 import type { SettingsPage } from "@/settings/navigation";
 import { SshKeysSection } from "@/settings/ssh-keys-section";
+import { ShortcutSettings } from "@/settings/shortcut-settings";
 import type { ThemePreference } from "@/theme/use-theme";
 import type { CornerStyle } from "@/theme/use-corner-style";
 
@@ -59,6 +60,9 @@ export function SettingsView({
           onSetCornerStyle={onSetCornerStyle}
         />
       );
+      break;
+    case "shortcuts":
+      content = <ShortcutSettings />;
       break;
     case "notifications":
       content = <NotificationSettings />;
