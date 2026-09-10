@@ -14,7 +14,13 @@ import {
   Square,
   X,
 } from "lucide-react";
-import type { AgentInfo, AgentSettings, AgentAttachment, AgentOperation } from "@concors/protocol";
+import {
+  agentProviderNames,
+  type AgentInfo,
+  type AgentSettings,
+  type AgentAttachment,
+  type AgentOperation,
+} from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { submitAgentInput } from "./paseo/submit";
 import { ControlPicker } from "./control-picker";
@@ -273,7 +279,7 @@ export function AgentComposer({
         <textarea
           ref={textarea}
           data-agent-composer
-          aria-label="Message Codex"
+          aria-label={`Message ${agentProviderNames[agent.provider]}`}
           placeholder={
             active ? "Add a follow-up to the queue…" : "Ask your agent to build something…"
           }
@@ -289,7 +295,13 @@ export function AgentComposer({
             }
           }}
           onKeyDown={(e) => {
-            if (e.key === "Tab" && e.shiftKey && !configuring && advanced) {
+            if (
+              e.key === "Tab" &&
+              e.shiftKey &&
+              !configuring &&
+              advanced &&
+              agent.provider === "codex"
+            ) {
               e.preventDefault();
               const modes: AgentSettings["mode"][] = ["default", "auto-review", "full-access"];
               void configure({
@@ -338,64 +350,68 @@ export function AgentComposer({
               void configure({ ...settings, model, effort: null, serviceTier: null })
             }
           />
-          <ControlPicker
-            label="Thinking effort"
-            showValue
-            value={settings.effort ?? ""}
-            icon={<Brain className="size-4" />}
-            disabled={!advanced || !connected || busy || configuring}
-            options={[
-              {
-                id: "",
-                label: `Default (${effortModel?.defaultEffort ?? "automatic"})`,
-                icon: <Brain className="size-4" />,
-              },
-              ...(effortModel?.efforts ?? []).map((effort) => ({
-                id: effort,
-                label: effort.charAt(0).toUpperCase() + effort.slice(1),
-                icon: <Brain className="size-4" />,
-              })),
-            ]}
-            onSelect={(effort) => void configure({ ...settings, effort: effort || null })}
-          />
-          <ControlPicker
-            label="Permission mode"
-            showValue
-            value={settings.mode}
-            icon={
-              settings.mode === "auto-review" ? (
-                <ShieldCheck className="size-4" />
-              ) : settings.mode === "full-access" ? (
-                <ShieldOff className="size-4 text-amber-500" />
-              ) : (
-                <Shield className="size-4" />
-              )
-            }
-            disabled={!advanced || !connected || busy || configuring}
-            options={[
-              {
-                id: "default",
-                label: "Default permissions",
-                description: "Workspace access; asks when approval is needed.",
-                icon: <Shield className="size-4" />,
-              },
-              {
-                id: "auto-review",
-                label: "Auto-review",
-                description: "Same sandbox; eligible requests go to the reviewer agent.",
-                icon: <ShieldCheck className="size-4" />,
-              },
-              {
-                id: "full-access",
-                label: "Full access",
-                description: "File and network access without approval prompts.",
-                icon: <ShieldOff className="size-4 text-amber-500" />,
-              },
-            ]}
-            onSelect={(mode) =>
-              void configure({ ...settings, mode: mode as AgentSettings["mode"] })
-            }
-          />
+          {agent.provider === "codex" && (
+            <ControlPicker
+              label="Thinking effort"
+              showValue
+              value={settings.effort ?? ""}
+              icon={<Brain className="size-4" />}
+              disabled={!advanced || !connected || busy || configuring}
+              options={[
+                {
+                  id: "",
+                  label: `Default (${effortModel?.defaultEffort ?? "automatic"})`,
+                  icon: <Brain className="size-4" />,
+                },
+                ...(effortModel?.efforts ?? []).map((effort) => ({
+                  id: effort,
+                  label: effort.charAt(0).toUpperCase() + effort.slice(1),
+                  icon: <Brain className="size-4" />,
+                })),
+              ]}
+              onSelect={(effort) => void configure({ ...settings, effort: effort || null })}
+            />
+          )}
+          {agent.provider === "codex" && (
+            <ControlPicker
+              label="Permission mode"
+              showValue
+              value={settings.mode}
+              icon={
+                settings.mode === "auto-review" ? (
+                  <ShieldCheck className="size-4" />
+                ) : settings.mode === "full-access" ? (
+                  <ShieldOff className="size-4 text-amber-500" />
+                ) : (
+                  <Shield className="size-4" />
+                )
+              }
+              disabled={!advanced || !connected || busy || configuring}
+              options={[
+                {
+                  id: "default",
+                  label: "Default permissions",
+                  description: "Workspace access; asks when approval is needed.",
+                  icon: <Shield className="size-4" />,
+                },
+                {
+                  id: "auto-review",
+                  label: "Auto-review",
+                  description: "Same sandbox; eligible requests go to the reviewer agent.",
+                  icon: <ShieldCheck className="size-4" />,
+                },
+                {
+                  id: "full-access",
+                  label: "Full access",
+                  description: "File and network access without approval prompts.",
+                  icon: <ShieldOff className="size-4 text-amber-500" />,
+                },
+              ]}
+              onSelect={(mode) =>
+                void configure({ ...settings, mode: mode as AgentSettings["mode"] })
+              }
+            />
+          )}
           {agent.supportsPlan && (
             <button
               type="button"
