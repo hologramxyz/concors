@@ -328,6 +328,8 @@ export class WorkspaceStore {
         );
       pane.sessionId = session.id;
       pane.profile = session.profile;
+      if (session.terminalProfile) pane.terminalProfile = session.terminalProfile;
+      else delete pane.terminalProfile;
       project.version++;
       state.revision++;
       this.#db.prepare("UPDATE workspace SET snapshot = ? WHERE id = 1").run(JSON.stringify(state));

@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+  SavedTerminalProfileSchema,
+  TerminalProfileInputSchema,
+  TerminalProfileIdSchema,
+} from "./terminal-profiles.ts";
 
 const Id = z.string().uuid();
 const Name = z.string().trim().min(1).max(120);
@@ -11,6 +16,7 @@ export const LayoutNodeSchema = z.discriminatedUnion("kind", [
     id: Id,
     kind: z.literal("pane"),
     profile: PaneProfileSchema,
+    terminalProfile: SavedTerminalProfileSchema.optional(),
     sessionId: Id.nullable(),
     directory: z.string().min(1).max(4096).optional(),
   }),
@@ -47,6 +53,7 @@ export const WorkspaceSnapshotSchema = z.object({
   machineId: Id,
   epoch: Id,
   revision: Version,
+  terminalProfiles: z.array(SavedTerminalProfileSchema).max(64).optional(),
   projects: z.array(WorkspaceProjectSchema).max(64),
   selection: z.object({ projectId: Id, tabId: Id.nullable() }).nullable(),
 });
@@ -55,6 +62,16 @@ export type WorkspaceSnapshot = z.infer<typeof WorkspaceSnapshotSchema>;
 const ProjectTarget = { projectId: Id, expectedVersion: Version };
 const TabTarget = { ...ProjectTarget, tabId: Id };
 export const WorkspaceOperationSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("terminal-profile.save"),
+    profile: TerminalProfileInputSchema,
+    expectedVersion: Version.nullable(),
+  }),
+  z.object({
+    kind: z.literal("terminal-profile.remove"),
+    profileId: TerminalProfileIdSchema,
+    expectedVersion: Version,
+  }),
   z.object({
     kind: z.literal("project.add"),
     projectId: Id,
@@ -65,6 +82,7 @@ export const WorkspaceOperationSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("project.remove"), ...ProjectTarget }),
   z.object({
     kind: z.literal("tab.create"),
+    terminalProfileId: TerminalProfileIdSchema.optional(),
     sourcePaneId: Id.optional(),
     ...ProjectTarget,
     tabId: Id,
@@ -77,6 +95,7 @@ export const WorkspaceOperationSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("tab.close"), ...TabTarget }),
   z.object({
     kind: z.literal("pane.split"),
+    terminalProfileId: TerminalProfileIdSchema.optional(),
     ...TabTarget,
     paneId: Id,
     newPaneId: Id,
@@ -103,6 +122,7 @@ export const WorkspaceOperationSchema = z.discriminatedUnion("kind", [
   }),
   z.object({
     kind: z.literal("pane.configure"),
+    terminalProfileId: TerminalProfileIdSchema.optional(),
     ...TabTarget,
     paneId: Id,
     profile: PaneProfileSchema,
