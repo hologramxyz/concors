@@ -1,7 +1,9 @@
 # Workspace keyboard shortcuts
 
-Open the user menu at the bottom of the sidebar and choose **Keyboard shortcuts** to view the
-shortcut reference. It is also available through search or Ctrl+Shift+/.
+Open the user menu at the bottom of the sidebar, choose **Settings**, then **Keyboard shortcuts**
+under Personal. The dedicated page groups the reference into Workspace, Tabs, and Panes.
+Searching for Keyboard shortcuts or pressing Ctrl+Shift+/ opens the same settings page.
+Use **Back to app** to return to your previous view.
 
 Use physical Control on macOS as well as Linux/Windows. `→` between keys denotes a sequence:
 press and release the first chord, then press the next key. A small action picker shows choices
