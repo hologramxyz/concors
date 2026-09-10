@@ -1,6 +1,7 @@
 import { formatDuration } from "./duration";
 import { useEffect, useState } from "react";
-import { CodexIcon } from "./paseo/codex-icon";
+import { ProviderIcon } from "./provider-icon";
+import { agentProviderNames } from "@concors/protocol";
 import { useAgents, AGENT_STATUS } from "./context";
 
 export function AgentLoadingIcon({ className = "size-4" }: { className?: string }) {
@@ -21,10 +22,12 @@ export function AgentPaneIcon({ sessionId }: { sessionId: string | null }) {
   return (
     <span
       className="relative mx-1 flex size-5 shrink-0 items-center justify-center"
-      title={agent?.settings?.model ?? agent?.model ?? "Codex"}
+      title={
+        agent?.settings?.model ?? agent?.model ?? agentProviderNames[agent?.provider ?? "codex"]
+      }
       aria-label={agent ? `Agent status: ${AGENT_STATUS[agent.status]}` : "Codex"}
     >
-      <CodexIcon size={18} />
+      <ProviderIcon provider={agent?.provider ?? "codex"} />
       {running && (
         <span
           data-testid="pane-agent-loading"
