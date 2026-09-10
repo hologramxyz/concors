@@ -57,10 +57,16 @@ test("phone and desktop discover a managed machine and share one real terminal",
     await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
     await ui.getByRole("combobox", { name: "Machine", exact: true }).click();
     await expect(
-      ui.getByRole("option", { name: /Provisioning machine provisioning/ }),
+      ui.getByRole("option", { name: /Provisioning machine Provisioning/ }),
     ).toBeDisabled();
-    await expect(ui.getByRole("option", { name: /Offline machine offline/ })).toBeDisabled();
-    await ui.getByRole("option", { name: /Second machine connectable/ }).click();
+    await expect(ui.getByRole("option", { name: /Offline machine Offline/ })).toBeDisabled();
+    await ui.getByRole("option", { name: /Second machine Online/ }).click();
+    await ui.getByRole("combobox", { name: "Machine", exact: true }).click();
+    await expect(ui.getByRole("option", { name: /Second machine Connected/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await ui.getByRole("dialog", { name: "Machine", exact: true }).press("Escape");
     await ui.getByRole("button", { name: "Close sidebar", exact: true }).click();
     const phoneTerminal = ui.getByLabel("Terminal output", { exact: true });
     await expect(phoneTerminal).toBeVisible();

@@ -159,9 +159,11 @@ To run desktop acceptance beside an existing checkout, use
 `CONCORS_E2E_WEB_PORT=1447 pnpm test:workspace:e2e`. Alternate-origin handling is
 confined to test fixtures; it does not relax the production daemon allowlist.
 
-The 2026-09-10 integration in PR #51 includes main through `d5cb01c`: agent providers
+The 2026-09-10 sync includes main through `f6708c2`: agent providers
 (#48), Shortcuts settings (#49), saved terminal profiles (#50), and the mobile managed
-host/secure credential fixes from #47. Historical test results above describe earlier
+host/secure credential fixes from #47/#51, plus the latest Online/Connected machine labels.
+The label helper is now shared by desktop, the mobile selector and mobile machine settings.
+Historical test results above describe earlier
 builds; they are not signed acceptance evidence for this integration.
 
 Follow-up publishing work also fixes a mobile-only provider-switch regression: the
@@ -173,7 +175,8 @@ the same provider-specific controls. Consent version 2 reconfirms the expanded d
 
 Local verification for this follow-up (2026-09-10):
 
-- `pnpm test`: 424 passed; one opt-in live API test skipped.
+- `pnpm test`: 424 passed; one opt-in live API test skipped. The additional shared
+  machine-label regression then passed with all 44 client-core tests (425 total cases).
 - Mobile UI: 26 browser scenarios passed.
 - Direct daemon: seven existing file/chat/terminal/profile scenarios passed; the two
   new provider scenarios exposed the navigation regression above, then both passed

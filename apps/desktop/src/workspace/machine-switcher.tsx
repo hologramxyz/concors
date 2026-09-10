@@ -1,4 +1,5 @@
 import type { Machine } from "@concors/api-client";
+import { machineStatusLabel } from "@concors/client-core";
 import { api } from "@/auth/api";
 import { LOCAL_HOST, loadHosts, machineAvailability, machineHost, type Host } from "./machines";
 import { useEffect, useState } from "react";
@@ -98,11 +99,7 @@ export function MachineSwitcher({
                 {machine.name}
               </span>
               <span className="ml-auto shrink-0 text-xs text-muted-foreground capitalize">
-                {selected.machineId === machine.id && connected
-                  ? "Connected"
-                  : availability === "connectable"
-                    ? "Online"
-                    : availability}
+                {machineStatusLabel(availability, selected.machineId === machine.id && connected)}
               </span>
             </DropdownMenuItem>
           );
