@@ -50,12 +50,20 @@ const symbols = {
   send: "arrow.up",
   stop: "stop.fill",
   model: "sparkles",
+  claude: "sparkles",
+  opencode: "terminal",
+  pi: "function",
   brain: "brain",
   shield: "shield",
   options: "slider.horizontal.3",
   context: "circle.dotted",
   mic: "mic",
 } as const;
+const providerImages = {
+  model: require("../../assets/codex.png"),
+  claude: require("../../assets/claude.png"),
+  opencode: require("../../assets/opencode.png"),
+};
 
 function useGlassAvailability() {
   // Fail closed until the accessibility settings have loaded; update while the app is running.
@@ -321,13 +329,15 @@ function Control({
           }}
           modifiers={modifiers}
         >
-          {icon === "model" ? (
+          {icon === "model" || icon === "claude" || icon === "opencode" ? (
             <RNHostView matchContents>
               <RNImage
-                source={require("../../assets/codex.png")}
+                source={providerImages[icon]}
                 style={{ width: 18, height: 18, tintColor: dark ? "#eee" : "#222" }}
               />
             </RNHostView>
+          ) : icon === "pi" ? (
+            <Text modifiers={[font({ size: 20 })]}>π</Text>
           ) : (
             <Image systemName={symbols[icon]} size={18} />
           )}
