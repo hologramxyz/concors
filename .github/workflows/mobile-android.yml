@@ -1,14 +1,7 @@
 name: Mobile Android native
 
 on:
-  pull_request:
-    paths:
-      - "apps/mobile/**"
-      - "apps/desktop/src/**"
-      - "packages/client-core/**"
-      - "packages/protocol/**"
-      - "pnpm-lock.yaml"
-      - ".github/workflows/mobile-android.yml"
+  # Native compilation and simulator tests are opt-in, outside the PR time budget.
   workflow_dispatch:
 
 permissions:
