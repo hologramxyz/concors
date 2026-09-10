@@ -1,0 +1,40 @@
+appId: dev.concors.mobile.preview
+---
+- launchApp:
+    clearState: true
+- tapOn: "Explore demo"
+- extendedWaitUntil:
+    visible:
+      id: native-agent-input
+    timeout: 30000
+- assertVisible:
+    id: native-header-menu
+- assertVisible:
+    id: native-header-files
+- tapOn:
+    id: native-agent-input
+- inputText: "Native Liquid Glass draft"
+- assertVisible:
+    id: native-composer-model
+- assertVisible:
+    id: native-composer-mic
+- assertVisible:
+    id: native-composer-context
+- takeScreenshot: apps/mobile/test-results/native/composer-expanded
+- tapOn:
+    id: native-composer-brain
+- assertVisible: "Thinking effort.*"
+- tapOn: "Cancel"
+- assertVisible: "Native Liquid Glass draft"
+- tapOn:
+    id: native-header-files
+- assertVisible:
+    id: native-header-back
+- takeScreenshot: apps/mobile/test-results/native/files-header
+- tapOn:
+    id: native-header-back
+- assertVisible: "Native Liquid Glass draft"
+- tapOn:
+    id: native-header-chevron
+- assertVisible: "Tabs and panes"
+- takeScreenshot: apps/mobile/test-results/native/tabs-drawer

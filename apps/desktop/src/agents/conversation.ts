@@ -1,16 +1,10 @@
 import { useContext, useEffect, useState } from "react";
 import type { AgentItem } from "@concors/protocol";
+import { mergeItems } from "@concors/client-core";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 
 /** Stable identities and revisions reconcile page reads with simultaneous streamed updates. */
-export function mergeItems(current: AgentItem[], incoming: AgentItem[]): AgentItem[] {
-  const map = new Map(current.map((i) => [i.id, i]));
-  for (const item of incoming) {
-    const prior = map.get(item.id);
-    if (!prior || prior.revision <= item.revision) map.set(item.id, item);
-  }
-  return [...map.values()].sort((a, b) => a.position - b.position);
-}
+export { mergeItems };
 export function useConversation(sessionId: string) {
   const connection = useContext(TerminalConnectionContext);
   const [items, setItems] = useState<AgentItem[]>([]);

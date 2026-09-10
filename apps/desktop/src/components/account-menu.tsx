@@ -1,4 +1,14 @@
 import { ChevronsUpDown, Keyboard, LogOut, Settings } from "lucide-react";
+import { useContext, useState } from "react";
+import { CompactLayoutContext } from "@/components/compact-layout";
+import {
+  Dialog,
+  DialogTrigger,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 import { activeOrganization, initialOf, type SignedInAuth } from "@/auth/auth-state";
 import {
@@ -24,7 +34,17 @@ export function AccountMenu({
   onOpenSettings,
   onOpenShortcuts,
 }: AccountMenuProps) {
+  const compact = useContext(CompactLayoutContext);
   const org = activeOrganization(auth);
+  if (compact)
+    return (
+      <MobileAccountMenu
+        auth={auth}
+        onSignOut={onSignOut}
+        onOpenSettings={onOpenSettings}
+        onOpenShortcuts={onOpenShortcuts}
+      />
+    );
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -62,5 +82,56 @@ export function AccountMenu({
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+function MobileAccountMenu({ auth, onSignOut, onOpenSettings }: AccountMenuProps) {
+  const [open, setOpen] = useState(false);
+  const org = activeOrganization(auth);
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger className="mobile-account-trigger" aria-label={`Account: ${auth.user.name}`}>
+        <span className="mobile-account-avatar">{initialOf(auth.user)}</span>
+        <span className="min-w-0 flex-1 truncate">{auth.user.name}</span>
+        <ChevronsUpDown className="size-4 text-muted-foreground" aria-hidden="true" />
+      </DialogTrigger>
+      <DialogContent className="mobile-account-drawer">
+        <DialogHeader>
+          <DialogTitle>Account</DialogTitle>
+          <DialogDescription>
+            {org ? (org.isPersonal ? "Personal organization" : org.name) : "Signed in"}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="mobile-account-identity">
+          <span className="mobile-account-avatar">{initialOf(auth.user)}</span>
+          <div className="min-w-0">
+            <p className="truncate font-medium">{auth.user.name}</p>
+            <p className="truncate text-sm text-muted-foreground">{auth.user.email}</p>
+          </div>
+        </div>
+        <div className="mobile-account-actions">
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              onOpenSettings();
+            }}
+          >
+            <Settings aria-hidden="true" />
+            Settings
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              onSignOut();
+            }}
+          >
+            <LogOut aria-hidden="true" />
+            Sign out
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

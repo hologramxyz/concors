@@ -14,7 +14,7 @@ export function Section({
   readonly children: ReactNode;
 }) {
   return (
-    <section className="mb-10 last:mb-0">
+    <section data-settings-section className="mb-10 last:mb-0">
       <h2 className="text-[15px] font-semibold">{title}</h2>
       {description && <p className="mt-1 text-muted-foreground">{description}</p>}
       <Separator className="my-4" />
@@ -33,7 +33,10 @@ export function Row({
   readonly children: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+    <div
+      data-settings-row
+      className="flex flex-col gap-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-6"
+    >
       <div className="min-w-0">
         <div className="font-medium">{label}</div>
         {hint && <div className="mt-0.5 text-xs text-muted-foreground">{hint}</div>}

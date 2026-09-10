@@ -1,9 +1,12 @@
 // DOM adaptation of Paseo components/context-window-meter.tsx; Apache-2.0.
 // Copyright (c) 2025-present Mohamed Boudra. See third-party/paseo-LICENSE.
 import { Popover } from "radix-ui";
+import { useContext } from "react";
+import { ComposerSurfaceContext } from "./composer-expansion";
 import type { AgentInfo } from "@concors/protocol";
 import { formatTokenCount } from "./paseo/context-window-meter.utils";
 export function ContextMeter({ context }: { context: AgentInfo["context"] }) {
+  const composerSurface = useContext(ComposerSurfaceContext);
   const percent = context?.limit
     ? Math.max(0, Math.min(100, (context.used / context.limit) * 100))
     : null;
@@ -48,6 +51,7 @@ export function ContextMeter({ context }: { context: AgentInfo["context"] }) {
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
+          data-composer-surface={composerSurface}
           side="top"
           sideOffset={8}
           className="z-50 rounded-xl border bg-popover p-4 text-sm shadow-lg"
