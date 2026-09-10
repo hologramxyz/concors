@@ -2,6 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
+import { BINDINGS, shortcutLabel } from "../apps/desktop/src/shortcuts/bindings.ts";
 
 test("workspace shortcuts create, search, split and close the active pane without leaking into terminals", async ({
   page,
@@ -17,17 +18,17 @@ test("workspace shortcuts create, search, split and close the active pane withou
       0,
     );
     await page.getByRole("button", { name: /^Account:/ }).click();
-    await expect(page.getByRole("menuitem")).toHaveText([
-      "Settings",
-      "Keyboard shortcuts",
-      "Sign out",
-    ]);
-    await page.getByRole("menuitem", { name: "Keyboard shortcuts", exact: true }).click();
+    await expect(page.getByRole("menuitem")).toHaveText(["Settings", "Sign out"]);
+    await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
+    await page
+      .getByRole("navigation", { name: "Settings" })
+      .getByRole("button", { name: "Keyboard shortcuts", exact: true })
+      .click();
     await expect(page.getByRole("menu")).toHaveCount(0);
     await expect(
       page.getByRole("heading", { name: "Keyboard shortcuts", exact: true }),
     ).toBeVisible();
-    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "Back to app", exact: true }).click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await page.keyboard.press("Control+Shift+n");
     await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -53,6 +54,7 @@ test("workspace shortcuts create, search, split and close the active pane withou
       }),
     ).toBe(false);
     await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
     await page.locator(".concors-terminal textarea").filter({ visible: true }).focus();
     await page.keyboard.type(`cd '${directory}'`);
     await page.keyboard.press("Enter");
@@ -78,8 +80,8 @@ test("workspace shortcuts create, search, split and close the active pane withou
     await expect(
       page.getByRole("heading", { name: "Keyboard shortcuts", exact: true }),
     ).toBeVisible();
-    await expect(page.getByRole("dialog")).toContainText("Ctrl+Shift+P → Backspace");
-    await page.keyboard.press("Escape");
+    await expect(page.getByRole("main")).toContainText("Ctrl+Shift+P → Backspace");
+    await page.getByRole("button", { name: "Back to app", exact: true }).click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await panes.first().locator("textarea").focus();
     await page.keyboard.press("Control+Shift+p");
@@ -168,7 +170,7 @@ test("workspace shortcuts create, search, split and close the active pane withou
   }
 });
 
-test("account menu opens shortcuts with the keyboard and leaves the global binding available", async ({
+test("shortcuts have a dedicated settings page and the account menu only shows identity and account actions", async ({
   page,
 }) => {
   await signedIn(page);
@@ -176,25 +178,50 @@ test("account menu opens shortcuts with the keyboard and leaves the global bindi
   const account = page.getByRole("button", { name: /^Account:/ });
   await account.focus();
   await page.keyboard.press("Enter");
+  const menu = page.getByRole("menu");
+  await expect(menu.getByRole("menuitem")).toHaveText(["Settings", "Sign out"]);
+  await expect(menu.getByText("E2E User", { exact: true })).toBeVisible();
+  await expect(menu.getByText("e2e@example.com", { exact: true })).toBeVisible();
+  await expect(menu.getByText("Personal organization", { exact: true })).toHaveCount(0);
+  await expect(menu.locator('[data-slot="dropdown-menu-label"]')).toHaveText(
+    "E2E Usere2e@example.com",
+  );
+  await page.screenshot({ path: "test-results/account-menu-clean.png" });
   await expect(page.getByRole("menuitem", { name: "Settings", exact: true })).toBeFocused();
-  await page.keyboard.press("ArrowDown");
-  await expect(
-    page.getByRole("menuitem", { name: "Keyboard shortcuts", exact: true }),
-  ).toBeFocused();
-  await page.screenshot({ path: "test-results/account-menu-shortcuts.png" });
   await page.keyboard.press("Enter");
-  const guide = page.getByRole("dialog", { name: "Keyboard shortcuts", exact: true });
-  await expect(guide).toBeVisible();
-  await expect(page.getByRole("menu")).toHaveCount(0);
-  await expect.poll(() => guide.evaluate((el) => el.contains(document.activeElement))).toBe(true);
-  await page.keyboard.press("Escape");
-  await expect(guide).toHaveCount(0);
-  await expect(account).toBeFocused();
+  const settings = page.getByRole("navigation", { name: "Settings" });
+  const shortcuts = settings
+    .getByRole("region", { name: "Personal" })
+    .getByRole("button", { name: "Keyboard shortcuts", exact: true });
+  await shortcuts.focus();
+  await page.keyboard.press("Enter");
+  await expect(shortcuts).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const main = page.getByRole("main");
+  await expect(main.getByRole("heading", { level: 2 })).toHaveText(["Workspace", "Tabs", "Panes"]);
+  await expect(main.locator("dt")).toHaveCount(BINDINGS.length);
+  for (const binding of BINDINGS) {
+    const label = main.getByText(binding.label, { exact: true });
+    await expect(label).toHaveCount(1);
+    await expect(label.locator("..").locator("kbd")).toHaveText(shortcutLabel(binding.id, false));
+  }
+  await page.screenshot({ path: "test-results/settings-shortcuts-light.png" });
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expect(page.locator("html")).toHaveClass(/dark/);
+  await page.setViewportSize({ width: 600, height: 850 });
+  await expect.poll(() => main.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await page.screenshot({ path: "test-results/settings-shortcuts-narrow-dark.png" });
+
+  await settings.getByRole("button", { name: "Appearance", exact: true }).click();
   await page.keyboard.press("Control+Shift+Slash");
-  await expect(guide).toBeVisible();
-  await expect(guide).toContainText("Ctrl+Shift+/");
-  await page.keyboard.press("Escape");
-  await expect(guide).toHaveCount(0);
+  await expect(shortcuts).toHaveAttribute("aria-current", "page");
+  await settings.getByRole("button", { name: "Back to app", exact: true }).click();
+  await expect(account).toBeVisible();
+  await page.getByRole("button", { name: "Collapse sidebar", exact: true }).click();
+  await page.keyboard.press("Control+Shift+Slash");
+  await expect(shortcuts).toHaveAttribute("aria-current", "page");
+  await settings.getByRole("button", { name: "Back to app", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
 });
 
 test("Mac workspace shortcuts use physical Control and display matching hints", async ({
@@ -241,10 +268,9 @@ test("Mac workspace shortcuts use physical Control and display matching hints", 
     await page.keyboard.press("Backspace");
     await expect(panes).toHaveCount(0);
     await page.keyboard.press("Control+Shift+Slash");
-    await expect(page.getByRole("dialog")).toContainText(
-      "physical Control (⌃) key, not Command (⌘)",
-    );
-    await expect(page.getByRole("dialog")).toContainText("Control+Shift+P → Backspace");
+    await expect(page.getByRole("main")).toContainText("physical Control (⌃) key, not Command (⌘)");
+    await expect(page.getByRole("main")).toContainText("Control+Shift+P → Backspace");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
