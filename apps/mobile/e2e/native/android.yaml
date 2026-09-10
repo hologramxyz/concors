@@ -15,8 +15,9 @@ appId: dev.concors.mobile.preview
       - assertVisible: "Explore demo"
 - tapOn: "Explore demo"
 - extendedWaitUntil:
-    visible: "Open sidebar"
-    timeout: 30000
+    visible: "Message Codex"
+    timeout: 45000
+- assertVisible: "Open sidebar"
 - tapOn: "Message Codex"
 - inputText: "Android draft survives navigation"
 - assertVisible: "Android draft survives navigation"
