@@ -17,30 +17,36 @@ sessions in its private loopback host. No second terminal-agent bridge is needed
   documented revocation window.
 - [Server PR #1](https://github.com/concors-dev/concors-server/pull/1) replaces the
   legacy tmux agent with the daemon release. It is a dependency, not duplicated here.
-- [Server PR #2](https://github.com/concors-dev/concors-server/pull/2) adds authenticated
-  `GET /api/v1/mobile/capabilities`, gated by
-  `MOBILE_MANAGED_ACCESS_ENABLED=false` by default. It does not deploy/install
-  machines. Push and account deletion remain explicitly false.
+- Optional mobile capabilities control push and account deletion. Managed workspace access
+  uses contracts 4.2 and 4.6 directly and does not depend on capability discovery.
 - Mobile now uses the existing `POST /api/v1/machines/:id/token` endpoint and
   `wss://<machine.hostname>/ws`. The obsolete `/connect` ticket proposal is not
   used; do not implement another exchange service for this client.
 
 ## Connection and identity
 
-The host rechecks the current account, active organization, selected machine and
-capability discovery before minting. It requires a running machine, a managed
-hostname, an unexpired certificate, a heartbeat within 90 seconds, and a workspace
-daemon version (not the legacy terminal agent). Expired cancelled subscriptions are
-not candidates.
+Desktop and mobile share `HostSchema`, `machineHost` and `machineAvailability` in
+`@concors/client-core`. Profiles contain `machineId`, `label`, `connections` and
+`preferredConnectionId`; native device storage scopes profiles to the account and
+organization. Discovery comes from `GET /api/v1/machines`, refreshed every 15 seconds.
+A machine is connectable when running, with a hostname and a heartbeat no older than
+90 seconds. The host rechecks the current account, organization and selected machine
+before minting, and rebuilds the URL from the current API hostname.
 
-Machine JWTs are minted immediately before connecting and passed only as
-`Sec-WebSocket-Protocol: concors.bearer.<token>`. They are kept in the host transport's
-memory, never persisted, logged, placed in URLs or relayed to the embedded renderer.
-The account session is stored using the platform secure store. The gateway validates
-signature, issuer, machine audience, session/organization claims and a maximum
-15-minute lifetime. The gateway now detaches authenticated sockets at their token
-deadline, without stopping remote terminals or agents. Reconnects mint fresh tokens;
-HTTP 401/403/404 stops automatic retries and prompts for user action.
+Machine JWTs are minted with `mintMachineToken` immediately before connecting, saved
+in device-only SecureStore, then passed as `Sec-WebSocket-Protocol: concors.bearer.<token>`.
+They never enter renderer state, profiles, logs or URLs. The browser preview uses memory
+because it has no native secure store. Disconnect/background, machine/account changes,
+and sign-out cancel pending mints and clear the saved credential; new connections always
+mint afresh. Serialized storage writes prevent a late mint from restoring cleared access.
+The account session also uses SecureStore.
+
+HTTP 401 or WebSocket close 4401 triggers one immediate re-mint. Another authorization
+failure shows **Access revoked** and stops automatic retries, including foreground/network
+transitions. Explicit Retry starts a new attempt. Successful authentication resets the
+budget for a later token-expiry episode. Browsers hide failed-upgrade HTTP status; after
+one refresh, an opaque failure reports that the machine may be offline or access revoked.
+403/404 stops immediately; ordinary network failures use backoff.
 
 The **cloud machine ID** is the control-plane record and JWT audience. The
 **workspace machine ID** is an independently generated, persistent daemon namespace.
@@ -78,9 +84,8 @@ store submission or physical-device verification is implied by these source test
 
 ## Remaining backend services
 
-Authenticate and authorize every request. The client treats only a 404 capability
-response as an older unsupported server; malformed responses and service/auth errors
-are not converted into permission to connect.
+Authenticate and authorize every request. Capability discovery governs these optional services only; machine access is authorized
+by the token endpoint and managed gateway.
 
 | Route                                           | Request                           | Success                                                      |
 | ----------------------------------------------- | --------------------------------- | ------------------------------------------------------------ |
