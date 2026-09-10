@@ -60,7 +60,7 @@ jobs:
           key: android-native-v1-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml', 'apps/mobile/app.config.ts', 'apps/mobile/scripts/ci-native.gradle') }}-${{ github.sha }}
           restore-keys: android-native-v1-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml', 'apps/mobile/app.config.ts', 'apps/mobile/scripts/ci-native.gradle') }}-
       - name: Build standalone simulator APK (release packaging on manual runs)
-        timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 30 || 13 }}
+        timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 30 || 15 }}
         # Preview identity and demo data only. Neither artifact may be submitted to a store.
         working-directory: apps/mobile/android
         run: |
