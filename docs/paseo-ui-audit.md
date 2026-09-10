@@ -1,5 +1,11 @@
 # Paseo composer and timeline audit
 
+**Historical snapshot of the initial Codex UI port.** For current provider
+coverage and behavior, read the [unified chat parity audit](unified-chat-parity-audit.md)
+and [agent interface](agent-interface.md). Subsequent changes added Claude Code,
+OpenCode, and Pi, removed model refresh from the picker, and moved drafts into
+connection-scoped memory. The results below describe the earlier implementation.
+
 Reference: `getpaseo/paseo` at `a7a708bec99e935ee4b8c6f7314a4b9a9984cfa6`.
 This audit covers the Agent pane, composer, and conversation rendering. It does not
 mean the entire Paseo application or every provider adapter has been imported.
