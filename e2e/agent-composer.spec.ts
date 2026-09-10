@@ -1,3 +1,4 @@
+import { seedProject } from "./support/projects.ts";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -38,13 +39,7 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
       Object.defineProperty(window, "SpeechRecognition", { value: Recognition });
     });
     await page.goto("/");
-    await page.getByRole("button", { name: "Add project", exact: true }).first().click();
-    await page.getByLabel("Project name", { exact: true }).fill("Composer acceptance");
-    await page.getByLabel("Folder on this machine").fill(directory);
-    await page
-      .getByRole("dialog")
-      .getByRole("button", { name: "Add project", exact: true })
-      .click();
+    await seedProject(page, "Composer acceptance", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
     await page.getByRole("textbox", { name: "Message Codex" }).waitFor();
@@ -174,8 +169,13 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole("button", { name: "Collapse sidebar", exact: true }).click();
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
-    const composer = await page.getByRole("textbox", { name: "Message Codex" }).boundingBox();
-    expect((composer?.x ?? 0) + (composer?.width ?? 0)).toBeLessThanOrEqual(390);
+    // Sidebar width animates after the click; visibility does not mean layout has settled.
+    await expect
+      .poll(async () => {
+        const composer = await page.getByRole("textbox", { name: "Message Codex" }).boundingBox();
+        return composer ? composer.x + composer.width : Infinity;
+      })
+      .toBeLessThanOrEqual(390);
     await page.screenshot({ path: "test-results/agent-composer-mobile.png" });
     await page.getByRole("button", { name: "Pane actions", exact: true }).click();
     for (const name of ["Terminal", "Agent", "Codex", "Claude Code", "OpenCode"])

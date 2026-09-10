@@ -39,19 +39,26 @@ jobs:
           EXPO_NO_TELEMETRY: "1"
           CI: "1"
 
-      - name: Smoke-test the daemon bundle
+      - name: Smoke-test the isolated daemon bundle
+        run: pnpm --filter @concors/daemon exec node scripts/smoke-bundle.ts
+
+      - name: Package Linux daemon
+        run: pnpm --filter @concors/daemon package:linux
+
+      - name: Run release on clean Ubuntu 24.04 without Node or compilers
         run: |
-          node packages/daemon/dist/cli.js --version
-          node packages/daemon/dist/cli.js serve --port 7420 --log-level warn &
-          DAEMON_PID=$!
-          for i in $(seq 1 20); do
-            curl -sf http://127.0.0.1:7420/health && break
-            sleep 0.5
-          done
-          curl -sf http://127.0.0.1:7420/health | grep -q '"status":"ok"'
-          kill -TERM "$DAEMON_PID"
-          wait "$DAEMON_PID"
-          node packages/daemon/dist/cli.js stop-host
+          docker run --rm --network none \
+            -v "$PWD/packages/daemon/dist/release/concors-daemon-linux-x64.tar.gz:/artifact.tar.gz:ro" \
+            -v "$PWD/packages/daemon/scripts/smoke-bundle.ts:/smoke-bundle.ts:ro" \
+            ubuntu:24.04 sh -ec '
+              for tool in node npm pnpm gcc g++ cc make clang; do
+                if command -v "$tool"; then echo "Unexpected preinstalled tool: $tool"; exit 1; fi
+              done
+              mkdir /opt/concors
+              tar -xzf /artifact.tar.gz -C /opt/concors
+              /opt/concors/concors-daemon/bin/concors-daemon --version
+              /opt/concors/concors-daemon/bin/node /smoke-bundle.ts --release /opt/concors/concors-daemon
+            '
 
   # Compile platform-specific notification bridges; packaged OS smoke tests remain separate.
   tauri:
@@ -93,7 +100,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Session continuity on the native platform
-        run: pnpm --filter @concors/daemon exec vitest run src/hosting/gateway.test.ts src/terminal/profiles.test.ts
+        run: pnpm --filter @concors/daemon exec vitest run src/hosting/gateway.test.ts src/terminal/profiles.test.ts src/terminal/working-directory.test.ts src/projects/manager.test.ts src/workspace/folder-continuity.test.ts
       - run: pnpm desktop:web:build
 
       - name: cargo fmt
@@ -165,3 +172,6 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm daemon:test
+      - run: pnpm daemon:build
+      - name: Smoke-test the isolated native bundle
+        run: pnpm --filter @concors/daemon exec node scripts/smoke-bundle.ts

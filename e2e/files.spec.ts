@@ -1,3 +1,4 @@
+import { seedProject } from "./support/projects.ts";
 import { test, expect } from "@playwright/test";
 import { signedIn } from "./signed-in.ts";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -21,11 +22,7 @@ async function project(page: Page) {
   writeFileSync(join(root, "example.ts"), "const example = true;\n");
   await signedIn(page);
   await page.goto("/");
-  await page.getByRole("button", { name: "Add project", exact: true }).first().click();
-  await page.getByLabel("Project source").selectOption("open");
-  await page.getByLabel("Project name", { exact: true }).fill("File browser test");
-  await page.getByLabel("Folder on this machine").fill(root);
-  await page.getByRole("dialog").getByRole("button", { name: "Add project", exact: true }).click();
+  await seedProject(page, "File browser test", root);
   await expect(page.getByRole("heading", { name: "File browser test", exact: true })).toBeVisible();
   return root;
 }

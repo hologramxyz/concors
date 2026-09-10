@@ -245,7 +245,13 @@ function Directory({
     });
     void connection
       .requestFile(
-        { kind: "list", projectId: project.id, epoch: workspace.epoch, path },
+        {
+          kind: "list",
+          projectId: project.id,
+          directory: project.directory,
+          epoch: workspace.epoch,
+          path,
+        },
         crypto.randomUUID(),
       )
       .then((result) => {
@@ -263,7 +269,7 @@ function Directory({
     return () => {
       cancelled = true;
     };
-  }, [connection, status, epoch, project.id, path, retry, generation]);
+  }, [connection, status, epoch, project.id, project.directory, path, retry, generation]);
   if (error)
     return (
       <div role="alert" className="space-y-2 p-3 text-ui text-muted-foreground">

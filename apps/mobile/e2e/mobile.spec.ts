@@ -397,17 +397,22 @@ test("desktop tool cards, diffs, MCP results, subagents and markdown fit a phone
     await ui.locator("body").evaluate(() => document.documentElement.scrollWidth > innerWidth),
   ).toBe(false);
 });
-test("project creation and shared settings remain available from the sidebar", async ({ page }) => {
+test("folder workspaces and shared settings remain available from the sidebar", async ({
+  page,
+}) => {
   const ui = await enter(page);
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
-  await ui.getByRole("button", { name: "Add project", exact: true }).click();
-  await ui.getByRole("combobox", { name: "Project source" }).selectOption("create");
-  await ui.getByRole("textbox", { name: "Project name" }).fill("Phone project");
+  await ui.getByRole("button", { name: "Open workspace menu", exact: true }).click();
+  await ui.getByRole("button", { name: "Open folder…", exact: true }).click();
   await ui
-    .getByRole("dialog", { name: "Add project", exact: true })
-    .getByRole("button", { name: "Add project", exact: true })
+    .getByRole("textbox", { name: "Folder path", exact: true })
+    .fill("/home/demo/Phone project");
+  await ui.getByRole("button", { name: "Go", exact: true }).click();
+  await ui
+    .getByRole("dialog", { name: "Open folder", exact: true })
+    .getByRole("button", { name: "Open folder", exact: true })
     .click();
-  await expect(ui.getByRole("dialog", { name: "Add project" })).toHaveCount(0);
+  await expect(ui.getByRole("dialog", { name: "Open folder" })).toHaveCount(0);
   await expect(ui.getByRole("combobox", { name: "Tabs and panes" })).toContainText("Phone project");
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
   await openSettings(ui);
@@ -513,16 +518,22 @@ test("search and project sheets animate above the open sidebar and restore focus
   await expect(search).toHaveCount(0);
   await expect(shell).toHaveAttribute("data-sidebar-open", "true");
   await expect(ui.getByRole("button", { name: "Search workspace", exact: true })).toBeFocused();
-  await ui.getByRole("button", { name: "Add project", exact: true }).click();
-  const project = ui.getByRole("dialog", { name: "Add project", exact: true });
+  await ui.getByRole("button", { name: "Open workspace menu", exact: true }).click();
+  await ui.getByRole("button", { name: "Clone repository…", exact: true }).click();
+  const project = ui.getByRole("dialog", { name: "Clone repository", exact: true });
   await expect(project).toHaveAttribute("data-mobile-drawer", "true");
-  await project.getByRole("textbox", { name: "Project name" }).fill("Discard this draft");
+  await project
+    .getByRole("textbox", { name: "Repository URL or local path" })
+    .fill("Discard this draft");
   await project.getByRole("button", { name: "Close", exact: true }).first().click();
   await expect(project).toHaveCount(0);
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await ui.getByRole("button", { name: "Add project", exact: true }).click();
+  await ui.getByRole("button", { name: "Open workspace menu", exact: true }).click();
+  await ui.getByRole("button", { name: "Clone repository…", exact: true }).click();
   await expect(project).toHaveCSS("animation-name", "none");
-  await expect(project.getByRole("textbox", { name: "Project name" })).toHaveValue("");
+  await expect(project.getByRole("textbox", { name: "Repository URL or local path" })).toHaveValue(
+    "",
+  );
 });
 
 test("composer expands on focus, preserves portaled controls, and collapses after keyboard dismissal", async ({

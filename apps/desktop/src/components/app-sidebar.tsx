@@ -1,3 +1,4 @@
+import { NewWorkspaceMenu } from "@/workspace/new-workspace-menu";
 import { useContext, useEffect, useState } from "react";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { ProjectImage } from "@/workspace/project-image";
@@ -7,12 +8,12 @@ import { shortcutLabel } from "@/shortcuts/bindings";
 import { AgentSidebar } from "@/agents/list";
 import { ProjectActions } from "@/workspace/project-actions";
 import { SidebarSection } from "./sidebar-section";
-import { Keyboard, PanelLeftClose, Plus, Search } from "lucide-react";
+import { PanelLeftClose, Search } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "cn";
 import type { WorkspaceSnapshot, WorkspaceOperation } from "@concors/protocol";
 import type { View } from "@/navigation";
-import type { SignedInAuth } from "@/auth/auth-state";
+import { activeOrganization, type SignedInAuth } from "@/auth/auth-state";
 import { AccountMenu } from "@/components/account-menu";
 import { MachineSwitcher } from "@/workspace/machine-switcher";
 import type { MachineConnection } from "@/workspace/machines";
@@ -29,10 +30,11 @@ interface AppSidebarProps {
   canEdit: boolean;
   onSelectProject: (id: string) => void;
   onAddProject: () => void;
+  onOpenFolder: (mode: "open" | "clone") => void;
   machines: MachineConnection[];
   selectedMachineId: string;
   onSelectMachine: (id: string) => void;
-  onAddMachine: (machine: MachineConnection) => void;
+  onViewCloud: (machineId?: string) => void;
   auth: SignedInAuth;
   onSignOut: () => void;
   execute: (operation: WorkspaceOperation) => Promise<void>;
@@ -67,10 +69,12 @@ export function AppSidebar(props: AppSidebarProps) {
       >
         <div className="m-2 flex h-9 items-center justify-between gap-1">
           <MachineSwitcher
+            key={activeOrganization(props.auth)?.id}
+            organizationId={activeOrganization(props.auth)?.id}
+            onViewCloud={props.onViewCloud}
             machines={props.machines}
             selectedId={props.selectedMachineId}
             onSelect={props.onSelectMachine}
-            onAdd={props.onAddMachine}
           />
           <div className="ml-auto flex shrink-0 items-center gap-0.5">
             <Tooltip>
@@ -102,17 +106,13 @@ export function AppSidebar(props: AppSidebarProps) {
         </div>
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-2 py-3">
           <SidebarSection
-            title="Projects"
+            title="Workspaces"
             action={
-              <button
-                type="button"
-                aria-label="Add project"
+              <NewWorkspaceMenu
                 disabled={!props.canEdit}
-                onClick={props.onAddProject}
-                className="rounded p-1 text-muted-foreground hover:text-sidebar-foreground disabled:opacity-40"
-              >
-                <Plus className="size-4" />
-              </button>
+                onNew={props.onAddProject}
+                onOpen={props.onOpenFolder}
+              />
             }
           >
             <ul className="mt-1 space-y-0.5">
@@ -154,7 +154,7 @@ export function AppSidebar(props: AppSidebarProps) {
               ))}
               {props.workspace?.projects.length === 0 && (
                 <li className="px-2 py-3 text-ui leading-relaxed text-muted-foreground">
-                  Add a project to organize your tabs and panes.
+                  Start a workspace or open a folder.
                 </li>
               )}
             </ul>
@@ -168,29 +168,13 @@ export function AppSidebar(props: AppSidebarProps) {
             </p>
           </SidebarSection>
         </div>
-        <div className="flex items-center gap-1 border-t border-sidebar-border p-2">
-          <div className="min-w-0 flex-1">
-            <AccountMenu
-              auth={props.auth}
-              onSignOut={props.onSignOut}
-              onOpenSettings={props.onOpenSettings}
-            />
-          </div>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                aria-label="Keyboard shortcuts"
-                onClick={props.onOpenShortcuts}
-                className="flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-              >
-                <Keyboard className="size-4" aria-hidden="true" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="top" className="flex items-center gap-2 text-sm">
-              Keyboard shortcuts <kbd>{shortcutLabel("shortcuts")}</kbd>
-            </TooltipContent>
-          </Tooltip>
+        <div className="border-t border-sidebar-border p-2">
+          <AccountMenu
+            auth={props.auth}
+            onSignOut={props.onSignOut}
+            onOpenSettings={props.onOpenSettings}
+            onOpenShortcuts={props.onOpenShortcuts}
+          />
         </div>
       </nav>
     </div>

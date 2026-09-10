@@ -109,7 +109,7 @@ export function useMachines(organizationId: string | undefined): MachinesState {
 /** Human message for a failed machine call; `describeAuthError` already covers network and 5xx. */
 export function describeMachinesError(cause: unknown): string {
   if (cause instanceof ApiError && cause.status === 402) {
-    return `${cause.message}. Add a payment method in Settings → Billing.`;
+    return `${cause.message}. Check your payment method and try again.`;
   }
   if (cause instanceof ApiError && cause.status < 500) return cause.message;
   return describeAuthError(cause);

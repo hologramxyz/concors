@@ -1,3 +1,4 @@
+import { seedProject } from "./support/projects.ts";
 import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -24,13 +25,7 @@ test("directional pane sequences, tab cycling, project memory and immediate Agen
   try {
     await signedIn(page);
     await page.goto("/");
-    await page.getByRole("button", { name: "Add project", exact: true }).first().click();
-    await page.getByLabel("Project name", { exact: true }).fill("Navigation project");
-    await page.getByLabel("Folder on this machine").fill(directory);
-    await page
-      .getByRole("dialog")
-      .getByRole("button", { name: "Add project", exact: true })
-      .click();
+    await seedProject(page, "Navigation project", directory);
     await expect(page.getByRole("button", { name: "New tab", exact: true })).toBeEnabled();
     const panes = page.locator("[data-pane-id]");
     await expect(panes.locator("textarea")).toBeFocused();
@@ -133,14 +128,8 @@ test("directional pane sequences, tab cycling, project memory and immediate Agen
     await sequence(page, "t", "ArrowRight");
     await expect.poll(() => focusedPane(page)).toBe(left);
     // A second project must not replace this project's remembered tab or pane.
-    await page.getByRole("button", { name: "Add project", exact: true }).click();
-    await page.getByLabel("Project name", { exact: true }).fill("Other navigation project");
-    await page.getByLabel("Folder on this machine").fill(join(directory, "other"));
     await mkdir(join(directory, "other"));
-    await page
-      .getByRole("dialog")
-      .getByRole("button", { name: "Add project", exact: true })
-      .click();
+    await seedProject(page, "Other navigation project", join(directory, "other"));
     await expect(
       page.getByRole("heading", { name: "Other navigation project", exact: true }),
     ).toBeVisible();

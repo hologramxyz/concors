@@ -78,12 +78,13 @@ export function applyWorkspaceOperation(
   };
   if (op.kind === "project.add") {
     claim(op.projectId);
-    if (state.projects.some((p) => p.directory === op.directory))
+    if (op.directoryMode !== "follow" && state.projects.some((p) => p.directory === op.directory))
       throw new WorkspaceOperationError("INVALID_OPERATION", "Directory is already registered");
     state.projects.push({
       id: op.projectId,
       name: op.name,
       directory: op.directory,
+      ...(op.directoryMode ? { directoryMode: op.directoryMode } : {}),
       version: 0,
       tabs: [],
     });
@@ -113,11 +114,28 @@ export function applyWorkspaceOperation(
       } else if (op.kind === "tab.create") {
         claim(op.tabId);
         claim(op.paneId);
+        const source = op.sourcePaneId
+          ? requireValue(
+              project.tabs
+                .flatMap((tab) => tab.nodes)
+                .find((node) => node.id === op.sourcePaneId && node.kind === "pane"),
+              "Source pane",
+            )
+          : undefined;
+        const directory =
+          source?.kind === "pane" ? (source.directory ?? project.directory) : project.directory;
+        if (
+          project.directoryMode === "follow" &&
+          !project.followPaneId &&
+          !project.tabs.length &&
+          op.profile === "shell"
+        )
+          project.followPaneId = op.paneId;
         project.tabs.push({
           id: op.tabId,
           name: op.name,
           root: op.paneId,
-          nodes: [{ id: op.paneId, kind: "pane", profile: op.profile, sessionId: null }],
+          nodes: [{ id: op.paneId, kind: "pane", profile: op.profile, sessionId: null, directory }],
         });
         state.selection = { projectId: project.id, tabId: op.tabId };
       } else {
@@ -238,7 +256,13 @@ export function applyWorkspaceOperation(
                   first: op.before ? op.newPaneId : pane.id,
                   second: op.before ? pane.id : op.newPaneId,
                 },
-                { id: op.newPaneId, kind: "pane", profile: op.profile, sessionId: null },
+                {
+                  id: op.newPaneId,
+                  kind: "pane",
+                  profile: op.profile,
+                  sessionId: null,
+                  directory: pane.directory ?? project.directory,
+                },
               );
             } else if (tab.root === pane.id) closeTab(state, project.id, tab.id);
             else {
@@ -263,6 +287,16 @@ export function applyWorkspaceOperation(
           }
         }
       }
+    }
+  }
+  for (const project of state.projects) {
+    if (project.directoryMode !== "follow" || !project.followPaneId) continue;
+    const anchor = project.tabs
+      .flatMap((tab) => tab.nodes)
+      .find((node) => node.id === project.followPaneId);
+    if (!anchor || anchor.kind !== "pane" || anchor.profile !== "shell") {
+      project.directoryMode = "pinned";
+      delete project.followPaneId;
     }
   }
   state.revision++;

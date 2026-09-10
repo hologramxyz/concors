@@ -342,6 +342,7 @@ export function createDemoServer() {
                   "terminal-recovery",
                   "directional-pane-split",
                   "workspace-pane-rearrangement",
+                  "folder-workspaces",
                 ],
               });
               break;
@@ -499,6 +500,30 @@ export function createDemoServer() {
             }
             case "project.request": {
               const op = message.operation;
+              if (op.kind === "browse") {
+                if (op.epoch !== workspace.epoch) throw new Error("Workspace was reset");
+                const directory =
+                  (op.directory || "~").replace(/^~/, "/home/demo").replace(/\/$/, "") || "/";
+                reply({
+                  type: "project.result",
+                  requestId: message.requestId,
+                  outcome: {
+                    status: "listed",
+                    directory,
+                    parent:
+                      directory === "/"
+                        ? null
+                        : directory.slice(0, directory.lastIndexOf("/")) || "/",
+                    home: "/home/demo",
+                    entries:
+                      directory === "/home/demo"
+                        ? [{ name: "concors", directory: "/home/demo/concors" }]
+                        : [],
+                    truncated: false,
+                  },
+                });
+                break;
+              }
               if (op.kind === "cancel") {
                 const setup = setups.get(op.id);
                 if (setup) setup.status = "cancelled";
@@ -506,10 +531,14 @@ export function createDemoServer() {
                 if (op.epoch !== workspace.epoch) throw new Error("Workspace was reset");
                 const setup: ProjectSetup = {
                   id: op.id,
-                  name: op.name,
-                  directory: op.directory,
-                  repository: op.repository,
-                  mode: op.mode,
+                  name:
+                    op.kind === "workspace"
+                      ? "New workspace"
+                      : op.directory.split("/").filter(Boolean).at(-1) || "Workspace",
+                  directory:
+                    op.kind === "workspace" ? `/home/demo/workspaces/${op.id}` : op.directory,
+                  repository: op.kind === "workspace" ? "" : op.repository,
+                  mode: op.kind === "workspace" ? "create" : op.mode,
                   status: "working",
                   progress: "Simulating project setup. No files are created.",
                 };
@@ -520,8 +549,8 @@ export function createDemoServer() {
                     workspace = applyWorkspaceOperation(workspace, {
                       kind: "project.add",
                       projectId: op.id,
-                      name: op.name,
-                      directory: op.directory,
+                      name: setup.name,
+                      directory: setup.directory,
                     });
                     setup.status = "done";
                     setup.progress = "Demo project ready. No real files were changed.";

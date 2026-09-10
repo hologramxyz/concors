@@ -36,7 +36,7 @@ export function FileTabLabel({ file }: { file: OpenFile }) {
     >
       <button
         type="button"
-        title={file.path}
+        title={`${file.directory}/${file.path}`}
         aria-pressed={files.active[file.scope] === file.id}
         onClick={() => files.select(file.scope, file.id)}
         className="flex max-w-52 items-center gap-1.5 px-2 py-1 text-ui"
@@ -80,7 +80,13 @@ export function FileTab({ file }: { file: OpenFile }) {
   const available =
     connection?.state.status === "ready" &&
     connection.workspace?.epoch === file.document.target.epoch &&
-    connection.workspace.projects.some((project) => project.id === file.projectId) &&
+    connection.workspace.projects.some(
+      (project) =>
+        project.id === file.projectId &&
+        (project.directory === file.directory ||
+          (connection.state.status === "ready" &&
+            connection.state.daemon.capabilities?.includes("folder-workspaces"))),
+    ) &&
     !!connection.state.daemon.capabilities?.includes("project-files");
   const request = useCallback(
     async (operation: FileOperation) => {
@@ -124,7 +130,7 @@ export function FileTab({ file }: { file: OpenFile }) {
       >
         <span
           data-file-path
-          title={file.path}
+          title={`${file.directory}/${file.path}`}
           className="min-w-20 flex-1 truncate font-mono text-ui text-muted-foreground"
         >
           {file.path}

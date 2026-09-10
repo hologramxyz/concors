@@ -14,7 +14,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { api } from "@/auth/api";
 import { AuthScreen } from "@/auth/auth-screen";
-import { describeAuthError } from "@/auth/auth-state";
+import { activeOrganization, describeAuthError } from "@/auth/auth-state";
 import { useAuth } from "@/auth/use-auth";
 import { AppSidebar } from "@/components/app-sidebar";
 import { CommandPalette } from "@/components/command-palette";
@@ -28,6 +28,7 @@ import { SettingsSidebar } from "@/settings/settings-sidebar";
 import { useTheme } from "@/theme/use-theme";
 import { useCornerStyle } from "@/theme/use-corner-style";
 import { SettingsView } from "@/views/settings-view";
+import { useNewWorkspace } from "@/workspace/use-new-workspace";
 import { ProjectSetupDialog } from "@/workspace/project-setup-dialog";
 import {
   MACHINES_STORAGE_KEY,
@@ -46,6 +47,26 @@ function savedMachines() {
 }
 
 export function App() {
+  const setup = new URLSearchParams(window.location.search).get("setup");
+  if (
+    window.location.pathname === "/settings/billing" &&
+    (setup === "success" || setup === "cancelled")
+  ) {
+    return (
+      <div className="flex h-dvh flex-col items-center justify-center gap-3 bg-background p-8 text-center text-foreground">
+        <h1 className="text-xl font-semibold">
+          {setup === "success" ? "Card setup submitted" : "Card setup cancelled"}
+        </h1>
+        <p className="max-w-md text-sm text-muted-foreground">
+          Return to your original Concors window to{" "}
+          {setup === "success"
+            ? "finish creating your VPS. Concors will verify your card with Stripe."
+            : "continue. You can add a card again when you’re ready."}
+        </p>
+        <p className="text-xs text-muted-foreground">You can close this tab.</p>
+      </div>
+    );
+  }
   return (
     <ShortcutProvider>
       <AppContent />
@@ -63,15 +84,21 @@ function AppContent() {
   const lastTabs = useRef(new Map<string, string>());
   const lastPanes = useRef(new Map<string, string>());
   const [paneFocus, setPaneFocus] = useState<PaneFocusRequest | null>(null);
-  const [view, setView] = useState<View>("projects");
-  const [settingsPage, setSettingsPage] = useState<SettingsPage>("account");
+  const [view, setView] = useState<View>(() =>
+    window.location.pathname === "/settings/billing" ? "settings" : "projects",
+  );
+  const [creatingMachine, setCreatingMachine] = useState(false);
+  const [focusedCloudMachineId, setFocusedCloudMachineId] = useState<string | null>(null);
+  const [settingsPage, setSettingsPage] = useState<SettingsPage>(() =>
+    window.location.pathname === "/settings/billing" ? "billing" : "account",
+  );
   const settingsReturnView = useRef<Exclude<View, "settings">>("projects");
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [localEndpoint, setLocalEndpoint] = useState<DaemonEndpoint | null>(null);
   const [bookmarks, setBookmarks] = useState<MachineConnection[]>(savedMachines);
   const [selectedMachineId, setSelectedMachineId] = useState(LOCAL_ID);
-  const [addingProject, setAddingProject] = useState(false);
+  const [addingProject, setAddingProject] = useState<"open" | "clone" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [endpoint, setEndpoint] = useState<DaemonEndpoint | null>(null);
@@ -127,6 +154,11 @@ function AppContent() {
   }, []);
 
   const transport = connection.transport;
+  const newWorkspace = useNewWorkspace(transport);
+  const startWorkspace = () => {
+    setView("projects");
+    newWorkspace.start();
+  };
   const openAgent = useCallback(
     (id: string) => {
       const target = findSessionPane(transport?.workspace ?? null, id);
@@ -168,7 +200,7 @@ function AppContent() {
 
   const signedIn = auth.state.status === "signed-in";
   useCommand("search", signedIn, () => setPaletteOpen((open) => !open));
-  useCommand("new-project", signedIn && canEdit, () => setAddingProject(true));
+  useCommand("new-project", signedIn && canEdit && !newWorkspace.busy, startWorkspace);
   useCommand("settings", signedIn, openSettings);
   useCommand("shortcuts", signedIn, () => setShortcutsOpen(true));
 
@@ -213,7 +245,7 @@ function AppContent() {
     setSelectedMachineId(id);
     setView("projects");
     setError(null);
-    setAddingProject(false);
+    setAddingProject(null);
   };
   const activeProject = workspace?.projects.find(
     (project) => project.id === workspace.selection?.projectId,
@@ -259,23 +291,17 @@ function AppContent() {
                     onOpenCommandPalette={openPalette}
                     onOpenShortcuts={() => setShortcutsOpen(true)}
                     workspace={workspace}
-                    canEdit={canEdit}
+                    canEdit={canEdit && !newWorkspace.busy}
                     onSelectProject={selectProject}
-                    onAddProject={() => setAddingProject(true)}
+                    onAddProject={startWorkspace}
+                    onOpenFolder={setAddingProject}
                     machines={machines}
                     selectedMachineId={selectedMachineId}
                     onSelectMachine={selectMachine}
-                    onAddMachine={(machine) => {
-                      if (machines.some((existing) => existing.url === machine.url))
-                        throw new Error("This machine connection is already saved");
-                      if (bookmarks.length >= 32)
-                        throw new Error("You can save up to 32 machine connections");
-                      const next = [...bookmarks, machine];
-                      localStorage.setItem(MACHINES_STORAGE_KEY, JSON.stringify(next));
-                      setBookmarks(next);
-                      setEndpoint(describeDaemonEndpoint(machine.url));
-                      setSelectedMachineId(machine.id);
-                      setView("projects");
+                    onViewCloud={(machineId) => {
+                      setFocusedCloudMachineId(machineId ?? null);
+                      setCreatingMachine(false);
+                      setView("machines");
                     }}
                     auth={account}
                     onSignOut={signOut}
@@ -343,10 +369,11 @@ function AppContent() {
                           }}
                           focusRequest={paneFocus}
                           workspace={workspace}
-                          canEdit={canEdit}
+                          canEdit={canEdit && !newWorkspace.busy}
                           onCommand={command}
                           execute={execute}
-                          onAddProject={() => setAddingProject(true)}
+                          onAddProject={startWorkspace}
+                          onOpenFolder={setAddingProject}
                         />
                       ) : (
                         <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
@@ -364,7 +391,25 @@ function AppContent() {
                         </div>
                       )
                     ) : view === "machines" ? (
-                      <MachinesView auth={account} />
+                      <MachinesView
+                        onAddMachine={(machine) => {
+                          if (machines.some((existing) => existing.url === machine.url))
+                            throw new Error("This machine connection is already saved");
+                          if (bookmarks.length >= 32)
+                            throw new Error("You can save up to 32 machine connections");
+                          const next = [...bookmarks, machine];
+                          localStorage.setItem(MACHINES_STORAGE_KEY, JSON.stringify(next));
+                          setBookmarks(next);
+                          setEndpoint(describeDaemonEndpoint(machine.url));
+                          setSelectedMachineId(machine.id);
+                          setView("projects");
+                        }}
+                        key={activeOrganization(account)?.id}
+                        auth={account}
+                        focusedMachineId={focusedCloudMachineId}
+                        creating={creatingMachine}
+                        onCreatingChange={setCreatingMachine}
+                      />
                     ) : (
                       <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
                         <Server className="size-10 text-muted-foreground/50" />
@@ -379,11 +424,23 @@ function AppContent() {
                 </div>
                 <FilesSidebar project={view === "projects" ? activeProject : undefined} />
               </div>
+              {newWorkspace.error && (
+                <div
+                  role="alert"
+                  className="fixed bottom-4 left-1/2 z-50 flex max-w-[90vw] -translate-x-1/2 items-center gap-3 rounded-md border bg-popover p-3 text-ui shadow-md"
+                >
+                  <span>{newWorkspace.error}</span>
+                  <button type="button" onClick={newWorkspace.dismiss} className="text-primary">
+                    Dismiss
+                  </button>
+                </div>
+              )}
               {addingProject && (
                 <ProjectSetupDialog
-                  onClose={() => setAddingProject(false)}
+                  mode={addingProject}
+                  onClose={() => setAddingProject(null)}
                   onAdded={() => {
-                    setAddingProject(false);
+                    setAddingProject(null);
                     setView("projects");
                   }}
                 />

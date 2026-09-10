@@ -2,7 +2,7 @@ import { homedir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { projectDirectory, projectDirectoryError } from "./directories.ts";
 import { spawn, type ChildProcess } from "node:child_process";
-import { mkdir, realpath, stat } from "node:fs/promises";
+import { mkdir, realpath, stat, opendir } from "node:fs/promises";
 import { isAbsolute, dirname, basename, join } from "node:path";
 import type { ProjectRequest, ProjectResult, ProjectSetup } from "@concors/protocol";
 import type { WorkspaceStore } from "../workspace/store.ts";
@@ -56,6 +56,7 @@ export class ProjectManager {
     try {
       if (this.#closed) throw new Error("Daemon is stopping");
       const op = request.operation;
+      if (op.kind === "browse") throw new Error("Use the directory browser endpoint");
       if (op.kind === "cancel") {
         const setup = this.#store.projectSetups().find((s) => s.id === op.id);
         if (!setup) throw new Error("Project setup no longer exists");
@@ -66,8 +67,9 @@ export class ProjectManager {
       } else {
         if (op.epoch !== this.#store.snapshot().epoch)
           throw new Error("Workspace was replaced; refresh before starting");
-        const directory = projectDirectory(op.directory, this.#home);
-        if (op.mode === "clone") validateRepository(op.repository);
+        const quick = op.kind === "workspace";
+        const directory = projectDirectory(quick ? "~" : op.directory, this.#home);
+        if (!quick && op.mode === "clone") validateRepository(op.repository);
         const existing = this.#store.projectSetups();
         if (
           !existing.some((s) => s.id === op.id) &&
@@ -76,10 +78,11 @@ export class ProjectManager {
           throw new Error("Wait for a project setup to finish (maximum 4)");
         const setup: ProjectSetup = {
           id: op.id,
-          mode: op.mode,
-          name: op.name,
+          mode: quick ? "open" : op.mode,
+          name: quick ? "Workspace" : op.name || basename(directory).slice(0, 120) || directory,
+          ...(quick ? { directoryMode: "follow" as const } : {}),
           directory,
-          repository: op.repository,
+          repository: quick ? "" : op.repository,
           status: "working",
           progress: "Preparing project…",
         };
@@ -100,6 +103,53 @@ export class ProjectManager {
       };
     }
   }
+  async browse(request: ProjectRequest): Promise<ProjectResult> {
+    try {
+      const op = request.operation;
+      if (this.#closed || op.kind !== "browse" || op.epoch !== this.#store.snapshot().epoch)
+        throw new Error("Reconnect before browsing this machine.");
+      const directory = await realpath(projectDirectory(op.directory || "~", this.#home));
+      const entries: { name: string; directory: string }[] = [];
+      let scanned = 0,
+        truncated = false;
+      for await (const entry of await opendir(directory)) {
+        if (++scanned > 10000 || entries.length === 500) {
+          truncated = true;
+          break;
+        }
+        // Links may be entered explicitly; no recursive traversal or reads of file contents.
+        if (entry.isDirectory())
+          entries.push({ name: entry.name, directory: join(directory, entry.name) });
+      }
+      entries.sort((a, b) => a.name.localeCompare(b.name));
+      return {
+        type: "project.result",
+        requestId: request.requestId,
+        outcome: {
+          status: "listed",
+          directory,
+          parent: dirname(directory) === directory ? null : dirname(directory),
+          home: this.#home,
+          entries,
+          truncated,
+        },
+      };
+    } catch (error) {
+      return {
+        type: "project.result",
+        requestId: request.requestId,
+        outcome: {
+          status: "error",
+          message: projectDirectoryError(
+            error,
+            request.operation.kind === "browse" ? (request.operation.directory ?? "~") : "",
+            false,
+          ),
+        },
+      };
+    }
+  }
+
   private save(setup: ProjectSetup): void {
     if (!this.#closed) {
       this.#store.saveProjectSetup(setup);
@@ -133,13 +183,38 @@ export class ProjectManager {
       this.save(setup);
       if (setup.mode === "clone") await this.clone(setup);
       this.check(setup.id);
-      if (this.#store.snapshot().projects.some((p) => p.directory === directory))
-        throw new Error("This folder is already registered as a project");
+      const existing =
+        setup.directoryMode !== "follow" &&
+        this.#store.snapshot().projects.find((p) => p.directory === directory);
+      if (existing) {
+        const selected = this.#store.snapshot().selection;
+        const result = this.#store.execute({
+          type: "workspace.command",
+          commandId: setup.id,
+          epoch,
+          operation: {
+            kind: "selection.set",
+            projectId: existing.id,
+            tabId:
+              selected?.projectId === existing.id ? selected.tabId : (existing.tabs[0]?.id ?? null),
+          },
+        });
+        if (result.result.outcome.status === "rejected")
+          throw new Error(result.result.outcome.message);
+        this.save({ ...setup, projectId: existing.id, status: "done", progress: "Folder opened" });
+        return;
+      }
       const result = this.#store.execute({
         type: "workspace.command",
         commandId: setup.id,
         epoch,
-        operation: { kind: "project.add", projectId: setup.id, name: setup.name, directory },
+        operation: {
+          kind: "project.add",
+          projectId: setup.id,
+          name: setup.name,
+          directory,
+          ...(setup.directoryMode ? { directoryMode: setup.directoryMode } : {}),
+        },
       });
       if (result.result.outcome.status === "rejected")
         throw new Error(result.result.outcome.message);
@@ -161,7 +236,7 @@ export class ProjectManager {
       });
       if (terminal.result.outcome.status === "rejected")
         throw new Error(terminal.result.outcome.message);
-      this.save({ ...setup, status: "done", progress: "Project ready" });
+      this.save({ ...setup, projectId: project.id, status: "done", progress: "Ready" });
     } catch (error) {
       this.save({
         ...setup,

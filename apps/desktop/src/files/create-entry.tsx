@@ -54,6 +54,7 @@ export function CreateEntry({
             {
               kind: "create",
               projectId: project.id,
+              directory: project.directory,
               epoch: workspace.epoch,
               path: path.trim(),
               entryKind: kind,

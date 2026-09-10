@@ -75,7 +75,7 @@
   color-scheme: light;
   --selection: #deded9;
 
-  --background: #f4f3ef;
+  --background: #eeede8;
   --foreground: #20211f;
   --card: #ffffff;
   --card-foreground: var(--foreground);
@@ -138,7 +138,7 @@
   --success: oklch(0.72 0.16 150);
   --warning: oklch(0.8 0.15 75);
 
-  --sidebar: #101010;
+  --sidebar: #0b0b0b;
   --sidebar-foreground: #b0b0b0;
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);

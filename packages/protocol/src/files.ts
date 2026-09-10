@@ -3,7 +3,12 @@ import { z } from "zod";
 export const MAX_FILE_BYTES = 1024 * 1024;
 export const MAX_DIRECTORY_ENTRIES = 2000;
 const Path = z.string().max(4096);
-const Target = { projectId: z.string().uuid(), epoch: z.string().uuid(), path: Path };
+const Target = {
+  directory: z.string().min(1).max(4096).optional(),
+  projectId: z.string().uuid(),
+  epoch: z.string().uuid(),
+  path: Path,
+};
 export const FileRequestSchema = z.object({
   type: z.literal("file.request"),
   requestId: z.string().uuid(),
