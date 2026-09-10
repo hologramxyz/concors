@@ -16,7 +16,7 @@ import type { View } from "@/navigation";
 import { activeOrganization, type SignedInAuth } from "@/auth/auth-state";
 import { AccountMenu } from "@/components/account-menu";
 import { MachineSwitcher } from "@/workspace/machine-switcher";
-import type { MachineConnection } from "@/workspace/machines";
+import type { Host } from "@/workspace/machines";
 
 interface AppSidebarProps {
   collapsed: boolean;
@@ -30,9 +30,9 @@ interface AppSidebarProps {
   onSelectProject: (id: string) => void;
   onAddProject: () => void;
   onOpenFolder: (mode: "open" | "clone") => void;
-  machines: MachineConnection[];
-  selectedMachineId: string;
-  onSelectMachine: (id: string) => void;
+  hostScope: string;
+  selectedHost: Host;
+  onSelectMachine: (host: Host) => void;
   onViewCloud: (machineId?: string) => void;
   auth: SignedInAuth;
   onSignOut: () => void;
@@ -71,8 +71,8 @@ export function AppSidebar(props: AppSidebarProps) {
             key={activeOrganization(props.auth)?.id}
             organizationId={activeOrganization(props.auth)?.id}
             onViewCloud={props.onViewCloud}
-            machines={props.machines}
-            selectedId={props.selectedMachineId}
+            scope={props.hostScope}
+            selected={props.selectedHost}
             onSelect={props.onSelectMachine}
           />
           <div className="ml-auto flex shrink-0 items-center gap-0.5">

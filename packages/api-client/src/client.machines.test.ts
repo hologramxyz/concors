@@ -60,6 +60,48 @@ function lastCall(fetch: ReturnType<typeof vi.fn>): { url: string; init: Request
 }
 
 describe("ApiClient machines", () => {
+  it("preserves upstream agent and TLS readiness while supporting older deployments", async () => {
+    const machine = {
+      ...MACHINE,
+      hostname: "machine.example",
+      agentInstalledAt: "2026-09-09T00:00:00.000Z",
+      agentSeenAt: "2026-09-09T00:01:00.000Z",
+      agentVersion: "0.1.0",
+      agentError: null,
+      certificateExpiresAt: "2026-12-09T00:00:00.000Z",
+      certificateError: null,
+    };
+    await expect(client(async () => json({ machine })).getMachine("m1")).resolves.toEqual(machine);
+    await expect(client(async () => json({ machine: MACHINE })).getMachine("m1")).resolves.toEqual(
+      MACHINE,
+    );
+  });
+  it("retains the managed daemon fields returned by the control plane", async () => {
+    const managed = {
+      ...MACHINE,
+      hostname: "m-example.dev.concors.app",
+      agentSeenAt: "2026-09-10T00:00:00Z",
+      agentVersion: "0.2.0",
+      agentInstalledAt: "2026-09-09T00:00:00Z",
+      agentError: null,
+      certificateExpiresAt: "2026-12-09T00:00:00Z",
+    };
+    const fetch = vi.fn(async () => json({ machines: [managed] }));
+    await expect(client(fetch).listMachines()).resolves.toEqual([managed]);
+  });
+  it("mints a machine token with session authorization and validates the response", async () => {
+    const fetch = vi.fn(async () => json({ token: "machine-jwt" }, { status: 201 }));
+    await expect(client(fetch).mintMachineToken("machine/1")).resolves.toEqual({
+      token: "machine-jwt",
+    });
+    const { url, init } = lastCall(fetch);
+    expect(url).toBe("https://api.example/api/v1/machines/machine%2F1/token");
+    expect(init.method).toBe("POST");
+    expect(new Headers(init.headers).get("authorization")).toBe("Bearer tok-1");
+    fetch.mockResolvedValueOnce(json({ token: "" }));
+    await expect(client(fetch).mintMachineToken("machine/1")).rejects.toThrow();
+  });
+
   it("reads the catalog", async () => {
     const catalog = {
       regions: [{ id: "US-EAST-VA", location: "Vint Hill, Virginia", countryCode: "US" }],
