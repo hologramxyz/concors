@@ -2,6 +2,7 @@ import {
   Bell,
   CreditCard,
   KeyRound,
+  Keyboard,
   Palette,
   Settings2,
   UserRound,
@@ -9,7 +10,7 @@ import {
 } from "lucide-react";
 
 export type SettingsPage =
-  "account" | "appearance" | "notifications" | "billing" | "ssh-keys" | "advanced";
+  "account" | "appearance" | "shortcuts" | "notifications" | "billing" | "ssh-keys" | "advanced";
 
 export interface SettingsNavItem {
   readonly page: SettingsPage;
@@ -34,6 +35,7 @@ export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
     items: [
       ACCOUNT_SETTINGS_ITEM,
       { page: "appearance", label: "Appearance", icon: Palette },
+      { page: "shortcuts", label: "Keyboard shortcuts", icon: Keyboard },
       { page: "notifications", label: "Notifications", icon: Bell },
     ],
   },
