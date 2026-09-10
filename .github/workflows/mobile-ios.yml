@@ -21,7 +21,8 @@ concurrency:
 jobs:
   simulator:
     name: Native iOS glass and composer
-    runs-on: macos-26
+    # The standard Intel runner has 14 GB RAM for CoreSimulator + XCTest (ARM has 7 GB).
+    runs-on: macos-26-intel
     timeout-minutes: 25
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
@@ -66,7 +67,7 @@ jobs:
           MOBILE_SCHEME=$(basename "$MOBILE_WORKSPACE" .xcworkspace)
           xcodebuild -workspace "$MOBILE_WORKSPACE" -scheme "$MOBILE_SCHEME" \
             -configuration Release -sdk iphonesimulator \
-            -destination 'generic/platform=iOS Simulator' -jobs 2 \
+            -destination 'generic/platform=iOS Simulator' -jobs 4 \
             -derivedDataPath "$HOME/Library/Developer/Xcode/DerivedData/ConcorsCI" \
             ARCHS="$(uname -m)" ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO GCC_OPTIMIZATION_LEVEL=0 \
@@ -94,6 +95,7 @@ jobs:
         run: |
           MOBILE_APP=$(find "$HOME/Library/Developer/Xcode/DerivedData/ConcorsCI/Build/Products/Release-iphonesimulator" -maxdepth 1 -name '*.app' -print -quit)
           xcrun simctl install '${{ steps.simulator.outputs.id }}' "$MOBILE_APP"
+          xcrun simctl launch '${{ steps.simulator.outputs.id }}' dev.concors.mobile.preview
       - name: Install pinned native UI test runner
         timeout-minutes: 2
         run: |
@@ -103,7 +105,7 @@ jobs:
           echo "$RUNNER_TEMP/maestro-cli/maestro/bin" >> "$GITHUB_PATH"
       - name: Exercise real SwiftUI controls and native text input
         timeout-minutes: 5
-        run: maestro --device "${{ steps.simulator.outputs.id }}" test --test-output-dir apps/mobile/test-results/native apps/mobile/e2e/native/glass.yaml
+        run: maestro --device "${{ steps.simulator.outputs.id }}" test -e FRESH_SIMULATOR=true --test-output-dir apps/mobile/test-results/native apps/mobile/e2e/native/glass.yaml
       - uses: actions/upload-artifact@v4
         if: always()
         with:
