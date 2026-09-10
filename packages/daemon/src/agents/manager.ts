@@ -318,7 +318,7 @@ export class AgentManager {
           throw new Error("That model is not available on this machine.");
         if (op.settings.planMode && !info.supportsPlan)
           throw new Error(
-            "Plan mode is not available on this machine. Refresh models after updating Codex.",
+            "Plan mode is not available on this machine. Update Codex and open a new agent session.",
           );
         const model = info.models?.find((m) => m.id === (op.settings.model ?? info.model));
         if (op.settings.effort && model && !model.efforts.includes(op.settings.effort))
