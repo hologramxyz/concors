@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { consentRecord, hasAIConsent } from "./consent";
+import { AI_CONSENT_VERSION, consentRecord, hasAIConsent } from "./consent";
 
 describe("AI sharing consent", () => {
   it("requires explicit, versioned consent for the same account and organization", () => {
@@ -13,12 +13,15 @@ describe("AI sharing consent", () => {
   it("fails closed for absent, corrupt, old, future or incomplete records", () => {
     for (const raw of [null, "", "{", "true", "null", "[]", "{}"])
       expect(hasAIConsent(raw, "alice")).toBe(false);
-    for (const version of [0, 2, "1"])
+    for (const version of [0, 1, AI_CONSENT_VERSION + 1, String(AI_CONSENT_VERSION)])
       expect(
         hasAIConsent(JSON.stringify({ version, scope: "alice", acceptedAt: new Date() }), "alice"),
       ).toBe(false);
-    expect(hasAIConsent('{"version":1,"scope":"alice","acceptedAt":"invalid"}', "alice")).toBe(
-      false,
-    );
+    expect(
+      hasAIConsent(
+        JSON.stringify({ version: AI_CONSENT_VERSION, scope: "alice", acceptedAt: "invalid" }),
+        "alice",
+      ),
+    ).toBe(false);
   });
 });
