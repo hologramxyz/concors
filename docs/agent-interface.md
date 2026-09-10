@@ -50,6 +50,11 @@ parser licenses remain with the dependency.
 - Model choices and thinking efforts come from the machine's Codex model catalog.
   Settings are saved with the agent and broadcast across clients. Concurrent edits
   reject stale revisions. Controls remain available during active turns; changes apply to the next message.
+- The model picker opens on the current provider's models. A back arrow above search
+  returns to the provider list; choosing a provider opens its model page without
+  changing the current model. Search resets between pages. Escape closes the picker
+  and returns focus to its button. Models load when the session starts; the manual
+  Refresh models action has been removed.
 - Default permissions use workspace-write and on-request approvals. Auto-review
   sends `approvalsReviewer: auto_review` with the same sandbox (requires Codex
   0.115.0 or newer). Full access explicitly selects danger-full-access and no
@@ -75,8 +80,11 @@ parser licenses remain with the dependency.
   and native webviews show it as unavailable; no portable transcription backend is
   included yet.
 
-The agent/model selector currently exposes Codex models. Claude Code and OpenCode
-remain terminal profiles; their structured chat adapters are separate work.
+The provider list currently exposes Codex only, matching the daemon's supported
+structured-chat provider. Claude Code and OpenCode remain terminal profiles; adding
+them to this list as working unified-chat choices requires their provider adapters
+and connected-provider discovery. The selector does not imply those integrations
+already exist.
 
 ## Validation
 
