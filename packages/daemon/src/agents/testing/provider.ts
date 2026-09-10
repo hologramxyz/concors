@@ -1,3 +1,4 @@
+import type { AgentProviderId } from "@concors/protocol";
 import type { AgentProvider, AgentProviderFactory } from "../manager.ts";
 
 /** Deterministic provider used only by integration tests and the acceptance-test server. */
@@ -9,7 +10,9 @@ export class TestAgentProvider implements AgentProvider {
   threadId = "fixture-thread";
   turnId = "";
   closed = false;
-  constructor(onRequest: Parameters<AgentProviderFactory>[1]) {
+  readonly provider: AgentProviderId;
+  constructor(onRequest: Parameters<AgentProviderFactory>[1], provider: AgentProviderId = "codex") {
+    this.provider = provider;
     this.onRequest = onRequest;
   }
   async initialize(): Promise<void> {
@@ -32,13 +35,14 @@ export class TestAgentProvider implements AgentProvider {
   async request(method: string, params: unknown = {}): Promise<unknown> {
     this.requests.push({ method, params });
     if (method === "collaborationMode/list")
-      return { data: [{ mode: "plan" }, { mode: "default" }] };
+      return { data: this.provider === "codex" ? [{ mode: "plan" }, { mode: "default" }] : [] };
     if (method === "model/list")
       return {
         data: [
           {
-            model: "fixture",
-            displayName: "Fixture model",
+            model: this.provider === "codex" ? "fixture" : `fixture-${this.provider}`,
+            displayName:
+              this.provider === "codex" ? "Fixture model" : `Fixture ${this.provider} model`,
             serviceTiers: [
               {
                 id: "fast",
@@ -53,7 +57,10 @@ export class TestAgentProvider implements AgentProvider {
       };
     const input = params as Record<string, unknown>;
     if (method === "thread/start" || method === "thread/resume")
-      return { thread: { id: this.threadId, turns: [] }, model: "fixture" };
+      return {
+        thread: { id: this.threadId, turns: [] },
+        model: this.provider === "codex" ? "fixture" : `fixture-${this.provider}`,
+      };
     if (method === "turn/interrupt") {
       this.finish("interrupted");
       return {};

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SavedTerminalProfileSchema } from "./terminal-profiles.ts";
 
 const Id = z.string().uuid();
 const Size = { cols: z.number().int().min(10).max(240), rows: z.number().int().min(2).max(100) };
@@ -9,6 +10,7 @@ export const TerminalInfoSchema = z.object({
   id: Id,
   projectId: Id,
   profile: TerminalProfileSchema,
+  terminalProfile: SavedTerminalProfileSchema.optional(),
   detectedAgent: z.enum(["codex", "claude", "opencode"]).nullable().optional(),
   currentDirectory: z.string().min(1).max(4096).optional(),
   directory: z.string(),

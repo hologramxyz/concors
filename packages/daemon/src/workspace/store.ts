@@ -328,6 +328,8 @@ export class WorkspaceStore {
         );
       pane.sessionId = session.id;
       pane.profile = session.profile;
+      if (session.terminalProfile) pane.terminalProfile = session.terminalProfile;
+      else delete pane.terminalProfile;
       project.version++;
       state.revision++;
       this.#db.prepare("UPDATE workspace SET snapshot = ? WHERE id = 1").run(JSON.stringify(state));
@@ -384,17 +386,47 @@ export class WorkspaceStore {
   }
   reserveAgent(request: AgentRequest, info: AgentInfo): void {
     const op = request.operation;
-    if (op.kind !== "start") throw new Error("Expected agent start");
+    if (op.kind !== "start" && op.kind !== "switch-provider")
+      throw new Error("Expected agent start");
     this.#db.exec("BEGIN IMMEDIATE");
     try {
-      const state = this.snapshot();
-      const project = state.projects.find((p) => p.id === op.projectId);
-      const pane = project?.tabs
-        .find((t) => t.id === op.tabId)
-        ?.nodes.find((n) => n.id === op.paneId);
-      if (state.epoch !== op.epoch || project?.version !== op.expectedVersion)
-        throw new Error("Workspace changed; refresh before starting");
-      if (!pane || pane.kind !== "pane" || pane.profile !== "chat" || pane.sessionId !== null)
+      let state = this.snapshot();
+      let project = state.projects.find((p) => p.id === info.projectId);
+      let tabId: string, paneId: string;
+      if (op.kind === "switch-provider") {
+        const previous = this.agent(op.sessionId);
+        if (
+          previous.revision !== op.expectedRevision ||
+          previous.projectId !== info.projectId ||
+          !project
+        )
+          throw new Error("Agent changed. Try again.");
+        tabId = randomUUID();
+        paneId = randomUUID();
+        state = applyWorkspaceOperation(state, {
+          kind: "tab.create",
+          projectId: project.id,
+          expectedVersion: project.version,
+          tabId,
+          paneId,
+          name: info.name,
+          profile: "chat",
+        });
+        project = state.projects.find((p) => p.id === info.projectId);
+      } else {
+        tabId = op.tabId;
+        paneId = op.paneId;
+        if (state.epoch !== op.epoch || project?.version !== op.expectedVersion)
+          throw new Error("Workspace changed; refresh before starting");
+      }
+      const pane = project?.tabs.find((t) => t.id === tabId)?.nodes.find((n) => n.id === paneId);
+      if (
+        !project ||
+        !pane ||
+        pane.kind !== "pane" ||
+        pane.profile !== "chat" ||
+        pane.sessionId !== null
+      )
         throw new Error("Select an empty chat pane");
       if (this.agents().length >= 128) throw new Error("Agent session limit reached (128)");
       pane.sessionId = info.id;
