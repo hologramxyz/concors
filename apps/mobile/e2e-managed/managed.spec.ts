@@ -41,7 +41,7 @@ test("phone and desktop discover a managed machine and share one real terminal",
     );
     await desktop.goto("/");
     await desktop.getByRole("button", { name: "Switch machine", exact: true }).click();
-    await desktop.getByRole("menuitem", { name: /Second machine connectable/i }).click();
+    await desktop.getByRole("menuitem", { name: /Second machine Online/i }).click();
     await seedProject(desktop, "Managed companion acceptance", "/tmp", "ws://127.0.0.1:7430/ws");
     await expect(
       desktop.getByRole("heading", { name: "Managed companion acceptance", exact: true }),
