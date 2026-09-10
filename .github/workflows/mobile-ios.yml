@@ -22,7 +22,7 @@ jobs:
   simulator:
     name: Native iOS glass and composer
     runs-on: macos-26
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
       APP_VARIANT: preview
@@ -57,7 +57,7 @@ jobs:
         working-directory: apps/mobile/ios
         run: pod install
       - name: Build one unsigned simulator architecture
-        timeout-minutes: 13
+        timeout-minutes: 15
         working-directory: apps/mobile/ios
         run: |
           set -o pipefail
@@ -72,8 +72,18 @@ jobs:
             COMPILER_INDEX_STORE_ENABLE=NO GCC_OPTIMIZATION_LEVEL=0 \
             SWIFT_OPTIMIZATION_LEVEL=-Onone GCC_GENERATE_DEBUGGING_SYMBOLS=NO \
             build > ../test-results/native/xcodebuild.log 2>&1 || { tail -100 ../test-results/native/xcodebuild.log; exit 1; }
+      - uses: actions/cache/save@v4
+        if: ${{ !cancelled() && steps.native-cache.outputs.cache-matched-key != steps.native-cache.outputs.cache-primary-key }}
+        with:
+          path: |
+            apps/mobile/ios/Pods
+            apps/mobile/ios/Podfile.lock
+            apps/mobile/ios/build
+            ~/Library/Caches/CocoaPods
+            ~/Library/Developer/Xcode/DerivedData/ConcorsCI
+          key: ${{ steps.native-cache.outputs.cache-primary-key }}
       - name: Create isolated iOS 26 simulator
-        timeout-minutes: 3
+        timeout-minutes: 4
         id: simulator
         run: |
           MOBILE_SIMULATOR_ID=$(xcrun simctl create "Concors Glass CI" com.apple.CoreSimulator.SimDeviceType.iPhone-17 com.apple.CoreSimulator.SimRuntime.iOS-26-5)
@@ -92,18 +102,8 @@ jobs:
           unzip -q "$RUNNER_TEMP/maestro.zip" -d "$RUNNER_TEMP/maestro-cli"
           echo "$RUNNER_TEMP/maestro-cli/maestro/bin" >> "$GITHUB_PATH"
       - name: Exercise real SwiftUI controls and native text input
-        timeout-minutes: 3
+        timeout-minutes: 5
         run: maestro --device "${{ steps.simulator.outputs.id }}" test --test-output-dir apps/mobile/test-results/native apps/mobile/e2e/native/glass.yaml
-      - uses: actions/cache/save@v4
-        if: ${{ !cancelled() && steps.native-cache.outputs.cache-matched-key != steps.native-cache.outputs.cache-primary-key }}
-        with:
-          path: |
-            apps/mobile/ios/Pods
-            apps/mobile/ios/Podfile.lock
-            apps/mobile/ios/build
-            ~/Library/Caches/CocoaPods
-            ~/Library/Developer/Xcode/DerivedData/ConcorsCI
-          key: ${{ steps.native-cache.outputs.cache-primary-key }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
