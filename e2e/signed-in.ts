@@ -1,13 +1,14 @@
 import { test as base, expect, type Page } from "@playwright/test";
 import { DaemonConnection, describeDaemonEndpoint } from "../packages/daemon-client/src/index.ts";
 
-// Specs share isolated daemons, but their PTYs must not accumulate toward the runtime limit.
+// Specs share isolated daemons. Clear previous projects as well as live PTYs so a failed
+// test cannot leave agent panes in the next test's sidebar.
 export const test = base.extend({
   page: async ({ page }, use) => {
     for (const port of [7429, 7430]) {
       const connection = new DaemonConnection({
         endpoint: describeDaemonEndpoint(`ws://127.0.0.1:${port}/ws`),
-        client: { kind: "test", name: "terminal cleanup", version: "0.0.0" },
+        client: { kind: "test", name: "workspace cleanup", version: "0.0.0" },
       });
       const unsubscribe = connection.subscribeWorkspace(() => undefined);
       try {
@@ -22,6 +23,21 @@ export const test = base.extend({
             crypto.randomUUID(),
           );
           expect(stopped.outcome.status).toBe("ok");
+        }
+        const workspace = connection.workspace;
+        if (!workspace) throw new Error("Workspace disconnected during cleanup");
+        for (const project of workspace.projects) {
+          const removed = await connection.executeWorkspace({
+            type: "workspace.command",
+            commandId: crypto.randomUUID(),
+            epoch: workspace.epoch,
+            operation: {
+              kind: "project.remove",
+              projectId: project.id,
+              expectedVersion: project.version,
+            },
+          });
+          expect(removed.outcome.status).toBe("accepted");
         }
       } finally {
         unsubscribe();
