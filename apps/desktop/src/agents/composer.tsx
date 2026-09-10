@@ -27,7 +27,8 @@ import { submitAgentInput } from "./paseo/submit";
 import { ControlPicker } from "./control-picker";
 import { Popover } from "radix-ui";
 import { ContextMeter } from "./context-meter";
-import { AgentModelPicker, useAgentModelSelection } from "./model-picker";
+import { AgentModelPicker } from "./model-picker";
+import { useAgentModelSelection } from "./use-model-selection";
 import { useDictation } from "./dictation";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import { ComposerSurfaceContext, useComposerExpansion } from "./composer-expansion";
@@ -261,7 +262,7 @@ export function AgentComposer({
           label: nativeProvider
             ? `${agentProviderNames[nativeProvider.id]} · Agent and model`
             : "Choose an agent provider",
-          icon: "model" as const,
+          icon: nativeProvider?.id === "codex" ? ("model" as const) : ("options" as const),
           disabled: controlsDisabled || agent.status === "starting" || nativeModels.switching,
           options: nativeProvider
             ? [
