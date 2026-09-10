@@ -583,7 +583,7 @@ export class AgentManager {
       for (const [key, value] of runtime.pending)
         if (value.providerId === params["requestId"]) {
           runtime.pending.delete(key);
-          value.reject(new Error("Request was resolved by Codex"));
+          value.reject(new Error("Request was resolved by the provider"));
         }
       const pending = info.pending.filter((p) => runtime.pending.has(p.id));
       if (pending.length !== info.pending.length)
@@ -684,7 +684,7 @@ export class AgentManager {
             ? "Run command"
             : method === "item/reasoning/summaryTextDelta"
               ? "Thinking"
-              : "Codex"),
+              : agentProviderNames[info.provider]),
         text: tool ? (prior?.text ?? "") : (prior?.text ?? "") + event.delta,
         detail: tool ? (prior?.detail ?? "") + event.delta : (prior?.detail ?? ""),
         status: "running",

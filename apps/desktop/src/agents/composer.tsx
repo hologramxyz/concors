@@ -425,7 +425,7 @@ export function AgentComposer({
               <ListTodo className="size-4" />
             </button>
           )}
-          {!!effortModel?.serviceTiers?.length && (
+          {agent.provider === "codex" && !!effortModel?.serviceTiers?.length && (
             <ControlPicker
               label="Speed"
               value={settings.serviceTier ?? ""}
