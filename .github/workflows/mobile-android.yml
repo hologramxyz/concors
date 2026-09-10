@@ -20,15 +20,19 @@ concurrency:
 
 jobs:
   native:
-    name: Android release build and native UI
+    name: Android native build
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 35 || 20 }}
     env:
       APP_VARIANT: preview
       EXPO_PUBLIC_DEMO: "true"
       EXPO_NO_TELEMETRY: "1"
       CI: "1"
     steps:
+      - name: Reserve space for native build tools
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/share/boost
+          df -h /
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
@@ -40,17 +44,63 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @concors/mobile assets
       - name: Generate native Android project
         working-directory: apps/mobile
         run: pnpm exec expo prebuild --platform android --no-install
-      - name: Build standalone APK and AAB with a disposable debug signing key
+      - uses: actions/cache@v4
+        with:
+          path: |
+            apps/mobile/android/.gradle
+            apps/mobile/android/app/.cxx
+            node_modules/.pnpm/**/android/.cxx
+          key: android-native-v1-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml', 'apps/mobile/app.config.ts', 'apps/mobile/scripts/ci-native.gradle') }}-${{ github.sha }}
+          restore-keys: android-native-v1-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml', 'apps/mobile/app.config.ts', 'apps/mobile/scripts/ci-native.gradle') }}-
+      - name: Build standalone simulator APK (release packaging on manual runs)
+        timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 30 || 13 }}
         # Preview identity and demo data only. Neither artifact may be submitted to a store.
         working-directory: apps/mobile/android
-        run: ./gradlew :app:assembleRelease :app:bundleRelease -PreactNativeArchitectures=arm64-v8a,x86_64 --max-workers=2 --no-daemon
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ./gradlew :app:assembleRelease :app:bundleRelease -PreactNativeArchitectures=arm64-v8a,x86_64 --build-cache --parallel --max-workers=4 --no-daemon
+          else
+            ./gradlew :app:assembleRelease --init-script ../scripts/ci-native.gradle -PreactNativeArchitectures=x86_64 --build-cache --parallel --max-workers=4 --no-daemon
+          fi
       - name: Audit target SDK, permissions and 16 KB native alignment
-        run: node apps/mobile/scripts/android-artifact-check.mjs apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+        run: node apps/mobile/scripts/android-artifact-check.mjs apps/mobile/android/app/build/outputs/apk/release/app-release.apk ${{ github.event_name == 'workflow_dispatch' && 'arm64-v8a,x86_64' || 'x86_64' }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mobile-android-app
+          path: apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'workflow_dispatch'
+        with:
+          name: mobile-android-release-bundle
+          path: apps/mobile/android/app/build/outputs/bundle/release/*.aab
+
+  ui:
+    name: Android native UI
+    needs: native
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # A clean runner keeps compiler objects from crowding out the emulator image.
+      - name: Reserve emulator disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/share/boost
+          df -h /
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: actions/download-artifact@v4
+        with:
+          name: mobile-android-app
+          path: native-app
       - name: Install pinned native UI test runner
         run: |
           curl --fail --location --retry 3 https://github.com/mobile-dev-inc/Maestro/releases/download/cli-2.10.0/maestro.zip --output "$RUNNER_TEMP/maestro.zip"
@@ -63,6 +113,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
       - name: Exercise installed Android workspace and keyboard
+        timeout-minutes: 7
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 36
@@ -71,7 +122,7 @@ jobs:
           profile: pixel_7
           disable-animations: true
           script: |
-            adb install apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+            adb install native-app/app-release.apk
             maestro test --test-output-dir apps/mobile/test-results/android apps/mobile/e2e/native/android.yaml
       - uses: actions/upload-artifact@v4
         if: always()
@@ -79,5 +130,3 @@ jobs:
           name: mobile-android-native-evidence
           path: |
             apps/mobile/test-results/android/
-            apps/mobile/android/app/build/outputs/apk/release/*.apk
-            apps/mobile/android/app/build/outputs/bundle/release/*.aab
