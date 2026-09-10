@@ -45,6 +45,23 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     await page.getByRole("textbox", { name: "Message Codex" }).waitFor();
     await expect(page.getByLabel("Agent and model")).toBeEnabled();
     await page.getByLabel("Agent and model", { exact: true }).click();
+    await expect(page.getByRole("button", { name: "Refresh agent models" })).toHaveCount(0);
+    const search = page.getByRole("combobox", { name: "Search agent and model" });
+    await expect(search).toBeFocused();
+    await search.fill("Fixture");
+    await page.getByRole("button", { name: "Back to providers", exact: true }).click();
+    const providerSearch = page.getByRole("combobox", { name: "Search providers" });
+    await expect(providerSearch).toBeFocused();
+    await expect(providerSearch).toHaveValue("");
+    await expect(page.getByRole("listbox", { name: "Providers", exact: true })).toBeVisible();
+    await providerSearch.fill("Codex");
+    await providerSearch.press("Enter");
+    await expect(search).toBeFocused();
+    await expect(search).toHaveValue("");
+    await search.press("Escape");
+    await expect(page.getByLabel("Agent and model", { exact: true })).toBeFocused();
+    await page.getByLabel("Agent and model", { exact: true }).click();
+    await expect(search).toBeVisible();
     await page.getByRole("combobox", { name: "Search agent and model" }).fill("Fixture");
     await page.getByRole("option", { name: "Fixture model", exact: true }).click();
     await expect(page.getByLabel("Agent and model", { exact: true })).toHaveText("Fixture model");
@@ -177,6 +194,19 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
       })
       .toBeLessThanOrEqual(390);
     await page.screenshot({ path: "test-results/agent-composer-mobile.png" });
+    await page.getByLabel("Agent and model", { exact: true }).click();
+    const back = page.getByRole("button", { name: "Back to providers", exact: true });
+    await expect(back).toBeVisible();
+    const popup = page.getByRole("dialog");
+    const bounds = await popup.boundingBox();
+    expect(bounds).not.toBeNull();
+    if (!bounds) throw new Error("Model picker did not render");
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
+    await back.click();
+    await page.getByRole("option", { name: "Codex", exact: true }).click();
+    await expect(search).toBeVisible();
+    await search.press("Escape");
     await page.getByRole("button", { name: "Pane actions", exact: true }).click();
     for (const name of ["Terminal", "Agent", "Codex", "Claude Code", "OpenCode"])
       await expect(page.getByRole("menuitemradio", { name, exact: true })).toBeEnabled();
