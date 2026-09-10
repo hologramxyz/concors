@@ -27,11 +27,10 @@ export class PiProvider extends EventProvider {
   );
   private text = "";
   private messageId = "";
-  constructor(
-    private cwd: string,
-    onInput: InputHandler,
-  ) {
+  private cwd: string;
+  constructor(cwd: string, onInput: InputHandler) {
     super(onInput);
+    this.cwd = cwd;
   }
   async initialize() {
     await this.open();

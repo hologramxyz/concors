@@ -25,12 +25,12 @@ export class ClaudeProvider extends EventProvider {
   private tools = new Map<string, { name: string; input: unknown }>();
   private messageId = "";
   private text = "";
-  constructor(
-    private readonly cwd: string,
-    onInput: InputHandler,
-    private readonly createQuery = query,
-  ) {
+  private readonly cwd: string;
+  private readonly createQuery: typeof query;
+  constructor(cwd: string, onInput: InputHandler, createQuery = query) {
     super(onInput);
+    this.cwd = cwd;
+    this.createQuery = createQuery;
   }
   async initialize() {
     await this.open();
