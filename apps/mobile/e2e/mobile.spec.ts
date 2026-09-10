@@ -1,6 +1,7 @@
 import { expect, test, type Page, type FrameLocator } from "@playwright/test";
 import { ids } from "../src/demo/fixtures";
 import { swipe as touchSwipe } from "./support/swipe";
+import { BINDINGS, isCompactCommand, shortcutLabel } from "../../desktop/src/shortcuts/bindings";
 const workspace = (page: Page) => page.frameLocator('iframe[title="Concors workspace"]');
 const activeChat = `${ids.tab}:${ids.pane}`;
 const activeTerminal = `${ids.tab}:${ids.terminalPane}`;
@@ -831,6 +832,11 @@ test("account opens a bottom drawer with settings, sign out and focus restoratio
   await expect(drawer).toHaveCSS("animation-name", "mobile-drawer-in");
   await expect(drawer.getByRole("button", { name: "Settings", exact: true })).toBeVisible();
   await expect(drawer.getByRole("button", { name: "Sign out", exact: true })).toBeVisible();
+  await expect(drawer.getByRole("button", { name: /Shortcuts/i })).toHaveCount(0);
+  await expect(drawer.getByText("Personal organization", { exact: true })).toHaveCount(0);
+  await expect(drawer.locator('[data-slot="dialog-description"]')).toHaveClass(/sr-only/);
+  await expect(drawer.getByText("Alex Morgan", { exact: true })).toBeVisible();
+  await expect(drawer.getByText("demo@concors.dev", { exact: true })).toBeVisible();
   const bounds = await drawer.evaluate((el) => ({
     width: el.getBoundingClientRect().width,
     bottom: el.getBoundingClientRect().bottom,
@@ -853,6 +859,49 @@ test("account opens a bottom drawer with settings, sign out and focus restoratio
   await account.click();
   await drawer.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(page.getByRole("button", { name: "Explore demo" })).toBeVisible();
+});
+
+test("mobile Shortcuts settings preserve supported commands and all entry points", async ({
+  page,
+}) => {
+  const ui = await enter(page);
+  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  await openSettings(ui);
+  await choose(ui, "Settings section", "shortcuts");
+  const settings = ui.getByRole("dialog", { name: "Settings", exact: true });
+  await expect(settings.getByRole("heading", { level: 2 })).toHaveText([
+    "Settings",
+    "Workspace",
+    "Tabs",
+    "Panes",
+  ]);
+  await expect(settings).toContainText("With an external keyboard");
+  await expect(settings).toContainText("Create and arrange split layouts on desktop.");
+  const bindings = BINDINGS.filter((binding) => isCompactCommand(binding.id));
+  await expect(settings.locator("dt")).toHaveCount(bindings.length);
+  for (const binding of bindings) {
+    const row = settings.locator("dt").filter({ hasText: binding.label }).locator("..");
+    await expect(row.locator("kbd")).toHaveText(shortcutLabel(binding.id, false));
+  }
+  await expect(settings.getByText("New pane beside current", { exact: true })).toHaveCount(0);
+  expect(await settings.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+    true,
+  );
+  await settings.getByRole("button", { name: "Close", exact: true }).click();
+  const input = ui.getByRole("textbox", { name: "Message Codex" });
+  await input.press("Control+Shift+/");
+  await expect(settings.getByRole("combobox", { name: "Settings section" })).toHaveAttribute(
+    "data-value",
+    "shortcuts",
+  );
+  await settings.getByRole("button", { name: "Close", exact: true }).click();
+  await input.press("Control+Shift+k");
+  await ui.getByPlaceholder("Type a command or search…").fill("Shortcuts");
+  await ui.getByRole("option", { name: /Shortcuts/ }).click();
+  await expect(settings.getByRole("combobox", { name: "Settings section" })).toHaveAttribute(
+    "data-value",
+    "shortcuts",
+  );
 });
 
 test("compact account footer and machine management live in settings", async ({ page }) => {

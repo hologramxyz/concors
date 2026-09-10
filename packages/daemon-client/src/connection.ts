@@ -66,7 +66,7 @@ export interface DaemonConnectionOptions {
   /** Identity presented to the daemon during the handshake. */
   readonly client: ClientInfo;
   readonly protocolVersion?: ProtocolVersion;
-  /** WebSocket subprotocols, including managed-machine bearer authentication. */
+  /** Authentication subprotocols stay in the host transport, never in the endpoint URL. */
   readonly protocols?: string | readonly string[];
   /** How long to wait for `daemon.ready` after the socket opens. */
   readonly handshakeTimeoutMs?: number;
@@ -161,9 +161,9 @@ export class DaemonConnection {
     this.#client = options.client;
     this.#protocolVersion = options.protocolVersion ?? PROTOCOL_VERSION;
     this.#handshakeTimeoutMs = options.handshakeTimeoutMs ?? DEFAULT_HANDSHAKE_TIMEOUT_MS;
-    this.#createSocket = options.webSocketFactory ?? defaultWebSocketFactory;
     this.#protocols =
       typeof options.protocols === "string" ? options.protocols : options.protocols?.slice();
+    this.#createSocket = options.webSocketFactory ?? defaultWebSocketFactory;
   }
 
   get state(): ConnectionState {

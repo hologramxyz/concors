@@ -20,6 +20,7 @@ import { NotificationSettings } from "@/notifications/settings";
 import { ExistingMachines } from "./existing-machines";
 import { MobileSelect } from "./select";
 import { AppearanceSettings } from "@/settings/appearance-settings";
+import { ShortcutSettings } from "@/settings/shortcut-settings";
 import { AdvancedSettings } from "@/settings/advanced-settings";
 
 export function SettingsDrawer({
@@ -91,7 +92,8 @@ export function SettingsDrawer({
                 .filter((item) => item.page !== "billing")
                 .filter(
                   (item) =>
-                    !host.direct || ["appearance", "advanced", "terminals"].includes(item.page),
+                    !host.direct ||
+                    ["appearance", "shortcuts", "advanced", "terminals"].includes(item.page),
                 )
                 .map(({ page, label, icon: Icon }) => ({
                   value: page,
@@ -121,6 +123,10 @@ export function SettingsDrawer({
                 creating={creatingTerminalProfile}
                 onCreatingChange={onCreatingTerminalProfileChange}
               />
+            </div>
+          ) : page === "shortcuts" ? (
+            <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
+              <ShortcutSettings />
             </div>
           ) : host.direct ? (
             <div className="space-y-5 p-4">
@@ -245,7 +251,7 @@ export function SettingsDrawer({
               }
             />
           ) : null}
-          {!host.demo && (host.direct || page === "account") && (
+          {!host.demo && ((host.direct && page !== "shortcuts") || page === "account") && (
             <div className="px-4 pb-4">
               <Section
                 title="AI data sharing"
