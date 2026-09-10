@@ -24,7 +24,7 @@ test("terminal profiles sync, launch literal arguments, and switch within the sa
     await Promise.all([signedIn(page), signedIn(second)]);
     await page.goto("/");
     await seedProject(page, "Profiles", directory);
-    await second.goto("http://localhost:1420");
+    await second.goto(page.url());
     await page.getByRole("button", { name: "Pane actions" }).click();
     for (const name of ["Terminal", "Agent", "Codex", "Claude Code", "OpenCode"]) {
       await expect(

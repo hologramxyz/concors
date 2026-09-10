@@ -209,7 +209,7 @@ export function NewTabMenu({
           <DropdownMenuContent
             className="w-72 max-w-[calc(100vw-16px)]"
             onCloseAutoFocus={(event) => {
-              // The new pane or configuration dialog owns focus after selection.
+              // The selected pane or settings page owns focus after selection.
               if (menuTransfersFocus.current) event.preventDefault();
               menuTransfersFocus.current = false;
             }}
