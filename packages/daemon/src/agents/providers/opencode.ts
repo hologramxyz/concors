@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
+import { setTimeout as delay } from "node:timers/promises";
 import { readFile } from "node:fs/promises";
 import {
   EventProvider,
@@ -16,6 +17,7 @@ export class OpenCodeProvider extends EventProvider {
   private password = randomBytes(32).toString("hex");
   private abort = new AbortController();
   private messages = new Map<string, string>();
+  private parts = new Map<string, { messageId: string; text: string }>();
   private cwd: string;
   constructor(cwd: string, onInput: InputHandler) {
     super(onInput);
@@ -58,6 +60,18 @@ export class OpenCodeProvider extends EventProvider {
         }
       });
     });
+    // The CLI can announce its URL before the HTTP listener accepts connections.
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await this.fetch("/global/health", {
+          signal: AbortSignal.any([this.abort.signal, AbortSignal.timeout(1000)]),
+        });
+        break;
+      } catch (error) {
+        if (attempt >= 9 || this.closed) throw error;
+        await delay(100);
+      }
+    }
     const response = await this.fetch("/event", { signal: this.abort.signal });
     if (!response.body) throw new Error("OpenCode event stream is missing");
     void this.events(response.body).catch((error) => {
@@ -76,6 +90,7 @@ export class OpenCodeProvider extends EventProvider {
         headers: {
           authorization: "Basic " + Buffer.from("concors:" + this.password).toString("base64"),
           "content-type": "application/json",
+          connection: "close",
           ...init.headers,
         },
         signal: init.signal ?? AbortSignal.any([this.abort.signal, AbortSignal.timeout(15000)]),
@@ -164,6 +179,7 @@ export class OpenCodeProvider extends EventProvider {
     }
     const result = this.begin();
     this.messages.clear();
+    this.parts.clear();
     await this.call(`/session/${encodeURIComponent(this.threadId)}/prompt_async`, {
       parts,
       ...(model
@@ -213,6 +229,8 @@ export class OpenCodeProvider extends EventProvider {
       const part = object(p["part"]);
       if (part["sessionID"] !== this.threadId) return;
       const id = string(part["id"]);
+      if (part["type"] === "text")
+        this.parts.set(id, { messageId: string(part["messageID"]), text: string(part["text"]) });
       if (part["type"] === "text" && this.messages.get(string(part["messageID"])) === "assistant")
         this.item(
           { id, type: "agentMessage", text: string(part["text"]) },
@@ -231,6 +249,15 @@ export class OpenCodeProvider extends EventProvider {
       }
     }
     if (p["sessionID"] !== this.threadId) return;
+    if (e["type"] === "message.part.delta" && p["field"] === "text") {
+      const id = string(p["partID"]),
+        part = this.parts.get(id);
+      if (part && this.messages.get(part.messageId) === "assistant") {
+        part.text += string(p["delta"]);
+        this.item({ id, type: "agentMessage", text: part.text }, false);
+      }
+    }
+
     // Keep reading SSE while waiting for user input; an interrupt/completion can resolve it.
     if (e["type"] === "permission.asked")
       void this.permission(string(p["permission"]), p["patterns"])
@@ -244,20 +271,22 @@ export class OpenCodeProvider extends EventProvider {
         });
     if (e["type"] === "question.asked")
       void (async () => {
-        const questions = array(p["questions"])
-          .slice(0, 3)
-          .map((value, index) => {
-            const q = object(value);
-            return {
-              id: String(index),
-              header: string(q["header"]),
-              question: string(q["question"]),
-              options: array(q["options"]).map((v) => {
-                const o = object(v);
-                return { label: string(o["label"]), description: string(o["description"]) };
-              }),
-            };
-          });
+        if (array(p["questions"]).length > 3) {
+          await this.call(`/question/${encodeURIComponent(string(p["id"]))}/reject`, {});
+          return;
+        }
+        const questions = array(p["questions"]).map((value, index) => {
+          const q = object(value);
+          return {
+            id: String(index),
+            header: string(q["header"]),
+            question: string(q["question"]),
+            options: array(q["options"]).map((v) => {
+              const o = object(v);
+              return { label: string(o["label"]), description: string(o["description"]) };
+            }),
+          };
+        });
         const result = object(
           await this.onInput(
             "item/tool/requestUserInput",
@@ -279,7 +308,7 @@ export class OpenCodeProvider extends EventProvider {
     this.closed = true;
     this.abort.abort();
     const child = this.child;
-    if (!child || child.exitCode !== null) return;
+    if (!child || child.exitCode !== null || child.signalCode !== null) return;
     const exit = new Promise<void>((resolve) => child.once("close", () => resolve()));
     child.kill();
     const timer = setTimeout(() => child.kill("SIGKILL"), 2000);
