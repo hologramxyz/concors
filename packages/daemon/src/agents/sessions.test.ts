@@ -190,6 +190,46 @@ it("marks a crashed active turn interrupted and never replays a durable prompt r
   expect(b.agents[0]?.pending).toEqual([]);
 });
 
+it("cancels the turn from an approval, settles other requests, and ignores late output", async () => {
+  const { a, b, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "approve command" });
+  await expect.poll(() => a.agents[0]?.pending.length).toBe(1);
+  const pending = a.agents[0]!.pending[0]!;
+  const provider = providers[0]!;
+  const other = provider
+    .onRequest(
+      "item/commandExecution/requestApproval",
+      {
+        threadId: provider.threadId,
+        turnId: pending.turnId,
+        command: "second command",
+      },
+      "second-approval",
+    )
+    .catch((error: Error) => error.message);
+  await expect.poll(() => b.agents[0]?.pending.length).toBe(2);
+  expect(
+    (await action(a, { kind: "respond", sessionId: id, pendingId: pending.id, decision: "cancel" }))
+      .outcome.status,
+  ).toBe("ok");
+  await expect.poll(() => b.agents[0]?.status).toBe("interrupted");
+  expect(await other).toBe("Turn ended");
+  expect(provider.requests.some((r) => r.method === "turn/interrupt")).toBe(true);
+  provider.emit("item/completed", {
+    item: { id: "late-output", type: "agentMessage", text: "Should not appear" },
+  });
+  provider.finish();
+  const result = await action(b, { kind: "read", sessionId: id });
+  expect(result.outcome).toMatchObject({
+    status: "ok",
+    conversation: { agent: { status: "interrupted", pending: [] } },
+  });
+  if (result.outcome.status === "ok")
+    expect(result.outcome.conversation.items.some((i) => i.id === "late-output")).toBe(false);
+  await action(a, { kind: "send", sessionId: id, text: "next message" });
+  await expect.poll(() => b.agents[0]?.status).toBe("done");
+});
+
 it("syncs attention acknowledgements, rejects stale reads, and preserves unread state across restart", async () => {
   const { a, b, id } = await setup();
   await action(a, { kind: "send", sessionId: id, text: "hold" });

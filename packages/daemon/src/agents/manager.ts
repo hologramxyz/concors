@@ -50,6 +50,7 @@ interface Runtime {
   ready: Promise<AgentProvider>;
   pending: Map<string, PendingResolver>;
   closed: boolean;
+  cancelledTurn: string | null;
 }
 
 export class AgentManager {
@@ -166,6 +167,7 @@ export class AgentManager {
       ready: Promise.resolve(provider),
       pending: new Map(),
       closed: false,
+      cancelledTurn: null,
     };
     this.#runtimes.set(id, runtime);
     provider.onNotification((method, params) => {
@@ -408,10 +410,7 @@ export class AgentManager {
         const runtime = this.#runtimes.get(info.id);
         if (!runtime) throw new Error("Agent connection is no longer active");
         this.#store.reserveAgentAction(request, info);
-        await runtime.provider.request("turn/interrupt", {
-          threadId: info.threadId,
-          turnId: op.turnId,
-        });
+        await this.interrupt(info.id, runtime, op.turnId);
       } else {
         const pending = info.pending.find((p) => p.id === op.pendingId);
         const runtime = this.#runtimes.get(info.id);
@@ -442,9 +441,12 @@ export class AgentManager {
           updatedAt: new Date().toISOString(),
         };
         this.#store.reserveAgentAction(request, next);
+        const cancel = pending.kind === "approval" && op.decision === "cancel";
+        if (cancel) runtime.cancelledTurn = pending.turnId;
         runtime.pending.delete(pending.id);
         resolver.resolve(value);
         this.#emit({ type: "agent.state", agent: next });
+        if (cancel) await this.interrupt(info.id, runtime, pending.turnId);
       }
       return this.result(request, op.sessionId);
     } catch (error) {
@@ -464,6 +466,22 @@ export class AgentManager {
       requestId: request.requestId,
       outcome: { status: "ok", conversation: this.#store.agentConversation(id, before) },
     };
+  }
+  private async interrupt(id: string, runtime: Runtime, turnId: string): Promise<void> {
+    runtime.cancelledTurn = turnId;
+    try {
+      await runtime.provider.request("turn/interrupt", {
+        threadId: this.#store.agent(id).threadId,
+        turnId,
+      });
+    } catch (error) {
+      // A provider can finish while its cancel request is in flight. A terminal
+      // state is authoritative; otherwise preserve the error and allow retry.
+      if (this.#store.agent(id).status !== "interrupted") {
+        runtime.cancelledTurn = null;
+        throw error;
+      }
+    }
   }
   private async send(
     id: string,
@@ -574,6 +592,7 @@ export class AgentManager {
     }
     if (method === "turn/started") {
       const turn = Turn.parse(params["turn"]);
+      if (this.#runtimes.get(id)?.cancelledTurn === turn.id) return;
       this.started(id, turn.id);
       return;
     }
@@ -592,8 +611,13 @@ export class AgentManager {
     }
     if (method === "turn/completed") {
       const turn = Turn.parse(params["turn"]);
-      if (turn.id !== info.turnId) return;
+      if (turn.id !== info.turnId || !["starting", "working", "needs_input"].includes(info.status))
+        return;
       const runtime = this.#runtimes.get(id);
+      if (runtime?.cancelledTurn === turn.id) {
+        turn.status = "interrupted";
+        turn.error = null;
+      }
       if (runtime) {
         for (const p of runtime.pending.values()) p.reject(new Error("Turn ended"));
         runtime.pending.clear();
@@ -653,6 +677,7 @@ export class AgentManager {
       return;
     }
     if (params["turnId"] !== info.turnId) return;
+    if (this.#runtimes.get(id)?.cancelledTurn === params["turnId"]) return;
     if (method === "item/started" || method === "item/completed")
       this.lifecycle(id, String(params["turnId"]), params["item"], method === "item/completed");
     else if (
