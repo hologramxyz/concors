@@ -1,138 +1,96 @@
 # Mobile backend integration contract
 
-The managed-cloud sections are a **source-verified integration assessment plus
-proposals**, not a claim that a deployed cloud workspace bridge has been tested.
-Direct desktop testing is a separate path, described below. No `concors-server`
-implementation is included in this client PR.
+## Implemented client contract (2026-09-10)
 
-## Direct desktop milestone: no server PR required
+Mobile is an **existing-account companion** for v1. It has sign-in and access to
+existing machines, but no signup, machine purchasing, subscription management, or
+billing links. Commerce RPCs are rejected at the native host boundary, not merely
+hidden. The desktop product keeps its existing commerce features.
 
-Mobile can now connect directly to the existing Concors daemon, just as desktop does,
-using an explicitly configured private WSS endpoint. It has a separate preview-only
-connection session with no fabricated cloud account or machine inventory. The host
-receives the real machine ID and workspace over the shared protocol. A loopback-only
-Tailscale identity/origin adapter is included for browser testing without weakening
-the daemon's local-origin policy. See [direct setup and testing](../apps/mobile/README.md#first-connect-to-the-same-daemon-as-desktop).
+The authoritative architecture is [managed machines v1](managed-machines-v1.md):
+one Concors daemon, with TLS/JWT authentication in its managed gateway and persistent
+sessions in its private loopback host. No second terminal-agent bridge is needed.
 
-The cloud bridge below is a separate managed-service milestone, not a prerequisite
-for this direct connection. Desktop's working direct path does not use the proposed
-cloud ticket endpoint either. No `concors-server` files or services were changed for
-direct mobile testing. Login/empty-state product design remains deferred.
+- Desktop main includes managed mode and Linux release packaging. The published
+  `daemon-v0.2.0` predates the active-socket expiry hardening in this mobile PR.
+  A new reviewed daemon release and rollout are required before claiming the
+  documented revocation window.
+- [Server PR #1](https://github.com/concors-dev/concors-server/pull/1) replaces the
+  legacy tmux agent with the daemon release. It is a dependency, not duplicated here.
+- [Server PR #2](https://github.com/concors-dev/concors-server/pull/2) adds authenticated
+  `GET /api/v1/mobile/capabilities`, gated by
+  `MOBILE_MANAGED_ACCESS_ENABLED=false` by default. It does not deploy/install
+  machines. Push and account deletion remain explicitly false.
+- Mobile now uses the existing `POST /api/v1/machines/:id/token` endpoint and
+  `wss://<machine.hostname>/ws`. The obsolete `/connect` ticket proposal is not
+  used; do not implement another exchange service for this client.
 
-Project file browsing/editing also uses that existing connection: schema-validated
-`file.request` / `file.result` operations are relayed by the host. The daemon must advertise
-`project-files`, and `project-file-create` separately for creation. An older running desktop
-daemon needs an update before files become available; no cloud gateway or filesystem HTTP
-endpoint is introduced. The renderer still has no credentials or independent network access.
+## Connection and identity
 
-## What exists now (2026-09-09)
+The host rechecks the current account, active organization, selected machine and
+capability discovery before minting. It requires a running machine, a managed
+hostname, an unexpired certificate, a heartbeat within 90 seconds, and a workspace
+daemon version (not the legacy terminal agent). Expired cancelled subscriptions are
+not candidates.
 
-Upstream server revision
-[`2f2ea5a`](https://github.com/concors-dev/concors-server/commit/2f2ea5ac1c659ec7240f2570db9b79e97da3348a)
-adds a machine agent. This supersedes the earlier assessment of `50d5a6d`:
+Machine JWTs are minted immediately before connecting and passed only as
+`Sec-WebSocket-Protocol: concors.bearer.<token>`. They are kept in the host transport's
+memory, never persisted, logged, placed in URLs or relayed to the embedded renderer.
+The account session is stored using the platform secure store. The gateway validates
+signature, issuer, machine audience, session/organization claims and a maximum
+15-minute lifetime. The gateway now detaches authenticated sockets at their token
+deadline, without stopping remote terminals or agents. Reconnects mint fresh tokens;
+HTTP 401/403/404 stops automatic retries and prompts for user action.
 
-- Control-plane accounts, organizations and machine lifecycle already exist.
-- Machines now report hostname, certificate expiry/error and agent installation,
-  version, last-seen and error metadata. The client preserves these optional fields
-  while still accepting older deployments.
-- `POST /api/v1/machines/:id/token` returns `{machineId, token, expiresAt}`. The token
-  is a 15-minute EdDSA JWT scoped to the machine audience, user, session and organization;
-  verification keys are exposed at `/.well-known/jwks.json`. This is **not** the
-  previously proposed short-lived, one-use connection ticket.
-- The machine agent serves TLS on port 443. It exposes `/health`, list/create/delete
-  `/sessions`, and `/sessions/:id/attach` over WebSocket. Sessions use persistent tmux;
-  the socket carries terminal bytes and resize/exit messages.
-- The agent accepts bearer authentication. Although upstream also accepts query-string
-  tokens, the mobile client must not put credentials in URLs or renderer state.
+The **cloud machine ID** is the control-plane record and JWT audience. The
+**workspace machine ID** is an independently generated, persistent daemon namespace.
+They need not match. TLS hostname and machine-scoped JWT authentication establish
+the remote host identity; workspace epochs/versions scope protocol operations.
+Do not compare a workspace namespace with a cloud record ID to authorize access.
 
-See the pinned [machine routes](https://github.com/concors-dev/concors-server/blob/2f2ea5ac1c659ec7240f2570db9b79e97da3348a/src/modules/machines/machines.routes.ts),
-[token implementation](https://github.com/concors-dev/concors-server/blob/2f2ea5ac1c659ec7240f2570db9b79e97da3348a/src/lib/machine-tokens.ts)
-and [agent server](https://github.com/concors-dev/concors-server/blob/2f2ea5ac1c659ec7240f2570db9b79e97da3348a/packages/agent/src/server.ts).
+Revocation is bounded, not immediate: an already-issued token may work until its
+expiry. The server's token route rechecks account-session and organization membership.
+A release must verify actual logout and membership removal with an open connection.
 
-**The integration gap:** this terminal-session protocol is not Concors v1. It does not
-provide the workspace snapshots, tab/pane operations, agent chat/tool events and
-approval messages consumed by the shared desktop/mobile UI. Changing a URL or token
-alone cannot give feature parity. The Concors daemon in this repository already
-implements those workspace, terminal and agent sessions.
+## Direct desktop testing remains separate
 
-## Next: authenticated workspace bridge
+Preview-only direct mode connects to the existing desktop daemon through an explicitly
+configured private WSS endpoint, without a fabricated cloud account. The loopback-only
+Tailscale identity/origin adapter is for private testing; it is not production auth.
+See [direct setup](../apps/mobile/README.md#first-connect-to-the-same-daemon-as-desktop).
 
-In a companion backend PR, add an explicit versioned capability/route to the new machine
-agent that forwards Concors v1 to the existing daemon on loopback. Keep the machine's
-TLS and access-token infrastructure; do not expose the daemon directly or reimplement
-chat using raw terminal output. Resolve route naming, daemon installation/lifecycle and
-the WebSocket credential handshake with the backend owner before client transport changes.
+Files use the same schema-validated `file.request`/`file.result` protocol. The daemon
+must advertise `project-files`, and `project-file-create` for creation. Chat, tool
+events, approvals, tabs/panes, file guards and terminal ownership remain shared with
+desktop. Real connections require explicit account/direct-endpoint-scoped AI consent.
 
-The bridge must validate signature/issuer/audience/expiry and current authorization,
-preserve protocol negotiation, enforce machine identity, redact credentials, and define
-active-socket expiry and revocation behavior. A 15-minute JWT does not by itself prove
-immediate logout/membership-removal revocation. Native credentials stay in the host;
-browser-compatible authentication must avoid URL tokens. Use a one-use exchange only
-if required by the agreed browser handshake, not as a parallel replacement access system.
+## Verification and release gates
 
-The shared API now supports `getMachineAccessToken()` with response shape, requested-machine
-and expiry validation, but it is **not wired into the mobile workspace transport**.
-The cloud connection path still gates access on mobile capabilities and the earlier
-ticket contract below. Direct desktop mode does not use either endpoint. Enable/change
-the cloud path only when a real bridge supports it.
+The read-only `pnpm --filter @concors/mobile live:preflight` checks the same managed
+metadata and discovery. It does not create a session or prove live/native acceptance.
+Credentials belong in private local/CI environment variables, never public Expo vars.
 
-Run `pnpm --filter @concors/mobile live:preflight` with private environment configuration
-described in the [mobile README](../apps/mobile/README.md). It reads account, machine and
-capability state, rejects missing/cross-organization machines, and reports blockers.
-It never creates a session or claims that a live connection was verified. Installation
-metadata is evidence of provisioning, not proof of workspace/chat support.
+Before enabling managed access: review/merge the installer and client/daemon changes,
+publish the updated daemon artifact, install on a non-customer test machine, and prove
+desktop/phone concurrency, token expiry/revocation, files, chat approvals and
+background/reconnect on signed native builds. No deployment, fleet update, signing,
+store submission or physical-device verification is implied by these source tests.
 
-## Existing contracts reused
+## Remaining backend services
 
-Native sign-in/sign-out and `/api/v1/me` use bearer tokens, not browser cookies or a
-Vite proxy. Sign-in must supply a token in the body or exposed response header.
-Organizations/machines use `@concors/api-client`. Daemon traffic uses Concors v1 through
-`DaemonConnection`: epochs, expected versions, stable pane/session IDs, bounded history,
-PTY ownership and attach snapshots retain their existing meaning. No protocol fork.
+Authenticate and authorize every request. The client treats only a 404 capability
+response as an older unsupported server; malformed responses and service/auth errors
+are not converted into permission to connect.
 
-## Remaining proposed routes (not found in reviewed upstream source)
+| Route                                           | Request                           | Success                                                      |
+| ----------------------------------------------- | --------------------------------- | ------------------------------------------------------------ |
+| `GET /api/v1/mobile/capabilities`               | —                                 | `{version:1,remoteAccess,pushNotifications,accountDeletion}` |
+| `POST /api/v1/mobile/devices`                   | `{installationId,token,platform}` | Successful 2xx                                               |
+| `DELETE /api/v1/mobile/devices/:installationId` | —                                 | Successful 2xx                                               |
+| `POST /api/v1/account/deletion`                 | `{password}`                      | `{status:"deleted"                                           | "scheduled"}` |
 
-Authenticate and authorize membership on every request. Use usual `{code,message}`
-errors with meaningful HTTP statuses. Schemas/client validation are in
-`packages/api-client/src/mobile.ts` and `client.ts`.
-
-| Route                                           | Request                                            | Success body                                                                         |
-| ----------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `GET /api/v1/mobile/capabilities`               | —                                                  | `{version:1,remoteAccess:boolean,pushNotifications:boolean,accountDeletion:boolean}` |
-| `POST /api/v1/mobile/devices`                   | `{installationId,token,platform:"ios"\|"android"}` | Any successful 2xx body                                                              |
-| `DELETE /api/v1/mobile/devices/:installationId` | —                                                  | Any successful 2xx body                                                              |
-| `POST /api/v1/account/deletion`                 | `{password}`                                       | `{status:"deleted"\|"scheduled"}`                                                    |
-
-Only a 404 capability response means an unsupported older server. Authentication,
-service errors and malformed responses are not silently converted into feature flags.
-
-### Earlier daemon-ticket proposal (not the new agent's current contract)
-
-The client has an implementation for `POST /api/v1/machines/:id/connect` returning
-`{machineId,url,ticket,expiresAt}`. The server has not implemented this route. Retain it
-as a reference while agreeing the bridge above; do not mistake it for `/token` or
-implement a second gateway without reconciling the existing machine-agent architecture.
-
-Return a WSS URL without credentials/query/fragment; a base64url ticket (16–2048 chars)
-scoped to the user, organization and exact machine; and a UTC ISO expiry. Recommended
-lifetime 30–60 seconds with one-use redemption. Client rejects wrong-machine tickets
-and expiry within five seconds.
-
-WebSocket offers `Sec-WebSocket-Protocol: concors.v1, ticket.<ticket>`. Validate and
-atomically consume the ticket **before** forwarding, negotiate only `concors.v1`, strip
-the credential protocol upstream and redact handshake headers from logs. Reject replay,
-expiry and cross-tenant access. Never send the control-plane session token to the daemon.
-Authorize/verify daemon identity before minting; client also checks snapshot machine ID.
-
-Revoke grants and active sockets on logout, membership removal and account deletion.
-Rate-limit minting, validate browser Origin where applicable without treating Origin as
-native authentication. The daemon must be installed/healthy behind the gateway; an IP
-address is not a complete mobile access path. Private WSS testing overrides are not
-production authorization.
-
-Acceptance: correct/wrong organization, replay/expiry, removed membership, logout with
-open socket, daemon offline/restart, network transitions, desktop/phone concurrency.
-Every resume/reconnect requests a fresh ticket and authoritative snapshot.
+Only discovery is implemented in the companion server PR. The following push and
+deletion contracts still require backend implementation and policy review.
 
 ### Push
 

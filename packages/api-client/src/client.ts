@@ -345,6 +345,7 @@ export class ApiClient {
       throw error;
     }
   }
+  /** @deprecated Unimplemented historical proposal; managed clients use getMachineAccessToken. */
   async connectMachine(machineId: string): Promise<MachineConnectionTicket> {
     const { data } = await this.#request(
       "POST",

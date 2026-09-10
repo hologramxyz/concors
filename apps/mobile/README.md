@@ -244,17 +244,24 @@ iOS 26 simulator app and exercises native headers, input expansion, settings, Fi
 preservation. Browser acceptance separately covers the bridge and the web/Android fallback;
 neither a passing web test nor an Expo export substitutes for the simulator/device test.
 
-### Later: managed cloud connections
+### Managed cloud connections — rollout gated
 
 Create `apps/mobile/.env.local` from `.env.example`. Set the real HTTPS
 `EXPO_PUBLIC_API_URL`, disable `EXPO_PUBLIC_DEMO`, then run `pnpm mobile:dev`.
-Native sign-up/sign-in, inventory and organization switching use the existing API.
+Native sign-in, inventory and organization switching use the existing API.
+V1 is an existing-account companion: signup, purchasing, subscription management and
+billing links are absent, and commerce RPCs are blocked in the native host.
 Unavailable gateway/push/deletion capabilities are shown honestly; failures are retryable.
 
-The latest upstream machine agent provides authenticated terminal sessions, not the
-Concourse workspace/chat protocol. Its `/token` API is now supported in the shared API
-client, but is deliberately **not wired to the workspace transport** until the authenticated
-bridge is implemented. See [the current backend assessment](../../docs/mobile-backend.md).
+The mobile host now connects using `/machines/:id/token` and the managed daemon's
+`/ws` endpoint with the `concors.bearer.<token>` subprotocol. Cloud machine IDs and
+daemon workspace IDs are separate namespaces. Short-lived machine JWTs remain only
+in native transport memory; the renderer never receives them.
+
+Server installer PR #1, opt-in capability discovery, and an updated daemon release
+with active-socket expiry must be reviewed and rolled out before cloud acceptance.
+The published daemon v0.2.0 predates this expiry fix. No cloud deployment or signed
+phone acceptance is claimed here. See [the backend contract](../../docs/mobile-backend.md).
 
 With an existing session credential supplied privately through your local environment,
 run the read-only prerequisite check from the repository root:

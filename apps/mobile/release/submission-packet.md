@@ -6,19 +6,20 @@ backend deployment, account deletion, or store upload has been performed.
 
 ## Critical path
 
-| Work                 | Owner / decision        | Acceptance                                                                                                                                                                                          |
-| -------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| First-release scope  | Product                 | Approve existing-account companion versus signup/purchasing; decide whether push ships in v1. Do not silently remove existing features.                                                             |
-| Production workspace | Backend                 | Versioned authenticated Concors protocol bridge in the existing machine agent; daemon installation/lifecycle, token expiry and active-socket revocation. Dedicated non-customer acceptance machine. |
-| Account lifecycle    | Backend + product       | Password recovery delivery; durable deletion; explicit handling of shared organization ownership, machines, subscriptions and retained records. No client-only deletion.                            |
-| Public pages         | Website + privacy owner | Actual privacy/support pages and working deletion request; accurate retention and subprocessors.                                                                                                    |
-| App links            | Website + signing owner | JSON association files with the real Apple team ID and Play signing certificate fingerprints.                                                                                                       |
-| AI safety            | Backend + privacy owner | Provider disclosure/consent, content safeguards and functioning in-app reporting under applicable store policy. A support email alone is not an in-app report workflow.                             |
-| Distribution         | Team account owner      | Verified Apple/Google accounts, Expo project, agreements, app records, signing, reviewer contacts and any Play testing requirement.                                                                 |
-| Installed acceptance | Device QA               | Signed physical iPhone/Android tests; permissions, accessibility and a 16 KB Android device.                                                                                                        |
+| Work                 | Owner / decision        | Acceptance                                                                                                                                                                      |
+| -------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| First-release scope  | Product                 | Existing-account companion approved and implemented; storefront review remains pending. Decide whether push ships in v1.                                                        |
+| Production workspace | Backend                 | Managed daemon installer (server PR #1), opt-in discovery, updated artifact with active-socket expiry, and signed phone/desktop acceptance on a dedicated non-customer machine. |
+| Account lifecycle    | Backend + product       | Password recovery delivery; durable deletion; explicit handling of shared organization ownership, machines, subscriptions and retained records. No client-only deletion.        |
+| Public pages         | Website + privacy owner | Actual privacy/support pages and working deletion request; accurate retention and subprocessors.                                                                                |
+| App links            | Website + signing owner | JSON association files with the real Apple team ID and Play signing certificate fingerprints.                                                                                   |
+| AI safety            | Backend + privacy owner | Provider disclosure/consent, content safeguards and functioning in-app reporting under applicable store policy. A support email alone is not an in-app report workflow.         |
+| Distribution         | Team account owner      | Verified Apple/Google accounts, Expo project, agreements, app records, signing, reviewer contacts and any Play testing requirement.                                             |
+| Installed acceptance | Device QA               | Signed physical iPhone/Android tests; permissions, accessibility and a 16 KB Android device.                                                                                    |
 
 Source audit: `concors-server` main `2f2ea5a` exposes authenticated tmux terminal
-sessions, not the Concors workspace/chat protocol. There is no reviewed mobile-device,
+sessions; open server PR #1 replaces that agent with the shared managed daemon.
+The companion server PR adds only default-disabled capability discovery. There is no reviewed mobile-device,
 deletion or AI-report route. Email auth has no password-reset email delivery configured.
 See [backend contract](../../../docs/mobile-backend.md).
 
