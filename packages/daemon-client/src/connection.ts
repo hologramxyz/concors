@@ -66,14 +66,12 @@ export interface DaemonConnectionOptions {
   /** Identity presented to the daemon during the handshake. */
   readonly client: ClientInfo;
   readonly protocolVersion?: ProtocolVersion;
-  /** WebSocket subprotocols, including managed-machine bearer authentication. */
-  readonly protocols?: string | string[];
+  /** Authentication subprotocols stay in the host transport, never in the endpoint URL. */
+  readonly protocols?: string | readonly string[];
   /** How long to wait for `daemon.ready` after the socket opens. */
   readonly handshakeTimeoutMs?: number;
   /** Override the WebSocket implementation (tests, custom transports). */
   readonly webSocketFactory?: WebSocketFactory;
-  /** Authentication subprotocols stay in the host transport, never in the endpoint URL. */
-  readonly protocols?: readonly string[];
 }
 
 export class DaemonConnectionError extends Error {
@@ -157,16 +155,15 @@ export class DaemonConnection {
   readonly #handshakeTimeoutMs: number;
   readonly #protocols: string | string[] | undefined;
   readonly #createSocket: WebSocketFactory;
-  readonly #protocols: string[] | undefined;
 
   constructor(options: DaemonConnectionOptions) {
     this.endpoint = options.endpoint;
     this.#client = options.client;
     this.#protocolVersion = options.protocolVersion ?? PROTOCOL_VERSION;
     this.#handshakeTimeoutMs = options.handshakeTimeoutMs ?? DEFAULT_HANDSHAKE_TIMEOUT_MS;
-    this.#protocols = options.protocols;
+    this.#protocols =
+      typeof options.protocols === "string" ? options.protocols : options.protocols?.slice();
     this.#createSocket = options.webSocketFactory ?? defaultWebSocketFactory;
-    this.#protocols = options.protocols ? [...options.protocols] : undefined;
   }
 
   get state(): ConnectionState {

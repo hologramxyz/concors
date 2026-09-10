@@ -2,7 +2,6 @@ import { FilesSidebar } from "@/files/sidebar";
 import { FilesProvider } from "@/files/provider";
 import { useCommand } from "@/shortcuts/context";
 import { ShortcutProvider } from "@/shortcuts/provider";
-import { ShortcutGuide } from "@/shortcuts/guide";
 import { findSessionPane, type PaneFocusRequest } from "@/workspace/session-pane";
 import { NotificationProvider } from "@/notifications/provider";
 import { AgentsProvider } from "@/agents/state";
@@ -80,7 +79,6 @@ function AppContent() {
     window.location.pathname === "/settings/billing" ? "billing" : "account",
   );
   const settingsReturnView = useRef<Exclude<View, "settings">>("projects");
-  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [localEndpoint, setLocalEndpoint] = useState<DaemonEndpoint | null>(null);
   const [selectionHost, setSelectionHost] = useState<{ scope: string; host: Host } | null>(null);
@@ -183,17 +181,17 @@ function AppContent() {
   const signOut = async () => {
     if ((await beforeLeaveFiles.current?.()) !== false) void auth.signOut();
   };
-  const openSettings = () => {
+  const openSettings = (page: SettingsPage) => {
     if (view !== "settings") settingsReturnView.current = view;
-    setSettingsPage("account");
+    setSettingsPage(page);
     setView("settings");
   };
 
   const signedIn = auth.state.status === "signed-in";
   useCommand("search", signedIn, () => setPaletteOpen((open) => !open));
   useCommand("new-project", signedIn && canEdit && !newWorkspace.busy, startWorkspace);
-  useCommand("settings", signedIn, openSettings);
-  useCommand("shortcuts", signedIn, () => setShortcutsOpen(true));
+  useCommand("settings", signedIn, () => openSettings("account"));
+  useCommand("shortcuts", signedIn, () => openSettings("shortcuts"));
 
   // Nothing but the sign-in screen exists for a signed-out user. All hooks run above this line.
   if (auth.state.status !== "signed-in") {
@@ -277,9 +275,8 @@ function AppContent() {
                     execute={execute}
                     onSelectAgent={openAgent}
                     view={view}
-                    onOpenSettings={openSettings}
+                    onOpenSettings={() => openSettings("account")}
                     onOpenCommandPalette={openPalette}
-                    onOpenShortcuts={() => setShortcutsOpen(true)}
                     workspace={workspace}
                     canEdit={canEdit && !newWorkspace.busy}
                     onSelectProject={selectProject}
@@ -438,7 +435,6 @@ function AppContent() {
                   }}
                 />
               )}
-              <ShortcutGuide open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
               <CommandPalette
                 canSelectProject={canEdit}
                 projects={workspace?.projects ?? []}

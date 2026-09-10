@@ -91,6 +91,45 @@ function startConnection() {
 }
 
 describe("DaemonConnection", () => {
+  it.each(["concors.bearer.test-token", ["concors.bearer.test-token"] as const, undefined])(
+    "preserves subprotocol values for custom transports: %j",
+    async (protocols) => {
+      const socket = new FakeWebSocket("wss://daemon.example/ws");
+      const factory = vi.fn(() => socket);
+      const connection = new DaemonConnection({
+        endpoint: describeDaemonEndpoint(socket.url),
+        client,
+        ...(protocols === undefined ? {} : { protocols }),
+        webSocketFactory: factory,
+      });
+      const ready = connection.connect();
+      expect(factory).toHaveBeenCalledWith(socket.url, protocols);
+      socket.serverOpen();
+      socket.serverSend(READY);
+      await ready;
+      connection.disconnect();
+    },
+  );
+
+  it("copies subprotocol arrays before the caller can mutate them", async () => {
+    const socket = new FakeWebSocket("wss://daemon.example/ws");
+    const factory = vi.fn(() => socket);
+    const protocols = ["concors.bearer.test-token"];
+    const connection = new DaemonConnection({
+      endpoint: describeDaemonEndpoint(socket.url),
+      client,
+      protocols,
+      webSocketFactory: factory,
+    });
+    protocols.push("unexpected-protocol");
+    const ready = connection.connect();
+    expect(factory).toHaveBeenCalledWith(socket.url, ["concors.bearer.test-token"]);
+    socket.serverOpen();
+    socket.serverSend(READY);
+    await ready;
+    connection.disconnect();
+  });
+
   it("passes bearer protocols to the native WebSocket constructor without changing the URL", async () => {
     const socket = new FakeWebSocket("wss://daemon.example/ws");
     const constructor = vi.fn(function () {

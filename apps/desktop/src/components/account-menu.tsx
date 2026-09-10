@@ -1,4 +1,4 @@
-import { ChevronsUpDown, Keyboard, LogOut, Settings } from "lucide-react";
+import { ChevronsUpDown, LogOut, Settings } from "lucide-react";
 import { useContext, useState } from "react";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import {
@@ -10,7 +10,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 
-import { activeOrganization, initialOf, type SignedInAuth } from "@/auth/auth-state";
+import { initialOf, type SignedInAuth } from "@/auth/auth-state";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,27 +24,13 @@ interface AccountMenuProps {
   readonly auth: SignedInAuth;
   readonly onSignOut: () => void;
   readonly onOpenSettings: () => void;
-  readonly onOpenShortcuts: () => void;
 }
 
-/** Sidebar footer: who is signed in, with settings, shortcuts, and sign out. */
-export function AccountMenu({
-  auth,
-  onSignOut,
-  onOpenSettings,
-  onOpenShortcuts,
-}: AccountMenuProps) {
+/** Sidebar footer: who is signed in, with settings and sign out. */
+export function AccountMenu({ auth, onSignOut, onOpenSettings }: AccountMenuProps) {
   const compact = useContext(CompactLayoutContext);
-  const org = activeOrganization(auth);
   if (compact)
-    return (
-      <MobileAccountMenu
-        auth={auth}
-        onSignOut={onSignOut}
-        onOpenSettings={onOpenSettings}
-        onOpenShortcuts={onOpenShortcuts}
-      />
-    );
+    return <MobileAccountMenu auth={auth} onSignOut={onSignOut} onOpenSettings={onOpenSettings} />;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -61,8 +47,7 @@ export function AccountMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" side="top" className="w-56">
         <DropdownMenuLabel className="text-ui font-normal text-muted-foreground">
-          {org ? (org.isPersonal ? "Personal organization" : org.name) : "Signed in"}
-          <span className="mt-1 block truncate text-foreground">{auth.user.name}</span>
+          <span className="block truncate text-foreground">{auth.user.name}</span>
           <span className="block truncate" title={auth.user.email}>
             {auth.user.email}
           </span>
@@ -71,10 +56,6 @@ export function AccountMenu({
         <DropdownMenuItem className="text-ui" onSelect={onOpenSettings}>
           <Settings aria-hidden="true" />
           Settings
-        </DropdownMenuItem>
-        <DropdownMenuItem className="text-ui" onSelect={onOpenShortcuts}>
-          <Keyboard aria-hidden="true" />
-          Keyboard shortcuts
         </DropdownMenuItem>
         <DropdownMenuItem className="text-ui" onSelect={onSignOut}>
           <LogOut aria-hidden="true" />
@@ -87,7 +68,6 @@ export function AccountMenu({
 
 function MobileAccountMenu({ auth, onSignOut, onOpenSettings }: AccountMenuProps) {
   const [open, setOpen] = useState(false);
-  const org = activeOrganization(auth);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger className="mobile-account-trigger" aria-label={`Account: ${auth.user.name}`}>
@@ -98,8 +78,8 @@ function MobileAccountMenu({ auth, onSignOut, onOpenSettings }: AccountMenuProps
       <DialogContent className="mobile-account-drawer">
         <DialogHeader>
           <DialogTitle>Account</DialogTitle>
-          <DialogDescription>
-            {org ? (org.isPersonal ? "Personal organization" : org.name) : "Signed in"}
+          <DialogDescription className="sr-only">
+            Manage your account settings or sign out.
           </DialogDescription>
         </DialogHeader>
         <div className="mobile-account-identity">
