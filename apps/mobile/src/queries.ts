@@ -8,7 +8,7 @@ export function useMachines() {
     queryKey: ["machines", me?.user.id, me?.session.activeOrganizationId],
     queryFn: () => api.listMachines(),
     enabled: !!me,
-    refetchInterval: 30_000,
+    refetchInterval: 15_000,
   });
 }
 export function useCapabilities() {

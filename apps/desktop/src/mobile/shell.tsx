@@ -1,3 +1,4 @@
+import { machineAvailability } from "@concors/client-core";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { FolderOpen, Menu, Search, Server } from "lucide-react";
 import type { DaemonConnection } from "@concors/daemon-client";
@@ -227,7 +228,7 @@ function MobileWorkspaceContent({
       !host.target.machineId
     ) {
       const machine = host.machines[0];
-      if (machine)
+      if (machine && machineAvailability(machine) === "connectable")
         void hostAction({ kind: "select-machine", machineId: machine.id }).catch(() => undefined);
     }
   }, [host.machineId, host.machines, host.capabilities.remoteAccess, host.target.machineId]);
@@ -489,7 +490,8 @@ function MobileWorkspaceContent({
                             value: machine.id,
                             label: machine.name,
                             icon: <Server />,
-                            description: machine.status,
+                            description: machineAvailability(machine),
+                            disabled: machineAvailability(machine) !== "connectable",
                           })),
                     },
                   ]}

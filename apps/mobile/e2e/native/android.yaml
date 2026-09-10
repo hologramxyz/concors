@@ -2,10 +2,22 @@ appId: dev.concors.mobile.preview
 ---
 - launchApp:
     clearState: true
+# A cold emulator can briefly put its own ANR dialog over the welcome screen.
+# Recover only System UI; Concors crashes/ANRs and all app interactions still fail.
+- retry:
+    maxRetries: 2
+    commands:
+      - runFlow:
+          when:
+            visible: "System UI isn't responding"
+          commands:
+            - tapOn: "Wait"
+      - assertVisible: "Explore demo"
 - tapOn: "Explore demo"
 - extendedWaitUntil:
-    visible: "Open sidebar"
-    timeout: 30000
+    visible: "Message Codex"
+    timeout: 45000
+- assertVisible: "Open sidebar"
 - tapOn: "Message Codex"
 - inputText: "Android draft survives navigation"
 - assertVisible: "Android draft survives navigation"

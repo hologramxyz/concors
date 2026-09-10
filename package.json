@@ -34,7 +34,8 @@
     "daemon:start": "pnpm --filter @concors/daemon start",
     "daemon:test": "pnpm --filter @concors/daemon test",
     "test:workspace:e2e": "playwright test",
-    "daemon:package": "pnpm daemon:build && pnpm --filter @concors/daemon package:linux"
+    "daemon:package": "pnpm daemon:build && pnpm --filter @concors/daemon package:linux",
+    "test:mobile:managed": "playwright test --config apps/mobile/playwright.managed.config.mts"
   },
   "devDependencies": {
     "@concors/config": "workspace:*",
