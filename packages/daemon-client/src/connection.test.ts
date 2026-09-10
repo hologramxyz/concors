@@ -91,28 +91,34 @@ function startConnection() {
 }
 
 describe("DaemonConnection", () => {
-  it("passes bearer protocols to the native WebSocket constructor without changing the URL", async () => {
-    const socket = new FakeWebSocket("wss://daemon.example/ws");
-    const constructor = vi.fn(function () {
-      return socket;
-    });
-    vi.stubGlobal("WebSocket", constructor);
-    try {
-      const connection = new DaemonConnection({
-        endpoint: describeDaemonEndpoint(socket.url),
-        client,
-        protocols: ["concors.bearer.test-token"],
+  it.each([
+    { protocols: "concors.bearer.test-token" },
+    { protocols: ["concors.bearer.test-token"] as const },
+  ])(
+    "passes bearer protocols %j to the native WebSocket constructor without changing the URL",
+    async ({ protocols }) => {
+      const socket = new FakeWebSocket("wss://daemon.example/ws");
+      const constructor = vi.fn(function () {
+        return socket;
       });
-      const ready = connection.connect();
-      expect(constructor).toHaveBeenCalledWith(socket.url, ["concors.bearer.test-token"]);
-      socket.serverOpen();
-      socket.serverSend(READY);
-      await ready;
-      connection.disconnect();
-    } finally {
-      vi.unstubAllGlobals();
-    }
-  });
+      vi.stubGlobal("WebSocket", constructor);
+      try {
+        const connection = new DaemonConnection({
+          endpoint: describeDaemonEndpoint(socket.url),
+          client,
+          protocols,
+        });
+        const ready = connection.connect();
+        expect(constructor).toHaveBeenCalledWith(socket.url, protocols);
+        socket.serverOpen();
+        socket.serverSend(READY);
+        await ready;
+        connection.disconnect();
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    },
+  );
 
   it("sends client.hello on open and becomes ready on daemon.ready", async () => {
     const { connection, socket, states, ready } = startConnection();
