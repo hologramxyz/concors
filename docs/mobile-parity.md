@@ -2,7 +2,7 @@
 
 The mobile client uses a bundled, offline rendering of the actual Concors React UI,
 inside the Expo native host. Chat, composer business logic, markdown, tool calls, plans, terminal,
-project setup/actions, and account/appearance/SSH/billing views are source-shared.
+project setup/actions, and account/appearance/SSH/Shortcuts/Terminals views are source-shared.
 iOS headers and the composer field/toolbar render natively above WKWebView using Expo UI and
 Expo GlassEffect; a scoped UI bridge invokes the shared navigation and agent logic.
 Android/web retain the shared DOM controls. The mobile entry lives beside the desktop UI;
@@ -14,13 +14,13 @@ relays protocol messages and allowlisted account actions; account credentials an
 connection tickets never enter the renderer. All UI code/fonts/styles are packaged
 with the app. The renderer cannot fetch a remote application or open its own socket.
 New desktop account methods outside the mobile allowlist show an explicit unavailable
-message inside settings rather than crashing the workspace. In particular, the newer
-VPS subscription listing and billing setup-session flow are not mobile-enabled yet;
-sharing their views does not automatically authorize those API operations.
+message inside settings rather than crashing the workspace. Mobile's first release is
+an existing-account companion: signup, purchasing, provisioning and billing/checkout
+are intentionally absent, with commerce calls rejected at the host boundary.
 
 Direct desktop previews now use the same daemon as desktop without cloud login or a
 simulated account. The actual machine ID comes from its snapshot. Direct mode blocks
-cloud API actions and only exposes appearance/connection settings; Disconnect detaches
+cloud API actions and exposes device settings plus daemon-backed terminal profiles; Disconnect detaches
 the client without stopping remote work. This mode is preview-only and requires a
 restricted private endpoint. The simulated demo remains a separate, mutually exclusive mode.
 
@@ -82,18 +82,20 @@ Phone-specific behavior:
 
 ## Source parity
 
-| Area          | Shared implementation                                                             | Phone behavior                                                                                               |
-| ------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Composer      | `agents/composer.tsx`, `draft.ts`, Paseo submit logic                             | Attachments, queue, retry, model/effort/permissions/plan/speed/context, interrupt; native keyboard dictation |
-| Conversation  | `agents/chat.tsx`, `timeline-item.tsx`, `markdown.tsx`, `plan-progress.tsx`       | Same history, streaming, approvals/questions, thinking, tool/MCP/diff/sub-agent rendering and copy actions   |
-| Projects      | `workspace/project-setup-dialog.tsx`, `project-actions.tsx`                       | Open/create/clone/remove; setup continues remotely                                                           |
-| Tabs/panes    | Protocol workspace reducer, `workspace/new-tab-menu.tsx`                          | Hierarchical picker; new-tab/add-pane drawer; rename/profile/confirmed close; no desktop geometry controls   |
-| Project files | `files/tree.tsx`, `file-tab.tsx`, `code-editor.tsx`, `document.ts`, file protocol | Full-page tree/editor, Markdown, links, create, explicit save/conflicts; local file tabs and draft guards    |
-| Terminal      | `terminal/terminal-pane.tsx`, `surface.tsx` and xterm                             | Same replay, input ownership, resize/recovery; extra key strip and confirmed stop                            |
-| Settings      | `views/settings-view.tsx` and `settings/*`                                        | Drawer: account/orgs, theme/corners, SSH, billing, native-safe diagnostics                                   |
-| Notifications | Shared attention engine, provider and sound settings                              | Foreground notices; native opt-in push remains backend gated                                                 |
-| Machines      | `machines/machines-view.tsx`                                                      | Shared inventory/provisioning/lifecycle controls inside Settings                                             |
-| Servers       | Same empty state as desktop                                                       | No discovered servers until upstream discovery exists                                                        |
+| Area              | Shared implementation                                                                | Phone behavior                                                                                                                       |
+| ----------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Composer          | `agents/composer.tsx`, `draft.ts`, Paseo submit logic                                | Attachments, queue, retry, model/effort/permissions/plan/speed/context, interrupt; native keyboard dictation                         |
+| Agent providers   | `agents/use-model-selection.ts`, `model-picker.tsx`, daemon provider catalog         | Codex, Claude Code, OpenCode and Pi selection; changing provider starts a new chat and preserves the original; native provider logos |
+| Conversation      | `agents/chat.tsx`, `timeline-item.tsx`, `markdown.tsx`, `plan-progress.tsx`          | Same history, streaming, approvals/questions, thinking, tool/MCP/diff/sub-agent rendering and copy actions                           |
+| Projects          | `workspace/project-setup-dialog.tsx`, `project-actions.tsx`                          | Open/create/clone/remove; setup continues remotely                                                                                   |
+| Tabs/panes        | Protocol workspace reducer, `workspace/new-tab-menu.tsx`                             | Hierarchical picker; new-tab/add-pane drawer; rename/profile/confirmed close; no desktop geometry controls                           |
+| Project files     | `files/tree.tsx`, `file-tab.tsx`, `code-editor.tsx`, `document.ts`, file protocol    | Full-page tree/editor, Markdown, links, create, explicit save/conflicts; local file tabs and draft guards                            |
+| Terminal          | `terminal/terminal-pane.tsx`, `surface.tsx` and xterm                                | Same replay, input ownership, resize/recovery; extra key strip and confirmed stop                                                    |
+| Terminal profiles | `terminal/profiles-context.tsx`, `workspace/new-tab-menu.tsx`, shared settings       | Machine-synced profiles and literal command arguments; add/manage from the creation drawer or Terminals settings                     |
+| Settings          | `views/settings-view.tsx` and `settings/*`                                           | Drawer: account/orgs, theme/corners, SSH, Shortcuts, Terminals, native-safe diagnostics; no commerce                                 |
+| Notifications     | Shared attention engine, provider and sound settings                                 | Foreground notices; native opt-in push remains backend gated                                                                         |
+| Machines          | Shared `@concors/client-core` host discovery/availability and machine token contract | Existing-machine selection, status and refresh; account-scoped secure credentials; no provisioning                                   |
+| Servers           | Same empty state as desktop                                                          | No discovered servers until upstream discovery exists                                                                                |
 
 Paths above are relative to `apps/desktop/src/`. The earlier mobile-only chat and
 terminal renderers were removed. Tauri-specific APIs are replaced by narrow native
@@ -157,11 +159,39 @@ To run desktop acceptance beside an existing checkout, use
 `CONCORS_E2E_WEB_PORT=1447 pnpm test:workspace:e2e`. Alternate-origin handling is
 confined to test fixtures; it does not relax the production daemon allowlist.
 
-The latest upstream machine agent adds TLS, machine JWTs and tmux sessions, but not
-Concourse workspace/chat messages. The API client now preserves its install/certificate
-metadata and validates `/token` responses. A read-only `live:preflight` command checks
-account/machine/capability prerequisites; neither that command nor terminal-agent
-installation proves a live workspace works. See [the protocol integration gap](mobile-backend.md).
+The 2026-09-10 integration in PR #51 includes main through `d5cb01c`: agent providers
+(#48), Shortcuts settings (#49), saved terminal profiles (#50), and the mobile managed
+host/secure credential fixes from #47. Historical test results above describe earlier
+builds; they are not signed acceptance evidence for this integration.
+
+Follow-up publishing work also fixes a mobile-only provider-switch regression: the
+new provider's chat is explicitly selected locally after the daemon accepts the
+request. Other devices' selection changes do not navigate this phone, and a late
+response from an unmounted pane/old connection does not steal its selection. The
+native composer now packages desktop's Claude/OpenCode marks and Pi symbol, with
+the same provider-specific controls. Consent version 2 reconfirms the expanded disclosure.
+
+Local verification for this follow-up (2026-09-10):
+
+- `pnpm test`: 424 passed; one opt-in live API test skipped.
+- Mobile UI: 26 browser scenarios passed.
+- Direct daemon: seven existing file/chat/terminal/profile scenarios passed; the two
+  new provider scenarios exposed the navigation regression above, then both passed
+  on a focused rerun after the fix. They exercise all three additional providers
+  through the web composer and native surface bridge, preserving the original chat.
+- Managed acceptance: one desktop/phone shared-terminal scenario passed even when
+  optional capability discovery returns 404.
+- iOS/Android Hermes and web bundle exports passed. Native compilation, signing,
+  physical-device tests and real AI-provider accounts are **not** implied by these
+  fixtures/exports. Native CI is currently blocked by GitHub account billing.
+
+See the [release runbook](mobile-release.md) for candidate builds and the separate
+submission evidence gate. No release gate was marked verified from browser testing.
+
+Server installer PR #1 is merged. Desktop and mobile use the same managed daemon/token
+contract, with no mobile-only workspace gateway or capability-discovery dependency.
+Publish/deploy the current daemon artifact and verify real phone/desktop access before
+claiming production parity. See [the current backend contract](mobile-backend.md).
 
 Managed cloud workspace access, push service and deletion backend remain external release gates.
 Store billing-policy review and physical iOS/Android keyboard, gestures, file picker,

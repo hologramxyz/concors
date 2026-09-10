@@ -7,7 +7,8 @@ and no second implementation of chat/tool rendering.
 
 **Status: implemented client and interactive preview, not store-submission ready.**
 Direct desktop testing works without a cloud account or server change; see below.
-Managed cloud connectivity, push and deletion require the [server contracts](../../docs/mobile-backend.md).
+Managed cloud connectivity uses desktop's machine/token contract; optional push and deletion
+still require backend services. See the [server contract](../../docs/mobile-backend.md).
 Signed builds and physical device checks require team-owned accounts/devices.
 See the [parity matrix](../../docs/mobile-parity.md) and [release runbook](../../docs/mobile-release.md).
 
@@ -36,13 +37,18 @@ phone-size mode. Select **Explore demo**; it opens straight into the agent chat.
    toolbar controls retain their own gestures.
 4. Tap your **name/avatar** at the bottom of the sidebar for the animated Account drawer,
    then **Settings** (or **Sign out**). The settings
-   picker contains account, appearance, notifications, SSH, billing, machines and diagnostics.
+   picker contains account, appearance, notifications, SSH, Shortcuts, Terminals, machines
+   and diagnostics. Signup, purchasing and billing are intentionally excluded from mobile.
    Search and the machine selector open animated bottom drawers without dismissing the sidebar.
    The machine drawer shows each machine's current status and selection.
 5. Open the top **Tabs and panes** picker. Each tab has its own card with indented panes.
    **New tab** is at the bottom; the tab's **…** offers **Add pane to this tab**, rename and close.
    Each pane's **…** offers profile selection and confirmed close (no left/right reordering).
-   New tab/Add pane open the provider drawer with Agent, Terminal, Codex, Claude Code and OpenCode.
+   New tab/Add pane open the creation drawer with Agent and the machine's saved terminal
+   profiles. On a current daemon, Add/Manage terminal profiles opens Terminals settings.
+   Within an agent chat, the model icon opens provider/model selection for Codex, Claude Code,
+   OpenCode and Pi when installed on the machine. Changing provider starts a new chat;
+   the original remains available in Tabs and panes.
    The sidebar button, picker and **Files** button are separate backdrop-blurred controls.
    Choose a pane to switch views, or dismiss with Close, Escape or the backdrop.
    Tapping the covered trigger hits the backdrop and closes the drawer without reopening it.
@@ -173,6 +179,28 @@ standalone Tailscale preview, export the web bundle with the same configuration 
 serve those files at that origin. For an installed development build use `mobile:dev`
 with the same environment. Plain WS is allowed **only for loopback in development**
 for the isolated browser test; preview builds require WSS.
+
+### Test the latest desktop sync
+
+Use a current daemon with `agent-providers` and `terminal-profiles` capabilities;
+the in-memory demo cannot prove real provider switching or saved profile launch.
+
+1. In an agent chat, tap the composer and its model icon. Go back to providers, choose
+   an installed Claude Code, OpenCode or Pi provider, then a model. The new chat should
+   open automatically; use Tabs and panes to return to the original conversation.
+   Provider accounts must already be configured on the connected machine.
+2. In Tabs and panes, choose New tab → Add terminal profile. Save a harmless command
+   (for example, `pwd` on a Unix machine), close settings, and launch that profile
+   from New tab. The same saved profile should appear on desktop.
+3. In Settings → Shortcuts, inspect external-keyboard commands. Mobile should not
+   expose desktop-only split/arrangement commands.
+4. Upgrading this build asks once more for AI-sharing consent. Decline to stay
+   disconnected, or accept after reviewing the provider disclosure. Native iOS model
+   controls use the same provider marks as desktop.
+
+For store-identity TestFlight/Play internal builds, follow the
+[candidate runbook](../../docs/mobile-release.md#production-identity-candidates-then-submission).
+Those require team project/signing setup and explicit upload approval, not the demo.
 
 ### Browse and edit the project's real files
 
