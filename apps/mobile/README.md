@@ -239,7 +239,7 @@ maestro test apps/mobile/e2e/native/glass.yaml
 
 For a real iPhone, use the existing EAS development/preview profile or add `--device` to the local
 iOS build, using the private daemon configuration above instead of demo mode when testing real
-sessions. No signing credentials are committed. The `Mobile iOS native` PR check builds an unsigned
+sessions. No signing credentials are committed. The `Mobile iOS native` PR check builds an ad-hoc-signed
 iOS 26 simulator app and exercises native headers, input expansion, settings, Files, and draft
 preservation. Browser acceptance separately covers the bridge and the web/Android fallback;
 neither a passing web test nor an Expo export substitutes for the simulator/device test.
@@ -248,7 +248,8 @@ Native PR checks build a standalone app for one simulator architecture, with nat
 optimization and debug symbols disabled. Android compilation and emulator tests use separate
 runners to keep build output from exhausting emulator disk space. Gradle/native objects and
 CocoaPods/Xcode build products are cached. iOS uses the standard Intel runner with 14 GB RAM
-and starts its simulator after compilation. The UI flow preserves the fresh CI installation
+and starts its simulator after compilation. Simulator ad-hoc signing preserves the keychain
+entitlements required by SecureStore without Apple signing credentials. The UI flow preserves the fresh CI installation
 while local reruns still clear app state. Unused Reanimated/Worklets native modules are excluded from
 autolinking, including copies retained by optional peer dependencies. These checks retain the native UI flows and Android
 SDK, permission, and 16 KB alignment audits. Manually dispatch `Mobile Android native` to also

@@ -57,7 +57,7 @@ jobs:
         timeout-minutes: 4
         working-directory: apps/mobile/ios
         run: pod install
-      - name: Build one unsigned simulator architecture
+      - name: Build one simulator architecture
         timeout-minutes: 15
         working-directory: apps/mobile/ios
         run: |
@@ -69,7 +69,8 @@ jobs:
             -configuration Release -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' -jobs 4 \
             -derivedDataPath "$HOME/Library/Developer/Xcode/DerivedData/ConcorsCI" \
-            ARCHS="$(uname -m)" ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO \
+            ARCHS="$(uname -m)" ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=YES \
+            CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=YES \
             COMPILER_INDEX_STORE_ENABLE=NO GCC_OPTIMIZATION_LEVEL=0 \
             SWIFT_OPTIMIZATION_LEVEL=-Onone GCC_GENERATE_DEBUGGING_SYMBOLS=NO \
             build > ../test-results/native/xcodebuild.log 2>&1 || { tail -100 ../test-results/native/xcodebuild.log; exit 1; }
@@ -94,6 +95,9 @@ jobs:
       - name: Install simulator app
         run: |
           MOBILE_APP=$(find "$HOME/Library/Developer/Xcode/DerivedData/ConcorsCI/Build/Products/Release-iphonesimulator" -maxdepth 1 -name '*.app' -print -quit)
+          # Simulator ad-hoc signing needs no Apple account, but SecureStore needs its app identity.
+          codesign -d --entitlements :- "$MOBILE_APP" > "$RUNNER_TEMP/mobile-entitlements.plist"
+          /usr/libexec/PlistBuddy -c 'Print :application-identifier' "$RUNNER_TEMP/mobile-entitlements.plist"
           xcrun simctl install '${{ steps.simulator.outputs.id }}' "$MOBILE_APP"
           xcrun simctl launch '${{ steps.simulator.outputs.id }}' dev.concors.mobile.preview
       - name: Install pinned native UI test runner
