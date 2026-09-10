@@ -5,13 +5,19 @@ import { useFileSidebar } from "./sidebar-state";
 import { FileDocument } from "./document";
 import { resolveFileLink, type FileLocation } from "./links";
 import { FilesContext, FileLinkContext, fileScope, useFiles, type OpenFile } from "./context";
+import { useFilePrompts } from "./prompts";
+import { CompactLayoutContext } from "@/components/compact-layout";
 export function FilesProvider({
   children,
   beforeLeaveRef,
+  leaveLabel = "sign out",
 }: {
   children: ReactNode;
-  beforeLeaveRef: RefObject<(() => boolean) | null>;
+  beforeLeaveRef: RefObject<(() => boolean | Promise<boolean>) | null>;
+  leaveLabel?: string;
 }) {
+  const prompts = useFilePrompts();
+  const compact = useContext(CompactLayoutContext);
   const sidebar = useFileSidebar();
   const connection = useContext(TerminalConnectionContext);
   const [files, setFiles] = useState<OpenFile[]>([]);
@@ -23,12 +29,12 @@ export function FilesProvider({
   useEffect(() => {
     beforeLeaveRef.current = () => {
       if (currentFiles.current.some((file) => file.document.getSnapshot().busy)) {
-        window.alert("Wait for the file operation to finish before signing out.");
+        prompts.notify(`Wait for the file operation to finish before you ${leaveLabel}.`);
         return false;
       }
       return (
         !currentFiles.current.some((file) => file.document.dirty) ||
-        window.confirm("Discard unsaved file changes and sign out?")
+        prompts.confirm(`Discard unsaved file changes and ${leaveLabel}?`)
       );
     };
     const guard = (event: BeforeUnloadEvent) => {
@@ -44,7 +50,7 @@ export function FilesProvider({
       window.removeEventListener("beforeunload", guard);
       beforeLeaveRef.current = null;
     };
-  }, [beforeLeaveRef]);
+  }, [beforeLeaveRef, prompts, leaveLabel]);
   const select = (scope: string, id: string | null) =>
     setActive((current) => ({ ...current, [scope]: id }));
   const open = (project: WorkspaceProject, location: FileLocation) => {
@@ -54,13 +60,13 @@ export function FilesProvider({
       connection.state.status !== "ready" ||
       !connection.state.daemon.capabilities?.includes("project-files")
     ) {
-      window.alert("Update or reconnect this machine to open project files.");
+      prompts.notify("Update or reconnect this machine to open project files.");
       return;
     }
     const scope = fileScope(workspace.machineId, workspace.epoch, project.id);
     const id = JSON.stringify([scope, project.directory, location.path]);
     if (!files.some((file) => file.id === id) && files.length >= 32) {
-      window.alert("Close a file tab before opening more files (32 maximum).");
+      prompts.notify("Close a file tab before opening more files (32 maximum).");
       return;
     }
     setFiles((current) => {
@@ -90,10 +96,13 @@ export function FilesProvider({
       ];
     });
     select(scope, id);
+    if (compact) sidebar.setOpen(true);
   };
-  const close = (file: OpenFile) => {
+  const close = async (file: OpenFile) => {
     if (file.document.getSnapshot().busy) return;
-    if (file.document.dirty && !window.confirm(`Discard unsaved changes to ${file.path}?`)) return;
+    if (file.document.dirty && !(await prompts.confirm(`Discard unsaved changes to ${file.path}?`)))
+      return;
+    if (file.document.getSnapshot().busy) return;
     setFiles((current) => current.filter((item) => item.id !== file.id));
     setActive((current) => ({
       ...current,

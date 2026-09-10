@@ -15,11 +15,13 @@ import { Input } from "@/components/ui/input";
 export function ProjectSetupDialog({
   onClose,
   onAdded,
+  open = true,
   mode,
 }: {
   mode: "open" | "clone";
   onClose: () => void;
   onAdded: () => void;
+  open?: boolean;
 }) {
   const connection = useContext(TerminalConnectionContext);
   const [repository, setRepository] = useState("");
@@ -50,12 +52,22 @@ export function ProjectSetupDialog({
   }, [connection]);
   const active = setups.find((s) => s.id === activeId);
   useEffect(() => {
-    if (active?.status === "done") onAdded();
-  }, [active?.status, onAdded]);
+    if (open && active?.status === "done") onAdded();
+  }, [open, active?.status, onAdded]);
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
+    if (!open) {
+      setActiveId(null);
+      setRepository("");
+      setCustomDirectory(null);
+      setError(null);
+    }
+  }
   const busy = pending || active?.status === "working";
   return (
     <Dialog
-      open
+      open={open}
       onOpenChange={(open) => {
         if (!open) onClose();
       }}

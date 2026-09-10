@@ -4,17 +4,19 @@ import {
   type DaemonEndpoint,
 } from "@concors/daemon-client";
 
+import { preferredConnection, type Host } from "../workspace/machines.ts";
+
 import { env } from "../config/env.ts";
 import { isTauri, localDaemon } from "../tauri/index.ts";
 
 /**
  * Decides which daemon this app instance should talk to on startup.
  *
- *  1. An explicit `VITE_CONCORS_DAEMON_URL` always wins (developer override / remote daemon).
+ *  1. `VITE_CONCORS_DAEMON_URL` overrides the local host endpoint for development.
  *  2. Inside Tauri, ask the native shell to start the bundled daemon and use its port.
  *  3. Otherwise assume a developer is running `pnpm daemon:dev` on the default port.
  *
- * Later, this is where saved remote daemons (the user's VPS) will be selectable.
+ * Managed hosts resolve separately, from their control-plane hostname.
  */
 export async function resolveStartupEndpoint(): Promise<DaemonEndpoint> {
   if (env.daemonUrl !== undefined) {
@@ -33,4 +35,13 @@ export async function resolveStartupEndpoint(): Promise<DaemonEndpoint> {
   }
 
   return localDaemonEndpoint();
+}
+
+export function resolveHostEndpoint(
+  host: Host,
+  local: DaemonEndpoint | null,
+): DaemonEndpoint | null {
+  const connection = preferredConnection(host);
+  if (!connection) return null;
+  return connection.kind === "local" ? local : describeDaemonEndpoint(connection.url, host.label);
 }

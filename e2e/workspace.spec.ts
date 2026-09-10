@@ -1,3 +1,4 @@
+import { managedHost } from "./support/managed-host.ts";
 import { seedProject } from "./support/projects.ts";
 import type { WebSocketRoute } from "@playwright/test";
 import { test, expect, signedIn } from "./signed-in.ts";
@@ -25,21 +26,12 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
   first.on("pageerror", (error) => errors.push(error.message));
   second.on("pageerror", (error) => errors.push(error.message));
   try {
-    // Keep testing switches between saved connections while adding new ones is coming soon.
-    await first.addInitScript(() => {
-      localStorage.setItem(
-        "concors.machine-connections.v1",
-        JSON.stringify([
-          {
-            id: "00000000-0000-4000-8000-000000000001",
-            name: "Second machine",
-            url: "ws://127.0.0.1:7430/ws",
-          },
-        ]),
-      );
-    });
     await Promise.all([signedIn(first), signedIn(second)]);
-    await Promise.all([first.goto("/"), second.goto("http://localhost:1420")]);
+    const managed = await managedHost(first);
+    await Promise.all([
+      first.goto("/"),
+      second.goto(test.info().project.use.baseURL ?? "http://localhost:1420"),
+    ]);
     await seedProject(first, "Concors acceptance", "/tmp");
     await expect(
       second.getByRole("heading", { name: "Concors acceptance", exact: true }),
@@ -134,12 +126,27 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
     await expect(second.getByRole("button", { name: "Terminal", exact: true })).toHaveCount(0);
 
     await first.getByRole("button", { name: "Switch machine", exact: true }).click();
-    await first.getByRole("menuitem", { name: "Second machine", exact: true }).click();
+    await first.getByRole("menuitem", { name: /Second machine connectable/i }).click();
     await expect(
       first.getByRole("heading", { name: "Start working on this machine", exact: true }),
     ).toBeVisible();
     await expect(
       second.getByRole("heading", { name: "Concors acceptance", exact: true }),
+    ).toBeVisible();
+    expect(managed.tokenCount()).toBe(1);
+    await seedProject(first, "Managed acceptance", "/tmp", "ws://127.0.0.1:7430/ws");
+    await first.getByRole("button", { name: "New tab", exact: true }).click();
+    await first.getByRole("menuitem", { name: "Terminal", exact: true }).click();
+    const remoteTerminal = first.getByLabel("Terminal output").filter({ visible: true });
+    await expect(remoteTerminal).toBeVisible();
+    await remoteTerminal.click();
+    await first.keyboard.type("printf 'managed-%s\\n' terminal");
+    await first.keyboard.press("Enter");
+    await expect(remoteTerminal).toContainText("managed-terminal");
+    await first.keyboard.type("exit");
+    await first.keyboard.press("Enter");
+    await expect(
+      first.getByRole("button", { name: "Start new session", exact: true }),
     ).toBeVisible();
     await first.getByRole("button", { name: "Switch machine", exact: true }).click();
     await first.getByRole("menuitem", { name: "This computer", exact: true }).click();

@@ -117,6 +117,16 @@ JWT, `alg: EdDSA`, header `kid`. Claims: `iss` = `controlPlaneUrl`, `sub` = user
 `aud` = `machineId`, `sid` = login session id, `org` = organization id, `iat`, `exp` (15 min),
 `jti`. Verify offline against the JWKS (cache; refetch on unknown `kid`; 30 s cooldown).
 
+The gateway must bound authenticated HTTP and WebSocket lifetimes by `exp`, not just
+validate expiry at upgrade. The mobile PR adds this enforcement; it is not in the
+original `daemon-v0.2.0` artifact. Expiry detaches the client transport without stopping
+the session host. Reconnects request a fresh token; revocation is bounded by the last
+issued token's expiry, not immediate.
+
+The token audience is the **control-plane machine ID**. `workspace.machineId` is an
+independently generated persistent daemon namespace and is not expected to equal that
+cloud ID. Remote identity comes from the managed TLS hostname and scoped token.
+
 How a client presents it to the gateway, in order of preference:
 
 1. `Sec-WebSocket-Protocol: concors.bearer.<token>` — works from browser and native WebSocket

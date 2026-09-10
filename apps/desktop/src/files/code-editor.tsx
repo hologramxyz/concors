@@ -11,7 +11,7 @@ import {
 } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { bracketMatching, syntaxHighlighting } from "@codemirror/language";
-import { searchKeymap } from "@codemirror/search";
+import { openSearchPanel, searchKeymap } from "@codemirror/search";
 import {
   createCodeMirrorHighlightStyle,
   darkHighlightColors,
@@ -35,6 +35,8 @@ export default function CodeEditor({
   location,
   navigation,
   readOnly = false,
+  searchRequest = 0,
+  focusLocation = true,
 }: {
   content: string;
   path: string;
@@ -45,6 +47,8 @@ export default function CodeEditor({
   location: FileLocation;
   navigation: number;
   readOnly?: boolean;
+  searchRequest?: number;
+  focusLocation?: boolean;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
@@ -76,6 +80,8 @@ export default function CodeEditor({
           EditorView.contentAttributes.of({
             "aria-label": `Code editor: ${filename}`,
             spellcheck: "false",
+            autocapitalize: "off",
+            autocorrect: "off",
           }),
           keymap.of([
             {
@@ -192,7 +198,10 @@ export default function CodeEditor({
       selection: { anchor: line.from },
       effects: EditorView.scrollIntoView(line.from, { y: "center" }),
     });
-    editor.focus();
-  }, [location.line, navigation]);
+    if (focusLocation) editor.focus();
+  }, [location.line, navigation, focusLocation]);
+  useEffect(() => {
+    if (searchRequest && view.current) openSearchPanel(view.current);
+  }, [searchRequest]);
   return <div ref={host} className="h-full min-h-0 min-w-0 overflow-hidden" />;
 }

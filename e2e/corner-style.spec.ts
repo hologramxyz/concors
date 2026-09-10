@@ -91,6 +91,8 @@ test("corner styles update the live workspace and portaled controls, sync, and p
 
     await second.reload();
     await expect(second.locator("html")).toHaveAttribute("data-corner-style", "rounded");
+    // The persisted theme is applied before session restoration enables app shortcuts.
+    await expect(second.getByRole("button", { name: /^Account:/ })).toBeVisible();
     await second.keyboard.press("Control+Shift+Comma");
     await second.getByRole("button", { name: "Appearance", exact: true }).click();
     await expect(second.getByRole("radio", { name: "Rounded", exact: true })).toBeChecked();

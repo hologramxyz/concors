@@ -17,6 +17,7 @@ import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { Button } from "@/components/ui/button";
 import { useFiles } from "./context";
 import { CreateEntry } from "./create-entry";
+import { CompactLayoutContext } from "@/components/compact-layout";
 
 export function FileTree({
   project,
@@ -27,6 +28,7 @@ export function FileTree({
   open: boolean;
   onClose(): void;
 }) {
+  const compact = useContext(CompactLayoutContext);
   const files = useFiles();
   const connection = useContext(TerminalConnectionContext);
   const [generation, setGeneration] = useState(0);
@@ -62,9 +64,9 @@ export function FileTree({
   );
   const panel = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (open)
+    if (open && !compact)
       panel.current?.querySelector<HTMLInputElement>("input")?.focus({ preventScroll: true });
-  }, [open]);
+  }, [open, compact]);
   return (
     <div
       ref={panel}
@@ -76,19 +78,21 @@ export function FileTree({
       }}
       className="flex h-full min-h-0 flex-col"
     >
-      <div className="m-2 flex h-9 shrink-0 items-center gap-2 px-1">
-        <FolderOpen className="size-4" />
-        <h2 className="flex-1 text-ui font-medium">Files</h2>
-        <Button
-          size="icon-sm"
-          variant="ghost"
-          aria-label="Close files"
-          title="Close files"
-          onClick={onClose}
-        >
-          <X className="size-4" />
-        </Button>
-      </div>
+      {!compact && (
+        <div className="m-2 flex h-9 shrink-0 items-center gap-2 px-1">
+          <FolderOpen className="size-4" />
+          <h2 className="flex-1 text-ui font-medium">Files</h2>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Close files"
+            title="Close files"
+            onClick={onClose}
+          >
+            <X className="size-4" />
+          </Button>
+        </div>
+      )}
       <div
         role="group"
         aria-label="File actions"
@@ -170,7 +174,7 @@ export function FileTree({
             setGeneration((value) => value + 1);
             if (entry.kind === "file") {
               files.open(project, { path: entry.path });
-              if (!files.sidebar.docked) onClose();
+              if (!compact && !files.sidebar.docked) onClose();
             } else
               panel.current
                 ?.querySelector<HTMLInputElement>("input")
@@ -190,7 +194,7 @@ export function FileTree({
           generation={generation}
           onOpen={(entry) => {
             files.open(project, { path: entry.path });
-            if (!files.sidebar.docked) onClose();
+            if (!compact && !files.sidebar.docked) onClose();
           }}
         />
       </div>

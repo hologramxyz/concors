@@ -17,6 +17,8 @@ interface SettingsViewProps {
   readonly page: SettingsPage;
   readonly endpoint: DaemonEndpoint | null;
   readonly state: ConnectionState;
+  readonly apiUrl?: string;
+  readonly endpointLabel?: string;
   readonly theme: ThemePreference;
   readonly onSetTheme: (theme: ThemePreference) => void;
   readonly cornerStyle: CornerStyle;
@@ -30,6 +32,8 @@ export function SettingsView({
   page,
   endpoint,
   state,
+  apiUrl,
+  endpointLabel,
   theme,
   onSetTheme,
   cornerStyle,
@@ -78,7 +82,14 @@ export function SettingsView({
       );
       break;
     case "advanced":
-      content = <AdvancedSettings endpoint={endpoint} state={state} />;
+      content = (
+        <AdvancedSettings
+          endpoint={endpoint}
+          state={state}
+          {...(apiUrl ? { apiUrl } : {})}
+          {...(endpointLabel ? { endpointLabel } : {})}
+        />
+      );
       break;
     default: {
       const unhandledPage: never = page;
