@@ -1275,6 +1275,10 @@ export class AgentManager {
       this.#store.mapNativeTurn(id, nativeId, info.turnId);
       return;
     }
+    if (method === "session/model/updated") {
+      this.update(id, { model: z.string().min(1).max(1024).parse(params["model"]) });
+      return;
+    }
     if (method === "session/models/updated") {
       this.update(id, {
         models: parseModels(params["models"], this.registry.config(info.provider).models),

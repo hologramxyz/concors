@@ -241,6 +241,24 @@ export class ClaudeProvider extends EventProvider {
     })();
     const initial = await session.initializationResult();
     this.currentModel = string(object(initial)["model"]);
+    // Modern initialize responses contain models but no selected model. Read the CLI's
+    // effective configuration without sending a prompt or guessing from its recommended alias.
+    if (!this.currentModel && session.getContextUsage) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        const context = await Promise.race([
+          session.getContextUsage(),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new Error("Model lookup timed out")), 5000);
+          }),
+        ]);
+        this.currentModel = string(context.model);
+      } catch {
+        // Older CLIs report their effective model in the first system/init message.
+      } finally {
+        clearTimeout(timer);
+      }
+    }
     this.controls = AgentControlsSchema.parse({
       history: true,
       childHistory: !this.transcriptStore,
@@ -346,14 +364,22 @@ export class ClaudeProvider extends EventProvider {
         this.models.map((m) => ({
           id: m.value,
           label: m.displayName,
+          ...(m.resolvedModel ? { resolvedModel: m.resolvedModel } : {}),
+          isDefault: m.value === "default",
+          description: m.description,
           efforts: m.supportedEffortLevels ?? [],
         })),
       );
     }
     if (method === "collaborationMode/list") return { data: [] };
     if (method === "thread/resume") await this.open(string(p["threadId"]));
+    if ((method === "thread/start" || method === "thread/resume") && p["model"]) {
+      await this.session?.setModel(string(p["model"]));
+      this.currentModel = string(p["model"]);
+    }
     if (method === "thread/start" || method === "thread/resume")
       return {
+        ...(this.currentModel ? { model: this.currentModel } : {}),
         thread: {
           id: this.threadId,
           turns:
@@ -511,6 +537,10 @@ export class ClaudeProvider extends EventProvider {
       return;
     }
     if (m["type"] === "system") {
+      if (m["subtype"] === "init" && m["model"]) {
+        this.currentModel = string(m["model"]);
+        this.emit("session/model/updated", { model: this.currentModel });
+      }
       if (m["subtype"] === "status" && m["status"] === "compacting") {
         this.compactCompleted = false;
         this.startCompaction();
@@ -561,7 +591,10 @@ export class ClaudeProvider extends EventProvider {
     }
     if (m["type"] === "assistant") {
       const message = object(m["message"]);
-      if (message["model"]) this.currentModel = string(message["model"]);
+      if (message["model"] && message["model"] !== this.currentModel) {
+        this.currentModel = string(message["model"]);
+        this.emit("session/model/updated", { model: this.currentModel });
+      }
       const usage = object(message["usage"] ?? {});
       if (Object.keys(usage).length) {
         this.currentUsed = [
