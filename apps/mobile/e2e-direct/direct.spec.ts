@@ -8,6 +8,8 @@ import type { WorkspaceOperation } from "@concors/protocol";
 test("mobile connects without cloud login and shares real daemon chat, panes and terminal sessions", async ({
   page,
 }) => {
+  // This scenario exercises the full connection, chat, navigation, terminal and consent flow.
+  test.setTimeout(180_000);
   const directory = await mkdtemp(join(tmpdir(), "concors-mobile-direct-project-"));
   const desktop = new DaemonConnection({
     endpoint: describeDaemonEndpoint("ws://127.0.0.1:7440/ws"),
