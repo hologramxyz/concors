@@ -42,6 +42,10 @@ export function useMachine() {
   if (!value) throw new Error("Missing MachineProvider");
   return value;
 }
+/** SecureStore keys only allow [A-Za-z0-9._-], so the scope is hex-encoded. */
+function scopedKey(prefix: string, scope: string) {
+  return `${prefix}.${Array.from(scope, (char) => char.charCodeAt(0).toString(16)).join("-")}`;
+}
 async function createConnection(machineId: string | null, scope: string, signal: AbortSignal) {
   const client = {
     kind: "mobile" as const,
@@ -62,7 +66,7 @@ async function createConnection(machineId: string | null, scope: string, signal:
     });
   }
   if (!machineId) throw new Error("Choose a machine first.");
-  const key = `hosts.v1.${Array.from(scope, (char) => char.charCodeAt(0).toString(16)).join("-")}`;
+  const key = scopedKey("hosts.v1", scope);
   const hosts = parseHosts(await deviceStorage.get(key));
   if (signal.aborted) throw new Error("Connection cancelled");
   return createManagedConnection(api, machineId, client, {
@@ -93,7 +97,28 @@ export function MachineProvider({
 }) {
   const [selection, setSelection] = useState<{ scope: string; id: string | null } | null>(null);
   const machineId = selection?.scope === scope ? selection.id : null;
-  const selectMachine = useCallback((id: string | null) => setSelection({ scope, id }), [scope]);
+  const selectMachine = useCallback(
+    (id: string | null) => {
+      setSelection({ scope, id });
+      void deviceStorage.set(scopedKey("selected-machine.v1", scope), id).catch(() => undefined);
+    },
+    [scope],
+  );
+  // Restore the machine picked before the last launch; an explicit pick made while the
+  // read is in flight wins.
+  useEffect(() => {
+    let cancelled = false;
+    void deviceStorage
+      .get(scopedKey("selected-machine.v1", scope))
+      .then((id) => {
+        if (cancelled || !id) return;
+        setSelection((current) => (current?.scope === scope ? current : { scope, id }));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [scope]);
   return (
     <MachineSession
       key={scope}
