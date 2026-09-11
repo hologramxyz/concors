@@ -15,12 +15,14 @@ export function MachineSwitcher({
   organizationId,
   scope,
   selected,
+  connected,
   onSelect,
   onViewCloud,
 }: {
   organizationId: string | undefined;
   scope: string;
   selected: Host;
+  connected: boolean;
   onSelect: (host: Host) => void;
   onViewCloud: (machineId?: string) => void;
 }) {
@@ -71,7 +73,9 @@ export function MachineSwitcher({
           <Server />
           This computer
           {selected.machineId === "local" && (
-            <span className="ml-auto text-xs text-muted-foreground">Selected</span>
+            <span className="ml-auto text-xs text-muted-foreground">
+              {connected ? "Connected" : "Selected"}
+            </span>
           )}
         </DropdownMenuItem>
         {cloudMachines?.map((machine) => {
@@ -94,7 +98,11 @@ export function MachineSwitcher({
                 {machine.name}
               </span>
               <span className="ml-auto shrink-0 text-xs text-muted-foreground capitalize">
-                {availability}
+                {selected.machineId === machine.id && connected
+                  ? "Connected"
+                  : availability === "connectable"
+                    ? "Online"
+                    : availability}
               </span>
             </DropdownMenuItem>
           );
