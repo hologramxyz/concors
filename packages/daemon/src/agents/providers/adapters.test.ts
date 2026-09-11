@@ -517,17 +517,6 @@ it("negotiates ACP controls, switches models, streams tools and respects native 
       authenticate: async () => ({}),
       newSession: async () => {
         await client.sessionUpdate({
-          sessionId: p.sessionId,
-          update: {
-            sessionUpdate: "tool_call",
-            toolCallId: "read-without-input",
-            title: "Read",
-            kind: "read",
-            status: "completed",
-            content: [{ type: "content", content: { type: "text", text: "Native file body" } }],
-          },
-        });
-        await client.sessionUpdate({
           sessionId: "acp-session",
           update: {
             sessionUpdate: "available_commands_update",
@@ -574,6 +563,17 @@ it("negotiates ACP controls, switches models, streams tools and respects native 
           toolCall: { toolCallId: "tool-1", title: "Read file", rawInput: { path: "README.md" } },
         });
         expect(outcome.outcome).toEqual({ outcome: "selected", optionId: "no" });
+        await client.sessionUpdate({
+          sessionId: p.sessionId,
+          update: {
+            sessionUpdate: "tool_call",
+            toolCallId: "read-without-input",
+            title: "Read",
+            kind: "read",
+            status: "completed",
+            content: [{ type: "content", content: { type: "text", text: "Native file body" } }],
+          },
+        });
         await client.sessionUpdate({
           sessionId: p.sessionId,
           update: {
