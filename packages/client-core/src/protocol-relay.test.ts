@@ -28,6 +28,7 @@ function setup() {
     onAgent: vi.fn(() => off),
     onTerminal: vi.fn(() => off),
     subscribeProjectSetups: vi.fn(() => off),
+    subscribeHostUsage: vi.fn(() => off),
     executeWorkspace: vi.fn<RelayConnection["executeWorkspace"]>(async (command) => ({
       type: "workspace.result",
       commandId: command.commandId,
@@ -65,6 +66,25 @@ function setup() {
   return { connection, messages, relay, off };
 }
 describe("offline UI protocol relay", () => {
+  it("relays opt-in resource usage and detaches on disposal", async () => {
+    const { connection, relay, messages, off } = setup();
+    await relay.receive(hello);
+    expect(connection.subscribeHostUsage).not.toHaveBeenCalled();
+    await relay.receive({ type: "host.subscribe", enabled: true });
+    await relay.receive({ type: "host.subscribe", enabled: true });
+    expect(connection.subscribeHostUsage).toHaveBeenCalledOnce();
+    const listener = vi.mocked(connection.subscribeHostUsage).mock.calls[0]![0];
+    listener(null);
+    expect(messages.at(-1)).toEqual({ type: "host.usage", usage: null });
+    await relay.receive({ type: "host.subscribe", enabled: false });
+    expect(off).toHaveBeenCalledOnce();
+    await relay.receive({ type: "host.subscribe", enabled: true });
+    relay.dispose();
+    expect(off).toHaveBeenCalledTimes(6);
+    const count = messages.length;
+    listener(null);
+    expect(messages).toHaveLength(count);
+  });
   it("requires a valid handshake and refuses unknown messages", async () => {
     const { relay } = setup();
     await expect(relay.receive({ type: "workspace.subscribe" })).rejects.toThrow("handshake");
