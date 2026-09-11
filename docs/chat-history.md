@@ -1,7 +1,7 @@
 # Chat history and default startup
 
 New agent panes start with the daemon's existing default provider (Codex) and its
-machine-default model. The composer still lets the user select a different provider
+configured model. The composer shows the resolved model name and lets the user select a different provider
 or model; there is no initial chooser screen.
 
 Desktop and mobile use the same conversation controller and scroll behavior:
@@ -22,6 +22,8 @@ Desktop and mobile use the same conversation controller and scroll behavior:
 - The sent-message navigator can jump to either side of the current window. It
   fetches bounded context around the selected prompt, then resumes automatic
   scrolling. New prompts stay indexed while the reader is viewing older history.
+- When the left message rail is visible, the duplicate top-right message-list
+  button is hidden. Narrow panes retain the list as their history navigator.
 
 The read protocol accepts either an exclusive `before` or `after` position, not both.
 Responses remain limited to 80 items and the existing payload-size budget. `hasMore`

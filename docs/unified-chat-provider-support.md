@@ -56,6 +56,31 @@ profile supplies similarly named environment variables.
 
 ## Native capabilities
 
+### Model selection and catalog caching
+
+The picker displays and selects the effective session model even when no explicit
+override was saved. Native catalogs retain canonical model IDs and recommendations.
+Claude's `resolvedModel` metadata supplies version numbers for alias rows such as
+Opus and Fable; a duplicate Default recommendation is folded into its named model.
+Custom deployment labels and special aliases retain their names. The inventory
+comes from the installed provider and account, so a version it does not advertise
+is not added by the UI. See [Claude's model configuration](https://code.claude.com/docs/en/model-config)
+for how its aliases and full model names differ.
+
+Visible conversations warm the installed providers in the background without
+sending prompts. Composers share a five-minute in-memory cache scoped to the
+connection, workspace epoch, and project directory. Reopening the picker or
+switching panes reuses its rows; expired data remains visible during a refresh.
+Discovery requests are coalesced, failed refreshes retain usable models, and
+provider edits or a completed sign-in invalidate the cache. A genuinely cold
+catalog can still take time to discover; the provider list is not replaced by a
+loading banner. A fresh app connection starts a new cache.
+
+The daemon update is required for newly exposed native resolution metadata.
+Older daemons still benefit from correct effective-model selection and UI caching,
+but cannot supply Claude version metadata they discarded. Native mobile and the
+web composer use the same selection and catalog logic.
+
 “Native” below means the adapter is wired to the underlying operation. A CLI can
 still reject an operation because of its version, account, current turn, or
 available checkpoint. The UI never guesses unsupported controls.
