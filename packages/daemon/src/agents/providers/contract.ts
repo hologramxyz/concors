@@ -33,6 +33,9 @@ export const modelCatalog = (
   models: {
     id: string;
     label: string;
+    resolvedModel?: string;
+    isDefault?: boolean;
+    description?: string;
     efforts?: string[];
     defaultEffort?: string | null;
     supportsImages?: boolean;
@@ -42,6 +45,9 @@ export const modelCatalog = (
   data: models.map((m) => ({
     model: m.id,
     displayName: m.label,
+    ...(m.resolvedModel ? { resolvedModel: m.resolvedModel } : {}),
+    ...(m.isDefault === undefined ? {} : { isDefault: m.isDefault }),
+    ...(m.description ? { description: m.description } : {}),
     supportedReasoningEfforts: (m.efforts ?? []).map((reasoningEffort) => ({ reasoningEffort })),
     defaultReasoningEffort: m.defaultEffort ?? null,
     ...(m.supportsImages === undefined ? {} : { supportsImages: m.supportsImages }),
