@@ -194,9 +194,10 @@ for (const native of [false, true]) {
         await expect(ui.getByRole("log")).toContainText("Keep my original conversation");
         await expect(ui.getByRole("log")).not.toContainText(`Continue with ${label}`);
       }
-      await ui.getByRole("button", { name: "Fork session", exact: true }).click();
-      await expect(ui.locator(".mobile-pane")).not.toHaveAttribute("data-pane-id", paneId);
-      await expect(ui.getByRole("log")).not.toContainText("Keep my original conversation");
+      for (const name of ["Import session", "Fork session", "Rewind", "MCP servers"])
+        await expect(ui.getByRole("button", { name, exact: true })).toHaveCount(0);
+      await expect(ui.locator(".mobile-pane")).toHaveAttribute("data-pane-id", paneId);
+      await expect(ui.getByRole("log")).toContainText("Keep my original conversation");
       expect(errors).toEqual([]);
     } finally {
       desktop.disconnect();
