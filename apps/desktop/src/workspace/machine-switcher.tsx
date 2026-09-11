@@ -4,7 +4,8 @@ import { api } from "@/auth/api";
 import { LOCAL_HOST, loadHosts, machineAvailability, machineHost, type Host } from "./machines";
 import { useEffect, useState } from "react";
 import { ChevronDown, Server, Plus } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -64,7 +65,7 @@ export function MachineSwitcher({
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
-      <Tooltip>
+      <SidebarTooltip collapsed={compact}>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger
             className={`relative flex min-w-0 items-center rounded-md hover:bg-sidebar-accent ${compact ? "sidebar-rail-control" : "h-9 w-fit gap-1.5 px-1.5 text-left"}`}
@@ -88,7 +89,7 @@ export function MachineSwitcher({
         <TooltipContent side={compact ? "right" : "bottom"} sideOffset={6}>
           {selected.label} · {connected ? "Connected" : "Disconnected"} · Switch machine
         </TooltipContent>
-      </Tooltip>
+      </SidebarTooltip>
       <DropdownMenuContent align="start" className="w-64">
         <DropdownMenuItem onSelect={() => onSelect(LOCAL_HOST)}>
           <Server className={selected.machineId === "local" ? "text-primary" : undefined} />
