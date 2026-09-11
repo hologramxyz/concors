@@ -80,3 +80,9 @@ export {
   type MachineAccessToken,
   type PushDevice,
 } from "./mobile.ts";
+
+export {
+  DevelopmentToolsSchema,
+  DevelopmentToolsSetupSchema,
+  type DevelopmentTools,
+} from "./schemas.ts";

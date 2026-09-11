@@ -30,14 +30,14 @@ const machine = {
 
 async function billingApi(
   page: Page,
-  options: { card?: boolean; unpriced?: boolean; decline?: boolean } = {},
+  options: { card?: boolean; unpriced?: boolean; decline?: boolean; savedKey?: boolean } = {},
 ) {
   await signedIn(page);
   const state = {
     card: options.card ?? false,
     complete: false,
     created: false,
-    keyAdded: false,
+    keyAdded: options.savedKey ?? false,
     requests: [] as { path: string; body: unknown }[],
   };
   await page.route("**/api/v1/{machines,billing,ssh-keys}**", async (route) => {
@@ -60,6 +60,7 @@ async function billingApi(
     let status = 200;
     if (path.endsWith("/machines/catalog"))
       result = {
+        developmentTools: { nodeVersions: ["lts", "24", "22"] },
         regions: [
           { id: "US-EAST-VA", location: "Vint Hill, Virginia", countryCode: "US" },
           { id: "US-WEST-OR", location: "Hillsboro, Oregon", countryCode: "US" },
@@ -196,7 +197,10 @@ async function openCreation(page: Page) {
   await page.getByRole("button", { name: "New machine", exact: true }).first().click();
   await expect(page.getByRole("dialog", { name: "New VPS" })).toBeVisible();
   await page.getByRole("textbox", { name: "Name", exact: true }).fill("build-agent");
-  await page.getByRole("textbox", { name: "SSH public key", exact: true }).fill(key);
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  const sshKey = page.getByRole("textbox", { name: "SSH public key", exact: true });
+  if (await sshKey.isVisible()) await sshKey.fill(key);
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
 }
 
 test("create a workspace VPS with a test card, then view its subscription in Profile", async ({
@@ -204,7 +208,7 @@ test("create a workspace VPS with a test card, then view its subscription in Pro
 }) => {
   const state = await billingApi(page);
   await openCreation(page);
-  const pay = page.getByRole("button", { name: "Pay $6.99/month and create VPS", exact: true });
+  const pay = page.getByRole("button", { name: "Pay $6.99 & deploy", exact: true });
   await expect(pay).toBeDisabled();
   const popup = page.waitForEvent("popup");
   await page.getByRole("button", { name: "Add a card with Stripe" }).click();
@@ -238,7 +242,7 @@ test("create a workspace VPS with a test card, then view its subscription in Pro
 test("a declined payment keeps the form and does not create a VPS", async ({ page }) => {
   const state = await billingApi(page, { card: true, decline: true });
   await openCreation(page);
-  await page.getByRole("button", { name: "Pay $6.99/month and create VPS", exact: true }).click();
+  await page.getByRole("button", { name: "Pay $6.99 & deploy", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("Your card was declined");
   await expect(page.getByRole("dialog", { name: "New VPS" })).toBeVisible();
   expect(state.created).toBe(false);
@@ -246,9 +250,12 @@ test("a declined payment keeps the form and does not create a VPS", async ({ pag
 
 test("missing Stripe prices cannot be mistaken for a free VPS", async ({ page }) => {
   const state = await billingApi(page, { card: true, unpriced: true });
-  await openCreation(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: "Switch machine", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Add a machine", exact: true }).click();
+  await page.getByRole("button", { name: "New machine", exact: true }).first().click();
   await expect(page.getByText("Unavailable", { exact: true }).first()).toBeVisible();
-  await expect(page.getByRole("button", { name: "Create VPS", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Continue", exact: true })).toBeDisabled();
   await expect(page.getByText("Free", { exact: true })).toHaveCount(0);
   expect(state.created).toBe(false);
 });
@@ -273,10 +280,10 @@ test("returning from card setup can be abandoned without paying or losing the VP
   const checkout = await popup;
   await checkout.close();
   await page.getByRole("button", { name: "Back to payment", exact: true }).click();
-  await expect(page.getByRole("textbox", { name: "Name", exact: true })).toHaveValue("build-agent");
+  await expect(page.getByText("build-agent", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Add a card with Stripe" })).toBeEnabled();
   await expect(
-    page.getByRole("button", { name: "Pay $6.99/month and create VPS", exact: true }),
+    page.getByRole("button", { name: "Pay $6.99 & deploy", exact: true }),
   ).toBeDisabled();
   expect(state.created).toBe(false);
 });
@@ -312,9 +319,10 @@ for (const viewport of [
     await billingApi(page, { card: true });
     await openCreation(page);
     const dialog = page.getByRole("dialog", { name: "New VPS" });
-    const pay = dialog.getByRole("button", { name: "Pay $6.99/month and create VPS", exact: true });
+    const pay = dialog.getByRole("button", { name: "Pay $6.99 & deploy", exact: true });
     await expect(pay).toBeEnabled();
     // Long keys and narrow windows must not push the form or its actions sideways.
+    await dialog.getByRole("button", { name: "Edit customization" }).click();
     await page
       .getByRole("textbox", { name: "SSH public key" })
       .fill(`${key} ${"workstation".repeat(30)}`);
@@ -352,6 +360,7 @@ for (const viewport of [
       element.scrollTop = 0;
     });
     await page.screenshot({ path: `/tmp/concors-vps-modal-${viewport.width}.png` });
+    await dialog.getByRole("button", { name: "Back", exact: true }).click();
     await dialog.getByRole("button", { name: "Region", exact: true }).click();
     await expect(
       page.getByRole("menuitemradio", { name: "Vint Hill, Virginia", exact: true }),
@@ -369,6 +378,9 @@ for (const viewport of [
       element.scrollTop = element.scrollHeight;
     });
     await assertLayout();
+    await dialog.getByRole("button", { name: "Continue", exact: true }).click();
+    await dialog.getByRole("button", { name: "Continue", exact: true }).click();
+    await assertLayout();
     await expect(pay).toBeInViewport();
     await expect(dialog.getByText("Stripe test mode", { exact: true })).toHaveCount(0);
     await dialog
@@ -376,3 +388,53 @@ for (const viewport of [
       .screenshot({ path: `/tmp/concors-order-summary-${viewport.width}.png` });
   });
 }
+
+test("wizard preserves customization and only deploys on final confirmation", async ({ page }) => {
+  const state = await billingApi(page, { card: true });
+  await openCreation(page);
+  expect(state.requests.filter((r) => r.body !== undefined)).toHaveLength(0);
+  await page.getByRole("button", { name: "Edit customization" }).click();
+  await expect(page.getByRole("checkbox", { name: "Node.js", exact: false })).toBeChecked();
+  await page.getByLabel("Node.js version", { exact: true }).selectOption("22");
+  await page.getByRole("checkbox", { name: /Docker/ }).check();
+  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "Name", exact: true })).toHaveValue("build-agent");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page.getByLabel("Node.js version", { exact: true })).toHaveValue("22");
+  await expect(page.getByRole("checkbox", { name: /Docker/ })).toBeChecked();
+  await expect(page.getByRole("textbox", { name: "SSH public key", exact: true })).toHaveValue(key);
+  await page.screenshot({ path: "/tmp/vps-wizard-customize.png" });
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page.getByText(/Node.js \(Node 22\), npm, pnpm, Yarn/)).toBeVisible();
+  await expect(page.getByText(/Docker & Compose/)).toBeVisible();
+  await page.screenshot({ path: "/tmp/vps-wizard-review.png" });
+  expect(state.requests.filter((r) => r.body !== undefined)).toHaveLength(0);
+  await page.getByRole("button", { name: "Pay $6.99 & deploy", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(
+    state.requests.filter((r) => r.path.endsWith("/machines") && r.body !== undefined),
+  ).toEqual([
+    {
+      path: "/api/v1/machines",
+      body: expect.objectContaining({ developmentTools: { node: "22", docker: true } }),
+    },
+  ]);
+});
+
+test("saved SSH keys need no extra input and optional tools can be disabled", async ({ page }) => {
+  const state = await billingApi(page, { card: true, savedKey: true });
+  await openCreation(page);
+  await page.getByRole("button", { name: "Edit customization" }).click();
+  await expect(page.getByRole("textbox", { name: "SSH public key", exact: true })).toHaveCount(0);
+  await page.getByRole("checkbox", { name: /Node.js/ }).uncheck();
+  await expect(page.getByLabel("Node.js version", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByRole("button", { name: "Pay $6.99 & deploy", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(
+    state.requests.filter((r) => r.path.endsWith("/ssh-keys") && r.body !== undefined),
+  ).toHaveLength(0);
+  expect(
+    state.requests.find((r) => r.path.endsWith("/machines") && r.body !== undefined)?.body,
+  ).toMatchObject({ developmentTools: { node: null, docker: false } });
+});
