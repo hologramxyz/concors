@@ -73,6 +73,11 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await ui.getByRole("button", { name: "Codex", exact: true }).click();
     const input = ui.getByRole("textbox", { name: "Message Codex" });
     await expect(input).toBeEnabled();
+    // Main's provider account flow must also cross the mobile relay without a real OAuth login.
+    const signIn = ui.getByRole("region", { name: "Codex account connection", exact: true });
+    await signIn.getByRole("button", { name: "Sign in with ChatGPT", exact: true }).click();
+    await expect(signIn.getByText("TEST-CODE", { exact: true })).toBeVisible();
+    await expect(ui.getByText("Codex connected", { exact: true })).toBeVisible();
     await input.fill("hello over the real daemon transport");
     await ui.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(ui.getByRole("log")).toContainText("Hello from Codex");
@@ -117,7 +122,19 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await expect(input).toBeEnabled();
     await input.fill("Unsent draft survives reconnect");
     await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
-    await ui.getByRole("button", { name: "Desktop connection settings" }).click();
+    await ui.getByRole("button", { name: "Account: Desktop connection", exact: true }).click();
+    const account = ui.getByRole("dialog", { name: "Account", exact: true });
+    await expect(ui.getByRole("dialog", { name: "Settings", exact: true })).toHaveCount(0);
+    await expect(account.getByRole("combobox", { name: "Machine", exact: true })).toContainText(
+      "Desktop daemon",
+    );
+    await expect(account).toContainText("Private preview · no cloud account");
+    await account.getByRole("button", { name: "Add machine", exact: true }).click();
+    const addMachine = ui.getByRole("dialog", { name: "Add machine", exact: true });
+    await expect(addMachine).toContainText("paired with one desktop daemon");
+    await addMachine.getByRole("button", { name: "Close", exact: true }).click();
+    await ui.getByRole("button", { name: "Account: Desktop connection", exact: true }).click();
+    await account.getByRole("button", { name: "Settings", exact: true }).click();
     const settings = ui.getByRole("dialog", { name: "Settings", exact: true });
     await expect(settings).toContainText(snapshot().machineId);
     await settings.getByRole("combobox", { name: "Settings section" }).click();
@@ -155,7 +172,8 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     expect(desktop.terminals[0]?.id).toBe(terminalId);
     // Disconnect closes this viewer, not the remote terminal or cloud account.
     await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
-    await ui.getByRole("button", { name: "Desktop connection settings" }).click();
+    await ui.getByRole("button", { name: "Account: Desktop connection", exact: true }).click();
+    await account.getByRole("button", { name: "Settings", exact: true }).click();
     await settings.getByRole("button", { name: "Disconnect desktop", exact: true }).click();
     await expect(
       page.getByRole("button", { name: "Connect to desktop", exact: true }),
@@ -171,7 +189,8 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await expect(ui.getByRole("log")).toContainText("Hello from Codex");
     await expect(input).toHaveValue("");
     await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
-    await ui.getByRole("button", { name: "Desktop connection settings" }).click();
+    await ui.getByRole("button", { name: "Account: Desktop connection", exact: true }).click();
+    await account.getByRole("button", { name: "Settings", exact: true }).click();
     await settings.getByRole("button", { name: "Review AI data sharing", exact: true }).click();
     await settings.getByRole("button", { name: "Withdraw and disconnect", exact: true }).click();
     await expect(

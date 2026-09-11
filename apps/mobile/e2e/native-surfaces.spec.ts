@@ -74,6 +74,39 @@ test("native surface bridge preserves navigation, drafts, settings, attachments 
   const initial = await snapshot(page);
   if (!initial) throw new Error("No native snapshot");
   expect(initial?.surfaces.filter((item) => item.content.kind === "button")).toHaveLength(3);
+  await event(page, "button", "Open sidebar", { kind: "press", control: "activate" });
+  const sidebarSurfaces = async () =>
+    (await snapshot(page))?.surfaces.map((item) =>
+      item.content.kind === "button" ? [item.content.label, item.content.icon] : "composer",
+    );
+  await expect.poll(sidebarSurfaces).toEqual([
+    ["Close sidebar", "menu"],
+    ["Search workspace", "search"],
+  ]);
+  await expect(ui.getByRole("button", { name: "Close sidebar", exact: true })).toHaveCount(0);
+  await event(page, "button", "Search workspace", { kind: "press", control: "activate" });
+  await expect(ui.getByPlaceholder("Type a command or search…")).toBeVisible();
+  await expect.poll(async () => (await snapshot(page))?.surfaces).toEqual([]);
+  await page.keyboard.press("Escape");
+  await expect.poll(sidebarSurfaces).toEqual([
+    ["Close sidebar", "menu"],
+    ["Search workspace", "search"],
+  ]);
+  await ui.getByRole("button", { name: /^Account:/ }).click();
+  const account = ui.getByRole("dialog", { name: "Account", exact: true });
+  await expect(account).toBeVisible();
+  await expect.poll(async () => (await snapshot(page))?.surfaces).toEqual([]);
+  await account.press("Escape");
+  await expect.poll(sidebarSurfaces).toEqual([
+    ["Close sidebar", "menu"],
+    ["Search workspace", "search"],
+  ]);
+  await event(page, "button", "Close sidebar", { kind: "press", control: "activate" });
+  await expect
+    .poll(async () =>
+      (await snapshot(page))?.surfaces.some((item) => item.content.kind === "composer"),
+    )
+    .toBe(true);
   await event(page, "composer", "", { kind: "focus", focused: true });
   await event(page, "composer", "", { kind: "height", height: 144 });
   await event(page, "composer", "", {
