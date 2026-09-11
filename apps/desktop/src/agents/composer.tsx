@@ -16,7 +16,7 @@ import {
   X,
 } from "lucide-react";
 import {
-  agentProviderNames,
+  agentProviderName,
   type AgentInfo,
   type AgentSettings,
   type AgentAttachment,
@@ -227,7 +227,8 @@ export function AgentComposer({
   };
   const nativeModels = useAgentModelSelection(
     agent,
-    (model) => void configure({ ...settings, model, effort: null, serviceTier: null }),
+    (model) =>
+      void configure({ ...settings, model, effort: null, serviceTier: null, features: {} }),
   );
   const [nativeProviderPage, setNativeProviderPage] = useState<AgentProviderId | undefined>(
     agent.provider,
@@ -260,7 +261,7 @@ export function AgentComposer({
         {
           id: "model",
           label: nativeProvider
-            ? `${agentProviderNames[nativeProvider.id]} · Agent and model`
+            ? `${agentProviderName(nativeProvider.id)} · Agent and model`
             : "Choose an agent provider",
           icon: nativeProvider?.id === "codex" ? ("model" as const) : ("options" as const),
           disabled: controlsDisabled || agent.status === "starting" || nativeModels.switching,
@@ -288,7 +289,7 @@ export function AgentComposer({
                 .map((provider) => ({
                   id: provider.id,
                   label:
-                    agentProviderNames[provider.id] +
+                    agentProviderName(provider.id) +
                     (provider.id === agent.provider ? " · Current chat" : " · Starts a new chat"),
                   selected: provider.id === agent.provider,
                 })),
@@ -313,30 +314,37 @@ export function AgentComposer({
         },
         {
           id: "mode",
-          label: `Permission mode: ${settings.mode}`,
+          label: `Mode: ${agent.provider === "codex" ? settings.mode : (settings.nativeMode ?? agent.controls?.currentMode ?? "default")}`,
           icon: "shield" as const,
           disabled: controlsDisabled,
-          options: [
-            {
-              id: "default",
-              label: "Default permissions · asks for approval",
-              selected: settings.mode === "default",
-            },
-            {
-              id: "auto-review",
-              label: "Auto-review · same sandbox",
-              selected: settings.mode === "auto-review",
-            },
-            {
-              id: "full-access",
-              label: "Full access · no approval prompts",
-              selected: settings.mode === "full-access",
-            },
-          ],
+          options:
+            agent.provider !== "codex"
+              ? (agent.controls?.modes ?? []).map((mode) => ({
+                  id: mode.id,
+                  label: mode.label,
+                  selected: (settings.nativeMode ?? agent.controls?.currentMode) === mode.id,
+                }))
+              : [
+                  {
+                    id: "default",
+                    label: "Default permissions · asks for approval",
+                    selected: settings.mode === "default",
+                  },
+                  {
+                    id: "auto-review",
+                    label: "Auto-review · same sandbox",
+                    selected: settings.mode === "auto-review",
+                  },
+                  {
+                    id: "full-access",
+                    label: "Full access · no approval prompts",
+                    selected: settings.mode === "full-access",
+                  },
+                ],
         },
         {
           id: "options",
-          label: "Plan mode and speed",
+          label: "Agent commands and options",
           icon: "options" as const,
           disabled: controlsDisabled,
           options: [
@@ -349,7 +357,29 @@ export function AgentComposer({
                   },
                 ]
               : []),
-            { id: "speed:", label: "Default speed", selected: !settings.serviceTier },
+            ...(agent.provider === "codex"
+              ? [{ id: "speed:", label: "Default speed", selected: !settings.serviceTier }]
+              : []),
+            ...(agent.controls?.commands ?? []).map((c) => ({
+              id: `command:${c.name}`,
+              label: `/${c.name} · ${c.description}`,
+              selected: false,
+            })),
+            ...(agent.controls?.features ?? []).flatMap((f) =>
+              f.options
+                ? f.options.map((o) => ({
+                    id: `feature:${JSON.stringify([f.id, o.id])}`,
+                    label: `${f.label}: ${o.label}`,
+                    selected: (settings.features?.[f.id] ?? f.value) === o.id,
+                  }))
+                : [
+                    {
+                      id: `feature:${JSON.stringify([f.id, !(settings.features?.[f.id] ?? f.value)])}`,
+                      label: `${f.label}: ${(settings.features?.[f.id] ?? f.value) ? "on" : "off"}`,
+                      selected: !!(settings.features?.[f.id] ?? f.value),
+                    },
+                  ],
+            ),
             ...(effortModel?.serviceTiers ?? []).map((tier) => ({
               id: `speed:${tier.id}`,
               label: tier.label,
@@ -357,9 +387,17 @@ export function AgentComposer({
             })),
           ],
         },
-      ].filter((control) => agent.provider === "codex" || control.id === "model"),
+      ].filter(
+        (control) =>
+          agent.provider === "codex" ||
+          control.id === "model" ||
+          (control.id === "effort" && !!effortModel?.efforts.length) ||
+          (control.id === "mode" && !!agent.controls?.modes.length) ||
+          (control.id === "options" &&
+            (!!agent.controls?.commands.length || !!agent.controls?.features.length)),
+      ),
       context: agent.context?.limit
-        ? `${agent.context.used.toLocaleString()} / ${agent.context.limit.toLocaleString()} tokens · ${Math.round((agent.context.used / agent.context.limit) * 100)}% used\n${agent.context.total.toLocaleString()} cumulative tokens`
+        ? `${agent.context.used.toLocaleString()} / ${agent.context.limit.toLocaleString()} tokens · ${Math.round((agent.context.used / agent.context.limit) * 100)}% used\n${agent.context.total === null ? "" : agent.context.total.toLocaleString() + " cumulative tokens"}`
         : "Usage will appear after the agent reports it.",
     },
     (event) => {
@@ -398,7 +436,10 @@ export function AgentComposer({
               const provider = nativeModels.providers.find(
                 (entry) => entry.id === value && !entry.error,
               );
-              if (provider) setNativeProviderPage(provider.id);
+              if (provider) {
+                setNativeProviderPage(provider.id);
+                void nativeModels.load(provider.id);
+              }
             } else if (!value || nativeProvider.models.some((model) => model.id === value)) {
               void nativeModels.choose(value, nativeProvider.id);
             }
@@ -409,10 +450,26 @@ export function AgentComposer({
             void configure({ ...settings, effort: value || null });
           else if (
             event.control === "mode" &&
+            agent.provider === "codex" &&
             ["default", "auto-review", "full-access"].includes(value)
           )
             void configure({ ...settings, mode: value as AgentSettings["mode"] });
+          else if (event.control === "mode" && agent.controls?.modes.some((m) => m.id === value))
+            void configure({ ...settings, nativeMode: value });
           else if (event.control === "options") {
+            if (
+              value.startsWith("command:") &&
+              agent.controls?.commands.some((c) => c.name === value.slice(8))
+            ) {
+              setDraft(`/${value.slice(8)} `);
+              return;
+            }
+            if (value.startsWith("feature:")) {
+              const [id, next] = JSON.parse(value.slice(8)) as [string, boolean | string];
+              if (agent.controls?.features.some((f) => f.id === id))
+                void configure({ ...settings, features: { ...settings.features, [id]: next } });
+              return;
+            }
             if (value === "plan" && agent.supportsPlan)
               void configure({ ...settings, planMode: !settings.planMode });
             else if (
@@ -601,7 +658,7 @@ export function AgentComposer({
               <textarea
                 ref={textarea}
                 data-agent-composer
-                aria-label={`Message ${agentProviderNames[agent.provider]}`}
+                aria-label={`Message ${agentProviderName(agent.provider)}`}
                 placeholder={
                   compact && !expanded
                     ? "Message your agent"
@@ -692,10 +749,16 @@ export function AgentComposer({
                     showValue={!compact}
                     disabled={controlsDisabled}
                     onSelect={(model) =>
-                      void configure({ ...settings, model, effort: null, serviceTier: null })
+                      void configure({
+                        ...settings,
+                        model,
+                        effort: null,
+                        serviceTier: null,
+                        features: {},
+                      })
                     }
                   />
-                  {agent.provider === "codex" && (
+                  {!!effortModel?.efforts.length && (
                     <ControlPicker
                       label="Thinking effort"
                       showValue={!compact}
@@ -715,6 +778,59 @@ export function AgentComposer({
                         })),
                       ]}
                       onSelect={(effort) => void configure({ ...settings, effort: effort || null })}
+                    />
+                  )}
+                  {!!agent.controls?.modes.length && agent.provider !== "codex" && (
+                    <ControlPicker
+                      label="Agent mode"
+                      showValue={!compact}
+                      value={settings.nativeMode ?? agent.controls.currentMode ?? ""}
+                      icon={<Shield className="size-4" />}
+                      disabled={controlsDisabled}
+                      options={agent.controls.modes}
+                      onSelect={(nativeMode) => void configure({ ...settings, nativeMode })}
+                    />
+                  )}
+                  {(agent.controls?.features ?? []).map((feature) => (
+                    <ControlPicker
+                      key={feature.id}
+                      label={feature.label}
+                      showValue={!compact}
+                      value={String(settings.features?.[feature.id] ?? feature.value)}
+                      icon={<SlidersHorizontal className="size-4" />}
+                      disabled={controlsDisabled}
+                      options={
+                        feature.options ?? [
+                          { id: "true", label: "On" },
+                          { id: "false", label: "Off" },
+                        ]
+                      }
+                      onSelect={(value) =>
+                        void configure({
+                          ...settings,
+                          features: {
+                            ...settings.features,
+                            [feature.id]: feature.options ? value : value === "true",
+                          },
+                        })
+                      }
+                    />
+                  ))}
+                  {!!agent.controls?.commands.length && (
+                    <ControlPicker
+                      label="Agent commands"
+                      value=""
+                      selectedLabel="Commands"
+                      icon={<SlidersHorizontal className="size-4" />}
+                      disabled={controlsDisabled}
+                      options={agent.controls.commands.map((c) => ({
+                        id: c.name,
+                        label: `/${c.name}`,
+                        description: c.description,
+                      }))}
+                      onSelect={(name) => {
+                        setDraft(`/${name} `);
+                      }}
                     />
                   )}
                   {agent.provider === "codex" && (

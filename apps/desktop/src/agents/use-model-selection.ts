@@ -18,10 +18,9 @@ export function useAgentModelSelection(agent: AgentInfo, onSelect: (model: strin
     ? catalog.map((p) => (p.id === agent.provider ? current : p))
     : [current, ...catalog];
   const model = agent.settings?.model ?? agent.model;
-  const load = async () => {
+  const load = async (provider?: string) => {
     if (
       !connection ||
-      loading ||
       !connection.state ||
       connection.state.status !== "ready" ||
       !connection.state.daemon.capabilities?.includes("agent-providers")
@@ -31,11 +30,16 @@ export function useAgentModelSelection(agent: AgentInfo, onSelect: (model: strin
     setError(null);
     try {
       const result = await connection.requestAgent(
-        { kind: "provider-catalog", sessionId: agent.id },
+        { kind: "provider-catalog", sessionId: agent.id, ...(provider ? { provider } : {}) },
         crypto.randomUUID(),
       );
       if (result.outcome.status === "error") throw new Error(result.outcome.message);
-      setCatalog(result.outcome.providers ?? []);
+      const providers = result.outcome.providers ?? [];
+      setCatalog((previous) =>
+        providers.map((p) =>
+          !p.loaded ? (previous.find((old) => old.id === p.id && old.loaded) ?? p) : p,
+        ),
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load providers");
     } finally {
