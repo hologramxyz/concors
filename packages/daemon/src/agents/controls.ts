@@ -14,6 +14,9 @@ export function turnControls(info: AgentInfo) {
     effort: settings.effort,
     summary: "auto",
     serviceTier: settings.serviceTier ?? null,
+    ...(info.provider === "codex"
+      ? {}
+      : { nativeMode: settings.nativeMode ?? null, features: settings.features ?? {} }),
     ...(info.supportsPlan
       ? {
           collaborationMode: {
@@ -52,6 +55,8 @@ const Catalog = z.object({
         .default([]),
       supportedReasoningEfforts: z.array(z.object({ reasoningEffort: z.string() })).default([]),
       defaultReasoningEffort: z.string().nullable().optional(),
+      supportsImages: z.boolean().optional(),
+      contextWindow: z.number().positive().optional(),
     }),
   ),
 });
@@ -66,6 +71,8 @@ export function parseModels(raw: unknown): NonNullable<AgentInfo["models"]> {
     label: m.displayName,
     efforts: m.supportedReasoningEfforts.map((e) => e.reasoningEffort),
     defaultEffort: m.defaultReasoningEffort ?? null,
+    ...(m.supportsImages === undefined ? {} : { supportsImages: m.supportsImages }),
+    ...(m.contextWindow === undefined ? {} : { contextWindow: m.contextWindow }),
     serviceTiers: m.serviceTiers
       .slice(0, 20)
       .map((tier) => ({ id: tier.id, label: tier.name, description: tier.description })),

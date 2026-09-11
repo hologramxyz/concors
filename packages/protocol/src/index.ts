@@ -21,5 +21,6 @@ export * from "./terminal-profiles.ts";
 export * from "./projects.ts";
 
 export * from "./agents.ts";
+export * from "./agent-controls.ts";
 
 export * from "./files.ts";
