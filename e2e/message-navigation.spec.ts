@@ -49,6 +49,11 @@ test("sent-message rail previews and jumps through paginated history, with a nar
     await page.reload();
     const nav = page.getByRole("navigation", { name: "Your messages", exact: true });
     await expect(nav.getByRole("button")).toHaveCount(36);
+    const timeline = page.getByRole("log", { name: "Chat timeline", exact: true });
+    await expect
+      .poll(() => timeline.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight))
+      .toBeLessThanOrEqual(2);
+    await expect(nav.getByRole("button").last()).toHaveAttribute("aria-current", "location");
     await expect(
       page
         .getByRole("log")
@@ -69,6 +74,19 @@ test("sent-message rail previews and jumps through paginated history, with a nar
     await first.click();
     await expect(target).toBeInViewport();
     await expect(first).toHaveAttribute("aria-current", "location");
+    await page.getByRole("button", { name: "Latest", exact: true }).click();
+    await expect(nav.getByRole("button").last()).toHaveAttribute("aria-current", "location");
+    // Reading just above the bottom still tracks the prompt at the top of the viewport.
+    await timeline.evaluate((el) => {
+      el.scrollTop = el.scrollHeight - el.clientHeight - 100;
+    });
+    await expect(nav.getByRole("button").last()).not.toHaveAttribute("aria-current", "location");
+    await timeline.evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
+    });
+    await expect(nav.getByRole("button").last()).toHaveAttribute("aria-current", "location");
+    await first.click();
+    await expect(first).toHaveAttribute("aria-current", "location");
     // A new turn must not pull the reader back to the bottom after a jump.
     await send("Request 37: keep working while I read earlier messages");
     await expect(target).toBeInViewport();
@@ -86,9 +104,16 @@ test("sent-message rail previews and jumps through paginated history, with a nar
     await page.setViewportSize({ width: 390, height: 844 });
     await page.emulateMedia({ reducedMotion: "reduce" });
     await expect(nav).not.toBeVisible();
+    await timeline.evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
+    });
     await page.getByRole("button", { name: "Browse your messages" }).click();
     const dialog = page.getByRole("dialog", { name: "Your messages", exact: true });
     await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("button", { name: /^37 Request 37:/ })).toHaveAttribute(
+      "aria-current",
+      "location",
+    );
     await page.screenshot({ path: test.info().outputPath("message-list-mobile.png") });
     await dialog.getByRole("button", { name: /^1 Request 1:/ }).click();
     await expect(dialog).not.toBeVisible();
