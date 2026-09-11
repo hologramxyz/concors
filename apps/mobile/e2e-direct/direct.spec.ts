@@ -44,8 +44,16 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     });
   });
   const workspaceSockets: string[] = [];
+  const accountStatuses: string[] = [];
   page.on("websocket", (socket) => {
-    if (new URL(socket.url()).pathname === "/ws") workspaceSockets.push(socket.url());
+    if (new URL(socket.url()).pathname !== "/ws") return;
+    workspaceSockets.push(socket.url());
+    socket.on("framereceived", ({ payload }) => {
+      if (typeof payload !== "string") return;
+      const event = JSON.parse(payload);
+      if (event.type === "agent.result" && event.outcome?.account)
+        accountStatuses.push(event.outcome.account.status);
+    });
   });
   const unsubscribe = desktop.subscribeWorkspace(() => undefined);
   const errors: string[] = [];
@@ -105,18 +113,9 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     // Main's provider account flow must also cross the mobile relay without a real OAuth login.
     const signIn = ui.getByRole("region", { name: "Codex account connection", exact: true });
     await signIn.getByRole("button", { name: "Sign in with ChatGPT", exact: true }).click();
-    // Verify the daemon's durable result; completed sign-in intentionally has no chat badge.
-    await expect
-      .poll(async () => {
-        const sessionId = desktop.agents.find((agent) => agent.directory === directory)?.id;
-        if (!sessionId) return null;
-        const result = await desktop.requestAgent(
-          { kind: "account", sessionId, action: { type: "read" } },
-          crypto.randomUUID(),
-        );
-        return result.outcome.status === "ok" ? result.outcome.account?.status : null;
-      })
-      .toBe("connected");
+    // Account flows are socket-scoped: observe the phone's result, not the separate
+    // desktop control connection's fixture account. Completed sign-in has no chat badge.
+    await expect.poll(() => accountStatuses, { timeout: 10_000 }).toContain("connected");
     await expect(signIn).toHaveCount(0);
     await expect(ui.getByText(/Codex connected|fixture-account@example\.test/)).toHaveCount(0);
     await input.fill("hello over the real daemon transport");
