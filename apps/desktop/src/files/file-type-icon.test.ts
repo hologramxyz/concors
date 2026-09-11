@@ -27,6 +27,8 @@ describe("file type icons", () => {
   it("keeps unknown files visible without changing the accessible filename", () => {
     const fallback = icon("unknown.extension");
     expect(fallback).toBe(icon("extensionless"));
+    for (const name of ["constructor", "__proto__", "file.constructor", "file.__proto__"])
+      expect(icon(name)).toBe(fallback);
     expect(fallback).toContain("<svg");
     expect(fallback).toContain('aria-hidden="true"');
     expect(fallback).toContain('focusable="false"');
