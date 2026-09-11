@@ -7,7 +7,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { FileCode2, RefreshCw, Save, WrapText, Search, Ellipsis, Copy } from "lucide-react";
+import { RefreshCw, Save, WrapText, Search, Ellipsis, Copy } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { copyText } from "@/lib/clipboard";
 import type { FileOperation } from "@concors/protocol";
 import { useFiles, type OpenFile } from "./context";
+import { FileTypeIcon } from "./file-type-icon";
 import { loadCodeEditor } from "./editor-loader";
 import { useFilePrompts } from "./prompts";
 import { CompactLayoutContext } from "@/components/compact-layout";
@@ -42,7 +43,7 @@ export function FileTabLabel({ file }: { file: OpenFile }) {
         onClick={() => files.select(file.scope, file.id)}
         className="flex max-w-52 items-center gap-1.5 px-2 py-1 text-ui"
       >
-        <FileCode2 className="size-3.5 shrink-0" />
+        <FileTypeIcon path={file.path} className="size-[18px]" />
         <span className="truncate">{file.path.split("/").pop()}</span>
         {dirty && <span aria-label="Unsaved changes">●</span>}
       </button>

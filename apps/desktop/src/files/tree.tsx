@@ -3,7 +3,7 @@ import {
   ChevronRight,
   Eye,
   EyeOff,
-  FileCode2,
+  File,
   FilePlus2,
   Folder,
   FolderOpen,
@@ -17,6 +17,7 @@ import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { Button } from "@/components/ui/button";
 import { useFiles } from "./context";
 import { CreateEntry } from "./create-entry";
+import { FileTypeIcon } from "./file-type-icon";
 import { CompactLayoutContext } from "@/components/compact-layout";
 
 export function FileTree({
@@ -304,7 +305,7 @@ function Directory({
               : Folder
             : entry.kind === "symlink"
               ? Link2
-              : FileCode2;
+              : File;
           return (
             <li key={entry.path}>
               <button
@@ -327,7 +328,11 @@ function Directory({
                 ) : (
                   <span className="w-3 shrink-0" />
                 )}
-                <Icon className="size-4 shrink-0 text-muted-foreground" />
+                {entry.kind === "file" ? (
+                  <FileTypeIcon path={entry.name} />
+                ) : (
+                  <Icon aria-hidden="true" className="size-[20px] shrink-0 text-muted-foreground" />
+                )}
                 <span className="truncate">{entry.name}</span>
               </button>
               {directory && open && (
