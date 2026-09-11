@@ -32,6 +32,7 @@ import { createProvider, type AgentProviderFactory } from "./providers/index.ts"
 import type { ConversationProvider as AgentProvider } from "./providers/contract.ts";
 import {
   agentProviderName,
+  findAgentModel,
   NativeSessionSchema,
   type AgentProviderCatalog,
 } from "@concors/protocol";
@@ -76,7 +77,15 @@ export class AgentManager {
   private deliveries = new Map<string, string>();
   private registry: ProviderRegistry;
   readonly accounts: AgentAccounts;
-  private catalogs = new Map<string, { expires: number; value: Promise<AgentProviderCatalog[]> }>();
+  private catalogGeneration = 0;
+  private catalogs = new Map<
+    string,
+    {
+      expires: number;
+      value: Promise<AgentProviderCatalog[]>;
+      result?: AgentProviderCatalog;
+    }
+  >();
   constructor(
     store: WorkspaceStore,
     emit: (event: AgentEvent) => void,
@@ -92,6 +101,7 @@ export class AgentManager {
     this.#factory = factory;
     this.accounts = new AgentAccounts(accountFactory ?? accountBackendFactory(registry), (info) => {
       this.catalogs.clear();
+      this.catalogGeneration++;
       // Idle runtimes reload the provider's freshly saved credentials on the next send.
       for (const [id, runtime] of this.#runtimes) {
         const current = this.#store.agent(id);
@@ -301,6 +311,21 @@ export class AgentManager {
           this.registry.config(info.provider).models,
         );
         this.update(id, { models });
+        const revision = `${this.registry.revision}:${this.catalogGeneration}`;
+        const result: AgentProviderCatalog = {
+          id: info.provider,
+          label: this.registry.config(info.provider).label,
+          revision,
+          models,
+          loaded: true,
+        };
+        if (this.catalogs.size >= 128)
+          this.catalogs.delete(this.catalogs.keys().next().value ?? "");
+        this.catalogs.set(JSON.stringify([info.directory, info.provider, revision]), {
+          expires: Date.now() + 60000,
+          result,
+          value: Promise.resolve([result]),
+        });
       } catch {
         /* Older providers can still run their configured model. */
       }
@@ -839,7 +864,7 @@ export class AgentManager {
           throw new Error(
             "Plan mode is not available on this machine. Update Codex and open a new agent session.",
           );
-        const model = info.models?.find((m) => m.id === (op.settings.model ?? info.model));
+        const model = findAgentModel(info.models ?? [], op.settings.model ?? info.model);
         if (op.settings.effort && model && !model.efforts.includes(op.settings.effort))
           throw new Error("That thinking effort is not supported by this model.");
         if (
@@ -1275,14 +1300,15 @@ export class AgentManager {
       this.#store.mapNativeTurn(id, nativeId, info.turnId);
       return;
     }
-    if (method === "session/model/updated") {
-      this.update(id, { model: z.string().min(1).max(1024).parse(params["model"]) });
-      return;
-    }
     if (method === "session/models/updated") {
       this.update(id, {
         models: parseModels(params["models"], this.registry.config(info.provider).models),
       });
+      return;
+    }
+    if (method === "session/model/updated") {
+      const model = z.string().min(1).max(1024).parse(params["model"]);
+      if (model !== info.model) this.update(id, { model, updatedAt: info.updatedAt });
       return;
     }
     if (method === "session/controls/updated") {
@@ -1591,32 +1617,57 @@ export class AgentManager {
       configs.map(async (config): Promise<AgentProviderCatalog> => {
         const id = config.id,
           label = config.label;
-        if (id === info.provider && info.models?.length)
-          return { id, label, models: info.models, loaded: true };
-        if (id !== selected) return { id, label, models: [], loaded: false };
-        const key = `${info.directory}:${id}:${this.registry.revision}`;
+        const revision = `${this.registry.revision}:${this.catalogGeneration}`;
+        const key = JSON.stringify([info.directory, id, revision]);
         const cached = this.catalogs.get(key);
-        if (cached && cached.expires > Date.now())
-          return (await cached.value)[0] ?? { id, label, models: [], loaded: false };
+        if (id !== selected) {
+          if (cached?.result) return cached.result;
+          if (id === info.provider && info.models?.length)
+            return { id, label, revision, models: info.models, loaded: true };
+          return { id, label, revision, models: [], loaded: false };
+        }
+        if (cached && cached.expires > Date.now()) {
+          const result = (await cached.value)[0];
+          if (
+            id === info.provider &&
+            result &&
+            !result.error &&
+            !this.#closed &&
+            JSON.stringify(this.#store.agent(info.id).models) !== JSON.stringify(result.models)
+          )
+            this.update(info.id, {
+              models: result.models,
+              updatedAt: this.#store.agent(info.id).updatedAt,
+            });
+          return result ?? { id, label, revision, models: [], loaded: false };
+        }
         const value = (async (): Promise<AgentProviderCatalog[]> => {
           let provider: AgentProvider | undefined, timer: ReturnType<typeof setTimeout> | undefined;
           try {
-            provider = this.#factory(
-              info.directory,
-              async () => {
-                throw new Error("Model discovery cannot approve tools or send prompts");
-              },
-              id,
-            );
-            const current = provider;
+            // Reuse transports with a live model-list API. Claude's SDK caches
+            // initialization models; probe a separate prompt-free process rather
+            // than reinitializing the live query (which can cancel pending hooks).
+            // Discovery for other providers never sends a prompt or approves a tool.
             const models = await Promise.race([
               (async () => {
-                await current.initialize();
-                await current.request("thread/start", {
-                  cwd: info.directory,
-                  approvalPolicy: "on-request",
-                  sandbox: "workspace-write",
-                });
+                const current =
+                  id === info.provider && config.engine !== "claude" && config.engine !== "acp"
+                    ? await this.provider(info.id)
+                    : (provider = this.#factory(
+                        info.directory,
+                        async () => {
+                          throw new Error("Model discovery cannot approve tools or send prompts");
+                        },
+                        id,
+                      ));
+                if (provider) {
+                  await current.initialize();
+                  await current.request("thread/start", {
+                    cwd: info.directory,
+                    approvalPolicy: "on-request",
+                    sandbox: "workspace-write",
+                  });
+                }
                 return parseModels(await current.request("model/list", {}), config.models);
               })(),
               new Promise<never>((_, reject) => {
@@ -1627,13 +1678,16 @@ export class AgentManager {
                 );
               }),
             ]);
-            return [{ id, label, models, loaded: true }];
+            if (id === info.provider && !this.#closed)
+              this.update(info.id, { models, updatedAt: this.#store.agent(info.id).updatedAt });
+            return [{ id, label, revision, models, loaded: true }];
           } catch (error) {
             return [
               {
                 id,
                 label,
-                models: [],
+                revision,
+                models: cached?.result?.models ?? (id === info.provider ? (info.models ?? []) : []),
                 loaded: true,
                 error: error instanceof Error ? error.message : "Could not load provider models",
               },
@@ -1645,7 +1699,26 @@ export class AgentManager {
         })();
         if (this.catalogs.size >= 128)
           this.catalogs.delete(this.catalogs.keys().next().value ?? "");
-        this.catalogs.set(key, { expires: Date.now() + 60000, value });
+        // Keep a single in-flight discovery even if startup takes longer than the TTL.
+        const entry: {
+          expires: number;
+          value: Promise<AgentProviderCatalog[]>;
+          result?: AgentProviderCatalog;
+        } = {
+          expires: Infinity,
+          value,
+          ...(cached?.result ? { result: cached.result } : {}),
+        };
+        this.catalogs.set(key, entry);
+        void value.then(
+          ([result]) => {
+            if (result) entry.result = result;
+            entry.expires = Date.now() + (result?.error ? 5000 : 60000);
+          },
+          () => {
+            if (this.catalogs.get(key) === entry) this.catalogs.delete(key);
+          },
+        );
         return (await value)[0] ?? { id, label, models: [], loaded: false };
       }),
     );

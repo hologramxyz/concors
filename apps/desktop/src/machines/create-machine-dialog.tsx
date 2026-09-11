@@ -96,10 +96,10 @@ export function CreateMachineDialog({
         if (!open && !pending) onClose();
       }}
     >
-      <DialogContent className="flex max-h-[calc(100dvh-2rem)] min-w-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
-        <DialogHeader className="shrink-0 border-b px-5 py-5 pr-12 sm:px-7 sm:pr-12">
+      <DialogContent size="wide" className="gap-0 overflow-hidden p-0">
+        <DialogHeader className="border-b p-6 pr-14">
           <DialogTitle>New VPS</DialogTitle>
-          <DialogDescription className="text-sm break-words">
+          <DialogDescription>
             A server for <span className="font-medium text-foreground">{organizationName}</span>,
             running {catalog.image}.
           </DialogDescription>
@@ -136,7 +136,7 @@ export function CreateMachineDialog({
         >
           <div
             data-slot="vps-form-body"
-            className="min-h-0 min-w-0 flex-1 space-y-6 overflow-x-hidden overflow-y-auto overscroll-contain px-5 py-5 sm:px-7"
+            className="min-h-0 min-w-0 flex-1 space-y-6 overflow-x-hidden overflow-y-auto overscroll-contain p-6"
           >
             <div className="grid min-w-0 gap-5 sm:grid-cols-2">
               <label className="block min-w-0 space-y-2 text-sm">
@@ -409,7 +409,7 @@ export function CreateMachineDialog({
               </p>
             )}
           </div>
-          <DialogFooter className="mx-0 mb-0 min-w-0 shrink-0 rounded-none px-5 py-4 sm:px-7">
+          <DialogFooter className="mx-0 mb-0 min-w-0 rounded-none">
             <Button type="button" variant="ghost" onClick={onClose} disabled={pending}>
               Cancel
             </Button>

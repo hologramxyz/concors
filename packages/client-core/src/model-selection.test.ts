@@ -26,6 +26,18 @@ it("keeps explicit overrides and current models absent from a refreshed catalog 
     options: [{ id: "custom/account-model" }],
   });
 });
+it("retains legacy default bindings while displaying the reported session model", () => {
+  expect(
+    modelSelection(
+      { model: "claude-opus-5", settings: { model: "default", effort: null, mode: "default" } },
+      [model("default", "Default")],
+    ),
+  ).toMatchObject({
+    value: "default",
+    label: "Opus 5",
+    options: [{ id: "default", label: "Opus 5" }],
+  });
+});
 it("shows advertised Claude versions and collapses a duplicate recommendation", () => {
   const models = [
     model("default", "Default (recommended)", "claude-opus-5[1m]", true),

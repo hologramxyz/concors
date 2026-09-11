@@ -24,6 +24,7 @@ afterEach(async () => {
   vi.unstubAllEnvs();
   if (directory) await rm(directory, { recursive: true, force: true });
   instances.length = 0;
+  vi.restoreAllMocks();
 });
 async function setup() {
   directory = await mkdtemp(join(tmpdir(), "concors-providers-test-"));
@@ -80,6 +81,109 @@ async function setup() {
   await expect.poll(() => c.agents[0]?.status).toBe("idle");
   return { c, id: c.agents[0]!.id };
 }
+it("reuses discovered catalogs across chats, deduplicates loads, and refreshes after expiry", async () => {
+  const { c, id } = await setup();
+  const load = (provider?: string) =>
+    c.requestAgent(
+      { kind: "provider-catalog", sessionId: id, ...(provider ? { provider } : {}) },
+      randomUUID(),
+    );
+  const before = TestAgentProvider.turns;
+  const [first, second] = await Promise.all([load("claude"), load("claude")]);
+  expect(first.outcome.status).toBe("ok");
+  expect(second.outcome.status).toBe("ok");
+  expect(instances.filter((i) => i.provider === "claude")).toHaveLength(1);
+  const list = await load();
+  if (list.outcome.status !== "ok") throw new Error("Catalog failed");
+  expect(list.outcome.providers?.find((p) => p.id === "claude")).toMatchObject({
+    loaded: true,
+    models: [{ id: "fixture-claude" }],
+  });
+  await load("claude");
+  expect(instances.filter((i) => i.provider === "claude")).toHaveLength(1);
+  const now = Date.now();
+  vi.spyOn(Date, "now").mockReturnValue(now + 61000);
+  await load("claude");
+  expect(instances.filter((i) => i.provider === "claude")).toHaveLength(2);
+  expect(TestAgentProvider.turns).toBe(before);
+  expect(c.agents).toHaveLength(1);
+});
+it("refreshes the current provider in place and broadcasts its actual reported model", async () => {
+  const { c, id } = await setup();
+  const runtime = instances[0]!.runtime;
+  const calls = runtime.requests.filter((r) => r.method === "model/list").length;
+  const now = Date.now();
+  vi.spyOn(Date, "now").mockReturnValue(now + 61000);
+  await c.requestAgent(
+    { kind: "provider-catalog", sessionId: id, provider: "codex" },
+    randomUUID(),
+  );
+  expect(instances).toHaveLength(1);
+  expect(runtime.closed).toBe(false);
+  expect(runtime.requests.filter((r) => r.method === "model/list")).toHaveLength(calls + 1);
+  runtime.emit("session/model/updated", { model: "reported-model" });
+  await expect.poll(() => c.agents[0]?.model).toBe("reported-model");
+  runtime.emit("session/model/updated", { threadId: "unrelated-child", model: "child-model" });
+  const read = await c.requestAgent({ kind: "read", sessionId: id }, randomUUID());
+  expect(read.outcome.status).toBe("ok");
+  expect(c.agents[0]?.model).toBe("reported-model");
+});
+it("refreshes Claude's session-cached models without reinitializing a live approval", async () => {
+  const { c, id } = await setup();
+  const switched = await c.requestAgent(
+    {
+      kind: "switch-provider",
+      sessionId: id,
+      provider: "claude",
+      model: "fixture-claude",
+      expectedRevision: c.agents[0]!.revision,
+    },
+    randomUUID(),
+  );
+  if (switched.outcome.status !== "ok") throw new Error("Switch failed");
+  const next = switched.outcome.conversation.agent.id;
+  await expect.poll(() => c.agents.find((a) => a.id === next)?.status).toBe("idle");
+  const live = instances.findLast((i) => i.provider === "claude" && !i.runtime.closed)!.runtime;
+  await c.requestAgent({ kind: "send", sessionId: next, text: "approve read" }, randomUUID());
+  await expect.poll(() => c.agents.find((a) => a.id === next)?.status).toBe("needs_input");
+  const pending = c.agents.find((a) => a.id === next)!.pending;
+  const turns = TestAgentProvider.turns;
+  const now = Date.now();
+  vi.spyOn(Date, "now").mockReturnValue(now + 61000);
+  const refreshed = await c.requestAgent(
+    { kind: "provider-catalog", sessionId: next, provider: "claude" },
+    randomUUID(),
+  );
+  expect(refreshed.outcome.status).toBe("ok");
+  expect(live.closed).toBe(false);
+  expect(c.agents.find((a) => a.id === next)).toMatchObject({ status: "needs_input", pending });
+  expect(instances.at(-1)?.runtime).not.toBe(live);
+  expect(instances.at(-1)?.runtime.closed).toBe(true);
+  expect(TestAgentProvider.turns).toBe(turns);
+});
+it("keeps the last catalog on a failed refresh and retries after a short backoff", async () => {
+  const { c, id } = await setup();
+  const runtime = instances[0]!.runtime;
+  const original = runtime.request.bind(runtime);
+  vi.spyOn(runtime, "request").mockImplementationOnce(async () => {
+    throw new Error("Temporarily offline");
+  });
+  const now = Date.now();
+  const clock = vi.spyOn(Date, "now").mockReturnValue(now + 61000);
+  const load = () =>
+    c.requestAgent({ kind: "provider-catalog", sessionId: id, provider: "codex" }, randomUUID());
+  const failed = await load();
+  if (failed.outcome.status !== "ok") throw new Error("Catalog failed");
+  expect(failed.outcome.providers?.find((p) => p.id === "codex")).toMatchObject({
+    error: "Temporarily offline",
+    models: [{ id: "fixture" }],
+  });
+  vi.mocked(runtime.request).mockImplementation(original);
+  clock.mockReturnValue(now + 67000);
+  const retried = await load();
+  if (retried.outcome.status !== "ok") throw new Error("Retry failed");
+  expect(retried.outcome.providers?.find((p) => p.id === "codex")?.error).toBeUndefined();
+});
 it.each(["claude", "opencode", "pi"] as const)(
   "starts %s without replacing or replaying the current conversation",
   async (provider) => {

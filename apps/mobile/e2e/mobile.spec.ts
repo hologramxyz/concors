@@ -517,6 +517,48 @@ test("compact toolbar keeps icon controls and send on one row at phone widths", 
   }
 });
 
+test("message history uses the shared mobile drawer and returns focus to its trigger", async ({
+  page,
+}) => {
+  const ui = await enter(page);
+  const trigger = ui.getByRole("button", { name: "Browse your messages", exact: true });
+  await trigger.click();
+  const dialog = ui.getByRole("dialog", { name: "Your messages", exact: true });
+  await expect(dialog).toHaveAttribute("data-mobile-drawer", "true");
+  await expect(dialog.getByRole("heading")).toHaveCSS("font-size", "20px");
+  const close = dialog.getByRole("button", { name: "Close messages", exact: true });
+  await expect(close).toHaveCSS("width", "44px");
+  await expect
+    .poll(() =>
+      dialog.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        return (
+          Math.abs(rect.bottom - window.innerHeight) < 2 &&
+          rect.top >= 0 &&
+          element.scrollWidth <= element.clientWidth
+        );
+      }),
+    )
+    .toBe(true);
+  await page.screenshot({ path: test.info().outputPath("mobile-messages-drawer.png") });
+  await close.click();
+  await expect(dialog).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+  await trigger.click();
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+  // A hardware keyboard uses the same compact presentation as touch-triggered dialogs.
+  await ui.getByRole("textbox", { name: "Message Codex" }).focus();
+  await page.keyboard.press("Control+Shift+t");
+  const shortcuts = ui.getByRole("dialog", { name: "Tab shortcuts", exact: true });
+  await expect(shortcuts).toHaveAttribute("data-mobile-drawer", "true");
+  await page.keyboard.press("Escape");
+  await expect(shortcuts).toHaveCount(0);
+  await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeFocused();
+});
+
 test("search and project sheets animate above the open sidebar and restore focus", async ({
   page,
 }) => {

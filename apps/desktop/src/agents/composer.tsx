@@ -30,6 +30,7 @@ import { ControlPicker } from "./control-picker";
 import { Popover } from "radix-ui";
 import { ContextMeter } from "./context-meter";
 import { AgentModelPicker } from "./model-picker";
+import { findAgentModel } from "@concors/protocol";
 import { useAgentModelSelection } from "./use-model-selection";
 import { useDictation } from "./dictation";
 import { CompactLayoutContext } from "@/components/compact-layout";
@@ -270,6 +271,7 @@ export function AgentComposer({
     agent,
     (model) =>
       void configure({ ...settings, model, effort: null, serviceTier: null, features: {} }),
+    native && !!advanced && connected && !busy,
   );
   const [nativeProviderPage, setNativeProviderPage] = useState<AgentProviderId | undefined>(
     agent.provider,
@@ -282,7 +284,7 @@ export function AgentComposer({
   const nativeProvider = nativeModels.providers.find(
     (provider) => provider.id === nativeProviderPage,
   );
-  const effortModel = nativeModels.currentModels.find((m) => m.id === nativeModels.selection.value);
+  const effortModel = findAgentModel(nativeModels.currentModels, nativeModels.selection.value);
   const controlsDisabled = !advanced || !connected || busy || configuring;
   useNativeSurface(
     nativeField,

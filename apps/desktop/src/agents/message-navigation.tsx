@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { Dialog } from "radix-ui";
-import { List, X } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogBody,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { List } from "lucide-react";
 import type { MessageEntry } from "./message-index";
 
 export function MessageNavigation({
@@ -178,8 +186,8 @@ export function MessageNavigation({
           );
         })}
       </nav>
-      <Dialog.Root open={open} onOpenChange={setOpen}>
-        <Dialog.Trigger asChild>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
           <button
             type="button"
             aria-label="Browse your messages"
@@ -188,62 +196,51 @@ export function MessageNavigation({
           >
             <List className="size-4" />
           </button>
-        </Dialog.Trigger>
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/35" />
-          <Dialog.Content className="fixed top-1/2 left-1/2 z-50 flex max-h-[80dvh] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 flex-col rounded-xl border bg-background p-4 shadow-xl">
-            <div className="mb-2 flex items-center justify-between">
-              <Dialog.Title className="font-medium">Your messages</Dialog.Title>
-              <Dialog.Close
-                aria-label="Close messages"
-                className="flex size-10 items-center justify-center rounded-md hover:bg-muted"
+        </DialogTrigger>
+        <DialogContent closeLabel="Close messages" className="overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Your messages</DialogTitle>
+            <DialogDescription>Jump to a message in this conversation.</DialogDescription>
+          </DialogHeader>
+          <DialogBody>
+            {hasEarlier && (
+              <p className="p-3 text-sm text-muted-foreground">
+                Scroll up in the conversation to load earlier messages.
+              </p>
+            )}
+            {error && (
+              <button
+                className="w-full rounded-md p-3 text-left text-sm hover:bg-muted"
+                onClick={onRetry}
               >
-                <X className="size-4" />
-              </Dialog.Close>
-            </div>
-            <Dialog.Description className="mb-3 text-sm text-muted-foreground">
-              Jump to a message in this conversation.
-            </Dialog.Description>
-            <div className="chat-scroll min-h-0 overflow-y-auto">
-              {hasEarlier && (
-                <p className="p-3 text-sm text-muted-foreground">
-                  Scroll up in the conversation to load earlier messages.
-                </p>
-              )}
-              {error && (
-                <button
-                  className="w-full rounded-md p-3 text-left text-sm hover:bg-muted"
-                  onClick={onRetry}
-                >
-                  Retry loading messages
-                </button>
-              )}
-              {entries.map((entry, index) => (
-                <button
-                  key={entry.id}
-                  disabled={jumping}
-                  aria-current={entry.id === active ? "location" : undefined}
-                  className="flex w-full gap-3 rounded-md px-2 py-3 text-left text-sm hover:bg-muted disabled:opacity-50 aria-[current=location]:bg-muted/60"
-                  onClick={() => void jump(entry)}
-                >
-                  <span className="w-6 shrink-0 text-muted-foreground">{index + 1}</span>
-                  <span className="line-clamp-3 min-w-0 break-words">{entry.preview}</span>
-                </button>
-              ))}
-            </div>
-            {(loading || jumping) && (
-              <p role="status" className="pt-2 text-sm text-muted-foreground">
-                {jumping ? "Finding message…" : "Loading messages…"}
-              </p>
+                Retry loading messages
+              </button>
             )}
-            {problem && (
-              <p role="alert" className="pt-2 text-sm text-destructive">
-                {problem}
-              </p>
-            )}
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+            {entries.map((entry, index) => (
+              <button
+                key={entry.id}
+                disabled={jumping}
+                aria-current={entry.id === active ? "location" : undefined}
+                className="flex w-full gap-3 rounded-md px-2 py-3 text-left text-[15px] hover:bg-muted disabled:opacity-50 aria-[current=location]:bg-muted/60"
+                onClick={() => void jump(entry)}
+              >
+                <span className="w-6 shrink-0 text-muted-foreground">{index + 1}</span>
+                <span className="line-clamp-3 min-w-0 break-words">{entry.preview}</span>
+              </button>
+            ))}
+          </DialogBody>
+          {(loading || jumping) && (
+            <p role="status" className="pt-2 text-sm text-muted-foreground">
+              {jumping ? "Finding message…" : "Loading messages…"}
+            </p>
+          )}
+          {problem && (
+            <p role="alert" className="pt-2 text-sm text-destructive">
+              {problem}
+            </p>
+          )}
+        </DialogContent>
+      </Dialog>
       {problem && !open && (
         <button
           onClick={() => setOpen(true)}

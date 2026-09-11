@@ -74,7 +74,10 @@ switching panes reuses its rows; expired data remains visible during a refresh.
 Discovery requests are coalesced, failed refreshes retain usable models, and
 provider edits or a completed sign-in invalidate the cache. A genuinely cold
 catalog can still take time to discover; the provider list is not replaced by a
-loading banner. A fresh app connection starts a new cache.
+loading banner. Visible, enabled composers also recheck freshness on window focus
+and once per minute. Disconnect clears cached metadata; account/configuration
+revisions prevent late responses from restoring stale rows. A fresh app connection
+starts a new cache.
 
 The daemon update is required for newly exposed native resolution metadata.
 Older daemons still benefit from correct effective-model selection and UI caching,

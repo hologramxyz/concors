@@ -12,6 +12,7 @@ export interface ControlOption {
 export interface ControlGroup extends ControlOption {
   options: ControlOption[];
   emptyMessage?: string | undefined;
+  status?: string | undefined;
 }
 export function ControlPicker({
   label,
@@ -61,6 +62,7 @@ export function ControlPicker({
   const currentLabel =
     selectedLabel ?? options.find((option) => option.id === value)?.label ?? value;
   const group = groups?.find((item) => item.id === groupId);
+  const statusText = group?.status ?? status;
   const choosingProvider = !!groups && !group;
   const searchLabel = choosingProvider ? "Providers" : label;
   const visible = (groups ? (group?.options ?? groups) : options).filter((o) =>
@@ -210,9 +212,9 @@ export function ControlPicker({
               </p>
             )}
           </div>
-          {status && (
+          {statusText && (
             <p role="status" className="border-t px-2 py-2 text-xs text-muted-foreground">
-              {status}
+              {statusText}
             </p>
           )}
         </Popover.Content>
