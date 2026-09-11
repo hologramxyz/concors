@@ -141,9 +141,6 @@ IDs/release fingerprints. This PR deploys none of these pages/association files.
 
 ## References reviewed
 
-- Paseo `a7a708bec99e935ee4b8c6f7314a4b9a9984cfa6`: timeline sync, tool presentation,
-  terminal WebView readiness and notification routing tests; adapted readiness-before-attach,
-  snapshot/live merging and validated navigation.
 - Herdr `b99002ac99b09e00b4ca692436cb15a6b0d676f1`: notification policy and attention
   aggregation; retained authoritative attention and device-local focus.
 
