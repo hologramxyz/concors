@@ -136,12 +136,9 @@ for (const native of [false, true]) {
         await expect(ui.getByRole("log")).toContainText(text);
         await expect(ui.getByRole("log")).toContainText("Hello from");
       };
-      await send("Codex", "Keep my original conversation");
-      for (const [provider, label] of [
-        ["claude", "Claude Code"],
-        ["opencode", "OpenCode"],
-        ["pi", "Pi"],
-      ] as const) {
+      const choose = async (provider: string, label: string) => {
+        const modelId = provider === "codex" ? "fixture" : `fixture-${provider}`;
+        const modelLabel = provider === "codex" ? "Fixture model" : `Fixture ${provider} model`;
         if (native) {
           await nativeEvent({ kind: "press", control: "model", value: "__providers__" });
           await expect
@@ -163,19 +160,28 @@ for (const native of [false, true]) {
                 content?.kind === "composer" &&
                 content.controls
                   .find((item) => item.id === "model")
-                  ?.options?.some((option) => option.id === `fixture-${provider}`)
+                  ?.options?.some((option) => option.id === modelId)
               );
             })
             .toBe(true);
-          await nativeEvent({ kind: "press", control: "model", value: `fixture-${provider}` });
+          await nativeEvent({ kind: "press", control: "model", value: modelId });
         } else {
-          await ui.getByRole("textbox", { name: "Message Codex" }).click();
+          await ui.getByRole("textbox", { name: /^Message / }).click();
           await ui.getByRole("button", { name: "Agent and model", exact: true }).click();
           await ui.getByRole("button", { name: "Back to providers", exact: true }).click();
-          await ui.getByRole("option", { name: `${label} Starts a new chat`, exact: true }).click();
-          await ui.getByRole("option", { name: `Fixture ${provider} model`, exact: true }).click();
+          await ui.getByRole("option", { name: `${label} Use in this pane`, exact: true }).click();
+          await ui.getByRole("option", { name: modelLabel, exact: true }).click();
         }
-        await expect(ui.locator(".mobile-pane")).not.toHaveAttribute("data-pane-id", paneId);
+      };
+      await send("Codex", "Keep my original conversation");
+      for (const [provider, label] of [
+        ["claude", "Claude Code"],
+        ["opencode", "OpenCode"],
+        ["pi", "Pi"],
+      ] as const) {
+        await choose(provider, label);
+        await expect(ui.locator(".mobile-pane")).toHaveAttribute("data-pane-id", paneId);
+        expect(desktop.workspace?.projects.find((p) => p.id === projectId)?.tabs).toHaveLength(1);
         await send(label, `Continue with ${label}`);
         if (native) {
           const content = (await surface("composer"))?.content;
@@ -188,9 +194,7 @@ for (const native of [false, true]) {
           ]);
         }
         await expect(ui.getByRole("log")).not.toContainText("Keep my original conversation");
-        if (native) await nativeEvent({ kind: "press", control: "activate" }, "Tabs");
-        else await ui.getByRole("combobox", { name: "Tabs", exact: true }).click();
-        await ui.locator(`[data-pane-choice][data-value="${tabId}:${paneId}"]`).click();
+        await choose("codex", "Codex");
         await expect(ui.getByRole("log")).toContainText("Keep my original conversation");
         await expect(ui.getByRole("log")).not.toContainText(`Continue with ${label}`);
       }
