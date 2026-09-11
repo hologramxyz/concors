@@ -20,6 +20,7 @@ test("corner styles update the live workspace and portaled controls, sync, and p
     await seedProject(page, "Corner styles", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("button", { name: "Codex", exact: true }).click();
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
     await page
       .getByRole("textbox", { name: "Message Codex" })
