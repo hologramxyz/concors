@@ -19,7 +19,13 @@ for (const [provider, label] of [
       await seedProject(page, "Agent accounts", directory);
       await page.getByRole("button", { name: "New tab", exact: true }).click();
       await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
-      await page.getByRole("button", { name: label, exact: true }).click();
+      await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
+      if (provider !== "codex") {
+        await page.getByRole("button", { name: "Agent and model", exact: true }).click();
+        await page.getByRole("button", { name: "Back to providers", exact: true }).click();
+        await page.getByRole("option", { name: `${label} Starts a new chat`, exact: true }).click();
+        await page.getByRole("option", { name: `Fixture ${provider} model`, exact: true }).click();
+      }
       const prompt = page.getByRole("region", { name: `${label} account connection` });
       const composer = page.getByRole("textbox", { name: `Message ${label}` });
       await expect(prompt).toBeVisible();

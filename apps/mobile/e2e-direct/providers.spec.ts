@@ -106,7 +106,6 @@ for (const native of [false, true]) {
       await expect(page.getByText(/OpenCode, Pi and custom agents/)).toBeVisible();
       await page.getByRole("button", { name: "Allow AI data sharing", exact: true }).click();
       const ui = page.frameLocator('iframe[title="Concors workspace"]');
-      await ui.getByRole("button", { name: "Codex", exact: true }).click();
       let sequence = 0;
       const send = async (label: string, text: string) => {
         if (native) {

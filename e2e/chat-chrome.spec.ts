@@ -49,7 +49,6 @@ test("chat stays uncluttered even when the provider advertises session tools and
     await seedProject(page, "Clean chat", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
-    await page.getByRole("button", { name: "Codex", exact: true }).click();
     const composer = page.getByRole("textbox", { name: "Message Codex" });
     await expect(composer).toBeEnabled();
     await expect(page.getByRole("region", { name: "Codex account connection" })).toHaveCount(0);

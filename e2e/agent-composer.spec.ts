@@ -42,7 +42,6 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     await seedProject(page, "Composer acceptance", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
-    await page.getByRole("button", { name: "Codex", exact: true }).click();
     await page.getByRole("textbox", { name: "Message Codex" }).waitFor();
     await expect(page.getByLabel("Agent and model")).toBeEnabled();
     await page.getByLabel("Agent and model", { exact: true }).click();

@@ -66,7 +66,6 @@ test("directional pane sequences, tab cycling, project memory and immediate Agen
     // A terminal -> Agent -> terminal round-trip must keep navigating, not enter text selection.
     await upper.getByRole("button", { name: "Pane actions" }).click();
     await page.getByRole("menuitemradio", { name: "Agent", exact: true }).click();
-    await upper.getByRole("button", { name: "Codex", exact: true }).click();
     await expect(upper.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
     await panes.first().locator("textarea").focus();
     for (let i = 0; i < 3; i++) {
@@ -108,7 +107,6 @@ test("directional pane sequences, tab cycling, project memory and immediate Agen
     await expect.poll(() => focusedPane(page)).toBe(left);
     await sequence(page, "t", "Enter");
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
-    await page.getByRole("button", { name: "Codex", exact: true }).click();
     const input = page.getByRole("textbox", { name: "Message Codex" });
     await expect(input).toBeEnabled();
     await input.fill("keep these words");
