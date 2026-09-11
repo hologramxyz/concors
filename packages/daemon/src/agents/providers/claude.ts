@@ -35,12 +35,20 @@ export class ClaudeProvider extends EventProvider {
   private contextLimit: number | null = null;
   private totalTokens: number | null = null;
   private compactCompleted = false;
+  private activeCommand: string | null = null;
   private lastBoundary = "";
   private readonly cwd: string;
+  private launcher: typeof launch;
   private readonly createQuery: typeof query;
-  constructor(cwd: string, onInput: InputHandler, createQuery = query) {
+  constructor(
+    cwd: string,
+    onInput: InputHandler,
+    createQuery = query,
+    launcher: typeof launch = launch,
+  ) {
     super(onInput);
     this.cwd = cwd;
+    this.launcher = launcher;
     this.createQuery = createQuery;
   }
   async initialize() {
@@ -63,12 +71,12 @@ export class ClaudeProvider extends EventProvider {
           });
       }
     };
-    const executable = resolveProfile("claude").command;
+    const executable = this.launcher === launch ? resolveProfile("claude").command : "claude";
     const options: Options = {
       cwd: this.cwd,
       pathToClaudeCodeExecutable: executable,
       spawnClaudeCodeProcess: ({ args, cwd, env, signal }) => {
-        const child = launch("claude", args, cwd ?? this.cwd, env);
+        const child = this.launcher("claude", args, cwd ?? this.cwd, env);
         const abort = () => {
           child.kill();
         };
@@ -146,7 +154,8 @@ export class ClaudeProvider extends EventProvider {
           if (generation !== this.generation || this.closed) return;
           this.event(object(message));
         }
-        if (generation === this.generation && this.turnId) this.finish("Claude Code stopped before completing the turn");
+        if (generation === this.generation && this.turnId)
+          this.finish("Claude Code stopped before completing the turn");
       } catch (error) {
         if (generation === this.generation && !this.closed) {
           if (this.interrupted) this.finish();
@@ -282,6 +291,7 @@ export class ClaudeProvider extends EventProvider {
       }
     }
     const result = this.begin();
+    this.activeCommand = method === "command/execute" ? string(p["name"]) : null;
     this.compactCompleted = false;
     this.tools.clear();
     this.messageId = "";
@@ -371,6 +381,23 @@ export class ClaudeProvider extends EventProvider {
         if (tool) this.tool(id, tool.name, tool.input, c["content"], true, c["is_error"] === true);
       }
     if (m["type"] === "result") {
+      const commandResult = string(m["result"]);
+      if (this.activeCommand && commandResult && !this.text)
+        this.item({
+          id: string(m["uuid"]) || randomUUID(),
+          type: "agentMessage",
+          text: commandResult,
+        });
+      if (this.activeCommand === "compact" && !this.compactCompleted) {
+        const reason =
+          commandResult ||
+          array(m["errors"]).map(String).join("\n") ||
+          "Claude did not report a compaction result.";
+        this.endCompaction(reason);
+        this.finish(reason);
+        return;
+      }
+
       const modelUsage = object(m["modelUsage"] ?? {});
       const entries: (Record<string, unknown> & { id: string })[] = Object.entries(modelUsage).map(
         ([id, usage]) => ({ id, ...object(usage) }),
