@@ -670,3 +670,69 @@ it("steers an active turn once without scheduling another turn", async () => {
   expect(providers[0]?.requests.filter((r) => r.method === "session/steer")).toHaveLength(1);
   expect(providers[0]?.requests.filter((r) => r.method === "turn/start")).toHaveLength(1);
 });
+
+it("holds the source session steady while a native fork is in flight", async () => {
+  const { a, b, id } = await setup();
+  const provider = providers[0]!;
+  const original = provider.request.bind(provider);
+  let release!: () => void;
+  const waiting = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  vi.spyOn(provider, "request").mockImplementation(async (method, params) => {
+    if (method === "session/fork") await waiting;
+    return original(method, params);
+  });
+  const fork = await action(a, {
+    kind: "fork-session",
+    sessionId: id,
+    expectedRevision: a.agents[0]!.revision,
+  });
+  expect(fork.outcome.status).toBe("ok");
+  expect(
+    (await action(b, { kind: "send", sessionId: id, text: "concurrent change" })).outcome.status,
+  ).toBe("error");
+  expect(
+    (
+      await action(b, {
+        kind: "fork-session",
+        sessionId: id,
+        expectedRevision: a.agents.find((agent) => agent.id === id)!.revision,
+      })
+    ).outcome.status,
+  ).toBe("error");
+  release();
+  await expect.poll(() => a.agents.filter((agent) => agent.status === "idle").length).toBe(2);
+  expect(
+    (await action(b, { kind: "send", sessionId: id, text: "after fork" })).outcome.status,
+  ).toBe("ok");
+});
+
+it("keeps saved history visible and retries a failed native recovery", async () => {
+  const { a, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "saved prompt" });
+  await expect.poll(() => a.agents[0]?.status).toBe("done");
+  const resume = TestAgentProvider.prototype.request;
+  providers[0]!.emit("session/disconnected", {});
+  const spy = vi.spyOn(TestAgentProvider.prototype, "request").mockImplementation(async function (
+    this: TestAgentProvider,
+    method,
+    params,
+  ) {
+    if (method === "thread/resume") throw new Error("Temporary account error");
+    return resume.call(this, method, params);
+  });
+  try {
+    const read = await action(a, { kind: "read", sessionId: id });
+    expect(read.outcome.status).toBe("ok");
+    if (read.outcome.status === "ok")
+      expect(read.outcome.conversation.items.some((i) => i.text === "saved prompt")).toBe(true);
+    await expect.poll(() => a.agents[0]?.status).toBe("failed");
+  } finally {
+    spy.mockRestore();
+  }
+  const before = providers.length;
+  await action(a, { kind: "read", sessionId: id });
+  expect(providers).toHaveLength(before + 1);
+  expect(providers.at(-1)?.requests.some((r) => r.method === "thread/resume")).toBe(true);
+});
