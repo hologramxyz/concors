@@ -1,3 +1,6 @@
+import { dirname, join, basename } from "node:path";
+import { ProviderRegistry } from "../agents/providers/registry.ts";
+import { providerFactory } from "../agents/providers/index.ts";
 import { ProjectFiles } from "../files/service.ts";
 import { AgentManager, type AgentProviderFactory } from "../agents/manager.ts";
 import { ProjectManager } from "../projects/manager.ts";
@@ -76,6 +79,12 @@ export function registerProtocolEndpoint(
       for (const target of subscribers) send(target, { type: "terminal.state", session });
     },
   );
+  const attachments = options.workspace.attachmentsDirectory;
+  const providers = new ProviderRegistry(
+    basename(attachments) === "attachments"
+      ? join(dirname(attachments), "providers")
+      : attachments + "-providers",
+  );
   const agents = new AgentManager(
     options.workspace,
     (event) => {
@@ -85,9 +94,11 @@ export function registerProtocolEndpoint(
       for (const target of subscribers)
         send(target, { type: "workspace.snapshot", snapshot: options.workspace.snapshot() });
     },
-    options.agentProviderFactory,
+    options.agentProviderFactory ?? providerFactory(providers),
+    providers,
   );
   app.addHook("onClose", async () => {
+    providers.close();
     await agents.close();
     projects.close();
     terminals.close();
@@ -128,7 +139,8 @@ export function registerProtocolEndpoint(
         message.type === "terminal.input" ||
         message.type === "project.request" ||
         message.type === "agent.request" ||
-        message.type === "file.request"
+        message.type === "file.request" ||
+        message.type === "provider.request"
       ) {
         if (!subscribers.has(socket)) {
           send(socket, {
@@ -137,7 +149,8 @@ export function registerProtocolEndpoint(
           });
           return;
         }
-        if (message.type === "file.request")
+        if (message.type === "provider.request") send(socket, providers.request(message));
+        else if (message.type === "file.request")
           void files.request(message).then((result) => send(socket, result));
         else if (message.type === "agent.request")
           void agents.request(message).then((result) => send(socket, result));
@@ -193,6 +206,7 @@ export function registerProtocolEndpoint(
   });
 
   return async () => {
+    providers.close();
     await agents.close();
     projects.close();
     terminals.close();

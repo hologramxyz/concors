@@ -60,8 +60,10 @@ const Catalog = z.object({
     }),
   ),
 });
-export function parseModels(raw: unknown): NonNullable<AgentInfo["models"]> {
-  const models = Catalog.parse(raw).data.filter((m) => !m.hidden);
+export function parseModels(raw: unknown, filter?: string[]): NonNullable<AgentInfo["models"]> {
+  const models = Catalog.parse(raw).data.filter(
+    (m) => !m.hidden && (!filter?.length || filter.includes(m.model)),
+  );
   if (models.length > MAX_AGENT_MODELS)
     throw new Error(
       `This provider reports more than ${MAX_AGENT_MODELS} models. Filter its catalog in provider settings.`,
