@@ -34,3 +34,11 @@ Paseo commit `a7a708bec99e935ee4b8c6f7314a4b9a9984cfa6` informed the PTY/headles
 serialized attach snapshots and explicit resize claim/update contract. The output coalescer and
 Windows npm CLI shim escaping are adapted from its terminal implementation; attribution is in the
 source and the full Apache-2.0 license is preserved in `third-party/paseo-LICENSE`.
+
+## File-type icons
+
+File trees and open-file tabs use `@react-symbols/icons@1.4.1`
+([React Symbols](https://github.com/pheralb/react-symbols)), the React implementation of Miguel
+Solorio's Symbols editor icons. The package is bundled locally for desktop and the offline mobile
+renderer. Its MIT notice is retained in `third-party/react-symbols-LICENSE`. Concors adds filename
+normalization, common extension aliases, consistent sizing, and theme-aware brightness.
