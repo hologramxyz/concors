@@ -149,7 +149,7 @@ function ProfileEditor({
         if (!open && !submitting.current) onClose();
       }}
     >
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent>
         <form
           onSubmit={(event) => {
             event.preventDefault();
