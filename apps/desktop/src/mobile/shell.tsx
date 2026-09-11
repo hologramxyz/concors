@@ -45,6 +45,7 @@ import { AddMachineDrawer } from "./add-machine-drawer";
 import type { SettingsPage } from "@/settings/navigation";
 import { NativeSurfaces } from "./native-surfaces";
 import { NativeHeaderButton } from "./native-header-button";
+import { ResourceStatus } from "@/host/resource-status";
 
 const subscribeState = (listener: () => void) =>
   subscribeHost((message) => {
@@ -489,6 +490,17 @@ function MobileWorkspaceContent({
                       runHost({ kind: "select-machine", machineId });
                     }}
                   />
+                  {sidebarOpen && (
+                    <ResourceStatus
+                      compact
+                      connection={connection}
+                      state={connection?.state ?? { status: "disconnected" }}
+                      machine={
+                        host.machines.find((machine) => machine.id === host.machineId)?.name ??
+                        "Desktop daemon"
+                      }
+                    />
+                  )}
                 </div>
                 <nav aria-label="Primary" className="mobile-sidebar-content">
                   <SidebarSection
