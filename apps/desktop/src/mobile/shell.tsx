@@ -404,6 +404,7 @@ function MobileWorkspaceContent({
   useCommand("focus-down", commandsAvailable && !!pane, () => cyclePane(1));
   return (
     <ColorThemeProvider
+      compact
       connection={connection}
       mode={
         host.preferences.theme === "dark" ||
