@@ -147,8 +147,19 @@ export function mapCodexItem(
       return {
         ...base,
         kind: "system",
-        title: "Context compacted",
-        text: "Earlier context was summarized by Codex.",
+        title:
+          status === "running"
+            ? "Compacting context"
+            : status === "completed"
+              ? "Context compacted"
+              : "Compaction interrupted or failed",
+        text:
+          text(item["message"]) ||
+          (status === "running"
+            ? "Summarizing earlier context…"
+            : status === "completed"
+              ? "Earlier context was summarized."
+              : "The context could not be compacted."),
       };
     default:
       return {

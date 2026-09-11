@@ -6,6 +6,8 @@ import { randomUUID } from "node:crypto";
 import { stat } from "node:fs/promises";
 import { z } from "zod";
 import {
+  AgentControlsSchema,
+  parseAgentCommand,
   AgentQuestionSchema,
   type AgentInfo,
   type AgentItem,
@@ -183,6 +185,17 @@ export class AgentManager {
     });
     runtime.ready = (async () => {
       await provider.initialize();
+      const response = ThreadResponse.parse(
+        await provider.request(info.threadId ? "thread/resume" : "thread/start", {
+          ...(info.threadId ? { threadId: info.threadId } : {}),
+          cwd: info.directory,
+          approvalPolicy: "on-request",
+          sandbox: "workspace-write",
+          ...(info.model ? { model: info.model } : {}),
+        }),
+      );
+      if (runtime.closed || this.#closed) throw new Error("Agent connection ended");
+      this.update(id, { threadId: response.thread.id, model: response.model ?? info.model });
       try {
         const models = parseModels(await provider.request("model/list", {}));
         this.update(id, { models });
@@ -197,17 +210,13 @@ export class AgentManager {
       } catch {
         this.update(id, { supportsPlan: false });
       }
-      const response = ThreadResponse.parse(
-        await provider.request(info.threadId ? "thread/resume" : "thread/start", {
-          ...(info.threadId ? { threadId: info.threadId } : {}),
-          cwd: info.directory,
-          approvalPolicy: "on-request",
-          sandbox: "workspace-write",
-          ...(info.model ? { model: info.model } : {}),
-        }),
-      );
-      if (runtime.closed || this.#closed) throw new Error("Agent connection ended");
-      this.update(id, { threadId: response.thread.id, model: response.model ?? info.model });
+      try {
+        this.update(id, {
+          controls: AgentControlsSchema.parse(await provider.request("session/controls")),
+        });
+      } catch {
+        // Older transports have no capability contract. They do not receive new controls.
+      }
       // Rehydrate provider history after restart using stable item and turn identities.
       for (const turn of response.thread.turns)
         for (const raw of turn.items) this.lifecycle(id, turn.id, raw, true);
@@ -227,7 +236,16 @@ export class AgentManager {
   async request(request: AgentRequest): Promise<AgentResult> {
     try {
       if (this.#closed) throw new Error("Daemon is shutting down");
-      const op = request.operation;
+      const operation = request.operation;
+      const op =
+        operation.kind === "command"
+          ? {
+              kind: "send" as const,
+              sessionId: operation.sessionId,
+              text: `/${operation.name}${operation.args ? ` ${operation.args}` : ""}`,
+              attachments: undefined,
+            }
+          : operation;
       if (op.kind === "read") return this.result(request, op.sessionId, op.before);
       if (op.kind === "seen") {
         const info = this.#store.agent(op.sessionId);
@@ -328,14 +346,26 @@ export class AgentManager {
       if (op.kind === "configure") {
         if (
           info.provider !== "codex" &&
-          (op.settings.mode !== "default" ||
-            op.settings.planMode ||
-            op.settings.serviceTier ||
-            op.settings.effort)
+          (op.settings.mode !== "default" || op.settings.planMode || op.settings.serviceTier)
         )
           throw new Error("This provider uses its native tool approvals and model defaults");
         if (info.revision !== op.expectedRevision)
           throw new Error("Agent settings changed. Try again.");
+        if (
+          op.settings.nativeMode &&
+          !info.controls?.modes.some((m) => m.id === op.settings.nativeMode)
+        )
+          throw new Error("That mode is not available for this provider.");
+        for (const [key, value] of Object.entries(op.settings.features ?? {})) {
+          const feature = info.controls?.features.find((f) => f.id === key);
+          if (
+            !feature ||
+            (feature.options
+              ? !feature.options.some((o) => o.id === value)
+              : typeof value !== "boolean")
+          )
+            throw new Error("That feature is not available for this provider.");
+        }
         if (
           op.settings.model &&
           info.models?.length &&
@@ -369,6 +399,15 @@ export class AgentManager {
           throw new Error(
             "This conversation could not be started. Create a new chat pane after fixing the connection.",
           );
+        const command = parseAgentCommand(op.text);
+        if (command) {
+          if (!info.controls?.commands.some((c) => c.name === command.name))
+            throw new Error(
+              `/${command.name} is not available for this agent. Check its commands or update its CLI.`,
+            );
+          if (op.attachments?.length)
+            throw new Error("Send attachments in a message, separately from a command.");
+        }
         const turnId = `pending:${request.requestId}`;
         const next = {
           ...info,
@@ -494,10 +533,12 @@ export class AgentManager {
     const uploaded = attachments.length
       ? await saveAttachments(this.#store.attachmentsDirectory, id, attachments)
       : [];
+    const command = parseAgentCommand(text);
     const response = z.object({ turn: Turn }).parse(
-      await provider.request("turn/start", {
+      await provider.request(command ? "command/execute" : "turn/start", {
         threadId: info.threadId,
         input: [...(text ? [{ type: "text", text }] : []), ...uploaded],
+        ...(command ?? {}),
         ...turnControls({ ...info, settings: settings ?? defaultSettings }),
       }),
     );
@@ -571,11 +612,15 @@ export class AgentManager {
       }
       return;
     }
+    if (method === "session/controls/updated") {
+      this.update(id, { controls: AgentControlsSchema.parse(params["controls"]) });
+      return;
+    }
     if (method === "thread/tokenUsage/updated") {
       const usage = z
         .object({
           last: z.object({ totalTokens: z.number().nonnegative() }),
-          total: z.object({ totalTokens: z.number().nonnegative() }),
+          total: z.object({ totalTokens: z.number().nonnegative().nullable() }),
           modelContextWindow: z.number().positive().nullable(),
         })
         .safeParse(params["tokenUsage"]);
@@ -779,7 +824,7 @@ export class AgentManager {
         .slice(0, 4000),
       detail: JSON.stringify(params, null, 2).slice(0, 16000),
       decisions: questions ? [] : ["accept", "decline", "cancel"],
-      questions: questions ? z.array(AgentQuestionSchema).max(3).parse(params["questions"]) : [],
+      questions: questions ? z.array(AgentQuestionSchema).max(32).parse(params["questions"]) : [],
     };
     if (Array.isArray(params["availableDecisions"]))
       pending.decisions = pending.decisions.filter((d) =>

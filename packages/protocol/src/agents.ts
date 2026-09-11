@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AgentControlsSchema, AgentFeatureValueSchema } from "./agent-controls.ts";
 const Id = z.string().uuid();
 export const MAX_AGENT_MODELS = 4096;
 export const AgentModelIdSchema = z.string().min(1).max(1024);
@@ -15,6 +16,8 @@ export const AgentModelSchema = z.object({
   label: z.string(),
   efforts: z.array(z.string()),
   defaultEffort: z.string().nullable(),
+  supportsImages: z.boolean().optional(),
+  contextWindow: z.number().positive().optional(),
   serviceTiers: z
     .array(z.object({ id: z.string(), label: z.string(), description: z.string() }))
     .max(20)
@@ -31,6 +34,8 @@ export const AgentQuestionSchema = z.object({
   header: z.string(),
   question: z.string(),
   isSecret: z.boolean().default(false),
+  multiSelect: z.boolean().optional(),
+  allowOther: z.boolean().optional(),
   options: z
     .array(z.object({ label: z.string(), description: z.string() }))
     .nullable()
@@ -44,7 +49,7 @@ export const AgentPendingSchema = z.object({
   summary: z.string().default(""),
   detail: z.string(),
   decisions: z.array(z.enum(["accept", "decline", "cancel"])),
-  questions: z.array(AgentQuestionSchema).max(3),
+  questions: z.array(AgentQuestionSchema).max(32),
 });
 export type AgentPending = z.infer<typeof AgentPendingSchema>;
 export const AgentSettingsSchema = z.object({
@@ -53,6 +58,8 @@ export const AgentSettingsSchema = z.object({
   mode: z.enum(["default", "auto-review", "full-access"]).default("default"),
   planMode: z.boolean().optional(),
   serviceTier: z.string().max(100).nullable().optional(),
+  nativeMode: z.string().min(1).max(512).nullable().optional(),
+  features: z.record(z.string().max(128), AgentFeatureValueSchema).optional(),
 });
 export type AgentSettings = z.infer<typeof AgentSettingsSchema>;
 export const AgentAttachmentSchema = z.object({
@@ -94,12 +101,13 @@ export const AgentInfoSchema = z.object({
   model: z.string().nullable(),
   settings: AgentSettingsSchema.optional(),
   supportsPlan: z.boolean().optional(),
+  controls: AgentControlsSchema.optional(),
   models: z.array(AgentModelSchema).max(MAX_AGENT_MODELS).optional(),
   context: z
     .object({
       used: z.number().nonnegative(),
       limit: z.number().positive().nullable(),
-      total: z.number().nonnegative(),
+      total: z.number().nonnegative().nullable(),
     })
     .nullable()
     .optional(),
@@ -176,6 +184,12 @@ export const AgentOperationSchema = z.discriminatedUnion("kind", [
     expectedRevision: z.number().int().nonnegative(),
   }),
   z.object({ kind: z.literal("refresh-models"), sessionId: Id }),
+  z.object({
+    kind: z.literal("command"),
+    sessionId: Id,
+    name: z.string().min(1).max(128),
+    args: z.string().max(16000).default(""),
+  }),
   z
     .object({
       kind: z.literal("send"),
@@ -190,7 +204,7 @@ export const AgentOperationSchema = z.discriminatedUnion("kind", [
     sessionId: Id,
     pendingId: Id,
     decision: z.enum(["accept", "decline", "cancel"]).optional(),
-    answers: z.record(z.string(), z.array(z.string().max(4000)).max(5)).optional(),
+    answers: z.record(z.string(), z.array(z.string().max(4000)).max(128)).optional(),
   }),
 ]);
 export type AgentOperation = z.infer<typeof AgentOperationSchema>;
