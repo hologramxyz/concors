@@ -1,5 +1,6 @@
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { z } from "zod";
+import { AgentControlsSchema } from "@concors/protocol";
 
 const Frame = z.object({
   id: z.union([z.string(), z.number()]).optional(),
@@ -39,6 +40,7 @@ export class CodexAppServer {
   #exit: Promise<void>;
   #resolveExit: () => void = () => undefined;
   #incomingRequests = 0;
+  #compactions = new Map<string, { id: string; turnId: string; completed: boolean }>();
 
   constructor(child: ChildProcessWithoutNullStreams, onRequest?: RequestHandler) {
     this.#child = child;
@@ -87,6 +89,26 @@ export class CodexAppServer {
   }
   request(method: string, params: unknown = {}, timeoutMs = 30000): Promise<unknown> {
     if (!this.#ready) return Promise.reject(new Error("Initialize the Codex app server first"));
+    if (method === "session/controls")
+      return Promise.resolve(
+        AgentControlsSchema.parse({
+          compact: true,
+          contextUsage: true,
+          history: true,
+          mcp: true,
+          commands: [{ name: "compact", description: "Summarize earlier context in this session" }],
+        }),
+      );
+    if (method === "command/execute") {
+      const command = z
+        .object({ threadId: z.string(), name: z.literal("compact"), args: z.string().default("") })
+        .parse(params);
+      if (command.args)
+        return Promise.reject(
+          new Error("Codex compaction does not accept additional instructions."),
+        );
+      return this.compact(command.threadId);
+    }
     if (
       method === "turn/start" &&
       !this.#autoReviewAvailable &&
@@ -98,6 +120,38 @@ export class CodexAppServer {
         ),
       );
     return this.rpc(method, params, timeoutMs);
+  }
+  private compact(threadId: string): Promise<unknown> {
+    // Native compaction starts a real Codex turn. Wait for its identity rather
+    // than creating a second synthetic turn or treating /compact as a prompt.
+    return new Promise((resolve, reject) => {
+      const cleanup = () => {
+        clearTimeout(timer);
+        this.#notifications.delete(notified);
+        this.#failures.delete(failed);
+      };
+      const failed = (error: Error) => {
+        cleanup();
+        reject(error);
+      };
+      const notified = (method: string, raw: unknown) => {
+        const result = z
+          .object({ threadId: z.string(), turn: z.object({ id: z.string(), status: z.string() }) })
+          .safeParse(raw);
+        if (method === "turn/started" && result.success && result.data.threadId === threadId) {
+          cleanup();
+          resolve({ turn: result.data.turn });
+        }
+      };
+      const timer = setTimeout(
+        () =>
+          failed(new Error("Codex compaction did not report a turn. Reconnect before retrying.")),
+        30000,
+      );
+      this.#notifications.add(notified);
+      this.#failures.add(failed);
+      void this.rpc("thread/compact/start", { threadId }).catch(failed);
+    });
   }
   private rpc(method: string, params: unknown, timeoutMs = 30000): Promise<unknown> {
     if (this.#failure) return Promise.reject(this.#failure);
@@ -195,7 +249,40 @@ export class CodexAppServer {
           .finally(() => {
             this.#incomingRequests--;
           });
-      } else for (const listener of this.#notifications) listener(frame.method, frame.params);
+      } else {
+        const p = z.record(z.string(), z.unknown()).parse(frame.params ?? {});
+        const item = z
+          .object({ id: z.string(), type: z.string() })
+          .passthrough()
+          .safeParse(p["item"]);
+        const threadId = String(p["threadId"] ?? "");
+        if (frame.method === "turn/started") this.#compactions.delete(threadId);
+        let compaction = this.#compactions.get(threadId);
+        if (item.success && item.data.type === "contextCompaction") {
+          if (compaction?.id !== item.data.id) {
+            compaction = { id: item.data.id, turnId: String(p["turnId"] ?? ""), completed: false };
+            this.#compactions.set(threadId, compaction);
+          }
+          if (frame.method === "item/completed") {
+            if (compaction.completed) return;
+            compaction.completed = true;
+          }
+        }
+        if (frame.method === "thread/compacted") {
+          if (compaction?.completed) return;
+          const turnId = String(p["turnId"] ?? compaction?.turnId ?? "");
+          compaction = { id: compaction?.id ?? `compact:${turnId}`, turnId, completed: true };
+          this.#compactions.set(threadId, compaction);
+          for (const listener of this.#notifications)
+            listener("item/completed", {
+              ...p,
+              turnId,
+              item: { id: compaction.id, type: "contextCompaction", status: "completed" },
+            });
+          return;
+        }
+        for (const listener of this.#notifications) listener(frame.method, frame.params);
+      }
       return;
     }
     if (frame.id === undefined || (!("result" in frame) && !frame.error))
