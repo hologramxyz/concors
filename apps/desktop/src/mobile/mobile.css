@@ -376,6 +376,10 @@ body {
   height: 44px;
   font-size: 18px;
 }
+.mobile-account-machine {
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
 .mobile-account-actions {
   display: flex;
   flex-direction: column;
@@ -427,7 +431,7 @@ body {
 .mobile-files-header {
   margin-bottom: 0;
 }
-:is(.mobile-header, .mobile-files-header) .mobile-glass {
+:is(.mobile-header, .mobile-files-header, .mobile-sidebar-head) .mobile-glass {
   position: relative;
   z-index: 30;
   pointer-events: auto;
@@ -440,13 +444,13 @@ body {
     0 1px 3px #00000008;
 }
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  :is(.mobile-header, .mobile-files-header) .mobile-glass {
+  :is(.mobile-header, .mobile-files-header, .mobile-sidebar-head) .mobile-glass {
     background: color-mix(in srgb, var(--background) 38%, transparent);
     -webkit-backdrop-filter: blur(24px) saturate(1.6);
     backdrop-filter: blur(24px) saturate(1.6);
   }
 }
-:is(.mobile-header, .mobile-files-header) .mobile-icon {
+:is(.mobile-header, .mobile-files-header, .mobile-sidebar-head) .mobile-icon {
   width: 48px;
   height: 48px;
   border-radius: 50%;
@@ -544,12 +548,14 @@ body {
   border-radius: calc(var(--corner-radius) * 3.5);
 }
 /* Tint lives on the same rounded surface in every state, never an opaque inset pill. */
-:is(.mobile-header, .mobile-files-header) .mobile-glass:is(:active, [data-state="open"]) {
+:is(.mobile-header, .mobile-files-header, .mobile-sidebar-head)
+  .mobile-glass:is(:active, [data-state="open"]) {
   background: var(--background);
   border-color: color-mix(in srgb, var(--border) 50%, transparent);
 }
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  :is(.mobile-header, .mobile-files-header) .mobile-glass:is(:active, [data-state="open"]) {
+  :is(.mobile-header, .mobile-files-header, .mobile-sidebar-head)
+    .mobile-glass:is(:active, [data-state="open"]) {
     background: color-mix(in srgb, var(--background) 38%, transparent);
   }
 }
@@ -1088,8 +1094,9 @@ aside[aria-label="Agent notifications"] {
   }
 }
 @media (prefers-reduced-transparency: reduce), (forced-colors: active) {
-  :is(.mobile-header, .mobile-files-header) .mobile-glass,
-  :is(.mobile-header, .mobile-files-header) .mobile-glass:is(:active, [data-state="open"]) {
+  :is(.mobile-header, .mobile-files-header, .mobile-sidebar-head) .mobile-glass,
+  :is(.mobile-header, .mobile-files-header, .mobile-sidebar-head)
+    .mobile-glass:is(:active, [data-state="open"]) {
     background: var(--background);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
