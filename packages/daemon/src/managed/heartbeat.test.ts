@@ -148,3 +148,29 @@ it("aborts an in-flight heartbeat on shutdown without logging its credential", a
   expect(signal?.aborted).toBe(true);
   expect(lines).toHaveLength(0);
 });
+
+it("includes resource samples, and still heartbeats when collection fails", async () => {
+  const resources = { memory: { totalBytes: 8192, availableBytes: 4096 }, disk: null };
+  const collectResources = vi
+    .fn()
+    .mockResolvedValueOnce(resources)
+    .mockRejectedValueOnce(new Error("read failed"));
+  const fetchImpl = vi.fn<typeof fetch>(async () => new Response("{}"));
+  const heartbeat = createHeartbeat({
+    controlPlaneUrl: "https://api.test",
+    machineId: "m1",
+    agentToken: "secret",
+    version: "0.2.0",
+    countSessions: async () => 1,
+    collectResources,
+    fetchImpl,
+    logger: createLogger(() => undefined),
+  });
+  await heartbeat.beat();
+  await heartbeat.beat();
+  expect(JSON.parse(fetchImpl.mock.calls[0]![1]!.body as string).resources).toEqual(resources);
+  expect(JSON.parse(fetchImpl.mock.calls[1]![1]!.body as string)).toMatchObject({
+    sessions: 1,
+    resources: null,
+  });
+});

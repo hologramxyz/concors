@@ -336,3 +336,15 @@ describe("verified billing checkout and subscriptions", () => {
     );
   });
 });
+
+it("preserves partial resource usage from machine lists and supports old servers", async () => {
+  const resourceUsage = {
+    memory: { totalBytes: 8192, availableBytes: 4096 },
+    disk: null,
+    sampledAt: "2026-09-11T12:00:00.000Z",
+  };
+  const fetch = vi.fn(async () => json({ machines: [{ ...MACHINE, resourceUsage }, MACHINE] }));
+  const machines = await client(fetch).listMachines();
+  expect(machines[0]?.resourceUsage).toEqual(resourceUsage);
+  expect(machines[1]?.resourceUsage).toBeUndefined();
+});
