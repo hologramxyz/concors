@@ -82,20 +82,20 @@ Phone-specific behavior:
 
 ## Source parity
 
-| Area              | Shared implementation                                                                | Phone behavior                                                                                                                       |
-| ----------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Composer          | `agents/composer.tsx`, `draft.ts`, Paseo submit logic                                | Attachments, queue, retry, model/effort/permissions/plan/speed/context, interrupt; native keyboard dictation                         |
-| Agent providers   | `agents/use-model-selection.ts`, `model-picker.tsx`, daemon provider catalog         | Codex, Claude Code, OpenCode and Pi selection; changing provider starts a new chat and preserves the original; native provider logos |
-| Conversation      | `agents/chat.tsx`, `timeline-item.tsx`, `markdown.tsx`, `plan-progress.tsx`          | Same history, streaming, approvals/questions, thinking, tool/MCP/diff/sub-agent rendering and copy actions                           |
-| Projects          | `workspace/project-setup-dialog.tsx`, `project-actions.tsx`                          | Open/create/clone/remove; setup continues remotely                                                                                   |
-| Tabs/panes        | Protocol workspace reducer, `workspace/new-tab-menu.tsx`                             | Hierarchical picker; new-tab/add-pane drawer; rename/profile/confirmed close; no desktop geometry controls                           |
-| Project files     | `files/tree.tsx`, `file-tab.tsx`, `code-editor.tsx`, `document.ts`, file protocol    | Full-page tree/editor, Markdown, links, create, explicit save/conflicts; local file tabs and draft guards                            |
-| Terminal          | `terminal/terminal-pane.tsx`, `surface.tsx` and xterm                                | Same replay, input ownership, resize/recovery; extra key strip and confirmed stop                                                    |
-| Terminal profiles | `terminal/profiles-context.tsx`, `workspace/new-tab-menu.tsx`, shared settings       | Machine-synced profiles and literal command arguments; add/manage from the creation drawer or Terminals settings                     |
-| Settings          | `views/settings-view.tsx` and `settings/*`                                           | Drawer: account/orgs, theme/corners, SSH, Shortcuts, Terminals, native-safe diagnostics; no commerce                                 |
-| Notifications     | Shared attention engine, provider and sound settings                                 | Foreground notices; native opt-in push remains backend gated                                                                         |
-| Machines          | Shared `@concors/client-core` host discovery/availability and machine token contract | Existing-machine selection, status and refresh; account-scoped secure credentials; no provisioning                                   |
-| Servers           | Same empty state as desktop                                                          | No discovered servers until upstream discovery exists                                                                                |
+| Area              | Shared implementation                                                                | Phone behavior                                                                                                       |
+| ----------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| Composer          | `agents/composer.tsx`, `draft.ts`, Paseo submit logic                                | Attachments, queue, retry, model/effort/permissions/plan/speed/context, interrupt; native keyboard dictation         |
+| Agent providers   | Shared provider settings, model picker, daemon registry and native control bridge    | Six built-ins, 38 optional ACP presets, own-account configuration; switching/import/fork opens a separate local chat |
+| Conversation      | `agents/chat.tsx`, `timeline-item.tsx`, `markdown.tsx`, `plan-progress.tsx`          | Same history, streaming, approvals/questions, thinking, tool/MCP/diff/sub-agent rendering and copy actions           |
+| Projects          | `workspace/project-setup-dialog.tsx`, `project-actions.tsx`                          | Open/create/clone/remove; setup continues remotely                                                                   |
+| Tabs/panes        | Protocol workspace reducer, `workspace/new-tab-menu.tsx`                             | Hierarchical picker; new-tab/add-pane drawer; rename/profile/confirmed close; no desktop geometry controls           |
+| Project files     | `files/tree.tsx`, `file-tab.tsx`, `code-editor.tsx`, `document.ts`, file protocol    | Full-page tree/editor, Markdown, links, create, explicit save/conflicts; local file tabs and draft guards            |
+| Terminal          | `terminal/terminal-pane.tsx`, `surface.tsx` and xterm                                | Same replay, input ownership, resize/recovery; extra key strip and confirmed stop                                    |
+| Terminal profiles | `terminal/profiles-context.tsx`, `workspace/new-tab-menu.tsx`, shared settings       | Machine-synced profiles and literal command arguments; add/manage from the creation drawer or Terminals settings     |
+| Settings          | `views/settings-view.tsx` and `settings/*`                                           | Drawer: account/orgs, theme/corners, SSH, Shortcuts, Terminals, native-safe diagnostics; no commerce                 |
+| Notifications     | Shared attention engine, provider and sound settings                                 | Foreground notices; native opt-in push remains backend gated                                                         |
+| Machines          | Shared `@concors/client-core` host discovery/availability and machine token contract | Existing-machine selection, status and refresh; account-scoped secure credentials; no provisioning                   |
+| Servers           | Same empty state as desktop                                                          | No discovered servers until upstream discovery exists                                                                |
 
 Paths above are relative to `apps/desktop/src/`. The earlier mobile-only chat and
 terminal renderers were removed. Tauri-specific APIs are replaced by narrow native
@@ -201,3 +201,28 @@ Store billing-policy review and physical iOS/Android keyboard, gestures, file pi
 clipboard and accessibility checks are required before claiming submission readiness.
 The optional local WebKit check could not run because this host lacks WebKit's Linux
 runtime libraries; Chromium device emulation is not a physical iPhone/Safari verification.
+
+## Unified agent follow-up (PR #52 integrated into #53)
+
+The shared daemon and client fixes include native compaction, cancellation,
+provider-specific modes/efforts/commands, typed tools and questions, native history,
+import/fork/rewind/steer where supported, MCP configuration/status, and a durable
+daemon queue. Settings → Providers works from phone width and installs on the
+connected machine. The mobile composer accepts complete bounded model catalogs
+and configured-provider labels, with safe icon fallbacks.
+
+Mobile-specific follow-up preserves this branch's consent/release work and local
+navigation. Importing and forking now select the accepted new chat; late responses
+from an old pane or connection do not steal the current selection.
+
+Final integrated verification: 455 repository tests passed, one opt-in API test
+skipped; workspace type checks, lint, and formatting passed. All nine direct mobile
+browser scenarios passed across the main run and focused provider rerun, including
+web/native bridge provider switching, return to the original conversation, fork
+navigation, and saving provider settings without horizontal overflow. These
+fixtures do not establish physical iOS/Android or authenticated ACP coverage.
+GitHub native checks remain blocked before startup by billing/spending limits.
+
+See the [support report](unified-chat-provider-support.md) for the native capability
+matrix, live CLI evidence, and remaining scope boundaries. No store build/upload
+or production daemon restart was performed by this follow-up.
