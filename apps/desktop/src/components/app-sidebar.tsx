@@ -29,7 +29,7 @@ interface AppSidebarProps {
   canEdit: boolean;
   onSelectProject: (id: string) => void;
   onAddProject: () => void;
-  onOpenFolder: (mode: "open" | "clone") => void;
+  onOpenFolder: (mode: "open" | "clone", trigger?: HTMLElement | null) => void;
   hostScope: string;
   selectedHost: Host;
   machineConnected: boolean;
