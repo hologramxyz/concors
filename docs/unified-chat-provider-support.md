@@ -85,6 +85,10 @@ support, native efforts/modes/features, and reported context usage. Unknown
 usage stays unknown. Shared mobile native controls preserve the same catalog
 and selection values rather than silently rejecting large catalogs.
 
+The [chat primitive audit](chat-primitives-audit.md) records the follow-up fixes
+for plans, question forms, approval scopes, async input, tools and attachment
+previews, including exact source and test boundaries.
+
 Tool cards retain provider-supplied shell, file, search, diff, and child metadata.
 Multi-select questions and supported MCP elicitation forms are answered through
 the shared client. MCP status is read from the provider; a successful install
@@ -119,18 +123,21 @@ is never shown as proof that every server is healthy.
 
 The changes were checked at distinct layers:
 
-- The final integrated mobile branch passed all 455 repository tests (one opt-in
-  live API test skipped), including all shared desktop/daemon changes. This
-  includes 201 daemon, 46 client-core, 77 desktop, and 44 mobile tests.
-- Workspace type checks, lint, and formatting passed on both implementation
-  branches. Mobile type checking also builds its embedded workspace assets.
-- Five desktop browser scenarios passed: composer/queue behavior, chat controls,
-  switching to Claude Code/OpenCode/Pi, and returning to the original chat.
-- All nine mobile direct browser scenarios passed across the integration run and
-  focused provider rerun. They use real daemon transport with controlled
-  providers, covering approvals, phone-width provider settings, files, terminals,
-  provider switching through web/native bridge composers, and fork navigation.
-  The provider tests were updated to select an agent before starting the chat.
+- The final integrated mobile branch passed **483 repository tests**, with one
+  opt-in live API test skipped: 229 daemon, 46 client-core, 77 desktop, 44 mobile,
+  28 protocol, 37 API-client and 22 daemon-client tests.
+- Workspace type checks, lint and formatting passed on the integrated branch;
+  desktop type checks and lint also passed on the desktop PR. Mobile type checking
+  builds the embedded workspace assets.
+- Five desktop browser scenarios passed: the three account sign-in flows, shared
+  chat, and the new questions/plan-review/file-read/attachment-preview scenario.
+- All nine mobile direct browser scenarios passed, followed by a focused phone
+  chat rerun after isolating account sign-in in the fixture. Coverage includes
+  forms, dismissal, plan approval, file reads, no horizontal overflow, provider
+  settings, and web/native-bridge switching through Claude/OpenCode/Pi.
+- The earlier native probes below remain evidence for the initial provider work;
+  the new primitive mappings were checked with deterministic native-protocol
+  fixtures and real daemon/browser transport, not inference on every account.
 - Real Codex compaction events and native OpenCode summarization were exercised.
   Claude/Pi compaction rejection paths were observed and surfaced; successful
   compaction on every account/history is not claimed. Native completion fixtures
@@ -152,9 +159,10 @@ live. Native command, model, and session availability remains provider-dependent
 
 ## Remaining scope boundaries
 
-The core audit defects and session operations above are implemented. Wider Paseo
+The fixes above cover the identified core defects. See the [primitive audit](chat-primitives-audit.md)
+for precise limits, including queued async answers and unsupported custom UIs. Wider Paseo
 features still outside this change include provider quota/rate-limit dashboards,
-historical attachment downloads/automatic cleanup, a general plugin loader, and
+imported attachment downloads/automatic cleanup, a general plugin loader, and
 a portable dictation backend. Pi extension-specific custom UIs are limited to
 the supported question and control contract. There is no automatic replay of an
 unconfirmed request after a crash and no blanket execution-isolation guarantee

@@ -5,7 +5,8 @@
 The findings below describe that revision, before the fixes. See
 [provider support and implementation evidence](unified-chat-provider-support.md)
 for the current adapters, settings, native controls, session behavior, validation,
-and remaining limits. This audit is retained to make the original reproductions
+and remaining limits. The [chat primitive follow-up](chat-primitives-audit.md)
+covers plans, questions, permission scopes and tool rendering in more depth. This audit is retained to make the original reproductions
 and comparison with Paseo reviewable.
 
 At the audited revision, Concors had working foundations for Codex, Claude Code, OpenCode, and Pi, but it

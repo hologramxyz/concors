@@ -61,7 +61,8 @@ parser licenses remain with the dependency.
   successful compaction.
 - Tool cards preserve native command output, file changes, searches, and child
   activity when supplied. Supported child conversations can be opened read-only.
-  Thinking cards show provider-authored summaries, not raw reasoning.
+  Thinking cards show text explicitly emitted for display by the provider;
+  opaque/redacted fields and signatures are excluded.
 - Tool denial and **Cancel turn** are separate actions. Cancellation interrupts
   the turn, settles pending questions, and rejects late frames. Questions support
   multiple selections and provider-specific MCP elicitation forms.
@@ -83,6 +84,7 @@ parser licenses remain with the dependency.
 - Attach up to three files, each at most 1 MiB. Images require the selected model
   to support them; other files become machine-local references. Attachment bytes
   stay in private daemon storage and are excluded from queue broadcasts.
+  New messages include image/text attachment previews retrieved on demand.
   Historical attachment download and automatic cleanup are not implemented.
 - Dictation uses the browser's SpeechRecognition API when available, with
   microphone permission. Native iOS directs users to keyboard dictation. There
@@ -104,3 +106,10 @@ The [support report](unified-chat-provider-support.md#validation) records unit,
 browser, native CLI, and packaging evidence separately. Browser tests use
 controlled providers and do not certify account authentication or native iOS
 and Android controls on physical devices.
+
+## Chat primitive audit
+
+See [the detailed primitive audit](chat-primitives-audit.md) for structured tasks,
+plan implementation/review, questions/editors/confirmations, permission scopes,
+async question recovery, attachments and the shared mobile verification. It also
+records the remaining custom-UI and provider-dependent limitations.
