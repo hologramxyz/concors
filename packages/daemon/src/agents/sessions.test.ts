@@ -28,6 +28,7 @@ async function boot() {
     workspacePath: join(directory, "state.db"),
     agentProviderFactory: (_cwd, handler) => {
       const provider = new TestAgentProvider(handler);
+      provider.cwd = _cwd;
       providers.push(provider);
       return provider;
     },
@@ -589,4 +590,83 @@ it("keeps queued attachment bytes private and removes canceled follow-ups", asyn
   await action(a, { kind: "queue-pause", sessionId: id, paused: false });
   expect(a.agents[0]?.queue).toHaveLength(0);
   expect(providers[0]?.requests.filter((r) => r.method === "turn/start")).toHaveLength(0);
+});
+
+it("imports and forks native sessions into separate tabs without replaying a prompt", async () => {
+  const { a, id } = await setup();
+  const listed = await action(a, { kind: "sessions-list", sessionId: id });
+  expect(listed.outcome.status).toBe("ok");
+  if (listed.outcome.status === "ok")
+    expect(listed.outcome.sessions?.[0]?.id).toBe("external-thread");
+  const importId = randomUUID(),
+    op: AgentOperation = {
+      kind: "import-session",
+      sessionId: id,
+      nativeSessionId: "external-thread",
+      expectedRevision: a.agents[0]!.revision,
+    };
+  await action(a, op, importId);
+  await action(a, op, importId);
+  await expect.poll(() => a.agents.filter((agent) => agent.status === "idle").length).toBe(2);
+  expect(a.agents.some((agent) => agent.threadId === "external-thread")).toBe(true);
+  expect(
+    providers.flatMap((p) => p.requests).filter((r) => r.method === "turn/start"),
+  ).toHaveLength(0);
+  const forkId = randomUUID(),
+    fork: AgentOperation = {
+      kind: "fork-session",
+      sessionId: id,
+      expectedRevision: a.agents.find((agent) => agent.id === id)!.revision,
+    };
+  await action(a, fork, forkId);
+  await action(a, fork, forkId);
+  await expect.poll(() => a.agents.filter((agent) => agent.status === "idle").length).toBe(3);
+  expect(providers[0]?.requests.filter((r) => r.method === "session/fork")).toHaveLength(1);
+  expect(a.workspace?.projects[0]?.tabs).toHaveLength(3);
+});
+
+it("rewinds the selected turn only and publishes a history revision to all clients", async () => {
+  const { a, b, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "first prompt" });
+  await expect.poll(() => a.agents[0]?.status).toBe("done");
+  await action(a, { kind: "send", sessionId: id, text: "second prompt" });
+  await expect.poll(() => a.agents[0]?.status).toBe("done");
+  const read = await action(a, { kind: "read", sessionId: id });
+  expect(read.outcome.status).toBe("ok");
+  if (read.outcome.status !== "ok") return;
+  const turnId = read.outcome.conversation.items.find((i) => i.text === "second prompt")!.turnId;
+  const result = await action(a, {
+    kind: "rewind",
+    sessionId: id,
+    turnId,
+    mode: "conversation",
+    expectedRevision: a.agents[0]!.revision,
+  });
+  expect(result.outcome.status).toBe("ok");
+  if (result.outcome.status === "ok")
+    expect(
+      result.outcome.conversation.items.filter((i) => i.kind === "user").map((i) => i.text),
+    ).toEqual(["first prompt"]);
+  await expect.poll(() => b.agents[0]?.historyRevision).toBe(1);
+  expect(b.agents[0]?.queuePaused).toBe(true);
+  expect(providers[0]?.requests.find((r) => r.method === "session/rewind")?.params).toMatchObject({
+    numTurns: 1,
+  });
+});
+
+it("steers an active turn once without scheduling another turn", async () => {
+  const { a, b, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "hold the turn" });
+  await expect.poll(() => a.agents[0]?.turnId?.startsWith("turn-")).toBe(true);
+  const req = randomUUID(),
+    op: AgentOperation = {
+      kind: "steer",
+      sessionId: id,
+      turnId: a.agents[0]!.turnId!,
+      text: "Focus on the parser",
+    };
+  expect((await action(a, op, req)).outcome.status).toBe("ok");
+  await action(b, op, req);
+  expect(providers[0]?.requests.filter((r) => r.method === "session/steer")).toHaveLength(1);
+  expect(providers[0]?.requests.filter((r) => r.method === "turn/start")).toHaveLength(1);
 });

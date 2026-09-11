@@ -54,6 +54,7 @@ export class WorkspaceStore {
         CREATE TABLE IF NOT EXISTS agents (id TEXT PRIMARY KEY, info TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS agent_items (position INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, item_id TEXT NOT NULL, item TEXT NOT NULL, UNIQUE(session_id, item_id));
         CREATE TABLE IF NOT EXISTS agent_native_turns (session_id TEXT NOT NULL, native_id TEXT NOT NULL, turn_id TEXT NOT NULL, PRIMARY KEY (session_id, native_id));
+        CREATE TABLE IF NOT EXISTS agent_request_errors (id TEXT PRIMARY KEY, message TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS agent_queue (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, request TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS agent_requests (id TEXT PRIMARY KEY, request TEXT NOT NULL, session_id TEXT NOT NULL);
         PRAGMA user_version = 4;
@@ -366,6 +367,33 @@ export class WorkspaceStore {
       )
       .run(sessionId, nativeId, turnId);
   }
+  nativeTurnId(sessionId: string, turnId: string): string {
+    const row = this.#db
+      .prepare(
+        "SELECT native_id FROM agent_native_turns WHERE session_id = ? AND turn_id = ? LIMIT 1",
+      )
+      .get(sessionId, turnId);
+    return row ? String(row["native_id"]) : turnId;
+  }
+  agentPrompts(sessionId: string): AgentItem[] {
+    return this.#db
+      .prepare("SELECT position, item FROM agent_items WHERE session_id = ? ORDER BY position")
+      .all(sessionId)
+      .map((row) =>
+        AgentItemSchema.parse({
+          ...JSON.parse(String(row["item"])),
+          position: Number(row["position"]),
+        }),
+      )
+      .filter((item) => item.kind === "user");
+  }
+  removeAgentTurnsFrom(sessionId: string, turnId: string) {
+    const prompt = this.agentPrompts(sessionId).find((i) => i.turnId === turnId);
+    if (!prompt) throw new Error("Turn is unavailable");
+    this.#db
+      .prepare("DELETE FROM agent_items WHERE session_id = ? AND position >= ?")
+      .run(sessionId, prompt.position);
+  }
   nativeTurn(sessionId: string, nativeId: string): string {
     const row = this.#db
       .prepare("SELECT turn_id FROM agent_native_turns WHERE session_id = ? AND native_id = ?")
@@ -376,6 +404,17 @@ export class WorkspaceStore {
     this.#db
       .prepare("UPDATE agents SET info = ? WHERE id = ?")
       .run(JSON.stringify(AgentInfoSchema.parse(info)), info.id);
+  }
+  agentActionError(id: string): string | null {
+    const row = this.#db.prepare("SELECT message FROM agent_request_errors WHERE id = ?").get(id);
+    return row ? String(row["message"]) : null;
+  }
+  saveAgentActionError(id: string, message: string): void {
+    this.#db
+      .prepare(
+        "INSERT INTO agent_request_errors (id,message) VALUES (?,?) ON CONFLICT(id) DO NOTHING",
+      )
+      .run(id, message.slice(0, 4000));
   }
   agentReceipt(request: AgentRequest): string | null {
     const row = this.#db
@@ -419,14 +458,19 @@ export class WorkspaceStore {
   }
   reserveAgent(request: AgentRequest, info: AgentInfo): void {
     const op = request.operation;
-    if (op.kind !== "start" && op.kind !== "switch-provider")
+    if (
+      op.kind !== "start" &&
+      op.kind !== "switch-provider" &&
+      op.kind !== "import-session" &&
+      op.kind !== "fork-session"
+    )
       throw new Error("Expected agent start");
     this.#db.exec("BEGIN IMMEDIATE");
     try {
       let state = this.snapshot();
       let project = state.projects.find((p) => p.id === info.projectId);
       let tabId: string, paneId: string;
-      if (op.kind === "switch-provider") {
+      if (op.kind !== "start") {
         const previous = this.agent(op.sessionId);
         if (
           previous.revision !== op.expectedRevision ||

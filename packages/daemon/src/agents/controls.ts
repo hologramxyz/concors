@@ -14,7 +14,7 @@ export function turnControls(info: AgentInfo) {
     effort: settings.effort,
     summary: "auto",
     serviceTier: settings.serviceTier ?? null,
-    ...(info.provider === "codex"
+    ...((info.engine ?? info.provider) === "codex"
       ? {}
       : { nativeMode: settings.nativeMode ?? null, features: settings.features ?? {} }),
     ...(info.supportsPlan
