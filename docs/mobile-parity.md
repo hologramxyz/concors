@@ -237,12 +237,11 @@ selection (#55), empty Codex thread recovery (#56), and unified chat primitives.
 The daemon, protocol and shared agent implementations match main; this PR adds no
 separate mobile provider backend.
 
-The sidebar menu and Search now use the same glass surfaces as the chat header:
+Sidebar Search uses the same glass surface as the chat header:
 Expo UI SwiftUI buttons on supported native iOS, backdrop blur on web/Android,
 and the existing accessibility fallbacks. Both signed-in and direct-desktop footers
 open Account first. It contains the current machine, Add machine setup guidance,
-Settings, and Sign out/Disconnect. Direct preview deliberately shows Desktop connection
-instead of inventing a cloud identity. Add machine does not provision or purchase
+Settings, and Sign out/Disconnect. Add machine does not provision or purchase
 infrastructure; signed-in users can refresh and connect existing machines.
 
 Nested machine-sheet dismissal returns focus to Account; closing setup returns to
@@ -261,3 +260,25 @@ background conflict detection (Save was correctly disabled). That coverage inclu
 the account drawer, simulated provider sign-in, files, terminal profiles, and
 web/native-bridge provider navigation. Browser bridge tests do not render SwiftUI or
 replace signed physical-device acceptance. Release evidence gates remain unchanged.
+
+### Profile and sidebar corrections
+
+The sidebar has a Concourse logo and Search, not a second menu button. Its controls
+are contained in a lower stacking layer; the workspace clips its content and slides
+above the sidebar with a 32px rounded edge, independent of control-corner preferences.
+
+The footer is now a real profile entry. Normal signed-in sessions show the Concourse
+account as before. Direct previews offer **Your profile → Sign in**, using an optional,
+private, profile-only route to the same account API as desktop. Only verified name/email
+enter the renderer; passwords and tokens stay in the outer host's isolated memory session.
+Profile sign-in/sign-out does not reconnect the workspace, discard drafts, or grant cloud
+machine privileges. The proxy is disabled unless its HTTPS API origin is explicitly
+configured; it accepts only sign-in, sign-out and `/me`, behind existing private identity
+checks. It never copies desktop credentials or substitutes a Tailscale profile.
+
+Correction verification: 487 unit tests passed (one opt-in live API test skipped),
+desktop/mobile typechecks and scoped lint passed; six sidebar/gesture/native-bridge
+scenarios and two direct-daemon scenarios passed. The direct scenario verifies the
+profile flow using a deterministic account fixture, no credentials in renderer messages,
+no additional workspace socket, unchanged terminal identity and retained drafts.
+This does not claim authentication with the user's credentials or physical iOS testing.
