@@ -1,3 +1,4 @@
+import { AgentAccountPrompt } from "./account-prompt";
 import { completedTurnFooters } from "./duration";
 import { AgentComposer } from "./composer";
 import { TimelineItem } from "./timeline-item";
@@ -240,6 +241,7 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
         <div className="mx-auto max-w-5xl space-y-3">
           {!compact && feedback}
           {latestPlan && <PlanProgress compact item={latestPlan} />}
+          {agent && <AgentAccountPrompt agent={agent} canEdit={!!connected} />}
           {agent && (
             <AgentComposer
               key={agent.id}
