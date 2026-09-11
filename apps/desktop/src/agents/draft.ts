@@ -15,7 +15,7 @@ export interface InputDraft {
 export interface ComposerAttempt {
   id: string;
   draft: InputDraft;
-  operation: Extract<AgentOperation, { kind: "send" }>;
+  operation: Extract<AgentOperation, { kind: "send" | "queue-add" }>;
 }
 interface Draft extends InputDraft {
   queue: InputDraft[];
