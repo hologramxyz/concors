@@ -837,6 +837,23 @@ test("account opens a bottom drawer with settings, sign out and focus restoratio
   await expect(drawer.locator('[data-slot="dialog-description"]')).toHaveClass(/sr-only/);
   await expect(drawer.getByText("Alex Morgan", { exact: true })).toBeVisible();
   await expect(drawer.getByText("demo@concors.dev", { exact: true })).toBeVisible();
+  const machine = drawer.getByRole("combobox", { name: "Machine", exact: true });
+  await expect(machine).toContainText("Development");
+  await machine.click();
+  const machines = ui.getByRole("dialog", { name: "Machine", exact: true });
+  await expect(machines.getByRole("option", { name: /Development/ })).toContainText("Connected");
+  await machines.press("Escape");
+  await expect(machine).toBeFocused();
+  await drawer.getByRole("button", { name: "Add machine", exact: true }).click();
+  const addMachine = ui.getByRole("dialog", { name: "Add machine", exact: true });
+  await expect(drawer).toHaveCount(0);
+  await expect(addMachine).toContainText("Creating machines is not available in mobile yet.");
+  await expect(
+    addMachine.getByRole("button", { name: "Refresh machines", exact: true }),
+  ).toBeVisible();
+  await addMachine.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(account).toBeFocused();
+  await account.click();
   const bounds = await drawer.evaluate((el) => ({
     width: el.getBoundingClientRect().width,
     bottom: el.getBoundingClientRect().bottom,
@@ -859,6 +876,30 @@ test("account opens a bottom drawer with settings, sign out and focus restoratio
   await account.click();
   await drawer.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(page.getByRole("button", { name: "Explore demo" })).toBeVisible();
+});
+
+test("sidebar menu and search share the header glass and keep search above the sidebar", async ({
+  page,
+}) => {
+  const ui = await enter(page);
+  const header = ui.getByRole("button", { name: "Open sidebar", exact: true });
+  const glass = await header.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { blur: style.backdropFilter, radius: style.borderRadius, shadow: style.boxShadow };
+  });
+  await header.click();
+  for (const label of ["Close sidebar", "Search workspace"]) {
+    const button = ui.getByRole("button", { name: label, exact: true });
+    await expect(button).toHaveClass(/mobile-glass/);
+    await expect(button).toHaveCSS("backdrop-filter", glass.blur);
+    await expect(button).toHaveCSS("border-radius", glass.radius);
+    await expect(button).toHaveCSS("box-shadow", glass.shadow);
+  }
+  await ui.getByRole("button", { name: "Search workspace", exact: true }).click();
+  await expect(ui.getByPlaceholder("Type a command or search…")).toBeVisible();
+  await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "true");
+  await page.keyboard.press("Escape");
+  await expect(ui.getByRole("button", { name: "Search workspace", exact: true })).toBeFocused();
 });
 
 test("mobile Shortcuts settings preserve supported commands and all entry points", async ({

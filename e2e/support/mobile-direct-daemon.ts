@@ -10,6 +10,7 @@ import {
 import { createDaemonServer } from "../../packages/daemon/src/server.ts";
 import { loadDaemonConfig } from "../../packages/daemon/src/config.ts";
 import { TestAgentProvider } from "../../packages/daemon/src/agents/testing/provider.ts";
+import { TestAccountBackend } from "../../packages/daemon/src/agents/testing/account.ts";
 const directory = await mkdtemp(join(tmpdir(), "concors-mobile-direct-daemon-"));
 // Provider discovery must find harmless fixture executables, never a developer's AI CLI.
 process.env["PATH"] = installTestCodexProfile(directory) + delimiter + (process.env["PATH"] ?? "");
@@ -25,6 +26,7 @@ if (process.platform !== "win32") process.env["SHELL"] = "/bin/sh";
 const server = createDaemonServer(loadDaemonConfig({ port: 7440, logLevel: "warn" }, {}), {
   workspacePath: join(directory, "workspace.sqlite"),
   agentProviderFactory: (_cwd, handler, provider) => new TestAgentProvider(handler, provider),
+  accountBackendFactory: (info) => new TestAccountBackend(info),
 });
 server.app.addHook("onRequest", async (request) => {
   if (request.headers.origin === "http://localhost:8087")
