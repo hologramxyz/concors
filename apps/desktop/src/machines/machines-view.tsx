@@ -1,6 +1,16 @@
 import type { Machine } from "@concors/api-client";
 import { cn } from "cn";
-import { CalendarX, Check, Cloud, Copy, Plus, RefreshCw, Server, Undo2 } from "lucide-react";
+import {
+  CalendarX,
+  Check,
+  Cloud,
+  Copy,
+  LoaderCircle,
+  Plus,
+  RefreshCw,
+  Server,
+  Undo2,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { activeOrganization, type SignedInAuth } from "@/auth/auth-state";
@@ -249,34 +259,74 @@ function MachineCard({
         </p>
       )}
 
-      <div className="mt-6 grid gap-6 border-t pt-5 lg:grid-cols-2 lg:gap-10">
-        <dl className="grid grid-cols-[auto_minmax(0,1fr)] content-start items-center gap-x-5 gap-y-3 text-sm">
-          <dt className="text-muted-foreground">Address</dt>
-          <dd className="selectable font-mono break-all">{machine.ipv4 ?? "assigning…"}</dd>
-          <dt className="text-muted-foreground">SSH</dt>
-          <dd className="flex min-w-0 items-center gap-2">
-            {command ? (
-              <>
-                <code className="selectable font-mono break-all">{command}</code>
-                <CopyButton text={command} />
-              </>
-            ) : (
-              <span className="text-muted-foreground">
-                {machine.status === "provisioning" ? "available once installed" : "—"}
-              </span>
-            )}
-          </dd>
-          {machine.paidUntil && (
-            <>
-              <dt className="text-muted-foreground">Paid until</dt>
-              <dd>
-                {new Date(machine.paidUntil).toLocaleDateString(undefined, { dateStyle: "medium" })}
-              </dd>
-            </>
+      {machine.status === "provisioning" ? (
+        <div className="mt-6 border-t pt-5">
+          <div role="status" className="flex items-start gap-3 rounded-lg bg-muted/30 p-4">
+            <LoaderCircle
+              className="mt-0.5 size-4 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none"
+              aria-hidden="true"
+            />
+            <div className="min-w-0 space-y-1">
+              <p className="text-sm font-medium">
+                {machine.ovhState === "order:documentsRequested"
+                  ? "Waiting for provider review"
+                  : "Setting up your machine"}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {machine.ovhState === "order:documentsRequested"
+                  ? "The provider needs to review this order before setup can continue."
+                  : "Your server is being prepared. Connection details and usage will appear here as they become available."}
+              </p>
+            </div>
+          </div>
+          {(machine.ipv4 || machine.paidUntil) && (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-xs text-muted-foreground">
+              {machine.ipv4 && (
+                <p>
+                  Address <span className="selectable ml-2 font-mono">{machine.ipv4}</span>
+                </p>
+              )}
+              {machine.paidUntil && (
+                <p className="ml-auto">
+                  Paid until{" "}
+                  {new Date(machine.paidUntil).toLocaleDateString(undefined, {
+                    dateStyle: "medium",
+                  })}
+                </p>
+              )}
+            </div>
           )}
-        </dl>
-        <MachineUsage machine={machine} />
-      </div>
+        </div>
+      ) : (
+        <div className="mt-6 grid gap-6 border-t pt-5 lg:grid-cols-2 lg:gap-10">
+          <dl className="grid grid-cols-[auto_minmax(0,1fr)] content-start items-center gap-x-5 gap-y-3 text-sm">
+            <dt className="text-muted-foreground">Address</dt>
+            <dd className="selectable font-mono break-all">{machine.ipv4 ?? "assigning…"}</dd>
+            <dt className="text-muted-foreground">SSH</dt>
+            <dd className="flex min-w-0 items-center gap-2">
+              {command ? (
+                <>
+                  <code className="selectable font-mono break-all">{command}</code>
+                  <CopyButton text={command} />
+                </>
+              ) : (
+                <span className="text-muted-foreground">—</span>
+              )}
+            </dd>
+            {machine.paidUntil && (
+              <>
+                <dt className="text-muted-foreground">Paid until</dt>
+                <dd>
+                  {new Date(machine.paidUntil).toLocaleDateString(undefined, {
+                    dateStyle: "medium",
+                  })}
+                </dd>
+              </>
+            )}
+          </dl>
+          <MachineUsage machine={machine} />
+        </div>
+      )}
     </div>
   );
 }
