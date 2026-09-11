@@ -4,6 +4,12 @@ New agent panes start with the daemon's existing default provider (Codex) and it
 configured model. The composer shows the resolved model name and lets the user select a different provider
 or model; there is no initial chooser screen.
 
+Chat prose and desktop/native composer text use Paseo's default 15px content size
+with 21px line spacing; code uses its 12px size. These values follow
+`packages/app/src/styles/theme.ts`, `styles/markdown-styles.ts`, and
+`composer/input/input.tsx` at Paseo revision `d7c7044`. Mobile web inputs retain
+16px to avoid Safari zooming the viewport on focus.
+
 Desktop and mobile use the same conversation controller and scroll behavior:
 
 - Scrolling near the top loads earlier messages automatically.
