@@ -94,6 +94,19 @@ export const MACHINE_STATUSES = [
 export const MachineStatusSchema = z.enum(MACHINE_STATUSES);
 export type MachineStatus = z.infer<typeof MachineStatusSchema>;
 
+const ResourceCapacitySchema = z
+  .object({
+    totalBytes: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+    availableBytes: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  })
+  .refine((value) => value.availableBytes <= value.totalBytes);
+export const MachineResourceUsageSchema = z.object({
+  memory: ResourceCapacitySchema.nullable(),
+  disk: ResourceCapacitySchema.nullable(),
+  sampledAt: z.iso.datetime(),
+});
+export type MachineResourceUsage = z.infer<typeof MachineResourceUsageSchema>;
+
 export const MachineSchema = z.object({
   id: z.string(),
   organizationId: z.string(),
@@ -120,6 +133,7 @@ export const MachineSchema = z.object({
   agentInstalledAt: z.string().nullable().optional(),
   agentVersion: z.string().nullable().optional(),
   agentSeenAt: z.string().nullable().optional(),
+  resourceUsage: MachineResourceUsageSchema.nullable().optional(),
   certificateError: z.string().nullable().optional(),
   agentError: z.string().nullable().optional(),
   /** Login user; connect with `ssh <sshUser>@<ipv4>`. */
