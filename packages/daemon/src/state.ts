@@ -26,6 +26,7 @@ export class DaemonState {
       status: this.#status,
       capabilities: [
         "terminal-profiles",
+        "color-themes",
         "project-files",
         "project-file-create",
         "folder-workspaces",

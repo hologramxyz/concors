@@ -11,7 +11,10 @@ const MAX_BYTES = 32 * 1024;
 /** Re-read on demand, including atomic editor saves. Invalid edits retain the last valid palette. */
 export class ThemeRegistry {
   private valid = new Map<string, ThemeDefinition>();
-  constructor(readonly directory: string) {}
+  readonly directory: string;
+  constructor(directory: string) {
+    this.directory = directory;
+  }
   catalog(): ThemeCatalog {
     const themes: ThemeDefinition[] = [],
       issues: ThemeCatalog["issues"] = [];
