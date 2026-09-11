@@ -33,9 +33,12 @@ test("CPU and RAM stay visible in settings and collapsed layouts, without retain
   await expect(status).toContainText("CPU 94%");
   await expect(status).toContainText("RAM 7.5 GiB / 8.0 GiB (94%)");
   await expect(status).toContainText("High usage");
-  await status.focus();
-  await expect(page.getByRole("tooltip")).toContainText("whole-machine usage");
-  await page.keyboard.press("Escape");
+  await page.clock.install();
+  await status.hover();
+  await page.clock.runFor(1000);
+  await expect(page.getByRole("tooltip")).toHaveCount(0);
+  await expect(status).not.toHaveAttribute("tabindex");
+  await expect(status.locator("[title]")).toHaveCount(0);
   await page.getByRole("button", { name: "Collapse sidebar", exact: true }).click();
   await expect(status).toBeVisible();
   await page.keyboard.press("Control+Shift+,");
@@ -55,7 +58,6 @@ test("CPU and RAM stay visible in settings and collapsed layouts, without retain
   expect(await status.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
   await page.screenshot({ path: "test-results/host-usage-narrow-dark.png" });
   paused = true;
-  await page.clock.install();
   await page.clock.fastForward(11_000);
   await expect(status).toContainText("Usage stale");
   await expect(status).toContainText("CPU —");
