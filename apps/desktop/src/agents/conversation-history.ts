@@ -103,28 +103,35 @@ export class ConversationHistory {
         check(page);
         if (!page.items.some((item) => item.position === position))
           throw new Error("This message is no longer available.");
-        const ids = new Set(page.items.map((item) => item.id));
+        // Include following context so the selected prompt can align at the top,
+        // rather than being clamped to the end of a backward-only page.
+        const newer = page.hasNewer ? await this.read({ after: position }) : null;
+        if (newer) check(newer);
+        const context = [...page.items, ...(newer?.items ?? [])];
+        const ids = new Set(context.map((item) => item.id));
         const items = mergeItems(
-          page.items,
+          context,
           this.snapshot.items.filter((item) => ids.has(item.id)),
         );
         this.update({
           items,
           hasEarlier: page.hasMore,
-          hasNewer: !!page.hasNewer || (items.at(-1)?.position ?? -1) < this.newest,
+          hasNewer: !!(newer ?? page).hasNewer || (items.at(-1)?.position ?? -1) < this.newest,
         });
       } else {
         // Older daemons cannot reload forward pages: retain a contiguous tail.
         let items = this.snapshot.items;
         let hasEarlier = this.snapshot.hasEarlier;
-        while (hasEarlier && (items[0]?.position ?? -1) > position) {
-          const before = items[0]!.position;
+        let first = items[0];
+        while (hasEarlier && first && first.position > position) {
+          const before = first.position;
           const page = await this.read({ before });
           check(page);
-          if (!page.items.length || page.items[0]!.position >= before)
+          if (!page.items[0] || page.items[0].position >= before)
             throw new Error("This message is no longer available.");
           items = mergeItems(page.items, items);
           hasEarlier = page.hasMore;
+          first = items[0];
         }
         if (!items.some((item) => item.position === position))
           throw new Error("This message is no longer available.");
