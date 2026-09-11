@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { useConversation } from "./conversation";
+import type { MessageEntry } from "./message-index";
 
 const EDGE = 200;
 /** Anchor a visible message, not total height: either edge may be trimmed as pages move. */
@@ -21,6 +22,7 @@ export function useConversationScroll(
   const scroll = useRef<HTMLDivElement>(null);
   const anchor = useRef<{ id: string; top: number } | null>(null);
   const following = useRef(true);
+  const jumping = useRef(false);
   const reset = useRef(-1);
   const [atBottom, setAtBottom] = useState(true);
   const remember = useCallback(() => {
@@ -36,7 +38,8 @@ export function useConversationScroll(
   }, []);
   const edges = useCallback(() => {
     const viewport = scroll.current;
-    if (!visible || !viewport?.clientHeight || !ready || loading || error) return;
+    if (!visible || !viewport?.clientHeight || !ready || loading || error || jumping.current)
+      return;
     const short = viewport.scrollHeight <= viewport.clientHeight + 1;
     if (hasEarlier && viewport.scrollTop < EDGE && (!following.current || short))
       void load("earlier");
@@ -45,7 +48,7 @@ export function useConversationScroll(
   }, [visible, ready, loading, error, hasEarlier, hasNewer, load]);
   const onScroll = useCallback(() => {
     const viewport = scroll.current;
-    if (!viewport?.clientHeight) return;
+    if (!viewport?.clientHeight || jumping.current) return;
     following.current =
       !hasNewer && viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 80;
     setFollowing(following.current);
@@ -98,5 +101,41 @@ export function useConversationScroll(
       setAtBottom(true);
     }
   };
-  return { scroll, onScroll, atBottom, latest };
+  const jumpToMessage = async (entry: MessageEntry) => {
+    following.current = false;
+    setFollowing(false);
+    setAtBottom(false);
+    anchor.current = null;
+    jumping.current = true;
+    try {
+      await conversation.reveal(entry.position);
+      // Commit the fetched window before measuring or resuming edge loading.
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      );
+      const viewport = scroll.current;
+      const target = viewport?.querySelector<HTMLElement>(
+        `[data-user-message="${CSS.escape(entry.id)}"]`,
+      );
+      if (!viewport || !target) throw new Error("This message is no longer available.");
+      const inset = Math.max(
+        16,
+        Number.parseFloat(getComputedStyle(viewport).scrollPaddingTop) || 0,
+      );
+      viewport.scrollTop +=
+        target.getBoundingClientRect().top - viewport.getBoundingClientRect().top - inset;
+      target.focus({ preventScroll: true });
+      target.animate([{ backgroundColor: "var(--muted)" }, { backgroundColor: "transparent" }], {
+        duration: matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 700,
+      });
+      remember();
+    } finally {
+      requestAnimationFrame(() => {
+        jumping.current = false;
+        // The DOM may contain a different window than this callback's render.
+        scroll.current?.dispatchEvent(new Event("scroll"));
+      });
+    }
+  };
+  return { scroll, onScroll, atBottom, latest, jumpToMessage };
 }
