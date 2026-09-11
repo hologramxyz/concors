@@ -66,6 +66,14 @@ for (const native of [false, true]) {
       const timeline = ui.getByRole("log", { name: "Chat timeline" });
       await expect(timeline.getByText("History 0 message 639", { exact: true })).toBeVisible();
       await expect(ui.getByRole("heading", { name: "Choose an agent" })).toHaveCount(0);
+      for (const name of [
+        "Import session",
+        "Fork session",
+        "Rewind",
+        "MCP servers",
+        "Agent commands",
+      ])
+        await expect(ui.getByRole("button", { name, exact: true })).toHaveCount(0);
       await expect(ui.getByRole("button", { name: /Load (earlier|newer) messages/ })).toHaveCount(
         0,
       );
@@ -89,6 +97,20 @@ for (const native of [false, true]) {
         );
       }
       expect(history.requests.some((request) => request.after !== undefined)).toBe(true);
+      for (const position of [0, 639]) {
+        await ui.getByRole("button", { name: "Browse your messages", exact: true }).click();
+        const dialog = ui.getByRole("dialog", { name: "Your messages", exact: true });
+        await dialog
+          .getByRole("button", {
+            name: `${position + 1} History 0 message ${position}`,
+            exact: true,
+          })
+          .click();
+        await expect(
+          timeline.getByText(`History 0 message ${position}`, { exact: true }),
+        ).toBeInViewport();
+        expect(await timeline.locator("[data-message-id]").count()).toBeLessThanOrEqual(240);
+      }
       await timeline.evaluate((viewport) => {
         viewport.scrollTop = viewport.scrollHeight;
       });
