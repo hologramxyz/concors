@@ -1,3 +1,4 @@
+import { DevelopmentToolsStatus } from "./development-tools-status";
 import type { Machine } from "@concors/api-client";
 import { cn } from "cn";
 import {
@@ -147,6 +148,7 @@ export function MachinesView({
             >
               <MachineCard
                 machine={machine}
+                onRetryTools={() => state.retryTools(machine.id)}
                 onCancel={() => setCancelling(machine)}
                 resuming={resuming === machine.id}
                 onResume={() => {
@@ -201,11 +203,13 @@ const TONE_CLASS: Record<StatusTone, string> = {
 
 function MachineCard({
   machine,
+  onRetryTools,
   onCancel,
   onResume,
   resuming,
 }: {
   readonly machine: Machine;
+  readonly onRetryTools: () => Promise<void>;
   readonly onCancel: () => void;
   readonly onResume: () => void;
   readonly resuming: boolean;
@@ -327,6 +331,7 @@ function MachineCard({
           <MachineUsage machine={machine} />
         </div>
       )}
+      <DevelopmentToolsStatus machine={machine} onRetry={onRetryTools} />
     </div>
   );
 }

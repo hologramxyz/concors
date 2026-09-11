@@ -348,3 +348,27 @@ it("preserves partial resource usage from machine lists and supports old servers
   expect(machines[0]?.resourceUsage).toEqual(resourceUsage);
   expect(machines[1]?.resourceUsage).toBeUndefined();
 });
+
+it("retries tool setup with authorization and preserves returned setup state", async () => {
+  const developmentToolsSetup = {
+    status: "pending",
+    updatedAt: "2026-09-11T12:00:00.000Z",
+    error: null,
+    versions: {},
+  };
+  const machine = {
+    ...MACHINE,
+    developmentTools: { node: "lts", docker: true },
+    developmentToolsSetup,
+  };
+  const fetch = vi.fn(async () => json({ machine }));
+  await expect(client(fetch).retryDevelopmentTools("machine/1")).resolves.toEqual(machine);
+  const { url, init } = lastCall(fetch);
+  expect(url).toBe("https://api.example/api/v1/machines/machine%2F1/development-tools/retry");
+  expect(init.method).toBe("POST");
+  expect(new Headers(init.headers).get("authorization")).toBe("Bearer tok-1");
+  fetch.mockResolvedValueOnce(json({ message: "Already running" }, { status: 409 }));
+  await expect(client(fetch).retryDevelopmentTools("machine/1")).rejects.toMatchObject({
+    status: 409,
+  });
+});

@@ -27,6 +27,7 @@ export interface MachinesState {
   cancel(id: string): Promise<void>;
   /** Undoes `cancel` while the month is still running. */
   resume(id: string): Promise<void>;
+  retryTools(id: string): Promise<void>;
 }
 
 /**
@@ -107,7 +108,13 @@ export function useMachines(organizationId: string | undefined): MachinesState {
   const cancel = useCallback(async (id: string) => replace(await api.cancelMachine(id)), []);
   const resume = useCallback(async (id: string) => replace(await api.resumeMachine(id)), []);
 
+  const retryTools = useCallback(
+    async (id: string) => replace(await api.retryDevelopmentTools(id)),
+    [],
+  );
+
   return {
+    retryTools,
     machines,
     catalog,
     error,
