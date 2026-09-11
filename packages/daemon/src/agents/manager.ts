@@ -1,6 +1,8 @@
+import { questionAnswers } from "./questions.ts";
+import { approvalActions } from "./approval-actions.ts";
 import {
   AgentAccounts,
-  createAccountBackend,
+  accountBackendFactory,
   type AccountBackendFactory,
 } from "./accounts/manager.ts";
 import { defaultSettings, parseModels, turnControls } from "./controls.ts";
@@ -49,6 +51,7 @@ const ThreadResponse = z.object({
 });
 const Scope = z.object({ threadId: z.string(), turnId: z.string() });
 interface PendingResolver {
+  nativeDecisions?: Map<string, unknown>;
   providerId: string | number;
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
@@ -87,34 +90,31 @@ export class AgentManager {
     this.#emit = emit;
     this.#workspaceChanged = workspaceChanged;
     this.#factory = factory;
-    this.accounts = new AgentAccounts(
-      accountFactory ?? ((info) => createAccountBackend(info, registry)),
-      (info) => {
-        // Catalogs are keyed by directory, provider and registry revision.
-        this.catalogs.clear();
-        // Idle runtimes reload the provider's freshly saved credentials on the next send.
-        for (const [id, runtime] of this.#runtimes) {
-          const current = this.#store.agent(id);
-          if (
-            current.directory !== info.directory ||
-            current.provider !== info.provider ||
-            ["starting", "working", "needs_input"].includes(current.status)
-          )
-            continue;
-          runtime.closed = true;
-          this.#runtimes.delete(id);
-          void runtime.provider.close().catch(() => undefined);
-        }
-      },
-    );
+    this.accounts = new AgentAccounts(accountFactory ?? accountBackendFactory(registry), (info) => {
+      this.catalogs.clear();
+      // Idle runtimes reload the provider's freshly saved credentials on the next send.
+      for (const [id, runtime] of this.#runtimes) {
+        const current = this.#store.agent(id);
+        if (
+          current.directory !== info.directory ||
+          current.provider !== info.provider ||
+          ["starting", "working", "needs_input"].includes(current.status)
+        )
+          continue;
+        runtime.closed = true;
+        this.#runtimes.delete(id);
+        void runtime.provider.close().catch(() => undefined);
+      }
+    });
     for (const info of store.agents())
       if (["starting", "working", "needs_input"].includes(info.status)) {
         store.saveAgent({
           ...info,
           status: "interrupted",
           queuePaused: true,
-          pending: [],
-          attention: null,
+          pending: info.pending.filter((p) => p.asynchronous),
+          attention: info.pending.some((p) => p.asynchronous) ? info.attention : null,
+          turnId: null,
           error:
             "The daemon restarted. Your saved conversation can be continued; the previous prompt will not be resent.",
           revision: info.revision + 1,
@@ -162,18 +162,17 @@ export class AgentManager {
       revision: prior.revision + 1,
       updatedAt: patch.updatedAt ?? new Date().toISOString(),
     };
-    if (next.status === "done" && (prior.status !== "done" || next.turnId !== prior.turnId))
-      next.attention = { id: randomUUID(), kind: "done", createdAt: next.updatedAt, seen: false };
-    else if (
-      next.status === "needs_input" &&
-      next.pending.some((p) => !prior.pending.some((old) => old.id === p.id))
-    )
+    if (next.pending.some((p) => !prior.pending.some((old) => old.id === p.id)))
       next.attention = {
         id: randomUUID(),
         kind: "needs_input",
         createdAt: next.updatedAt,
         seen: false,
       };
+    else if (next.pending.length && prior.attention?.kind === "needs_input")
+      next.attention = patch.attention === undefined ? prior.attention : patch.attention;
+    else if (next.status === "done" && (prior.status !== "done" || next.turnId !== prior.turnId))
+      next.attention = { id: randomUUID(), kind: "done", createdAt: next.updatedAt, seen: false };
     else if (!["done", "needs_input"].includes(next.status)) next.attention = null;
     this.#store.saveAgent(next);
     this.#emit({ type: "agent.state", agent: next });
@@ -186,7 +185,10 @@ export class AgentManager {
   private item(
     id: string,
     turnId: string,
-    value: Pick<AgentItem, "id" | "kind" | "title" | "text" | "detail" | "status" | "presentation">,
+    value: Pick<
+      AgentItem,
+      "id" | "kind" | "title" | "text" | "detail" | "status" | "presentation" | "attachments"
+    >,
   ): void {
     const previous = this.#store.agentItem(id, value.id);
     const item = this.#store.saveAgentItem({
@@ -213,7 +215,7 @@ export class AgentManager {
     this.update(id, {
       status: "failed",
       queuePaused: true,
-      pending: [],
+      pending: this.#store.agent(id).pending.filter((p) => p.asynchronous),
       error: (error instanceof Error ? error.message : String(error)).slice(0, 4000),
     });
   }
@@ -275,7 +277,7 @@ export class AgentManager {
         // Codex can discard a thread closed before its first turn (including on sign-in).
         // Only replace that empty thread; never discard history or replay reserved prompts.
         if (
-          info.provider !== "codex" ||
+          this.registry.config(info.provider).engine !== "codex" ||
           !info.threadId ||
           !(error instanceof Error) ||
           error.message !== `no rollout found for thread id ${info.threadId}` ||
@@ -338,7 +340,40 @@ export class AgentManager {
     let mutation: string | undefined;
     try {
       if (this.#closed) throw new Error("Daemon is shutting down");
-      const operation = request.operation;
+      const original = request.operation;
+      let implementation = false;
+      let operation: Exclude<AgentRequest["operation"], { kind: "implement-plan" }>;
+      if (original.kind === "implement-plan") {
+        const receipt = this.#store.agentReceipt(request);
+        if (receipt) {
+          const error = this.#store.agentActionError(request.requestId);
+          if (error) throw new Error(error);
+          return this.result(request, receipt);
+        }
+        const info = this.#store.agent(original.sessionId),
+          plan = this.#store.agentItem(info.id, original.itemId);
+        if (
+          info.revision !== original.expectedRevision ||
+          !info.supportsPlan ||
+          (info.engine ?? info.provider) !== "codex" ||
+          !info.settings?.planMode ||
+          plan?.kind !== "plan" ||
+          plan.status !== "completed" ||
+          plan.turnId !== info.turnId ||
+          !plan.text.trim() ||
+          Boolean(plan.presentation?.steps?.length)
+        )
+          throw new Error("This plan is no longer available to implement");
+        const text =
+          plan.text || plan.presentation?.steps?.map((step) => `- ${step.step}`).join("\n") || "";
+        if (!text.trim()) throw new Error("The plan is empty");
+        implementation = true;
+        operation = {
+          kind: "send",
+          sessionId: info.id,
+          text: `Implement this plan:\n\n${text}`.slice(0, 16000),
+        };
+      } else operation = original;
       const op =
         operation.kind === "command"
           ? {
@@ -348,6 +383,18 @@ export class AgentManager {
               attachments: undefined,
             }
           : operation;
+      if (op.kind === "read-attachment") {
+        const info = this.#store.agent(op.sessionId);
+        return {
+          type: "agent.result",
+          requestId: request.requestId,
+          outcome: {
+            status: "ok",
+            conversation: this.#store.agentConversation(info.id),
+            attachment: this.#store.agentAttachment(info.id, op.itemId, op.index),
+          },
+        };
+      }
       if (op.kind === "account") {
         const info = this.#store.agent(op.sessionId);
         const account = await this.accounts.request(owner, info, op.action);
@@ -811,6 +858,9 @@ export class AgentManager {
         const turnId = `pending:${request.requestId}`;
         const next = {
           ...info,
+          ...(implementation
+            ? { settings: { ...(info.settings ?? defaultSettings), planMode: false } }
+            : {}),
           name:
             info.name === (info.providerLabel ?? agentProviderName(info.provider))
               ? op.text.split("\n")[0]?.slice(0, 80) || agentProviderName(info.provider)
@@ -818,7 +868,7 @@ export class AgentManager {
           status: "working" as const,
           turnId,
           turnStartedAt: new Date().toISOString(),
-          pending: [],
+          pending: info.pending.filter((p) => p.asynchronous),
           attention: null,
           error: null,
           revision: info.revision + 1,
@@ -832,11 +882,10 @@ export class AgentManager {
           id: `prompt:${request.requestId}`,
           kind: "user",
           title: "You",
-          text:
-            op.text +
-            (op.attachments?.length
-              ? "\n\nAttached: " + op.attachments.map((a) => a.name).join(", ")
-              : ""),
+          ...(op.attachments?.length
+            ? { attachments: op.attachments.map(({ name, mime }) => ({ name, mime })) }
+            : {}),
+          text: op.text,
           detail: "",
           status: "completed",
         });
@@ -854,50 +903,91 @@ export class AgentManager {
         await this.interrupt(info.id, runtime, op.turnId);
       } else {
         const pending = info.pending.find((p) => p.id === op.pendingId);
+        if (pending?.asynchronous) return this.respondAsyncQuestion(request, info, pending, op);
         const runtime = this.#runtimes.get(info.id);
         const resolver = runtime?.pending.get(op.pendingId);
         if (!pending || !resolver || !runtime || pending.turnId !== info.turnId)
           throw new Error("This request was already answered or is no longer active");
+        const selectedAction = op.actionId
+          ? pending.actions?.find((action) => action.id === op.actionId)
+          : undefined;
+        if (op.actionId && !selectedAction)
+          throw new Error("That permission action is no longer available");
+        if (selectedAction && op.decision && op.decision !== selectedAction.decision)
+          throw new Error("Permission action does not match the decision");
+        const decision = selectedAction?.decision ?? op.decision;
         let value: unknown;
         if (pending.kind === "elicitation") {
+          if (!decision || decision === "accept") questionAnswers(pending.questions, op.answers);
           value = {
             action:
-              op.decision === "decline"
-                ? "decline"
-                : op.decision === "cancel"
-                  ? "cancel"
-                  : "accept",
-            ...(["decline", "cancel"].includes(op.decision ?? "")
+              decision === "decline" ? "decline" : decision === "cancel" ? "cancel" : "accept",
+            ...(["decline", "cancel"].includes(decision ?? "")
               ? {}
               : { content: elicitationContent(pending.elicitation?.schema, op.answers ?? {}) }),
           };
         } else if (pending.kind === "approval") {
-          if (!op.decision || !pending.decisions.includes(op.decision))
+          if (!decision || !pending.decisions.includes(decision))
             throw new Error("Choose one of the available decisions");
-          value = { decision: op.decision };
+          if (
+            !selectedAction &&
+            pending.actions &&
+            !pending.actions.some((action) => action.id === decision)
+          )
+            throw new Error("Choose an explicit permission action");
+          const actionId = selectedAction?.id ?? decision;
+          value = { decision: resolver.nativeDecisions?.get(actionId) ?? decision, actionId };
         } else {
-          if (!op.answers || pending.questions.some((q) => !op.answers?.[q.id]?.length))
-            throw new Error("Answer each question");
-          value = {
-            answers: Object.fromEntries(
-              pending.questions.map((q) => [q.id, { answers: op.answers?.[q.id] ?? [] }]),
-            ),
-          };
+          if (decision) {
+            if (!pending.decisions.includes(decision) || !["decline", "cancel"].includes(decision))
+              throw new Error("Choose an available question action");
+            value = { decision, answers: {} };
+          } else {
+            value = { answers: questionAnswers(pending.questions, op.answers) };
+          }
         }
         const remaining = info.pending.filter((p) => p.id !== pending.id);
         const next = {
           ...info,
           pending: remaining,
           attention: remaining.length ? info.attention : null,
-          status: remaining.length ? ("needs_input" as const) : ("working" as const),
+          status: remaining.some((p) => !p.asynchronous)
+            ? ("needs_input" as const)
+            : ("working" as const),
           revision: info.revision + 1,
           updatedAt: new Date().toISOString(),
         };
         this.#store.reserveAgentAction(request, next);
-        const cancel = op.decision === "cancel";
+        const cancel = decision === "cancel";
         if (cancel) runtime.cancelledTurn = pending.turnId;
         runtime.pending.delete(pending.id);
         resolver.resolve(value);
+        this.item(info.id, pending.turnId, {
+          id: `response:${pending.id}`,
+          kind: "system",
+          title:
+            pending.approvalKind === "plan"
+              ? "Plan review"
+              : pending.kind === "approval"
+                ? "Permission"
+                : "Questions",
+          text:
+            selectedAction?.label ??
+            (decision === "cancel"
+              ? "Turn canceled"
+              : decision === "decline"
+                ? "Dismissed"
+                : decision === "accept"
+                  ? "Approved"
+                  : pending.questions
+                      .map(
+                        (q) =>
+                          `${q.question}: ${q.isSecret ? "[private answer]" : (op.answers?.[q.id] ?? []).join(", ") || "Skipped"}`,
+                      )
+                      .join("\n")),
+          detail: "",
+          status: "completed",
+        });
         this.#emit({ type: "agent.state", agent: next });
         if (cancel) await this.interrupt(info.id, runtime, pending.turnId);
       }
@@ -926,6 +1016,74 @@ export class AgentManager {
         void this.drain(mutation).catch((error) => this.fail(mutation as string, error));
       }
     }
+  }
+  private respondAsyncQuestion(
+    request: AgentRequest,
+    info: AgentInfo,
+    pending: AgentPending,
+    op: Extract<AgentRequest["operation"], { kind: "respond" }>,
+  ): AgentResult {
+    if (op.decision && op.decision !== "decline")
+      throw new Error("Answer or dismiss this question");
+    const answers = op.decision ? undefined : questionAnswers(pending.questions, op.answers);
+    const prompt = answers
+      ? "Answers to your questions:\n\n" +
+        pending.questions
+          .map((q) => `${q.question}\n${answers[q.id]?.answers.join(", ") ?? ""}`)
+          .join("\n\n")
+      : undefined;
+    if (prompt && prompt.length > 16000) throw new Error("Shorten the answers before submitting");
+    if (prompt && (info.queue?.length ?? 0) >= 20)
+      throw new Error("Remove a queued follow-up before answering");
+    const next: AgentInfo = {
+      ...info,
+      pending: info.pending.filter((p) => p.id !== pending.id),
+      attention: info.pending.length > 1 ? info.attention : null,
+      updatedAt: new Date().toISOString(),
+      revision: info.revision + 1,
+      ...(prompt
+        ? {
+            queue: [
+              ...(info.queue ?? []),
+              {
+                id: request.requestId,
+                text: prompt,
+                attachments: [],
+                queuedAt: new Date().toISOString(),
+              },
+            ],
+          }
+        : {}),
+    };
+    const delivery: AgentRequest | undefined = prompt
+      ? {
+          type: "agent.request",
+          requestId: randomUUID(),
+          operation: { kind: "send", sessionId: info.id, text: prompt },
+        }
+      : undefined;
+    const resolution: AgentItem = {
+      id: `async-response:${pending.sourceItemId}`,
+      sessionId: info.id,
+      turnId: pending.turnId,
+      position: 0,
+      revision: 0,
+      createdAt: new Date().toISOString(),
+      kind: "system",
+      title: prompt ? "Answers queued" : "Question dismissed",
+      text: "",
+      detail: "",
+      status: "completed",
+    };
+    this.#store.reserveAgentAction(request, next, {
+      ...(delivery ? { add: delivery } : {}),
+      resolution,
+    });
+    const savedResolution = this.#store.agentItem(info.id, resolution.id);
+    if (savedResolution) this.#emit({ type: "agent.item", item: savedResolution });
+    this.#emit({ type: "agent.state", agent: next });
+    void this.drain(info.id).catch((error) => this.fail(info.id, error));
+    return this.result(request, info.id);
   }
   private result(request: AgentRequest, id: string, before?: number): AgentResult {
     return {
@@ -990,6 +1148,53 @@ export class AgentManager {
     });
   }
   private lifecycle(id: string, turnId: string, raw: unknown, completed: boolean): void {
+    const source = ObjectValue.parse(raw);
+    if (
+      source["type"] === "agentMessage" &&
+      source["delivery"] === "async" &&
+      Array.isArray(source["questions"])
+    ) {
+      const sourceItemId = String(source["id"]),
+        info = this.#store.agent(id);
+      if (
+        !info.pending.some((p) => p.sourceItemId === sourceItemId) &&
+        !this.#store.agentItem(id, `async-response:${sourceItemId}`)
+      ) {
+        if (info.pending.length >= 16) throw new Error("Too many pending agent questions");
+        const questions = source["questions"].slice(0, 32).map((rawQuestion, index) => {
+          const q = ObjectValue.parse(rawQuestion);
+          return AgentQuestionSchema.parse({
+            id: String(index),
+            header: `Question ${index + 1}`,
+            question: q["title"],
+            allowOther: true,
+            options: (Array.isArray(q["options"]) ? q["options"] : []).map((label) => ({
+              label: String(label),
+              description: "",
+            })),
+          });
+        });
+        if (questions.length)
+          this.update(id, {
+            pending: [
+              ...info.pending,
+              {
+                id: randomUUID(),
+                turnId,
+                sourceItemId,
+                asynchronous: true,
+                kind: "questions",
+                title: "Codex has a question",
+                summary: "Your answers will be sent as a follow-up. The current work can continue.",
+                detail: "",
+                decisions: ["decline"],
+                decisionLabels: { decline: "Dismiss" },
+                questions,
+              },
+            ],
+          });
+      }
+    }
     const mapped = mapCodexItem(raw, completed);
     if (!mapped) return;
     // Locally submitted prompts are reserved before dispatch; replace their turn identity, not their text.
@@ -1061,7 +1266,15 @@ export class AgentManager {
       return;
     }
     if (method === "session/controls/updated") {
-      this.update(id, { controls: AgentControlsSchema.parse(params["controls"]) });
+      const controls = AgentControlsSchema.parse(params["controls"]);
+      this.update(id, {
+        controls,
+        ...(controls.currentMode
+          ? {
+              settings: { ...(info.settings ?? defaultSettings), nativeMode: controls.currentMode },
+            }
+          : {}),
+      });
       return;
     }
     if (method === "thread/tokenUsage/updated") {
@@ -1095,11 +1308,18 @@ export class AgentManager {
       for (const [key, value] of runtime.pending)
         if (value.providerId === params["requestId"]) {
           runtime.pending.delete(key);
-          value.reject(new Error("Request was resolved by the provider"));
+          value.reject(
+            Object.assign(new Error("Request was resolved by the provider"), {
+              name: "AgentInputResolvedError",
+            }),
+          );
         }
-      const pending = info.pending.filter((p) => runtime.pending.has(p.id));
+      const pending = info.pending.filter((p) => p.asynchronous || runtime.pending.has(p.id));
       if (pending.length !== info.pending.length)
-        this.update(id, { pending, status: pending.length ? "needs_input" : "working" });
+        this.update(id, {
+          pending,
+          status: pending.some((p) => !p.asynchronous) ? "needs_input" : "working",
+        });
       return;
     }
     if (method === "turn/completed") {
@@ -1164,7 +1384,7 @@ export class AgentManager {
             : turn.status === "interrupted"
               ? "interrupted"
               : "failed",
-        pending: [],
+        pending: info.pending.filter((p) => p.asynchronous),
         queuePaused: turn.status === "completed" ? (info.queuePaused ?? false) : true,
         error: turn.error?.message ?? null,
       });
@@ -1276,8 +1496,23 @@ export class AgentManager {
         .join("\n")
         .slice(0, 4000),
       detail: JSON.stringify(params, null, 2).slice(0, 16000),
-      decisions: questions ? [] : ["accept", "decline", "cancel"],
-      questions: questions ? z.array(AgentQuestionSchema).max(32).parse(params["questions"]) : [],
+      decisions: questions ? ["decline", "cancel"] : ["accept", "decline", "cancel"],
+      questions: questions
+        ? z
+            .array(AgentQuestionSchema)
+            .max(32)
+            .parse(
+              (Array.isArray(params["questions"]) ? params["questions"] : []).map((raw) => {
+                const q = ObjectValue.parse(raw);
+                return {
+                  ...q,
+                  ...(typeof q["isOther"] === "boolean" && q["allowOther"] === undefined
+                    ? { allowOther: q["isOther"] }
+                    : {}),
+                };
+              }),
+            )
+        : [],
     };
     if (elicitation) {
       const schema = ObjectValue.parse(params["requestedSchema"] ?? {});
@@ -1293,14 +1528,39 @@ export class AgentManager {
     }
     if (params["decisionLabels"])
       pending.decisionLabels = z
-        .object({ accept: z.string().max(100).optional() })
+        .object({
+          accept: z.string().max(100).optional(),
+          decline: z.string().max(100).optional(),
+          cancel: z.string().max(100).optional(),
+        })
         .parse(params["decisionLabels"]);
-    if (Array.isArray(params["availableDecisions"]))
+    if (questions && !pending.decisionLabels?.decline)
+      pending.decisionLabels = { ...pending.decisionLabels, decline: "Dismiss" };
+    const choices = pending.kind === "approval" ? approvalActions(params) : undefined;
+    if (choices) {
+      pending.actions = choices.actions.map((action) => ({
+        ...action,
+        label: pending.decisionLabels?.[action.decision] ?? action.label,
+      }));
+      pending.decisions = [...new Set(choices.actions.map((action) => action.decision))];
+      if (params["approvalKind"] === "plan" || params["approvalKind"] === "mode") {
+        pending.approvalKind = params["approvalKind"];
+        pending.title =
+          params["approvalKind"] === "plan" ? "Review the agent’s plan" : "Change agent mode?";
+        if (typeof params["plan"] === "string") pending.plan = params["plan"].slice(0, 16000);
+      }
+    }
+    if (!choices && Array.isArray(params["availableDecisions"]))
       pending.decisions = pending.decisions.filter((d) =>
         (params["availableDecisions"] as unknown[]).includes(d),
       );
     const result = new Promise<unknown>((resolve, reject) =>
-      runtime.pending.set(pending.id, { providerId, resolve, reject }),
+      runtime.pending.set(pending.id, {
+        providerId,
+        resolve,
+        reject,
+        ...(choices ? { nativeDecisions: choices.values } : {}),
+      }),
     );
     this.update(id, { status: "needs_input", pending: [...info.pending, pending] });
     return result;

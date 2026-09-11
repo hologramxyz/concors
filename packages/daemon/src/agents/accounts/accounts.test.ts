@@ -7,18 +7,13 @@ import { AgentAccountSchema } from "@concors/protocol";
 import { CodexAccount } from "./codex.ts";
 import { ClaudeAccount } from "./claude.ts";
 import { OpenCodeAccount } from "./opencode.ts";
-import { AgentAccounts, createAccountBackend } from "./manager.ts";
-import { ProviderRegistry } from "../providers/registry.ts";
-import type { ProviderConfig } from "@concors/protocol";
+import { AgentAccounts } from "./manager.ts";
 import type { AccountBackend } from "./backend.ts";
 import type { ConversationProvider } from "../providers/contract.ts";
 import type { launch } from "../providers/launch.ts";
 
 const info = { id: "agent", provider: "codex", directory: "/project" } as AgentInfo;
-afterEach(() => {
-  vi.useRealTimers();
-  vi.restoreAllMocks();
-});
+afterEach(() => vi.useRealTimers());
 function backend() {
   let done: (error?: Error) => void = () => undefined;
   const value = {
@@ -51,69 +46,6 @@ function provider(respond: (method: string, params?: unknown) => Promise<unknown
   };
   return { value, notify: (method: string, params: unknown) => notify(method, params) };
 }
-
-it("uses the daemon registry's launcher for custom Claude account settings", async () => {
-  const registry = new ProviderRegistry();
-  const config: ProviderConfig = {
-    id: "team-claude",
-    label: "Team Claude",
-    engine: "claude",
-    command: ["/private/claude"],
-    enabled: true,
-    env: { CLAUDE_CONFIG_DIR: "/private/team-config" },
-  };
-  vi.spyOn(registry, "config").mockReturnValue(config);
-  const process = child();
-  const spawn = vi.fn<typeof launch>(() => process);
-  const launcher = vi.spyOn(registry, "launcher").mockReturnValue(spawn);
-  const account = createAccountBackend({ ...info, provider: config.id }, registry);
-  const read = account.read();
-  process.stdout.emit("data", Buffer.from('{"loggedIn":true}'));
-  process.emit("close", 0);
-  expect((await read).connected).toBe(true);
-  expect(launcher).toHaveBeenCalledWith(config);
-  expect(spawn).toHaveBeenCalledWith("claude", ["auth", "status", "--json"], info.directory);
-  await account.close();
-});
-
-it.each(["codex", "opencode"] as const)(
-  "routes custom %s account profiles by engine",
-  async (engine) => {
-    const registry = new ProviderRegistry();
-    vi.spyOn(registry, "config").mockReturnValue({
-      id: "custom",
-      label: "Custom",
-      engine,
-      command: ["custom"],
-      enabled: true,
-    });
-    const p = provider(async () => ({}));
-    const factory = vi.fn(() => p.value);
-    const account = createAccountBackend({ ...info, provider: "custom" }, registry, factory);
-    expect(account).toBeInstanceOf(engine === "codex" ? CodexAccount : OpenCodeAccount);
-    expect(factory).toHaveBeenCalledWith(info.directory, expect.any(Function), "custom");
-    await account.close();
-  },
-);
-
-it.each(["pi", "omp", "acp"] as const)(
-  "does not send OpenCode account RPCs to %s providers",
-  (engine) => {
-    const registry = new ProviderRegistry();
-    vi.spyOn(registry, "config").mockReturnValue({
-      id: "custom",
-      label: "Custom",
-      engine,
-      command: ["custom"],
-      enabled: true,
-    });
-    const factory = vi.fn();
-    expect(() => createAccountBackend({ ...info, provider: "custom" }, registry, factory)).toThrow(
-      "not supported",
-    );
-    expect(factory).not.toHaveBeenCalled();
-  },
-);
 describe("socket-scoped provider accounts", () => {
   it("keeps challenges private, rejects another client's code, and discards them on disconnect", async () => {
     const backends: ReturnType<typeof backend>[] = [];

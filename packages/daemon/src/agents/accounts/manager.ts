@@ -5,7 +5,7 @@ import {
   type AgentAccountAction,
   type AgentInfo,
 } from "@concors/protocol";
-import { providerFactory, type AgentProviderFactory } from "../providers/index.ts";
+import { providerFactory } from "../providers/index.ts";
 import { ProviderRegistry } from "../providers/registry.ts";
 import { ClaudeAccount } from "./claude.ts";
 import { CodexAccount } from "./codex.ts";
@@ -13,25 +13,24 @@ import { OpenCodeAccount } from "./opencode.ts";
 import type { AccountBackend } from "./backend.ts";
 
 export type AccountBackendFactory = (info: AgentInfo) => AccountBackend;
-export function createAccountBackend(
-  info: AgentInfo,
-  registry = new ProviderRegistry(),
-  factory: AgentProviderFactory = providerFactory(registry),
-): AccountBackend {
-  const config = registry.config(info.provider);
-  if (config.engine === "claude")
-    return new ClaudeAccount(info.directory, registry.launcher(config));
-  if (config.engine !== "codex" && config.engine !== "opencode")
-    throw new Error("Account connections are not supported for this provider");
-  const provider = factory(
-    info.directory,
-    async () => {
-      throw new Error("Sign-in cannot approve agent tools");
-    },
-    info.provider,
-  );
-  return config.engine === "codex" ? new CodexAccount(provider) : new OpenCodeAccount(provider);
-}
+export const accountBackendFactory =
+  (registry: ProviderRegistry): AccountBackendFactory =>
+  (info) => {
+    const config = registry.config(info.provider);
+    if (config.engine === "claude")
+      return new ClaudeAccount(info.directory, registry.launcher(config));
+    if (!["codex", "opencode"].includes(config.engine))
+      throw new Error("Sign in through this agent's CLI on the machine.");
+    const provider = providerFactory(registry)(
+      info.directory,
+      async () => {
+        throw new Error("Sign-in cannot approve agent tools");
+      },
+      info.provider,
+    );
+    return config.engine === "codex" ? new CodexAccount(provider) : new OpenCodeAccount(provider);
+  };
+const createAccountBackend = accountBackendFactory(new ProviderRegistry());
 interface Entry {
   owner: string;
   backend: AccountBackend;

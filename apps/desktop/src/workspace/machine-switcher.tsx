@@ -109,9 +109,7 @@ export function MachineSwitcher({
               <span
                 className={`ml-auto shrink-0 text-xs capitalize ${isSelected ? "text-primary" : "text-muted-foreground"}`}
               >
-                {isSelected && !connected
-                  ? "Selected"
-                  : machineStatusLabel(availability, isSelected && connected)}
+                {machineStatusLabel(availability, isSelected && connected)}
               </span>
             </DropdownMenuItem>
           );

@@ -88,6 +88,41 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await expect(ui.getByRole("region", { name: "Allow command execution?" })).toBeVisible();
     await ui.getByRole("button", { name: "Allow once", exact: true }).click();
     await expect.poll(() => desktop.agents[0]?.status).toBe("done");
+    await input.fill("primitive-form");
+    await ui.getByRole("button", { name: "Send message", exact: true }).click();
+    await ui.getByRole("checkbox", { name: "Unit tests Run the focused suite" }).click();
+    await ui.getByRole("checkbox", { name: "Type check Verify types" }).click();
+    await ui
+      .getByRole("textbox", { name: "Additional notes", exact: true })
+      .fill("  Keep indentation.\n");
+    await ui.getByRole("button", { name: "Submit answers", exact: true }).click();
+    await expect.poll(() => desktop.agents[0]?.status).toBe("done");
+    await input.fill("primitive-form");
+    await ui.getByRole("button", { name: "Send message", exact: true }).click();
+    await ui.getByRole("button", { name: "Dismiss", exact: true }).click();
+    await expect.poll(() => desktop.agents[0]?.status).toBe("done");
+    await input.fill("primitive-plan");
+    await ui.getByRole("button", { name: "Send message", exact: true }).click();
+    await expect(
+      ui.getByRole("heading", { name: "Implementation plan", exact: true }),
+    ).toBeVisible();
+    await ui.getByRole("button", { name: "Approve plan", exact: true }).click();
+    await expect.poll(() => desktop.agents[0]?.status).toBe("done");
+    await input.fill("primitive-read");
+    await ui.getByRole("button", { name: "Send message", exact: true }).click();
+    await ui
+      .getByRole("article", { name: "Tool call", exact: true })
+      .filter({ hasText: "src/app.ts" })
+      .getByRole("button")
+      .first()
+      .click();
+    await expect(ui.getByText("export const previewWorks = true;", { exact: true })).toBeVisible();
+    const viewport = await ui
+      .locator("body")
+      .evaluate((el) => ({ scroll: el.scrollWidth, width: el.clientWidth }));
+    expect(viewport.scroll).toBeLessThanOrEqual(viewport.width);
+    await page.screenshot({ path: test.info().outputPath("mobile-chat-primitives.png") });
+
     await execute({
       kind: "tab.rename",
       projectId,

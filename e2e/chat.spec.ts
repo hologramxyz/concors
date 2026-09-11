@@ -89,7 +89,7 @@ test("shared chat streams, handles approvals and removes detached sidebar entrie
     await expect(page.getByRole("button", { name: "Allow once", exact: true })).toHaveCount(0);
     await page.getByRole("textbox", { name: "Message Codex" }).fill("question");
     await page.getByRole("button", { name: "Send message", exact: true }).click();
-    await second.getByRole("button", { name: "Blue", exact: true }).click();
+    await second.getByRole("radio", { name: "Blue Use blue", exact: true }).click();
     await second.getByRole("button", { name: "Submit answers", exact: true }).click();
     await expect(page.getByLabel("Agent status: Done").first()).toBeVisible();
     await page.getByRole("textbox", { name: "Message Codex" }).fill("hello again");
