@@ -13,7 +13,7 @@ import { TerminalProfilesContext } from "@/terminal/profiles-context";
 import { DEFAULT_TERMINAL_PROFILES } from "@concors/protocol";
 import type { DaemonEndpoint } from "@concors/daemon-client";
 import type { WorkspaceOperation } from "@concors/protocol";
-import { PanelLeftOpen, Server } from "lucide-react";
+import { Server } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 
 import { api } from "@/auth/api";
@@ -298,22 +298,6 @@ function AppContent() {
     (project) => project.id === workspace.selection?.projectId,
   );
 
-  const appSidebarCollapsed = view !== "settings" && sidebarCollapsed;
-  const sidebarToggle = appSidebarCollapsed && (
-    <button
-      id="expand-sidebar"
-      type="button"
-      aria-label="Expand sidebar"
-      title="Expand sidebar"
-      aria-controls="app-sidebar"
-      aria-expanded={false}
-      onClick={() => toggleSidebar(false)}
-      className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-    >
-      <PanelLeftOpen className="size-4" aria-hidden="true" />
-    </button>
-  );
-
   return (
     <ColorThemeProvider
       connection={connection.transport}
@@ -355,7 +339,7 @@ function AppContent() {
                     ) : (
                       <AppSidebar
                         collapsed={sidebarCollapsed}
-                        onCollapse={() => toggleSidebar(true)}
+                        onCollapse={() => toggleSidebar(!sidebarCollapsed)}
                         execute={execute}
                         onSelectAgent={openAgent}
                         view={view}
@@ -379,12 +363,9 @@ function AppContent() {
                         onSignOut={signOut}
                       />
                     )}
-                    <div
-                      className={`workspace-surface my-2 mr-2 flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-background shadow-xs ${appSidebarCollapsed ? "ml-2" : ""}`}
-                    >
+                    <div className="workspace-surface my-2 mr-2 flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-background shadow-xs">
                       {!(view === "projects" && activeProject) && (
                         <header className="flex h-11 shrink-0 items-center gap-2 border-b px-4">
-                          {sidebarToggle}
                           <h1 className="truncate text-ui font-medium">
                             {view === "settings"
                               ? settingsNavItemFor(settingsPage).label
@@ -452,7 +433,6 @@ function AppContent() {
                         ) : view === "projects" ? (
                           workspace ? (
                             <ProjectWorkspace
-                              sidebarToggle={sidebarToggle}
                               onPaneFocus={(paneId) => {
                                 if (selection?.tabId)
                                   lastPanes.current.set(`${memoryKey}:${selection.tabId}`, paneId);

@@ -18,10 +18,13 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
     await Promise.all([signedIn(page), signedIn(second)]);
     await page.goto("/");
     await seedProject(page, "Terminal agents", directory);
+    // The collapsed rail and full sidebar must receive the same live terminal activity.
+    await page.getByRole("button", { name: "Collapse sidebar", exact: true }).click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     const agents = page
       .getByRole("navigation", { name: "Primary" })
       .getByRole("region", { name: "Agents", exact: true });
+    await expect(agents).toHaveCount(0);
     await expect(agents.getByRole("button", { name: /Open in terminal/ })).toHaveCount(0);
     // Starting an agent from a normal shell must be discovered without changing its profile.
     const shellPane = page.getByRole("region", { name: "Terminal pane", exact: true });
@@ -34,6 +37,7 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
     await page.keyboard.type("codex");
     await page.keyboard.press("Enter");
     await expect(agents.getByRole("button", { name: /Open in terminal.*Codex/ })).toHaveCount(1);
+    await expect(agents.locator('[data-provider="codex"]')).toBeVisible();
     await expect(shellPane.getByLabel("Terminal output").filter({ visible: true })).toContainText(
       "CODEX_TERMINAL_READY",
     );
@@ -79,6 +83,7 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
     await second.keyboard.press("Enter");
     await expect(shellAgent).toHaveCount(0);
     await expect(agents.getByRole("button", { name: /Open in terminal/ })).toHaveCount(0);
+    await expect(agents).toHaveCount(0);
 
     // Claude redraws its screen without a title update. Both sidebars must follow
     // real working / permission / completed UI, including after observer reconnect.
@@ -86,6 +91,7 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
     await second.keyboard.press("Enter");
     const claude = agents.getByRole("button", { name: /Open in terminal.*Claude/ });
     await expect(claude).toBeVisible();
+    await expect(agents.locator('[data-provider="claude"]')).toBeVisible();
     for (const [command, label] of [
       ["test-working", "Working"],
       ["test-approval", "Needs input"],
@@ -120,7 +126,9 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
     await expect(page.getByLabel("Terminal output").filter({ visible: true })).toContainText(
       "CODEX_TERMINAL_READY",
     );
-    await expect(agents.getByLabel("Agent status: Open in terminal").locator("svg")).toHaveCount(0);
+    await expect(
+      agents.getByLabel("Agent status: Open in terminal").locator(".animate-spin"),
+    ).toHaveCount(0);
     await page.getByRole("button", { name: "Pane actions" }).click();
     await page.getByRole("menuitem", { name: "Split horizontally" }).click();
     await expect(

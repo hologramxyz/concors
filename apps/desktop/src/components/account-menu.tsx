@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 
 import { initialOf, type SignedInAuth } from "@/auth/auth-state";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,27 +25,47 @@ interface AccountMenuProps {
   readonly auth: SignedInAuth;
   readonly onSignOut: () => void;
   readonly onOpenSettings: () => void;
+  readonly collapsed?: boolean;
 }
 
 /** Sidebar footer: who is signed in, with settings and sign out. */
-export function AccountMenu({ auth, onSignOut, onOpenSettings }: AccountMenuProps) {
+export function AccountMenu({
+  auth,
+  onSignOut,
+  onOpenSettings,
+  collapsed = false,
+}: AccountMenuProps) {
   const compact = useContext(CompactLayoutContext);
   if (compact)
     return <MobileAccountMenu auth={auth} onSignOut={onSignOut} onOpenSettings={onOpenSettings} />;
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left hover:bg-sidebar-accent aria-expanded:bg-sidebar-accent"
-        aria-label={`Account: ${auth.user.name}`}
-      >
-        <span className="flex size-7 shrink-0 items-center justify-center rounded-4xl bg-primary text-xs font-semibold text-primary-foreground">
-          {initialOf(auth.user)}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-ui font-medium">{auth.user.name}</span>
-        </span>
-        <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-      </DropdownMenuTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger
+            className={`flex items-center rounded-md hover:bg-sidebar-accent aria-expanded:bg-sidebar-accent ${collapsed ? "sidebar-rail-control" : "h-9 w-full gap-2 px-2 text-left"}`}
+            aria-label={`Account: ${auth.user.name}`}
+          >
+            <span className="flex size-7 shrink-0 items-center justify-center rounded-4xl bg-primary text-xs font-semibold text-primary-foreground">
+              {initialOf(auth.user)}
+            </span>
+            {!collapsed && (
+              <>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-ui font-medium">{auth.user.name}</span>
+                </span>
+                <ChevronsUpDown
+                  className="size-3.5 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
+              </>
+            )}
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent side={collapsed ? "right" : "top"} sideOffset={6}>
+          {auth.user.name} · Account and settings
+        </TooltipContent>
+      </Tooltip>
       <DropdownMenuContent align="start" side="top" className="w-56">
         <DropdownMenuLabel className="text-ui font-normal text-muted-foreground">
           <span className="block truncate text-foreground">{auth.user.name}</span>
