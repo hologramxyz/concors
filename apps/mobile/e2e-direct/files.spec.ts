@@ -307,10 +307,12 @@ test("real mobile files preserve drafts, save explicitly and resolve competing d
     await confirm.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(code).toContainText("my unsaved file draft");
     await writeFile(join(root, "src/main.ts"), "an agent changed this file\n");
-    await files.getByRole("button", { name: "Save", exact: true }).click();
+    // Background conflict detection can disable Save before the tap. Wait for that
+    // protection, review the competing version, then explicitly save the kept draft.
     await expect(
       files.getByText("This file changed on the machine. Your version is kept."),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(files.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
     expect(await readFile(join(root, "src/main.ts"), "utf8")).toBe("an agent changed this file\n");
     await files.getByRole("button", { name: "Compare with disk" }).click();
     await expect(files.getByText("an agent changed this file", { exact: true })).toBeVisible();
