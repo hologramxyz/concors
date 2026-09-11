@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { TaskState, planSteps } from "./plans.ts";
-import { claudeHistory, openCodeHistory } from "./history.ts";
+import { claudeHistory, openCodeHistory, piHistory } from "./history.ts";
 import { mapCodexItem } from "../codex/items.ts";
 it("preserves canonical task states, active labels, empty snapshots, and successful task mutations", () => {
   const state = new TaskState();
@@ -137,4 +137,14 @@ it("continues updating ID-based tasks restored from native history", () => {
   expect(state.update("TaskUpdate", { taskId: "7", status: "completed" }, {}, true)).toEqual([
     { id: "7", step: "Verify the change", status: "completed" },
   ]);
+});
+
+it("restores visible extension messages while keeping hidden custom content private", () => {
+  const turns = piHistory([
+    { role: "user", content: "Review", timestamp: 1 },
+    { role: "custom", content: "Visible extension update", timestamp: 2 },
+    { role: "custom", content: "Hidden extension data", display: false, timestamp: 3 },
+  ]);
+  expect(JSON.stringify(turns)).toContain("Visible extension update");
+  expect(JSON.stringify(turns)).not.toContain("Hidden extension data");
 });

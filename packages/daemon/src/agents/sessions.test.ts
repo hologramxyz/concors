@@ -841,7 +841,7 @@ it("preserves resume errors and recovers a later retry without replaying failed 
   });
 });
 
-it("keeps invalid question replies pending, accepts optional blanks, and redacts private answer receipts", async () => {
+it("keeps invalid question replies pending, accepts optional blanks, and redacts private answers from the shared timeline", async () => {
   const { a, b, id } = await setup();
   await action(a, { kind: "send", sessionId: id, text: "hold the turn" });
   await expect.poll(() => a.agents[0]?.turnId?.startsWith("turn-")).toBe(true);
