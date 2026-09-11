@@ -1,5 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import { TestAccountBackend } from "./testing/account.ts";
+import { WorkspaceStore } from "../workspace/store.ts";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -79,7 +80,7 @@ async function setup() {
   );
   expect(result.outcome.status).toBe("ok");
   await expect.poll(() => c.agents[0]?.status).toBe("idle");
-  return { c, id: c.agents[0]!.id };
+  return { c, id: c.agents[0]!.id, projectId, tabId, paneId };
 }
 it("reuses discovered catalogs across chats, deduplicates loads, and refreshes after expiry", async () => {
   const { c, id } = await setup();
@@ -185,7 +186,7 @@ it("keeps the last catalog on a failed refresh and retries after a short backoff
   expect(retried.outcome.providers?.find((p) => p.id === "codex")?.error).toBeUndefined();
 });
 it.each(["claude", "opencode", "pi"] as const)(
-  "starts %s without replacing or replaying the current conversation",
+  "switches to %s in the same pane and restores provider histories without replay",
   async (provider) => {
     const { c, id } = await setup();
     await c.requestAgent(
@@ -222,11 +223,21 @@ it.each(["claude", "opencode", "pi"] as const)(
     const next = result.outcome.conversation.agent.id;
     await expect.poll(() => c.agents.find((a) => a.id === next)?.status).toBe("idle");
     expect(c.agents.find((a) => a.id === next)?.provider).toBe(provider);
-    expect(c.workspace?.projects[0]?.tabs).toHaveLength(2);
-    expect(c.workspace?.projects[0]?.tabs.map((tab) => tab.name)).toEqual(["Codex", "Tab 2"]);
+    expect(c.workspace?.projects[0]?.tabs).toHaveLength(1);
+    expect(c.workspace?.projects[0]?.tabs.map((tab) => tab.name)).toEqual(["Codex"]);
+    expect(c.workspace?.projects[0]?.tabs[0]?.nodes[0]).toMatchObject({ sessionId: next });
     expect(c.workspace?.projects[0]?.tabs[0]?.nodes[0]?.kind).toBe("pane");
     expect((await c.requestAgent(operation, requestId)).outcome.status).toBe("ok");
     expect(c.agents).toHaveLength(2);
+    expect(TestAgentProvider.turns).toBe(before);
+    expect(
+      (
+        await c.requestAgent(
+          { kind: "send", sessionId: id, text: "Late message from another client" },
+          randomUUID(),
+        )
+      ).outcome,
+    ).toMatchObject({ status: "error", message: expect.stringContaining("Switch back") });
     expect(TestAgentProvider.turns).toBe(before);
     const prior = await c.requestAgent({ kind: "read", sessionId: id }, randomUUID());
     expect(prior.outcome.status).toBe("ok");
@@ -256,6 +267,42 @@ it.each(["claude", "opencode", "pi"] as const)(
       randomUUID(),
     );
     expect(invalid.outcome.status).toBe("error");
+    const turns = TestAgentProvider.turns;
+    const restored = await c.requestAgent(
+      {
+        kind: "switch-provider",
+        sessionId: next,
+        provider: "codex",
+        model: "fixture",
+        expectedRevision: c.agents.find((a) => a.id === next)!.revision,
+      },
+      randomUUID(),
+    );
+    expect(restored.outcome.status).toBe("ok");
+    if (restored.outcome.status !== "ok") throw new Error("Restore failed");
+    expect(restored.outcome.conversation.agent.id).toBe(id);
+    expect(
+      restored.outcome.conversation.items.some((item) => item.text === "existing conversation"),
+    ).toBe(true);
+    const again = await c.requestAgent(
+      {
+        kind: "switch-provider",
+        sessionId: id,
+        provider,
+        model: `fixture-${provider}`,
+        expectedRevision: c.agents.find((a) => a.id === id)!.revision,
+      },
+      randomUUID(),
+    );
+    expect(again.outcome.status).toBe("ok");
+    if (again.outcome.status !== "ok") throw new Error("Second restore failed");
+    expect(again.outcome.conversation.agent.id).toBe(next);
+    expect(again.outcome.conversation.items.some((item) => item.text === "approve read")).toBe(
+      true,
+    );
+    expect(c.workspace?.projects[0]?.tabs).toHaveLength(1);
+    expect(c.agents).toHaveLength(2);
+    expect(TestAgentProvider.turns).toBe(turns);
   },
 );
 it("rejects stale provider switches and unavailable models without adding tabs", async () => {
@@ -275,6 +322,166 @@ it("rejects stale provider switches and unavailable models without adding tabs",
     ).toBe("error");
   expect(c.agents).toHaveLength(1);
   expect(c.workspace?.projects[0]?.tabs).toHaveLength(1);
+});
+
+it("serializes competing switches across clients and preserves a split layout", async () => {
+  const { c, id, projectId, tabId, paneId } = await setup();
+  await c.executeWorkspace({
+    type: "workspace.command",
+    commandId: randomUUID(),
+    epoch: c.workspace!.epoch,
+    operation: {
+      kind: "pane.split",
+      projectId,
+      tabId,
+      paneId,
+      expectedVersion: c.workspace!.projects[0]!.version,
+      newPaneId: randomUUID(),
+      splitId: randomUUID(),
+      axis: "horizontal",
+      profile: "shell",
+    },
+  });
+  const before = c.workspace!.projects[0]!.tabs[0]!;
+  const other = new DaemonConnection({
+    endpoint: c.endpoint,
+    client: { kind: "test", name: "competing-switch", version: "0.0.0" },
+  });
+  const unsubscribe = other.subscribeWorkspace(() => undefined);
+  try {
+    await other.connect();
+    await expect.poll(() => other.workspace).toBeTruthy();
+    const revision = c.agents.find((agent) => agent.id === id)!.revision;
+    const results = await Promise.all(
+      [c, other].map((connection, index) =>
+        connection.requestAgent(
+          {
+            kind: "switch-provider",
+            sessionId: id,
+            provider: index ? "pi" : "claude",
+            model: index ? "fixture-pi" : "fixture-claude",
+            expectedRevision: revision,
+          },
+          randomUUID(),
+        ),
+      ),
+    );
+    expect(results.map((result) => result.outcome.status).sort()).toEqual(["error", "ok"]);
+    expect(c.agents).toHaveLength(2);
+    const after = c.workspace!.projects[0]!.tabs[0]!;
+    const winner = results.find((result) => result.outcome.status === "ok")!.outcome;
+    if (winner.status !== "ok") throw new Error("No switch succeeded");
+    expect(after).toEqual({
+      ...before,
+      nodes: before.nodes.map((node) =>
+        node.kind === "pane" && node.id === paneId
+          ? {
+              ...node,
+              sessionId: winner.conversation.agent.id,
+            }
+          : node,
+      ),
+    });
+    expect(c.workspace!.projects[0]!.tabs).toHaveLength(1);
+    await expect.poll(() => other.workspace).toEqual(c.workspace);
+  } finally {
+    other.disconnect();
+    unsubscribe();
+  }
+});
+
+it("does not detach working agents or create sessions when their pane was closed", async () => {
+  const { c, id, projectId, tabId, paneId } = await setup();
+  await c.requestAgent({ kind: "send", sessionId: id, text: "hold" }, randomUUID());
+  await expect.poll(() => c.agents.find((agent) => agent.id === id)?.status).toBe("working");
+  const change = () =>
+    c.requestAgent(
+      {
+        kind: "switch-provider",
+        sessionId: id,
+        provider: "claude",
+        model: "fixture-claude",
+        expectedRevision: c.agents.find((agent) => agent.id === id)!.revision,
+      },
+      randomUUID(),
+    );
+  const working = await change();
+  expect(working.outcome).toMatchObject({
+    status: "error",
+    message: expect.stringContaining("Finish or stop"),
+  });
+  expect(c.agents).toHaveLength(1);
+  await c.requestAgent(
+    { kind: "interrupt", sessionId: id, turnId: c.agents[0]!.turnId! },
+    randomUUID(),
+  );
+  await c.executeWorkspace({
+    type: "workspace.command",
+    commandId: randomUUID(),
+    epoch: c.workspace!.epoch,
+    operation: {
+      kind: "pane.close",
+      projectId,
+      tabId,
+      paneId,
+      expectedVersion: c.workspace!.projects[0]!.version,
+    },
+  });
+  expect((await change()).outcome.status).toBe("error");
+  expect(c.agents).toHaveLength(1);
+});
+
+it("restores a provider conversation after reopening the persisted workspace", async () => {
+  const { c, id, paneId } = await setup();
+  await c.requestAgent(
+    { kind: "send", sessionId: id, text: "Keep this across restarts" },
+    randomUUID(),
+  );
+  await expect.poll(() => c.agents[0]?.status).toBe("done");
+  const switched = await c.requestAgent(
+    {
+      kind: "switch-provider",
+      sessionId: id,
+      provider: "claude",
+      model: "fixture-claude",
+      expectedRevision: c.agents[0]!.revision,
+    },
+    randomUUID(),
+  );
+  if (switched.outcome.status !== "ok") throw new Error("Switch failed");
+  const next = switched.outcome.conversation.agent.id;
+  await expect.poll(() => c.agents.find((agent) => agent.id === next)?.status).toBe("idle");
+  c.disconnect();
+  await server!.close();
+  server = undefined;
+  const store = new WorkspaceStore(join(directory, "state.db"));
+  try {
+    const current = store.agent(next);
+    const restored = store.reserveAgent(
+      {
+        type: "agent.request",
+        requestId: randomUUID(),
+        operation: {
+          kind: "switch-provider",
+          sessionId: next,
+          provider: "codex",
+          model: "fixture",
+          expectedRevision: current.revision,
+        },
+      },
+      { ...current, id: randomUUID(), provider: "codex" },
+    );
+    expect(restored.id).toBe(id);
+    expect(
+      store.agentConversation(id).items.some((item) => item.text === "Keep this across restarts"),
+    ).toBe(true);
+    expect(
+      store.snapshot().projects[0]!.tabs[0]!.nodes.find((pane) => pane.id === paneId),
+    ).toMatchObject({ sessionId: id });
+    expect(store.agents()).toHaveLength(2);
+  } finally {
+    store.close();
+  }
 });
 
 it("keeps account exchanges out of receipts and broadcasts, scoped to the initiating socket", async () => {
