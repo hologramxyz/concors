@@ -31,7 +31,16 @@ import { useCornerStyle } from "@/theme/use-corner-style";
 import { SettingsView } from "@/views/settings-view";
 import { useNewWorkspace } from "@/workspace/use-new-workspace";
 import { ProjectSetupDialog } from "@/workspace/project-setup-dialog";
-import { LOCAL_HOST, saveHost, type Host } from "@/workspace/machines";
+import {
+  LOCAL_HOST,
+  loadHosts,
+  loadSelectedMachineId,
+  machineAvailability,
+  machineHost,
+  saveHost,
+  saveSelectedMachineId,
+  type Host,
+} from "@/workspace/machines";
 import { ProjectWorkspace } from "@/workspace/project-workspace";
 
 export function App() {
@@ -91,10 +100,10 @@ function AppContent() {
   const theme = useTheme();
   const corners = useCornerStyle();
   const auth = useAuth(api);
+  const organizationId =
+    auth.state.status === "signed-in" ? activeOrganization(auth.state)?.id : undefined;
   const hostScope =
-    auth.state.status === "signed-in"
-      ? `${auth.state.user.id}:${activeOrganization(auth.state)?.id ?? ""}`
-      : "";
+    auth.state.status === "signed-in" ? `${auth.state.user.id}:${organizationId ?? ""}` : "";
   const selectedHost = selectionHost?.scope === hostScope ? selectionHost.host : LOCAL_HOST;
   const selectedMachineId = selectedHost.machineId;
   const endpoint = useMemo(
@@ -144,6 +153,34 @@ function AppContent() {
       cancelled = true;
     };
   }, []);
+
+  // Restore the machine picked before the last reload once the account scope is known.
+  useEffect(() => {
+    if (!hostScope || !organizationId || selectionHost?.scope === hostScope) return;
+    const machineId = loadSelectedMachineId(hostScope);
+    if (!machineId || machineId === "local") return;
+    let cancelled = false;
+    api
+      .listMachines({ organizationId })
+      .then((machines) => {
+        if (cancelled) return;
+        const machine = machines.find((m) => m.id === machineId);
+        if (!machine || machineAvailability(machine) !== "connectable") return;
+        setSelectionHost({
+          scope: hostScope,
+          host: machineHost(
+            machine,
+            loadHosts(hostScope).find((h) => h.machineId === machineId),
+          ),
+        });
+      })
+      .catch(() => {
+        /* Stay on this computer when the saved machine cannot be restored. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [hostScope, organizationId, selectionHost]);
 
   const transport = connection.transport;
   const newWorkspace = useNewWorkspace(transport);
@@ -233,6 +270,7 @@ function AppContent() {
   const selectMachine = (host: Host) => {
     if (beforeLeaveFiles.current?.() === false) return;
     saveHost(hostScope, host);
+    saveSelectedMachineId(hostScope, host.machineId);
     setSelectionHost({ scope: hostScope, host });
     setView("projects");
     setError(null);
