@@ -92,6 +92,17 @@ body {
 .mobile-files-tree button {
   min-height: 44px;
 }
+/* Touch arbitration stops at the nearest scroll container, not the shell.
+   Reserve horizontal navigation here while preserving native vertical scrolling. */
+.mobile-files-tree [data-file-directory],
+.mobile-files-editor [data-file-preview],
+.mobile-files-editor .cm-gutters,
+.mobile-files-editor .cm-gutter {
+  touch-action: pan-y pinch-zoom;
+}
+.mobile-files-editor .cm-gutters {
+  min-width: 28px;
+}
 .mobile-files-tree input {
   font-size: 16px;
   min-height: 44px;
