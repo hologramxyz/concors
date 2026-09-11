@@ -77,7 +77,7 @@ export class JsonLines {
       throw new Error("Provider write limit exceeded");
     this.child.stdin.write(frame);
   }
-  request(type: string, params: Record<string, unknown> = {}) {
+  request(type: string, params: Record<string, unknown> = {}, timeoutMs = 15000) {
     return new Promise<unknown>((resolve, reject) => {
       if (this.pending.size >= 32) {
         reject(new Error("Too many provider requests"));
@@ -87,7 +87,7 @@ export class JsonLines {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         reject(new Error(`Provider ${type} timed out; request was not retried`));
-      }, 15000);
+      }, timeoutMs);
       this.pending.set(id, { resolve, reject, timer });
       try {
         this.write({ id, type, ...params });
