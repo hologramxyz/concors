@@ -840,3 +840,253 @@ it("preserves resume errors and recovers a later retry without replaying failed 
     input: [{ type: "text", text: "only this prompt" }],
   });
 });
+
+it("keeps invalid question replies pending, accepts optional blanks, and redacts private answer receipts", async () => {
+  const { a, b, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "hold the turn" });
+  await expect.poll(() => a.agents[0]?.turnId?.startsWith("turn-")).toBe(true);
+  const input = providers[0]!.onRequest(
+    "item/tool/requestUserInput",
+    {
+      threadId: a.agents[0]!.threadId,
+      turnId: a.agents[0]!.turnId,
+      questions: [
+        {
+          id: "checks",
+          header: "Checks",
+          question: "Which checks?",
+          multiSelect: true,
+          allowOther: false,
+          options: [
+            { label: "Unit", description: "Fast" },
+            { label: "Browser", description: "UI" },
+          ],
+        },
+        { id: "secret", header: "Key", question: "Private value", isSecret: true },
+        { id: "note", header: "Note", question: "Notes?", required: false },
+      ],
+    },
+    "question",
+  );
+  await expect.poll(() => b.agents[0]?.pending.length).toBe(1);
+  const pendingId = b.agents[0]!.pending[0]!.id;
+  expect(
+    (
+      await action(a, {
+        kind: "respond",
+        sessionId: id,
+        pendingId,
+        answers: { checks: ["Invalid"] },
+      })
+    ).outcome.status,
+  ).toBe("error");
+  expect(b.agents[0]?.pending).toHaveLength(1);
+  expect(
+    (
+      await action(b, {
+        kind: "respond",
+        sessionId: id,
+        pendingId,
+        answers: { checks: ["Unit", "Browser"], secret: ["private-fixture"], note: [] },
+      })
+    ).outcome.status,
+  ).toBe("ok");
+  expect(await input).toEqual({
+    answers: {
+      checks: { answers: ["Unit", "Browser"] },
+      secret: { answers: ["private-fixture"] },
+      note: { answers: [] },
+    },
+  });
+  const read = await action(a, { kind: "read", sessionId: id });
+  expect(JSON.stringify(read)).not.toContain("private-fixture");
+  expect(JSON.stringify(read)).toContain("[private answer]");
+});
+
+it("preserves explicit permission actions and lets a question cancel the whole turn", async () => {
+  const { a, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "hold the turn" });
+  await expect.poll(() => a.agents[0]?.turnId?.startsWith("turn-")).toBe(true);
+  const scope = { threadId: a.agents[0]!.threadId, turnId: a.agents[0]!.turnId };
+  const input = providers[0]!.onRequest(
+    "item/commandExecution/requestApproval",
+    { ...scope, availableDecisions: ["accept", "acceptForSession", "decline", "cancel"] },
+    "approval",
+  );
+  await expect.poll(() => a.agents[0]?.pending.length).toBe(1);
+  const pendingId = a.agents[0]!.pending[0]!.id;
+  expect(
+    (
+      await action(a, {
+        kind: "respond",
+        sessionId: id,
+        pendingId,
+        actionId: "invented",
+        decision: "accept",
+      })
+    ).outcome.status,
+  ).toBe("error");
+  await action(a, {
+    kind: "respond",
+    sessionId: id,
+    pendingId,
+    actionId: "acceptForSession",
+    decision: "accept",
+  });
+  expect(await input).toMatchObject({ decision: "acceptForSession" });
+  const question = providers[0]!.onRequest(
+    "item/tool/requestUserInput",
+    { ...scope, questions: [{ id: "answer", header: "Question", question: "Proceed?" }] },
+    "question",
+  );
+  await expect.poll(() => a.agents[0]?.pending.length).toBe(1);
+  await action(a, {
+    kind: "respond",
+    sessionId: id,
+    pendingId: a.agents[0]!.pending[0]!.id,
+    decision: "cancel",
+  });
+  expect(await question).toMatchObject({ decision: "cancel" });
+  await expect.poll(() => a.agents[0]?.status).toBe("interrupted");
+  expect(a.agents[0]?.pending).toEqual([]);
+});
+
+it("keeps async questions across turns and restart, and durably resolves answers once", async () => {
+  const { a, b, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "hold" });
+  const provider = providers[0]!;
+  const question = {
+    id: "async-1",
+    type: "agentMessage",
+    delivery: "async",
+    questions: [{ title: "Which approach?", options: ["Small change", "Full rewrite"] }],
+  };
+  provider.emit("item/completed", { item: question });
+  await expect.poll(() => b.agents[0]?.pending.length).toBe(1);
+  expect(b.agents[0]?.status).toBe("working");
+  expect(b.agents[0]?.attention?.kind).toBe("needs_input");
+  provider.finish();
+  await expect.poll(() => a.agents[0]?.status).toBe("done");
+  await action(a, { kind: "send", sessionId: id, text: "hold again" });
+  expect(a.agents[0]?.pending).toHaveLength(1);
+  a.disconnect();
+  b.disconnect();
+  await server!.close();
+  const c = await open(await boot());
+  expect(c.agents[0]?.pending).toHaveLength(1);
+  const pending = c.agents[0]!.pending[0]!;
+  const op: AgentOperation = {
+    kind: "respond",
+    sessionId: id,
+    pendingId: pending.id,
+    answers: { "0": ["Small change"] },
+  };
+  const requestId = randomUUID();
+  expect((await action(c, op, requestId)).outcome.status).toBe("ok");
+  expect((await action(c, op, requestId)).outcome.status).toBe("ok");
+  expect(c.agents[0]?.queue).toHaveLength(1);
+  expect(c.agents[0]?.pending).toHaveLength(0);
+  const history = await action(c, { kind: "read", sessionId: id });
+  expect(
+    history.outcome.status === "ok" &&
+      history.outcome.conversation.items.some((i) => i.id === "async-response:async-1"),
+  ).toBe(true);
+  await action(c, { kind: "send", sessionId: id, text: "hold resumed" });
+  providers.at(-1)!.emit("item/completed", { item: question });
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  expect(c.agents[0]?.pending).toHaveLength(0);
+});
+
+it("implements only the current completed plan and keeps normal tool permissions", async () => {
+  const { a, id } = await setup();
+  let info = a.agents[0]!;
+  await action(a, {
+    kind: "configure",
+    sessionId: id,
+    expectedRevision: info.revision,
+    settings: { model: "fixture", effort: "high", mode: "default", planMode: true },
+  });
+  await action(a, { kind: "send", sessionId: id, text: "hold" });
+  providers[0]!.emit("item/completed", {
+    item: { id: "proposal", type: "plan", text: "## Plan\n\nAdd a test, then implement." },
+  });
+  providers[0]!.finish();
+  await expect.poll(() => a.agents[0]?.status).toBe("done");
+  info = a.agents[0]!;
+  const op: AgentOperation = {
+    kind: "implement-plan",
+    sessionId: id,
+    expectedRevision: info.revision,
+    itemId: "proposal",
+  };
+  expect((await action(a, { ...op, expectedRevision: info.revision - 1 })).outcome.status).toBe(
+    "error",
+  );
+  const requestId = randomUUID();
+  expect((await action(a, op, requestId)).outcome.status).toBe("ok");
+  expect((await action(a, op, requestId)).outcome.status).toBe("ok");
+  await expect
+    .poll(() => providers[0]!.requests.filter((r) => r.method === "turn/start").length)
+    .toBe(2);
+  expect(providers[0]!.requests.filter((r) => r.method === "turn/start")[1]?.params).toMatchObject({
+    collaborationMode: { mode: "default" },
+    sandboxPolicy: { type: "workspaceWrite" },
+    input: [
+      { type: "text", text: "Implement this plan:\n\n## Plan\n\nAdd a test, then implement." },
+    ],
+  });
+});
+
+it("previews submitted attachments after restart without broadcasting the bytes in timeline items", async () => {
+  const { a, b, id } = await setup();
+  const requestId = randomUUID(),
+    data = Buffer.from("# Attached document").toString("base64");
+  await action(
+    a,
+    {
+      kind: "send",
+      sessionId: id,
+      text: "Read the attachment",
+      attachments: [{ name: "notes.md", mime: "text/markdown", data }],
+    },
+    requestId,
+  );
+  await expect.poll(() => a.agents[0]?.status).toBe("done");
+  const read = await action(b, { kind: "read", sessionId: id });
+  expect(
+    read.outcome.status === "ok" && read.outcome.conversation.items.find((i) => i.kind === "user"),
+  ).toMatchObject({
+    text: "Read the attachment",
+    attachments: [{ name: "notes.md", mime: "text/markdown" }],
+  });
+  expect(JSON.stringify(read)).not.toContain(data);
+  a.disconnect();
+  b.disconnect();
+  await server!.close();
+  const c = await open(await boot());
+  const result = await action(c, {
+    kind: "read-attachment",
+    sessionId: id,
+    itemId: `prompt:${requestId}`,
+    index: 0,
+  });
+  expect(result.outcome.status === "ok" && result.outcome.attachment).toEqual({
+    name: "notes.md",
+    mime: "text/markdown",
+    data,
+  });
+  expect(
+    (
+      await action(c, {
+        kind: "read-attachment",
+        sessionId: id,
+        itemId: `prompt:${requestId}`,
+        index: 1,
+      })
+    ).outcome.status,
+  ).toBe("error");
+  expect(
+    (await action(c, { kind: "read-attachment", sessionId: id, itemId: "/etc/passwd", index: 0 }))
+      .outcome.status,
+  ).toBe("error");
+});
