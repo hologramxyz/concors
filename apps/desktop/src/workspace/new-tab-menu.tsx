@@ -31,7 +31,7 @@ export function NewTabMenu({
   renderTrigger,
 }: {
   disabled: boolean;
-  onCreate: (profile: PaneProfile, name?: string, terminalProfileId?: string) => void;
+  onCreate: (profile: PaneProfile, terminalProfileId?: string) => void;
   empty?: boolean;
   keyboard?: boolean;
   tabLimitReached?: boolean;
@@ -42,9 +42,9 @@ export function NewTabMenu({
   const triggerContainer = useRef<HTMLSpanElement>(null);
   const menuTransfersFocus = useRef(false);
   const createDisabled = disabled || tabLimitReached;
-  const create = (profile: PaneProfile, name?: string, terminalProfileId?: string) => {
+  const create = (profile: PaneProfile, terminalProfileId?: string) => {
     const id = profiles.supported ? terminalProfileId : undefined;
-    onCreate(profile, name, id);
+    onCreate(profile, id);
   };
   const [open, setOpen] = useState(false);
   useCommand("new-tab", keyboard && !disabled, () => {
@@ -103,7 +103,7 @@ export function NewTabMenu({
                       disabled={createDisabled}
                       onClick={() => {
                         setOpen(false);
-                        create(profile, label, terminalProfileId);
+                        create(profile, terminalProfileId);
                       }}
                     >
                       <span className="mobile-session-icon">
@@ -179,7 +179,7 @@ export function NewTabMenu({
                   disabled={disabled}
                   onSelect={() => {
                     menuTransfersFocus.current = true;
-                    onCreate(profile, label, profiles.supported ? terminalProfileId : undefined);
+                    create(profile, terminalProfileId);
                   }}
                 >
                   <Icon className="size-4 shrink-0" aria-hidden="true" />
