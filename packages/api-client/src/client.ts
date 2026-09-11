@@ -1,3 +1,4 @@
+import type { DevelopmentTools } from "./schemas.ts";
 import type { z } from "zod";
 
 import { ApiError, ApiNetworkError } from "./errors.ts";
@@ -76,6 +77,7 @@ export interface OrganizationScope {
 }
 
 export interface CreateMachineInput extends OrganizationScope {
+  readonly developmentTools?: DevelopmentTools;
   readonly expectedMonthlyPrice?: Money;
   /** Lowercase letters, digits and hyphens; unique among the organization's live machines. */
   readonly name: string;
@@ -210,6 +212,16 @@ export class ApiClient {
       },
     );
     return data;
+  }
+
+  /** Retry failed optional tool setup without recreating or charging for the machine. */
+  async retryDevelopmentTools(id: string): Promise<Machine> {
+    const { data } = await this.#request(
+      "POST",
+      `/api/v1/machines/${encodeURIComponent(id)}/development-tools/retry`,
+      { schema: MachineResponseSchema },
+    );
+    return data.machine;
   }
 
   /**

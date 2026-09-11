@@ -107,6 +107,18 @@ export const MachineResourceUsageSchema = z.object({
 });
 export type MachineResourceUsage = z.infer<typeof MachineResourceUsageSchema>;
 
+export const DevelopmentToolsSchema = z.object({
+  node: z.enum(["lts", "24", "22"]).nullable(),
+  docker: z.boolean(),
+});
+export type DevelopmentTools = z.infer<typeof DevelopmentToolsSchema>;
+export const DevelopmentToolsSetupSchema = z.object({
+  status: z.enum(["pending", "installing", "ready", "error"]),
+  updatedAt: z.iso.datetime(),
+  error: z.string().nullable(),
+  versions: z.record(z.string(), z.string()),
+});
+
 export const MachineSchema = z.object({
   id: z.string(),
   organizationId: z.string(),
@@ -134,6 +146,8 @@ export const MachineSchema = z.object({
   agentVersion: z.string().nullable().optional(),
   agentSeenAt: z.string().nullable().optional(),
   resourceUsage: MachineResourceUsageSchema.nullable().optional(),
+  developmentTools: DevelopmentToolsSchema.nullable().optional(),
+  developmentToolsSetup: DevelopmentToolsSetupSchema.nullable().optional(),
   certificateError: z.string().nullable().optional(),
   agentError: z.string().nullable().optional(),
   /** Login user; connect with `ssh <sshUser>@<ipv4>`. */
@@ -181,6 +195,10 @@ export type MachineSize = z.infer<typeof MachineSizeSchema>;
 
 /** `GET /api/v1/machines/catalog` */
 export const MachineCatalogSchema = z.object({
+  developmentTools: z
+    .object({ nodeVersions: z.array(z.enum(["lts", "24", "22"])) })
+    .nullable()
+    .optional(),
   regions: z.array(MachineRegionSchema),
   sizes: z.array(MachineSizeSchema),
   /** OS image every machine runs. */
