@@ -13,6 +13,7 @@ import {
   type InputHandler,
 } from "./contract.ts";
 import { launch } from "./launch.ts";
+import { supportsJsonlRpcProtocolV2 } from "./jsonl-frame-decoder.ts";
 import { JsonLines } from "./json-lines.ts";
 // Pi's tool_call hook waits for the native RPC confirmation dialog before each tool executes.
 // This extension is supplied explicitly on every launch, including resumed sessions.
@@ -29,12 +30,22 @@ export class PiProvider extends EventProvider {
   private text = "";
   private messageId = "";
   private cwd: string;
+  private launcher: typeof launch;
+  private engine: "pi" | "omp";
   private models = new Map<string, Record<string, unknown>>();
   private model: Record<string, unknown> = {};
   private thinkingLevel = "off";
-  constructor(cwd: string, onInput: InputHandler) {
+  constructor(
+    cwd: string,
+    onInput: InputHandler,
+    launcher: typeof launch = launch,
+    engine: "pi" | "omp" = "pi",
+  ) {
     super(onInput);
     this.cwd = cwd;
+    this.launcher = launcher;
+    this.engine = engine;
+    if (engine === "omp") this.directory = this.directory.replace(/pi-sessions$/, "omp-sessions");
   }
   async initialize() {
     await this.open();
@@ -46,28 +57,59 @@ export class PiProvider extends EventProvider {
     await mkdir(this.directory, { recursive: true, mode: 0o700 });
     const extension = join(this.directory, "concors-approvals.mjs");
     await writeFile(extension, guard, { mode: 0o600 });
+    let markReady: (value: Record<string, unknown>) => void = () => {
+      /* Only OMP waits for readiness. */
+    };
+    let rejectReady: (error: Error) => void = () => {
+      /* Only OMP waits for readiness. */
+    };
+    const ready =
+      this.engine === "omp"
+        ? new Promise<Record<string, unknown>>((resolve, reject) => {
+            markReady = resolve;
+            rejectReady = reject;
+          })
+        : null;
     const rpc = new JsonLines(
-      launch(
-        "pi",
+      this.launcher(
+        this.engine,
         [
           "--mode",
-          "rpc",
-          "--extension",
-          extension,
+          this.engine === "omp" ? "rpc-ui" : "rpc",
+          ...(this.engine === "omp"
+            ? ["--approval-mode", "always-ask"]
+            : ["--extension", extension]),
           ...(file ? ["--session", file] : ["--no-session"]),
         ],
         this.cwd,
       ),
       (e) => {
+        if (e["type"] === "ready") markReady(e);
         void this.event(e).catch((error) => {
           if (this.rpc === rpc && !this.interrupted) this.fail(error);
         });
       },
       (error) => {
+        rejectReady(error);
         if (this.rpc === rpc) this.fail(error);
       },
     );
     this.rpc = rpc;
+    if (ready) {
+      const timer = setTimeout(() => rejectReady(new Error("OMP did not become ready")), 20000);
+      try {
+        const handshake = await ready;
+        if (supportsJsonlRpcProtocolV2(handshake)) {
+          const negotiated = object(
+            await rpc.request("negotiate_protocol", { protocolVersion: 2 }),
+          );
+          if (negotiated["protocolVersion"] !== 2)
+            throw new Error("OMP did not accept RPC protocol v2");
+        }
+      } finally {
+        clearTimeout(timer);
+      }
+    }
     const state = object(await rpc.request("get_state"));
     this.model = object(state["model"] ?? {});
     this.thinkingLevel = string(state["thinkingLevel"]) || "off";
@@ -95,7 +137,9 @@ export class PiProvider extends EventProvider {
       ],
     });
     try {
-      const commands = object(await rpc.request("get_commands"));
+      const commands = object(
+        await rpc.request(this.engine === "omp" ? "get_available_commands" : "get_commands"),
+      );
       for (const raw of array(commands["commands"])) {
         const command = object(raw),
           name = string(command["name"]);
@@ -273,12 +317,28 @@ export class PiProvider extends EventProvider {
         this.rpc?.write({ type: "extension_ui_response", id, cancelled: true, confirmed: false });
         return;
       }
+      if (
+        this.engine === "omp" &&
+        e["method"] === "select" &&
+        string(e["title"]).startsWith("Allow tool: ") &&
+        array(e["options"]).includes("Approve") &&
+        array(e["options"]).includes("Deny")
+      ) {
+        const allowed = await this.permission(string(e["title"]), e["message"]);
+        this.rpc?.write({
+          type: "extension_ui_response",
+          id,
+          value: allowed ? "Approve" : "Deny",
+          ...(this.interrupted ? { cancelled: true } : {}),
+        });
+        return;
+      }
       if (e["method"] === "confirm") {
         const confirmed = await this.permission(string(e["title"]), e["message"]);
         this.rpc?.write({ type: "extension_ui_response", id, confirmed });
         return;
       }
-      if (e["method"] === "select" || e["method"] === "input") {
+      if (e["method"] === "select" || e["method"] === "input" || e["method"] === "editor") {
         const options =
           e["method"] === "select"
             ? array(e["options"]).map((label) => ({ label: String(label), description: "" }))

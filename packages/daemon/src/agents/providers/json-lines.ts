@@ -1,8 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
-import { object } from "./contract.ts";
+import { JsonlFrameDecoder } from "./jsonl-frame-decoder.ts";
 export class JsonLines {
-  private buffer = "";
   private pending = new Map<
     string,
     {
@@ -12,6 +11,7 @@ export class JsonLines {
     }
   >();
   private ended = false;
+  private startupProblem: string | undefined;
   private exit: Promise<void>;
   private child: ChildProcessWithoutNullStreams;
   private event: (value: Record<string, unknown>) => void;
@@ -26,35 +26,37 @@ export class JsonLines {
     this.failure = failure;
     this.exit = new Promise((resolve) => child.once("close", () => resolve()));
     child.stdout.setEncoding("utf8");
+    const decoder = new JsonlFrameDecoder({
+      frame: (frame) => {
+        const pending = this.pending.get(String(frame["id"]));
+        if (frame["type"] === "response" && pending) {
+          this.pending.delete(String(frame["id"]));
+          clearTimeout(pending.timer);
+          if (frame["success"] === true) pending.resolve(frame["data"]);
+          else pending.reject(new Error(String(frame["error"] ?? "Provider request failed")));
+        } else this.event(frame);
+      },
+      problem: (problem) => this.fail(new Error(`Invalid provider frame: ${problem}`)),
+    });
     child.stdout.on("data", (chunk: string) => {
       try {
-        this.buffer += chunk;
-        let index;
-        while ((index = this.buffer.indexOf("\n")) >= 0) {
-          const line = this.buffer.slice(0, index);
-          this.buffer = this.buffer.slice(index + 1);
-          if (Buffer.byteLength(line) > 2 * 1024 * 1024)
-            throw new Error("Provider frame too large");
-          if (!line.trim()) continue;
-          const frame = object(JSON.parse(line));
-          const pending = this.pending.get(String(frame["id"]));
-          if (frame["type"] === "response" && pending) {
-            this.pending.delete(String(frame["id"]));
-            clearTimeout(pending.timer);
-            if (frame["success"] === true) pending.resolve(frame["data"]);
-            else pending.reject(new Error(String(frame["error"] ?? "Provider request failed")));
-          } else this.event(frame);
-        }
-        if (Buffer.byteLength(this.buffer) > 2 * 1024 * 1024)
-          throw new Error("Provider frame too large");
-      } catch (e) {
-        this.fail(e instanceof Error ? e : new Error(String(e)));
+        decoder.write(chunk);
+      } catch (error) {
+        this.fail(error instanceof Error ? error : new Error(String(error)));
       }
     });
     child.stdin.on("error", (e) => this.fail(e));
     child.on("error", (e) => this.fail(e));
-    child.on("close", () => this.fail(new Error("Provider process exited")));
-    child.stderr.resume();
+    child.on("close", (code) =>
+      this.fail(
+        new Error(this.startupProblem ?? `Provider process exited (code ${code ?? "unknown"})`),
+      ),
+    );
+    child.stderr.on("data", (chunk: Buffer) => {
+      if (chunk.toString().includes("No models available"))
+        this.startupProblem =
+          "No models available. Sign in with this provider's CLI or add its credentials in Settings → Providers.";
+    });
   }
   private fail(error: Error) {
     if (this.ended) return;
