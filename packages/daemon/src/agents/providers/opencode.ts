@@ -454,8 +454,10 @@ export class OpenCodeProvider extends EventProvider {
       )
         this.summaries.add(string(info["id"]));
       if (info["role"] === "assistant") {
-        if (info["providerID"] && info["modelID"])
+        if (info["providerID"] && info["modelID"]) {
           this.currentModel = string(info["providerID"]) + "/" + string(info["modelID"]);
+          this.emit("session/model/updated", { model: this.currentModel });
+        }
         this.updateUsage(info["tokens"]);
       }
       if (info["error"]) this.finish(string(object(info["error"])["message"]) || "OpenCode failed");

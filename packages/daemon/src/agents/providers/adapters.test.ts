@@ -79,7 +79,10 @@ it("maps Claude streaming and tool decisions, interrupts, and resumes the native
     };
     return Object.assign(messages, {
       initializationResult: async () => ({}),
-      supportedModels: async () => [{ value: "sonnet", displayName: "Sonnet" }],
+      supportedModels: async () => [
+        { value: "sonnet", displayName: "Sonnet", resolvedModel: "claude-sonnet-5" },
+      ],
+      getContextUsage: async () => ({ model: "claude-sonnet-5" }),
       setModel: async () => undefined,
       setPermissionMode: async () => undefined,
       interrupt: interrupts,
@@ -93,6 +96,10 @@ it("maps Claude streaming and tool decisions, interrupts, and resumes the native
   const { notifications, failures } = observe(provider);
   await provider.initialize();
   const session = object(await provider.request("thread/start"));
+  expect(session["model"]).toBe("claude-sonnet-5");
+  expect(await provider.request("model/list")).toMatchObject({
+    data: [{ model: "sonnet", resolvedModel: "claude-sonnet-5" }],
+  });
   await provider.request("turn/start", turn);
   expect(options!.permissionMode).toBe("default");
   expect(options!.allowDangerouslySkipPermissions).toBeUndefined();
