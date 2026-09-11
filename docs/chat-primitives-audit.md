@@ -1,8 +1,7 @@
 # Chat primitives: implementation audit
 
 September 11, 2026. This extends the [provider audit](unified-chat-parity-audit.md)
-beyond compaction and session controls. It compares Concors at `f61d75c` with
-[Paseo `d7c7044`](https://github.com/getpaseo/paseo/tree/d7c7044dfc91d1d18721dc8757ac3bb913d8c232).
+beyond compaction and session controls, starting from Concors `f61d75c`.
 The implementation also incorporates main through `007d27d`, including account
 sign-in, machine selection, and empty Codex thread recovery.
 
@@ -55,7 +54,7 @@ history is not discarded, and failed prompts are not replayed.
 - Codex async answers use Concors's durable follow-up queue. They are delivered
   after the active turn; they do not silently steer or interrupt current work.
   After Stop/failure/daemon restart the queue stays paused until resumed. The
-  question card explains this delivery model. Paseo can steer an active turn.
+  question card explains this delivery model.
 - Blocking native permission requests cannot survive a dead provider process.
   They are retired on interruption/restart; Concors never replays an approval.
   Async questions can survive because they do not depend on a live RPC resolver.
@@ -75,11 +74,6 @@ history is not discarded, and failed prompts are not replayed.
   authenticated, or that browser tests certify physical iOS/Android behavior.
 
 ## Evidence
-
-Reference paths inspected in the pinned Paseo source include `agent-types.ts`,
-`question-form-card-core.ts`, Claude `task-state.ts` and `agent.ts`, Codex
-`async-questions.ts` and its app-server adapter, OpenCode's adapter, Pi's extension
-UI mapping, OMP custom-message handling, and ACP plan/permission mapping.
 
 Regression coverage lives in:
 
