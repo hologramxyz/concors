@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { AgentControlsSchema, AgentFeatureValueSchema } from "./agent-controls.ts";
-import { ProviderIdSchema } from "./providers.ts";
+import { ProviderIdSchema, ProviderEngineSchema } from "./providers.ts";
 import { providerPresets } from "./provider-presets.ts";
 const Id = z.string().uuid();
 export const MAX_AGENT_MODELS = 4096;
@@ -44,6 +44,7 @@ export const AgentQuestionSchema = z.object({
   header: z.string(),
   question: z.string(),
   isSecret: z.boolean().default(false),
+  required: z.boolean().optional(),
   multiSelect: z.boolean().optional(),
   allowOther: z.boolean().optional(),
   options: z
@@ -51,11 +52,22 @@ export const AgentQuestionSchema = z.object({
     .nullable()
     .default(null),
 });
+export type AgentQuestion = z.infer<typeof AgentQuestionSchema>;
 export const AgentPendingSchema = z.object({
   id: Id,
   turnId: z.string(),
-  kind: z.enum(["approval", "questions"]),
+  kind: z.enum(["approval", "questions", "elicitation"]),
   title: z.string(),
+  elicitation: z
+    .object({ schema: z.record(z.string(), z.unknown()), url: z.string().url().optional() })
+    .optional(),
+  decisionLabels: z
+    .object({
+      accept: z.string().max(100).optional(),
+      decline: z.string().max(100).optional(),
+      cancel: z.string().max(100).optional(),
+    })
+    .optional(),
   summary: z.string().default(""),
   detail: z.string(),
   decisions: z.array(z.enum(["accept", "decline", "cancel"])),
@@ -106,6 +118,8 @@ export const AgentInfoSchema = z.object({
   id: Id,
   projectId: Id,
   provider: AgentProviderIdSchema,
+  engine: ProviderEngineSchema.optional(),
+  providerLabel: z.string().max(100).optional(),
   name: z.string(),
   directory: z.string(),
   model: z.string().nullable(),
@@ -125,6 +139,7 @@ export const AgentInfoSchema = z.object({
     .max(20)
     .optional(),
   queuePaused: z.boolean().optional(),
+  historyRevision: z.number().int().nonnegative().optional(),
   context: z
     .object({
       used: z.number().nonnegative(),
@@ -174,7 +189,46 @@ export const AgentConversationSchema = z.object({
   hasMore: z.boolean(),
 });
 export type AgentConversation = z.infer<typeof AgentConversationSchema>;
+export const NativeSessionSchema = z.object({
+  id: z.string().min(1).max(4096),
+  title: z.string().max(4000),
+  directory: z.string(),
+  updatedAt: z.string().datetime(),
+});
+export type NativeSession = z.infer<typeof NativeSessionSchema>;
 export const AgentOperationSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("child-history"),
+    sessionId: Id,
+    itemId: z.string().min(1).max(4096),
+    childId: z.string().min(1).max(4096),
+  }),
+  z.object({ kind: z.literal("mcp-status"), sessionId: Id }),
+  z.object({ kind: z.literal("sessions-list"), sessionId: Id }),
+  z.object({
+    kind: z.literal("import-session"),
+    sessionId: Id,
+    nativeSessionId: z.string().min(1).max(4096),
+    expectedRevision: z.number().int().nonnegative(),
+  }),
+  z.object({
+    kind: z.literal("fork-session"),
+    sessionId: Id,
+    expectedRevision: z.number().int().nonnegative(),
+  }),
+  z.object({
+    kind: z.literal("rewind"),
+    sessionId: Id,
+    turnId: z.string().min(1),
+    mode: z.enum(["conversation", "files", "both"]),
+    expectedRevision: z.number().int().nonnegative(),
+  }),
+  z.object({
+    kind: z.literal("steer"),
+    sessionId: Id,
+    turnId: z.string().min(1),
+    text: z.string().trim().min(1).max(16000),
+  }),
   z
     .object({
       kind: z.literal("queue-add"),
@@ -258,6 +312,12 @@ export const AgentResultSchema = z.object({
       status: z.literal("ok"),
       conversation: AgentConversationSchema,
       providers: z.array(AgentProviderCatalogSchema).max(128).optional(),
+      sessions: z.array(NativeSessionSchema).max(100).optional(),
+      childItems: z.array(AgentItemSchema).max(80).optional(),
+      servers: z
+        .array(z.object({ name: z.string(), status: z.string() }))
+        .max(100)
+        .optional(),
     }),
     z.object({ status: z.literal("error"), message: z.string() }),
   ]),

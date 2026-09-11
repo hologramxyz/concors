@@ -34,7 +34,10 @@ export const AgentControlsSchema = z.object({
   steer: z.boolean().default(false),
   rewind: z.array(z.enum(["conversation", "files", "both"])).default([]),
   fork: z.boolean().default(false),
+  childHistory: z.boolean().default(false),
+  importSessions: z.boolean().default(false),
   history: z.boolean().default(false),
+  mcpStatus: z.boolean().default(false),
   mcp: z.boolean().default(false),
 });
 export type AgentControls = z.infer<typeof AgentControlsSchema>;

@@ -6,6 +6,30 @@ export const ProviderIdSchema = z
   .max(100)
   .regex(/^[a-z][a-z0-9_-]*$/);
 export const ProviderEngineSchema = z.enum(["codex", "claude", "opencode", "pi", "omp", "acp"]);
+export const McpServerSchema = z.discriminatedUnion("type", [
+  z.object({
+    name: z
+      .string()
+      .min(1)
+      .max(100)
+      .regex(/^[a-zA-Z0-9_-]+$/),
+    type: z.literal("stdio"),
+    command: z.string().min(1).max(4096),
+    args: z.array(z.string().max(4096)).max(64).default([]),
+    env: z.record(z.string(), z.string().max(16000)).optional(),
+  }),
+  z.object({
+    name: z
+      .string()
+      .min(1)
+      .max(100)
+      .regex(/^[a-zA-Z0-9_-]+$/),
+    type: z.enum(["http", "sse"]),
+    url: z.string().url().max(4096),
+    headers: z.record(z.string(), z.string().max(16000)).optional(),
+  }),
+]);
+export type McpServer = z.infer<typeof McpServerSchema>;
 export const ProviderConfigSchema = z.object({
   id: ProviderIdSchema,
   label: z.string().trim().min(1).max(100),
@@ -14,15 +38,22 @@ export const ProviderConfigSchema = z.object({
   enabled: z.boolean(),
   env: z.record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/), z.string().max(16000)).optional(),
   models: z.array(z.string().min(1).max(1024)).max(4096).optional(),
-  params: z.object({ supportsMcpServers: z.boolean().optional() }).optional(),
+  params: z
+    .object({
+      supportsMcpServers: z.boolean().optional(),
+      mcpServers: z.array(McpServerSchema).max(32).optional(),
+    })
+    .optional(),
 });
 export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
 export type ProviderPreset = ProviderConfig & {
   install?: { kind: "npm" | "npx"; package: string; bin?: string };
   installLink: string;
 };
-export const ProviderStatusSchema = ProviderConfigSchema.omit({ env: true }).extend({
+export const ProviderStatusSchema = ProviderConfigSchema.omit({ env: true, params: true }).extend({
   envKeys: z.array(z.string()),
+  params: z.object({ supportsMcpServers: z.boolean().optional() }).optional(),
+  mcpServerNames: z.array(z.string()).optional(),
   installed: z.boolean(),
   customized: z.boolean(),
   canInstall: z.boolean(),
