@@ -25,6 +25,12 @@ Named-theme terminals use the same canvas unless a custom theme explicitly overr
 terminal colors. Passing regression coverage includes switching palettes, custom files,
 and falling back after a custom file is removed.
 
+The second pass confirmed two more recovery issues in the file editor and provider
+settings. Transient polling warnings now clear when reads recover, without clearing or
+replacing failed-save feedback. File drafts and provider form edits are preserved.
+Three additional file-state unit tests and two browser scenarios cover recovery and
+verify that a rendered refresh cannot make an unsuccessful save appear successful.
+
 Each runtime fix is a separate commit with its regression coverage. Separate test-only
 commits update intentional provider-picker/attachment-preview UI expectations and wait
 for dialog focus restoration before typing into a terminal. No product shortcut behavior
@@ -36,22 +42,24 @@ No checks were removed, and this does not resolve the separate account billing b
 
 ## Audit passes
 
-- Initial pass completed (started at 07:52 UTC). Follow-up passes are planned around 10:52 and 13:52 UTC.
+- Initial pass completed (started at 07:52 UTC).
+- Second pass completed at 11:21 UTC (started at 10:52 UTC), adding two confirmed recovery fixes.
+- Final pass is planned around 13:52 UTC.
 - Follow-ups are part of the active audit session, not a permanently installed scheduler.
 
 ## Validation
 
-- Workspace unit suite after the fixes: 527 passed, one optional live-API integration test skipped.
+- Workspace unit suite after the fixes: 530 passed, one optional live-API integration test skipped.
 - Final workspace typecheck and repository lint/format checks passed.
 - Final desktop web and daemon builds passed, as did the bundled mobile renderer and JavaScript/Hermes exports for web, Android and iOS.
 - Isolated Linux daemon bundle smoke passed: version, health, workspace, terminal input/output, resize and stop.
-- Desktop acceptance: 55 scenarios exercised. Attachment recovery passed three repeats,
+- Desktop acceptance: all 57 scenarios passed in a clean full run during the second pass (8.1 minutes). Attachment recovery passed three repeats,
   and all three shortcut scenarios passed three repeats after explicit focus synchronization.
-- Phone-size browser suites: 37 passed (26 demo/native bridge, 10 direct-daemon, one managed phone/desktop integration). The initial demo baseline had 25 passes and one confirmed theme failure; all 26 passed after the fix.
-- The latest full desktop run finished with 54 passes and one interrupted reload (8.3 minutes).
+- Phone-size browser suites: 37 passed (26 demo/native bridge, 10 direct-daemon, one managed phone/desktop integration). All 10 direct-daemon scenarios passed again during the second pass (4.4 minutes). The initial demo baseline had 25 passes and one confirmed theme failure; all 26 passed after the fix.
+- An earlier full desktop run finished with 54 passes and one interrupted reload (8.3 minutes).
   Its trace shows Chromium `ERR_NETWORK_CHANGED` failures loading app modules; the app did not
-  mount. The unchanged palette/reload scenario then passed three separate repeats. A further
-  clean full-suite run is planned for the next audit pass; this run is not reported as all-green.
+  mount. The unchanged palette/reload scenario then passed three separate repeats, followed
+  by the clean full-suite run above. No app behavior or assertions were changed for that interruption.
 
 ## Remaining validation boundaries
 
@@ -64,7 +72,7 @@ No checks were removed, and this does not resolve the separate account billing b
   or an end-to-end production account lifecycle.
 - The optional dependency advisory scan is awaiting approval to send dependency metadata
   to the registry. This audit does not assert dependency-vulnerability clearance.
-- The repository's latest main CI run did not start any job steps because of an account
+- Both the repository's main CI and this PR's CI did not start any job steps because of an account
   payment/spending-limit blocker. Local results do not replace the unexecuted native CI
   checks; no billing settings or CI bypasses were changed.
 - The web build still emits its existing large-chunk warning. Passing builds and interaction
