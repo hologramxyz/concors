@@ -12,12 +12,12 @@ export function MachineUsage({ machine }: { readonly machine: Machine }) {
   const usage = machine.resourceUsage;
   if (freshness === "unavailable" || !usage)
     return (
-      <p className="mt-4 border-t pt-3 text-xs text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         Usage unavailable · waiting for a resource report
       </p>
     );
   return (
-    <section aria-label={`${machine.name} resource usage`} className="mt-4 border-t pt-3">
+    <section aria-label={`${machine.name} resource usage`} className="min-w-0">
       <div className="grid gap-4 sm:grid-cols-2">
         {(["memory", "disk"] as const).map((kind) => {
           const value = usage[kind];
@@ -25,9 +25,9 @@ export function MachineUsage({ machine }: { readonly machine: Machine }) {
           const percent = value ? usagePercent(value) : null;
           return (
             <div key={kind}>
-              <div className="mb-1.5 flex justify-between text-xs">
+              <div className="mb-2 flex justify-between text-sm">
                 <span className="text-muted-foreground">{label}</span>
-                <span className="tabular-nums">
+                <span className="font-medium tabular-nums">
                   {percent === null ? "Unavailable" : `${percent}%`}
                 </span>
               </div>
@@ -40,7 +40,7 @@ export function MachineUsage({ machine }: { readonly machine: Machine }) {
                     aria-valuemax={100}
                     aria-valuenow={percent ?? 0}
                     aria-valuetext={`${percent}%${freshness === "stale" ? ", last reported" : ""}`}
-                    className="h-1.5 overflow-hidden rounded-full bg-muted"
+                    className="h-2 overflow-hidden rounded-full bg-muted"
                   >
                     <div
                       className={
@@ -51,11 +51,11 @@ export function MachineUsage({ machine }: { readonly machine: Machine }) {
                       style={{ width: `${percent}%` }}
                     />
                   </div>
-                  <p className="mt-1.5 text-xs text-muted-foreground tabular-nums">
+                  <p className="mt-2 text-xs text-muted-foreground tabular-nums">
                     {formatResourceBytes(value.totalBytes - value.availableBytes)} /{" "}
                     {formatResourceBytes(value.totalBytes)} used
-                    <span className="ml-2">
-                      · {formatResourceBytes(value.availableBytes)} available
+                    <span className="mt-1 block">
+                      {formatResourceBytes(value.availableBytes)} available
                     </span>
                   </p>
                 </>
@@ -64,7 +64,7 @@ export function MachineUsage({ machine }: { readonly machine: Machine }) {
           );
         })}
       </div>
-      <p className="mt-3 text-[11px] text-muted-foreground">
+      <p className="mt-4 text-xs text-muted-foreground">
         {freshness === "stale" ? "Out of date · last updated " : "Updated "}
         <time dateTime={usage.sampledAt} title={new Date(usage.sampledAt).toLocaleString()}>
           {new Date(usage.sampledAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
