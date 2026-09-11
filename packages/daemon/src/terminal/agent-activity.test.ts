@@ -121,8 +121,16 @@ it("only uses live, anchored working indicators as a screen fallback", () => {
   const working = "• Working (5s • esc to interrupt)";
   expect(terminalAgentActivity("codex", "", [working, "", ""])).toBe("working");
   expect(terminalAgentActivity("codex", "", [working, "old", "output", "prompt"])).toBe("unknown");
-  expect(terminalAgentActivity("codex", "", [`› Explain ${working}`])).toBe("unknown");
+  expect(terminalAgentActivity("codex", "", [`› Explain ${working}`])).toBe("idle");
   expect(terminalAgentActivity("codex", "", ["CODEX_TERMINAL_READY"])).toBe("unknown");
+});
+it("recognizes Codex returning to its prompt when OSC titles are disabled", () => {
+  expect(
+    terminalAgentActivity("codex", "", ["Response complete", "› ", "? for shortcuts"], "working"),
+  ).toBe("idle");
+  expect(terminalAgentActivity("codex", "", ["• Working (5s • esc to interrupt)", "› "])).toBe(
+    "working",
+  );
 });
 
 it("recognizes Claude busy titles without inventing activity for ordinary shells", () => {

@@ -7,6 +7,8 @@ export const TerminalProfileSchema = z.enum(["shell", "codex", "claude", "openco
 export type TerminalProfile = z.infer<typeof TerminalProfileSchema>;
 export const TerminalInfoSchema = z.object({
   agentActivity: z.enum(["unknown", "idle", "working", "needs_input"]).optional(),
+  // Separate from activity so older clients can still parse the idle state.
+  agentTurnCompleted: z.boolean().optional(),
   id: Id,
   projectId: Id,
   profile: TerminalProfileSchema,

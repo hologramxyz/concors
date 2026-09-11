@@ -1,5 +1,10 @@
 import { LoaderCircle } from "lucide-react";
-import { agentProviderName, type AgentInfo } from "@concors/protocol";
+import {
+  agentProviderName,
+  agentModelName,
+  agentModelSelection,
+  type AgentInfo,
+} from "@concors/protocol";
 import { ControlPicker } from "./control-picker";
 import { ProviderIcon } from "./provider-icon";
 import { useAgentModelSelection } from "./use-model-selection";
@@ -15,17 +20,16 @@ export function AgentModelPicker({
   showValue?: boolean;
   onSelect: (model: string | null) => void;
 }) {
-  const { currentModels, model, providers, load, choose, loading, switching, error } =
-    useAgentModelSelection(agent, onSelect);
+  const { currentModels, providers, load, choose, loadingProvider, switching, error } =
+    useAgentModelSelection(agent, onSelect, !disabled && agent.status !== "starting");
+  const selected = agentModelSelection(agent, currentModels);
   return (
     <>
       <ControlPicker
         label="Agent and model"
         showValue={showValue}
-        selectedLabel={
-          currentModels.find((m) => m.id === model)?.label ?? model ?? "Machine default"
-        }
-        value={agent.settings?.model ?? ""}
+        selectedLabel={selected.label}
+        value={selected.value}
         icon={
           agent.status === "starting" || switching ? (
             <LoaderCircle className="size-4 animate-spin" />
@@ -38,26 +42,29 @@ export function AgentModelPicker({
         selectedGroupId={agent.provider}
         onOpen={() => void load()}
         onGroupChange={(id) => void load(id)}
-        status={loading ? "Loading providers…" : undefined}
         groups={providers.map((p) => ({
           id: p.id,
           label: p.label ?? agentProviderName(p.id),
           description: p.id === agent.provider ? "Current conversation" : "Starts a new chat",
           icon: <ProviderIcon provider={p.id} />,
-          emptyMessage: p.error,
+          emptyMessage: p.error ?? "No models reported. Check this provider in Settings.",
+          status: loadingProvider === p.id && !p.models.length ? "Loading models…" : p.error,
           options: [
-            {
-              id: "",
-              label: "Machine default",
-              description:
-                p.id === agent.provider
-                  ? (agent.model ?? "Use the provider’s default model")
-                  : "Start a new conversation with this provider",
-              icon: <ProviderIcon provider={p.id} />,
-            },
+            // Keep provider switching/sign-in possible when an older or signed-out
+            // provider cannot report models yet; never invent a concrete model.
+            ...(!p.models.length
+              ? [
+                  {
+                    id: "",
+                    label: `Use ${p.label ?? agentProviderName(p.id)}`,
+                    description: "Let this provider choose the model",
+                    icon: <ProviderIcon provider={p.id} />,
+                  },
+                ]
+              : []),
             ...p.models.map((m) => ({
               id: m.id,
-              label: m.label,
+              label: agentModelName(m, p.models),
               icon: <ProviderIcon provider={p.id} />,
             })),
           ],
