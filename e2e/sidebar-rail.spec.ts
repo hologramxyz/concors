@@ -9,10 +9,10 @@ import type { Locator, Page } from "@playwright/test";
 async function hoverControl(page: Page, control: Locator) {
   await control.scrollIntoViewIfNeeded();
   const bounds = await control.boundingBox();
-  expect(bounds).not.toBeNull();
+  if (!bounds) throw new Error("Cannot hover a hidden sidebar control");
   // Trace a real pointer path instead of teleporting into a neighboring
   // tooltip's hoverable-content grace area.
-  await page.mouse.move(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2, {
+  await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, {
     steps: 10,
   });
 }
