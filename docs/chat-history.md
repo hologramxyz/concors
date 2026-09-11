@@ -19,6 +19,9 @@ Desktop and mobile use the same conversation controller and scroll behavior:
   They do not automatically loop on an unavailable connection.
 - History revision changes invalidate pending reads before reloading the current
   transcript, so truncated history cannot reappear from a late response.
+- The sent-message navigator can jump to either side of the current window. It
+  fetches bounded context around the selected prompt, then resumes automatic
+  scrolling. New prompts stay indexed while the reader is viewing older history.
 
 The read protocol accepts either an exclusive `before` or `after` position, not both.
 Responses remain limited to 80 items and the existing payload-size budget. `hasMore`
