@@ -41,12 +41,16 @@ function DialogOverlay({
 function DialogContent({
   className,
   children,
+  size = "default",
   showCloseButton = true,
+  closeLabel = "Close",
   onOpenAutoFocus,
   onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
+  size?: "default" | "wide";
   showCloseButton?: boolean;
+  closeLabel?: string;
 }) {
   const compact = React.useContext(CompactLayoutContext);
   const returnFocus = React.useRef<HTMLElement | null>(null);
@@ -55,6 +59,7 @@ function DialogContent({
       <DialogOverlay className={compact ? "mobile-drawer-overlay" : undefined} />
       <DialogPrimitive.Content
         data-slot="dialog-content"
+        data-size={size}
         data-mobile-drawer={compact || undefined}
         onOpenAutoFocus={(event) => {
           returnFocus.current =
@@ -80,7 +85,8 @@ function DialogContent({
           });
         }}
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-5 overflow-y-auto rounded-xl bg-popover p-6 text-[15px] text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-xl data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "chat-scroll fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] min-w-0 -translate-x-1/2 -translate-y-1/2 flex-col gap-5 overflow-y-auto overscroll-contain rounded-xl bg-popover p-6 text-[15px] text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none motion-reduce:animate-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          size === "wide" ? "max-w-3xl" : "max-w-xl",
           className,
         )}
         {...props}
@@ -89,9 +95,9 @@ function DialogContent({
         {children}
         {showCloseButton && (
           <DialogPrimitive.Close data-slot="dialog-close" asChild>
-            <Button variant="ghost" className="absolute top-2 right-2" size="icon-sm">
-              <XIcon />
-              <span className="sr-only">Close</span>
+            <Button variant="ghost" className="absolute top-3 right-3" size="icon">
+              <XIcon className="size-4.5" />
+              <span className="sr-only">{closeLabel}</span>
             </Button>
           </DialogPrimitive.Close>
         )}
@@ -102,7 +108,21 @@ function DialogContent({
 
 function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    <div data-slot="dialog-header" className={cn("flex flex-col gap-2", className)} {...props} />
+    <div
+      data-slot="dialog-header"
+      className={cn("flex min-w-0 shrink-0 flex-col gap-2 pr-8", className)}
+      {...props}
+    />
+  );
+}
+
+function DialogBody({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="dialog-body"
+      className={cn("chat-scroll min-h-0 min-w-0 overflow-y-auto overscroll-contain", className)}
+      {...props}
+    />
   );
 }
 
@@ -118,7 +138,7 @@ function DialogFooter({
     <div
       data-slot="dialog-footer"
       className={cn(
-        "-mx-6 -mb-6 flex flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/50 p-6 sm:flex-row sm:justify-end",
+        "-mx-6 -mb-6 flex shrink-0 flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/50 p-6 sm:flex-row sm:justify-end",
         className,
       )}
       {...props}
@@ -137,7 +157,7 @@ function DialogTitle({ className, ...props }: React.ComponentProps<typeof Dialog
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn("font-heading text-xl leading-none font-medium", className)}
+      className={cn("font-heading text-xl leading-snug font-medium break-words", className)}
       {...props}
     />
   );
@@ -161,6 +181,7 @@ function DialogDescription({
 
 export {
   Dialog,
+  DialogBody,
   DialogClose,
   DialogContent,
   DialogDescription,
