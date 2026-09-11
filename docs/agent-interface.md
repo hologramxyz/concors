@@ -1,15 +1,21 @@
 # Agent interface
 
-Choose **New tab → Agent** to start a chat in a project. Codex is the initial provider.
-Open **Agent and model → Back to providers** to choose Claude Code, OpenCode, or Pi.
-The machine must have the corresponding CLI installed on its PATH and signed in
-with your account. Provider discovery requires the daemon's `agent-providers`
-capability; older daemons keep their existing Codex model picker.
+Choose **New tab → Agent**, then select an installed provider. Open
+**Agent and model → Back to providers** to browse another provider's models.
+Selecting one creates a separate conversation in the same folder; the original
+chat and any running work remain available. Concors does not replay a transcript
+into a different agent.
+
+Open **Settings → Providers** to install supported packages on the connected
+machine, enable providers, or configure a profile. Sign in with your own CLI
+account using a regular terminal. Installation is separate from authentication.
+See [provider support](unified-chat-provider-support.md) for the exact capability
+matrix, configuration details, and verification limits.
 
 ## Paseo reuse
 
-See the [unified chat parity audit](unified-chat-parity-audit.md) for current
-provider coverage, reproduced defects, and remaining integration work. The
+See [provider support](unified-chat-provider-support.md) for current behavior and
+the [historical parity audit](unified-chat-parity-audit.md) for the original defects. The
 earlier [UI audit](paseo-ui-audit.md) records the initial composer/timeline port.
 
 The following source files were imported from `getpaseo/paseo` revision
@@ -42,92 +48,59 @@ parser licenses remain with the dependency.
 
 ## Behavior
 
-- New, split, and converted Agent panes prepare their session automatically and open
-  an empty conversation with the normal composer at the bottom. No message is sent
-  until submitted. Pane titles use the same live session name as the sidebar.
-- Loading and working indicators follow the machine's authoritative status.
-- Codex tool calls expand to show command output, exit codes, and file diffs.
-  Plans show steps and completion counts. Sub-agent cards show provider-reported
-  status and messages; they are inline activity, not separate navigable child
-  conversations. Other adapters currently show generic tool input/output and do
-  not preserve the same specialized tool or child-agent presentation.
-- Codex thinking cards show provider-authored summaries, never raw reasoning content.
-- Model choices come from each installed CLI's model catalog. Codex also exposes thinking efforts.
-  Settings are saved with the agent and broadcast across clients. Concurrent edits
-  reject stale revisions. Controls remain available during active turns; changes apply to the next message.
-- The model picker opens on the current provider's models. A back arrow above search
-  returns to the provider list; choosing a provider opens its model page without
-  changing the current model. Search resets between pages. Escape closes the picker
-  and returns focus to its button. Models load when the session starts; the manual
-  Refresh models action has been removed. Installed providers are discovered when
-  the picker opens; catalogs are cached for 30 seconds. Unavailable catalogs show
-  an installation/sign-in error. OpenCode models are limited to connected accounts.
-  Selecting another provider's model starts a new chat tab in the same folder.
-  The original chat and any running turn remain intact; no messages are replayed
-  into the new provider. Retrying the same switch request cannot create two tabs.
-- Codex default permissions use workspace-write and on-request approvals. Auto-review
-  sends `approvalsReviewer: auto_review` with the same sandbox (requires Codex
-  0.115.0 or newer). Full access explicitly selects danger-full-access and no
-  approval prompts. Provider errors surface in the conversation.
-- Claude Code uses its SDK and normal CLI tool approvals. OpenCode runs a private,
-  authenticated loopback server with approval requests. Pi uses its RPC mode with
-  an explicit extension that requests confirmation before each tool call.
-  Approvals and supported questions appear in the shared chat interface.
-  These providers expose model selection, streaming replies, tool activity, and
-  interruption. Codex-specific permission modes, thinking effort, plan mode,
-  speed tiers, and context usage are not exposed for them. They do not inherit
-  Codex's OS sandbox; each CLI retains its own execution and account settings.
-- Native compaction is not consistently integrated. Claude's SDK can recognize
-  `/compact`, but its compaction status is not rendered. Codex, OpenCode, and Pi
-  receive it as ordinary prompt text instead of an explicit compaction operation.
-  The approval action labeled “Cancel turn” currently only declines the tool in
-  the non-Codex adapters; the separate Stop action requests native interruption.
-  These are open defects, detailed in the parity audit.
-- Upload, paste, or drop up to three files, each at most 1 MiB. Images are native
-  provider image inputs; other files become machine-local file references. Uploads
-  stay in the daemon data directory under `attachments/<session-id>` with private
-  file permissions. They are retained with session history; automatic cleanup and
-  downloading old attachments are not implemented. Retried requests use the same
-  receipt and do not upload or send twice.
-- Codex Plan mode and model-provided speed tiers are exposed when available.
-  Plan mode uses read-only access, and disabling it restores the default workflow.
-- Enter sends; Shift+Enter adds a line. While working, Enter queues a follow-up.
-  Queues and drafts live in connection-scoped memory and survive pane/tab unmounts;
-  mobile retains a machine-scoped draft store across socket reconnection. They
-  do not survive a hard reload/app restart or transfer to another client. Queues
-  drain while their composer is mounted and connected, not independently on the
-  daemon. Delivered history, settings, and reported context usage are durable
-  and shared. An uncertain send retains its request ID for explicit retry,
-  including if another client already sees the turn running.
-- Context usage uses Codex's last-turn total against its reported context window;
-  the tooltip also shows cumulative usage. Unknown usage stays unknown.
-- Dictation uses `SpeechRecognition`/`webkitSpeechRecognition`, when the browser
-  provides it, and appends transcript text for review. It requires microphone
-  permission and may use the browser vendor's speech service. Unsupported browsers
-  and native webviews cannot use that API. The native iOS composer directs users
-  to keyboard dictation; no portable transcription backend is included yet.
+- Chat settings and working / needs input / done states come from the machine
+  and synchronize across clients. Model, thinking, mode, and feature controls
+  reflect the selected provider. Settings edits apply to the next message and
+  reject stale revisions.
+- Model catalogs load on demand. Qualified model IDs and image-input capabilities
+  are preserved. The native mobile bridge accepts the same bounded catalog as
+  desktop. There is no manual **Refresh models** action in the model picker.
+- Native commands and skills appear when reported by the provider. `/compact`
+  calls the provider's actual compaction operation and shows running, completed,
+  interrupted, or failed activity. Concors never presents an ordinary prompt as
+  successful compaction.
+- Tool cards preserve native command output, file changes, searches, and child
+  activity when supplied. Supported child conversations can be opened read-only.
+  Thinking cards show provider-authored summaries, not raw reasoning.
+- Tool denial and **Cancel turn** are separate actions. Cancellation interrupts
+  the turn, settles pending questions, and rejects late frames. Questions support
+  multiple selections and provider-specific MCP elicitation forms.
+- Codex defaults to workspace-write with on-request approvals. Auto-review uses
+  the same sandbox; full access explicitly removes those restrictions. Other
+  CLIs retain their own tool permissions and execution settings. A shared UI
+  does not give every CLI Codex's OS isolation.
+- **Import session**, **Fork session**, **Rewind**, **Steer current turn**, and
+  **MCP servers** appear only where the adapter exposes them. Rewind states
+  whether it changes conversation history, checkpointed files, or both. Forks
+  and imports open a separate chat; they send no prompt.
+- Enter sends; Shift+Enter adds a line. While working, Enter queues a follow-up
+  on the daemon. Up to 20 queued messages can continue after all clients close.
+  Stop, failure, and a daemon restart pause delivery until explicitly resumed.
+- Unsent drafts are scoped to machine and conversation. They survive view
+  unmounts; browser storage also preserves them for seven days when available.
+  Restricted webviews fall back to scoped memory. Uncertain sends retain their
+  request ID and require an explicit retry.
+- Attach up to three files, each at most 1 MiB. Images require the selected model
+  to support them; other files become machine-local references. Attachment bytes
+  stay in private daemon storage and are excluded from queue broadcasts.
+  Historical attachment download and automatic cleanup are not implemented.
+- Dictation uses the browser's SpeechRecognition API when available, with
+  microphone permission. Native iOS directs users to keyboard dictation. There
+  is no portable transcription backend in this change.
 
-Native session identifiers are saved with the conversation. Reopening a chat
-resumes its provider's session instead of sending the previous prompt again.
-Pi session files live under the daemon data directory; Claude Code and OpenCode
-use their native session stores. Keep those stores when moving a machine.
-Disconnecting the client leaves the daemon and its agents running. Restarting the
-daemon interrupts active turns; saved conversations can be continued afterward.
-Unreceived output from the other providers is not backfilled after a daemon crash.
+Native session IDs are durable. Reopening a conversation resumes its provider
+session; the native history adapters backfill available transcript output after
+restart using stable item identities. Keep the provider's session store when
+moving a machine. Disconnecting a client leaves the daemon and agents running;
+a daemon restart marks active turns interrupted and pauses their queues.
+
+The expanded protocol uses the `agent-providers-v2` client capability. An older
+client receives an explicit upgrade error before expanded agent messages reach
+its old parser. New clients retain the existing fallback for older daemons.
 
 ## Validation
 
-Daemon tests cover settings synchronization, stale edits, native turn parameters,
-attachment storage and request deduplication, structured progress, child activity,
-and context events. Provider tests cover model discovery without prompts, atomic
-switching, stale revisions, request deduplication, native streaming frames, tool
-approvals, interruption, and session resume. Browser acceptance covers the composer,
-rich timeline, queued follow-ups, switching to each provider, and returning to the
-original chat after reload. Speech recognition is
-stubbed in that test; it does not establish microphone/service support on a device.
-The imported submit helper is tested for preserved drafts on failure and receipt
-retry during an active turn.
-
-Pane profile changes detach the view binding without stopping its agent or terminal.
-The previous session remains discoverable. Workspace source packages are excluded
-from Vite prebundling so changed schemas reach the development client immediately.
+The [support report](unified-chat-provider-support.md#validation) records unit,
+browser, native CLI, and packaging evidence separately. Browser tests use
+controlled providers and do not certify account authentication or native iOS
+and Android controls on physical devices.
