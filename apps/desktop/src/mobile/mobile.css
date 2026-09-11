@@ -92,6 +92,17 @@ body {
 .mobile-files-tree button {
   min-height: 44px;
 }
+/* Touch arbitration stops at the nearest scroll container, not the shell.
+   Reserve horizontal navigation here while preserving native vertical scrolling. */
+.mobile-files-tree [data-file-directory],
+.mobile-files-editor [data-file-preview],
+.mobile-files-editor .cm-gutters,
+.mobile-files-editor .cm-gutter {
+  touch-action: pan-y pinch-zoom;
+}
+.mobile-files-editor .cm-gutters {
+  min-width: 28px;
+}
 .mobile-files-tree input {
   font-size: 16px;
   min-height: 44px;
@@ -138,54 +149,11 @@ body {
   overflow: auto;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 4px;
   padding: 2px;
 }
-.mobile-tab-card {
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  overflow: hidden;
-  background: color-mix(in srgb, var(--muted) 22%, var(--background));
-  flex-shrink: 0;
-}
-.mobile-tab-card[data-active="true"] {
-  border-color: color-mix(in srgb, var(--primary) 30%, var(--border));
-}
-.mobile-tab-card-heading {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 5px 6px;
-}
-.mobile-tab-choice {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  min-height: 44px;
-  align-items: center;
-  gap: 10px;
-  padding: 6px;
-  font-size: 15px;
-  font-weight: 600;
-  text-align: left;
-}
-.mobile-tab-choice > svg {
-  width: 18px;
-  height: 18px;
-  color: var(--muted-foreground);
-  flex-shrink: 0;
-}
-.mobile-tab-choice > span:first-of-type {
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.mobile-tab-panes {
-  padding: 0 6px 6px 18px;
-}
 .mobile-pane-row {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 2px;
@@ -229,7 +197,6 @@ body {
   color: var(--muted-foreground);
 }
 .mobile-row-actions:active,
-.mobile-tab-choice:active,
 .mobile-pane-choice:active {
   background: var(--muted);
 }
@@ -267,6 +234,9 @@ body {
 }
 .mobile-sidebar {
   position: absolute;
+  z-index: 0;
+  isolation: isolate;
+  overflow: hidden;
   inset: 0 auto 0 0;
   display: flex;
   flex-direction: column;
@@ -376,6 +346,10 @@ body {
   height: 44px;
   font-size: 18px;
 }
+.mobile-account-machine {
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
 .mobile-account-actions {
   display: flex;
   flex-direction: column;
@@ -400,10 +374,38 @@ body {
 }
 .mobile-workspace {
   position: absolute;
+  z-index: 1;
+  isolation: isolate;
   inset: 0;
+  overflow: hidden;
+  background: transparent;
+  transition:
+    transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-radius 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  box-shadow: -6px 0 24px #00000018;
+}
+/* Only the rounded rim reveals the backdrop. Inset the opaque content with a
+   clip, not padding: navigation must never resize/reflow chat or a terminal. */
+.mobile-workspace::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
   background: var(--background);
-  transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
-  box-shadow: -2px 0 18px #0000000a;
+  box-shadow:
+    inset 1px 1px 0 #ffffff70,
+    inset -1px -1px 0 #00000016;
+  opacity: var(--mobile-workspace-reveal, 0);
+  transition: opacity 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .mobile-workspace::before {
+    background: linear-gradient(135deg, #ffffff50, #ffffff08 45%, #ffffff28);
+    -webkit-backdrop-filter: blur(18px) saturate(1.5);
+    backdrop-filter: blur(18px) saturate(1.5);
+  }
 }
 .mobile-main {
   position: relative;
@@ -411,6 +413,16 @@ body {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  background: var(--background);
+  clip-path: inset(
+    calc(3px * var(--mobile-workspace-reveal, 0)) round
+      calc(29px * var(--mobile-workspace-reveal, 0))
+  );
+  transition: clip-path 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.mobile-workspace[data-dragging="true"]::before,
+.mobile-workspace[data-dragging="true"] .mobile-main {
+  transition: none;
 }
 .mobile-header,
 .mobile-files-header {
@@ -427,7 +439,7 @@ body {
 .mobile-files-header {
   margin-bottom: 0;
 }
-:is(.mobile-header, .mobile-files-header) .mobile-glass {
+:is(.mobile-header, .mobile-files-header, .mobile-sidebar-head) .mobile-glass {
   position: relative;
   z-index: 30;
   pointer-events: auto;
@@ -440,13 +452,13 @@ body {
     0 1px 3px #00000008;
 }
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  :is(.mobile-header, .mobile-files-header) .mobile-glass {
+  :is(.mobile-header, .mobile-files-header, .mobile-sidebar-head) .mobile-glass {
     background: color-mix(in srgb, var(--background) 38%, transparent);
     -webkit-backdrop-filter: blur(24px) saturate(1.6);
     backdrop-filter: blur(24px) saturate(1.6);
   }
 }
-:is(.mobile-header, .mobile-files-header) .mobile-icon {
+:is(.mobile-header, .mobile-files-header, .mobile-sidebar-head) .mobile-icon {
   width: 48px;
   height: 48px;
   border-radius: 50%;
@@ -544,12 +556,14 @@ body {
   border-radius: calc(var(--corner-radius) * 3.5);
 }
 /* Tint lives on the same rounded surface in every state, never an opaque inset pill. */
-:is(.mobile-header, .mobile-files-header) .mobile-glass:is(:active, [data-state="open"]) {
+:is(.mobile-header, .mobile-files-header, .mobile-sidebar-head)
+  .mobile-glass:is(:active, [data-state="open"]) {
   background: var(--background);
   border-color: color-mix(in srgb, var(--border) 50%, transparent);
 }
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  :is(.mobile-header, .mobile-files-header) .mobile-glass:is(:active, [data-state="open"]) {
+  :is(.mobile-header, .mobile-files-header, .mobile-sidebar-head)
+    .mobile-glass:is(:active, [data-state="open"]) {
     background: color-mix(in srgb, var(--background) 38%, transparent);
   }
 }
@@ -772,6 +786,7 @@ aside[aria-label="Agent notifications"] {
 .mobile-scrim {
   position: absolute;
   inset: 0;
+  clip-path: inset(3px round 29px);
   background: #00000030;
   border: 0;
   touch-action: pan-y;
@@ -967,24 +982,6 @@ aside[aria-label="Agent notifications"] {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
 }
-.mobile-session-destination {
-  display: flex;
-  gap: 4px;
-  padding: 4px;
-  border-radius: 16px;
-  background: var(--muted);
-}
-.mobile-session-destination button {
-  flex: 1;
-  padding: 8px;
-  border-radius: 12px;
-  font-size: 13px;
-  font-weight: 500;
-}
-.mobile-session-destination button[aria-pressed="true"] {
-  background: var(--background);
-  box-shadow: 0 1px 4px #00000012;
-}
 .mobile-composer-toolbar {
   flex-wrap: nowrap;
   gap: 0;
@@ -1088,8 +1085,16 @@ aside[aria-label="Agent notifications"] {
   }
 }
 @media (prefers-reduced-transparency: reduce), (forced-colors: active) {
-  :is(.mobile-header, .mobile-files-header) .mobile-glass,
-  :is(.mobile-header, .mobile-files-header) .mobile-glass:is(:active, [data-state="open"]) {
+  .mobile-workspace::before {
+    background: var(--background);
+    border-color: var(--border);
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  :is(.mobile-header, .mobile-files-header, .mobile-sidebar-head) .mobile-glass,
+  :is(.mobile-header, .mobile-files-header, .mobile-sidebar-head)
+    .mobile-glass:is(:active, [data-state="open"]) {
     background: var(--background);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
@@ -1252,6 +1257,8 @@ aside[aria-label="Agent notifications"] {
 }
 @media (prefers-reduced-motion: reduce) {
   .mobile-workspace,
+  .mobile-workspace::before,
+  .mobile-main,
   .mobile-pane .mobile-composer {
     transition: none;
   }

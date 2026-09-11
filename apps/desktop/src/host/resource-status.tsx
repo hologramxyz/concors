@@ -9,10 +9,12 @@ export function ResourceStatus({
   connection,
   state,
   machine,
+  compact = false,
 }: {
   connection: DaemonConnection | null;
   state: ConnectionState;
   machine: string;
+  compact?: boolean;
 }) {
   const [reading, setReading] = useState<{
     connection: DaemonConnection;
@@ -57,9 +59,13 @@ export function ResourceStatus({
       role="group"
       aria-label="Machine resource usage"
       data-usage-status={status ?? "live"}
-      className="flex min-h-7 shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t bg-muted/20 px-3 py-1 text-[11px] text-muted-foreground"
+      className={
+        compact
+          ? "mt-2 flex min-h-5 flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[11px] text-muted-foreground"
+          : "flex min-h-7 shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t bg-muted/20 px-3 py-1 text-[11px] text-muted-foreground"
+      }
     >
-      <span className="flex max-w-40 min-w-0 items-center gap-1.5">
+      <span className={compact ? "sr-only" : "flex max-w-40 min-w-0 items-center gap-1.5"}>
         <Activity className="size-3 shrink-0" aria-hidden="true" />
         <span className="truncate">{machine}</span>
       </span>
@@ -67,7 +73,12 @@ export function ResourceStatus({
         CPU {summary?.cpu ?? "—"}
       </span>
       <span className={`shrink-0 tabular-nums ${summary?.highMemory ? "text-destructive" : ""}`}>
-        RAM {summary ? `${summary.memory} (${summary.memoryPercent})` : "—"}
+        RAM{" "}
+        {summary
+          ? compact
+            ? summary.memory
+            : `${summary.memory} (${summary.memoryPercent})`
+          : "—"}
       </span>
       {high && (
         <span className="flex items-center gap-1 text-destructive">

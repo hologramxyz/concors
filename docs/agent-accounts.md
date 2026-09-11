@@ -1,10 +1,14 @@
 # Agent account connections
 
-Desktop agent panes check the selected provider's account as soon as they open. A
+Desktop and mobile agent panes check the selected provider's account as soon as they open. A
 prompt above the composer offers sign-in when no account is configured. Dismissal
 is remembered for that machine and provider in browser session storage; a small
 **Connect account** button reopens it. Neither the check nor dismissal disables
 sending prompts. Existing environment credentials and configurations remain usable.
+
+Sign-in uses the connected daemon's provider registry, including custom CLI commands and
+credential-directory settings. Supported custom profiles select the account adapter by engine;
+Pi, OMP and ACP profiles do not receive unsupported OpenCode account requests.
 
 - **Codex / ChatGPT:** `account/read`, followed by `account/login/start` with
   `chatgptDeviceCode`. The panel displays OpenAI's link and one-time code and observes

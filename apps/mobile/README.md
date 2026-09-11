@@ -2,7 +2,7 @@
 
 Expo SDK 57 / React Native hosts the **actual Concors desktop React workspace** in a
 bundled, offline WebView. The phone shell is chat-first: bottom composer, swipeable
-push sidebar, top tab/pane picker, and modal settings. There is no bottom navigation
+push sidebar, flat top Tabs picker, and modal settings. There is no bottom navigation
 and no second implementation of chat/tool rendering.
 
 **Status: implemented client and interactive preview, not store-submission ready.**
@@ -41,14 +41,14 @@ phone-size mode. Select **Explore demo**; it opens straight into the agent chat.
    and diagnostics. Signup, purchasing and billing are intentionally excluded from mobile.
    Search and the machine selector open animated bottom drawers without dismissing the sidebar.
    The machine drawer shows each machine's current status and selection.
-5. Open the top **Tabs and panes** picker. Each tab has its own card with indented panes.
-   **New tab** is at the bottom; the tab's **…** offers **Add pane to this tab**, rename and close.
-   Each pane's **…** offers profile selection and confirmed close (no left/right reordering).
-   New tab/Add pane open the creation drawer with Agent and the machine's saved terminal
+5. Open the top **Tabs** picker: one flat row per chat or terminal, including desktop split panes.
+   **New tab** is at the bottom. Each row's **…** offers type/profile selection and confirmed close;
+   rename is available when the row is the only pane in its desktop tab.
+   New tab opens the creation drawer with Agent and the machine's saved terminal
    profiles. On a current daemon, Add/Manage terminal profiles opens Terminals settings.
    Within an agent chat, the model icon opens provider/model selection for Codex, Claude Code,
    OpenCode and Pi when installed on the machine. Changing provider starts a new chat;
-   the original remains available in Tabs and panes.
+   the original remains available in Tabs.
    The sidebar button, picker and **Files** button are separate backdrop-blurred controls.
    Choose a pane to switch views, or dismiss with Close, Escape or the backdrop.
    Tapping the covered trigger hits the backdrop and closes the drawer without reopening it.
@@ -61,25 +61,27 @@ Model, effort and permissions use icon-only desktop controls when expanded.
 Context usage and dictation sit on the right beside the primary button; the sliders button contains only
 Plan and Speed. Dictation focuses the native keyboard and explains how to use its microphone.
 There is one primary button: Stop while working with an empty draft, Queue for a follow-up,
-or Send when idle. 7. Select **Terminal · Pane 2** for the shared xterm terminal: type, use extra keys,
+or Send when idle. 7. Select **Mobile launch · 2** (Terminal) for the shared xterm terminal: type, use extra keys,
 reload the renderer or explicitly stop the process after confirmation.
 
-### Tabs versus panes
+### Mobile tabs and desktop sync
 
-A project contains tabs; each tab contains one or more panes. A pane is a chat or
-terminal view. The initial demo has one tab, **Mobile launch**, with an **Agent**
-pane and a **Terminal** pane—not two tabs.
+Mobile calls each chat or terminal view a **tab**. The picker lists every pane in the
+project at one level, in desktop tab order and split-tree order, with no group headings.
+The initial demo shows **Mobile launch · 1** (Agent) and **Mobile launch · 2** (Terminal).
+On desktop these are still two panes inside the original **Mobile launch** tab.
 
-- **New tab** creates a separate group with its first pane.
-- **Add pane to this tab** keeps a new session alongside the current work, inside that tab.
-- Select any indented pane under any tab to open it. Mobile shows one at a time;
-  desktop can show that same tab's panes side by side.
+- **New tab** creates a new desktop tab with a single pane. There is no mobile Add pane mode.
+- Select any row to open that one view. Next/Previous tab shortcuts cycle through the same flat list.
+  Existing desktop splits, pane IDs and session IDs stay intact; navigation never rewrites the layout.
 - Navigation changes only this device's selected view. Adding, renaming, changing a
   profile or closing updates the shared workspace on connected devices.
-- Adding a pane uses the existing shared split operation (beside the selected pane
-  on desktop); mobile does not expose split directions. Closing the last pane also closes its tab.
-- A pane profile changes the kind of view; it is not a way to create another pane.
-  Closing a pane removes its saved view, not a promise to terminate its remote process.
+- **Close tab** closes only that row's pane, even if other panes share its desktop tab.
+  Closing an inactive row keeps the current view selected. Closing the last pane removes its empty desktop tab.
+- Split panes have no individual saved names: their labels use the desktop name and position.
+  Rename is therefore offered only for single-pane desktop tabs, so siblings are never renamed inadvertently.
+- **Tab type** changes the kind of view; it does not create another tab.
+  Closing removes its saved view, not a promise to terminate its remote process.
   Use the agent/terminal's explicit stop control to stop work.
 
 Everything in the demo is simulated, including commands, repository setup, SSH,
@@ -128,12 +130,17 @@ confirmation. Save files first; unsent drafts are discarded, while remote sessio
 The in-memory demo does not share data with AI providers and skips this gate.
 
 The host uses the same `DaemonConnection` protocol as desktop and obtains the actual
-machine ID from its workspace snapshot. Cloud login, inventory and API requests are
-not needed and are explicitly blocked in this mode. Account credentials are not read,
-sent, created or revoked. Appearance and connection diagnostics remain available;
-account/billing/provisioning/push controls are unavailable. Full onboarding design is deferred.
+machine ID from its workspace snapshot. Cloud login is not needed for the workspace;
+inventory, billing, provisioning and push API calls remain blocked in this mode.
+The footer is a profile entry, not a machine status label. Tap **Your profile → Sign in**
+to verify the same Concourse account used on desktop; its actual name and email then
+appear in the footer/drawer. This optional profile session is isolated in memory and
+never grants cloud machine access or changes the desktop connection. Passwords and
+session tokens stay in the outer host, not the embedded workspace renderer. Reloading
+the private browser preview requires signing in again; normal native account login
+continues to use the existing SecureStore flow.
 
-Use **Desktop connection → Settings → Disconnect desktop** to leave. This detaches
+Use **Your profile → Settings → Disconnect desktop** to leave. This detaches
 the phone, not the daemon's agents or terminals. Reconnects retain in-memory drafts;
 explicit disconnect or page reload discards unsent input. Cold session links must match
 the connected daemon. The direct option is disabled in production builds.
@@ -143,6 +150,12 @@ development adapter. It validates one Tailscale identity and the exact preview o
 then forwards only `/ws` and `/health` to a fixed loopback daemon port. It adapts the
 approved origin without changing the daemon's production origin allowlist; it does not
 forward cookies, account authorization or Tailscale identity headers to the daemon.
+For optional profile login, set `CONCORS_DIRECT_PROFILE_API_URL` on the adapter to the
+same exact HTTPS account API origin used by desktop. This is disabled by default.
+The private `/desktop-daemon/profile-api` route only forwards email sign-in, sign-out,
+and `/api/v1/me`, with exact methods, bounded bodies, no redirects and no cookie forwarding.
+The same Tailscale identity/origin check protects these routes. It does not substitute
+a Tailscale profile or copy a desktop session token.
 
 Example on the computer running the daemon (replace the origin and login):
 
@@ -191,9 +204,10 @@ the in-memory demo cannot prove real provider switching or saved profile launch.
    authenticated are separate states. Create a new Agent pane and choose a provider.
    In an agent chat, tap the composer and its model icon. Go back to providers, choose
    an installed Claude Code, OpenCode or Pi provider, then a model. The new chat should
-   open automatically; use Tabs and panes to return to the original conversation.
-   Provider accounts must already be configured on the connected machine.
-2. In Tabs and panes, choose New tab → Add terminal profile. Save a harmless command
+   open automatically; use Tabs to return to the original conversation.
+   Current daemons with `agent-accounts` also offer dismissible Codex, Claude and
+   OpenCode sign-in in the chat. Other providers still use their own CLI setup.
+2. In Tabs, choose New tab → Add terminal profile. Save a harmless command
    (for example, `pwd` on a Unix machine), close settings, and launch that profile
    from New tab. The same saved profile should appear on desktop.
 3. In Settings → Shortcuts, inspect external-keyboard commands. Mobile should not
@@ -205,8 +219,20 @@ the in-memory demo cannot prove real provider switching or saved profile launch.
    Queue a follow-up, disconnect the phone, and verify delivery from desktop. Stop
    pauses queued work; use Resume queue before expecting further delivery.
 6. Where available, import a native session or fork an idle conversation. The phone
-   should open the new chat while the original remains in Tabs and panes. Rewind
+   should open the new chat while the original remains in Tabs. Rewind
    names its exact scope; file checkpoints and conversation rollback differ.
+7. Open the sidebar: it has glass Search, with no logo or extra menu
+   button. The workspace slides above it with a visible 32px rounded glass-style rim; hidden
+   sidebar controls must never show through the main view. Tap your name/avatar to open Account, not Settings. The drawer starts
+   with the machine selector, followed by Add machine, Settings and Sign out.
+   Direct previews offer **Your profile → Sign in** until you authenticate your real
+   Concourse account, with **Disconnect desktop** kept separate from profile sign-out. Add machine
+   explains setup and refreshes existing cloud machines; it does not provision or
+   purchase one. Closing nested machine sheets restores focus to the account drawer.
+   CPU/RAM sits just below the sidebar machine selector, using the selected daemon's
+   live readings. It takes no space in chat and unsubscribes when the sidebar closes.
+   Older daemons show **Update daemon for usage**; stale/offline readings are not
+   presented as current. See [measurement limits](../../docs/host-resource-usage.md).
 
 The full [provider support report](../../docs/unified-chat-provider-support.md)
 covers six built-in agents, 38 opt-in ACP presets, credential/MCP settings, native
@@ -225,8 +251,10 @@ alone cannot enable files on an older running daemon. No control-plane/server PR
 Upgrade/restart that daemon when it is safe for your sessions, or test with a separate current daemon.
 
 1. Open a project, then tap the top-right **Files** button. Swipe left on chat or the terminal
-   to open Files; swipe right on the file surface or header, or tap **Back to chat**, to return.
-   Swipe right from chat or the terminal opens the project sidebar. Inputs, editors, code blocks and
+   to open Files; swipe right on directory rows, preview links or the header to return without
+   activating the touched control. In a code editor, swipe right from the leftmost 28px;
+   the rest of the editor keeps text selection and scrolling. **Back to chat** also returns.
+   Swipe right from chat or the terminal opens the project sidebar. Inputs, file tabs, popup menus and
    terminal toolbar controls keep their own gestures; vertical terminal gestures never navigate.
    The Files button and navigation also work on older/offline daemons, with an explanation of
    what is missing. They do not invent a filesystem or bypass the daemon's capabilities.
@@ -241,8 +269,8 @@ Upgrade/restart that daemon when it is safe for your sessions, or test with a se
 4. Use the open-file strip to switch documents; the project pill returns to the directory tree.
    Chat/file drafts survive navigation and connection replacement. Another client's edit triggers
    conflict review instead of silently replacing its work. Dirty file close/disconnect asks in-app.
-5. Open **Tabs and panes** from chat to manage sessions. A tab groups one or more agent/terminal
-   panes. Mobile displays one selected pane; desktop may show the same panes side by side.
+5. Open **Tabs** from chat to manage sessions in one flat list.
+   Mobile displays one selected view; desktop may show the same panes side by side.
    File documents are separate client-local editor tabs, not new daemon panes or processes.
 
 Unsaved file drafts are memory-only: save before reloading or closing the app. Browser navigation
@@ -253,7 +281,8 @@ See [file behavior and safety boundaries](../../docs/project-files.md).
 ### Glass rendering: web styling versus native iOS
 
 The iOS workspace now uses [Expo UI SwiftUI buttons](https://docs.expo.dev/versions/latest/sdk/ui/swift-ui/button/)
-with `buttonStyle('glass')` for the sidebar, tabs/panes, Files, Back and directory controls.
+with `buttonStyle('glass')` for the workspace menu button, sidebar Search, Tabs,
+Files, Back and directory controls.
 The agent composer uses a real React Native `TextInput` above an
 [Expo GlassEffect `GlassView`](https://docs.expo.dev/versions/latest/sdk/glass-effect/) background.
 These views sit **above** WKWebView, with chat scrolling behind the composer; they are not CSS
@@ -261,6 +290,11 @@ effects or native blur painted over HTML text. The shared renderer reserves layo
 duplicate controls from touch/VoiceOver, and retains draft, attachment, queue, configuration and
 delivery logic. Native controls relay bounded, scope/connection-checked UI events to that logic.
 Open web drawers suppress the native layer so their focus traps and backdrops remain usable.
+
+The rounded workspace boundary is a decorative **CSS backdrop-blurred rim**, including inside
+WKWebView, not another native Liquid Glass control. It reveals a 3px translucent edge while
+sliding above the sidebar, without resizing the terminal or blurring chat content. It fades away
+when closed, never intercepts touches, and has opaque/reduced-motion accessibility fallbacks.
 
 The iOS-specific imports do not enter Android or Safari bundles. Android/web retain their shared
 controls and web styling. Older iOS or Reduce Transparency uses native bordered controls and an
@@ -360,6 +394,19 @@ in-memory drafts. Switching panes does not.
 SVG. Generated HTML and native `ios/`/`android/` projects are ignored. No mobile client
 imports daemon or Tauri runtime implementations.
 
+### Path-hosted private web previews
+
+For a preview under a shared HTTPS origin, set `CONCORS_MOBILE_WEB_BASE_PATH=/concors-mobile`
+when running `expo export --platform web --clear`. This prefixes the app's assets and router
+links; it is opt-in and rejected for production builds. Set `EXPO_PUBLIC_DEV_DAEMON_URL`
+to the matching secure socket path on that origin, for example
+`wss://private.example/concors-mobile/desktop-daemon/ws`, rather than an older preview port.
+Mount the export and its SPA routes below the same path. Use a separate loopback gateway
+with the exact new origin and the same allowed Tailscale identity; never enable Funnel or
+relax identity/origin checks to work around a browser connection failure. Profile sign-in
+automatically stays below the socket's gateway prefix. Preserve unrelated routes and the
+existing daemon/session host when changing preview hosting.
+
 ## Verification
 
 ```bash
@@ -369,6 +416,13 @@ pnpm exec playwright install chromium
 pnpm test:mobile:e2e
 pnpm test:mobile:direct
 pnpm mobile:build
+```
+
+If another checkout owns the direct-suite ports, use a separate pair (the production
+daemon origin allowlist is unchanged):
+
+```bash
+CONCORS_MOBILE_DIRECT_PORT=7458 CONCORS_MOBILE_WEB_PORT=8098 pnpm test:mobile:direct
 ```
 
 The browser suite covers chat, approvals, streaming, attachments, queue/draft retention,

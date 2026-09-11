@@ -1,5 +1,5 @@
 import { useId, useRef, useState } from "react";
-import { Check, ChevronDown, PanelsTopLeft, Plus } from "lucide-react";
+import { Check, ChevronDown, Plus } from "lucide-react";
 import type { MobileTarget } from "@concors/client-core";
 import type { WorkspaceOperation, WorkspaceProject, WorkspaceTab } from "@concors/protocol";
 import {
@@ -10,7 +10,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { PaneProfileIcon } from "@/workspace/profile-icon";
-import { PROFILE_LABELS, tabPanes, type PaneNode } from "./selection";
+import { projectPanes, type PaneNode } from "./selection";
 import { WorkspaceActions } from "./workspace-actions";
 import { useNativeSurface } from "@/components/native-surface";
 
@@ -25,7 +25,6 @@ export function WorkspacePicker({
   command,
   onSelect,
   onNewTab,
-  onNewPane,
 }: {
   project: WorkspaceProject;
   tab: WorkspaceTab | null;
@@ -36,23 +35,22 @@ export function WorkspacePicker({
   command(operation: WorkspaceOperation): void;
   onSelect(target: MobileTarget): void;
   onNewTab(): void;
-  onNewPane(tabId: string): void;
 }) {
   const [open, setOpen] = useState(false);
   const id = useId();
   const trigger = useRef<HTMLButtonElement>(null);
   const content = useRef<HTMLDivElement>(null);
-  const subtitle =
-    pane && tab
-      ? `${pane.terminalProfile?.name ?? PROFILE_LABELS[pane.profile]} · Pane ${tabPanes(tab).findIndex((item) => item.id === pane.id) + 1}`
-      : "Tabs and panes";
+  const entries = projectPanes(project);
+  const selected = entries.find((entry) => entry.tab.id === tab?.id && entry.pane.id === pane?.id);
+  const title = selected?.label ?? project.name;
+  const subtitle = selected?.profileLabel ?? "Tabs";
   const native = useNativeSurface(
     trigger,
     {
       kind: "button",
       icon: "chevron",
-      label: "Tabs and panes",
-      title: tab?.name ?? project.name,
+      label: "Tabs",
+      title,
       subtitle,
       disabled: false,
     },
@@ -64,32 +62,25 @@ export function WorkspacePicker({
     setOpen(false);
     onSelect({ projectId: project.id, tabId, paneId });
   };
-  const createPane = (tabId: string) => {
-    setOpen(false);
-    onNewPane(tabId);
-  };
   return (
     <>
       {/* Keep active-pane shortcuts registered when the drawer's contents are unmounted. */}
-      {tab &&
-        pane &&
-        (["tab", "pane"] as const).map((kind) => (
-          <WorkspaceActions
-            key={kind}
-            kind={kind}
-            label={`Active ${kind} actions`}
-            project={project}
-            tab={tab}
-            pane={pane}
-            canEdit={canEdit}
-            execute={execute}
-            command={command}
-            onSelect={onSelect}
-            onNewPane={() => createPane(tab.id)}
-            keyboard={keyboard && !open}
-            showTrigger={false}
-          />
-        ))}
+      {tab && pane && (
+        <WorkspaceActions
+          key={`${tab.id}:${pane.id}`}
+          label="Active tab actions"
+          project={project}
+          tab={tab}
+          pane={pane}
+          canEdit={canEdit}
+          execute={execute}
+          command={command}
+          onSelect={onSelect}
+          selected
+          keyboard={keyboard && !open}
+          showTrigger={false}
+        />
+      )}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
           <button
@@ -100,7 +91,7 @@ export function WorkspacePicker({
             className="mobile-select-trigger mobile-picker mobile-glass"
             type="button"
             role="combobox"
-            aria-label="Tabs and panes"
+            aria-label="Tabs"
             aria-haspopup="dialog"
             aria-controls={id}
             aria-expanded={open}
@@ -113,12 +104,8 @@ export function WorkspacePicker({
             }}
           >
             <span className="mobile-picker-breadcrumb">
-              <span>{tab?.name ?? project.name}</span>
-              <span>
-                {pane && tab
-                  ? `${pane.terminalProfile?.name ?? PROFILE_LABELS[pane.profile]} · Pane ${tabPanes(tab).findIndex((item) => item.id === pane.id) + 1}`
-                  : "Tabs and panes"}
-              </span>
+              <span>{title}</span>
+              <span>{subtitle}</span>
             </span>
             <span className="mobile-select-chevron">
               <ChevronDown />
@@ -146,7 +133,7 @@ export function WorkspacePicker({
           }}
         >
           <DialogHeader>
-            <DialogTitle>Tabs and panes</DialogTitle>
+            <DialogTitle>Tabs</DialogTitle>
           </DialogHeader>
           <div
             ref={content}
@@ -178,86 +165,38 @@ export function WorkspacePicker({
               }
             }}
           >
-            {project.tabs.map((item) => {
-              const panes = tabPanes(item),
-                first = panes[0];
+            {entries.map(({ tab: item, pane: node, label, profileLabel }) => {
+              const active = tab?.id === item.id && pane?.id === node.id;
               return (
-                <section
-                  key={item.id}
-                  aria-label={`${item.name} tab`}
-                  className="mobile-tab-card"
-                  data-active={tab?.id === item.id}
-                >
-                  <div className="mobile-tab-card-heading">
-                    <button
-                      type="button"
-                      className="mobile-tab-choice"
-                      onClick={() => choose(item.id, item.id === tab?.id ? pane?.id : first?.id)}
-                      aria-label={`Open tab ${item.name}`}
-                    >
-                      <PanelsTopLeft />
-                      <span>{item.name}</span>
-                      <span className="mobile-pane-count">{panes.length}</span>
-                    </button>
-                    {first && (
-                      <WorkspaceActions
-                        kind="tab"
-                        label={`Actions for tab ${item.name}`}
-                        project={project}
-                        tab={item}
-                        pane={first}
-                        canEdit={canEdit}
-                        execute={execute}
-                        command={command}
-                        onSelect={(target) => {
-                          setOpen(false);
-                          onSelect(target);
-                        }}
-                        onComplete={() => setOpen(false)}
-                        onNewPane={() => createPane(item.id)}
-                      />
-                    )}
-                  </div>
-                  <div className="mobile-tab-panes">
-                    {panes.map((node, index) => (
-                      <div key={node.id} className="mobile-pane-row">
-                        <button
-                          type="button"
-                          data-pane-choice
-                          data-value={`${item.id}:${node.id}`}
-                          aria-pressed={tab?.id === item.id && pane?.id === node.id}
-                          className="mobile-pane-choice"
-                          onClick={() => choose(item.id, node.id)}
-                        >
-                          <PaneProfileIcon profile={node.profile} />
-                          <span>
-                            {node.terminalProfile?.name ?? PROFILE_LABELS[node.profile]}
-                            <small>Pane {index + 1}</small>
-                          </span>
-                          {tab?.id === item.id && pane?.id === node.id && (
-                            <Check className="mobile-pane-selected" />
-                          )}
-                        </button>
-                        <WorkspaceActions
-                          kind="pane"
-                          label={`Actions for pane ${index + 1} in ${item.name}`}
-                          project={project}
-                          tab={item}
-                          pane={node}
-                          canEdit={canEdit}
-                          execute={execute}
-                          command={command}
-                          onSelect={(target) => {
-                            setOpen(false);
-                            onSelect(target);
-                          }}
-                          onComplete={() => setOpen(false)}
-                          onNewPane={() => createPane(item.id)}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </section>
+                <div key={`${item.id}:${node.id}`} className="mobile-pane-row">
+                  <button
+                    type="button"
+                    data-pane-choice
+                    data-value={`${item.id}:${node.id}`}
+                    aria-pressed={active}
+                    className="mobile-pane-choice"
+                    onClick={() => choose(item.id, node.id)}
+                  >
+                    <PaneProfileIcon profile={node.profile} />
+                    <span>
+                      <span className="block truncate">{label}</span>
+                      <small className="truncate">{profileLabel}</small>
+                    </span>
+                    {active && <Check className="mobile-pane-selected" />}
+                  </button>
+                  <WorkspaceActions
+                    label={`Actions for tab ${label}`}
+                    project={project}
+                    tab={item}
+                    pane={node}
+                    selected={active}
+                    canEdit={canEdit}
+                    execute={execute}
+                    command={command}
+                    onSelect={onSelect}
+                    onComplete={() => setOpen(false)}
+                  />
+                </div>
               );
             })}
             {!project.tabs.length && (

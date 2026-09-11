@@ -1,7 +1,15 @@
 import { ColorThemeProvider } from "@/theme/color-theme-provider";
-import { machineAvailability, machineStatusLabel } from "@concors/client-core";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { FolderOpen, Menu, Search, Server } from "lucide-react";
+import { machineAvailability } from "@concors/client-core";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type CSSProperties,
+} from "react";
+import { FolderOpen, Menu, Search } from "lucide-react";
 import type { DaemonConnection } from "@concors/daemon-client";
 import type { MobileState, MobileTarget } from "@concors/client-core";
 import type { PaneProfile, WorkspaceOperation, WorkspaceSnapshot } from "@concors/protocol";
@@ -28,10 +36,10 @@ import { SidebarSection } from "@/components/sidebar-section";
 import { NewTabMenu } from "@/workspace/new-tab-menu";
 import { TAB_PROFILES } from "@/workspace/tab-profiles";
 import { CommandPalette } from "@/components/command-palette";
-import { AccountMenu } from "@/components/account-menu";
+import { MobileAccountMenu } from "@/components/account-menu";
 import { Button } from "@/components/ui/button";
 import { embeddedConnection, getHostState, hostAction, subscribeHost } from "./bridge";
-import { resolveMobileSelection, tabPanes } from "./selection";
+import { resolveMobileSelection, projectPanes } from "./selection";
 import { useSidebarGesture } from "./sidebar-gesture";
 import { SettingsDrawer } from "./settings-drawer";
 import { WorkspacePicker } from "./workspace-picker";
@@ -40,10 +48,12 @@ import { fileScope, useFiles } from "@/files/context";
 import { ProjectFileLinks } from "@/files/provider";
 import { preloadCodeEditor } from "@/files/editor-loader";
 import { TabVisibility } from "@/workspace/tab-visibility";
-import { MobileSelect } from "./select";
+import { MobileMachinePicker } from "./machine-picker";
+import { AddMachineDrawer } from "./add-machine-drawer";
 import type { SettingsPage } from "@/settings/navigation";
 import { NativeSurfaces } from "./native-surfaces";
 import { NativeHeaderButton } from "./native-header-button";
+import { ResourceStatus } from "@/host/resource-status";
 
 const subscribeState = (listener: () => void) =>
   subscribeHost((message) => {
@@ -88,10 +98,10 @@ function MobileWorkspaceContent({
   connection: DaemonConnection | null;
 }) {
   const files = useFiles();
-  const [paneDestination, setPaneDestination] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [creatingTerminalProfile, setCreatingTerminalProfile] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [addingMachine, setAddingMachine] = useState(false);
   const [settingsPage, setSettingsPage] = useState<SettingsPage | "machines">("account");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [addingProject, setAddingProject] = useState<"open" | "clone" | null>(null);
@@ -341,30 +351,6 @@ function MobileWorkspaceContent({
         setError(cause instanceof Error ? cause.message : "Could not create tab"),
       );
   };
-  const createPane = (profile: PaneProfile, terminalProfileId?: string) => {
-    const targetTab = project?.tabs.find((item) => item.id === paneDestination) ?? tab;
-    const targetPane = targetTab?.id === tab?.id ? pane : targetTab && tabPanes(targetTab)[0];
-    if (!project || !targetTab || !targetPane) return;
-    const newPaneId = crypto.randomUUID();
-    setError(null);
-    // Keep the shared layout tree valid; mobile still displays only the selected leaf.
-    void execute({
-      kind: "pane.split",
-      projectId: project.id,
-      expectedVersion: project.version,
-      tabId: targetTab.id,
-      paneId: targetPane.id,
-      newPaneId,
-      splitId: crypto.randomUUID(),
-      axis: "horizontal",
-      profile,
-      ...(terminalProfileId ? { terminalProfileId } : {}),
-    })
-      .then(() => select({ projectId: project.id, tabId: targetTab.id, paneId: newPaneId }))
-      .catch((cause: unknown) =>
-        setError(cause instanceof Error ? cause.message : "Could not add pane"),
-      );
-  };
   const runHost = (action: Parameters<typeof hostAction>[0]) => {
     setError(null);
     void hostAction(action).catch((cause: unknown) =>
@@ -377,31 +363,30 @@ function MobileWorkspaceContent({
     setSettingsOpen(true);
   };
   const unobscured =
-    !sidebarOpen && !files.sidebar.open && !settingsOpen && !paletteOpen && !addingProject;
+    !sidebarOpen &&
+    !files.sidebar.open &&
+    !settingsOpen &&
+    !paletteOpen &&
+    !addingProject &&
+    !addingMachine;
   const cycleTab = (delta: number) => {
-    if (!project || !tab) return;
-    const next =
-      project.tabs[(project.tabs.indexOf(tab) + delta + project.tabs.length) % project.tabs.length];
-    if (next) select({ projectId: project.id, tabId: next.id });
-  };
-  const cyclePane = (delta: number) => {
     if (!project || !tab || !pane) return;
-    const panes = tabPanes(tab);
-    const next = panes[panes.findIndex((item) => item.id === pane.id) + delta];
-    if (next) select({ projectId: project.id, tabId: tab.id, paneId: next.id });
+    const entries = projectPanes(project);
+    const index = entries.findIndex((item) => item.tab.id === tab.id && item.pane.id === pane.id);
+    const next = entries[(index + delta + entries.length) % entries.length];
+    if (next) select({ projectId: project.id, tabId: next.tab.id, paneId: next.pane.id });
   };
   const commandsAvailable = unobscured || paletteOpen;
-  const newPaneTab = project?.tabs.find((item) => item.id === paneDestination) ?? tab;
   useCommand("search", commandsAvailable, () => setPaletteOpen((open) => !open));
   useCommand("settings", commandsAvailable, () => openSettings());
   useCommand("shortcuts", commandsAvailable, () => openSettings("shortcuts"));
   useCommand("new-project", commandsAvailable && canEdit, newWorkspace.start);
   useCommand("previous-tab", commandsAvailable && !!tab, () => cycleTab(-1));
   useCommand("next-tab", commandsAvailable && !!tab, () => cycleTab(1));
-  useCommand("focus-left", commandsAvailable && !!pane, () => cyclePane(-1));
-  useCommand("focus-up", commandsAvailable && !!pane, () => cyclePane(-1));
-  useCommand("focus-right", commandsAvailable && !!pane, () => cyclePane(1));
-  useCommand("focus-down", commandsAvailable && !!pane, () => cyclePane(1));
+  useCommand("focus-left", commandsAvailable && !!pane, () => cycleTab(-1));
+  useCommand("focus-up", commandsAvailable && !!pane, () => cycleTab(-1));
+  useCommand("focus-right", commandsAvailable && !!pane, () => cycleTab(1));
+  useCommand("focus-down", commandsAvailable && !!pane, () => cycleTab(1));
   return (
     <ColorThemeProvider
       compact
@@ -476,61 +461,34 @@ function MobileWorkspaceContent({
                   style={{ width }}
                 >
                   <div className="mobile-sidebar-head">
-                    <button
-                      className="mobile-icon"
-                      aria-label="Close sidebar"
-                      onClick={() => setSidebarOpen(false)}
-                    >
-                      <Menu />
-                    </button>
-                    <button
-                      className="mobile-icon ml-auto"
+                    <NativeHeaderButton
+                      icon="search"
+                      className="mobile-icon mobile-glass ml-auto"
                       aria-label="Search workspace"
                       onClick={() => setPaletteOpen(true)}
                     >
                       <Search />
-                    </button>
+                    </NativeHeaderButton>
                   </div>
                   <div className="px-3 pb-3">
-                    <MobileSelect
-                      label="Machine"
-                      presentation="sheet"
-                      value={host.machineId ?? ""}
-                      placeholder={host.direct ? "Connecting to desktop…" : "Choose a machine"}
-                      onValueChange={(machineId) => {
+                    <MobileMachinePicker
+                      host={host}
+                      onSelect={(machineId) => {
                         setLocal({ machineId, target: {} });
                         runHost({ kind: "select-machine", machineId });
                       }}
-                      groups={[
-                        {
-                          label: host.direct ? "Direct connection" : "Your machines",
-                          options: host.direct
-                            ? host.machineId
-                              ? [
-                                  {
-                                    value: host.machineId,
-                                    label: "Desktop daemon",
-                                    icon: <Server />,
-                                    description:
-                                      host.phase === "ready"
-                                        ? "Connected · real workspace"
-                                        : host.phase,
-                                  },
-                                ]
-                              : []
-                            : host.machines.map((machine) => ({
-                                value: machine.id,
-                                label: machine.name,
-                                icon: <Server />,
-                                description: machineStatusLabel(
-                                  machineAvailability(machine),
-                                  host.machineId === machine.id && host.phase === "ready",
-                                ),
-                                disabled: machineAvailability(machine) !== "connectable",
-                              })),
-                        },
-                      ]}
                     />
+                    {sidebarOpen && (
+                      <ResourceStatus
+                        compact
+                        connection={connection}
+                        state={connection?.state ?? { status: "disconnected" }}
+                        machine={
+                          host.machines.find((machine) => machine.id === host.machineId)?.name ??
+                          "Desktop daemon"
+                        }
+                      />
+                    )}
                   </div>
                   <nav aria-label="Primary" className="mobile-sidebar-content">
                     <SidebarSection
@@ -577,40 +535,47 @@ function MobileWorkspaceContent({
                     </SidebarSection>
                   </nav>
                   <div className="mobile-sidebar-footer">
-                    {host.me ? (
-                      <AccountMenu
-                        auth={{
-                          status: "signed-in",
-                          ...host.me,
-                          organizations: host.organizations,
-                        }}
-                        onOpenSettings={() => openSettings()}
-                        onSignOut={() => runHost({ kind: "sign-out" })}
-                      />
-                    ) : (
-                      <button
-                        className="flex w-full items-center gap-3 rounded-xl p-3 text-left hover:bg-sidebar-accent"
-                        aria-label="Desktop connection settings"
-                        onClick={() => openSettings()}
-                      >
-                        <Server className="size-5" />
-                        <span className="min-w-0">
-                          <span className="block text-sm font-medium">Desktop connection</span>
-                          <span className="block text-xs text-muted-foreground">
-                            Private test · no cloud account
-                          </span>
-                        </span>
-                      </button>
-                    )}
+                    <MobileAccountMenu
+                      profile={host.profile ?? null}
+                      {...(host.direct
+                        ? { onOpenProfile: () => runHost({ kind: "open-profile" }) }
+                        : {})}
+                      auth={
+                        host.me
+                          ? {
+                              status: "signed-in",
+                              ...host.me,
+                              organizations: host.organizations,
+                            }
+                          : null
+                      }
+                      machinePicker={
+                        <MobileMachinePicker
+                          host={host}
+                          onSelect={(machineId) => {
+                            setLocal({ machineId, target: {} });
+                            runHost({ kind: "select-machine", machineId });
+                          }}
+                        />
+                      }
+                      onAddMachine={() => setAddingMachine(true)}
+                      onOpenSettings={() => openSettings()}
+                      onSignOut={() => runHost({ kind: "sign-out" })}
+                    />
                   </div>
                 </aside>
                 <div
                   className="mobile-workspace"
                   data-testid="mobile-workspace"
-                  style={{
-                    transform: `translateX(${gesture.offset}px)`,
-                    transition: gesture.dragging ? "none" : undefined,
-                  }}
+                  data-dragging={gesture.dragging}
+                  style={
+                    {
+                      "--mobile-workspace-reveal": Math.min(1, gesture.offset / 32),
+                      transform: `translateX(${gesture.offset}px)`,
+                      borderRadius: Math.min(32, gesture.offset),
+                      transition: gesture.dragging ? "none" : undefined,
+                    } as CSSProperties
+                  }
                 >
                   <div
                     className="mobile-main"
@@ -634,15 +599,6 @@ function MobileWorkspaceContent({
                           keyboard={commandsAvailable}
                           disabled={!canEdit}
                           tabLimitReached={project.tabs.length >= 32}
-                          paneTarget={
-                            newPaneTab
-                              ? {
-                                  name: newPaneTab.name,
-                                  disabled: tabPanes(newPaneTab).length >= 32,
-                                  onCreate: createPane,
-                                }
-                              : undefined
-                          }
                           onCreate={createTab}
                           renderTrigger={(open) => (
                             <WorkspacePicker
@@ -654,14 +610,7 @@ function MobileWorkspaceContent({
                               execute={execute}
                               command={command}
                               onSelect={select}
-                              onNewTab={() => {
-                                setPaneDestination(null);
-                                open("tab");
-                              }}
-                              onNewPane={(tabId) => {
-                                setPaneDestination(tabId);
-                                open("pane");
-                              }}
+                              onNewTab={open}
                             />
                           )}
                         />
@@ -790,6 +739,7 @@ function MobileWorkspaceContent({
                   dragging={filesGesture.dragging}
                 />
               </div>
+              <AddMachineDrawer host={host} open={addingMachine} onOpenChange={setAddingMachine} />
               <SettingsDrawer
                 key={host.machineId}
                 creatingTerminalProfile={creatingTerminalProfile}

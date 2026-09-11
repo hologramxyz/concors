@@ -182,7 +182,11 @@ export function FileTree({
           }}
         />
       )}
-      <div className="min-h-0 flex-1 overflow-auto pb-3" aria-label={`${project.name} directory`}>
+      <div
+        data-file-directory
+        className="min-h-0 flex-1 overflow-auto pb-3"
+        aria-label={`${project.name} directory`}
+      >
         <Directory
           project={project}
           path=""

@@ -56,6 +56,11 @@ export type MobilePreferences = z.infer<typeof MobilePreferencesSchema>;
 export const MobileStateSchema = z.object({
   scope: id,
   me: MeSchema.nullable(),
+  /** Display-only profile verified by preview sign-in; never grants machine/cloud API access. */
+  profile: z
+    .object({ name: z.string().max(500), email: z.string().max(500) })
+    .nullable()
+    .optional(),
   direct: z.boolean().default(false),
   organizations: z.array(OrganizationSchema),
   machines: z.array(MachineSchema),
@@ -83,6 +88,7 @@ export const MobileActionSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("retry") }),
   z.object({ kind: z.literal("refresh") }),
   z.object({ kind: z.literal("sign-out") }),
+  z.object({ kind: z.literal("open-profile") }),
   z.object({ kind: z.literal("switch-organization"), organizationId: id }),
   z.object({ kind: z.literal("push"), enabled: z.boolean() }),
   z.object({
