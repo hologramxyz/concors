@@ -105,13 +105,20 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     // Main's provider account flow must also cross the mobile relay without a real OAuth login.
     const signIn = ui.getByRole("region", { name: "Codex account connection", exact: true });
     await signIn.getByRole("button", { name: "Sign in with ChatGPT", exact: true }).click();
-    // A completed fixture sign-in can replace the short-lived device code under load.
-    await expect(
-      signIn
-        .getByText("TEST-CODE", { exact: true })
-        .or(ui.getByText("Codex connected", { exact: true })),
-    ).toBeVisible();
-    await expect(ui.getByText("Codex connected", { exact: true })).toBeVisible();
+    // Verify the daemon's durable result; completed sign-in intentionally has no chat badge.
+    await expect
+      .poll(async () => {
+        const sessionId = desktop.agents.find((agent) => agent.directory === directory)?.id;
+        if (!sessionId) return null;
+        const result = await desktop.requestAgent(
+          { kind: "account", sessionId, action: { type: "read" } },
+          crypto.randomUUID(),
+        );
+        return result.outcome.status === "ok" ? result.outcome.account?.status : null;
+      })
+      .toBe("connected");
+    await expect(signIn).toHaveCount(0);
+    await expect(ui.getByText(/Codex connected|fixture-account@example\.test/)).toHaveCount(0);
     await input.fill("hello over the real daemon transport");
     await ui.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(ui.getByRole("log")).toContainText("Hello from Codex");
