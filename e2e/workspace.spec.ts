@@ -66,7 +66,6 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
     await second.getByRole("button", { name: "Pane actions", exact: true }).last().click();
     await second.getByRole("menuitemradio", { name: "Agent", exact: true }).click();
     await expect(first.getByRole("region", { name: "Agent pane", exact: true })).toHaveCount(1);
-    await first.getByRole("button", { name: "Codex", exact: true }).click();
     await expect(first.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
     await expect(second.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
     await expect(first.getByRole("log", { name: "Chat timeline" })).toBeEmpty();

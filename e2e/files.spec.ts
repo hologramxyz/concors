@@ -231,7 +231,6 @@ test("agent file links open Markdown and code tabs without leaving the workspace
   try {
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
-    await page.getByRole("button", { name: "Codex", exact: true }).click();
     await expect(page.getByLabel("Message Codex")).toBeEnabled();
     await page.getByLabel("Message Codex").fill("file-links");
     await page.getByLabel("Message Codex").press("Enter");
