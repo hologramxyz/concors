@@ -93,8 +93,8 @@ executable command, and arguments (one argument per line; spaces inside a line s
 Codex, Claude Code, and OpenCode are included initially. **Terminal** opens the machine's default
 shell, while **Agent** opens agent chat; both remain separate from the editable profile list.
 
-The plus-tab menu and pane actions use the same profile list and provider icons. **Add terminal
-profile…** opens the editor in Terminals settings; **Manage terminal profiles…** opens its list.
+The plus-tab menu and pane actions use the same profile list and provider icons.
+**Edit pane profiles** opens the list in Terminals settings, where profiles can be added or edited.
 A profile executes on the selected machine, in the pane's folder. Commands resolve through that
 machine's PATH or an executable path. Arguments are passed individually, without shell expansion;
 use an explicit shell command if you need a shell script.

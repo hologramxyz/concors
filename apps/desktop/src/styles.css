@@ -269,10 +269,10 @@
   padding: 0.85rem;
   border-radius: var(--radius-xl);
   background: var(--muted);
-  font-size: 14px;
+  font-size: 12px;
 }
 .chat-markdown code {
-  font-size: 0.85em;
+  font-size: 12px;
   overflow-wrap: anywhere;
 }
 .chat-markdown pre code {
@@ -428,13 +428,14 @@
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
-.chat-markdown {
-  font-size: 16px;
-  line-height: 1.75;
+.chat-markdown,
+.agent-composer-input {
+  /* Paseo's default content typography: 15px with a 1.4 line-height. */
+  font-size: 15px;
+  line-height: 21px;
 }
 .chat-markdown pre {
-  font-size: 14px;
-  line-height: 1.7;
+  line-height: 21px;
 }
 .chat-markdown h1 {
   font-size: 1.5em;
@@ -654,13 +655,7 @@
     padding-right: 48px;
   }
   .message-list-trigger {
-    width: 28px;
-    height: 28px;
-    opacity: 0.55;
-  }
-  .message-list-trigger:hover,
-  .message-list-trigger:focus-visible {
-    opacity: 1;
+    display: none;
   }
 }
 @media (prefers-reduced-motion: reduce) {

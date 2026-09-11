@@ -48,6 +48,7 @@ test("sent-message rail previews and jumps through paginated history, with a nar
     await page.reload();
     const nav = page.getByRole("navigation", { name: "Your messages", exact: true });
     await expect(nav.getByRole("button")).toHaveCount(36);
+    await expect(page.getByRole("button", { name: "Browse your messages" })).toBeHidden();
     const timeline = page.getByRole("log", { name: "Chat timeline", exact: true });
     await expect
       .poll(() => timeline.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight))

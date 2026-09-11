@@ -17,6 +17,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { ProviderIcon } from "@/agents/provider-icon";
+import { invalidateModelCatalogs } from "@/agents/model-catalog";
 
 export function ProvidersSettings() {
   const connection = useContext(TerminalConnectionContext);
@@ -35,6 +36,7 @@ export function ProvidersSettings() {
       if (!connection) throw new Error("Reconnect to the machine first.");
       const result = await connection.requestProvider(operation, crypto.randomUUID());
       if (result.outcome.status === "error") throw new Error(result.outcome.message);
+      if (operation.kind !== "list") invalidateModelCatalogs(connection);
       if (mounted.current && active()) {
         setData(result.outcome);
         if (operation.kind === "list") setRefreshError(null);

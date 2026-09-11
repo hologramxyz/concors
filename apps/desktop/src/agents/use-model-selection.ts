@@ -1,12 +1,15 @@
 import { useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { ProviderCatalogCache, providerCatalogCache } from "./provider-catalog-cache";
 import { AgentStartedContext } from "./context";
-import {
-  AgentProviderIdSchema,
-  type AgentInfo,
-  type AgentProviderCatalog,
-} from "@concors/protocol";
+import { AgentProviderIdSchema, type AgentInfo } from "@concors/protocol";
+import { modelSelection } from "@concors/client-core";
+import { modelCatalog } from "./model-catalog";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
+import { PaneVisibilityContext } from "@/components/compact-layout";
+import { useTabVisible } from "@/workspace/tab-visibility";
+
+const empty = { providers: [], pending: [], error: null };
+const emptySnapshot = () => empty;
+const emptySubscribe = () => () => undefined;
 
 export function useAgentModelSelection(
   agent: AgentInfo,
@@ -14,68 +17,53 @@ export function useAgentModelSelection(
   enabled = true,
 ) {
   const connection = useContext(TerminalConnectionContext);
+  const paneVisible = useContext(PaneVisibilityContext);
+  const tabVisible = useTabVisible();
   const onStarted = useContext(AgentStartedContext);
-  const cache = useMemo(
-    () =>
-      connection ? providerCatalogCache(connection, agent.directory) : new ProviderCatalogCache(),
-    [connection, agent.directory],
-  );
   const generation = useRef(0);
   useEffect(
     () => () => {
       generation.current++;
     },
-    [connection, agent.id, cache],
+    [connection, agent.id],
   );
-  const catalog = useSyncExternalStore(cache.subscribe, cache.getSnapshot);
-  const [loadingProvider, setLoadingProvider] = useState<string | null>(null),
-    [switching, setSwitching] = useState(false),
+  const epoch = connection?.workspace?.epoch;
+  const cache = useMemo(
+    () => (connection ? modelCatalog(connection, agent.directory, epoch) : null),
+    [connection, agent.directory, epoch],
+  );
+  const snapshot = useSyncExternalStore(
+    cache?.subscribe ?? emptySubscribe,
+    cache?.getSnapshot ?? emptySnapshot,
+  );
+  const [switching, setSwitching] = useState(false),
     [error, setError] = useState<string | null>(null);
-  const cachedCurrent = catalog.find((p) => p.id === agent.provider);
-  const currentModels = agent.models?.length ? agent.models : (cachedCurrent?.models ?? []);
-  const current: AgentProviderCatalog = {
-    ...cachedCurrent,
+  const known = snapshot.providers.find((p) => p.id === agent.provider);
+  const currentModels = agent.models?.length ? agent.models : (known?.models ?? []);
+  const current = {
+    ...known,
     id: agent.provider,
+    label: agent.providerLabel ?? known?.label,
     models: currentModels,
+    loaded: known?.loaded || !!currentModels.length,
   };
-  const providers = catalog.some((p) => p.id === agent.provider)
-    ? catalog.map((p) => (p.id === agent.provider ? current : p))
-    : [current, ...catalog];
-  const model = agent.settings?.model ?? agent.model;
-  const load = async (provider = agent.provider) => {
-    if (
-      !enabled ||
-      !connection ||
-      !connection.state ||
-      connection.state.status !== "ready" ||
-      !connection.state.daemon.capabilities?.includes("agent-providers")
-    )
-      return;
-    const attempt = generation.current;
-    setLoadingProvider(provider);
-    setError(null);
-    try {
-      await cache.load(provider, async () => {
-        const result = await connection.requestAgent(
-          { kind: "provider-catalog", sessionId: agent.id, provider },
-          crypto.randomUUID(),
-        );
-        if (result.outcome.status === "error") throw new Error(result.outcome.message);
-        return result.outcome.providers ?? [];
-      });
-    } catch (e) {
-      if (attempt === generation.current)
-        setError(e instanceof Error ? e.message : "Could not load providers");
-    } finally {
-      if (attempt === generation.current)
-        setLoadingProvider((current) => (current === provider ? null : current));
-    }
-  };
+  const providers = known
+    ? snapshot.providers.map((p) => (p.id === agent.provider ? current : p))
+    : [current, ...snapshot.providers];
+  const selection = modelSelection(agent, currentModels);
+  const load = (provider?: string) =>
+    (enabled ? cache?.load(agent, provider) : undefined) ?? Promise.resolve();
+  const ready =
+    enabled &&
+    paneVisible &&
+    tabVisible &&
+    agent.status !== "starting" &&
+    !!agent.threadId &&
+    connection?.state.status === "ready";
   useEffect(() => {
-    if (!enabled) return;
-    // Warm only the current provider, not a process for every installed CLI.
+    if (!cache || !ready) return;
     const refresh = () => {
-      if (document.visibilityState === "visible") void load();
+      if (document.visibilityState === "visible") void cache.warm(agent);
     };
     refresh();
     window.addEventListener("focus", refresh);
@@ -88,9 +76,9 @@ export function useAgentModelSelection(
       window.removeEventListener("focus", refresh);
       unsubscribe?.();
     };
-    // The request uses this conversation's identity; agent revision updates must not trigger discovery loops.
+    // The shared cache coalesces both native/web composers and keeps menus warm across panes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connection, agent.id, agent.provider, cache, enabled]);
+  }, [cache, connection, agent.id, agent.provider, ready]);
   const choose = async (next: string, id?: string) => {
     const provider = AgentProviderIdSchema.parse(id ?? agent.provider);
     if (provider === agent.provider) {
@@ -124,5 +112,14 @@ export function useAgentModelSelection(
       setSwitching(false);
     }
   };
-  return { currentModels, model, providers, load, choose, loadingProvider, switching, error };
+  return {
+    currentModels,
+    selection,
+    providers,
+    load,
+    choose,
+    pending: snapshot.pending,
+    switching,
+    error: error ?? snapshot.error,
+  };
 }

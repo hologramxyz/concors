@@ -1,7 +1,6 @@
 import type { AgentProviderCatalog } from "@concors/protocol";
-import type { DaemonConnection } from "@concors/daemon-client";
 
-/** Memory-only, scoped to a connection and project directory; never shared across machines. */
+/** Merge discovery rows without restoring stale account/configuration snapshots. */
 export class ProviderCatalogCache {
   private snapshot: AgentProviderCatalog[] = [];
   private listeners = new Set<() => void>();
@@ -64,25 +63,4 @@ export class ProviderCatalogCache {
     this.pending.set(provider, job);
     return job;
   }
-}
-
-const caches = new WeakMap<DaemonConnection, Map<string, ProviderCatalogCache>>();
-export function providerCatalogCache(connection: DaemonConnection, directory: string) {
-  let scopes = caches.get(connection);
-  if (!scopes) {
-    scopes = new Map();
-    caches.set(connection, scopes);
-    const entries = scopes;
-    connection.subscribe((state) => {
-      if (state.status !== "ready") for (const cache of entries.values()) cache.clear();
-    });
-  }
-  let cache = scopes.get(directory);
-  if (!cache) {
-    cache = new ProviderCatalogCache();
-    // Only metadata is retained, with a bounded number of project scopes.
-    if (scopes.size >= 64) scopes.delete(scopes.keys().next().value ?? "");
-    scopes.set(directory, cache);
-  }
-  return cache;
 }

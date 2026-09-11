@@ -31,7 +31,7 @@ test("terminal profiles sync, launch literal arguments, and switch within the sa
         page.getByRole("menuitemradio", { name, exact: true }).locator("svg").last(),
       ).toBeVisible();
     }
-    await page.getByRole("menuitem", { name: "Manage terminal profiles…" }).click();
+    await page.getByRole("menuitem", { name: "Edit pane profiles" }).click();
     await expect(page.getByRole("heading", { name: "Terminals", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Edit Codex profile" }).click();
     await expect(page.getByLabel("Command", { exact: true })).toHaveValue("codex");
@@ -89,7 +89,9 @@ test("terminal profiles sync, launch literal arguments, and switch within the sa
     await expect(page.getByRole("button", { name: "Edit Dev task profile" })).toHaveCount(0);
     await second.getByRole("button", { name: "New tab", exact: true }).click();
     await expect(second.getByRole("menuitem", { name: "Dev task", exact: true })).toHaveCount(0);
-    await second.getByRole("menuitem", { name: "Add terminal profile…" }).click();
+    await second.getByRole("menuitem", { name: "Edit pane profiles" }).click();
+    await expect(second.getByRole("heading", { name: "Terminals", exact: true })).toBeVisible();
+    await second.getByRole("button", { name: "Add terminal profile", exact: true }).click();
     await expect(second.getByRole("dialog", { name: "Add terminal profile" })).toBeVisible();
     await expect(second.getByLabel("Name", { exact: true })).toBeFocused();
     await second.screenshot({ path: "test-results/terminal-profile-editor.png" });

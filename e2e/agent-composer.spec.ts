@@ -132,7 +132,7 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     await expect(elapsed).not.toHaveText(initialElapsed);
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toHaveCSS(
       "font-size",
-      "16px",
+      "15px",
     );
     await expect(page.getByLabel("Agent plan")).toContainText("Implement the change");
     await page.getByLabel("Sub-agent activity").getByText("Agent update", { exact: true }).click();

@@ -96,7 +96,7 @@ export function ChatPane({
               aria-label="Preparing agent"
               placeholder="Preparing agent…"
               disabled
-              className="min-h-16 w-full resize-none bg-transparent px-3 py-3 text-[16px] leading-relaxed outline-none"
+              className="agent-composer-input min-h-16 w-full resize-none bg-transparent px-3 py-3 outline-none"
             />
           </div>
         </div>
