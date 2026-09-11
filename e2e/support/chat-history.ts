@@ -27,6 +27,7 @@ export async function mockChatHistory(page: Page, url = "ws://127.0.0.1:7429/ws"
     client = socket;
     const server = socket.connectToServer();
     const reads = new Map<string, { before?: number; after?: number }>();
+    const indexes = new Map<string, number | undefined>();
     socket.onMessage((raw) => {
       const message = JSON.parse(String(raw));
       if (message.type === "agent.request" && message.operation.kind === "read") {
@@ -34,11 +35,31 @@ export async function mockChatHistory(page: Page, url = "ws://127.0.0.1:7429/ws"
         reads.set(message.requestId, { before, after });
         requests.push({ before, after });
       }
+      if (message.type === "agent.request" && message.operation.kind === "list-messages")
+        indexes.set(message.requestId, message.operation.before);
       server.send(raw);
     });
     server.onMessage(async (raw) => {
       const message = JSON.parse(String(raw));
       const cursor = reads.get(message.requestId);
+      if (
+        indexes.has(message.requestId) &&
+        message.type === "agent.result" &&
+        message.outcome.status === "ok"
+      ) {
+        const before = indexes.get(message.requestId) ?? count;
+        indexes.delete(message.requestId);
+        const end = Math.min(before, count);
+        const start = Math.max(0, end - 200);
+        message.outcome.messageIndex = {
+          messages: Array.from({ length: end - start }, (_, offset) => {
+            const message = item(start + offset);
+            return { id: message.id, position: message.position, preview: message.text };
+          }),
+          hasMore: start > 0,
+        };
+        message.outcome.conversation.agent.historyRevision = revision;
+      }
       if (cursor && message.type === "agent.result" && message.outcome.status === "ok") {
         reads.delete(message.requestId);
         agent = { ...message.outcome.conversation.agent, historyRevision: revision };
