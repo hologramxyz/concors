@@ -1,5 +1,15 @@
+import { Button } from "@/components/ui/button";
 import { AttachmentPreview } from "./attachment-preview";
-import { Dialog } from "radix-ui";
+import {
+  Dialog,
+  DialogContent,
+  DialogBody,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogTrigger,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { useAgents } from "./context";
 import { useContext } from "react";
@@ -298,55 +308,49 @@ function ChildConversation({ parent, childId }: { parent: AgentItem; childId: st
     }
   };
   return (
-    <Dialog.Root open={open} onOpenChange={setOpen}>
-      <button
-        type="button"
-        className="mt-2 text-xs underline"
-        onClick={() => {
-          setOpen(true);
-          void load();
-        }}
-      >
-        Open agent conversation
-      </button>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60" />
-        <Dialog.Content className="fixed top-1/2 left-1/2 z-50 flex max-h-[85dvh] w-[min(48rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 rounded-xl border bg-background p-5 shadow-xl">
-          <div className="flex justify-between gap-4">
-            <Dialog.Title className="font-medium">Agent conversation</Dialog.Title>
-            <Dialog.Close className="text-sm">Close</Dialog.Close>
-          </div>
-          <Dialog.Description className="text-xs text-muted-foreground">
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          className="mt-2 text-xs underline"
+          onClick={() => {
+            void load();
+          }}
+        >
+          Open agent conversation
+        </button>
+      </DialogTrigger>
+      <DialogContent size="wide" className="overflow-hidden">
+        <DialogHeader>
+          <DialogTitle>Agent conversation</DialogTitle>
+          <DialogDescription>
             Recent messages from this child agent. Reading them does not send a prompt.
-          </Dialog.Description>
-          <div className="min-h-0 space-y-4 overflow-y-auto">
-            {loading ? (
-              <p className="text-sm">Reading conversation…</p>
-            ) : error ? (
-              <p role="alert" className="text-sm text-destructive">
-                {error}
-              </p>
-            ) : items.length ? (
-              items.map((item) => (
-                <article key={item.id} className="space-y-1 text-sm">
-                  <p className="text-xs text-muted-foreground">{item.title}</p>
-                  <AgentMarkdown>{item.text || item.detail}</AgentMarkdown>
-                </article>
-              ))
-            ) : (
-              <p className="text-sm text-muted-foreground">No messages reported yet.</p>
-            )}
-          </div>
-          <button
-            type="button"
-            className="self-start rounded border px-3 py-1 text-xs"
-            disabled={loading}
-            onClick={() => void load()}
-          >
+          </DialogDescription>
+        </DialogHeader>
+        <DialogBody className="space-y-4">
+          {loading ? (
+            <p className="text-sm">Reading conversation…</p>
+          ) : error ? (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          ) : items.length ? (
+            items.map((item) => (
+              <article key={item.id} className="space-y-1 text-sm">
+                <p className="text-xs text-muted-foreground">{item.title}</p>
+                <AgentMarkdown>{item.text || item.detail}</AgentMarkdown>
+              </article>
+            ))
+          ) : (
+            <p className="text-sm text-muted-foreground">No messages reported yet.</p>
+          )}
+        </DialogBody>
+        <DialogFooter>
+          <Button type="button" variant="outline" disabled={loading} onClick={() => void load()}>
             Reload conversation
-          </button>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

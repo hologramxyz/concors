@@ -18,7 +18,7 @@ function Command({ className, ...props }: React.ComponentProps<typeof CommandPri
     <CommandPrimitive
       data-slot="command"
       className={cn(
-        "flex size-full flex-col overflow-hidden rounded-xl! bg-popover p-1 text-popover-foreground",
+        "flex min-h-0 flex-1 flex-col overflow-hidden bg-popover text-popover-foreground",
         className,
       )}
       {...props}
@@ -31,7 +31,7 @@ function CommandDialog({
   description = "Search for a command to run...",
   children,
   className,
-  showCloseButton = false,
+  showCloseButton = true,
   ...props
 }: React.ComponentProps<typeof Dialog> & {
   title?: string;
@@ -43,15 +43,10 @@ function CommandDialog({
   return (
     <Dialog {...props}>
       <DialogContent
-        className={cn(
-          compact
-            ? "mobile-search-drawer"
-            : "top-[12vh] translate-y-0 overflow-hidden rounded-xl! p-0 sm:max-w-2xl",
-          className,
-        )}
+        className={cn("overflow-hidden", compact && "mobile-search-drawer", className)}
         showCloseButton={compact || showCloseButton}
       >
-        <DialogHeader className={compact ? undefined : "sr-only"}>
+        <DialogHeader>
           <DialogTitle>{compact ? "Search workspace" : title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
@@ -66,8 +61,8 @@ function CommandInput({
   ...props
 }: React.ComponentProps<typeof CommandPrimitive.Input>) {
   return (
-    <div data-slot="command-input-wrapper" className="p-2 pb-1">
-      <InputGroup className="h-12! rounded-lg! border-input/30 bg-input/30 shadow-none! *:data-[slot=input-group-addon]:pl-3!">
+    <div data-slot="command-input-wrapper" className="shrink-0 pb-2">
+      <InputGroup className="h-11! rounded-lg! border-input/30 bg-input/30 shadow-none! *:data-[slot=input-group-addon]:pl-3!">
         <CommandPrimitive.Input
           data-slot="command-input"
           className={cn(
@@ -89,7 +84,7 @@ function CommandList({ className, ...props }: React.ComponentProps<typeof Comman
     <CommandPrimitive.List
       data-slot="command-list"
       className={cn(
-        "chat-scroll max-h-[min(60vh,32rem)] scroll-py-1 overflow-x-hidden overflow-y-auto outline-none",
+        "chat-scroll max-h-[min(60dvh,32rem)] min-h-0 scroll-py-1 overflow-x-hidden overflow-y-auto overscroll-contain outline-none",
         className,
       )}
       {...props}
@@ -104,7 +99,7 @@ function CommandEmpty({
   return (
     <CommandPrimitive.Empty
       data-slot="command-empty"
-      className={cn("py-8 text-center text-base", className)}
+      className={cn("py-8 text-center text-[15px]", className)}
       {...props}
     />
   );
@@ -148,7 +143,7 @@ function CommandItem({
     <CommandPrimitive.Item
       data-slot="command-item"
       className={cn(
-        "group/command-item relative flex min-h-11 cursor-pointer flex-wrap items-center gap-3 rounded-sm px-3 py-2.5 text-base outline-hidden select-none in-data-[slot=dialog-content]:rounded-lg! data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-selected:bg-muted data-selected:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 data-selected:*:[svg]:text-foreground",
+        "group/command-item relative flex min-h-11 cursor-pointer flex-wrap items-center gap-3 rounded-lg px-3 py-2.5 text-[15px] outline-hidden select-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-selected:bg-muted data-selected:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 data-selected:*:[svg]:text-foreground",
         className,
       )}
       {...props}
