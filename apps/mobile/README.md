@@ -219,14 +219,18 @@ the in-memory demo cannot prove real provider switching or saved profile launch.
 6. Where available, import a native session or fork an idle conversation. The phone
    should open the new chat while the original remains in Tabs and panes. Rewind
    names its exact scope; file checkpoints and conversation rollback differ.
-7. Open the sidebar: it has the Concourse logo and glass Search, with no extra menu
-   button. The workspace slides above it with a visible 32px rounded edge; hidden
+7. Open the sidebar: it has glass Search, with no logo or extra menu
+   button. The workspace slides above it with a visible 32px rounded glass-style rim; hidden
    sidebar controls must never show through the main view. Tap your name/avatar to open Account, not Settings. The drawer starts
    with the machine selector, followed by Add machine, Settings and Sign out.
    Direct previews offer **Your profile → Sign in** until you authenticate your real
    Concourse account, with **Disconnect desktop** kept separate from profile sign-out. Add machine
    explains setup and refreshes existing cloud machines; it does not provision or
    purchase one. Closing nested machine sheets restores focus to the account drawer.
+   CPU/RAM sits just below the sidebar machine selector, using the selected daemon's
+   live readings. It takes no space in chat and unsubscribes when the sidebar closes.
+   Older daemons show **Update daemon for usage**; stale/offline readings are not
+   presented as current. See [measurement limits](../../docs/host-resource-usage.md).
 
 The full [provider support report](../../docs/unified-chat-provider-support.md)
 covers six built-in agents, 38 opt-in ACP presets, credential/MCP settings, native
@@ -245,8 +249,10 @@ alone cannot enable files on an older running daemon. No control-plane/server PR
 Upgrade/restart that daemon when it is safe for your sessions, or test with a separate current daemon.
 
 1. Open a project, then tap the top-right **Files** button. Swipe left on chat or the terminal
-   to open Files; swipe right on the file surface or header, or tap **Back to chat**, to return.
-   Swipe right from chat or the terminal opens the project sidebar. Inputs, editors, code blocks and
+   to open Files; swipe right on directory rows, preview links or the header to return without
+   activating the touched control. In a code editor, swipe right from the leftmost 28px;
+   the rest of the editor keeps text selection and scrolling. **Back to chat** also returns.
+   Swipe right from chat or the terminal opens the project sidebar. Inputs, file tabs, popup menus and
    terminal toolbar controls keep their own gestures; vertical terminal gestures never navigate.
    The Files button and navigation also work on older/offline daemons, with an explanation of
    what is missing. They do not invent a filesystem or bypass the daemon's capabilities.
@@ -282,6 +288,11 @@ effects or native blur painted over HTML text. The shared renderer reserves layo
 duplicate controls from touch/VoiceOver, and retains draft, attachment, queue, configuration and
 delivery logic. Native controls relay bounded, scope/connection-checked UI events to that logic.
 Open web drawers suppress the native layer so their focus traps and backdrops remain usable.
+
+The rounded workspace boundary is a decorative **CSS backdrop-blurred rim**, including inside
+WKWebView, not another native Liquid Glass control. It reveals a 3px translucent edge while
+sliding above the sidebar, without resizing the terminal or blurring chat content. It fades away
+when closed, never intercepts touches, and has opaque/reduced-motion accessibility fallbacks.
 
 The iOS-specific imports do not enter Android or Safari bundles. Android/web retain their shared
 controls and web styling. Older iOS or Reduce Transparency uses native bordered controls and an

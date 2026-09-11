@@ -263,9 +263,26 @@ replace signed physical-device acceptance. Release evidence gates remain unchang
 
 ### Profile and sidebar corrections
 
-The sidebar has a Concourse logo and Search, not a second menu button. Its controls
+Merged desktop CPU/RAM telemetry is shared with mobile: the compact resource row
+is below the sidebar's machine selector, leaving the profile footer and conversation
+untouched. The sidebar alone owns its subscription; closing it stops updates, and
+changing machines never retains the previous machine's readings. It uses the same
+10-second stale cutoff, unavailable/offline states and high-usage warnings as desktop.
+
+The sidebar has Search, without a logo or second menu button. Its controls
 are contained in a lower stacking layer; the workspace clips its content and slides
 above the sidebar with a 32px rounded edge, independent of control-corner preferences.
+The edge has a 3px CSS backdrop-blurred rim, while the conversation remains opaque and
+its layout dimensions stay unchanged. This decorative WebView boundary does not replace
+the native Expo glass controls. Reduced transparency and motion retain accessible fallbacks.
+
+Files permits rightward swipe-back from directory buttons and preview links, suppressing
+the trailing click so navigation never also opens a file. Code editing retains its own
+gestures except for a 28px left-edge navigation strip; headers remain drag handles too.
+Input fields, horizontal file tabs and popup menus continue to own their gestures.
+The file tree, Markdown preview and editor gutter declare vertical touch handling at
+their scroll containers, so the browser does not cancel horizontal navigation before
+pointer-up (see [touch-action](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/touch-action)).
 
 The footer is now a real profile entry. Normal signed-in sessions show the Concourse
 account as before. Direct previews offer **Your profile → Sign in**, using an optional,
@@ -276,9 +293,18 @@ machine privileges. The proxy is disabled unless its HTTPS API origin is explici
 configured; it accepts only sign-in, sign-out and `/me`, behind existing private identity
 checks. It never copies desktop credentials or substitutes a Tailscale profile.
 
-Correction verification: 487 unit tests passed (one opt-in live API test skipped),
+Initial profile-correction verification: 487 unit tests passed (one opt-in live API test skipped),
 desktop/mobile typechecks and scoped lint passed; six sidebar/gesture/native-bridge
 scenarios and two direct-daemon scenarios passed. The direct scenario verifies the
 profile flow using a deterministic account fixture, no credentials in renderer messages,
 no additional workspace socket, unchanged terminal identity and retained drafts.
 This does not claim authentication with the user's credentials or physical iOS testing.
+
+CPU/RAM, Files swipe-back and glass-edge follow-up: main through `fd79216` / #57 is
+merged. 504 unit tests passed (one opt-in live API test skipped), along with ten
+direct-daemon browser tests and six sidebar/glass/native-bridge scenarios. These cover
+live machine sampling, subscription cleanup, stale/unavailable/older-daemon states,
+file-row/Markdown/editor-edge gestures, draft/save/conflict safety, terminal profiles
+and session preservation, unchanged workspace dimensions and accessibility fallbacks.
+Desktop/mobile typechecks, scoped lint, formatting and diff checks passed. Physical
+iPhone/native SwiftUI acceptance and release evidence gates remain separate.
