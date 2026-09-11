@@ -165,8 +165,12 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
         `[data-user-message="${CSS.escape(entry.id)}"]`,
       );
       if (!viewport || !target) throw new Error("This message is no longer available.");
+      const inset = Math.max(
+        16,
+        Number.parseFloat(getComputedStyle(viewport).scrollPaddingTop) || 0,
+      );
       viewport.scrollTop +=
-        target.getBoundingClientRect().top - viewport.getBoundingClientRect().top - 16;
+        target.getBoundingClientRect().top - viewport.getBoundingClientRect().top - inset;
       target.focus({ preventScroll: true });
       target.animate([{ backgroundColor: "var(--muted)" }, { backgroundColor: "transparent" }], {
         duration: matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 700,

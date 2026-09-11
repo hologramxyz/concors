@@ -12,11 +12,11 @@ export function useConversation(sessionId: string) {
   const [hasMore, setHasMore] = useState(false);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const generation = useRef(0);
+  const generation = useRef(Symbol());
   const pageRequest = useRef<Promise<AgentItem[]> | null>(null);
   useEffect(() => {
     if (!connection) return;
-    const currentGeneration = ++generation.current;
+    generation.current = Symbol();
     let disposed = false;
     const unsubscribe = connection.onAgent((event) => {
       if (
@@ -25,7 +25,7 @@ export function useConversation(sessionId: string) {
         (event.agent.historyRevision ?? 0) !== revision.current
       ) {
         revision.current = event.agent.historyRevision ?? 0;
-        generation.current++;
+        generation.current = Symbol();
         setItems([]);
         void refresh();
       }
@@ -61,7 +61,7 @@ export function useConversation(sessionId: string) {
     });
     return () => {
       disposed = true;
-      if (generation.current >= currentGeneration) generation.current++;
+      generation.current = Symbol();
       unsubscribe();
       off();
     };

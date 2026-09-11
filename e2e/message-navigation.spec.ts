@@ -30,7 +30,9 @@ test("sent-message rail previews and jumps through paginated history, with a nar
     await expect
       .poll(() => connection.agents.find((a) => a.directory === directory)?.status)
       .toBe("idle");
-    const sessionId = connection.agents.find((a) => a.directory === directory)!.id;
+    const session = connection.agents.find((a) => a.directory === directory);
+    if (!session) throw new Error("Fixture agent was not created");
+    const sessionId = session.id;
     const send = async (text: string) => {
       const result = await connection.requestAgent(
         { kind: "send", sessionId, text },
