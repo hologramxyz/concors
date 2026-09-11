@@ -137,6 +137,17 @@ function MobileWorkspaceContent({
     ? resolveMobileSelection(workspace, local.machineId === host.machineId ? local.target : {})
     : null;
   const { project, tab, pane } = selected ?? { project: null, tab: null, pane: null };
+  useEffect(() => {
+    if (local.machineId !== host.machineId || !local.target.sessionId || !project || !tab || !pane)
+      return;
+    // Resolve a session deep link once, then keep the physical pane selected
+    // when its provider/session binding changes on any connected client.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLocal({
+      machineId: host.machineId,
+      target: { projectId: project.id, tabId: tab.id, paneId: pane.id },
+    });
+  }, [local.machineId, local.target.sessionId, host.machineId, project, tab, pane]);
   const filesAvailable = !!(
     ready &&
     connection?.state.status === "ready" &&
@@ -301,11 +312,20 @@ function MobileWorkspaceContent({
     select(memories.current.get(`${host.machineId}:${projectId}`) ?? { projectId });
   const openAgent = useCallback(
     (sessionId: string) => {
-      setLocal({ machineId: host.machineId, target: { sessionId } });
+      const target =
+        connection?.workspace && resolveMobileSelection(connection.workspace, { sessionId });
+      if (!target?.pane || !target.tab) {
+        setError("This agent's pane has been closed.");
+        return;
+      }
+      setLocal({
+        machineId: host.machineId,
+        target: { projectId: target.project.id, tabId: target.tab.id, paneId: target.pane.id },
+      });
       setSidebarOpen(false);
       setError(null);
     },
-    [host.machineId],
+    [host.machineId, connection],
   );
   const execute = async (operation: WorkspaceOperation) => {
     if (!connection?.workspace || !ready || mutating.current)

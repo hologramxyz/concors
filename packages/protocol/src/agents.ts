@@ -147,6 +147,8 @@ export type AgentPresentation = z.infer<typeof AgentPresentationSchema>;
 export const AgentInfoSchema = z.object({
   id: Id,
   projectId: Id,
+  // Provider-specific conversations that can be restored in the same pane.
+  providerGroupId: Id.optional(),
   provider: AgentProviderIdSchema,
   engine: ProviderEngineSchema.optional(),
   providerLabel: z.string().max(100).optional(),
