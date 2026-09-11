@@ -17,16 +17,12 @@ import {
   type AgentResult,
 } from "@concors/protocol";
 import type { WorkspaceStore } from "../workspace/store.ts";
-import { resolveProfile } from "../terminal/profiles.ts";
+import { ProviderRegistry } from "./providers/registry.ts";
 import { mapCodexItem } from "./codex/items.ts";
 
 import { createProvider, type AgentProviderFactory } from "./providers/index.ts";
 import type { ConversationProvider as AgentProvider } from "./providers/contract.ts";
-import {
-  AgentProviderIdSchema,
-  agentProviderNames,
-  type AgentProviderCatalog,
-} from "@concors/protocol";
+import { agentProviderName, type AgentProviderCatalog } from "@concors/protocol";
 export type { AgentProviderFactory } from "./providers/index.ts";
 export type { ConversationProvider as AgentProvider } from "./providers/contract.ts";
 
@@ -62,13 +58,16 @@ export class AgentManager {
   readonly #factory: AgentProviderFactory;
   readonly #runtimes = new Map<string, Runtime>();
   #closed = false;
+  private registry: ProviderRegistry;
   private catalogs = new Map<string, { expires: number; value: Promise<AgentProviderCatalog[]> }>();
   constructor(
     store: WorkspaceStore,
     emit: (event: AgentEvent) => void,
     workspaceChanged: () => void,
     factory: AgentProviderFactory = createProvider,
+    registry: ProviderRegistry = new ProviderRegistry(),
   ) {
+    this.registry = registry;
     this.#store = store;
     this.#emit = emit;
     this.#workspaceChanged = workspaceChanged;
@@ -197,7 +196,10 @@ export class AgentManager {
       if (runtime.closed || this.#closed) throw new Error("Agent connection ended");
       this.update(id, { threadId: response.thread.id, model: response.model ?? info.model });
       try {
-        const models = parseModels(await provider.request("model/list", {}));
+        const models = parseModels(
+          await provider.request("model/list", {}),
+          this.registry.config(info.provider).models,
+        );
         this.update(id, { models });
       } catch {
         /* Older providers can still run their configured model. */
@@ -258,7 +260,7 @@ export class AgentManager {
       }
       if (op.kind === "provider-catalog") {
         const info = this.#store.agent(op.sessionId);
-        const providers = await this.catalog(info);
+        const providers = await this.catalog(info, op.provider);
         return {
           type: "agent.result",
           requestId: request.requestId,
@@ -275,7 +277,9 @@ export class AgentManager {
         const previous = this.#store.agent(op.sessionId);
         if (previous.revision !== op.expectedRevision) throw new Error("Agent changed. Try again.");
         if (previous.provider === op.provider) throw new Error("Choose a different provider");
-        const catalog = (await this.catalog(previous)).find((p) => p.id === op.provider);
+        const catalog = (await this.catalog(previous, op.provider)).find(
+          (p) => p.id === op.provider,
+        );
         if (!catalog || catalog.error)
           throw new Error(catalog?.error ?? "Provider is not installed on this machine");
         if (op.model && !catalog.models.some((m) => m.id === op.model))
@@ -308,7 +312,7 @@ export class AgentManager {
         const info: AgentInfo = {
           id: randomUUID(),
           projectId: project.id,
-          name: agentProviderNames[op.provider ?? "codex"],
+          name: agentProviderName(op.provider ?? "codex"),
           directory,
           provider: op.provider ?? "codex",
           model: op.model ?? null,
@@ -338,7 +342,10 @@ export class AgentManager {
       if (op.kind === "refresh-models") {
         const provider = await this.provider(info.id);
         this.update(info.id, {
-          models: parseModels(await provider.request("model/list", {})),
+          models: parseModels(
+            await provider.request("model/list", {}),
+            this.registry.config(info.provider).models,
+          ),
           updatedAt: info.updatedAt,
         });
         return this.result(request, info.id);
@@ -412,8 +419,8 @@ export class AgentManager {
         const next = {
           ...info,
           name:
-            info.name === agentProviderNames[info.provider]
-              ? op.text.split("\n")[0]?.slice(0, 80) || agentProviderNames[info.provider]
+            info.name === agentProviderName(info.provider)
+              ? op.text.split("\n")[0]?.slice(0, 80) || agentProviderName(info.provider)
               : info.name,
           status: "working" as const,
           turnId,
@@ -573,7 +580,7 @@ export class AgentManager {
     this.item(id, turnId, {
       ...mapped,
       ...(mapped.kind === "assistant"
-        ? { title: agentProviderNames[this.#store.agent(id).provider] }
+        ? { title: agentProviderName(this.#store.agent(id).provider) }
         : {}),
     });
   }
@@ -754,7 +761,7 @@ export class AgentManager {
             ? "Run command"
             : method === "item/reasoning/summaryTextDelta"
               ? "Thinking"
-              : agentProviderNames[info.provider]),
+              : agentProviderName(info.provider)),
         text: tool ? (prior?.text ?? "") : (prior?.text ?? "") + event.delta,
         detail: tool ? (prior?.detail ?? "") + event.delta : (prior?.detail ?? ""),
         status: "running",
@@ -807,7 +814,7 @@ export class AgentManager {
       turnId: scope.turnId,
       kind: questions ? "questions" : "approval",
       title: questions
-        ? `${agentProviderNames[info.provider]} needs your input`
+        ? `${agentProviderName(info.provider)} needs your input`
         : method.includes("fileChange")
           ? "Allow file changes?"
           : "Allow command execution?",
@@ -836,60 +843,70 @@ export class AgentManager {
     this.update(id, { status: "needs_input", pending: [...info.pending, pending] });
     return result;
   }
-  private catalog(info: AgentInfo): Promise<AgentProviderCatalog[]> {
-    const cached = this.catalogs.get(info.directory);
-    if (cached && cached.expires > Date.now()) return cached.value;
-    const value = Promise.all(
-      AgentProviderIdSchema.options.map(async (id) => {
-        try {
-          resolveProfile(id);
-        } catch {
-          return null;
-        }
-        if (id === info.provider && info.models?.length) return { id, models: info.models };
-        let provider: AgentProvider | undefined;
-        let timer: ReturnType<typeof setTimeout> | undefined;
-        try {
-          provider = this.#factory(
-            info.directory,
-            async () => {
-              throw new Error("No prompts are sent during model discovery");
-            },
-            id,
-          );
-          const current = provider;
-          const models = await Promise.race([
-            (async () => {
-              await current.initialize();
-              return parseModels(await current.request("model/list", {}));
-            })(),
-            new Promise<never>((_, reject) => {
-              timer = setTimeout(() => reject(new Error("Model discovery timed out")), 15000);
-            }),
-          ]);
-          return {
-            id,
-            models,
-            ...(!models.length
-              ? { error: "No models available. Connect an account using the provider CLI." }
-              : {}),
-          };
-        } catch {
-          return {
-            id,
-            models: [],
-            error:
-              "Could not load models. Check the provider installation and sign in using its CLI.",
-          };
-        } finally {
-          clearTimeout(timer);
-          await provider?.close();
-        }
+  private async catalog(info: AgentInfo, selected?: string): Promise<AgentProviderCatalog[]> {
+    const configs = this.registry.configs().filter((c) => c.enabled && this.registry.installed(c));
+    return Promise.all(
+      configs.map(async (config): Promise<AgentProviderCatalog> => {
+        const id = config.id,
+          label = config.label;
+        if (id === info.provider && info.models?.length)
+          return { id, label, models: info.models, loaded: true };
+        if (id !== selected) return { id, label, models: [], loaded: false };
+        const key = `${info.directory}:${id}:${this.registry.revision}`;
+        const cached = this.catalogs.get(key);
+        if (cached && cached.expires > Date.now())
+          return (await cached.value)[0] ?? { id, label, models: [], loaded: false };
+        const value = (async (): Promise<AgentProviderCatalog[]> => {
+          let provider: AgentProvider | undefined, timer: ReturnType<typeof setTimeout> | undefined;
+          try {
+            provider = this.#factory(
+              info.directory,
+              async () => {
+                throw new Error("Model discovery cannot approve tools or send prompts");
+              },
+              id,
+            );
+            const current = provider;
+            const models = await Promise.race([
+              (async () => {
+                await current.initialize();
+                await current.request("thread/start", {
+                  cwd: info.directory,
+                  approvalPolicy: "on-request",
+                  sandbox: "workspace-write",
+                });
+                return parseModels(await current.request("model/list", {}), config.models);
+              })(),
+              new Promise<never>((_, reject) => {
+                timer = setTimeout(
+                  () =>
+                    reject(new Error("Model discovery timed out. Check the provider in Settings.")),
+                  90000,
+                );
+              }),
+            ]);
+            return [{ id, label, models, loaded: true }];
+          } catch (error) {
+            return [
+              {
+                id,
+                label,
+                models: [],
+                loaded: true,
+                error: error instanceof Error ? error.message : "Could not load provider models",
+              },
+            ];
+          } finally {
+            clearTimeout(timer);
+            await provider?.close();
+          }
+        })();
+        if (this.catalogs.size >= 128)
+          this.catalogs.delete(this.catalogs.keys().next().value ?? "");
+        this.catalogs.set(key, { expires: Date.now() + 60000, value });
+        return (await value)[0] ?? { id, label, models: [], loaded: false };
       }),
-    ).then((items) => items.filter((item) => item !== null));
-    if (this.catalogs.size >= 32) this.catalogs.delete(this.catalogs.keys().next().value ?? "");
-    this.catalogs.set(info.directory, { expires: Date.now() + 30000, value });
-    return value;
+    );
   }
   async close(): Promise<void> {
     if (this.#closed) return;

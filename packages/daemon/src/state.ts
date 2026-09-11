@@ -33,6 +33,8 @@ export class DaemonState {
         "agent-attention",
         "agent-composer",
         "agent-providers",
+        "provider-settings",
+        "agent-native-controls",
         "pane-rearrangement",
         "workspace-pane-rearrangement",
         "directional-pane-split",
