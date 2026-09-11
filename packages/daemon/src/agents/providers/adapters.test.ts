@@ -1,3 +1,6 @@
+import { Readable, Writable } from "node:stream";
+import { AgentSideConnection, ndJsonStream, PROTOCOL_VERSION } from "@agentclientprotocol/sdk";
+import { AcpProvider } from "./acp.ts";
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
@@ -121,11 +124,31 @@ it("maps Claude streaming and tool decisions, interrupts, and resumes the native
   expect(options!.resume).toBe(threadId);
   await provider.request("command/execute", { ...turn, name: "compact", args: "Keep decisions" });
   emit({ type: "system", subtype: "status", status: "compacting" });
-  emit({ type: "system", subtype: "compact_boundary", uuid: "boundary", compact_metadata: { post_tokens: 123 } });
+  emit({
+    type: "system",
+    subtype: "compact_boundary",
+    uuid: "boundary",
+    compact_metadata: { post_tokens: 123 },
+  });
   emit({ type: "system", subtype: "compact_boundary", uuid: "boundary" });
   emit({ type: "result", is_error: false });
-  await expect.poll(() => notifications.filter((n) => n.method === "item/completed" && object(n.params["item"])["type"] === "contextCompaction").length).toBe(1);
-  expect(notifications.some((n) => n.method === "thread/tokenUsage/updated" && object(object(n.params["tokenUsage"])["last"])["totalTokens"] === 123)).toBe(true);
+  await expect
+    .poll(
+      () =>
+        notifications.filter(
+          (n) =>
+            n.method === "item/completed" &&
+            object(n.params["item"])["type"] === "contextCompaction",
+        ).length,
+    )
+    .toBe(1);
+  expect(
+    notifications.some(
+      (n) =>
+        n.method === "thread/tokenUsage/updated" &&
+        object(object(n.params["tokenUsage"])["last"])["totalTokens"] === 123,
+    ),
+  ).toBe(true);
   expect(failures).toEqual([]);
 });
 
@@ -154,9 +177,11 @@ it("reads OpenCode SSE deltas, scopes events, forwards decisions, and interrupts
                 { id: "unconnected", models: { x: { id: "hidden", name: "Hidden" } } },
               ],
             }
-          : path.endsWith("/summarize") ? true : path === "/session"
-            ? { id: "session" }
-            : {},
+          : path.endsWith("/summarize")
+            ? true
+            : path === "/session"
+              ? { id: "session" }
+              : {},
       ),
     );
   });
@@ -222,9 +247,25 @@ it("reads OpenCode SSE deltas, scopes events, forwards decisions, and interrupts
   await provider.request("turn/interrupt");
   expect(requests.some((r) => r.path === "/session/session/abort")).toBe(true);
   expect(object(notifications.at(-1)!.params["turn"])["status"]).toBe("interrupted");
-  await provider.request("command/execute", { ...turn, model: "own-account/model", name: "compact" });
-  await expect.poll(() => notifications.filter((n) => n.method === "item/completed" && object(n.params["item"])["type"] === "contextCompaction").length).toBe(1);
-  expect(requests.find((r) => r.path.endsWith("/summarize"))?.body).toEqual({ providerID: "own-account", modelID: "model" });
+  await provider.request("command/execute", {
+    ...turn,
+    model: "own-account/model",
+    name: "compact",
+  });
+  await expect
+    .poll(
+      () =>
+        notifications.filter(
+          (n) =>
+            n.method === "item/completed" &&
+            object(n.params["item"])["type"] === "contextCompaction",
+        ).length,
+    )
+    .toBe(1);
+  expect(requests.find((r) => r.path.endsWith("/summarize"))?.body).toEqual({
+    providerID: "own-account",
+    modelID: "model",
+  });
   expect(requests.filter((r) => r.path.endsWith("/prompt_async"))).toHaveLength(1);
   expect(failures).toEqual([]);
 });
@@ -313,8 +354,175 @@ it("maps Pi JSONL, denies tool confirmation, and ignores a cancelled pending dia
   await provider.request("thread/resume", { threadId: object(first["thread"])["id"] });
   expect(vi.mocked(launch).mock.calls.at(-1)![1]).toContain("--extension");
   await provider.request("command/execute", { ...turn, name: "compact", args: "Keep decisions" });
-  await expect.poll(() => notifications.filter((n) => n.method === "item/completed" && object(n.params["item"])["type"] === "contextCompaction").length).toBe(1);
-  expect(commands.find((c) => c["type"] === "compact")).toMatchObject({ customInstructions: "Keep decisions" });
+  await expect
+    .poll(
+      () =>
+        notifications.filter(
+          (n) =>
+            n.method === "item/completed" &&
+            object(n.params["item"])["type"] === "contextCompaction",
+        ).length,
+    )
+    .toBe(1);
+  expect(commands.find((c) => c["type"] === "compact")).toMatchObject({
+    customInstructions: "Keep decisions",
+  });
   expect(commands.filter((c) => c["type"] === "prompt")).toHaveLength(1);
   expect(failures).toEqual([]);
+});
+
+it("negotiates ACP controls, switches models, streams tools and respects native approval decisions", async () => {
+  const process = child();
+  const modes: string[] = [],
+    models: string[] = [],
+    prompts: unknown[] = [];
+  const server = new AgentSideConnection(
+    (client) => ({
+      initialize: async () => ({
+        protocolVersion: PROTOCOL_VERSION,
+        agentCapabilities: { loadSession: true, promptCapabilities: { image: false } },
+        authMethods: [],
+      }),
+      authenticate: async () => ({}),
+      newSession: async () => {
+        await client.sessionUpdate({
+          sessionId: "acp-session",
+          update: {
+            sessionUpdate: "available_commands_update",
+            availableCommands: [{ name: "compact", description: "Compact session" }],
+          },
+        });
+        return {
+          sessionId: "acp-session",
+          models: {
+            currentModelId: "model-a",
+            availableModels: [
+              { modelId: "model-a", name: "Model A" },
+              { modelId: "model-b", name: "Model B" },
+            ],
+          },
+          modes: {
+            currentModeId: "ask",
+            availableModes: [
+              { id: "ask", name: "Ask" },
+              { id: "plan", name: "Plan" },
+            ],
+          },
+        };
+      },
+      setSessionMode: async (p) => {
+        modes.push(p.modeId);
+        return {};
+      },
+      unstable_setSessionModel: async (p) => {
+        models.push(p.modelId);
+        return {};
+      },
+      cancel: async () => {
+        /* No prompt remains pending in this fixture. */
+      },
+      prompt: async (p) => {
+        prompts.push(p.prompt);
+        const outcome = await client.requestPermission({
+          sessionId: p.sessionId,
+          options: [
+            { optionId: "yes", name: "Once", kind: "allow_once" },
+            { optionId: "no", name: "No", kind: "reject_once" },
+          ],
+          toolCall: { toolCallId: "tool-1", title: "Read file", rawInput: { path: "README.md" } },
+        });
+        expect(outcome.outcome).toEqual({ outcome: "selected", optionId: "no" });
+        await client.sessionUpdate({
+          sessionId: p.sessionId,
+          update: {
+            sessionUpdate: "agent_message_chunk",
+            content: { type: "text", text: "Understood." },
+          },
+        });
+        return { stopReason: "end_turn" };
+      },
+    }),
+    ndJsonStream(
+      Writable.toWeb(process.stdout as PassThrough),
+      Readable.toWeb(process.stdin as PassThrough) as ReadableStream<Uint8Array>,
+    ),
+  );
+  void server;
+  const provider = new AcpProvider(
+    tmpdir(),
+    async () => ({ decision: "decline" }),
+    { id: "fixture-acp", label: "Fixture", engine: "acp", command: ["fixture"], enabled: true },
+    () => process,
+  );
+  const { notifications } = observe(provider);
+  await provider.initialize();
+  await provider.request("thread/start");
+  expect(await provider.request("session/controls")).toMatchObject({
+    compact: true,
+    currentMode: "ask",
+    modes: [{ id: "ask" }, { id: "plan" }],
+  });
+  expect(await provider.request("model/list")).toMatchObject({
+    data: [{ model: "model-a", supportsImages: false }, { model: "model-b" }],
+  });
+  await provider.request("turn/start", { ...turn, model: "model-b", nativeMode: "plan" });
+  await expect
+    .poll(() => notifications.filter((n) => n.method === "turn/completed").length)
+    .toBe(1);
+  expect(models).toEqual(["model-b"]);
+  expect(modes).toEqual(["plan"]);
+  await provider.request("command/execute", { ...turn, name: "compact", args: "" });
+  await expect
+    .poll(() => notifications.filter((n) => n.method === "turn/completed").length)
+    .toBe(2);
+  expect(prompts.at(-1)).toEqual([{ type: "text", text: "/compact" }]);
+});
+
+it("waits for OMP readiness, negotiates v2, and uses RPC UI approvals instead of unattended mode", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-omp-adapter-"));
+  cleanup.push(() => rm(directory, { recursive: true, force: true }));
+  vi.stubEnv("CONCORS_DATA_DIR", directory);
+  const commands: Record<string, unknown>[] = [];
+  const launcher: typeof launch = (_provider, args) => {
+    expect(args).toContain("rpc-ui");
+    expect(args).toContain("always-ask");
+    expect(args).not.toContain("yolo");
+    const process = child();
+    process.stdin.on("data", (chunk) => {
+      const command = object(JSON.parse(String(chunk)));
+      commands.push(command);
+      process.stdout.push(
+        JSON.stringify({
+          id: command["id"],
+          type: "response",
+          success: true,
+          data: command["type"] === "negotiate_protocol" ? { protocolVersion: 2 } : {},
+        }) + "\n",
+      );
+    });
+    queueMicrotask(() =>
+      process.stdout.push(
+        JSON.stringify({
+          type: "ready",
+          supportedProtocolVersions: [1, 2],
+          maxFrameBytes: 1048576,
+          maxReassembledFrameBytes: 67108864,
+        }) + "\n",
+      ),
+    );
+    return process;
+  };
+  const provider = new PiProvider(
+    directory,
+    async () => ({ decision: "decline" }),
+    launcher,
+    "omp",
+  );
+  observe(provider);
+  await provider.initialize();
+  expect(commands.map((c) => c["type"])).toEqual([
+    "negotiate_protocol",
+    "get_state",
+    "get_available_commands",
+  ]);
 });
