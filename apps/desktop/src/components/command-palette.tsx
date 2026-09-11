@@ -1,5 +1,5 @@
 import { LogOut, Monitor, Moon, RefreshCw, Sun } from "lucide-react";
-import { useContext } from "react";
+import { useContext, useRef } from "react";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import { useCommands } from "@/shortcuts/context";
 import { isCompactCommand, shortcutLabel } from "@/shortcuts/bindings";
@@ -52,8 +52,11 @@ export function CommandPalette({
 }: CommandPaletteProps) {
   const commands = useCommands();
   const compact = useContext(CompactLayoutContext);
+  const returnFocus = useRef<HTMLElement | null>(null);
+  const ranCommand = useRef(false);
 
   const run = (action: () => void) => () => {
+    ranCommand.current = true;
     onOpenChange(false);
     action();
   };
@@ -64,6 +67,27 @@ export function CommandPalette({
       onOpenChange={onOpenChange}
       title="Command palette"
       description="Search for a page or action"
+      onOpenAutoFocus={() => {
+        returnFocus.current =
+          document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        ranCommand.current = false;
+      }}
+      onCloseAutoFocus={(event) => {
+        // Mobile drawers already restore their opener. Commands own their destination focus.
+        if (compact) return;
+        event.preventDefault();
+        if (ranCommand.current) return;
+        const target = returnFocus.current;
+        requestAnimationFrame(() => {
+          if (
+            target?.isConnected &&
+            !target.closest("[inert]") &&
+            target.getClientRects().length &&
+            !document.querySelector('[data-slot="dialog-content"][data-state="open"]')
+          )
+            target.focus();
+        });
+      }}
     >
       <Command>
         <CommandInput placeholder="Type a command or search…" />
