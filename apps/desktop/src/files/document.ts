@@ -21,6 +21,7 @@ export class FileDocument {
   };
   private listeners = new Set<() => void>();
   private generation = 0;
+  private checkGeneration = 0;
   readonly target: { projectId: string; epoch: string; path: string; directory?: string };
   constructor(target: FileDocument["target"]) {
     this.target = target;
@@ -72,9 +73,15 @@ export class FileDocument {
   async check(request: Request) {
     if (!this.snapshot.base || this.snapshot.busy) return;
     const generation = this.generation;
+    const checkGeneration = ++this.checkGeneration;
     try {
       const result = await request({ kind: "read", ...this.target });
-      if (generation !== this.generation || this.snapshot.busy) return;
+      if (
+        generation !== this.generation ||
+        checkGeneration !== this.checkGeneration ||
+        this.snapshot.busy
+      )
+        return;
       if (result.status === "read") {
         const changed = result.file.revision !== this.snapshot.base?.revision;
         this.update({ changed, disk: changed ? result.file : null });
