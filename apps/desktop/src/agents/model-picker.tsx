@@ -44,24 +44,22 @@ export function AgentModelPicker({
           description: p.id === agent.provider ? "Current conversation" : "Starts a new chat",
           icon: <ProviderIcon provider={p.id} />,
           emptyMessage: p.error,
-          options: p.error
-            ? []
-            : [
-                {
-                  id: "",
-                  label: "Machine default",
-                  description:
-                    p.id === agent.provider
-                      ? (agent.model ?? "Use the provider’s default model")
-                      : "Start a new conversation with this provider",
-                  icon: <ProviderIcon provider={p.id} />,
-                },
-                ...p.models.map((m) => ({
-                  id: m.id,
-                  label: m.label,
-                  icon: <ProviderIcon provider={p.id} />,
-                })),
-              ],
+          options: [
+            {
+              id: "",
+              label: "Machine default",
+              description:
+                p.id === agent.provider
+                  ? (agent.model ?? "Use the provider’s default model")
+                  : "Start a new conversation with this provider",
+              icon: <ProviderIcon provider={p.id} />,
+            },
+            ...p.models.map((m) => ({
+              id: m.id,
+              label: m.label,
+              icon: <ProviderIcon provider={p.id} />,
+            })),
+          ],
         }))}
         onSelect={(value, provider) => void choose(value, provider)}
       />

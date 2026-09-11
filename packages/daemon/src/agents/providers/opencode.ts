@@ -112,6 +112,22 @@ export class OpenCodeProvider extends EventProvider {
   }
   async request(method: string, raw: unknown = {}) {
     const p = object(raw);
+    if (method === "account/providers") return this.call("/provider");
+    if (method === "account/methods") return this.call("/provider/auth");
+    if (["account/authorize", "account/callback", "account/key"].includes(method)) {
+      const id = encodeURIComponent(string(p["provider"]));
+      if (method === "account/key")
+        return this.call(`/auth/${id}`, { type: "api", key: string(p["value"]) }, "PUT");
+      if (method === "account/authorize")
+        return this.call(`/provider/${id}/oauth/authorize`, { method: p["method"] });
+      const response = await this.fetch(`/provider/${id}/oauth/callback`, {
+        method: "POST",
+        body: JSON.stringify({ method: p["method"], ...(p["value"] ? { code: p["value"] } : {}) }),
+        signal: AbortSignal.any([this.abort.signal, AbortSignal.timeout(10 * 60 * 1000)]),
+      });
+      await response.arrayBuffer();
+      return {};
+    }
     if (method === "model/list") {
       const catalog = object(await this.call("/provider"));
       const connected = array(catalog["connected"]);
