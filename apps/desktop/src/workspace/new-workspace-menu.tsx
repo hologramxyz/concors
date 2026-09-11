@@ -1,6 +1,7 @@
 import { FolderOpen, GitBranch, Plus } from "lucide-react";
 import { useContext, useRef, useState } from "react";
 import { CompactLayoutContext } from "@/components/compact-layout";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Dialog,
   DialogTrigger,
@@ -19,10 +20,12 @@ export function NewWorkspaceMenu({
   disabled,
   onNew,
   onOpen,
+  rail = false,
 }: {
   disabled: boolean;
   onNew: () => void;
   onOpen: (mode: "open" | "clone", trigger?: HTMLElement | null) => void;
+  rail?: boolean;
 }) {
   const compact = useContext(CompactLayoutContext);
   const [open, setOpen] = useState(false);
@@ -76,15 +79,21 @@ export function NewWorkspaceMenu({
   return (
     <div className="flex items-center">
       <DropdownMenu>
-        <DropdownMenuTrigger
-          ref={trigger}
-          aria-label="Open workspace menu"
-          title="Open workspace menu"
-          disabled={disabled}
-          className="rounded p-1 text-muted-foreground hover:text-sidebar-foreground disabled:opacity-40"
-        >
-          <Plus className="size-4" />
-        </DropdownMenuTrigger>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger
+              ref={trigger}
+              aria-label="Open workspace menu"
+              disabled={disabled}
+              className={`rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground disabled:opacity-40 ${rail ? "sidebar-rail-control" : "p-1"}`}
+            >
+              <Plus className="size-4" />
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent side={rail ? "right" : "bottom"} sideOffset={6}>
+            Workspaces · New workspace or open folder
+          </TooltipContent>
+        </Tooltip>
         <DropdownMenuContent align="end" className="w-52">
           <DropdownMenuItem onSelect={onNew}>
             <Plus />
