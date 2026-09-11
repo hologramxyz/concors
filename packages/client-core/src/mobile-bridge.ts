@@ -5,7 +5,7 @@ import {
   MobileCapabilitiesSchema,
   OrganizationSchema,
 } from "@concors/api-client";
-import { ClientMessageSchema, DaemonMessageSchema } from "@concors/protocol";
+import { ClientMessageSchema, DaemonMessageSchema, ThemeSelectionSchema } from "@concors/protocol";
 import { NativeSurfaceSchema, NativeSurfaceEventSchema } from "./native-surfaces.ts";
 
 const id = z.string().min(1).max(200);
@@ -48,6 +48,7 @@ export const MobileTargetSchema = z.object({
 export type MobileTarget = z.infer<typeof MobileTargetSchema>;
 export const MobilePreferencesSchema = z.object({
   theme: z.enum(["system", "light", "dark"]),
+  colorTheme: ThemeSelectionSchema.optional(),
   corners: z.enum(["square", "subtle", "rounded"]),
   sound: z.boolean().default(false),
 });
