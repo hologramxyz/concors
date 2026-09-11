@@ -32,12 +32,16 @@ function CommandDialog({
   children,
   className,
   showCloseButton = true,
+  onOpenAutoFocus,
+  onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof Dialog> & {
   title?: string;
   description?: string;
   className?: string;
   showCloseButton?: boolean;
+  onOpenAutoFocus?: React.ComponentProps<typeof DialogContent>["onOpenAutoFocus"];
+  onCloseAutoFocus?: React.ComponentProps<typeof DialogContent>["onCloseAutoFocus"];
 }) {
   const compact = React.useContext(CompactLayoutContext);
   return (
@@ -45,6 +49,8 @@ function CommandDialog({
       <DialogContent
         className={cn("overflow-hidden", compact && "mobile-search-drawer", className)}
         showCloseButton={compact || showCloseButton}
+        onOpenAutoFocus={onOpenAutoFocus}
+        onCloseAutoFocus={onCloseAutoFocus}
       >
         <DialogHeader>
           <DialogTitle>{compact ? "Search workspace" : title}</DialogTitle>

@@ -4,6 +4,7 @@ import { api } from "@/auth/api";
 import { LOCAL_HOST, loadHosts, machineAvailability, machineHost, type Host } from "./machines";
 import { useEffect, useState } from "react";
 import { ChevronDown, Server, Plus } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,6 +20,7 @@ export function MachineSwitcher({
   connected,
   onSelect,
   onViewCloud,
+  compact = false,
 }: {
   organizationId: string | undefined;
   scope: string;
@@ -26,6 +28,7 @@ export function MachineSwitcher({
   connected: boolean;
   onSelect: (host: Host) => void;
   onViewCloud: (machineId?: string) => void;
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [cloudMachines, setCloudMachines] = useState<Machine[] | null>(null);
@@ -61,14 +64,31 @@ export function MachineSwitcher({
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
-      <DropdownMenuTrigger
-        className="flex h-9 w-fit min-w-0 items-center gap-1.5 rounded-md px-1.5 text-left hover:bg-sidebar-accent"
-        aria-label="Switch machine"
-      >
-        <Server className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <span className="min-w-0 truncate text-ui font-medium">{selected.label}</span>
-        <ChevronDown className="size-3 shrink-0" />
-      </DropdownMenuTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger
+            className={`relative flex min-w-0 items-center rounded-md hover:bg-sidebar-accent ${compact ? "sidebar-rail-control" : "h-9 w-fit gap-1.5 px-1.5 text-left"}`}
+            aria-label="Switch machine"
+          >
+            <Server className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            {compact ? (
+              <span
+                role="img"
+                aria-label={`${selected.label}: ${connected ? "Connected" : "Disconnected"}`}
+                className={`absolute right-1 bottom-1 size-1.5 rounded-full ring-2 ring-sidebar ${connected ? "bg-emerald-500" : "bg-muted-foreground/60"}`}
+              />
+            ) : (
+              <>
+                <span className="min-w-0 truncate text-ui font-medium">{selected.label}</span>
+                <ChevronDown className="size-3 shrink-0" />
+              </>
+            )}
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent side={compact ? "right" : "bottom"} sideOffset={6}>
+          {selected.label} · {connected ? "Connected" : "Disconnected"} · Switch machine
+        </TooltipContent>
+      </Tooltip>
       <DropdownMenuContent align="start" className="w-64">
         <DropdownMenuItem onSelect={() => onSelect(LOCAL_HOST)}>
           <Server className={selected.machineId === "local" ? "text-primary" : undefined} />
