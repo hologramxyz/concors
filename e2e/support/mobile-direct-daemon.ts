@@ -9,6 +9,7 @@ import {
 } from "../../packages/daemon/src/terminal/testing/profile.ts";
 import { createDaemonServer } from "../../packages/daemon/src/server.ts";
 import { loadDaemonConfig } from "../../packages/daemon/src/config.ts";
+import { TestAccountBackend } from "../../packages/daemon/src/agents/testing/account.ts";
 import { TestAgentProvider } from "../../packages/daemon/src/agents/testing/provider.ts";
 const directory = await mkdtemp(join(tmpdir(), "concors-mobile-direct-daemon-"));
 // Provider discovery must find harmless fixture executables, never a developer's AI CLI.
@@ -24,6 +25,7 @@ for (const provider of ["opencode", "pi"]) {
 if (process.platform !== "win32") process.env["SHELL"] = "/bin/sh";
 const server = createDaemonServer(loadDaemonConfig({ port: 7440, logLevel: "warn" }, {}), {
   workspacePath: join(directory, "workspace.sqlite"),
+  accountBackendFactory: (info) => new TestAccountBackend(info),
   agentProviderFactory: (_cwd, handler, provider) => new TestAgentProvider(handler, provider),
 });
 server.app.addHook("onRequest", async (request) => {

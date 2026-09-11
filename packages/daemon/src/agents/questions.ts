@@ -19,7 +19,7 @@ export function questionAnswers(
       if (
         q.options?.length &&
         q.allowOther === false &&
-        values.some((value) => !q.options!.some((option) => option.label === value))
+        values.some((value) => !(q.options ?? []).some((option) => option.label === value))
       )
         throw new Error("Choose one of the available answers");
       return [q.id, { answers: values }];

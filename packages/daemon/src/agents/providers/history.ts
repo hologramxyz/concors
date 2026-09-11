@@ -141,6 +141,10 @@ export function piHistory(messages: unknown[]): NativeTurn[] {
             );
         }
     }
+    if (message["role"] === "custom" && message["display"] !== false) {
+      const text = textContent(content);
+      if (text) turn.items.push({ id, type: "notification", title: "Agent update", text });
+    }
     if (message["role"] === "toolResult") {
       const id = string(message["toolCallId"]),
         tool = tools.get(id);

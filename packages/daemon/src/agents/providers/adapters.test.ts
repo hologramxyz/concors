@@ -371,7 +371,7 @@ it("reads OpenCode SSE deltas, scopes events, forwards decisions, and interrupts
   expect(failures).toEqual([]);
 });
 
-it("maps Pi JSONL, denies tool confirmation, and ignores a cancelled pending dialog", async () => {
+it("maps Pi JSONL, preserves editor forms, and ignores a cancelled pending dialog", async () => {
   const directory = await mkdtemp(join(tmpdir(), "concors-pi-adapter-"));
   cleanup.push(() => rm(directory, { recursive: true, force: true }));
   vi.stubEnv("CONCORS_DATA_DIR", directory);
@@ -432,7 +432,7 @@ it("maps Pi JSONL, denies tool confirmation, and ignores a cancelled pending dia
     type: "extension_ui_request",
     id: "first",
     method: "confirm",
-    title: "Read file?",
+    title: "Concors tool approval: read",
     message: "read",
   });
   await expect
@@ -469,6 +469,9 @@ it("maps Pi JSONL, denies tool confirmation, and ignores a cancelled pending dia
     message: "read",
   });
   await expect.poll(() => input.mock.calls.length).toBe(4);
+  expect(input.mock.calls[3]?.[1]).toMatchObject({
+    questions: [{ id: "confirm", allowOther: false, options: [{ label: "Yes" }, { label: "No" }] }],
+  });
   await provider.request("turn/interrupt");
   rejectDialog(new Error("Turn interrupted"));
   await new Promise((resolve) => setImmediate(resolve));
@@ -513,6 +516,17 @@ it("negotiates ACP controls, switches models, streams tools and respects native 
       }),
       authenticate: async () => ({}),
       newSession: async () => {
+        await client.sessionUpdate({
+          sessionId: p.sessionId,
+          update: {
+            sessionUpdate: "tool_call",
+            toolCallId: "read-without-input",
+            title: "Read",
+            kind: "read",
+            status: "completed",
+            content: [{ type: "content", content: { type: "text", text: "Native file body" } }],
+          },
+        });
         await client.sessionUpdate({
           sessionId: "acp-session",
           update: {
@@ -620,6 +634,9 @@ it("negotiates ACP controls, switches models, streams tools and respects native 
     ),
   ).toBe(true);
   expect(models).toEqual(["model-b"]);
+  expect(
+    notifications.some((n) => object(n.params["item"] ?? {})["output"] === "Native file body"),
+  ).toBe(true);
   expect(modes).toEqual(["plan"]);
   await provider.request("command/execute", { ...turn, name: "compact", args: "" });
   await expect

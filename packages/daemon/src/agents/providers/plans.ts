@@ -4,7 +4,12 @@ const record = (value: unknown): Record<string, unknown> =>
     ? (value as Record<string, unknown>)
     : {};
 const text = (value: unknown) => (typeof value === "string" ? value : "");
-export type PlanStep = { step: string; status: string; id?: string; activeForm?: string };
+export interface PlanStep {
+  step: string;
+  status: string;
+  id?: string;
+  activeForm?: string;
+}
 export function planSteps(value: unknown): PlanStep[] {
   return (Array.isArray(value) ? value : [])
     .flatMap((raw) => {
@@ -79,13 +84,12 @@ export class TaskState {
       if (!previous) return null;
       const status = input["status"] ?? record(data["statusChange"])["to"] ?? previous.status;
       if (status === "deleted") this.tasks.delete(id);
-      else
-        this.tasks.set(
-          id,
-          planSteps([
-            { ...previous, ...input, step: input["subject"] ?? previous.step, status },
-          ])[0]!,
-        );
+      else {
+        const next = planSteps([
+          { ...previous, ...input, step: input["subject"] ?? previous.step, status },
+        ])[0];
+        if (next) this.tasks.set(id, next);
+      }
     }
     return [...this.tasks.values()].slice(0, 100);
   }
