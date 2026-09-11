@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useState, useRef } from "react";
 import type { AgentItem } from "@concors/protocol";
 import { mergeItems } from "@concors/client-core";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
@@ -7,6 +7,7 @@ import { TerminalConnectionContext } from "@/terminal/connection-context";
 export { mergeItems };
 export function useConversation(sessionId: string) {
   const connection = useContext(TerminalConnectionContext);
+  const revision = useRef(0);
   const [items, setItems] = useState<AgentItem[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [ready, setReady] = useState(false);
@@ -15,6 +16,15 @@ export function useConversation(sessionId: string) {
     if (!connection) return;
     let disposed = false;
     const unsubscribe = connection.onAgent((event) => {
+      if (
+        event.type === "agent.state" &&
+        event.agent.id === sessionId &&
+        (event.agent.historyRevision ?? 0) !== revision.current
+      ) {
+        revision.current = event.agent.historyRevision ?? 0;
+        setItems([]);
+        void refresh();
+      }
       if (event.type === "agent.item" && event.item.sessionId === sessionId)
         setItems((current) => mergeItems(current, [event.item]));
     });
@@ -27,7 +37,9 @@ export function useConversation(sessionId: string) {
         if (disposed) return;
         if (result.outcome.status === "error") throw new Error(result.outcome.message);
         const page = result.outcome.conversation;
-        setItems((current) => mergeItems(current, page.items));
+        const reset = revision.current !== (page.agent.historyRevision ?? 0);
+        revision.current = page.agent.historyRevision ?? 0;
+        setItems((current) => mergeItems(reset ? [] : current, page.items));
         setHasMore(page.hasMore);
         setReady(true);
         setError(null);

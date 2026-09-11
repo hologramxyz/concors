@@ -37,6 +37,7 @@ export class TerminalRuntime {
     info: TerminalInfo,
     command: { command: string; args: string[] | string },
     save: (info: TerminalInfo) => void,
+    env = process.env,
   ) {
     this.info = info;
     this.#exit = new Promise((resolve) => {
@@ -77,7 +78,7 @@ export class TerminalRuntime {
         cols: info.cols,
         rows: info.rows,
         cwd: info.directory,
-        env: terminalEnvironment(process.env),
+        env: terminalEnvironment(env),
       });
     } catch (error) {
       this.#coalescer.dispose();

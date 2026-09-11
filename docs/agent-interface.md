@@ -8,7 +8,9 @@ capability; older daemons keep their existing Codex model picker.
 
 ## Paseo reuse
 
-See [the UI audit](paseo-ui-audit.md) for the follow-up port and explicit remaining differences.
+See the [unified chat parity audit](unified-chat-parity-audit.md) for current
+provider coverage, reproduced defects, and remaining integration work. The
+earlier [UI audit](paseo-ui-audit.md) records the initial composer/timeline port.
 
 The following source files were imported from `getpaseo/paseo` revision
 `a7a708bec99e935ee4b8c6f7314a4b9a9984cfa6`, under Apache-2.0. The copyright
@@ -44,10 +46,12 @@ parser licenses remain with the dependency.
   an empty conversation with the normal composer at the bottom. No message is sent
   until submitted. Pane titles use the same live session name as the sidebar.
 - Loading and working indicators follow the machine's authoritative status.
-- Tool calls expand to show command output, exit codes, and file diffs. Plans show
-  steps and completion counts. Sub-agent cards show provider-reported status and
-  messages; they are inline activity, not separate navigable child conversations.
-- Thinking cards show provider-authored summaries, never raw reasoning content.
+- Codex tool calls expand to show command output, exit codes, and file diffs.
+  Plans show steps and completion counts. Sub-agent cards show provider-reported
+  status and messages; they are inline activity, not separate navigable child
+  conversations. Other adapters currently show generic tool input/output and do
+  not preserve the same specialized tool or child-agent presentation.
+- Codex thinking cards show provider-authored summaries, never raw reasoning content.
 - Model choices come from each installed CLI's model catalog. Codex also exposes thinking efforts.
   Settings are saved with the agent and broadcast across clients. Concurrent edits
   reject stale revisions. Controls remain available during active turns; changes apply to the next message.
@@ -73,6 +77,12 @@ parser licenses remain with the dependency.
   interruption. Codex-specific permission modes, thinking effort, plan mode,
   speed tiers, and context usage are not exposed for them. They do not inherit
   Codex's OS sandbox; each CLI retains its own execution and account settings.
+- Native compaction is not consistently integrated. Claude's SDK can recognize
+  `/compact`, but its compaction status is not rendered. Codex, OpenCode, and Pi
+  receive it as ordinary prompt text instead of an explicit compaction operation.
+  The approval action labeled “Cancel turn” currently only declines the tool in
+  the non-Codex adapters; the separate Stop action requests native interruption.
+  These are open defects, detailed in the parity audit.
 - Upload, paste, or drop up to three files, each at most 1 MiB. Images are native
   provider image inputs; other files become machine-local file references. Uploads
   stay in the daemon data directory under `attachments/<session-id>` with private
@@ -82,17 +92,20 @@ parser licenses remain with the dependency.
 - Codex Plan mode and model-provided speed tiers are exposed when available.
   Plan mode uses read-only access, and disabling it restores the default workflow.
 - Enter sends; Shift+Enter adds a line. While working, Enter queues a follow-up.
-  Queues and drafts belong to the current mounted composer and do not survive
-  closing the pane or reloading. Delivered history, settings, and context usage
-  are durable and shared. An uncertain send retains its request ID for explicit
-  retry, including if another client already sees the turn running.
+  Queues and drafts live in connection-scoped memory and survive pane/tab unmounts;
+  mobile retains a machine-scoped draft store across socket reconnection. They
+  do not survive a hard reload/app restart or transfer to another client. Queues
+  drain while their composer is mounted and connected, not independently on the
+  daemon. Delivered history, settings, and reported context usage are durable
+  and shared. An uncertain send retains its request ID for explicit retry,
+  including if another client already sees the turn running.
 - Context usage uses Codex's last-turn total against its reported context window;
   the tooltip also shows cumulative usage. Unknown usage stays unknown.
 - Dictation uses `SpeechRecognition`/`webkitSpeechRecognition`, when the browser
   provides it, and appends transcript text for review. It requires microphone
   permission and may use the browser vendor's speech service. Unsupported browsers
-  and native webviews show it as unavailable; no portable transcription backend is
-  included yet.
+  and native webviews cannot use that API. The native iOS composer directs users
+  to keyboard dictation; no portable transcription backend is included yet.
 
 Native session identifiers are saved with the conversation. Reopening a chat
 resumes its provider's session instead of sending the previous prompt again.

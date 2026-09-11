@@ -65,6 +65,27 @@ export function mapCodexItem(
           .filter(Boolean)
           .join("\n"),
       };
+    case "fileRead":
+      return {
+        ...base,
+        kind: "tool",
+        title: "Read file",
+        text: text(item["path"]),
+        detail: text(item["output"]),
+        presentation: {
+          type: "files",
+          files: text(item["path"]) ? [{ path: text(item["path"]), diff: "" }] : [],
+        },
+      };
+    case "search":
+      return {
+        ...base,
+        kind: "tool",
+        title: text(item["tool"]) || "Search",
+        text: text(item["query"]),
+        detail: text(item["output"]),
+        presentation: { type: "search" },
+      };
     case "fileChange":
       return {
         ...base,
@@ -80,7 +101,11 @@ export function mapCodexItem(
             .map((f) => ({ path: f.path, diff: (f.diff ?? "").slice(0, 16000) })),
         },
         text: "File changes",
-        detail: detail(item["changes"]),
+        detail: detail({
+          changes: item["changes"],
+          input: item["nativeInput"],
+          output: item["nativeOutput"],
+        }),
       };
     case "collabAgentToolCall": {
       const states = z
@@ -147,8 +172,19 @@ export function mapCodexItem(
       return {
         ...base,
         kind: "system",
-        title: "Context compacted",
-        text: "Earlier context was summarized by Codex.",
+        title:
+          status === "running"
+            ? "Compacting context"
+            : status === "completed"
+              ? "Context compacted"
+              : "Compaction interrupted or failed",
+        text:
+          text(item["message"]) ||
+          (status === "running"
+            ? "Summarizing earlier context…"
+            : status === "completed"
+              ? "Earlier context was summarized."
+              : "The context could not be compacted."),
       };
     default:
       return {

@@ -43,6 +43,11 @@ function setup() {
       requestId,
       outcome: { status: "error", message: "fixture" },
     })),
+    requestProvider: vi.fn<RelayConnection["requestProvider"]>(async (_, requestId) => ({
+      type: "provider.result",
+      requestId,
+      outcome: { status: "error", message: "fixture" },
+    })),
     requestFile: vi.fn<RelayConnection["requestFile"]>(async (_, requestId) => ({
       type: "file.result",
       requestId,

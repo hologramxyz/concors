@@ -1,5 +1,5 @@
 import { LoaderCircle } from "lucide-react";
-import { agentProviderNames, type AgentInfo } from "@concors/protocol";
+import { agentProviderName, type AgentInfo } from "@concors/protocol";
 import { ControlPicker } from "./control-picker";
 import { ProviderIcon } from "./provider-icon";
 import { useAgentModelSelection } from "./use-model-selection";
@@ -37,10 +37,11 @@ export function AgentModelPicker({
         options={[]}
         selectedGroupId={agent.provider}
         onOpen={() => void load()}
+        onGroupChange={(id) => void load(id)}
         status={loading ? "Loading providers…" : undefined}
         groups={providers.map((p) => ({
           id: p.id,
-          label: agentProviderNames[p.id],
+          label: p.label ?? agentProviderName(p.id),
           description: p.id === agent.provider ? "Current conversation" : "Starts a new chat",
           icon: <ProviderIcon provider={p.id} />,
           emptyMessage: p.error,

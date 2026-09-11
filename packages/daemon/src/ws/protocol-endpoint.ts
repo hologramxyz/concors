@@ -1,3 +1,6 @@
+import { dirname, join, basename } from "node:path";
+import { ProviderRegistry } from "../agents/providers/registry.ts";
+import { providerFactory } from "../agents/providers/index.ts";
 import { ProjectFiles } from "../files/service.ts";
 import { AgentManager, type AgentProviderFactory } from "../agents/manager.ts";
 import { ProjectManager } from "../projects/manager.ts";
@@ -50,8 +53,22 @@ export function registerProtocolEndpoint(
   const handshakeTimeoutMs = options.handshakeTimeoutMs ?? DEFAULT_HANDSHAKE_TIMEOUT_MS;
   const connections = new Set<WebSocket>();
   const subscribers = new Set<WebSocket>();
+  const agentV2 = new WeakSet<WebSocket>();
   const send = (socket: WebSocket, message: DaemonMessage): void => {
     if (socket.readyState !== socket.OPEN) return;
+    if (!agentV2.has(socket) && (message.type === "agent.state" || message.type === "agent.item")) {
+      socket.send(
+        JSON.stringify({
+          type: "error",
+          error: createProtocolError(
+            "PROTOCOL_VERSION_UNSUPPORTED",
+            "Update Concors on this device to use unified agent chat with this daemon.",
+          ),
+        }),
+      );
+      socket.close(CLOSE_PROTOCOL_ERROR, "Agent client upgrade required");
+      return;
+    }
     if (socket.bufferedAmount > 2 * 1024 * 1024) {
       socket.close(1013, "Client must reconnect to catch up");
       return;
@@ -66,6 +83,12 @@ export function registerProtocolEndpoint(
       send(target, { type: "project.setups", setups: options.workspace.projectSetups() });
     }
   });
+  const attachments = options.workspace.attachmentsDirectory;
+  const providers = new ProviderRegistry(
+    basename(attachments) === "attachments"
+      ? join(dirname(attachments), "providers")
+      : attachments + "-providers",
+  );
   const terminals = new TerminalManager(
     options.workspace,
     () => {
@@ -75,6 +98,7 @@ export function registerProtocolEndpoint(
     (session) => {
       for (const target of subscribers) send(target, { type: "terminal.state", session });
     },
+    () => providers.terminalEnvironment(),
   );
   const agents = new AgentManager(
     options.workspace,
@@ -85,9 +109,11 @@ export function registerProtocolEndpoint(
       for (const target of subscribers)
         send(target, { type: "workspace.snapshot", snapshot: options.workspace.snapshot() });
     },
-    options.agentProviderFactory,
+    options.agentProviderFactory ?? providerFactory(providers),
+    providers,
   );
   app.addHook("onClose", async () => {
+    providers.close();
     await agents.close();
     projects.close();
     terminals.close();
@@ -123,12 +149,28 @@ export function registerProtocolEndpoint(
     });
 
     new ConnectionHandler(socket, log, options.state, handshakeTimeoutMs, (message) => {
+      if (message.type === "client.hello") {
+        if (message.capabilities?.includes("agent-providers-v2")) agentV2.add(socket);
+        return;
+      }
+      if (message.type === "agent.request" && !agentV2.has(socket)) {
+        send(socket, {
+          type: "agent.result",
+          requestId: message.requestId,
+          outcome: {
+            status: "error",
+            message: "Update Concors on this device to use unified agent chat with this daemon.",
+          },
+        });
+        return;
+      }
       if (
         message.type === "terminal.request" ||
         message.type === "terminal.input" ||
         message.type === "project.request" ||
         message.type === "agent.request" ||
-        message.type === "file.request"
+        message.type === "file.request" ||
+        message.type === "provider.request"
       ) {
         if (!subscribers.has(socket)) {
           send(socket, {
@@ -137,7 +179,8 @@ export function registerProtocolEndpoint(
           });
           return;
         }
-        if (message.type === "file.request")
+        if (message.type === "provider.request") send(socket, providers.request(message));
+        else if (message.type === "file.request")
           void files.request(message).then((result) => send(socket, result));
         else if (message.type === "agent.request")
           void agents.request(message).then((result) => send(socket, result));
@@ -193,6 +236,7 @@ export function registerProtocolEndpoint(
   });
 
   return async () => {
+    providers.close();
     await agents.close();
     projects.close();
     terminals.close();
@@ -295,6 +339,7 @@ class ConnectionHandler {
           "client connected",
         );
         this.send({ type: "daemon.ready", ...this.state.info() });
+        this.workspaceMessage(message);
         return;
       }
     }

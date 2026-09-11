@@ -16,6 +16,7 @@ export class TerminalManager {
   readonly #terminalChanged: (session: TerminalInfo) => void;
   #queue: Promise<unknown> = Promise.resolve();
   #closed = false;
+  readonly #environment: () => NodeJS.ProcessEnv;
   #scanning = false;
   #observing = false;
   readonly #directoryPoll: ReturnType<typeof setInterval>;
@@ -25,7 +26,9 @@ export class TerminalManager {
     store: WorkspaceStore,
     workspaceChanged: () => void,
     terminalChanged: (session: TerminalInfo) => void = () => undefined,
+    environment: () => NodeJS.ProcessEnv = () => process.env,
   ) {
+    this.#environment = environment;
     this.#directoryPoll = setInterval(() => {
       void this.scanDirectories();
     }, 400);
@@ -201,19 +204,20 @@ export class TerminalManager {
     const directory = await realpath(startingDirectory);
     if (!(await stat(directory)).isDirectory()) throw new Error("Project path is not a directory");
     const recoveryProfile = lost?.detectedAgent ?? pane.profile;
+    const env = this.#environment();
     const command =
       pane.terminalProfile && !op.recover
         ? resolveTerminalCommand(
             pane.terminalProfile.command,
             pane.terminalProfile.args,
             process.platform,
-            process.env,
+            env,
             directory,
           )
         : resolveProfile(
             op.recover ? recoveryProfile : pane.profile,
             process.platform,
-            process.env,
+            env,
             !!op.recover,
           );
     if (this.#closed || !viewer.active()) throw new Error("Connection closed before launch");
@@ -243,7 +247,7 @@ export class TerminalManager {
     this.#workspaceChanged();
     this.#terminalChanged(info);
     try {
-      const runtime = new TerminalRuntime(info, command, (session) => this.save(session));
+      const runtime = new TerminalRuntime(info, command, (session) => this.save(session), env);
       this.#runtimes.set(info.id, runtime);
       return runtime.info;
     } catch (error) {

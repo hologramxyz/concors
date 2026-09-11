@@ -1,6 +1,11 @@
 // Mode presets adapted from Paseo's codex-app-server-agent.ts (Apache-2.0; third-party/paseo-LICENSE).
 import { z } from "zod";
-import type { AgentInfo, AgentSettings } from "@concors/protocol";
+import {
+  AgentModelIdSchema,
+  MAX_AGENT_MODELS,
+  type AgentInfo,
+  type AgentSettings,
+} from "@concors/protocol";
 export const defaultSettings: AgentSettings = { model: null, effort: null, mode: "default" };
 export function turnControls(info: AgentInfo) {
   const settings = info.settings ?? defaultSettings;
@@ -9,6 +14,9 @@ export function turnControls(info: AgentInfo) {
     effort: settings.effort,
     summary: "auto",
     serviceTier: settings.serviceTier ?? null,
+    ...((info.engine ?? info.provider) === "codex"
+      ? {}
+      : { nativeMode: settings.nativeMode ?? null, features: settings.features ?? {} }),
     ...(info.supportsPlan
       ? {
           collaborationMode: {
@@ -39,7 +47,7 @@ export function turnControls(info: AgentInfo) {
 const Catalog = z.object({
   data: z.array(
     z.object({
-      model: z.string(),
+      model: AgentModelIdSchema,
       displayName: z.string(),
       hidden: z.boolean().optional(),
       serviceTiers: z
@@ -47,20 +55,28 @@ const Catalog = z.object({
         .default([]),
       supportedReasoningEfforts: z.array(z.object({ reasoningEffort: z.string() })).default([]),
       defaultReasoningEffort: z.string().nullable().optional(),
+      supportsImages: z.boolean().optional(),
+      contextWindow: z.number().positive().optional(),
     }),
   ),
 });
-export function parseModels(raw: unknown): NonNullable<AgentInfo["models"]> {
-  return Catalog.parse(raw)
-    .data.filter((m) => !m.hidden)
-    .slice(0, 100)
-    .map((m) => ({
-      id: m.model,
-      label: m.displayName,
-      efforts: m.supportedReasoningEfforts.map((e) => e.reasoningEffort),
-      defaultEffort: m.defaultReasoningEffort ?? null,
-      serviceTiers: m.serviceTiers
-        .slice(0, 20)
-        .map((tier) => ({ id: tier.id, label: tier.name, description: tier.description })),
-    }));
+export function parseModels(raw: unknown, filter?: string[]): NonNullable<AgentInfo["models"]> {
+  const models = Catalog.parse(raw).data.filter(
+    (m) => !m.hidden && (!filter?.length || filter.includes(m.model)),
+  );
+  if (models.length > MAX_AGENT_MODELS)
+    throw new Error(
+      `This provider reports more than ${MAX_AGENT_MODELS} models. Filter its catalog in provider settings.`,
+    );
+  return models.map((m) => ({
+    id: m.model,
+    label: m.displayName,
+    efforts: m.supportedReasoningEfforts.map((e) => e.reasoningEffort),
+    defaultEffort: m.defaultReasoningEffort ?? null,
+    ...(m.supportsImages === undefined ? {} : { supportsImages: m.supportsImages }),
+    ...(m.contextWindow === undefined ? {} : { contextWindow: m.contextWindow }),
+    serviceTiers: m.serviceTiers
+      .slice(0, 20)
+      .map((tier) => ({ id: tier.id, label: tier.name, description: tier.description })),
+  }));
 }

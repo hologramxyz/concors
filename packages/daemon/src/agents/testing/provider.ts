@@ -8,6 +8,7 @@ export class TestAgentProvider implements AgentProvider {
   readonly onRequest: Parameters<AgentProviderFactory>[1];
   readonly requests: { method: string; params: unknown }[] = [];
   threadId = "fixture-thread";
+  cwd = process.cwd();
   turnId = "";
   closed = false;
   readonly provider: AgentProviderId;
@@ -34,6 +35,21 @@ export class TestAgentProvider implements AgentProvider {
   }
   async request(method: string, params: unknown = {}): Promise<unknown> {
     this.requests.push({ method, params });
+    if (method === "session/controls")
+      return { importSessions: true, fork: true, rewind: ["conversation"], steer: true };
+    if (method === "session/list")
+      return {
+        sessions: [
+          {
+            id: "external-thread",
+            title: "CLI session",
+            directory: this.cwd,
+            updatedAt: new Date().toISOString(),
+          },
+        ],
+      };
+    if (method === "session/fork") return { thread: { id: "forked-thread", turns: [] } };
+    if (method === "session/rewind" || method === "session/steer") return {};
     if (method === "collaborationMode/list")
       return { data: this.provider === "codex" ? [{ mode: "plan" }, { mode: "default" }] : [] };
     if (method === "model/list")
@@ -56,6 +72,8 @@ export class TestAgentProvider implements AgentProvider {
         ],
       };
     const input = params as Record<string, unknown>;
+    if (method === "thread/resume" && typeof input["threadId"] === "string")
+      this.threadId = input["threadId"];
     if (method === "thread/start" || method === "thread/resume")
       return {
         thread: { id: this.threadId, turns: [] },

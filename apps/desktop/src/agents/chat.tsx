@@ -1,4 +1,6 @@
+import { ProviderStart } from "./provider-start";
 import { completedTurnFooters } from "./duration";
+import { SessionActions } from "./session-actions";
 import { AgentComposer } from "./composer";
 import { TimelineItem } from "./timeline-item";
 import { useViewedAgent } from "@/notifications/context";
@@ -36,11 +38,22 @@ export function ChatPane({
   const [retry, setRetry] = useState(0);
   const attempted = useRef(false);
   const startId = useRef(crypto.randomUUID());
+  const [provider, setProvider] = useState<string | null>(null);
+  const chooseProvider =
+    connection?.state.status === "ready" &&
+    connection.state.daemon.capabilities?.includes("provider-settings");
   const available =
     connection?.state.status === "ready" &&
     connection.state.daemon.capabilities?.includes("agent-chat");
   useEffect(() => {
-    if (node.sessionId || !canEdit || !available || !connection?.workspace || attempted.current)
+    if (
+      (chooseProvider && !provider) ||
+      node.sessionId ||
+      !canEdit ||
+      !available ||
+      !connection?.workspace ||
+      attempted.current
+    )
       return;
     attempted.current = true;
     const current = connection.workspace;
@@ -50,6 +63,7 @@ export function ChatPane({
       .requestAgent(
         {
           kind: "start",
+          ...(provider ? { provider } : {}),
           epoch: current.epoch,
           projectId: project.id,
           tabId: tab.id,
@@ -67,9 +81,22 @@ export function ChatPane({
       .catch((cause: unknown) => {
         setError(cause instanceof Error ? cause.message : "Could not prepare agent");
       });
-  }, [node.sessionId, node.id, canEdit, available, connection, project.id, tab.id, retry]);
+  }, [
+    node.sessionId,
+    node.id,
+    canEdit,
+    available,
+    connection,
+    project.id,
+    tab.id,
+    retry,
+    chooseProvider,
+    provider,
+  ]);
   if (node.sessionId)
     return <Chat key={node.sessionId} sessionId={node.sessionId} canEdit={canEdit} />;
+  if (chooseProvider && !provider)
+    return <ProviderStart disabled={!canEdit || !available} onChoose={setProvider} />;
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="Agent conversation">
       <div className="min-h-0 flex-1" role="log" aria-label="Chat timeline" />
@@ -94,8 +121,8 @@ export function ChatPane({
           <div className="rounded-2xl border bg-background p-2">
             <textarea
               data-agent-composer
-              aria-label="Message Codex"
-              placeholder="Message Codex…"
+              aria-label="Preparing agent"
+              placeholder="Preparing agent…"
               disabled
               className="min-h-16 w-full resize-none bg-transparent px-3 py-3 text-[16px] leading-relaxed outline-none"
             />
@@ -241,17 +268,20 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
           {!compact && feedback}
           {latestPlan && <PlanProgress compact item={latestPlan} />}
           {agent && (
-            <AgentComposer
-              key={agent.id}
-              agent={agent}
-              connected={!!connected && !busy}
-              onInterrupt={() => {
-                if (agent.turnId)
-                  void run(() =>
-                    perform({ kind: "interrupt", sessionId, turnId: agent.turnId ?? "" }),
-                  );
-              }}
-            />
+            <>
+              <SessionActions agent={agent} items={conversation.items} connected={!!connected} />
+              <AgentComposer
+                key={agent.id}
+                agent={agent}
+                connected={!!connected && !busy}
+                onInterrupt={() => {
+                  if (agent.turnId)
+                    void run(() =>
+                      perform({ kind: "interrupt", sessionId, turnId: agent.turnId ?? "" }),
+                    );
+                }}
+              />
+            </>
           )}
         </div>
       </div>
@@ -270,7 +300,8 @@ function PendingInput({
     answers?: Record<string, string[]>;
   }) => Promise<void>;
 }) {
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<Record<string, string[]>>({});
+  const [other, setOther] = useState<Record<string, string>>({});
   return (
     <section
       aria-label={pending.title}
@@ -299,7 +330,7 @@ function PendingInput({
                 onClick={() => void onRespond({ decision })}
               >
                 {decision === "accept"
-                  ? "Allow once"
+                  ? (pending.decisionLabels?.accept ?? "Allow once")
                   : decision === "decline"
                     ? "Decline"
                     : "Cancel turn"}
@@ -314,11 +345,27 @@ function PendingInput({
             e.preventDefault();
             void onRespond({
               answers: Object.fromEntries(
-                pending.questions.map((q) => [q.id, [answers[q.id] ?? ""]]),
+                pending.questions.map((q) => [
+                  q.id,
+                  [
+                    ...(answers[q.id] ?? []),
+                    ...(other[q.id]?.trim() ? [(other[q.id] ?? "").trim()] : []),
+                  ],
+                ]),
               ),
             });
           }}
         >
+          {pending.elicitation?.url && (
+            <a
+              href={pending.elicitation.url}
+              target="_blank"
+              rel="noreferrer"
+              className="block text-xs underline"
+            >
+              Open the server’s authentication page
+            </a>
+          )}
           {pending.questions.map((q) => (
             <fieldset key={q.id} className="block space-y-2 text-xs">
               <legend>{q.question}</legend>
@@ -329,31 +376,69 @@ function PendingInput({
                       type="button"
                       key={option.label}
                       title={option.description}
-                      className={`${button} ${answers[q.id] === option.label ? "border-primary bg-primary/10" : ""}`}
+                      className={`${button} ${answers[q.id]?.includes(option.label) ? "border-primary bg-primary/10" : ""}`}
+                      aria-pressed={answers[q.id]?.includes(option.label) ?? false}
                       disabled={disabled}
-                      onClick={() =>
-                        setAnswers((current) => ({ ...current, [q.id]: option.label }))
-                      }
+                      onClick={() => {
+                        setAnswers((current) => ({
+                          ...current,
+                          [q.id]: q.multiSelect
+                            ? current[q.id]?.includes(option.label)
+                              ? (current[q.id] ?? []).filter((v) => v !== option.label)
+                              : [...(current[q.id] ?? []), option.label]
+                            : [option.label],
+                        }));
+                        if (!q.multiSelect) setOther((current) => ({ ...current, [q.id]: "" }));
+                      }}
                     >
                       {option.label}
                     </button>
                   ))}
                 </div>
               )}
-              <input
-                aria-label={q.question}
-                type={q.isSecret ? "password" : "text"}
-                value={answers[q.id] ?? ""}
-                required
-                disabled={disabled}
-                onChange={(e) => setAnswers((current) => ({ ...current, [q.id]: e.target.value }))}
-                className="w-full rounded border bg-background px-2 py-1.5"
-              />
+              {(q.allowOther !== false || !q.options?.length) && (
+                <input
+                  aria-label={q.options?.length ? `Other answer: ${q.question}` : q.question}
+                  type={q.isSecret ? "password" : "text"}
+                  value={other[q.id] ?? ""}
+                  required={q.required !== false && !answers[q.id]?.length}
+                  disabled={disabled}
+                  onChange={(e) => {
+                    setOther((current) => ({ ...current, [q.id]: e.target.value }));
+                    if (!q.multiSelect) setAnswers((current) => ({ ...current, [q.id]: [] }));
+                  }}
+                  className="w-full rounded border bg-background px-2 py-1.5"
+                />
+              )}
             </fieldset>
           ))}
-          <button className={button} disabled={disabled}>
-            Submit answers
+          <button
+            className={button}
+            disabled={
+              disabled ||
+              pending.questions.some(
+                (q) => q.required !== false && !answers[q.id]?.length && !other[q.id]?.trim(),
+              )
+            }
+          >
+            {pending.elicitation?.url
+              ? "Authentication completed"
+              : pending.questions.length
+                ? "Submit answers"
+                : "Continue"}
           </button>
+          {pending.kind === "elicitation" &&
+            pending.decisions.map((decision) => (
+              <button
+                key={decision}
+                type="button"
+                className={button}
+                disabled={disabled}
+                onClick={() => void onRespond({ decision })}
+              >
+                {decision === "cancel" ? "Cancel turn" : "Decline"}
+              </button>
+            ))}
         </form>
       )}
     </section>
