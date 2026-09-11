@@ -31,6 +31,7 @@ export class DaemonState {
         "project-file-create",
         "folder-workspaces",
         "agent-chat",
+        "agent-message-navigation",
         "agent-accounts",
         "agent-attention",
         "agent-composer",
