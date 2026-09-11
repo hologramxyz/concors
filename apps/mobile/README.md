@@ -182,10 +182,14 @@ for the isolated browser test; preview builds require WSS.
 
 ### Test the latest desktop sync
 
-Use a current daemon with `agent-providers` and `terminal-profiles` capabilities;
+Use a current daemon with `provider-settings`, `agent-native-controls`, `agent-queue`,
+`agent-providers`, and `terminal-profiles` capabilities;
 the in-memory demo cannot prove real provider switching or saved profile launch.
 
-1. In an agent chat, tap the composer and its model icon. Go back to providers, choose
+1. Open Settings → Providers. Search the catalog, install a supported CLI on the
+   connected machine, and sign into it using a regular terminal. Installed and
+   authenticated are separate states. Create a new Agent pane and choose a provider.
+   In an agent chat, tap the composer and its model icon. Go back to providers, choose
    an installed Claude Code, OpenCode or Pi provider, then a model. The new chat should
    open automatically; use Tabs and panes to return to the original conversation.
    Provider accounts must already be configured on the connected machine.
@@ -197,6 +201,17 @@ the in-memory demo cannot prove real provider switching or saved profile launch.
 4. Upgrading this build asks once more for AI-sharing consent. Decline to stay
    disconnected, or accept after reviewing the provider disclosure. Native iOS model
    controls use the same provider marks as desktop.
+5. Run `/compact` when the selected CLI exposes it. Check its running/result state.
+   Queue a follow-up, disconnect the phone, and verify delivery from desktop. Stop
+   pauses queued work; use Resume queue before expecting further delivery.
+6. Where available, import a native session or fork an idle conversation. The phone
+   should open the new chat while the original remains in Tabs and panes. Rewind
+   names its exact scope; file checkpoints and conversation rollback differ.
+
+The full [provider support report](../../docs/unified-chat-provider-support.md)
+covers six built-in agents, 38 opt-in ACP presets, credential/MCP settings, native
+capability limits, and live versus fixture evidence. Restricted webviews retain
+unsent drafts in scoped memory; hard app-restart durability is not guaranteed.
 
 For store-identity TestFlight/Play internal builds, follow the
 [candidate runbook](../../docs/mobile-release.md#production-identity-candidates-then-submission).
