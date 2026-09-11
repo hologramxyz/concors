@@ -1,3 +1,6 @@
+import { Dialog } from "radix-ui";
+import { TerminalConnectionContext } from "@/terminal/connection-context";
+import { useAgents } from "./context";
 import { useContext } from "react";
 import { FileLinkContext } from "@/files/context";
 import { formatDuration } from "./duration";
@@ -159,6 +162,7 @@ export function TimelineItem({
             </span>
             <span className="ml-auto text-muted-foreground">{child.status}</span>
           </div>
+          <ChildConversation parent={item} childId={child.id} />
           {child.message && (
             <details className="mt-2">
               <summary className="cursor-pointer text-xs text-muted-foreground">
@@ -249,5 +253,84 @@ export function TimelineItem({
         </div>
       )}
     </article>
+  );
+}
+
+function ChildConversation({ parent, childId }: { parent: AgentItem; childId: string }) {
+  const connection = useContext(TerminalConnectionContext),
+    agent = useAgents().find((a) => a.id === parent.sessionId);
+  const [open, setOpen] = useState(false),
+    [items, setItems] = useState<AgentItem[]>([]),
+    [error, setError] = useState<string | null>(null),
+    [loading, setLoading] = useState(false);
+  if (!agent?.controls?.childHistory) return null;
+  const load = async () => {
+    if (!connection) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await connection.requestAgent(
+        { kind: "child-history", sessionId: parent.sessionId, itemId: parent.id, childId },
+        crypto.randomUUID(),
+      );
+      if (result.outcome.status === "error") throw new Error(result.outcome.message);
+      setItems(result.outcome.childItems ?? []);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not read child session");
+    } finally {
+      setLoading(false);
+    }
+  };
+  return (
+    <Dialog.Root open={open} onOpenChange={setOpen}>
+      <button
+        type="button"
+        className="mt-2 text-xs underline"
+        onClick={() => {
+          setOpen(true);
+          void load();
+        }}
+      >
+        Open agent conversation
+      </button>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60" />
+        <Dialog.Content className="fixed top-1/2 left-1/2 z-50 flex max-h-[85dvh] w-[min(48rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 rounded-xl border bg-background p-5 shadow-xl">
+          <div className="flex justify-between gap-4">
+            <Dialog.Title className="font-medium">Agent conversation</Dialog.Title>
+            <Dialog.Close className="text-sm">Close</Dialog.Close>
+          </div>
+          <Dialog.Description className="text-xs text-muted-foreground">
+            Recent messages from this child agent. Reading them does not send a prompt.
+          </Dialog.Description>
+          <div className="min-h-0 space-y-4 overflow-y-auto">
+            {loading ? (
+              <p className="text-sm">Reading conversation…</p>
+            ) : error ? (
+              <p role="alert" className="text-sm text-destructive">
+                {error}
+              </p>
+            ) : items.length ? (
+              items.map((item) => (
+                <article key={item.id} className="space-y-1 text-sm">
+                  <p className="text-xs text-muted-foreground">{item.title}</p>
+                  <AgentMarkdown>{item.text || item.detail}</AgentMarkdown>
+                </article>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">No messages reported yet.</p>
+            )}
+          </div>
+          <button
+            type="button"
+            className="self-start rounded border px-3 py-1 text-xs"
+            disabled={loading}
+            onClick={() => void load()}
+          >
+            Reload conversation
+          </button>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
