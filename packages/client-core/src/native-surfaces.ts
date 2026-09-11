@@ -21,9 +21,11 @@ export const NativeIconSchema = z.enum([
   "mic",
 ]);
 export type NativeIcon = z.infer<typeof NativeIconSchema>;
+// Model IDs and encoded feature values must survive both sides of the native bridge.
+const optionValue = z.string().max(8192);
 const option = z.object({
-  id: z.string().max(200),
-  label: z.string().max(500),
+  id: optionValue,
+  label: z.string().max(4608),
   selected: z.boolean(),
 });
 export const NativeControlSchema = z.object({
@@ -31,7 +33,7 @@ export const NativeControlSchema = z.object({
   label: z.string().max(500),
   icon: NativeIconSchema,
   disabled: z.boolean(),
-  options: z.array(option).max(256).optional(),
+  options: z.array(option).max(10240).optional(),
 });
 export type NativeControl = z.infer<typeof NativeControlSchema>;
 export const NativeSurfaceContentSchema = z.discriminatedUnion("kind", [
@@ -77,7 +79,7 @@ export const NativeSurfaceEventSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("press"),
     control: z.string().max(200),
-    value: z.string().max(200).optional(),
+    value: optionValue.optional(),
     text: text.optional(),
   }),
   z.object({ kind: z.literal("text"), text, sequence: z.number().int().positive() }),
