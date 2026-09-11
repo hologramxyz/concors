@@ -32,6 +32,7 @@ interface AppSidebarProps {
   onOpenFolder: (mode: "open" | "clone") => void;
   hostScope: string;
   selectedHost: Host;
+  machineConnected: boolean;
   onSelectMachine: (host: Host) => void;
   onViewCloud: (machineId?: string) => void;
   auth: SignedInAuth;
@@ -73,6 +74,7 @@ export function AppSidebar(props: AppSidebarProps) {
             onViewCloud={props.onViewCloud}
             scope={props.hostScope}
             selected={props.selectedHost}
+            connected={props.machineConnected}
             onSelect={props.onSelectMachine}
           />
           <div className="ml-auto flex shrink-0 items-center gap-0.5">
