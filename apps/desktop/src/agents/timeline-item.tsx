@@ -1,3 +1,4 @@
+import { AttachmentPreview } from "./attachment-preview";
 import { Dialog } from "radix-ui";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { useAgents } from "./context";
@@ -41,6 +42,9 @@ export function TimelineItem({
             <AgentMarkdown>{item.text}</AgentMarkdown>
           )}
         </div>
+        {item.attachments?.map((attachment, index) => (
+          <AttachmentPreview key={index} item={item} attachment={attachment} index={index} />
+        ))}
         {item.kind === "assistant" && item.status !== "running" && (
           <div className="mt-2 flex items-center gap-2">
             <CopyButton text={item.text} />
@@ -54,13 +58,13 @@ export function TimelineItem({
   if (data?.type === "plan" || item.kind === "plan") return <PlanProgress item={item} />;
   if (item.kind === "system")
     return (
-      <article className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span>
+      <article className="flex items-center gap-2 text-sm text-muted-foreground">
+        <span className="min-w-0 break-words whitespace-pre-wrap">
           {item.id === `turn:${item.turnId}` &&
           item.status === "completed" &&
           /^\d+s$/.test(item.text)
             ? `Worked for ${formatDuration(Number(item.text.slice(0, -1)))}`
-            : `${item.title} · ${item.text}`}
+            : `${item.title}${item.text ? ` · ${item.text}` : ""}`}
         </span>
       </article>
     );
@@ -68,7 +72,10 @@ export function TimelineItem({
   if (data?.type === "shell")
     detail = { type: "shell", command: data.command ?? item.text, output: item.detail };
   if (data?.type === "files")
-    detail = { type: "edit", filePath: data.files?.[0]?.path ?? "Files", unifiedDiff: item.detail };
+    detail =
+      data.fileOperation === "read"
+        ? { type: "read", filePath: data.files?.[0]?.path ?? item.text, content: item.detail }
+        : { type: "edit", filePath: data.files?.[0]?.path ?? "Files", unifiedDiff: item.detail };
   if (data?.type === "sub_agent")
     detail = { type: "sub_agent", description: item.text, log: item.detail };
   if (data?.type === "search") detail = { type: "search", query: item.text };
@@ -190,7 +197,11 @@ export function TimelineItem({
               {filePath}
             </button>
           )}
-          {data?.type === "files" && data.files?.length ? (
+          {data?.type === "files" && data.fileOperation === "read" ? (
+            <pre className="font-mono break-words whitespace-pre-wrap">
+              {item.detail || (running ? "Reading file…" : "No file content returned.")}
+            </pre>
+          ) : data?.type === "files" && data.files?.length ? (
             data.files.map((file) => (
               <div key={file.path} className="mb-3">
                 <div className="mb-2 flex items-center gap-2">
@@ -203,6 +214,11 @@ export function TimelineItem({
                   </button>
                   <CopyButton label="Copy diff" text={file.diff} />
                 </div>
+                {!file.diff && (
+                  <pre className="font-mono break-words whitespace-pre-wrap">
+                    {item.detail || "No diff returned."}
+                  </pre>
+                )}
                 <pre className="overflow-x-auto font-mono">
                   {file.diff.split("\n").map((line, i) => (
                     <div
