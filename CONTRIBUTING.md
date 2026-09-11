@@ -67,6 +67,10 @@ driven by the `.dark` class on `<html>`.
 - App-level components go in `src/components/`, screens in `src/views/`. Import via the `@/` alias.
 - Prefer semantic tokens (`bg-background`, `text-muted-foreground`, `border-border`, …) over raw
   colours so dark mode keeps working.
+- Build modals with `components/ui/dialog`: use its header, title, description, body and footer
+  instead of styling Radix dialogs independently. The default size covers actions, search and forms;
+  `size="wide"` is reserved for content previews and the multi-column machine form. Keep placement,
+  typography and close controls in the shared component. Compact layouts use its mobile drawer.
 - Prefer small modules and plain functions over frameworks and abstractions.
 - Tests live next to the code as `*.test.ts` and run with Vitest.
 
