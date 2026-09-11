@@ -12,8 +12,11 @@ export function useConversation(sessionId: string) {
   const [hasMore, setHasMore] = useState(false);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const generation = useRef(Symbol());
+  const pageRequest = useRef<Promise<AgentItem[]> | null>(null);
   useEffect(() => {
     if (!connection) return;
+    generation.current = Symbol();
     let disposed = false;
     const unsubscribe = connection.onAgent((event) => {
       if (
@@ -22,6 +25,7 @@ export function useConversation(sessionId: string) {
         (event.agent.historyRevision ?? 0) !== revision.current
       ) {
         revision.current = event.agent.historyRevision ?? 0;
+        generation.current = Symbol();
         setItems([]);
         void refresh();
       }
@@ -57,6 +61,7 @@ export function useConversation(sessionId: string) {
     });
     return () => {
       disposed = true;
+      generation.current = Symbol();
       unsubscribe();
       off();
     };
@@ -72,5 +77,41 @@ export function useConversation(sessionId: string) {
     setItems((current) => mergeItems(current, page.items));
     setHasMore(page.hasMore);
   };
-  return { items, hasMore, ready, error, earlier };
+  const reveal = (position: number) => {
+    if (pageRequest.current) return pageRequest.current;
+    const currentGeneration = generation.current;
+    const load = async () => {
+      let first = items[0]?.position;
+      let more = hasMore;
+      let fetched: AgentItem[] = [];
+      while (connection && first !== undefined && first > position && more) {
+        const result = await connection.requestAgent(
+          { kind: "read", sessionId, before: first },
+          crypto.randomUUID(),
+        );
+        if (generation.current !== currentGeneration)
+          throw new Error("Conversation changed. Select the message again.");
+        if (result.outcome.status === "error") throw new Error(result.outcome.message);
+        const page = result.outcome.conversation;
+        if ((page.agent.historyRevision ?? 0) !== revision.current)
+          throw new Error("Conversation changed. Select the message again.");
+        const next = page.items[0]?.position;
+        if (next === undefined || next >= first)
+          throw new Error("This message is no longer available.");
+        fetched = [...page.items, ...fetched];
+        first = next;
+        more = page.hasMore;
+      }
+      if (fetched.length) {
+        setItems((current) => mergeItems(current, fetched));
+        setHasMore(more);
+      }
+      return fetched;
+    };
+    pageRequest.current = load().finally(() => {
+      pageRequest.current = null;
+    });
+    return pageRequest.current;
+  };
+  return { items, hasMore, ready, error, earlier, reveal };
 }

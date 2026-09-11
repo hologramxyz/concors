@@ -16,6 +16,8 @@ import { PlanProgress } from "./plan-progress";
 import { useAgents } from "./context";
 import { useConversation } from "./conversation";
 import { useTabVisible } from "@/workspace/tab-visibility";
+import { MessageNavigation } from "./message-navigation";
+import { useMessageIndex, type MessageEntry } from "./message-index";
 
 const button = "rounded-md border px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-40";
 export function ChatPane({
@@ -141,6 +143,44 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
   const scroll = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   const [atBottom, setAtBottom] = useState(true);
+  const messageIndex = useMessageIndex(
+    sessionId,
+    agent?.historyRevision ?? 0,
+    conversation.ready,
+    conversation.items,
+  );
+  const jumping = useRef(false);
+  const jumpToMessage = async (entry: MessageEntry) => {
+    follow.current = false;
+    jumping.current = true;
+    setAtBottom(false);
+    try {
+      await conversation.reveal(entry.position);
+      // Allow React to commit any fetched history before measuring the target.
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      );
+      const viewport = scroll.current;
+      const target = viewport?.querySelector<HTMLElement>(
+        `[data-user-message="${CSS.escape(entry.id)}"]`,
+      );
+      if (!viewport || !target) throw new Error("This message is no longer available.");
+      const inset = Math.max(
+        16,
+        Number.parseFloat(getComputedStyle(viewport).scrollPaddingTop) || 0,
+      );
+      viewport.scrollTop +=
+        target.getBoundingClientRect().top - viewport.getBoundingClientRect().top - inset;
+      target.focus({ preventScroll: true });
+      target.animate([{ backgroundColor: "var(--muted)" }, { backgroundColor: "transparent" }], {
+        duration: matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 700,
+      });
+    } finally {
+      requestAnimationFrame(() => {
+        jumping.current = false;
+      });
+    }
+  };
   const footers = completedTurnFooters(conversation.items);
   const latestPlan = conversation.items.findLast((item) => item.kind === "plan");
   const proposal = conversation.items.findLast(
@@ -209,51 +249,76 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
   );
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="Agent conversation">
-      <div
-        ref={scroll}
-        role="log"
-        aria-label="Chat timeline"
-        aria-live="off"
-        className="chat-scroll min-h-0 flex-1 overflow-y-auto px-3 py-4"
-        onScroll={() => {
-          const el = scroll.current;
-          if (!el) return;
-          follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-          setAtBottom(follow.current);
-        }}
-      >
-        <div className="mx-auto max-w-5xl space-y-5">
-          {conversation.hasMore && (
-            <button
-              className={button}
-              disabled={busy || !connected}
-              onClick={() =>
-                void run(async () => {
-                  const el = scroll.current;
-                  const height = el?.scrollHeight ?? 0;
-                  follow.current = false;
-                  await conversation.earlier();
-                  requestAnimationFrame(() => {
-                    if (el) el.scrollTop += el.scrollHeight - height;
-                  });
-                })
-              }
-            >
-              Load earlier messages
-            </button>
-          )}
-          {conversation.items
-            .filter((item) => !footers.hidden.has(item.id))
-            .map((item) => (
-              <TimelineItem key={item.id} item={item} workedFor={footers.durations.get(item.id)} />
-            ))}
-          {compact && feedback}
-          {active && (
-            <Activity startedAt={agent.turnStartedAt}>
-              {agent?.status === "needs_input" ? "Waiting for your input" : "Working…"}
-            </Activity>
-          )}
+      <div className="chat-timeline-shell relative flex min-h-0 flex-1">
+        <div
+          ref={scroll}
+          role="log"
+          aria-label="Chat timeline"
+          aria-live="off"
+          className="chat-scroll min-h-0 min-w-0 flex-1 overflow-y-auto px-3 py-4"
+          onScroll={() => {
+            const el = scroll.current;
+            if (!el) return;
+            if (jumping.current) return;
+            follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+            setAtBottom(follow.current);
+          }}
+        >
+          <div className="mx-auto max-w-5xl space-y-5">
+            {conversation.hasMore && (
+              <button
+                className={button}
+                disabled={busy || !connected}
+                onClick={() =>
+                  void run(async () => {
+                    const el = scroll.current;
+                    const height = el?.scrollHeight ?? 0;
+                    follow.current = false;
+                    await conversation.earlier();
+                    requestAnimationFrame(() => {
+                      if (el) el.scrollTop += el.scrollHeight - height;
+                    });
+                  })
+                }
+              >
+                Load earlier messages
+              </button>
+            )}
+            {conversation.items
+              .filter((item) => !footers.hidden.has(item.id))
+              .map((item) => (
+                <div
+                  key={item.id}
+                  data-user-message={item.kind === "user" ? item.id : undefined}
+                  tabIndex={item.kind === "user" ? -1 : undefined}
+                  className="outline-none"
+                >
+                  <TimelineItem item={item} workedFor={footers.durations.get(item.id)} />
+                </div>
+              ))}
+            {compact && feedback}
+            {active && (
+              <Activity startedAt={agent.turnStartedAt}>
+                {agent?.status === "needs_input" ? "Waiting for your input" : "Working…"}
+              </Activity>
+            )}
+          </div>
         </div>
+        <MessageNavigation
+          entries={messageIndex.entries}
+          viewport={scroll}
+          onJump={jumpToMessage}
+          loading={messageIndex.loading}
+          error={messageIndex.error}
+          onRetry={messageIndex.retry}
+          hasEarlier={
+            !(
+              connection?.state.status === "ready" &&
+              connection.state.daemon.capabilities?.includes("agent-message-navigation")
+            ) && conversation.hasMore
+          }
+          onEarlier={conversation.earlier}
+        />
       </div>
       {!atBottom && (
         <button
