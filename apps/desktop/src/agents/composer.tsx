@@ -296,7 +296,7 @@ export function AgentComposer({
         {
           id: "model",
           label: nativeProvider
-            ? `${agentProviderName(nativeProvider.id)} · Agent and model`
+            ? `${nativeProvider.label ?? agentProviderName(nativeProvider.id)} · Agent and model`
             : "Choose an agent provider",
           icon: nativeProvider?.id === "codex" ? ("model" as const) : ("options" as const),
           disabled: controlsDisabled || agent.status === "starting" || nativeModels.switching,
@@ -324,7 +324,7 @@ export function AgentComposer({
                 .map((provider) => ({
                   id: provider.id,
                   label:
-                    agentProviderName(provider.id) +
+                    (provider.label ?? agentProviderName(provider.id)) +
                     (provider.id === agent.provider ? " · Current chat" : " · Starts a new chat"),
                   selected: provider.id === agent.provider,
                 })),
