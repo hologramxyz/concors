@@ -53,6 +53,7 @@ export class WorkspaceStore {
         CREATE TABLE IF NOT EXISTS project_setups (id TEXT PRIMARY KEY, request TEXT NOT NULL, setup TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS agents (id TEXT PRIMARY KEY, info TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS agent_items (position INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, item_id TEXT NOT NULL, item TEXT NOT NULL, UNIQUE(session_id, item_id));
+        CREATE TABLE IF NOT EXISTS agent_native_turns (session_id TEXT NOT NULL, native_id TEXT NOT NULL, turn_id TEXT NOT NULL, PRIMARY KEY (session_id, native_id));
         CREATE TABLE IF NOT EXISTS agent_requests (id TEXT PRIMARY KEY, request TEXT NOT NULL, session_id TEXT NOT NULL);
         PRAGMA user_version = 4;
       `);
@@ -356,6 +357,19 @@ export class WorkspaceStore {
     const row = this.#db.prepare("SELECT info FROM agents WHERE id = ?").get(id);
     if (!row) throw new Error("Agent session no longer exists");
     return AgentInfoSchema.parse(JSON.parse(String(row["info"])));
+  }
+  mapNativeTurn(sessionId: string, nativeId: string, turnId: string): void {
+    this.#db
+      .prepare(
+        "INSERT INTO agent_native_turns (session_id, native_id, turn_id) VALUES (?, ?, ?) ON CONFLICT(session_id, native_id) DO NOTHING",
+      )
+      .run(sessionId, nativeId, turnId);
+  }
+  nativeTurn(sessionId: string, nativeId: string): string {
+    const row = this.#db
+      .prepare("SELECT turn_id FROM agent_native_turns WHERE session_id = ? AND native_id = ?")
+      .get(sessionId, nativeId);
+    return row ? String(row["turn_id"]) : nativeId;
   }
   saveAgent(info: AgentInfo): void {
     this.#db

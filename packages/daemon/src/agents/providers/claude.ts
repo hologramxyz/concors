@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import {
   query,
+  getSessionMessages,
   type Query,
   type SDKUserMessage,
   type Options,
@@ -9,6 +10,7 @@ import {
   type PermissionMode,
 } from "@anthropic-ai/claude-agent-sdk";
 import { AgentControlsSchema } from "@concors/protocol";
+import { claudeHistory } from "./history.ts";
 import { launch } from "./launch.ts";
 import { resolveProfile } from "../../terminal/profiles.ts";
 import {
@@ -166,6 +168,7 @@ export class ClaudeProvider extends EventProvider {
     const initial = await session.initializationResult();
     this.currentModel = string(object(initial)["model"]);
     this.controls = AgentControlsSchema.parse({
+      history: true,
       compact: true,
       contextUsage: true,
       mcp: true,
@@ -226,7 +229,20 @@ export class ClaudeProvider extends EventProvider {
     if (method === "collaborationMode/list") return { data: [] };
     if (method === "thread/resume") await this.open(string(p["threadId"]));
     if (method === "thread/start" || method === "thread/resume")
-      return { thread: { id: this.threadId, turns: [] } };
+      return {
+        thread: {
+          id: this.threadId,
+          turns:
+            method === "thread/resume"
+              ? claudeHistory(
+                  await getSessionMessages(this.threadId, {
+                    dir: this.cwd,
+                    includeSystemMessages: true,
+                  }),
+                )
+              : [],
+        },
+      };
     if (method === "turn/interrupt") {
       this.interrupted = true;
       await session.interrupt();
@@ -298,6 +314,7 @@ export class ClaudeProvider extends EventProvider {
     this.text = "";
     this.pending.push({
       type: "user",
+      uuid: this.turnId as `${string}-${string}-${string}-${string}-${string}`,
       session_id: this.threadId,
       parent_tool_use_id: null,
       message: { role: "user", content },
@@ -306,7 +323,42 @@ export class ClaudeProvider extends EventProvider {
     return result;
   }
   private event(m: Record<string, unknown>) {
-    if (!this.turnId || m["parent_tool_use_id"]) return;
+    if (!this.turnId) return;
+    const parent = string(m["parent_tool_use_id"]);
+    if (parent) {
+      // Nested messages belong to their parent tool, not the root assistant reply.
+      if (m["type"] === "assistant") {
+        const message = object(m["message"]),
+          content = array(message["content"]);
+        const response = textContent(content.filter((c) => object(c)["type"] === "text"));
+        if (response)
+          this.item({
+            id: `child:${parent}:${string(message["id"])}`,
+            type: "subAgentActivity",
+            agentPath: this.tools.get(parent)?.name ?? "Agent",
+            agentThreadId: parent,
+            kind: "working",
+            message: response,
+          });
+        for (const value of content) {
+          const c = object(value);
+          if (c["type"] === "tool_use") {
+            const tool = { name: string(c["name"]), input: c["input"] };
+            this.tools.set(string(c["id"]), tool);
+            this.tool(string(c["id"]), tool.name, tool.input, null, false);
+          }
+        }
+      }
+      if (m["type"] === "user")
+        for (const value of array(object(m["message"])["content"])) {
+          const c = object(value),
+            id = string(c["tool_use_id"]),
+            tool = this.tools.get(id);
+          if (c["type"] === "tool_result" && tool)
+            this.tool(id, tool.name, tool.input, c["content"], true, c["is_error"] === true);
+        }
+      return;
+    }
     if (m["type"] === "system") {
       if (m["subtype"] === "status" && m["status"] === "compacting") {
         this.compactCompleted = false;

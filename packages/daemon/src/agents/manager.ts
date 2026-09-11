@@ -221,7 +221,8 @@ export class AgentManager {
       }
       // Rehydrate provider history after restart using stable item and turn identities.
       for (const turn of response.thread.turns)
-        for (const raw of turn.items) this.lifecycle(id, turn.id, raw, true);
+        for (const raw of turn.items)
+          this.lifecycle(id, this.#store.nativeTurn(id, turn.id), raw, true);
       if (info.threadId) {
         const active = response.thread.turns.findLast((t) => t.status === "inProgress");
         if (active) {
@@ -248,7 +249,17 @@ export class AgentManager {
               attachments: undefined,
             }
           : operation;
-      if (op.kind === "read") return this.result(request, op.sessionId, op.before);
+      if (op.kind === "read") {
+        const info = this.#store.agent(op.sessionId);
+        if (info.threadId && !this.#runtimes.has(info.id) && !op.before) {
+          try {
+            await this.provider(info.id);
+          } catch {
+            /* Keep the saved conversation visible if native recovery fails. */
+          }
+        }
+        return this.result(request, op.sessionId, op.before);
+      }
       if (op.kind === "seen") {
         const info = this.#store.agent(op.sessionId);
         if (info.attention?.id === op.attentionId && !info.attention.seen)
@@ -617,6 +628,11 @@ export class AgentManager {
             },
           });
       }
+      return;
+    }
+    if (method === "turn/nativeIdentity" && info.turnId) {
+      const nativeId = z.string().min(1).max(4096).parse(params["nativeTurnId"]);
+      this.#store.mapNativeTurn(id, nativeId, info.turnId);
       return;
     }
     if (method === "session/controls/updated") {

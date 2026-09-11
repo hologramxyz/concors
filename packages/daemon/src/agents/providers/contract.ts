@@ -1,3 +1,4 @@
+import { nativeToolItem } from "./tool-items.ts";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { AgentControlsSchema, type AgentControls } from "@concors/protocol";
@@ -148,17 +149,7 @@ export abstract class EventProvider implements ConversationProvider {
     done: boolean,
     failed = false,
   ) {
-    this.item(
-      {
-        id,
-        type: "mcpToolCall",
-        tool: name,
-        arguments: input,
-        result: output,
-        status: failed ? "failed" : done ? "completed" : "inProgress",
-      },
-      done,
-    );
+    this.item(nativeToolItem(id, name, input, output, done, failed), done);
   }
   protected async permission(title: string, input: unknown): Promise<boolean> {
     const result = object(

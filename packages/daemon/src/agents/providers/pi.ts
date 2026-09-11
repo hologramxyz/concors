@@ -1,3 +1,4 @@
+import { piHistory, messageIdentity } from "./history.ts";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -35,6 +36,7 @@ export class PiProvider extends EventProvider {
   private models = new Map<string, Record<string, unknown>>();
   private model: Record<string, unknown> = {};
   private thinkingLevel = "off";
+  private toolInputs = new Map<string, { name: string; input: unknown }>();
   constructor(
     cwd: string,
     onInput: InputHandler,
@@ -114,6 +116,7 @@ export class PiProvider extends EventProvider {
     this.model = object(state["model"] ?? {});
     this.thinkingLevel = string(state["thinkingLevel"]) || "off";
     this.controls = AgentControlsSchema.parse({
+      history: true,
       compact: true,
       contextUsage: true,
       commands: [
@@ -187,7 +190,17 @@ export class PiProvider extends EventProvider {
           ? string(p["threadId"])
           : join(this.directory, randomUUID() + ".jsonl");
       await this.open(this.threadId);
-      return { thread: { id: this.threadId, turns: [] } };
+      const resumed = this.rpc;
+      if (!resumed) throw new Error("Agent disconnected during resume");
+      return {
+        thread: {
+          id: this.threadId,
+          turns:
+            method === "thread/resume"
+              ? piHistory(array(object(await resumed.request("get_messages"))["messages"]))
+              : [],
+        },
+      };
     }
     if (method === "turn/interrupt") {
       this.interrupted = true;
@@ -369,7 +382,10 @@ export class PiProvider extends EventProvider {
     if (["compaction_end", "auto_compaction_end"].includes(string(e["type"])))
       this.endCompaction(string(e["errorMessage"]) || (e["aborted"] ? "Interrupted" : undefined));
     if (e["type"] === "message_start") {
-      this.messageId = randomUUID();
+      const message = object(e["message"] ?? {});
+      this.messageId = messageIdentity(message, randomUUID());
+      if (message["role"] === "user")
+        this.emit("turn/nativeIdentity", { nativeTurnId: this.messageId });
       this.text = "";
     }
     if (e["type"] === "message_update") {
@@ -387,15 +403,23 @@ export class PiProvider extends EventProvider {
         if (m["errorMessage"]) this.finish(string(m["errorMessage"]));
       }
     }
-    if (string(e["type"]).startsWith("tool_execution_"))
+    if (string(e["type"]).startsWith("tool_execution_")) {
+      const id = string(e["toolCallId"]),
+        prior = this.toolInputs.get(id);
+      const tool = {
+        name: string(e["toolName"]) || prior?.name || "Tool",
+        input: e["args"] ?? prior?.input,
+      };
+      this.toolInputs.set(id, tool);
       this.tool(
-        string(e["toolCallId"]),
-        string(e["toolName"]),
-        e["args"],
+        id,
+        tool.name,
+        tool.input,
         e["result"] ?? e["partialResult"],
         e["type"] === "tool_execution_end",
         e["isError"] === true,
       );
+    }
     if (e["type"] === "agent_end" || e["type"] === "agent_settled") {
       const turnId = this.turnId;
       await this.refreshUsage();
