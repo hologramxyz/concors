@@ -354,6 +354,9 @@ test("sidebar pushes the workspace and settings opens as a drawer over the same 
     "0px",
   );
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toHaveValue("Keep this draft");
+  // The moving workspace is a navigation surface, independent of control-corner preferences.
+  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  await expect(ui.getByTestId("mobile-workspace")).toHaveCSS("border-top-left-radius", "32px");
 });
 test("top select switches split panes and cold session links survive sign-in", async ({ page }) => {
   await page.goto(
@@ -878,7 +881,7 @@ test("account opens a bottom drawer with settings, sign out and focus restoratio
   await expect(page.getByRole("button", { name: "Explore demo" })).toBeVisible();
 });
 
-test("sidebar menu and search share the header glass and keep search above the sidebar", async ({
+test("sidebar has one logo and glass search behind the rounded workspace, never a duplicate menu", async ({
   page,
 }) => {
   const ui = await enter(page);
@@ -887,19 +890,34 @@ test("sidebar menu and search share the header glass and keep search above the s
     const style = getComputedStyle(element);
     return { blur: style.backdropFilter, radius: style.borderRadius, shadow: style.boxShadow };
   });
+  const sidebar = ui.locator("#mobile-sidebar");
+  const workspace = ui.getByTestId("mobile-workspace");
+  await expect(sidebar).toHaveAttribute("inert", "");
+  await expect(sidebar).toHaveCSS("isolation", "isolate");
+  await expect(sidebar).toHaveCSS("overflow", "hidden");
+  await expect(sidebar).toHaveCSS("z-index", "0");
+  await expect(workspace).toHaveCSS("z-index", "1");
+  await expect(workspace).toHaveCSS("border-top-left-radius", "0px");
   await header.click();
-  for (const label of ["Close sidebar", "Search workspace"]) {
-    const button = ui.getByRole("button", { name: label, exact: true });
-    await expect(button).toHaveClass(/mobile-glass/);
-    await expect(button).toHaveCSS("backdrop-filter", glass.blur);
-    await expect(button).toHaveCSS("border-radius", glass.radius);
-    await expect(button).toHaveCSS("box-shadow", glass.shadow);
-  }
+  await expect(sidebar.getByRole("img", { name: "Concourse", exact: true })).toBeVisible();
+  await expect(sidebar.locator('button[aria-label*="sidebar"]')).toHaveCount(0);
+  await expect(workspace).toHaveCSS("border-top-left-radius", "32px");
+  await expect(workspace).toHaveCSS("border-bottom-left-radius", "32px");
+  await expect(workspace).toHaveCSS("overflow", "hidden");
+  const search = ui.getByRole("button", { name: "Search workspace", exact: true });
+  await expect(search).toHaveClass(/mobile-glass/);
+  await expect(search).toHaveCSS("backdrop-filter", glass.blur);
+  await expect(search).toHaveCSS("border-radius", glass.radius);
+  await expect(search).toHaveCSS("box-shadow", glass.shadow);
   await ui.getByRole("button", { name: "Search workspace", exact: true }).click();
   await expect(ui.getByPlaceholder("Type a command or search…")).toBeVisible();
   await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "true");
   await page.keyboard.press("Escape");
   await expect(ui.getByRole("button", { name: "Search workspace", exact: true })).toBeFocused();
+  await ui.getByRole("button", { name: "Return to workspace", exact: true }).click();
+  await expect(workspace).toHaveCSS("border-top-left-radius", "0px");
+  await expect(sidebar).toHaveAttribute("inert", "");
+  await expect(ui.getByRole("button", { name: "Search workspace", exact: true })).toHaveCount(0);
 });
 
 test("mobile Shortcuts settings preserve supported commands and all entry points", async ({

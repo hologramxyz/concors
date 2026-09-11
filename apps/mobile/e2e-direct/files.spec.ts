@@ -325,7 +325,7 @@ test("real mobile files preserve drafts, save explicitly and resolve competing d
     await code.fill("Draft retained during connection retry");
     await files.getByRole("button", { name: "Back to chat" }).click();
     await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
-    await ui.getByRole("button", { name: "Account: Desktop connection", exact: true }).click();
+    await ui.getByRole("button", { name: "Account: Your profile", exact: true }).click();
     await ui
       .getByRole("dialog", { name: "Account", exact: true })
       .getByRole("button", { name: "Settings", exact: true })
