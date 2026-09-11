@@ -14,6 +14,7 @@ import { Activity } from "./activity";
 import { PlanProgress } from "./plan-progress";
 import { useAgents } from "./context";
 import { useConversation } from "./conversation";
+import { useConversationScroll } from "./conversation-scroll";
 import { useTabVisible } from "@/workspace/tab-visibility";
 
 const button = "rounded-md border px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-40";
@@ -131,15 +132,14 @@ export function ChatPane({
 export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boolean }) {
   const compact = useContext(CompactLayoutContext);
   const paneVisible = useContext(PaneVisibilityContext);
-  useViewedAgent(sessionId, useTabVisible() && paneVisible);
+  const visible = useTabVisible() && paneVisible;
+  useViewedAgent(sessionId, visible);
   const connection = useContext(TerminalConnectionContext);
   const agent = useAgents().find((a) => a.id === sessionId);
   const conversation = useConversation(sessionId);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const scroll = useRef<HTMLDivElement>(null);
-  const follow = useRef(true);
-  const [atBottom, setAtBottom] = useState(true);
+  const { scroll, onScroll, atBottom, latest } = useConversationScroll(conversation, visible);
   const footers = completedTurnFooters(conversation.items);
   const latestPlan = conversation.items.findLast((item) => item.kind === "plan");
   const proposal = conversation.items.findLast(
@@ -156,19 +156,6 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
     connection.state.daemon.capabilities?.includes("agent-plan-implementation");
   const active = agent && ["working", "needs_input"].includes(agent.status);
   const connected = canEdit && connection?.state.status === "ready";
-  useEffect(() => {
-    if (follow.current && scroll.current) scroll.current.scrollTop = scroll.current.scrollHeight;
-  }, [conversation.items, agent?.pending]);
-  useEffect(() => {
-    const viewport = scroll.current;
-    const content = viewport?.firstElementChild;
-    if (!viewport || !content) return;
-    const observer = new ResizeObserver(() => {
-      if (follow.current) viewport.scrollTop = viewport.scrollHeight;
-    });
-    observer.observe(content);
-    return () => observer.disconnect();
-  }, []);
   const perform = async (operation: AgentOperation, id = crypto.randomUUID()) => {
     if (!connection) throw new Error("Machine is disconnected");
     const result = await connection.requestAgent(operation, id);
@@ -195,7 +182,7 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
       }
     />
   ));
-  const problem = error ?? conversation.error ?? agent?.error;
+  const problem = error ?? agent?.error;
   const feedback = (
     <>
       {pendingInputs}
@@ -213,41 +200,45 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
         role="log"
         aria-label="Chat timeline"
         aria-live="off"
-        className="chat-scroll min-h-0 flex-1 overflow-y-auto px-3 py-4"
-        onScroll={() => {
-          const el = scroll.current;
-          if (!el) return;
-          follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-          setAtBottom(follow.current);
-        }}
+        className="chat-scroll min-h-0 flex-1 overflow-y-auto px-3 py-4 [overflow-anchor:none]"
+        onScroll={onScroll}
       >
         <div className="mx-auto max-w-5xl space-y-5">
-          {conversation.hasMore && (
-            <button
-              className={button}
-              disabled={busy || !connected}
-              onClick={() =>
-                void run(async () => {
-                  const el = scroll.current;
-                  const height = el?.scrollHeight ?? 0;
-                  follow.current = false;
-                  await conversation.earlier();
-                  requestAnimationFrame(() => {
-                    if (el) el.scrollTop += el.scrollHeight - height;
-                  });
-                })
-              }
-            >
-              Load earlier messages
-            </button>
+          {(conversation.hasEarlier || conversation.loading === "latest") && (
+            <div className="h-5 text-center text-xs text-muted-foreground" role="status">
+              {conversation.loading === "earlier"
+                ? "Loading earlier messages…"
+                : conversation.loading === "latest"
+                  ? "Loading messages…"
+                  : ""}
+            </div>
+          )}
+          {conversation.error && conversation.error.direction !== "newer" && (
+            <HistoryError
+              message={conversation.error.message}
+              onRetry={() => void conversation.load(conversation.error?.direction ?? "latest")}
+            />
           )}
           {conversation.items
             .filter((item) => !footers.hidden.has(item.id))
             .map((item) => (
-              <TimelineItem key={item.id} item={item} workedFor={footers.durations.get(item.id)} />
+              <div key={item.id} data-message-id={item.id} data-message-position={item.position}>
+                <TimelineItem item={item} workedFor={footers.durations.get(item.id)} />
+              </div>
             ))}
+          {conversation.hasNewer && (
+            <div className="h-5 text-center text-xs text-muted-foreground" role="status">
+              {conversation.loading === "newer" ? "Loading newer messages…" : ""}
+            </div>
+          )}
+          {conversation.error?.direction === "newer" && (
+            <HistoryError
+              message={conversation.error.message}
+              onRetry={() => void conversation.load("newer")}
+            />
+          )}
           {compact && feedback}
-          {active && (
+          {active && !conversation.hasNewer && (
             <Activity startedAt={agent.turnStartedAt}>
               {agent?.status === "needs_input" ? "Waiting for your input" : "Working…"}
             </Activity>
@@ -257,11 +248,7 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
       {!atBottom && (
         <button
           className="z-10 mx-auto -mt-9 mb-2 flex items-center gap-1 rounded-xl border bg-background px-3 py-1 text-xs shadow"
-          onClick={() => {
-            follow.current = true;
-            if (scroll.current) scroll.current.scrollTop = scroll.current.scrollHeight;
-            setAtBottom(true);
-          }}
+          onClick={latest}
         >
           <ArrowDown className="size-3" />
           Latest
@@ -308,6 +295,17 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function HistoryError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div role="alert" className="flex items-center justify-center gap-2 text-xs text-destructive">
+      {message}
+      <button className={button} onClick={onRetry}>
+        Retry loading messages
+      </button>
     </div>
   );
 }
