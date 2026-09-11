@@ -2,7 +2,6 @@ import { PendingInput } from "./pending-input";
 import { ProviderStart } from "./provider-start";
 import { AgentAccountPrompt } from "./account-prompt";
 import { completedTurnFooters } from "./duration";
-import { SessionActions } from "./session-actions";
 import { AgentComposer } from "./composer";
 import { TimelineItem } from "./timeline-item";
 import { useViewedAgent } from "@/notifications/context";
@@ -295,20 +294,17 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
           )}
           {agent && <AgentAccountPrompt agent={agent} canEdit={!!connected} />}
           {agent && (
-            <>
-              <SessionActions agent={agent} items={conversation.items} connected={!!connected} />
-              <AgentComposer
-                key={agent.id}
-                agent={agent}
-                connected={!!connected && !busy}
-                onInterrupt={() => {
-                  if (agent.turnId)
-                    void run(() =>
-                      perform({ kind: "interrupt", sessionId, turnId: agent.turnId ?? "" }),
-                    );
-                }}
-              />
-            </>
+            <AgentComposer
+              key={agent.id}
+              agent={agent}
+              connected={!!connected && !busy}
+              onInterrupt={() => {
+                if (agent.turnId)
+                  void run(() =>
+                    perform({ kind: "interrupt", sessionId, turnId: agent.turnId ?? "" }),
+                  );
+              }}
+            />
           )}
         </div>
       </div>
