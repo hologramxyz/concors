@@ -6,6 +6,8 @@ import { test, expect, signedIn } from "./signed-in.ts";
 test("agent controls, uploads, tool details, plans, sub-agents, dictation and queued prompts work together", async ({
   page,
 }) => {
+  // This end-to-end journey includes uploads, streaming, a reload and narrow-layout checks.
+  test.setTimeout(60_000);
   const directory = await mkdtemp(join(tmpdir(), "concors-composer-"));
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
