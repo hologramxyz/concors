@@ -149,3 +149,46 @@ it("keeps MCP headers and process environment private while preserving existing 
   expect(registry.config("claude").params?.mcpServers).toHaveLength(1);
   expect(JSON.stringify(registry.terminalEnvironment())).not.toContain("fixture-secret");
 });
+
+it("keeps private OpenCode transport settings authoritative without discarding account variables", async () => {
+  const root = await mkdtemp(join(tmpdir(), "concors-provider-transport-"));
+  directories.push(root);
+  const script = join(root, "transport.mjs");
+  await writeFile(
+    script,
+    "console.log(JSON.stringify([process.env.OPENCODE_SERVER_USERNAME,process.env.OPENCODE_SERVER_PASSWORD,process.env.OPENCODE_CONFIG_CONTENT,process.env.EXAMPLE_ACCOUNT]));",
+  );
+  const registry = new ProviderRegistry(root);
+  const launch = registry.launcher({
+    id: "opencode-profile",
+    label: "OpenCode profile",
+    engine: "opencode",
+    enabled: true,
+    command: [process.execPath, script],
+    env: {
+      OPENCODE_SERVER_USERNAME: "profile-user",
+      OPENCODE_SERVER_PASSWORD: "profile-password",
+      OPENCODE_CONFIG_CONTENT: "profile-config",
+      EXAMPLE_ACCOUNT: "own-account",
+    },
+  });
+  const child = launch("opencode", [], root, {
+    OPENCODE_SERVER_USERNAME: "concors",
+    OPENCODE_SERVER_PASSWORD: "private-transport",
+    OPENCODE_CONFIG_CONTENT: "adapter-config",
+  });
+  let output = "";
+  child.stdout.on("data", (chunk) => {
+    output += String(chunk);
+  });
+  await new Promise<void>((resolve, reject) => {
+    child.once("close", () => resolve());
+    child.once("error", reject);
+  });
+  expect(JSON.parse(output)).toEqual([
+    "concors",
+    "private-transport",
+    "adapter-config",
+    "own-account",
+  ]);
+});

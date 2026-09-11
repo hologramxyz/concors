@@ -306,8 +306,13 @@ export class AgentManager {
         if (info.threadId && !this.#runtimes.has(info.id) && !op.before) {
           try {
             await this.provider(info.id);
-          } catch {
-            /* Keep the saved conversation visible if native recovery fails. */
+          } catch (error) {
+            // Keep saved history visible and allow a failed startup to retry.
+            // A resumed native turn may still be working; keep its interrupt connection alive.
+            const runtime = this.#runtimes.get(info.id);
+            if (runtime && this.#store.agent(info.id).status === "working")
+              runtime.ready = Promise.resolve(runtime.provider);
+            else this.fail(info.id, error);
           }
         }
         return this.result(request, op.sessionId, op.before);
@@ -426,6 +431,8 @@ export class AgentManager {
       }
       if (op.kind === "import-session" || op.kind === "fork-session") {
         const previous = this.#store.agent(op.sessionId);
+        if (this.mutations.has(previous.id))
+          throw new Error("This session is being changed. Try again when it finishes.");
         if (previous.revision !== op.expectedRevision) throw new Error("Agent changed. Try again.");
         if (
           op.kind === "fork-session" &&
@@ -467,6 +474,7 @@ export class AgentManager {
         this.#store.reserveAgent(request, next);
         this.#workspaceChanged();
         this.#emit({ type: "agent.state", agent: next });
+        if (op.kind === "fork-session") this.mutations.add(previous.id);
         void (async () => {
           if (op.kind === "fork-session") {
             const provider = await this.provider(previous.id);
@@ -480,7 +488,14 @@ export class AgentManager {
           }
           await this.provider(next.id);
           this.update(next.id, { status: "idle" });
-        })().catch((error) => this.fail(next.id, error));
+        })()
+          .catch((error) => this.fail(next.id, error))
+          .finally(() => {
+            if (op.kind === "fork-session") {
+              this.mutations.delete(previous.id);
+              void this.drain(previous.id).catch((error) => this.fail(previous.id, error));
+            }
+          });
         return this.result(request, next.id);
       }
       if (op.kind === "start" || op.kind === "switch-provider") {
