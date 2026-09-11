@@ -5,6 +5,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { mkdir, realpath, stat, opendir } from "node:fs/promises";
 import { isAbsolute, dirname, basename, join } from "node:path";
 import type { ProjectRequest, ProjectResult, ProjectSetup } from "@concors/protocol";
+import { nextWorkspaceTabName } from "@concors/protocol";
 import type { WorkspaceStore } from "../workspace/store.ts";
 
 export function validateRepository(repository: string): void {
@@ -230,7 +231,7 @@ export class ProjectManager {
           expectedVersion: project.version,
           tabId: randomUUID(),
           paneId: randomUUID(),
-          name: "Terminal",
+          name: nextWorkspaceTabName(project.tabs),
           profile: "shell",
         },
       });
