@@ -20,7 +20,7 @@ import { JsonLines } from "./json-lines.ts";
 // Pi's tool_call hook waits for the native RPC confirmation dialog before each tool executes.
 // This extension is supplied explicitly on every launch, including resumed sessions.
 const guard = `export default function(pi) { pi.on("tool_call", async (event,ctx) => {
-  const allowed = await ctx.ui.confirm("Allow " + event.toolName + "?", JSON.stringify(event));
+  const allowed = await ctx.ui.confirm("Concors tool approval: " + event.toolName, JSON.stringify(event));
   if (!allowed) return {block:true,reason:"Declined in Concors"};
 }); }`;
 export class PiProvider extends EventProvider {
@@ -366,9 +366,44 @@ export class PiProvider extends EventProvider {
         });
         return;
       }
-      if (e["method"] === "confirm") {
+      if (e["method"] === "confirm" && string(e["title"]).startsWith("Concors tool approval: ")) {
         const confirmed = await this.permission(string(e["title"]), e["message"]);
         this.rpc?.write({ type: "extension_ui_response", id, confirmed });
+        return;
+      }
+      if (e["method"] === "confirm") {
+        const response = object(
+          await this.onInput(
+            "item/tool/requestUserInput",
+            {
+              threadId: this.threadId,
+              turnId: this.turnId,
+              questions: [
+                {
+                  id: "confirm",
+                  header: "Confirm",
+                  question: [string(e["title"]), string(e["message"])].filter(Boolean).join("\n\n"),
+                  required: true,
+                  allowOther: false,
+                  options: [
+                    { label: "Yes", description: "" },
+                    { label: "No", description: "" },
+                  ],
+                },
+              ],
+            },
+            String(id),
+          ),
+        );
+        this.rpc?.write({
+          type: "extension_ui_response",
+          id,
+          confirmed:
+            !response["decision"] &&
+            array(object(object(response["answers"])["confirm"])["answers"])[0] === "Yes" &&
+            !this.interrupted,
+          ...(response["decision"] ? { cancelled: true } : {}),
+        });
         return;
       }
       if (e["method"] === "select" || e["method"] === "input" || e["method"] === "editor") {
@@ -389,7 +424,10 @@ export class PiProvider extends EventProvider {
                   question: string(e["title"]),
                   options,
                   allowOther: e["method"] !== "select",
-                  required: e["method"] === "select",
+                  required:
+                    e["method"] === "select" ||
+                    (e["method"] === "input" &&
+                      !/\boptional\b|\bskip\b/i.test(string(e["placeholder"]))),
                   multiline: e["method"] === "editor",
                   placeholder: string(e["placeholder"]),
                   defaultValue: string(e["prefill"]),
@@ -467,6 +505,16 @@ export class PiProvider extends EventProvider {
     }
     if (e["type"] === "message_end") {
       const m = object(e["message"]);
+      if (m["role"] === "custom" && m["display"] !== false) {
+        const text = textContent(m["content"]);
+        if (text)
+          this.item({
+            id: messageIdentity(m, this.messageId),
+            type: "notification",
+            title: "Agent update",
+            text,
+          });
+      }
       if (m["role"] === "assistant") {
         array(m["content"]).forEach((raw, index) => {
           const block = object(raw);
