@@ -1,5 +1,5 @@
 import type { DaemonInfo, DaemonStatus } from "@concors/protocol";
-import { PROTOCOL_VERSION } from "@concors/protocol";
+import { HOST_USAGE_CAPABILITY, PROTOCOL_VERSION } from "@concors/protocol";
 
 import { DAEMON_VERSION } from "./version.ts";
 
@@ -25,6 +25,7 @@ export class DaemonState {
       daemonVersion: DAEMON_VERSION,
       status: this.#status,
       capabilities: [
+        HOST_USAGE_CAPABILITY,
         "terminal-profiles",
         "project-files",
         "project-file-create",
