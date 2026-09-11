@@ -1,22 +1,20 @@
 # Unified chat: provider support and implementation evidence
 
 This is the implementation follow-up to the
-[September 10 Paseo parity audit](unified-chat-parity-audit.md). It describes
+[September 10 capability audit](unified-chat-parity-audit.md). It describes
 Concors' desktop and shared mobile chat after PR #52, with mobile integration
 in PR #53. The historical audit remains a record of the pre-fix code.
 
 ## Provider coverage
 
-Concors now has the six built-in integrations in the audited Paseo manifest:
+Concors has six built-in integrations:
 Codex, Claude Code, OpenCode, Pi, GitHub Copilot, and Oh My Pi (OMP). OMP remains
-disabled by default, matching the audited manifest.
+disabled by default.
 
 There are also 38 opt-in ACP presets and configurable profiles with their own
-label, executable arguments, environment, and model filter. All 44 entries come
-from the audited catalog at Paseo
-[`d7c7044`](https://github.com/getpaseo/paseo/commit/d7c7044dfc91d1d18721dc8757ac3bb913d8c232).
-The [preset metadata](../packages/protocol/src/provider-presets.ts) retains its
-attribution and [Apache license](../third-party/paseo-LICENSE). These are agent
+label, executable arguments, environment, and model filter. The
+[preset metadata](../packages/protocol/src/provider-presets.ts) and
+[third-party notices](../third-party/source-notices.md) record provenance. These are agent
 integrations, not an inventory of model vendors or automatically authenticated
 accounts. Preset availability is not live certification of every CLI.
 
@@ -24,7 +22,7 @@ ACP negotiates the installed agent's capabilities. Cursor, Kimi, Kiro, and TRAE
 have the adaptations identified in the audit: parameterized model configuration,
 per-model thinking choices, delayed command discovery, and Kiro session/skill
 extensions. Factory Droid's preset rejects injected MCP configuration. Arbitrary
-Paseo plugins are not loaded into Concors.
+third-party plugins are not loaded into Concors.
 
 ## Settings and installation
 
@@ -160,7 +158,7 @@ live. Native command, model, and session availability remains provider-dependent
 ## Remaining scope boundaries
 
 The fixes above cover the identified core defects. See the [primitive audit](chat-primitives-audit.md)
-for precise limits, including queued async answers and unsupported custom UIs. Wider Paseo
+for precise limits, including queued async answers and unsupported custom UIs. Additional
 features still outside this change include provider quota/rate-limit dashboards,
 imported attachment downloads/automatic cleanup, a general plugin loader, and
 a portable dictation backend. Pi extension-specific custom UIs are limited to

@@ -87,4 +87,4 @@ Keep the host's lifecycle independent in other supervisors as well. Runtime upgr
 
 Integration tests exercise a real PTY process through graceful gateway shutdown and SIGKILL, checking the same PID, environment, working directory, pane binding, screen, and continuing output. Other tests cover simultaneous gateways, the private endpoint, occupied public ports, stale host replacement, persistent Agent chat turns and approvals, and concurrent recovery requests. Browser coverage uses two clients with Codex and Claude test executables, verifies unchanged process IDs after restart, and checks native-picker recovery without the interruption screen after host failure.
 
-The previous reference Paseo worker terminated terminals on parent IPC disconnect. This implementation instead keeps the existing complete runtime outside the gateway, avoiding a second owner of SQLite or split launch receipts.
+The complete runtime stays outside the gateway, avoiding a second owner of SQLite or split launch receipts.

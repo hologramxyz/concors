@@ -5,18 +5,7 @@ reserves a session and its binding before starting a provider thread. Prompts ha
 persistent request IDs; reconnecting or retrying the same request never resends a
 prompt. Credentials stay with the machine's Codex installation.
 
-## Reference implementation
-
-Reviewed Paseo at `a7a708bec99e935ee4b8c6f7314a4b9a9984cfa6`:
-
-- `packages/server/src/server/agent/providers/codex-app-server-agent.ts`: thread
-  resume, item lifecycle, explicit approval/input handlers, and turn identity.
-- `packages/server/src/server/agent/providers/codex/tool-call-mapper.ts`: tool
-  summaries and details. Its command normalization helpers are extracted into
-  `command-display.ts`, with Apache-2.0 attribution and the existing full license
-  in `third-party/paseo-LICENSE`. The remaining mapper is adapted to Concors items.
-- `packages/app/src/timeline/turn-liveness.ts`: completion must target the active
-  turn, so delayed events cannot close a newer turn.
+## Protocol
 
 The [official Codex app-server documentation](https://learn.chatgpt.com/docs/app-server)
 is the protocol reference. The installed CLI smoke test additionally verified
@@ -65,7 +54,7 @@ to that installation. Codex must already be installed and signed in on the machi
 Send with Enter; Shift+Enter inserts a line break. The square button interrupts the
 current turn. Closing the pane keeps its conversation in the global Agents view.
 
-The client adapts Paseo's shared timeline presentation: Markdown messages,
+The client presents: Markdown messages,
 collapsible tool summaries/details, explicit approval and question cards, progress
 plans, and turn status/timing. It follows output only while scrolled near the end,
 with a Latest button to return. Older pages are loaded on demand. Item revisions
@@ -82,4 +71,4 @@ approval, structured input, and continuing after closing the original pane. The
 browser fixture is a separate test entry point, never a production runtime option.
 
 See [Agent interface](agent-interface.md) for the expanded composer, structured progress,
-Paseo source manifest, and feature limits.
+third-party source notices, and feature limits.
