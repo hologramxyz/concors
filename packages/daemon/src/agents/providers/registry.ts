@@ -63,6 +63,13 @@ export class ProviderRegistry {
     writeFileSync(temp, JSON.stringify(this.saved, null, 2), { mode: 0o600 });
     renameSync(temp, join(this.directory, "config.json"));
   }
+  terminalEnvironment(): NodeJS.ProcessEnv {
+    const bins = this.configs()
+      .filter((c) => c.enabled)
+      .map((c) => join(this.directory, c.id, "node_modules", ".bin"))
+      .filter((path) => existsSync(path));
+    return { ...process.env, PATH: [...bins, process.env["PATH"] ?? ""].join(delimiter) };
+  }
   private env(config: ProviderConfig): NodeJS.ProcessEnv {
     const bin = join(this.directory, config.id, "node_modules", ".bin");
     return {
