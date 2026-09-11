@@ -119,18 +119,18 @@ is never shown as proof that every server is healthy.
 
 The changes were checked at distinct layers:
 
-- Full desktop-branch repository suite passed (437 tests, one opt-in API test
-  skipped), followed by the new session/registry regressions and all 45
-  client-core tests. The daemon suite passed after adding the fork/recovery
-  regressions; the additional OpenCode transport regression passed separately.
-- Workspace type checks and lint passed before the final targeted additions;
-  final integration checks are recorded in the PR descriptions.
+- The final integrated mobile branch passed all 455 repository tests (one opt-in
+  live API test skipped), including all shared desktop/daemon changes. This
+  includes 201 daemon, 46 client-core, 77 desktop, and 44 mobile tests.
+- Workspace type checks, lint, and formatting passed on both implementation
+  branches. Mobile type checking also builds its embedded workspace assets.
 - Five desktop browser scenarios passed: composer/queue behavior, chat controls,
   switching to Claude Code/OpenCode/Pi, and returning to the original chat.
-- Mobile direct browser acceptance covers real daemon transport with controlled
-  providers, provider-first panes, approvals, provider settings at phone width,
-  files, terminals, and switching through web/native bridge composer paths.
-  See PR #53 for the final integration run.
+- All nine mobile direct browser scenarios passed across the integration run and
+  focused provider rerun. They use real daemon transport with controlled
+  providers, covering approvals, phone-width provider settings, files, terminals,
+  provider switching through web/native bridge composers, and fork navigation.
+  The provider tests were updated to select an agent before starting the chat.
 - Real Codex compaction events and native OpenCode summarization were exercised.
   Claude/Pi compaction rejection paths were observed and surfaced; successful
   compaction on every account/history is not claimed. Native completion fixtures
