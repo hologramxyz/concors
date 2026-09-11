@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { AgentControlsSchema } from "@concors/protocol";
 import {
   EventProvider,
   array,
@@ -28,6 +29,9 @@ export class PiProvider extends EventProvider {
   private text = "";
   private messageId = "";
   private cwd: string;
+  private models = new Map<string, Record<string, unknown>>();
+  private model: Record<string, unknown> = {};
+  private thinkingLevel = "off";
   constructor(cwd: string, onInput: InputHandler) {
     super(onInput);
     this.cwd = cwd;
@@ -64,20 +68,70 @@ export class PiProvider extends EventProvider {
       },
     );
     this.rpc = rpc;
-    await rpc.request("get_state");
+    const state = object(await rpc.request("get_state"));
+    this.model = object(state["model"] ?? {});
+    this.thinkingLevel = string(state["thinkingLevel"]) || "off";
+    this.controls = AgentControlsSchema.parse({
+      compact: true,
+      contextUsage: true,
+      commands: [
+        {
+          name: "compact",
+          description: "Summarize earlier context",
+          argumentHint: "[instructions]",
+        },
+        {
+          name: "autocompact",
+          description: "Configure automatic compaction",
+          argumentHint: "[on|off|toggle]",
+        },
+      ],
+      features: [
+        {
+          id: "auto_compaction",
+          label: "Automatic compaction",
+          value: state["autoCompactionEnabled"] !== false,
+        },
+      ],
+    });
+    try {
+      const commands = object(await rpc.request("get_commands"));
+      for (const raw of array(commands["commands"])) {
+        const command = object(raw),
+          name = string(command["name"]);
+        if (name && !this.controls.commands.some((c) => c.name === name))
+          this.controls.commands.push({
+            name,
+            description: string(command["description"]),
+            kind: command["source"] === "skill" ? "skill" : "command",
+            argumentHint: string(object(command["input"] ?? {})["hint"]),
+          });
+      }
+    } catch {
+      /* Older Pi versions do not expose extension commands. */
+    }
   }
   async request(method: string, raw: unknown = {}) {
     const p = object(raw);
     let rpc = this.rpc;
     if (!rpc) throw new Error("Pi is disconnected");
+    if (method === "session/controls") return this.controls;
     if (method === "model/list") {
       const data = object(await rpc.request("get_available_models"));
       return modelCatalog(
         array(data["models"]).map((value) => {
           const m = object(value);
+          this.models.set(string(m["provider"]) + "/" + string(m["id"]), m);
           return {
             id: string(m["provider"]) + "/" + string(m["id"]),
             label: string(m["name"]) || string(m["id"]),
+            efforts: m["reasoning"]
+              ? ["off", "minimal", "low", "medium", "high", "xhigh", "max"]
+              : [],
+            supportsImages: array(m["input"]).includes("image"),
+            ...(typeof m["contextWindow"] === "number" && m["contextWindow"] > 0
+              ? { contextWindow: m["contextWindow"] }
+              : {}),
           };
         }),
       );
@@ -97,22 +151,90 @@ export class PiProvider extends EventProvider {
       this.finish();
       return {};
     }
-    if (method !== "turn/start") throw new Error(`Unsupported Pi operation: ${method}`);
+    if (method === "command/execute") {
+      const name = string(p["name"]),
+        args = string(p["args"]);
+      if (!this.controls.commands.some((c) => c.name === name))
+        throw new Error("Unknown Pi command");
+      if (name === "compact" || name === "autocompact") {
+        if (name === "autocompact" && !["", "on", "off", "toggle"].includes(args))
+          throw new Error("Use /autocompact [on|off|toggle]");
+        const result = this.begin(),
+          turnId = this.turnId;
+        if (name === "compact") this.startCompaction();
+        const auto = this.controls.features.find((f) => f.id === "auto_compaction");
+        const enabled = args === "on" || (args !== "off" && auto?.value !== true);
+        void rpc
+          .request(
+            name === "compact" ? "compact" : "set_auto_compaction",
+            name === "compact" ? (args ? { customInstructions: args } : {}) : { enabled },
+            300000,
+          )
+          .then(async () => {
+            if (turnId !== this.turnId) return;
+            if (name === "compact") this.endCompaction();
+            else {
+              if (auto) auto.value = enabled;
+              this.controlsChanged();
+              this.item({
+                id: randomUUID(),
+                type: "agentMessage",
+                text: `Automatic compaction ${enabled ? "enabled" : "disabled"}.`,
+              });
+            }
+            await this.refreshUsage();
+            if (turnId === this.turnId) this.finish();
+          })
+          .catch((error: Error) => {
+            if (turnId === this.turnId) {
+              this.endCompaction(error.message);
+              this.finish(error.message);
+            }
+          });
+        return result;
+      }
+      p["input"] = [{ type: "text", text: `/${name}${args ? ` ${args}` : ""}` }];
+    } else if (method !== "turn/start") throw new Error(`Unsupported Pi operation: ${method}`);
     if (object(p["sandboxPolicy"])["type"] === "dangerFullAccess")
       throw new Error("Pi tool calls require approval in Concors");
     const model = string(p["model"]);
     if (model) {
       const slash = model.indexOf("/");
       if (slash < 1) throw new Error("Invalid Pi model");
-      await rpc.request("set_model", {
-        provider: model.slice(0, slash),
-        modelId: model.slice(slash + 1),
-      });
+      const selected = object(
+        await rpc.request("set_model", {
+          provider: model.slice(0, slash),
+          modelId: model.slice(slash + 1),
+        }),
+      );
+      this.model = selected["id"] ? selected : (this.models.get(model) ?? {});
+    }
+    const effort = string(p["effort"]);
+    if (effort && effort !== this.thinkingLevel) {
+      await rpc.request("set_thinking_level", { level: effort });
+      this.thinkingLevel = effort;
+    }
+    const features = object(p["features"] ?? {});
+    const auto = this.controls.features.find((f) => f.id === "auto_compaction");
+    if (
+      typeof features["auto_compaction"] === "boolean" &&
+      features["auto_compaction"] !== auto?.value
+    ) {
+      await rpc.request("set_auto_compaction", { enabled: features["auto_compaction"] });
+      if (auto) auto.value = features["auto_compaction"];
+      this.controlsChanged();
     }
     const inputs = array(p["input"]).map(object);
     const images = [];
     for (const item of inputs)
       if (item["type"] === "localImage") {
+        if (!array(this.model["input"]).includes("image")) {
+          inputs.push({
+            type: "text",
+            text: `Image available on this machine at: ${string(item["path"])}`,
+          });
+          continue;
+        }
         const bytes = await readFile(string(item["path"]));
         images.push({
           type: "image",
@@ -132,13 +254,16 @@ export class PiProvider extends EventProvider {
     this.messageId = randomUUID();
     rpc = this.rpc;
     if (!rpc) throw new Error("Pi is disconnected");
-    await rpc.request("prompt", {
-      message: inputs
-        .filter((i) => i["type"] === "text")
-        .map((i) => string(i["text"]))
-        .join("\n"),
-      ...(images.length ? { images } : {}),
-    });
+    const ack = object(
+      (await rpc.request("prompt", {
+        message: inputs
+          .filter((i) => i["type"] === "text")
+          .map((i) => string(i["text"]))
+          .join("\n"),
+        ...(images.length ? { images } : {}),
+      })) ?? {},
+    );
+    if (ack["agentInvoked"] === false) this.finish();
     return result;
   }
   private async event(e: Record<string, unknown>) {
@@ -177,6 +302,12 @@ export class PiProvider extends EventProvider {
       return;
     }
     if (!this.turnId) return;
+    if (e["type"] === "command_output")
+      this.item({ id: randomUUID(), type: "agentMessage", text: string(e["text"]) });
+    if (["compaction_start", "auto_compaction_start"].includes(string(e["type"])))
+      this.startCompaction();
+    if (["compaction_end", "auto_compaction_end"].includes(string(e["type"])))
+      this.endCompaction(string(e["errorMessage"]) || (e["aborted"] ? "Interrupted" : undefined));
     if (e["type"] === "message_start") {
       this.messageId = randomUUID();
       this.text = "";
@@ -205,7 +336,29 @@ export class PiProvider extends EventProvider {
         e["type"] === "tool_execution_end",
         e["isError"] === true,
       );
-    if (e["type"] === "agent_end") this.finish();
+    if (e["type"] === "agent_end" || e["type"] === "agent_settled") {
+      const turnId = this.turnId;
+      await this.refreshUsage();
+      if (turnId === this.turnId) this.finish();
+    }
+  }
+  private async refreshUsage() {
+    const rpc = this.rpc;
+    if (!rpc || this.closed) return;
+    try {
+      const stats = object(await rpc.request("get_session_stats"));
+      const state = stats["contextUsage"] ? stats : object(await rpc.request("get_state"));
+      const context = object(state["contextUsage"] ?? {}),
+        tokens = object(stats["tokens"] ?? {});
+      if (typeof context["tokens"] === "number")
+        this.usage(
+          context["tokens"],
+          typeof context["contextWindow"] === "number" ? context["contextWindow"] : null,
+          typeof tokens["total"] === "number" ? tokens["total"] : null,
+        );
+    } catch {
+      /* Usage is optional; a statistics failure must not lose a finished reply. */
+    }
   }
   async close() {
     this.closed = true;
