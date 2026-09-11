@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "maxLength": 2048
+    },
+    "version": {
+      "type": "number",
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,63}$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 240
+    },
+    "extends": {
+      "default": "concors",
+      "type": "string",
+      "enum": ["concors", "cobalt", "dusk", "forest", "rose", "sand", "ocean"]
+    },
+    "light": {
+      "type": "object",
+      "properties": {
+        "background": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$"
+        },
+        "foreground": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$"
+        },
+        "surface": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$"
+        },
+        "sidebar": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$"
+        },
+        "muted": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$"
+        },
+        "mutedForeground": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$"
+        },
+        "border": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$"
+        },
+        "accent": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$"
+        },
+        "accentForeground": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$"
+        },
+        "selection": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$"
+        },
+        "terminal": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "enum": [
+              "background",
+              "foreground",
+              "cursor",
+              "selection",
+              "black",
+              "red",
+              "green",
+              "yellow",
+              "blue",
+              "magenta",
+              "cyan",
+              "white",
+              "bright-black",
+              "bright-red",
+              "bright-green",
+              "bright-yellow",
+              "bright-blue",
+              "bright-magenta",
+              "bright-cyan",
+              "bright-white"
+            ]
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "dark": {
+      "type": "object",
+      "properties": {
+        "background": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$"
+        },
+        "foreground": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$"
+        },
+        "surface": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$"
+        },
+        "sidebar": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$"
+        },
+        "muted": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$"
+        },
+        "mutedForeground": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$"
+        },
+        "border": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$"
+        },
+        "accent": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$"
+        },
+        "accentForeground": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$"
+        },
+        "selection": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$"
+        },
+        "terminal": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "enum": [
+              "background",
+              "foreground",
+              "cursor",
+              "selection",
+              "black",
+              "red",
+              "green",
+              "yellow",
+              "blue",
+              "magenta",
+              "cyan",
+              "white",
+              "bright-black",
+              "bright-red",
+              "bright-green",
+              "bright-yellow",
+              "bright-blue",
+              "bright-magenta",
+              "bright-cyan",
+              "bright-white"
+            ]
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$"
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": ["version", "id", "name", "extends"],
+  "additionalProperties": false
+}
