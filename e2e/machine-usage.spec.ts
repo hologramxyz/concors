@@ -4,6 +4,7 @@ test("machine cards display usage, poll, and identify stale or missing reports",
   page,
 }) => {
   await page.clock.install();
+  await page.emulateMedia({ colorScheme: "dark" });
   await page.addInitScript(() => localStorage.setItem("concors.auth.session-token.v1", "fixture"));
   const time = new Date().toISOString();
   const user = {
@@ -91,6 +92,14 @@ test("machine cards display usage, poll, and identify stale or missing reports",
   await page.getByRole("button", { name: "Switch machine" }).click();
   await page.getByRole("menuitem", { name: "Add a machine" }).click();
   await expect(page.getByRole("heading", { name: "Machines", level: 2 })).toBeVisible();
+  const create = page.getByRole("button", { name: "New machine", exact: true });
+  await expect(create).toBeEnabled();
+  const colors = await create.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { foreground: style.color, background: style.backgroundColor };
+  });
+  expect(colors.foreground).not.toBe(colors.background);
+  expect((await create.boundingBox())?.height).toBeGreaterThanOrEqual(40);
   const memory = page.getByRole("meter", { name: "Memory usage" });
   await expect(memory).toHaveAttribute("aria-valuenow", "63");
   await expect(page.getByRole("meter", { name: "Disk usage" })).toHaveAttribute(
@@ -99,6 +108,21 @@ test("machine cards display usage, poll, and identify stale or missing reports",
   );
   await expect(page.getByText("5.0 GiB / 8.0 GiB used")).toBeVisible();
   await page.screenshot({ path: "test-results/machine-resource-usage.png" });
+  await page.setViewportSize({ width: 800, height: 850 });
+  await expect(create).toBeInViewport();
+  expect(
+    await page.locator("[data-machines-view]").evaluate((el) => el.scrollWidth <= el.clientWidth),
+  ).toBe(true);
+  await page.screenshot({ path: "test-results/machines-narrow.png" });
+  await page.setViewportSize({ width: 1360, height: 850 });
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(page.locator("html")).not.toHaveClass(/dark/);
+  const lightColors = await create.evaluate((el) => ({
+    foreground: getComputedStyle(el).color,
+    background: getComputedStyle(el).backgroundColor,
+  }));
+  expect(lightColors.foreground).not.toBe(lightColors.background);
+  await page.screenshot({ path: "test-results/machines-light.png" });
   const before = reads;
   usage = { ...usage, memory: { totalBytes: 8 * 1024 ** 3, availableBytes: 4 * 1024 ** 3 } };
   await page.clock.fastForward(31000);
