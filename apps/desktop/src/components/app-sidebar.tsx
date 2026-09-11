@@ -7,7 +7,7 @@ import type { ProjectSetup } from "@concors/protocol";
 import { shortcutLabel } from "@/shortcuts/bindings";
 import { AgentSidebar } from "@/agents/list";
 import { SidebarSection } from "./sidebar-section";
-import { Bot, Globe, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "cn";
 import type { WorkspaceSnapshot, WorkspaceOperation } from "@concors/protocol";
@@ -162,50 +162,27 @@ export function AppSidebar(props: AppSidebarProps) {
                   execute={props.execute}
                 />
               ))}
-              {props.workspace?.projects.length === 0 && (
-                <li
-                  className={cn(
-                    "text-ui text-muted-foreground",
-                    props.collapsed ? "py-2 text-center" : "px-2 py-3 leading-relaxed",
-                  )}
-                >
-                  {props.collapsed && <span aria-hidden="true">—</span>}
-                  <span className={props.collapsed ? "sr-only" : undefined}>
-                    Start a workspace or open a folder.
-                  </span>
+              {!props.collapsed && props.workspace?.projects.length === 0 && (
+                <li className="px-2 py-3 text-ui leading-relaxed text-muted-foreground">
+                  Start a workspace or open a folder.
                 </li>
               )}
             </ul>
           </SidebarSection>
-          <SidebarSection
-            title="Agents"
-            compact={props.collapsed}
-            icon={<Bot className="size-3.5" />}
-          >
-            <AgentSidebar
-              compact={props.collapsed}
-              onSelect={props.onSelectAgent}
-              workspace={props.workspace}
-            />
-          </SidebarSection>
-          <SidebarSection
-            title="Servers"
-            compact={props.collapsed}
-            icon={<Globe className="size-3.5" />}
-          >
-            <p
-              className={cn(
-                "py-2 text-muted-foreground",
-                props.collapsed ? "text-center" : "px-2 leading-relaxed",
-              )}
-              title={props.collapsed ? "No servers discovered" : undefined}
-            >
-              {props.collapsed && <span aria-hidden="true">—</span>}
-              <span className={props.collapsed ? "sr-only" : undefined}>
+          {props.collapsed ? (
+            <AgentSidebar compact onSelect={props.onSelectAgent} workspace={props.workspace} />
+          ) : (
+            <SidebarSection title="Agents">
+              <AgentSidebar onSelect={props.onSelectAgent} workspace={props.workspace} />
+            </SidebarSection>
+          )}
+          {!props.collapsed && (
+            <SidebarSection title="Servers">
+              <p className="px-2 py-2 leading-relaxed text-muted-foreground">
                 No servers discovered.
-              </span>
-            </p>
-          </SidebarSection>
+              </p>
+            </SidebarSection>
+          )}
         </div>
         <div className={cn("border-t border-sidebar-border", props.collapsed ? "p-[6px]" : "p-2")}>
           <AccountMenu
