@@ -159,6 +159,54 @@ describe("ApiClient", () => {
     expect(tokens.get()).toBeNull();
   });
 
+  it("drops the local token immediately while revoking the original session", async () => {
+    let finish: () => void = () => undefined;
+    const pending = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const fetch = vi.fn(async () => {
+      await pending;
+      return json({ success: true });
+    });
+    const { api, tokens } = client(fetch, "old-token");
+    const signingOut = api.signOut();
+    try {
+      expect(tokens.get()).toBeNull();
+      const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+      expect(new Headers(init.headers).get("authorization")).toBe("Bearer old-token");
+    } finally {
+      finish();
+      await signingOut;
+    }
+  });
+
+  it.each(["success", "expired", "offline"])(
+    "keeps a newer sign-in when an older sign-out finishes with %s",
+    async (outcome) => {
+      let finish: () => void = () => undefined;
+      const pending = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      const fetch = vi
+        .fn()
+        .mockImplementationOnce(async () => {
+          await pending;
+          if (outcome === "offline") throw new TypeError("offline");
+          return outcome === "expired"
+            ? json({ message: "Unauthorized" }, { status: 401 })
+            : json({ success: true });
+        })
+        .mockResolvedValueOnce(json({ token: "new-token", user: USER }));
+      const { api, tokens } = client(fetch, "old-token");
+      const signingOut = api.signOut().catch((error: unknown) => error);
+      await api.signInWithEmail({ email: USER.email, password: "secret-123" });
+      expect(tokens.get()).toBe("new-token");
+      finish();
+      await signingOut;
+      expect(tokens.get()).toBe("new-token");
+    },
+  );
+
   it("lists organizations and switches the active one", async () => {
     const org = {
       id: "org1",
