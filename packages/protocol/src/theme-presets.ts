@@ -256,6 +256,12 @@ export const COLOR_THEMES: readonly ColorTheme[] = samples.map(
   }),
 );
 export const DEFAULT_COLOR_THEME = COLOR_THEMES[0] as ColorTheme;
+
+/** Shared by the native host and renderer so the phone canvas meets its safe area. */
+export function mobileThemeBackground(theme: ColorTheme, mode: "light" | "dark"): string {
+  if (theme.id === "concors") return mode === "dark" ? "#141414" : "#f4f3ef";
+  return theme[mode].background;
+}
 export function customColorTheme(definition: ThemeDefinition): ColorTheme {
   const base = COLOR_THEMES.find((theme) => theme.id === definition.extends) ?? DEFAULT_COLOR_THEME;
   const variant = (mode: "light" | "dark") =>

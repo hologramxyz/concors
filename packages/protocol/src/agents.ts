@@ -217,6 +217,8 @@ export const AgentConversationSchema = z.object({
   agent: AgentInfoSchema,
   items: z.array(AgentItemSchema).max(80),
   hasMore: z.boolean(),
+  // Optional for compatibility with daemons that only support backward paging.
+  hasNewer: z.boolean().optional(),
 });
 export type AgentConversation = z.infer<typeof AgentConversationSchema>;
 export const AgentMessageIndexSchema = z.object({
@@ -317,11 +319,16 @@ export const AgentOperationSchema = z.discriminatedUnion("kind", [
     expectedVersion: z.number().int().nonnegative(),
     model: AgentModelIdSchema.optional(),
   }),
-  z.object({
-    kind: z.literal("read"),
-    sessionId: Id,
-    before: z.number().int().positive().optional(),
-  }),
+  z
+    .object({
+      kind: z.literal("read"),
+      sessionId: Id,
+      before: z.number().int().nonnegative().optional(),
+      after: z.number().int().nonnegative().optional(),
+    })
+    .refine((read) => read.before === undefined || read.after === undefined, {
+      message: "Read history in one direction at a time",
+    }),
   z.object({
     kind: z.literal("list-messages"),
     sessionId: Id,

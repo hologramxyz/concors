@@ -13,6 +13,7 @@ export class TestAccountBackend implements AccountBackend {
   async read() {
     return {
       connected: this.connected,
+      ...(this.connected ? { label: "fixture-account@example.test" } : {}),
       methods: [
         {
           id: "fixture",

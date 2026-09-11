@@ -35,6 +35,123 @@ async function openSource(page: Page) {
   return tree;
 }
 
+test("copy reports unavailable clipboard access and recovers without page errors", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined });
+  });
+  const root = await project(page);
+  try {
+    await openSource(page);
+    await page.getByRole("button", { name: "Copy file", exact: true }).click();
+    const failed = page.getByRole("button", { name: "Copy failed; try again", exact: true });
+    await expect(failed).toBeVisible();
+    expect(errors).toEqual([]);
+
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          writeText: async () => {
+            throw new DOMException("Denied", "NotAllowedError");
+          },
+        },
+      });
+    });
+    await failed.click();
+    await expect(failed).toBeVisible();
+    expect(errors).toEqual([]);
+
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          writeText: async (text: string) => {
+            sessionStorage.setItem("audit-clipboard", text);
+          },
+        },
+      });
+    });
+    await failed.click();
+    await expect(page.getByRole("button", { name: "Copied", exact: true })).toBeVisible();
+    expect(await page.evaluate(() => sessionStorage.getItem("audit-clipboard"))).toContain(
+      "answer = 42",
+    );
+
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined });
+    });
+    await page.getByRole("button", { name: "Copied", exact: true }).click();
+    await expect(failed).toBeVisible();
+    expect(errors).toEqual([]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("file polling recovers read warnings without losing drafts or hiding failed saves", async ({
+  page,
+}) => {
+  test.setTimeout(45_000);
+  let failReads = false;
+  await page.routeWebSocket("ws://127.0.0.1:7429/ws", (socket) => {
+    const server = socket.connectToServer();
+    socket.onMessage((raw) => {
+      const message = JSON.parse(String(raw));
+      if (
+        message.type === "file.request" &&
+        message.operation.path === "src/main.ts" &&
+        ((failReads && message.operation.kind === "read") || message.operation.kind === "write")
+      ) {
+        socket.send(
+          JSON.stringify({
+            type: "file.result",
+            requestId: message.requestId,
+            outcome: {
+              status: "error",
+              message:
+                message.operation.kind === "write"
+                  ? "Permission denied while saving"
+                  : "The file is temporarily unavailable",
+            },
+          }),
+        );
+        return;
+      }
+      server.send(raw);
+    });
+  });
+  const root = await project(page);
+  try {
+    await openSource(page);
+    const code = page.getByRole("textbox", { name: "Code editor: src/main.ts" });
+    await code.fill("my unsaved draft");
+    failReads = true;
+    await expect(page.getByRole("alert")).toContainText("The file is temporarily unavailable", {
+      timeout: 10_000,
+    });
+    failReads = false;
+    await expect(page.getByRole("alert")).toHaveCount(0, { timeout: 10_000 });
+    await expect(code).toContainText("my unsaved draft");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByRole("alert")).toContainText("Permission denied while saving");
+    expect(readFileSync(join(root, "src/main.ts"), "utf8")).toContain("answer = 42");
+    writeFileSync(join(root, "src/main.ts"), "An external edit after the failed save\n");
+    await expect(
+      page.getByText("This file changed on the machine. Your version is kept."),
+    ).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.getByRole("alert")).toContainText("Permission denied while saving");
+    await expect(code).toContainText("my unsaved draft");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("browse, edit, preserve drafts across file tabs, preview Markdown and follow links", async ({
   page,
 }) => {
@@ -114,7 +231,6 @@ test("agent file links open Markdown and code tabs without leaving the workspace
   try {
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
-    await page.getByRole("button", { name: "Codex", exact: true }).click();
     await expect(page.getByLabel("Message Codex")).toBeEnabled();
     await page.getByLabel("Message Codex").fill("file-links");
     await page.getByLabel("Message Codex").press("Enter");

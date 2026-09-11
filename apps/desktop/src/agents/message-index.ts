@@ -39,6 +39,24 @@ export function useMessageIndex(
   const [loading, setLoading] = useState(false);
   const [retry, setRetry] = useState(0);
   useEffect(() => {
+    if (!connection) return;
+    return connection.onAgent((event) => {
+      if (
+        event.type !== "agent.item" ||
+        event.item.sessionId !== sessionId ||
+        event.item.kind !== "user"
+      )
+        return;
+      // Live prompts remain navigable even while the timeline holds an older window.
+      setIndex((current) => ({
+        revision: historyRevision,
+        entries: mergeMessageIndex(current.revision === historyRevision ? current.entries : [], [
+          event.item,
+        ]),
+      }));
+    });
+  }, [connection, sessionId, historyRevision]);
+  useEffect(() => {
     if (!connection || !supported || !ready) return;
     let disposed = false;
     const load = async () => {
@@ -59,7 +77,16 @@ export function useMessageIndex(
           const page = result.outcome.messageIndex;
           if (!page) throw new Error("Message navigation is unavailable on this machine.");
           entries = [...page.messages, ...entries];
-          setIndex({ revision: historyRevision, entries });
+          setIndex((current) => ({
+            revision: historyRevision,
+            entries: [
+              ...new Map(
+                [...entries, ...(current.revision === historyRevision ? current.entries : [])].map(
+                  (entry) => [entry.id, entry],
+                ),
+              ).values(),
+            ].sort((a, b) => a.position - b.position),
+          }));
           if (!page.hasMore) break;
           const next = page.messages[0]?.position;
           if (next === undefined || next >= (before ?? Infinity))

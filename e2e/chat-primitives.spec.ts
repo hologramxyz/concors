@@ -14,7 +14,6 @@ test("chat presents native forms, plan review, file content and durable attachme
     await seedProject(page, "Chat primitives", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
-    await page.getByRole("button", { name: "Codex", exact: true }).click();
     const input = page.getByRole("textbox", { name: "Message Codex" });
     const send = async (text: string) => {
       await input.fill(text);

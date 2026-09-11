@@ -95,6 +95,6 @@ older prompt pauses output-follow until you scroll back down or choose **Latest*
 **Browse your messages** opens the same index as a list in narrow panes and on
 mobile. The index reads bounded, session-scoped preview pages independently of
 the visible timeline; jumping loads the missing history without resending a prompt.
-A rewind invalidates the old index. Older daemons fall back to loaded messages
-and an explicit **Load earlier messages** action. Native CLI text remains on the
+A history revision invalidates the old index. Older daemons fall back to loaded messages,
+with more loaded automatically as you scroll up in the conversation. Native CLI text remains on the
 machine; no provider request is needed to list the saved prompts.

@@ -52,7 +52,6 @@ test("notifications deduplicate across windows, open chat, and sync unread witho
     await seedProject(page, "Notifications acceptance", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
-    await page.getByRole("button", { name: "Codex", exact: true }).click();
     await expect(page.getByLabel("Agent status: Ready").first()).toBeVisible();
     // A ready label can belong to an older project, and this separate socket may
     // receive the new workspace/session after the browser. Await this test's agent.
