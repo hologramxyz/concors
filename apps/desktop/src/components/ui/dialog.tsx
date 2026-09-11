@@ -70,7 +70,9 @@ function DialogContent({
             const target =
               previous?.isConnected && !previous.closest("[inert]")
                 ? previous
-                : document.getElementById("mobile-sidebar-toggle");
+                : (document.querySelector<HTMLElement>(
+                    "#mobile-sidebar:not([inert]) .mobile-account-trigger",
+                  ) ?? document.getElementById("mobile-sidebar-toggle"));
             const nextDialog = document.querySelector(
               '[data-slot="dialog-content"][data-state="open"]',
             );
