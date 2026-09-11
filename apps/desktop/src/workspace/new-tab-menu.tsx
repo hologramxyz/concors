@@ -27,7 +27,6 @@ export function NewTabMenu({
   onCreate,
   empty = false,
   keyboard = false,
-  paneTarget,
   tabLimitReached = false,
   renderTrigger,
 }: {
@@ -36,30 +35,19 @@ export function NewTabMenu({
   empty?: boolean;
   keyboard?: boolean;
   tabLimitReached?: boolean;
-  renderTrigger?: (open: (destination?: "tab" | "pane") => void) => ReactNode;
-  paneTarget?:
-    | {
-        name: string;
-        disabled: boolean;
-        onCreate(profile: PaneProfile, terminalProfileId?: string): void;
-      }
-    | undefined;
+  renderTrigger?: (open: () => void) => ReactNode;
 }) {
   const compact = useContext(CompactLayoutContext);
   const profiles = useTerminalProfiles();
   const triggerContainer = useRef<HTMLSpanElement>(null);
   const menuTransfersFocus = useRef(false);
-  const [destination, setDestination] = useState<"tab" | "pane">("tab");
-  const addingPane = compact && destination === "pane" && !!paneTarget;
-  const createDisabled = disabled || (addingPane ? paneTarget.disabled : tabLimitReached);
+  const createDisabled = disabled || tabLimitReached;
   const create = (profile: PaneProfile, name?: string, terminalProfileId?: string) => {
     const id = profiles.supported ? terminalProfileId : undefined;
-    if (addingPane) paneTarget.onCreate(profile, id);
-    else onCreate(profile, name, id);
+    onCreate(profile, name, id);
   };
   const [open, setOpen] = useState(false);
   useCommand("new-tab", keyboard && !disabled, () => {
-    setDestination("tab");
     setOpen(true);
   });
   const restoreTriggerFocus = (event: Event) => {
@@ -76,10 +64,7 @@ export function NewTabMenu({
         <>
           {renderTrigger ? (
             <span ref={triggerContainer} className="contents">
-              {renderTrigger((destination = "tab") => {
-                setDestination(destination);
-                setOpen(true);
-              })}
+              {renderTrigger(() => setOpen(true))}
             </span>
           ) : (
             <button
@@ -87,7 +72,6 @@ export function NewTabMenu({
               aria-label={empty ? "Create a tab" : "New tab"}
               disabled={disabled}
               onClick={() => {
-                setDestination("tab");
                 setOpen(true);
               }}
             >
@@ -98,40 +82,14 @@ export function NewTabMenu({
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogContent onCloseAutoFocus={restoreTriggerFocus}>
               <DialogHeader>
-                <DialogTitle>{addingPane ? "Add pane" : "New tab"}</DialogTitle>
+                <DialogTitle>New tab</DialogTitle>
                 <DialogDescription>
-                  {addingPane
-                    ? `Add a session inside “${paneTarget.name}”. Mobile shows one pane at a time; desktop adds it beside the current pane.`
-                    : "Create a separate tab with its first chat or terminal pane."}
+                  Start a chat or terminal, synced with your desktop.
                 </DialogDescription>
               </DialogHeader>
-              {paneTarget && (
-                <div
-                  className="mobile-session-destination"
-                  role="group"
-                  aria-label="Create in workspace"
-                >
-                  <button
-                    type="button"
-                    aria-pressed={!addingPane}
-                    onClick={() => setDestination("tab")}
-                  >
-                    New tab
-                  </button>
-                  <button
-                    type="button"
-                    aria-pressed={addingPane}
-                    onClick={() => setDestination("pane")}
-                  >
-                    Add pane to this tab
-                  </button>
-                </div>
-              )}
               {createDisabled && !disabled && (
                 <p role="status" className="text-sm text-muted-foreground">
-                  {addingPane
-                    ? "This tab has reached its 32-pane limit."
-                    : "This project has reached its 32-tab limit."}
+                  This project has reached its 32-tab limit.
                 </p>
               )}
               <div className="mobile-session-list">

@@ -35,8 +35,7 @@ export function WorkspaceActions({
   execute,
   command,
   onSelect,
-  onNewPane,
-  kind,
+  selected = false,
   label,
   keyboard = false,
   showTrigger = true,
@@ -49,8 +48,7 @@ export function WorkspaceActions({
   execute(operation: WorkspaceOperation): Promise<void>;
   command(operation: WorkspaceOperation): void;
   onSelect(target: MobileTarget): void;
-  onNewPane(): void;
-  kind: "tab" | "pane";
+  selected?: boolean;
   label: string;
   keyboard?: boolean;
   showTrigger?: boolean;
@@ -59,7 +57,7 @@ export function WorkspaceActions({
   const profiles = useTerminalProfiles();
   const options = paneProfiles(profiles.profiles);
   const [rename, setRename] = useState(false);
-  const [closing, setClosing] = useState<"pane" | "tab" | null>(null);
+  const [closing, setClosing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const target = {
@@ -68,8 +66,9 @@ export function WorkspaceActions({
     tabId: tab.id,
     paneId: pane.id,
   };
-  useCommand("close-pane", canEdit && keyboard && kind === "pane", () => setClosing("pane"));
-  useCommand("close-tab", canEdit && keyboard && kind === "tab", () => setClosing("tab"));
+  // Both shortcut spellings close only the visible leaf on mobile, never its siblings.
+  useCommand("close-pane", canEdit && keyboard, () => setClosing(true));
+  useCommand("close-tab", canEdit && keyboard, () => setClosing(true));
   return (
     <>
       {showTrigger && (
@@ -78,64 +77,48 @@ export function WorkspaceActions({
             <Ellipsis />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-64">
-            {kind === "tab" ? (
-              <>
-                <DropdownMenuItem
-                  disabled={!canEdit || tabPanes(tab).length >= 32}
-                  onSelect={onNewPane}
-                >
-                  <Plus /> Add pane to this tab
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel>{tab.name}</DropdownMenuLabel>
-                <DropdownMenuItem disabled={!canEdit} onSelect={() => setRename(true)}>
-                  <Pencil />
-                  Rename tab
-                </DropdownMenuItem>
-                <DropdownMenuItem disabled={!canEdit} onSelect={() => setClosing("tab")}>
-                  <X />
-                  Close tab…
-                </DropdownMenuItem>
-              </>
-            ) : (
-              <>
-                <DropdownMenuItem disabled={!canEdit} onSelect={() => setClosing("pane")}>
-                  <X />
-                  Close pane…
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel>Pane profile</DropdownMenuLabel>
-                <DropdownMenuRadioGroup
-                  value={pane.terminalProfile?.id ?? pane.profile}
-                  onValueChange={(id) => {
-                    const option = options.find((item) => item.id === id);
-                    if (option)
-                      command({
-                        kind: "pane.configure",
-                        ...target,
-                        profile: option.profile,
-                        ...(profiles.supported && option.terminalProfileId
-                          ? { terminalProfileId: option.terminalProfileId }
-                          : {}),
-                      });
-                  }}
-                >
-                  {options.map(({ id, label, icon: Icon }) => (
-                    <DropdownMenuRadioItem key={id} value={id} disabled={!canEdit}>
-                      <Icon className="size-4 shrink-0" aria-hidden="true" />
-                      <span className="truncate">{label}</span>
-                    </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => profiles.openSettings(true)}>
-                  <Plus /> Add terminal profile…
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => profiles.openSettings()}>
-                  <Settings2 /> Manage terminal profiles…
-                </DropdownMenuItem>
-              </>
+            {/* Only desktop tabs have saved names. Do not rename split siblings together. */}
+            {tabPanes(tab).length === 1 && (
+              <DropdownMenuItem disabled={!canEdit} onSelect={() => setRename(true)}>
+                <Pencil />
+                Rename tab
+              </DropdownMenuItem>
             )}
+            <DropdownMenuItem disabled={!canEdit} onSelect={() => setClosing(true)}>
+              <X />
+              Close tab…
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>Tab type</DropdownMenuLabel>
+            <DropdownMenuRadioGroup
+              value={pane.terminalProfile?.id ?? pane.profile}
+              onValueChange={(id) => {
+                const option = options.find((item) => item.id === id);
+                if (option)
+                  command({
+                    kind: "pane.configure",
+                    ...target,
+                    profile: option.profile,
+                    ...(profiles.supported && option.terminalProfileId
+                      ? { terminalProfileId: option.terminalProfileId }
+                      : {}),
+                  });
+              }}
+            >
+              {options.map(({ id, label, icon: Icon }) => (
+                <DropdownMenuRadioItem key={id} value={id} disabled={!canEdit}>
+                  <Icon className="size-4 shrink-0" aria-hidden="true" />
+                  <span className="truncate">{label}</span>
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => profiles.openSettings(true)}>
+              <Plus /> Add terminal profile…
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => profiles.openSettings()}>
+              <Settings2 /> Manage terminal profiles…
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       )}
@@ -167,24 +150,22 @@ export function WorkspaceActions({
         />
       )}
       <Dialog
-        open={!!closing}
+        open={closing}
         onOpenChange={(open) => {
-          if (!open && !busy) setClosing(null);
+          if (!open && !busy) setClosing(false);
         }}
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Close {closing}?</DialogTitle>
+            <DialogTitle>Close tab?</DialogTitle>
             <DialogDescription>
-              {closing === "pane" &&
-                tabPanes(tab).length === 1 &&
-                "This is the tab’s last pane, so the tab will also close. "}
-              This removes the saved {closing} on all connected devices. Machine processes remain
-              governed by the daemon's session lifecycle.
+              This closes this session’s pane on every connected device. Other panes stay open.
+              {tabPanes(tab).length === 1 && " Its empty desktop tab is also removed."} Machine
+              processes remain governed by the daemon's session lifecycle.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" disabled={busy} onClick={() => setClosing(null)}>
+            <Button variant="outline" disabled={busy} onClick={() => setClosing(false)}>
               Cancel
             </Button>
             <Button
@@ -192,22 +173,11 @@ export function WorkspaceActions({
               disabled={!canEdit || busy}
               onClick={() => {
                 setBusy(true);
-                void execute(
-                  closing === "tab"
-                    ? {
-                        kind: "tab.close",
-                        projectId: project.id,
-                        expectedVersion: project.version,
-                        tabId: tab.id,
-                      }
-                    : { kind: "pane.close", ...target },
-                )
+                void execute({ kind: "pane.close", ...target })
                   .then(() => {
-                    setClosing(null);
-                    onSelect({
-                      projectId: project.id,
-                      ...(closing === "pane" ? { tabId: tab.id } : {}),
-                    });
+                    setClosing(false);
+                    if (selected) onSelect({ projectId: project.id, tabId: tab.id });
+                    onComplete?.();
                   })
                   .catch((cause: unknown) =>
                     setError(cause instanceof Error ? cause.message : "Could not close"),
@@ -215,7 +185,7 @@ export function WorkspaceActions({
                   .finally(() => setBusy(false));
               }}
             >
-              Close {closing}
+              Close tab
             </Button>
           </DialogFooter>
         </DialogContent>
