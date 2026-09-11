@@ -10,6 +10,7 @@ import { demoMe } from "../src/demo/fixtures";
 test("mobile connects without cloud login and shares real daemon chat, panes and terminal sessions", async ({
   page,
 }) => {
+  // This scenario exercises the full connection, chat, navigation, terminal and consent flow.
   test.setTimeout(180_000);
   const directory = await mkdtemp(join(tmpdir(), "concors-mobile-direct-project-"));
   const desktop = new DaemonConnection({
@@ -154,6 +155,17 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
       .evaluate((el) => ({ scroll: el.scrollWidth, width: el.clientWidth }));
     expect(viewport.scroll).toBeLessThanOrEqual(viewport.width);
     await page.screenshot({ path: test.info().outputPath("mobile-chat-primitives.png") });
+    await ui.getByRole("button", { name: "Browse your messages" }).click();
+    const messages = ui.getByRole("dialog", { name: "Your messages", exact: true });
+    await expect(
+      messages.getByRole("button", { name: /hello over the real daemon transport/ }),
+    ).toBeVisible();
+    await page.screenshot({ path: test.info().outputPath("mobile-message-navigation.png") });
+    await messages.getByRole("button", { name: /hello over the real daemon transport/ }).click();
+    await expect(messages).not.toBeVisible();
+    await expect(
+      ui.getByRole("log").getByText("hello over the real daemon transport", { exact: true }),
+    ).toBeInViewport();
 
     await execute({
       kind: "tab.rename",

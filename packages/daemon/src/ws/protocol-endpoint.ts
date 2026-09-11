@@ -1,3 +1,4 @@
+import { ThemeRegistry } from "../themes/registry.ts";
 import { dirname, join, basename } from "node:path";
 import { ProviderRegistry } from "../agents/providers/registry.ts";
 import { providerFactory } from "../agents/providers/index.ts";
@@ -92,6 +93,11 @@ export function registerProtocolEndpoint(
     basename(attachments) === "attachments"
       ? join(dirname(attachments), "providers")
       : attachments + "-providers",
+  );
+  const themes = new ThemeRegistry(
+    basename(attachments) === "attachments"
+      ? join(dirname(attachments), "themes")
+      : attachments + "-themes",
   );
   const terminals = new TerminalManager(
     options.workspace,
@@ -190,7 +196,8 @@ export function registerProtocolEndpoint(
         message.type === "project.request" ||
         message.type === "agent.request" ||
         message.type === "file.request" ||
-        message.type === "provider.request"
+        message.type === "provider.request" ||
+        message.type === "theme.request"
       ) {
         if (!subscribers.has(socket)) {
           send(socket, {
@@ -199,7 +206,13 @@ export function registerProtocolEndpoint(
           });
           return;
         }
-        if (message.type === "provider.request") send(socket, providers.request(message));
+        if (message.type === "theme.request")
+          send(socket, {
+            type: "theme.result",
+            requestId: message.requestId,
+            catalog: themes.catalog(),
+          });
+        else if (message.type === "provider.request") send(socket, providers.request(message));
         else if (message.type === "file.request")
           void files.request(message).then((result) => send(socket, result));
         else if (message.type === "agent.request")

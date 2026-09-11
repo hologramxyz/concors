@@ -371,7 +371,7 @@
 
 /* DOM adaptation of Paseo's tool-call text shimmer (message.tsx), Apache-2.0.
    Copyright (c) 2025-present Mohamed Boudra; third-party/paseo-LICENSE. */
-@keyframes paseo-toolcall-shimmer {
+@keyframes tool-activity-shimmer {
   0% {
     background-position: 100% 0;
   }
@@ -391,7 +391,7 @@
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: paseo-toolcall-shimmer 2s linear infinite;
+  animation: tool-activity-shimmer 2s linear infinite;
 }
 .agent-control {
   display: inline-flex;
@@ -557,6 +557,114 @@
   .files-sidebar-shell,
   .files-sidebar-content,
   .files-toggle {
+    transition: none;
+  }
+}
+
+/* Sent-message navigation shares the timeline's width, including split panes. */
+.chat-timeline-shell {
+  container-type: inline-size;
+}
+.message-rail {
+  display: none;
+  position: absolute;
+  left: 6px;
+  top: 10%;
+  bottom: 10%;
+  width: 34px;
+  z-index: 10;
+  flex-direction: column;
+  justify-content: center;
+}
+.message-rail-slot {
+  position: relative;
+  flex: 0 1 9px;
+  min-height: 0;
+}
+.message-rail-target {
+  display: flex;
+  align-items: center;
+  width: 34px;
+  height: 100%;
+  padding-left: 4px;
+  border-radius: 3px;
+  outline-offset: 1px;
+}
+.message-rail-tick {
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted-foreground) 35%, transparent);
+  transition:
+    width 140ms ease-out,
+    height 140ms ease-out,
+    background 140ms ease-out;
+}
+.message-rail-tick[data-active="true"] {
+  background: var(--muted-foreground);
+}
+.message-rail-tick[data-attention="true"] {
+  background: var(--foreground);
+}
+.message-rail-preview {
+  position: absolute;
+  left: 38px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 260px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: 0 4px 14px #0002;
+  font-size: 13px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+.message-list-trigger {
+  position: absolute;
+  right: 8px;
+  top: 4px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--background);
+  color: var(--muted-foreground);
+}
+.message-list-trigger:hover {
+  color: var(--foreground);
+  background: var(--muted);
+}
+.chat-timeline-shell > .chat-scroll {
+  padding-top: 44px;
+}
+@container (min-width: 640px) {
+  .message-rail {
+    display: flex;
+  }
+  .chat-timeline-shell > .chat-scroll {
+    padding-left: 48px;
+    padding-top: 16px;
+    padding-right: 48px;
+  }
+  .message-list-trigger {
+    width: 28px;
+    height: 28px;
+    opacity: 0.55;
+  }
+  .message-list-trigger:hover,
+  .message-list-trigger:focus-visible {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .message-rail-tick {
     transition: none;
   }
 }

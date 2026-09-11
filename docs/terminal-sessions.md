@@ -58,10 +58,8 @@ The SQLite store migrates from user_version 1 to 2 without resetting workspace s
 
 ## Reuse and validation
 
-Paseo commit `a7a708bec99e935ee4b8c6f7314a4b9a9984cfa6` informed the PTY/headless-xterm architecture,
-serialized attach snapshots and explicit resize claim/update contract. The output coalescer and
-Windows npm CLI shim escaping are adapted from its terminal implementation; attribution is in the
-source and the full Apache-2.0 license is preserved in `third-party/paseo-LICENSE`.
+Source provenance for adapted terminal primitives is recorded in
+[third-party notices](../third-party/source-notices.md).
 
 `pnpm daemon:test` exercises real PTYs and WebSockets: duplicate launch receipts, cross-device
 output, ownership, reconnect replay, detach/rebind, stop, and restart interruption. Profile tests

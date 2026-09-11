@@ -52,5 +52,10 @@ export function useConversation(sessionId: string) {
       history.cancel();
     };
   }, [connection, sessionId, history]);
-  return { ...snapshot, load: history.load, setFollowing: history.setFollowing };
+  return {
+    ...snapshot,
+    load: history.load,
+    reveal: history.reveal,
+    setFollowing: history.setFollowing,
+  };
 }

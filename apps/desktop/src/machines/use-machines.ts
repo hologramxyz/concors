@@ -13,6 +13,7 @@ import { isSettling } from "./format.ts";
 
 /** How often the list is re-read while a machine is still being set up or torn down. */
 const SETTLING_POLL_MS = 15_000;
+const RESOURCE_POLL_MS = 30_000;
 
 export interface MachinesState {
   readonly machines: readonly Machine[] | null;
@@ -29,8 +30,8 @@ export interface MachinesState {
 }
 
 /**
- * Machines of one organization plus the catalog to create more. Re-reads the list while any
- * machine is provisioning or deleting, since the server only refreshes from OVH when asked.
+ * Machines of one organization plus the catalog to create more. Polls current resource usage while visible,
+ * more often during provisioning or deletion. Failed refreshes keep retrying.
  */
 export function useMachines(organizationId: string | undefined): MachinesState {
   const [machines, setMachines] = useState<readonly Machine[] | null>(null);
@@ -60,14 +61,26 @@ export function useMachines(organizationId: string | undefined): MachinesState {
       .finally(() => {
         if (ticket === latest.current) setLoading(false);
       });
+    return () => {
+      latest.current += 1;
+    };
     // `catalog` is only read to avoid re-fetching it; changes to it must not trigger a reload.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organizationId, generation]);
 
   useEffect(() => {
-    if (!machines?.some(isSettling)) return;
-    const timer = setTimeout(() => setGeneration((n) => n + 1), SETTLING_POLL_MS);
-    return () => clearTimeout(timer);
+    const refresh = () => {
+      if (document.visibilityState === "visible") setGeneration((n) => n + 1);
+    };
+    const timer = setInterval(
+      refresh,
+      machines?.some(isSettling) ? SETTLING_POLL_MS : RESOURCE_POLL_MS,
+    );
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
   }, [machines]);
 
   const reload = useCallback(() => {

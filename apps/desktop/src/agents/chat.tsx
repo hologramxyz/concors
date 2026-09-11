@@ -16,6 +16,8 @@ import { useAgents } from "./context";
 import { useConversation } from "./conversation";
 import { useConversationScroll } from "./conversation-scroll";
 import { useTabVisible } from "@/workspace/tab-visibility";
+import { MessageNavigation } from "./message-navigation";
+import { useMessageIndex } from "./message-index";
 
 const button = "rounded-md border px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-40";
 export function ChatPane({
@@ -114,7 +116,16 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
   const conversation = useConversation(sessionId);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { scroll, onScroll, atBottom, latest } = useConversationScroll(conversation, visible);
+  const { scroll, onScroll, atBottom, latest, jumpToMessage } = useConversationScroll(
+    conversation,
+    visible,
+  );
+  const messageIndex = useMessageIndex(
+    sessionId,
+    agent?.historyRevision ?? 0,
+    conversation.ready,
+    conversation.items,
+  );
   const footers = completedTurnFooters(conversation.items);
   const latestPlan = conversation.items.findLast((item) => item.kind === "plan");
   const proposal = conversation.items.findLast(
@@ -170,55 +181,80 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
   );
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="Agent conversation">
-      <div
-        ref={scroll}
-        role="log"
-        aria-label="Chat timeline"
-        aria-live="off"
-        className="chat-scroll min-h-0 flex-1 overflow-y-auto px-3 py-4 [overflow-anchor:none]"
-        onScroll={onScroll}
-      >
-        <div className="mx-auto max-w-5xl space-y-5">
-          {(conversation.hasEarlier || conversation.loading === "latest") && (
-            <div className="h-5 text-center text-xs text-muted-foreground" role="status">
-              {conversation.loading === "earlier"
-                ? "Loading earlier messages…"
-                : conversation.loading === "latest"
-                  ? "Loading messages…"
-                  : ""}
-            </div>
-          )}
-          {conversation.error && conversation.error.direction !== "newer" && (
-            <HistoryError
-              message={conversation.error.message}
-              onRetry={() => void conversation.load(conversation.error?.direction ?? "latest")}
-            />
-          )}
-          {conversation.items
-            .filter((item) => !footers.hidden.has(item.id))
-            .map((item) => (
-              <div key={item.id} data-message-id={item.id} data-message-position={item.position}>
-                <TimelineItem item={item} workedFor={footers.durations.get(item.id)} />
+      <div className="chat-timeline-shell relative flex min-h-0 flex-1">
+        <div
+          ref={scroll}
+          role="log"
+          aria-label="Chat timeline"
+          aria-live="off"
+          className="chat-scroll min-h-0 min-w-0 flex-1 overflow-y-auto px-3 py-4 [overflow-anchor:none]"
+          onScroll={onScroll}
+        >
+          <div className="mx-auto max-w-5xl space-y-5">
+            {(conversation.hasEarlier || conversation.loading === "latest") && (
+              <div className="h-5 text-center text-xs text-muted-foreground" role="status">
+                {conversation.loading === "earlier"
+                  ? "Loading earlier messages…"
+                  : conversation.loading === "latest"
+                    ? "Loading messages…"
+                    : ""}
               </div>
-            ))}
-          {conversation.hasNewer && (
-            <div className="h-5 text-center text-xs text-muted-foreground" role="status">
-              {conversation.loading === "newer" ? "Loading newer messages…" : ""}
-            </div>
-          )}
-          {conversation.error?.direction === "newer" && (
-            <HistoryError
-              message={conversation.error.message}
-              onRetry={() => void conversation.load("newer")}
-            />
-          )}
-          {compact && feedback}
-          {active && !conversation.hasNewer && (
-            <Activity startedAt={agent.turnStartedAt}>
-              {agent?.status === "needs_input" ? "Waiting for your input" : "Working…"}
-            </Activity>
-          )}
+            )}
+            {conversation.error && conversation.error.direction !== "newer" && (
+              <HistoryError
+                message={conversation.error.message}
+                onRetry={() => void conversation.load(conversation.error?.direction ?? "latest")}
+              />
+            )}
+            {conversation.items
+              .filter((item) => !footers.hidden.has(item.id))
+              .map((item) => (
+                <div
+                  key={item.id}
+                  data-message-id={item.id}
+                  data-message-position={item.position}
+                  data-user-message={item.kind === "user" ? item.id : undefined}
+                  tabIndex={item.kind === "user" ? -1 : undefined}
+                  className="outline-none"
+                >
+                  <TimelineItem item={item} workedFor={footers.durations.get(item.id)} />
+                </div>
+              ))}
+            {conversation.hasNewer && (
+              <div className="h-5 text-center text-xs text-muted-foreground" role="status">
+                {conversation.loading === "newer" ? "Loading newer messages…" : ""}
+              </div>
+            )}
+            {conversation.error?.direction === "newer" && (
+              <HistoryError
+                message={conversation.error.message}
+                onRetry={() => void conversation.load("newer")}
+              />
+            )}
+            {compact && feedback}
+            {active && !conversation.hasNewer && (
+              <Activity startedAt={agent.turnStartedAt}>
+                {agent?.status === "needs_input" ? "Waiting for your input" : "Working…"}
+              </Activity>
+            )}
+          </div>
         </div>
+        <MessageNavigation
+          entries={messageIndex.entries}
+          viewport={scroll}
+          onJump={jumpToMessage}
+          loading={messageIndex.loading}
+          error={messageIndex.error}
+          onRetry={messageIndex.retry}
+          hasEarlier={
+            !(
+              connection?.state.status === "ready" &&
+              connection.state.daemon.capabilities?.includes("agent-message-navigation")
+            ) && conversation.hasEarlier
+          }
+          onEarlier={() => conversation.load("earlier")}
+          hasNewer={conversation.hasNewer}
+        />
       </div>
       {!atBottom && (
         <button

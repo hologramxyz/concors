@@ -12,7 +12,7 @@ export interface HistorySnapshot {
   hasEarlier: boolean;
   hasNewer: boolean;
   ready: boolean;
-  loading: HistoryDirection | null;
+  loading: HistoryDirection | "jump" | null;
   error: { direction: HistoryDirection; message: string } | null;
   reset: number;
 }
@@ -82,6 +82,57 @@ export class ConversationHistory {
       if (this.following) this.update({ items: items.slice(-HISTORY_WINDOW), hasEarlier: true });
       else this.update({ items: items.slice(0, HISTORY_WINDOW), hasNewer: true });
     } else this.update({ items });
+  };
+  /** Jump through the message index without retaining every intervening tool result. */
+  reveal = async (position: number): Promise<void> => {
+    this.cancel();
+    if (this.snapshot.items.some((item) => item.position === position)) return;
+    const generation = this.generation;
+    const check = (page: AgentConversation) => {
+      if (generation !== this.generation)
+        throw new Error("Conversation changed. Select the message again.");
+      if ((page.agent.historyRevision ?? 0) !== this.revision) {
+        this.invalidate(page.agent);
+        throw new Error("Conversation changed. Select the message again.");
+      }
+    };
+    this.update({ loading: "jump", error: null });
+    try {
+      if (this.bidirectional) {
+        const page = await this.read({ before: position + 1 });
+        check(page);
+        if (!page.items.some((item) => item.position === position))
+          throw new Error("This message is no longer available.");
+        const ids = new Set(page.items.map((item) => item.id));
+        const items = mergeItems(
+          page.items,
+          this.snapshot.items.filter((item) => ids.has(item.id)),
+        );
+        this.update({
+          items,
+          hasEarlier: page.hasMore,
+          hasNewer: !!page.hasNewer || (items.at(-1)?.position ?? -1) < this.newest,
+        });
+      } else {
+        // Older daemons cannot reload forward pages: retain a contiguous tail.
+        let items = this.snapshot.items;
+        let hasEarlier = this.snapshot.hasEarlier;
+        while (hasEarlier && (items[0]?.position ?? -1) > position) {
+          const before = items[0]!.position;
+          const page = await this.read({ before });
+          check(page);
+          if (!page.items.length || page.items[0]!.position >= before)
+            throw new Error("This message is no longer available.");
+          items = mergeItems(page.items, items);
+          hasEarlier = page.hasMore;
+        }
+        if (!items.some((item) => item.position === position))
+          throw new Error("This message is no longer available.");
+        this.update({ items: mergeItems(items, this.snapshot.items), hasEarlier });
+      }
+    } finally {
+      if (generation === this.generation) this.update({ loading: null });
+    }
   };
   load = async (direction: HistoryDirection): Promise<void> => {
     const current = this.snapshot;
