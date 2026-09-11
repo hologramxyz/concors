@@ -394,6 +394,19 @@ in-memory drafts. Switching panes does not.
 SVG. Generated HTML and native `ios/`/`android/` projects are ignored. No mobile client
 imports daemon or Tauri runtime implementations.
 
+### Path-hosted private web previews
+
+For a preview under a shared HTTPS origin, set `CONCORS_MOBILE_WEB_BASE_PATH=/concors-mobile`
+when running `expo export --platform web --clear`. This prefixes the app's assets and router
+links; it is opt-in and rejected for production builds. Set `EXPO_PUBLIC_DEV_DAEMON_URL`
+to the matching secure socket path on that origin, for example
+`wss://private.example/concors-mobile/desktop-daemon/ws`, rather than an older preview port.
+Mount the export and its SPA routes below the same path. Use a separate loopback gateway
+with the exact new origin and the same allowed Tailscale identity; never enable Funnel or
+relax identity/origin checks to work around a browser connection failure. Profile sign-in
+automatically stays below the socket's gateway prefix. Preserve unrelated routes and the
+existing daemon/session host when changing preview hosting.
+
 ## Verification
 
 ```bash

@@ -44,3 +44,28 @@ it("keeps preview identity separate and rejects misspelled variants", async () =
   vi.stubEnv("APP_VARIANT", "prodution");
   await expect(import("./app.config")).rejects.toThrow("APP_VARIANT must be");
 });
+
+it("supports an opt-in web preview subpath without changing root-hosted builds", async () => {
+  vi.stubEnv("APP_VARIANT", "preview");
+  vi.stubEnv("CONCORS_MOBILE_WEB_BASE_PATH", "");
+  expect((await import("./app.config")).default.experiments?.baseUrl).toBeUndefined();
+  vi.resetModules();
+  vi.stubEnv("CONCORS_MOBILE_WEB_BASE_PATH", "/concors-mobile");
+  expect((await import("./app.config")).default.experiments?.baseUrl).toBe("/concors-mobile");
+  vi.resetModules();
+  vi.stubEnv("APP_VARIANT", "production");
+  await expect(import("./app.config")).rejects.toThrow("requires a preview build");
+});
+
+it.each([
+  "https://other.example",
+  "//other.example",
+  "/../private",
+  "/app?token=secret",
+  "/app#hash",
+  "/app%2fprivate",
+])("rejects ambiguous preview base path %s", async (path) => {
+  vi.stubEnv("APP_VARIANT", "preview");
+  vi.stubEnv("CONCORS_MOBILE_WEB_BASE_PATH", path);
+  await expect(import("./app.config")).rejects.toThrow("absolute URL path");
+});
