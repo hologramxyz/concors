@@ -15,6 +15,7 @@ export function terminalAgentActivity(
     const bottom = liveLines.filter((line) => line.trim()).slice(-3);
     if (bottom.some((line) => /^[•◦]\s+Working \([^)]*esc to interrupt\)(?: · .*)?$/u.test(line)))
       return "working";
+    if (bottom.some((line) => /^\s*›(?:\s|$)/u.test(line))) return "idle";
     if (title.trim()) return "idle";
   }
   if (agent === "claude") {

@@ -72,7 +72,7 @@ export function ProjectSetupDialog({
         if (!open) onClose();
       }}
     >
-      <DialogContent className="max-h-[85vh] overflow-auto">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>{mode === "open" ? "Open folder" : "Clone repository"}</DialogTitle>
           <DialogDescription>
@@ -154,7 +154,7 @@ export function ProjectSetupDialog({
           )}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={onClose}>
-              Close
+              Cancel
             </Button>
             <Button
               type="submit"

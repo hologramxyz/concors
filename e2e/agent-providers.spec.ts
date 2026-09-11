@@ -22,6 +22,7 @@ for (const [provider, label] of [
       await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
       const original = page.getByRole("textbox", { name: "Message Codex" });
       await expect(original).toBeEnabled();
+      await expect(page.getByLabel("Agent and model", { exact: true })).toHaveText("Fixture model");
       await original.fill("keep this Codex conversation");
       await page.getByRole("button", { name: "Send message", exact: true }).click();
       await expect(page.getByRole("log")).toContainText("Hello from");
@@ -30,6 +31,15 @@ for (const [provider, label] of [
       await page.getByLabel("Agent and model", { exact: true }).click();
       await page.getByRole("button", { name: "Back to providers" }).click();
       await page.getByRole("option", { name: new RegExp(`^${label} Starts a new chat$`) }).click();
+      await expect(
+        page.getByRole("option", { name: `Fixture ${provider} model`, exact: true }),
+      ).toBeVisible();
+      // Revisiting a discovered provider retains its model rows during revalidation.
+      await page.getByRole("button", { name: "Back to providers" }).click();
+      await page.getByRole("option", { name: new RegExp(`^${label} Starts a new chat$`) }).click();
+      await expect(
+        page.getByRole("status").filter({ hasText: /Loading providers|Loading models/ }),
+      ).toHaveCount(0);
       await page.getByRole("option", { name: `Fixture ${provider} model`, exact: true }).click();
       const composer = page.getByRole("textbox", { name: `Message ${label}` });
       await expect(composer).toBeEnabled();
@@ -37,6 +47,9 @@ for (const [provider, label] of [
         "aria-pressed",
         "true",
       );
+      await expect(
+        page.getByRole("button", { name: "Agent and model", exact: true }),
+      ).toContainText(`Fixture ${provider} model`);
       for (const name of ["Import session", "Fork session", "Rewind", "MCP servers"])
         await expect(page.getByRole("button", { name, exact: true })).toHaveCount(0);
       await expect(page.getByRole("log")).not.toContainText("keep this Codex conversation");
