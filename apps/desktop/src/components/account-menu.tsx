@@ -1,4 +1,4 @@
-import { ChevronsUpDown, LogOut, Plus, Server, Settings } from "lucide-react";
+import { ChevronsUpDown, LogOut, Plus, UserRound, Settings } from "lucide-react";
 import { useContext, useState, type ReactNode } from "react";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import {
@@ -72,14 +72,23 @@ export function MobileAccountMenu({
   onOpenSettings,
   machinePicker,
   onAddMachine,
+  profile,
+  onOpenProfile,
 }: Omit<AccountMenuProps, "auth"> & {
   auth: SignedInAuth | null;
   machinePicker?: ReactNode;
   onAddMachine?: () => void;
+  profile?: { name: string; email: string } | null;
+  onOpenProfile?: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const name = auth?.user.name || auth?.user.email || "Desktop connection";
-  const avatar = auth ? initialOf(auth.user) : <Server className="size-4" aria-hidden="true" />;
+  const person = auth?.user ?? profile;
+  const name = person?.name || person?.email || "Your profile";
+  const avatar = person ? (
+    (person.name.trim() || person.email)[0]?.toUpperCase()
+  ) : (
+    <UserRound className="size-4" aria-hidden="true" />
+  );
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger className="mobile-account-trigger" aria-label={`Account: ${name}`}>
@@ -100,11 +109,23 @@ export function MobileAccountMenu({
           <div className="min-w-0">
             <p className="truncate font-medium">{name}</p>
             <p className="truncate text-sm text-muted-foreground">
-              {auth ? auth.user.email : "Private preview · no cloud account"}
+              {person ? person.email : "Sign in to your Concourse account"}
             </p>
           </div>
         </div>
         <div className="mobile-account-actions">
+          {onOpenProfile && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onOpenProfile();
+              }}
+            >
+              <UserRound aria-hidden="true" />
+              {person ? "Your profile" : "Sign in"}
+            </button>
+          )}
           {onAddMachine && (
             <button
               type="button"

@@ -6,6 +6,7 @@ import { api } from "./runtime";
 import { tokenStore, machineCredentials } from "../platform/storage";
 import { disablePush } from "../platform/notifications";
 import { config } from "../config";
+import { useDirectProfile } from "./profile-sheet";
 
 interface AuthState {
   me: Me | null;
@@ -13,6 +14,8 @@ interface AuthState {
   error: string | null;
 }
 interface AuthContextValue extends AuthState {
+  profile: ReturnType<typeof useDirectProfile>["profile"];
+  openProfile(): void;
   direct: boolean;
   connectDirect(): void;
   signIn(email: string, password: string): Promise<void>;
@@ -26,6 +29,7 @@ export function useAuth() {
   return value;
 }
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const profile = useDirectProfile();
   const query = useQueryClient();
   const generation = useRef(0);
   const changingSession = useRef(false);
@@ -151,6 +155,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext
       value={{
         ...state,
+        profile: profile.profile,
+        openProfile: profile.openProfile,
         direct,
         connectDirect: () => {
           if (!config.developmentDaemon) throw new Error("No private daemon is configured.");
@@ -164,6 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }}
     >
       {children}
+      {profile.sheet}
     </AuthContext>
   );
 }
