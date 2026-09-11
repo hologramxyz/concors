@@ -371,9 +371,13 @@ export function createDemoServer() {
               const conversation = requestAgent(message.operation);
               const before =
                 message.operation.kind === "read" ? message.operation.before : undefined;
+              const after = message.operation.kind === "read" ? message.operation.after : undefined;
               const matching = conversation.items.filter(
-                (item) => before === undefined || item.position < before,
+                (item) =>
+                  (before === undefined || item.position < before) &&
+                  (after === undefined || item.position > after),
               );
+              const items = after === undefined ? matching.slice(-80) : matching.slice(0, 80);
               reply({
                 type: "agent.result",
                 requestId: message.requestId,
@@ -381,8 +385,13 @@ export function createDemoServer() {
                   status: "ok",
                   conversation: {
                     agent: conversation.agent,
-                    items: matching.slice(-80),
-                    hasMore: matching.length > 80,
+                    items,
+                    hasMore: conversation.items.some(
+                      (item) => item.position < (items[0]?.position ?? 0),
+                    ),
+                    hasNewer: conversation.items.some(
+                      (item) => item.position > (items.at(-1)?.position ?? Infinity),
+                    ),
                   },
                 },
               });
