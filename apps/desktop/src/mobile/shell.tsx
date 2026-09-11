@@ -38,7 +38,7 @@ import { CommandPalette } from "@/components/command-palette";
 import { MobileAccountMenu } from "@/components/account-menu";
 import { Button } from "@/components/ui/button";
 import { embeddedConnection, getHostState, hostAction, subscribeHost } from "./bridge";
-import { resolveMobileSelection, tabPanes } from "./selection";
+import { resolveMobileSelection, projectPanes } from "./selection";
 import { useSidebarGesture } from "./sidebar-gesture";
 import { SettingsDrawer } from "./settings-drawer";
 import { WorkspacePicker } from "./workspace-picker";
@@ -97,7 +97,6 @@ function MobileWorkspaceContent({
   connection: DaemonConnection | null;
 }) {
   const files = useFiles();
-  const [paneDestination, setPaneDestination] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [creatingTerminalProfile, setCreatingTerminalProfile] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -351,30 +350,6 @@ function MobileWorkspaceContent({
         setError(cause instanceof Error ? cause.message : "Could not create tab"),
       );
   };
-  const createPane = (profile: PaneProfile, terminalProfileId?: string) => {
-    const targetTab = project?.tabs.find((item) => item.id === paneDestination) ?? tab;
-    const targetPane = targetTab?.id === tab?.id ? pane : targetTab && tabPanes(targetTab)[0];
-    if (!project || !targetTab || !targetPane) return;
-    const newPaneId = crypto.randomUUID();
-    setError(null);
-    // Keep the shared layout tree valid; mobile still displays only the selected leaf.
-    void execute({
-      kind: "pane.split",
-      projectId: project.id,
-      expectedVersion: project.version,
-      tabId: targetTab.id,
-      paneId: targetPane.id,
-      newPaneId,
-      splitId: crypto.randomUUID(),
-      axis: "horizontal",
-      profile,
-      ...(terminalProfileId ? { terminalProfileId } : {}),
-    })
-      .then(() => select({ projectId: project.id, tabId: targetTab.id, paneId: newPaneId }))
-      .catch((cause: unknown) =>
-        setError(cause instanceof Error ? cause.message : "Could not add pane"),
-      );
-  };
   const runHost = (action: Parameters<typeof hostAction>[0]) => {
     setError(null);
     void hostAction(action).catch((cause: unknown) =>
@@ -394,29 +369,23 @@ function MobileWorkspaceContent({
     !addingProject &&
     !addingMachine;
   const cycleTab = (delta: number) => {
-    if (!project || !tab) return;
-    const next =
-      project.tabs[(project.tabs.indexOf(tab) + delta + project.tabs.length) % project.tabs.length];
-    if (next) select({ projectId: project.id, tabId: next.id });
-  };
-  const cyclePane = (delta: number) => {
     if (!project || !tab || !pane) return;
-    const panes = tabPanes(tab);
-    const next = panes[panes.findIndex((item) => item.id === pane.id) + delta];
-    if (next) select({ projectId: project.id, tabId: tab.id, paneId: next.id });
+    const entries = projectPanes(project);
+    const index = entries.findIndex((item) => item.tab.id === tab.id && item.pane.id === pane.id);
+    const next = entries[(index + delta + entries.length) % entries.length];
+    if (next) select({ projectId: project.id, tabId: next.tab.id, paneId: next.pane.id });
   };
   const commandsAvailable = unobscured || paletteOpen;
-  const newPaneTab = project?.tabs.find((item) => item.id === paneDestination) ?? tab;
   useCommand("search", commandsAvailable, () => setPaletteOpen((open) => !open));
   useCommand("settings", commandsAvailable, () => openSettings());
   useCommand("shortcuts", commandsAvailable, () => openSettings("shortcuts"));
   useCommand("new-project", commandsAvailable && canEdit, newWorkspace.start);
   useCommand("previous-tab", commandsAvailable && !!tab, () => cycleTab(-1));
   useCommand("next-tab", commandsAvailable && !!tab, () => cycleTab(1));
-  useCommand("focus-left", commandsAvailable && !!pane, () => cyclePane(-1));
-  useCommand("focus-up", commandsAvailable && !!pane, () => cyclePane(-1));
-  useCommand("focus-right", commandsAvailable && !!pane, () => cyclePane(1));
-  useCommand("focus-down", commandsAvailable && !!pane, () => cyclePane(1));
+  useCommand("focus-left", commandsAvailable && !!pane, () => cycleTab(-1));
+  useCommand("focus-up", commandsAvailable && !!pane, () => cycleTab(-1));
+  useCommand("focus-right", commandsAvailable && !!pane, () => cycleTab(1));
+  useCommand("focus-down", commandsAvailable && !!pane, () => cycleTab(1));
   return (
     <TerminalProfilesContext
       value={{
@@ -615,15 +584,6 @@ function MobileWorkspaceContent({
                         keyboard={commandsAvailable}
                         disabled={!canEdit}
                         tabLimitReached={project.tabs.length >= 32}
-                        paneTarget={
-                          newPaneTab
-                            ? {
-                                name: newPaneTab.name,
-                                disabled: tabPanes(newPaneTab).length >= 32,
-                                onCreate: createPane,
-                              }
-                            : undefined
-                        }
                         onCreate={createTab}
                         renderTrigger={(open) => (
                           <WorkspacePicker
@@ -635,14 +595,7 @@ function MobileWorkspaceContent({
                             execute={execute}
                             command={command}
                             onSelect={select}
-                            onNewTab={() => {
-                              setPaneDestination(null);
-                              open("tab");
-                            }}
-                            onNewPane={(tabId) => {
-                              setPaneDestination(tabId);
-                              open("pane");
-                            }}
+                            onNewTab={open}
                           />
                         )}
                       />

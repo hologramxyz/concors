@@ -24,15 +24,14 @@ const GROUPS: readonly {
     title: "Tabs",
     description:
       "Use Alt+Shift+Left/Right on a tab to reorder it. The desktop app also supports Ctrl+Tab / Ctrl+Shift+Tab; browsers keep those for browser tabs.",
-    compactDescription: "Use Tab and pane actions to rename, reorder or close tabs.",
+    compactDescription:
+      "Move through the flat Tabs list. Closing a tab closes only that view, not its desktop siblings.",
     commands: ["new-tab", "previous-tab", "next-tab", "close-tab"],
   },
   {
     title: "Panes",
     description:
       "Ctrl+Shift+Arrow moves between panes, including from the Agent input. Other form fields keep their normal text-selection keys. Use arrow keys on a split divider to resize panes.",
-    compactDescription:
-      "Arrow commands select the previous or next pane in the top selector. Create and arrange split layouts on desktop.",
     commands: [
       "new-pane",
       "split-left",
@@ -55,10 +54,11 @@ export function ShortcutSettings() {
       <p className="mb-8 text-muted-foreground">
         {compact && "With an external keyboard, the same commands work on mobile. "}
         {isMac() && "On Mac, use the physical Control (⌃) key, not Command (⌘). "}
-        Press a P or T shortcut, release the keys, then choose the next key. Escape cancels the
-        sequence. Closing a pane or tab leaves its sessions running.
+        Press a {compact ? "T" : "P or T"} shortcut, release the keys, then choose the next key.
+        Escape cancels the sequence. Closing a {compact ? "tab" : "pane or tab"} leaves its sessions
+        running.
       </p>
-      {GROUPS.map((group) => (
+      {GROUPS.filter((group) => !compact || group.commands.some(isCompactCommand)).map((group) => (
         <Section
           key={group.title}
           title={group.title}
