@@ -7,14 +7,11 @@ import { seedProject } from "./support/projects.ts";
 import type { Locator, Page } from "@playwright/test";
 
 async function hoverControl(page: Page, control: Locator) {
-  await control.scrollIntoViewIfNeeded();
-  const bounds = await control.boundingBox();
-  if (!bounds) throw new Error("Cannot hover a hidden sidebar control");
-  // Trace a real pointer path instead of teleporting into a neighboring
-  // tooltip's hoverable-content grace area.
-  await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, {
-    steps: 10,
-  });
+  // Verify dismissal as well as hover, and avoid inheriting another tooltip's
+  // pointer-transit grace area when Playwright jumps between distant controls.
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("tooltip")).toHaveCount(0);
+  await control.hover();
 }
 
 test("collapsed sidebar keeps workspace, machine, search and account navigation accessible", async ({
