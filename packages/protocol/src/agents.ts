@@ -23,6 +23,9 @@ export const agentProviderName = (id: string): string => agentProviderNames[id] 
 export const AgentModelSchema = z.object({
   id: AgentModelIdSchema,
   label: z.string(),
+  resolvedModel: AgentModelIdSchema.optional(),
+  isDefault: z.boolean().optional(),
+  description: z.string().optional(),
   efforts: z.array(z.string()),
   defaultEffort: z.string().nullable(),
   supportsImages: z.boolean().optional(),
