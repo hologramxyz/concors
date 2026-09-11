@@ -71,16 +71,21 @@ export function MachineSwitcher({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-64">
         <DropdownMenuItem onSelect={() => onSelect(LOCAL_HOST)}>
-          <Server />
-          This computer
+          <Server className={selected.machineId === "local" ? "text-primary" : undefined} />
+          <span
+            className={`min-w-0 flex-1 truncate ${selected.machineId === "local" ? "font-medium text-primary" : ""}`}
+          >
+            This computer
+          </span>
           {selected.machineId === "local" && (
-            <span className="ml-auto text-xs text-muted-foreground">
+            <span className="ml-auto shrink-0 text-xs text-primary">
               {connected ? "Connected" : "Selected"}
             </span>
           )}
         </DropdownMenuItem>
         {cloudMachines?.map((machine) => {
           const availability = machineAvailability(machine);
+          const isSelected = selected.machineId === machine.id;
           return (
             <DropdownMenuItem
               key={machine.id}
@@ -94,12 +99,19 @@ export function MachineSwitcher({
                 );
               }}
             >
-              <Server />
-              <span className="min-w-0 flex-1 truncate" title={machine.name}>
+              <Server className={isSelected ? "text-primary" : undefined} />
+              <span
+                className={`min-w-0 flex-1 truncate ${isSelected ? "font-medium text-primary" : ""}`}
+                title={machine.name}
+              >
                 {machine.name}
               </span>
-              <span className="ml-auto shrink-0 text-xs text-muted-foreground capitalize">
-                {machineStatusLabel(availability, selected.machineId === machine.id && connected)}
+              <span
+                className={`ml-auto shrink-0 text-xs capitalize ${isSelected ? "text-primary" : "text-muted-foreground"}`}
+              >
+                {isSelected && !connected
+                  ? "Selected"
+                  : machineStatusLabel(availability, isSelected && connected)}
               </span>
             </DropdownMenuItem>
           );

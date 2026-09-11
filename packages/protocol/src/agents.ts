@@ -1,3 +1,4 @@
+import { AgentAccountActionSchema, AgentAccountSchema } from "./agent-accounts.ts";
 import { z } from "zod";
 import { AgentControlsSchema, AgentFeatureValueSchema } from "./agent-controls.ts";
 import { ProviderIdSchema, ProviderEngineSchema } from "./providers.ts";
@@ -197,6 +198,7 @@ export const NativeSessionSchema = z.object({
 });
 export type NativeSession = z.infer<typeof NativeSessionSchema>;
 export const AgentOperationSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("account"), sessionId: Id, action: AgentAccountActionSchema }),
   z.object({
     kind: z.literal("child-history"),
     sessionId: Id,
@@ -311,6 +313,7 @@ export const AgentResultSchema = z.object({
     z.object({
       status: z.literal("ok"),
       conversation: AgentConversationSchema,
+      account: AgentAccountSchema.optional(),
       providers: z.array(AgentProviderCatalogSchema).max(128).optional(),
       sessions: z.array(NativeSessionSchema).max(100).optional(),
       childItems: z.array(AgentItemSchema).max(80).optional(),
