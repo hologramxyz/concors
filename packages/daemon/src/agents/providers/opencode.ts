@@ -1,3 +1,4 @@
+import { openCodeHistory } from "./history.ts";
 import { Agent } from "undici";
 import { randomBytes } from "node:crypto";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
@@ -32,6 +33,7 @@ export class OpenCodeProvider extends EventProvider {
     this.cwd = cwd;
     this.launcher = launcher;
     this.controls = AgentControlsSchema.parse({
+      history: true,
       compact: true,
       contextUsage: true,
       mcp: true,
@@ -207,7 +209,17 @@ export class OpenCodeProvider extends EventProvider {
         if (status && object(status)["type"] !== "idle")
           throw new Error("OpenCode session is still running; wait before reconnecting");
       }
-      return { thread: { id: this.threadId, turns: [] } };
+      return {
+        thread: {
+          id: this.threadId,
+          turns:
+            method === "thread/resume"
+              ? openCodeHistory(
+                  array(await this.call(`/session/${encodeURIComponent(this.threadId)}/message`)),
+                )
+              : [],
+        },
+      };
     }
     if (method === "turn/interrupt") {
       this.interrupted = true;
@@ -303,7 +315,10 @@ export class OpenCodeProvider extends EventProvider {
     this.parts.clear();
     this.summaries.clear();
     this.manualCompact = false;
+    const messageID = `msg_${Date.now().toString(16)}${randomBytes(10).toString("hex")}`;
+    this.emit("turn/nativeIdentity", { nativeTurnId: messageID });
     await this.call(`/session/${encodeURIComponent(this.threadId)}/prompt_async`, {
+      messageID,
       parts,
       ...(p["nativeMode"] ? { agent: p["nativeMode"] } : {}),
       ...(p["effort"] && p["effort"] !== "default" ? { variant: p["effort"] } : {}),
@@ -382,7 +397,7 @@ export class OpenCodeProvider extends EventProvider {
           id,
           string(part["tool"]),
           state["input"],
-          state["output"] ?? state["error"],
+          { content: state["output"] ?? state["error"], details: state["metadata"] },
           state["status"] === "completed" || state["status"] === "error",
           state["status"] === "error",
         );
