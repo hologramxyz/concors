@@ -122,8 +122,16 @@ is never shown as proof that every server is healthy.
 
 ## Sessions, queues, and recovery
 
-- Switching providers, importing a native session, and forking create a separate
-  chat tab without replaying prompts. A fork holds its source session steady
+- Switching providers replaces the current pane's session binding without adding
+  a tab or changing the split layout. Each provider keeps its own conversation;
+  switching back restores that history without replaying prompts. The association
+  is saved by the daemon and survives reconnects/restarts. Active turns, approvals,
+  and queued messages must be finished or stopped/cleared before switching so work
+  is never hidden in a detached session. Existing separate tabs are left intact.
+  This behavior requires an updated daemon/session host; older runtimes still
+  implement the previous new-tab behavior.
+- Importing a native session and forking create a separate chat tab without
+  replaying prompts. A fork holds its source session steady
   until the native copy finishes. The mobile follow-up explicitly navigates to
   accepted new chats without following another device's selection.
 - Rewind validates the current revision, pauses the queue, and publishes a

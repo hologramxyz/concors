@@ -43,7 +43,7 @@ export function AgentModelPicker({
         groups={providers.map((p) => ({
           id: p.id,
           label: p.label ?? agentProviderName(p.id),
-          description: p.id === agent.provider ? "Current conversation" : "Starts a new chat",
+          description: p.id === agent.provider ? "Current conversation" : "Use in this pane",
           icon: <ProviderIcon provider={p.id} />,
           emptyMessage:
             p.error ??

@@ -441,6 +441,17 @@ export class WorkspaceStore {
   ): void {
     this.#db.exec("BEGIN IMMEDIATE");
     try {
+      if (
+        this.agent(info.id).providerGroupId &&
+        !this.snapshot().projects.some((project) =>
+          project.tabs.some((tab) =>
+            tab.nodes.some((pane) => pane.kind === "pane" && pane.sessionId === info.id),
+          ),
+        )
+      )
+        throw new Error(
+          "Switch back to this provider before sending messages or changing its conversation.",
+        );
       this.#db
         .prepare("INSERT INTO agent_requests (id, request, session_id) VALUES (?, ?, ?)")
         .run(request.requestId, JSON.stringify(request), info.id);
@@ -460,7 +471,7 @@ export class WorkspaceStore {
       throw error;
     }
   }
-  reserveAgent(request: AgentRequest, info: AgentInfo): void {
+  reserveAgent(request: AgentRequest, info: AgentInfo): AgentInfo {
     const op = request.operation;
     if (
       op.kind !== "start" &&
@@ -474,6 +485,7 @@ export class WorkspaceStore {
       let state = this.snapshot();
       let project = state.projects.find((p) => p.id === info.projectId);
       let tabId: string, paneId: string;
+      let restoring = false;
       if (op.kind !== "start") {
         const previous = this.agent(op.sessionId);
         if (
@@ -482,18 +494,78 @@ export class WorkspaceStore {
           !project
         )
           throw new Error("Agent changed. Try again.");
-        tabId = randomUUID();
-        paneId = randomUUID();
-        state = applyWorkspaceOperation(state, {
-          kind: "tab.create",
-          projectId: project.id,
-          expectedVersion: project.version,
-          tabId,
-          paneId,
-          name: nextWorkspaceTabName(project.tabs),
-          profile: "chat",
-        });
-        project = state.projects.find((p) => p.id === info.projectId);
+        if (op.kind === "switch-provider") {
+          const bound = project.tabs
+            .flatMap((tab) => tab.nodes.map((pane) => ({ tab, pane })))
+            .find(
+              ({ pane }) =>
+                pane.kind === "pane" && pane.profile === "chat" && pane.sessionId === previous.id,
+            );
+          if (!bound) throw new Error("This agent's pane has been closed or changed.");
+          const idle = (agent: AgentInfo) =>
+            !["starting", "working", "needs_input"].includes(agent.status) &&
+            !agent.pending.length &&
+            !agent.queue?.length;
+          if (!idle(previous))
+            throw new Error(
+              "Finish or stop this agent and clear queued messages before switching providers.",
+            );
+          tabId = bound.tab.id;
+          paneId = bound.pane.id;
+          const group = previous.providerGroupId ?? previous.id;
+          const saved = this.agents().find(
+            (agent) =>
+              (agent.providerGroupId ?? agent.id) === group &&
+              agent.provider === info.provider &&
+              agent.projectId === info.projectId &&
+              agent.directory === info.directory &&
+              !!agent.threadId,
+          );
+          if (saved) {
+            if (
+              !idle(saved) ||
+              state.projects.some((p) =>
+                p.tabs.some((tab) =>
+                  tab.nodes.some((pane) => pane.kind === "pane" && pane.sessionId === saved.id),
+                ),
+              )
+            )
+              throw new Error("That provider's conversation is already active in another pane.");
+            restoring = true;
+            info = {
+              ...saved,
+              ...(op.model && op.model !== saved.settings?.model
+                ? {
+                    model: op.model,
+                    settings: {
+                      ...(saved.settings ?? { mode: "default" as const }),
+                      model: op.model,
+                      effort: null,
+                      serviceTier: null,
+                      features: {},
+                    },
+                    revision: saved.revision + 1,
+                  }
+                : {}),
+            };
+          } else info = { ...info, providerGroupId: group };
+          // Park the old conversation atomically with rebinding the pane. Late
+          // commands from another client cannot start work in a hidden session.
+          this.saveAgent({ ...previous, providerGroupId: group, revision: previous.revision + 1 });
+        } else {
+          tabId = randomUUID();
+          paneId = randomUUID();
+          state = applyWorkspaceOperation(state, {
+            kind: "tab.create",
+            projectId: project.id,
+            expectedVersion: project.version,
+            tabId,
+            paneId,
+            name: nextWorkspaceTabName(project.tabs),
+            profile: "chat",
+          });
+          project = state.projects.find((p) => p.id === info.projectId);
+        }
       } else {
         tabId = op.tabId;
         paneId = op.paneId;
@@ -506,21 +578,25 @@ export class WorkspaceStore {
         !pane ||
         pane.kind !== "pane" ||
         pane.profile !== "chat" ||
-        pane.sessionId !== null
+        pane.sessionId !== (op.kind === "switch-provider" ? op.sessionId : null)
       )
         throw new Error("Select an empty chat pane");
-      if (this.agents().length >= 128) throw new Error("Agent session limit reached (128)");
+      if (!restoring && this.agents().length >= 128)
+        throw new Error("Agent session limit reached (128)");
       pane.sessionId = info.id;
       project.version++;
       state.revision++;
-      this.#db
-        .prepare("INSERT INTO agents (id, info) VALUES (?, ?)")
-        .run(info.id, JSON.stringify(info));
+      if (restoring) this.saveAgent(info);
+      else
+        this.#db
+          .prepare("INSERT INTO agents (id, info) VALUES (?, ?)")
+          .run(info.id, JSON.stringify(info));
       this.#db
         .prepare("INSERT INTO agent_requests (id, request, session_id) VALUES (?, ?, ?)")
         .run(request.requestId, JSON.stringify(request), info.id);
       this.#db.prepare("UPDATE workspace SET snapshot = ? WHERE id = 1").run(JSON.stringify(state));
       this.#db.exec("COMMIT");
+      return info;
     } catch (error) {
       this.#db.exec("ROLLBACK");
       throw error;

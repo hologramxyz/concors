@@ -596,6 +596,7 @@ export class AgentManager {
         const next: AgentInfo = {
           ...previous,
           id: randomUUID(),
+          providerGroupId: undefined,
           name:
             op.kind === "fork-session"
               ? `${previous.name.slice(0, 70)} (fork)`
@@ -687,14 +688,15 @@ export class AgentManager {
           turnStartedAt: null,
           revision: 0,
         };
-        this.#store.reserveAgent(request, info);
+        const reserved = this.#store.reserveAgent(request, info);
         this.#workspaceChanged();
-        this.#emit({ type: "agent.state", agent: info });
-        void Promise.resolve()
-          .then(() => this.provider(info.id))
-          .then(() => this.update(info.id, { status: "idle" }))
-          .catch((error) => this.fail(info.id, error));
-        return this.result(request, info.id);
+        this.#emit({ type: "agent.state", agent: reserved });
+        if (reserved.id === info.id)
+          void Promise.resolve()
+            .then(() => this.provider(info.id))
+            .then(() => this.update(info.id, { status: "idle" }))
+            .catch((error) => this.fail(info.id, error));
+        return this.result(request, reserved.id);
       }
       const info = this.#store.agent(op.sessionId);
       if (this.mutations.has(info.id))

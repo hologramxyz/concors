@@ -49,16 +49,14 @@ test("effective models stay selected and warm provider menus reopen without load
     );
     await expect(page.getByText("Machine default", { exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: "Back to providers", exact: true }).click();
-    await page.getByRole("option", { name: "Claude Code Starts a new chat", exact: true }).click();
+    await page.getByRole("option", { name: "Claude Code Use in this pane", exact: true }).click();
     await expect(page.getByRole("option", { name: "Opus 5", exact: true })).toBeVisible();
     const warmed = requests.length;
     for (let i = 0; i < 2; i++) {
       await page.keyboard.press("Escape");
       await picker.click();
       await page.getByRole("button", { name: "Back to providers", exact: true }).click();
-      await page
-        .getByRole("option", { name: "Claude Code Starts a new chat", exact: true })
-        .click();
+      await page.getByRole("option", { name: "Claude Code Use in this pane", exact: true }).click();
       await expect(page.getByRole("option", { name: "Opus 5", exact: true })).toBeVisible();
       await expect(page.getByText("Loading providers…", { exact: true })).toHaveCount(0);
     }
