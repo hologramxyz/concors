@@ -1,4 +1,9 @@
-import { COLOR_THEMES, DEFAULT_COLOR_THEME, customColorTheme } from "@concors/protocol";
+import {
+  COLOR_THEMES,
+  DEFAULT_COLOR_THEME,
+  customColorTheme,
+  mobileThemeBackground,
+} from "@concors/protocol";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import {
   Alert,
@@ -331,7 +336,7 @@ function SignedInWorkspace() {
     ? customColorTheme(preferences.colorTheme.custom)
     : (COLOR_THEMES.find((theme) => theme.id === preferences.colorTheme?.id) ??
       DEFAULT_COLOR_THEME);
-  const backgroundColor = colorTheme[dark ? "dark" : "light"].sidebar;
+  const backgroundColor = mobileThemeBackground(colorTheme, dark ? "dark" : "light");
   return (
     <SafeAreaView testID="workspace-safe-area" style={{ flex: 1, backgroundColor }}>
       <KeyboardAvoidingView

@@ -94,12 +94,14 @@ export function ColorThemeProvider({
   mode,
   selection,
   onSelect,
+  compact = false,
   children,
 }: {
   connection: DaemonConnection | null;
   mode: "light" | "dark";
   selection: ThemeSelection;
   onSelect(selection: ThemeSelection): void;
+  compact?: boolean;
   children: ReactNode;
 }) {
   const { catalog, error, refresh } = useCatalog(connection);
@@ -120,7 +122,7 @@ export function ColorThemeProvider({
     )
       onSelect({ id: selected.id, custom: selected.custom });
   }, [catalog, selected.id, selected.custom, selection.id, selection.custom, onSelect]);
-  useLayoutEffect(() => applyColorTheme(selected, mode), [selected, mode]);
+  useLayoutEffect(() => applyColorTheme(selected, mode, compact), [selected, mode, compact]);
   return (
     <ColorThemeContext
       value={{

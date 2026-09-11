@@ -11,16 +11,21 @@ test("mobile applies built-in and local-file palettes through the native prefere
   await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
   await page.getByRole("button", { name: "Allow AI data sharing", exact: true }).click();
   const ui = page.frameLocator('iframe[title="Concors workspace"]');
+  const expectCanvas = async (color: string) => {
+    await expect(page.getByTestId("workspace-safe-area")).toHaveCSS("background-color", color);
+    await expect(page.locator('iframe[title="Concors workspace"]')).toHaveCSS(
+      "background-color",
+      color,
+    );
+    await expect(ui.getByTestId("mobile-workspace")).toHaveCSS("background-color", color);
+  };
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
   await ui.getByRole("button", { name: "Desktop connection settings" }).click();
   await ui.getByRole("radio", { name: "Cobalt", exact: true }).locator("..").click();
   await ui.getByRole("button", { name: "Theme", exact: true }).click();
   await ui.getByRole("menuitem", { name: "Dark", exact: true }).click();
   await expect(ui.locator("html")).toHaveAttribute("data-color-theme", "cobalt");
-  await expect(page.getByTestId("workspace-safe-area")).toHaveCSS(
-    "background-color",
-    "rgb(11, 16, 32)",
-  );
+  await expectCanvas("rgb(16, 22, 37)");
   await expect(ui.getByLabel("Theme directory")).toBeVisible();
   const directory = await ui.getByLabel("Theme directory").innerText();
   await mkdir(directory, { recursive: true });
@@ -34,17 +39,14 @@ test("mobile applies built-in and local-file palettes through the native prefere
         id,
         name: "Mobile sunset",
         extends: "sand",
-        dark: { sidebar: "#302219", accent: "#ffc099" },
+        dark: { background: "#35271d", sidebar: "#302219", accent: "#ffc099" },
       }),
     );
     await expect(ui.getByRole("radio", { name: "Mobile sunset", exact: true })).toBeVisible({
       timeout: 10_000,
     });
     await ui.getByRole("radio", { name: "Mobile sunset", exact: true }).locator("..").click();
-    await expect(page.getByTestId("workspace-safe-area")).toHaveCSS(
-      "background-color",
-      "rgb(48, 34, 25)",
-    );
+    await expectCanvas("rgb(53, 39, 29)");
     await expect(ui.locator("html")).toHaveAttribute("data-color-theme", id);
     const width = await ui
       .locator("body")
@@ -55,10 +57,7 @@ test("mobile applies built-in and local-file palettes through the native prefere
     await expect(ui.locator("html")).toHaveAttribute("data-color-theme", "concors", {
       timeout: 10_000,
     });
-    await expect(page.getByTestId("workspace-safe-area")).toHaveCSS(
-      "background-color",
-      "rgb(11, 11, 11)",
-    );
+    await expectCanvas("rgb(20, 20, 20)");
     expect(errors).toEqual([]);
   } finally {
     await rm(file, { force: true });
