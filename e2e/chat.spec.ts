@@ -8,6 +8,8 @@ test("shared chat streams, handles approvals and removes detached sidebar entrie
   page,
   browser,
 }) => {
+  // Two clients and repeated reloads need room beyond the short interaction-test budget.
+  test.setTimeout(60_000);
   const directory = await mkdtemp(join(tmpdir(), "concors-chat-browser-"));
   const context = await browser.newContext();
   const second = await context.newPage();
