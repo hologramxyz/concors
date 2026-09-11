@@ -14,6 +14,18 @@ async function hoverControl(page: Page, control: Locator) {
   await control.hover();
 }
 
+async function expectNoSidebarTooltips(page: Page, sidebar: Locator) {
+  await page.keyboard.press("Escape");
+  for (const control of await sidebar.getByRole("button").all()) {
+    await control.hover();
+    await control.focus();
+    // Focus would open an enabled tooltip immediately, even when hover is delayed.
+    await expect(control).not.toHaveAttribute("aria-describedby");
+    await expect(control).not.toHaveAttribute("title");
+    await expect(page.getByRole("tooltip")).toHaveCount(0);
+  }
+}
+
 test("collapsed sidebar keeps workspace, machine, search and account navigation accessible", async ({
   page,
 }) => {
@@ -35,6 +47,7 @@ test("collapsed sidebar keeps workspace, machine, search and account navigation 
     const shell = page.locator(".sidebar-shell");
     await expect(rail.getByText("No agents yet.", { exact: true })).toBeVisible();
     await expect(rail.getByText("No servers discovered.", { exact: true })).toBeVisible();
+    await expectNoSidebarTooltips(page, rail);
     await rail.getByRole("button", { name: "Collapse sidebar", exact: true }).click();
     await expect(shell).toHaveCSS("width", "44px");
     await expect(rail).toBeVisible();
@@ -53,6 +66,7 @@ test("collapsed sidebar keeps workspace, machine, search and account navigation 
     for (const [name, label] of [
       ["Switch machine", "This computer"],
       ["Expand sidebar", "Expand sidebar"],
+      ["Search", "Search"],
       ["Open workspace menu", "Workspaces"],
       ["Account: E2E User", "Account and settings"],
     ]) {
@@ -70,6 +84,7 @@ test("collapsed sidebar keeps workspace, machine, search and account navigation 
     await expect(page.getByRole("heading", { name: "Alpha workspace", exact: true })).toBeVisible();
     await expect(alpha).toHaveAttribute("aria-current", "page");
     await beta.focus();
+    await expect(page.getByRole("tooltip")).toContainText("Beta workspace");
     await page.keyboard.press("Enter");
     await expect(page.getByRole("heading", { name: "Beta workspace", exact: true })).toBeVisible();
     const search = rail.getByRole("button", { name: "Search", exact: true });
@@ -117,6 +132,7 @@ test("collapsed sidebar keeps workspace, machine, search and account navigation 
     await expect(shell).toHaveCSS("width", "216px");
     await expect(rail.getByRole("button", { name: "Collapse sidebar", exact: true })).toBeFocused();
     await expect(beta).toHaveText("Beta workspace");
+    await expectNoSidebarTooltips(page, rail);
     await expect(rail.getByText("No agents yet.", { exact: true })).toBeVisible();
     await expect(rail.getByText("No servers discovered.", { exact: true })).toBeVisible();
     expect(errors).toEqual([]);
@@ -177,7 +193,59 @@ test("collapsed agents show provider icons and live status without losing chat d
     await rail.getByRole("button", { name: "Expand sidebar", exact: true }).click();
     await expect(codex).toHaveValue("Keep this draft");
     await expect(agents.getByRole("img", { name: "Agent status: Done" })).toBeVisible();
+    await expectNoSidebarTooltips(page, rail);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("collapsed tooltips follow menu colors in light, dark and custom palettes", async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  await signedIn(page);
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.goto("/");
+  const sidebar = page.getByRole("navigation", { name: "Primary" });
+  await sidebar.getByRole("button", { name: "Collapse sidebar", exact: true }).click();
+  const backgrounds: string[] = [];
+  for (const palette of ["Concors", "Cobalt"]) {
+    if (palette === "Cobalt") {
+      await sidebar.getByRole("button", { name: /^Account:/ }).click();
+      await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
+      await page.getByRole("button", { name: "Appearance", exact: true }).click();
+      await page.getByRole("radio", { name: palette, exact: true }).locator("..").click();
+      await expect(page.locator("html")).toHaveAttribute("data-color-theme", "cobalt");
+      await page.getByRole("button", { name: "Back to app", exact: true }).click();
+    }
+    for (const colorScheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme });
+      if (colorScheme === "dark") await expect(page.locator("html")).toHaveClass(/dark/);
+      else await expect(page.locator("html")).not.toHaveClass(/dark/);
+      await sidebar.getByRole("button", { name: "Switch machine", exact: true }).click();
+      const menu = page.getByRole("menu");
+      await expect(menu).toBeVisible();
+      const colors = await menu.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return { background: style.backgroundColor, foreground: style.color };
+      });
+      await page.keyboard.press("Escape");
+      await expect(menu).toHaveCount(0);
+      await hoverControl(page, sidebar.getByRole("button", { name: "Search", exact: true }));
+      const tooltip = page.getByRole("tooltip");
+      await expect(tooltip).toBeVisible();
+      await expect(tooltip).toContainText("Search");
+      await expect(tooltip).toHaveCSS("background-color", colors.background);
+      await expect(tooltip).toHaveCSS("color", colors.foreground);
+      await expect(tooltip.locator("svg")).toHaveCSS("fill", colors.background);
+      await expect(tooltip).toHaveCSS("opacity", "1");
+      backgrounds.push(colors.background);
+      await page.screenshot({
+        path: test.info().outputPath(`tooltip-${palette.toLowerCase()}-${colorScheme}.png`),
+      });
+    }
+  }
+  expect(backgrounds[0]).not.toBe(backgrounds[1]);
+  expect(backgrounds[2]).not.toBe(backgrounds[3]);
+  expect(backgrounds[1]).not.toBe(backgrounds[3]);
 });
