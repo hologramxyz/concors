@@ -566,6 +566,15 @@ export class WorkspaceStore {
         }),
       );
   }
+  hasAgentProviderHistory(sessionId: string): boolean {
+    // Check all history, not just the most recent page. Pending user prompts are reserved
+    // locally before reaching a provider; every other item is evidence of provider activity.
+    return !!this.#db
+      .prepare(
+        "SELECT 1 FROM agent_items WHERE session_id = ? AND (json_extract(item, '$.kind') != 'user' OR json_extract(item, '$.turnId') NOT LIKE 'pending:%') LIMIT 1",
+      )
+      .get(sessionId);
+  }
   agentConversation(id: string, before = Number.MAX_SAFE_INTEGER): AgentConversation {
     const rows = this.#db
       .prepare(
