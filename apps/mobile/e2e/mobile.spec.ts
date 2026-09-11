@@ -132,7 +132,9 @@ test("mobile header, terminal and host share one background across palettes and 
         .getByRole("button", { name: "Close", exact: true })
         .click();
     }
-    await expect(ui.getByTestId("mobile-workspace")).toHaveCSS("background-color", color);
+    // The workspace wrapper is transparent for the swipe rim; .mobile-main
+    // owns the opaque content background.
+    await expect(ui.locator(".mobile-main")).toHaveCSS("background-color", color);
     await expect(terminal.locator("..")).toHaveCSS("background-color", color);
     // xterm sets this inline from its theme, so assert the renderer as well as pane CSS.
     await expect(terminal.locator(".xterm-scrollable-element")).toHaveCSS(
