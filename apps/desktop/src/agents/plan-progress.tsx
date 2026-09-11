@@ -6,6 +6,7 @@ import { BrailleSpinner } from "./activity";
 import { AgentMarkdown, CopyButton } from "./markdown";
 export function PlanProgress({ item, compact = false }: { item: AgentItem; compact?: boolean }) {
   const steps = item.presentation?.steps ?? [];
+  if (!steps.length && !item.text.trim()) return null;
   const completed = steps.filter((s) => s.status === "completed").length;
   return (
     <details

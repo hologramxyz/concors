@@ -46,13 +46,11 @@ test("chat presents native forms, plan review, file content and durable attachme
     await expect(
       page.getByText("export const previewWorks = true;", { exact: true }),
     ).toBeVisible();
-    await page
-      .locator('input[type="file"]')
-      .setInputFiles({
-        name: "notes.md",
-        mimeType: "text/markdown",
-        buffer: Buffer.from("# Durable attachment preview"),
-      });
+    await page.locator('input[type="file"]').setInputFiles({
+      name: "notes.md",
+      mimeType: "text/markdown",
+      buffer: Buffer.from("# Durable attachment preview"),
+    });
     await send("Read these notes");
     await expect(page.getByLabel("Agent status: Done").first()).toBeVisible();
     await page.reload();
