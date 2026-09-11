@@ -26,7 +26,6 @@ export function WorkspaceSidebarItem({
     <button
       type="button"
       disabled={!canEdit}
-      title={compact ? undefined : project.directory}
       aria-label={project.name}
       data-workspace-id={project.id}
       onClick={() => onSelect(project.id)}

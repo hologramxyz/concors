@@ -1,7 +1,8 @@
 import { FolderOpen, GitBranch, Plus } from "lucide-react";
 import { useContext, useRef, useState } from "react";
 import { CompactLayoutContext } from "@/components/compact-layout";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import {
   Dialog,
   DialogTrigger,
@@ -79,7 +80,7 @@ export function NewWorkspaceMenu({
   return (
     <div className="flex items-center">
       <DropdownMenu>
-        <Tooltip>
+        <SidebarTooltip collapsed={rail}>
           <TooltipTrigger asChild>
             <DropdownMenuTrigger
               ref={trigger}
@@ -93,7 +94,7 @@ export function NewWorkspaceMenu({
           <TooltipContent side={rail ? "right" : "bottom"} sideOffset={6}>
             Workspaces · New workspace or open folder
           </TooltipContent>
-        </Tooltip>
+        </SidebarTooltip>
         <DropdownMenuContent align="end" className="w-52">
           <DropdownMenuItem onSelect={onNew}>
             <Plus />
