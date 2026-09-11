@@ -24,6 +24,7 @@ export function ProvidersSettings() {
   const [data, setData] = useState<{ revision: number; providers: ProviderStatus[] } | null>(null);
   const [error, setError] = useState<string | null>(null),
     [busy, setBusy] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<ProviderStatus | "new" | null>(null);
   const mounted = useRef(true);
@@ -34,7 +35,10 @@ export function ProvidersSettings() {
       if (!connection) throw new Error("Reconnect to the machine first.");
       const result = await connection.requestProvider(operation, crypto.randomUUID());
       if (result.outcome.status === "error") throw new Error(result.outcome.message);
-      if (mounted.current && active()) setData(result.outcome);
+      if (mounted.current && active()) {
+        setData(result.outcome);
+        if (operation.kind === "list") setRefreshError(null);
+      }
     },
     [connection],
   );
@@ -50,7 +54,7 @@ export function ProvidersSettings() {
     let cancelled = false;
     const refresh = () => {
       void request({ kind: "list" }, () => !cancelled).catch((e: Error) => {
-        if (!cancelled) setError(e.message);
+        if (!cancelled) setRefreshError(e.message);
       });
     };
     refresh();
@@ -66,12 +70,15 @@ export function ProvidersSettings() {
     try {
       await request(operation);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not update providers");
+      const message = e instanceof Error ? e.message : "Could not update providers";
+      if (operation.kind === "list") setRefreshError(message);
+      else setError(message);
       throw e;
     } finally {
       setBusy(false);
     }
   };
+  const visibleError = error ?? refreshError;
   return (
     <section aria-label="Agent providers">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -110,9 +117,9 @@ export function ProvidersSettings() {
           unavailable.
         </p>
       )}
-      {error && (
+      {visibleError && (
         <p role="alert" className="mt-4 text-sm text-destructive">
-          {error}
+          {visibleError}
         </p>
       )}
       {supported && (
