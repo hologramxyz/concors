@@ -297,7 +297,7 @@ function ProviderEditor({
         if (!open && !busy) onClose();
       }}
     >
-      <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-xl">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>
             {provider ? `Configure ${provider.label}` : "Add an agent provider"}

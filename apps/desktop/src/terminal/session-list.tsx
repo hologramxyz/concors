@@ -39,7 +39,7 @@ export function SessionList() {
         Sessions
       </button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[80vh] overflow-auto">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Terminal sessions</DialogTitle>
             <DialogDescription>

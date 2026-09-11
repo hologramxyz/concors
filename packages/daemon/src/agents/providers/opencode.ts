@@ -274,6 +274,12 @@ export class OpenCodeProvider extends EventProvider {
       );
       this.threadId = string(session["id"]);
       if (!this.threadId) throw new Error("OpenCode did not return a session");
+      const savedModel = object(session["model"] ?? {});
+      this.currentModel =
+        string(p["model"]) ||
+        (savedModel["providerID"] && (savedModel["modelID"] || savedModel["id"])
+          ? `${string(savedModel["providerID"])}/${string(savedModel["modelID"] || savedModel["id"])}`
+          : "");
       if (method === "thread/resume") {
         const statuses = object(await this.call("/session/status"));
         const status = statuses[this.threadId];
@@ -281,6 +287,7 @@ export class OpenCodeProvider extends EventProvider {
           throw new Error("OpenCode session is still running; wait before reconnecting");
       }
       return {
+        ...(this.currentModel ? { model: this.currentModel } : {}),
         thread: {
           id: this.threadId,
           turns:
@@ -454,8 +461,10 @@ export class OpenCodeProvider extends EventProvider {
       )
         this.summaries.add(string(info["id"]));
       if (info["role"] === "assistant") {
-        if (info["providerID"] && info["modelID"])
+        if (info["providerID"] && info["modelID"]) {
           this.currentModel = string(info["providerID"]) + "/" + string(info["modelID"]);
+          this.emit("session/model/updated", { model: this.currentModel });
+        }
         this.updateUsage(info["tokens"]);
       }
       if (info["error"]) this.finish(string(object(info["error"])["message"]) || "OpenCode failed");

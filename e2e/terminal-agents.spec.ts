@@ -67,7 +67,11 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
     ).toBeVisible();
     await second.keyboard.type("test-idle");
     await second.keyboard.press("Enter");
-    await expect(shellAgent).toBeVisible();
+    for (const client of [page, second]) {
+      const done = client.getByRole("button", { name: /Agent status: Done.*Codex/ });
+      await expect(done).toBeVisible();
+      await expect(done.locator(".bg-emerald-500")).toBeVisible();
+    }
     await expect(agents.getByRole("button", { name: /Agent status: Working.*Codex/ })).toHaveCount(
       0,
     );
@@ -85,7 +89,7 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
     for (const [command, label] of [
       ["test-working", "Working"],
       ["test-approval", "Needs input"],
-      ["test-idle", "Open in terminal"],
+      ["test-idle", "Done"],
     ]) {
       await second.keyboard.type(command);
       await second.keyboard.press("Enter");
@@ -95,7 +99,9 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
         ).toBeVisible();
     }
     await second.reload();
-    await second.getByRole("button", { name: /Open in terminal.*Claude/ }).click();
+    const completedClaude = second.getByRole("button", { name: /Agent status: Done.*Claude/ });
+    await expect(completedClaude.locator(".bg-emerald-500")).toBeVisible();
+    await completedClaude.click();
     await expect(second.getByLabel("Terminal output").filter({ visible: true })).toHaveAttribute(
       "aria-busy",
       "false",

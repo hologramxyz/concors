@@ -7,7 +7,7 @@ import { test, expect, signedIn } from "./signed-in.ts";
 const sequence = async (page: Page, prefix: "p" | "t", key: string) => {
   await page.keyboard.press(`Control+Shift+${prefix}`);
   await expect(
-    page.getByRole("region", {
+    page.getByRole("dialog", {
       name: prefix === "p" ? "Pane shortcuts" : "Tab shortcuts",
       exact: true,
     }),
@@ -42,7 +42,7 @@ test("directional pane sequences, tab cycling, project memory and immediate Agen
         }),
       ),
     );
-    await expect(page.getByRole("region", { name: "Pane shortcuts", exact: true })).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Pane shortcuts", exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(panes).toHaveCount(1);
     await sequence(page, "p", "ArrowLeft");
@@ -116,7 +116,7 @@ test("directional pane sequences, tab cycling, project memory and immediate Agen
     expect(
       await input.evaluate((node: HTMLTextAreaElement) => node.selectionEnd - node.selectionStart),
     ).toBe(0);
-    await expect(page.getByRole("region", { name: "Pane shortcuts", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("dialog", { name: "Pane shortcuts", exact: true })).toHaveCount(0);
     // P/T sequences work directly in the composer without inserting their follow-up keys.
     await sequence(page, "p", "Escape");
     await expect(input).toHaveValue("keep these words");

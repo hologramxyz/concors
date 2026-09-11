@@ -62,13 +62,15 @@ const subscribeState = (listener: () => void) =>
 export function MobileApp() {
   const host = useSyncExternalStore(subscribeState, getHostState);
   return host ? (
-    <ShortcutProvider>
-      <TooltipProvider>
-        <NativeSurfaces key={host.scope} host={host}>
-          <MobileWorkspace host={host} />
-        </NativeSurfaces>
-      </TooltipProvider>
-    </ShortcutProvider>
+    <CompactLayoutContext value={true}>
+      <ShortcutProvider>
+        <TooltipProvider>
+          <NativeSurfaces key={host.scope} host={host}>
+            <MobileWorkspace host={host} />
+          </NativeSurfaces>
+        </TooltipProvider>
+      </ShortcutProvider>
+    </CompactLayoutContext>
   ) : (
     <p role="status" className="p-6 text-sm">
       Opening your workspace…
@@ -81,13 +83,11 @@ function MobileWorkspace({ host }: { host: MobileState }) {
     [host.connectionId],
   );
   return (
-    <CompactLayoutContext value={true}>
-      <TerminalConnectionContext value={connection}>
-        <MobileFilesProvider direct={host.direct}>
-          <MobileWorkspaceContent host={host} connection={connection} />
-        </MobileFilesProvider>
-      </TerminalConnectionContext>
-    </CompactLayoutContext>
+    <TerminalConnectionContext value={connection}>
+      <MobileFilesProvider direct={host.direct}>
+        <MobileWorkspaceContent host={host} connection={connection} />
+      </MobileFilesProvider>
+    </TerminalConnectionContext>
   );
 }
 function MobileWorkspaceContent({

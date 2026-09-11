@@ -28,6 +28,7 @@ export class TerminalRuntime {
   #paused = false;
   #stopped = false;
   #title = "";
+  #agentTurnActive = false;
   reportedDirectory: string | null = null;
   #resolveExit: () => void = () => undefined;
   readonly #exit: Promise<void>;
@@ -122,6 +123,7 @@ export class TerminalRuntime {
           status: this.#stopped || exitCode === 0 ? "exited" : "failed",
           exitCode,
           agentActivity: "unknown",
+          agentTurnCompleted: false,
         };
         this.#owner = null;
         this.#save(this.info);
@@ -149,7 +151,13 @@ export class TerminalRuntime {
   detectAgent(agent: TerminalInfo["detectedAgent"]): void {
     if (this.#disposed || this.info.status !== "running" || this.info.profile !== "shell") return;
     if ((this.info.detectedAgent ?? null) === (agent ?? null)) return;
-    this.info = { ...this.info, detectedAgent: agent ?? null };
+    this.#agentTurnActive = false;
+    this.info = {
+      ...this.info,
+      detectedAgent: agent ?? null,
+      agentActivity: "unknown",
+      agentTurnCompleted: false,
+    };
     if (!agent) this.#title = "";
     this.#save(this.info);
     this.updateAgentActivity();
@@ -168,8 +176,19 @@ export class TerminalRuntime {
       lines,
       this.info.agentActivity,
     );
-    if ((this.info.agentActivity ?? "unknown") === agentActivity) return;
-    this.info = { ...this.info, agentActivity };
+    if (agentActivity === "working") this.#agentTurnActive = true;
+    const agentTurnCompleted =
+      agentActivity === "working"
+        ? false
+        : (this.info.agentTurnCompleted ?? false) ||
+          (agentActivity === "idle" && this.#agentTurnActive);
+    if (agentActivity === "idle") this.#agentTurnActive = false;
+    if (
+      (this.info.agentActivity ?? "unknown") === agentActivity &&
+      (this.info.agentTurnCompleted ?? false) === agentTurnCompleted
+    )
+      return;
+    this.info = { ...this.info, agentActivity, agentTurnCompleted };
     this.#save(this.info);
   }
 
