@@ -30,17 +30,20 @@ Phone-specific behavior:
   tapping its text field opens the platform keyboard.
 - A swipeable Projects / Agents / Servers sidebar pushes the workspace to the right.
   Swipe back, press the mobile menu icon, or tap the workspace scrim to close it.
-- A compact name/avatar trigger opens an animated Account bottom drawer with Settings and Sign out.
-  Machine management is a settings section; the sidebar header has no redundant product title.
-- Tabs/panes, Machine, Search, Settings, Add Project and New Tab use the shared Radix dialog with animated
+- A compact name/avatar trigger opens an animated Account bottom drawer with the current machine,
+  Add machine setup guidance, Settings and Sign out. Direct previews use the same drawer with an
+  honest Desktop connection identity and Disconnect desktop. Existing-machine management remains
+  in Settings; no purchasing or provisioning is exposed. The sidebar has no redundant product title.
+- Tabs, Machine, Search, Settings, Add Project and New Tab use the shared Radix dialog with animated
   bottom-sheet presentation, focus restoration and reduced-motion support.
   Opening Search or choosing a machine leaves the sidebar visible behind it.
-- Separate glass controls contain the sidebar toggle, picker and Files button (native SwiftUI
+- Separate glass controls contain the sidebar toggle, sidebar Search, picker and Files button (native SwiftUI
   glass on supported iOS builds; CSS backdrop blur in the web/Android renderer),
   with matching rounded pressed states and opaque fallbacks for reduced transparency.
-  The picker uses a tab/pane breadcrumb and lightly indented
-  pane options under named tab headings with counts, without hierarchy lines or guide text.
-  Tab/pane and machine selection open bottom drawers with scrollable, touch-sized options.
+  The Tabs picker shows a flat list of every pane in the project, with a name and profile per row.
+  There are no desktop tab headings, counts or indentation. Split leaves use the shared tab name
+  plus display position; the original IDs, split geometry and sessions are preserved.
+  Tab and machine selection open bottom drawers with scrollable, touch-sized options.
   The backdrop, Close button and Escape dismiss them and restore focus. Tapping the
   covered trigger dismisses via the backdrop without reopening. The settings section
   picker remains a popover. Pane choices support arrow keys and Home/End; machine and settings
@@ -57,11 +60,13 @@ Phone-specific behavior:
   follow-up content, or Send when idle. Controls fit a single row down to 320px width.
 - Desktop split/placement/arrangement/resize controls and commands are intentionally
   absent on phones. Existing desktop split panes remain accessible in the top picker.
-- The tab/pane drawer has tab cards with per-tab menus (add pane, rename, close), per-pane
-  menus (profile, close) and a New Tab footer. Creation uses the shared new-session drawer
-  and locally packaged provider logos. Add Pane uses the shared split operation without
-  exposing geometry. Each menu targets its own row, including unselected tabs/panes.
-  Closing the last pane warns that its tab will also close; hardware close shortcuts remain.
+- The flat Tabs drawer has one menu per row (type/profile, close, and rename for single-pane
+  desktop tabs) and a New Tab footer. Creation uses the shared new-session drawer and provider
+  logos, always creating a new single-pane desktop tab. Close always sends `pane.close`, never
+  `tab.close`, so siblings survive. Closing an inactive row preserves the current selection;
+  the last pane's confirmation explains that its empty desktop tab is removed too.
+  No local-only names or schema migrations are introduced. Desktop split siblings cannot be
+  renamed independently, so mobile does not offer a misleading rename action for those rows.
 - Files opens full-screen from the right, with a directory tree and separate open-file strip.
   Swipe left from chat or the terminal opens it, swipe right returns; the sidebar retains the
   opposite gesture. Horizontal terminal gestures are handled before xterm can consume them;
@@ -77,10 +82,19 @@ Phone-specific behavior:
 - Drafts, attachments, queues and uncertain-send retry IDs survive pane/tab navigation
   and foreground socket replacement. They remain memory-only and account scoped;
   a full renderer reload discards unsent input. Changing machines starts a new draft scope.
-- External keyboards use the shared command palette/shortcuts. Pane focus follows
-  the top picker's order. Soft Enter adds a newline; the send button submits.
+- External keyboards use the shared command palette/shortcuts. Next/Previous tab follows
+  the flat picker's order across desktop tab boundaries. Legacy pane-focus/close shortcuts
+  remain aliases, not extra menu/settings entries. Soft Enter adds a newline; the send button submits.
 
 ## Source parity
+
+The flat Tabs follow-up is covered by `apps/mobile/e2e-direct/flat-tabs.spec.ts` using an
+isolated real daemon and two protocol clients (deterministic coding-provider fixture).
+It checks nested splits across desktop tabs, flat keyboard order, unchanged saved layout
+and desktop selection on navigation, live desktop rename/split/close updates, mobile
+single-pane tab creation, row-specific profile changes, leaf-only close and draft/session
+retention. Browser/native-bridge tests cover repeated dismissal, per-row menus and the
+updated native Tabs label. These are not physical-device or real-provider release checks.
 
 | Area              | Shared implementation                                                                | Phone behavior                                                                                                       |
 | ----------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
@@ -88,7 +102,7 @@ Phone-specific behavior:
 | Agent providers   | Shared provider settings, model picker, daemon registry and native control bridge    | Six built-ins, 38 optional ACP presets, own-account configuration; switching/import/fork opens a separate local chat |
 | Conversation      | `agents/chat.tsx`, `timeline-item.tsx`, `markdown.tsx`, `plan-progress.tsx`          | Same history, streaming, approvals/questions, thinking, tool/MCP/diff/sub-agent rendering and copy actions           |
 | Projects          | `workspace/project-setup-dialog.tsx`, `project-actions.tsx`                          | Open/create/clone/remove; setup continues remotely                                                                   |
-| Tabs/panes        | Protocol workspace reducer, `workspace/new-tab-menu.tsx`                             | Hierarchical picker; new-tab/add-pane drawer; rename/profile/confirmed close; no desktop geometry controls           |
+| Tabs/panes        | Protocol workspace reducer, `workspace/new-tab-menu.tsx`                             | Flat pane list labeled Tabs; new single-pane tab; safe rename/profile/leaf-only close; no layout migration           |
 | Project files     | `files/tree.tsx`, `file-tab.tsx`, `code-editor.tsx`, `document.ts`, file protocol    | Full-page tree/editor, Markdown, links, create, explicit save/conflicts; local file tabs and draft guards            |
 | Terminal          | `terminal/terminal-pane.tsx`, `surface.tsx` and xterm                                | Same replay, input ownership, resize/recovery; extra key strip and confirmed stop                                    |
 | Terminal profiles | `terminal/profiles-context.tsx`, `workspace/new-tab-menu.tsx`, shared settings       | Machine-synced profiles and literal command arguments; add/manage from the creation drawer or Terminals settings     |
@@ -136,7 +150,7 @@ CI exposed a notification-test setup race: a ready label from an older project d
 prove the separate control socket had received the newly created agent. The test now
 awaits its own project/session; three consecutive isolated notification runs pass.
 The phone suite covers 320/375/390/430px toolbars, contained picker chevrons, repeated
-backdrop dismissal without reopening, hierarchical tab/pane creation and closing, collapsed/expanded composer
+backdrop dismissal without reopening, flat tab creation and leaf-only closing, collapsed/expanded composer
 focus and keyboard dismissal, single centered send/stop actions,
 drawer focus/animations/reduced motion, sidebar-preserving search and machine selection,
 account menus and machine management.
@@ -226,3 +240,83 @@ GitHub native checks remain blocked before startup by billing/spending limits.
 See the [support report](unified-chat-provider-support.md) for the native capability
 matrix, live CLI evidence, and remaining scope boundaries. No store build/upload
 or production daemon restart was performed by this follow-up.
+
+## Sidebar and main merge follow-up (2026-09-11)
+
+This separate follow-up starts from main through `8f494ee`, after #53 (including
+#52) merged. It retains main's provider account sign-in (#54), saved machine
+selection (#55), empty Codex thread recovery (#56), and unified chat primitives.
+The daemon, protocol and shared agent implementations match main; this PR adds no
+separate mobile provider backend.
+
+Sidebar Search uses the same glass surface as the chat header:
+Expo UI SwiftUI buttons on supported native iOS, backdrop blur on web/Android,
+and the existing accessibility fallbacks. Both signed-in and direct-desktop footers
+open Account first. It contains the current machine, Add machine setup guidance,
+Settings, and Sign out/Disconnect. Add machine does not provision or purchase
+infrastructure; signed-in users can refresh and connect existing machines.
+
+Nested machine-sheet dismissal returns focus to Account; closing setup returns to
+the footer. Browser/native-bridge tests cover hiding native surfaces behind drawers,
+restoring them afterward, and keeping Search above the open sidebar.
+
+Post-merge verification: 483 repository unit tests passed, one opt-in live API test
+skipped; all six focused mobile UI/native-bridge scenarios passed. Desktop/daemon/mobile
+typechecks, scoped lint and formatting passed.
+Both direct-daemon follow-up scenarios also passed on this final merge: shared
+chat/terminal/account/reconnect flow and file drafts/saves/conflict protection.
+
+Before the final main merge, eight direct-daemon scenarios passed in the full run;
+the file-conflict scenario then passed in isolation after fixing its test race with
+background conflict detection (Save was correctly disabled). That coverage includes
+the account drawer, simulated provider sign-in, files, terminal profiles, and
+web/native-bridge provider navigation. Browser bridge tests do not render SwiftUI or
+replace signed physical-device acceptance. Release evidence gates remain unchanged.
+
+### Profile and sidebar corrections
+
+Merged desktop CPU/RAM telemetry is shared with mobile: the compact resource row
+is below the sidebar's machine selector, leaving the profile footer and conversation
+untouched. The sidebar alone owns its subscription; closing it stops updates, and
+changing machines never retains the previous machine's readings. It uses the same
+10-second stale cutoff, unavailable/offline states and high-usage warnings as desktop.
+
+The sidebar has Search, without a logo or second menu button. Its controls
+are contained in a lower stacking layer; the workspace clips its content and slides
+above the sidebar with a 32px rounded edge, independent of control-corner preferences.
+The edge has a 3px CSS backdrop-blurred rim, while the conversation remains opaque and
+its layout dimensions stay unchanged. This decorative WebView boundary does not replace
+the native Expo glass controls. Reduced transparency and motion retain accessible fallbacks.
+
+Files permits rightward swipe-back from directory buttons and preview links, suppressing
+the trailing click so navigation never also opens a file. Code editing retains its own
+gestures except for a 28px left-edge navigation strip; headers remain drag handles too.
+Input fields, horizontal file tabs and popup menus continue to own their gestures.
+The file tree, Markdown preview and editor gutter declare vertical touch handling at
+their scroll containers, so the browser does not cancel horizontal navigation before
+pointer-up (see [touch-action](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/touch-action)).
+
+The footer is now a real profile entry. Normal signed-in sessions show the Concourse
+account as before. Direct previews offer **Your profile → Sign in**, using an optional,
+private, profile-only route to the same account API as desktop. Only verified name/email
+enter the renderer; passwords and tokens stay in the outer host's isolated memory session.
+Profile sign-in/sign-out does not reconnect the workspace, discard drafts, or grant cloud
+machine privileges. The proxy is disabled unless its HTTPS API origin is explicitly
+configured; it accepts only sign-in, sign-out and `/me`, behind existing private identity
+checks. It never copies desktop credentials or substitutes a Tailscale profile.
+
+Initial profile-correction verification: 487 unit tests passed (one opt-in live API test skipped),
+desktop/mobile typechecks and scoped lint passed; six sidebar/gesture/native-bridge
+scenarios and two direct-daemon scenarios passed. The direct scenario verifies the
+profile flow using a deterministic account fixture, no credentials in renderer messages,
+no additional workspace socket, unchanged terminal identity and retained drafts.
+This does not claim authentication with the user's credentials or physical iOS testing.
+
+CPU/RAM, Files swipe-back and glass-edge follow-up: main through `fd79216` / #57 is
+merged. 504 unit tests passed (one opt-in live API test skipped), along with ten
+direct-daemon browser tests and six sidebar/glass/native-bridge scenarios. These cover
+live machine sampling, subscription cleanup, stale/unavailable/older-daemon states,
+file-row/Markdown/editor-edge gestures, draft/save/conflict safety, terminal profiles
+and session preservation, unchanged workspace dimensions and accessibility fallbacks.
+Desktop/mobile typechecks, scoped lint, formatting and diff checks passed. Physical
+iPhone/native SwiftUI acceptance and release evidence gates remain separate.

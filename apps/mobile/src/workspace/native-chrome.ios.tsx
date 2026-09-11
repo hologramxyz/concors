@@ -43,6 +43,7 @@ import {
 
 const symbols = {
   menu: "line.3.horizontal",
+  search: "magnifyingglass",
   files: "folder",
   back: "chevron.left",
   chevron: "chevron.down",

@@ -139,6 +139,10 @@ function SignedInWorkspace() {
       ? {
           scope,
           me: auth.me,
+          profile:
+            auth.direct && auth.profile
+              ? { name: auth.profile.name, email: auth.profile.email }
+              : null,
           direct: auth.direct,
           organizations: organizations.data ?? [],
           machines: machines.data ?? [],
@@ -180,6 +184,9 @@ function SignedInWorkspace() {
   const action = async (action: MobileAction): Promise<unknown> => {
     assertWorkspaceActionAllowed(auth.direct, !!auth.me, action);
     switch (action.kind) {
+      case "open-profile":
+        if (auth.direct) auth.openProfile();
+        return;
       case "withdraw-ai-consent":
         await consent.withdraw();
         return;

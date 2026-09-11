@@ -74,6 +74,35 @@ test("native surface bridge preserves navigation, drafts, settings, attachments 
   const initial = await snapshot(page);
   if (!initial) throw new Error("No native snapshot");
   expect(initial?.surfaces.filter((item) => item.content.kind === "button")).toHaveLength(3);
+  await event(page, "button", "Open sidebar", { kind: "press", control: "activate" });
+  const sidebarSurfaces = async () =>
+    (await snapshot(page))?.surfaces.map((item) =>
+      item.content.kind === "button" ? [item.content.label, item.content.icon] : "composer",
+    );
+  await expect.poll(sidebarSurfaces).toEqual([["Search workspace", "search"]]);
+  await expect(ui.getByRole("button", { name: "Close sidebar", exact: true })).toHaveCount(0);
+  await event(page, "button", "Search workspace", { kind: "press", control: "activate" });
+  await expect(ui.getByPlaceholder("Type a command or search…")).toBeVisible();
+  await expect.poll(async () => (await snapshot(page))?.surfaces).toEqual([]);
+  await page.keyboard.press("Escape");
+  await expect.poll(sidebarSurfaces).toEqual([["Search workspace", "search"]]);
+  await ui.getByRole("button", { name: /^Account:/ }).click();
+  const account = ui.getByRole("dialog", { name: "Account", exact: true });
+  await expect(account).toBeVisible();
+  await expect.poll(async () => (await snapshot(page))?.surfaces).toEqual([]);
+  await account.press("Escape");
+  await expect.poll(sidebarSurfaces).toEqual([["Search workspace", "search"]]);
+  await ui.getByRole("button", { name: "Return to workspace", exact: true }).click();
+  await expect
+    .poll(async () =>
+      (await snapshot(page))?.surfaces.some((item) => item.content.kind === "composer"),
+    )
+    .toBe(true);
+  expect(
+    (await snapshot(page))?.surfaces.some(
+      (item) => item.content.kind === "button" && item.content.label === "Search workspace",
+    ),
+  ).toBe(false);
   await event(page, "composer", "", { kind: "focus", focused: true });
   await event(page, "composer", "", { kind: "height", height: 144 });
   await event(page, "composer", "", {
@@ -140,8 +169,8 @@ test("native surface bridge preserves navigation, drafts, settings, attachments 
       (await snapshot(page))?.surfaces.some((item) => item.content.kind === "composer"),
     )
     .toBe(true);
-  await event(page, "button", "Tabs and panes", { kind: "press", control: "activate" });
-  await expect(ui.getByRole("dialog", { name: "Tabs and panes", exact: true })).toBeVisible();
+  await event(page, "button", "Tabs", { kind: "press", control: "activate" });
+  await expect(ui.getByRole("dialog", { name: "Tabs", exact: true })).toBeVisible();
   await expect.poll(async () => (await snapshot(page))?.surfaces).toEqual([]);
   // A delayed event from the covered native header cannot act through the drawer.
   const frame = page.frames().find((item) => item !== page.mainFrame());
@@ -158,7 +187,7 @@ test("native surface bridge preserves navigation, drafts, settings, attachments 
   } satisfies MobileHostMessage);
   await expect(ui.locator(".mobile-files")).toHaveAttribute("data-open", "false");
   await ui
-    .getByRole("dialog", { name: "Tabs and panes", exact: true })
+    .getByRole("dialog", { name: "Tabs", exact: true })
     .getByRole("button", { name: "Close", exact: true })
     .click();
   await expect

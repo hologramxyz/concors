@@ -55,11 +55,19 @@ export function useSidebarGesture(
         // The Files title/back controls also act as a drag handle. A tap still
         // reaches the button; an intentional swipe suppresses its trailing click.
         const fileHeader = target.closest(".mobile-files-header");
+        const closingFiles = open && protectInputs ? target.closest(".mobile-files") : null;
+        // Directory rows and preview links are click actions, not text inputs.
+        // Let them start a closing drag without following their trailing click.
+        // Editors keep text selection/scrolling, with an always-available back
+        // gesture at the left edge, including the line-number gutter.
+        const edgeX = closingFiles ? event.clientX - closingFiles.getBoundingClientRect().left : -1;
+        const editorEdge = edgeX >= 0 && edgeX <= 28;
         if (
           (!open || protectInputs) &&
-          (target.closest(".cm-editor, [role=dialog], [role=menu]") ||
-            (!fileHeader && target.closest("button, a")) ||
-            (!terminal && target.closest("input, textarea, select, pre, [contenteditable]")))
+          (target.closest('[role="dialog"], [role="menu"], .mobile-file-tabs') ||
+            (!editorEdge && target.closest(".cm-editor, pre, [contenteditable]")) ||
+            (!closingFiles && !fileHeader && target.closest("button, a")) ||
+            (!terminal && target.closest("input, textarea, select")))
         )
           return;
         gesture.current = {

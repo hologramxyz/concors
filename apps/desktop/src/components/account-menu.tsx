@@ -1,5 +1,5 @@
-import { ChevronsUpDown, LogOut, Settings } from "lucide-react";
-import { useContext, useState } from "react";
+import { ChevronsUpDown, LogOut, Plus, UserRound, Settings } from "lucide-react";
+import { useContext, useState, type ReactNode } from "react";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import {
   Dialog,
@@ -66,30 +66,78 @@ export function AccountMenu({ auth, onSignOut, onOpenSettings }: AccountMenuProp
   );
 }
 
-function MobileAccountMenu({ auth, onSignOut, onOpenSettings }: AccountMenuProps) {
+export function MobileAccountMenu({
+  auth,
+  onSignOut,
+  onOpenSettings,
+  machinePicker,
+  onAddMachine,
+  profile,
+  onOpenProfile,
+}: Omit<AccountMenuProps, "auth"> & {
+  auth: SignedInAuth | null;
+  machinePicker?: ReactNode;
+  onAddMachine?: () => void;
+  profile?: { name: string; email: string } | null;
+  onOpenProfile?: () => void;
+}) {
   const [open, setOpen] = useState(false);
+  const person = auth?.user ?? profile;
+  const name = person?.name || person?.email || "Your profile";
+  const avatar = person ? (
+    (person.name.trim() || person.email)[0]?.toUpperCase()
+  ) : (
+    <UserRound className="size-4" aria-hidden="true" />
+  );
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger className="mobile-account-trigger" aria-label={`Account: ${auth.user.name}`}>
-        <span className="mobile-account-avatar">{initialOf(auth.user)}</span>
-        <span className="min-w-0 flex-1 truncate">{auth.user.name}</span>
+      <DialogTrigger className="mobile-account-trigger" aria-label={`Account: ${name}`}>
+        <span className="mobile-account-avatar">{avatar}</span>
+        <span className="min-w-0 flex-1 truncate">{name}</span>
         <ChevronsUpDown className="size-4 text-muted-foreground" aria-hidden="true" />
       </DialogTrigger>
       <DialogContent className="mobile-account-drawer">
         <DialogHeader>
           <DialogTitle>Account</DialogTitle>
           <DialogDescription className="sr-only">
-            Manage your account settings or sign out.
+            Choose a machine, manage settings or disconnect.
           </DialogDescription>
         </DialogHeader>
+        {machinePicker && <div className="mobile-account-machine">{machinePicker}</div>}
         <div className="mobile-account-identity">
-          <span className="mobile-account-avatar">{initialOf(auth.user)}</span>
+          <span className="mobile-account-avatar">{avatar}</span>
           <div className="min-w-0">
-            <p className="truncate font-medium">{auth.user.name}</p>
-            <p className="truncate text-sm text-muted-foreground">{auth.user.email}</p>
+            <p className="truncate font-medium">{name}</p>
+            <p className="truncate text-sm text-muted-foreground">
+              {person ? person.email : "Sign in to your Concourse account"}
+            </p>
           </div>
         </div>
         <div className="mobile-account-actions">
+          {onOpenProfile && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onOpenProfile();
+              }}
+            >
+              <UserRound aria-hidden="true" />
+              {person ? "Your profile" : "Sign in"}
+            </button>
+          )}
+          {onAddMachine && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onAddMachine();
+              }}
+            >
+              <Plus aria-hidden="true" />
+              Add machine
+            </button>
+          )}
           <button
             type="button"
             onClick={() => {
@@ -108,7 +156,7 @@ function MobileAccountMenu({ auth, onSignOut, onOpenSettings }: AccountMenuProps
             }}
           >
             <LogOut aria-hidden="true" />
-            Sign out
+            {auth ? "Sign out" : "Disconnect desktop"}
           </button>
         </div>
       </DialogContent>

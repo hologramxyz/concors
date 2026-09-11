@@ -8,7 +8,7 @@ afterEach(async () => {
 });
 const origin = "https://private.example";
 const identity = { "tailscale-user-login": "owner@example.com" };
-async function setup() {
+async function setup(profileOptions = {}) {
   const calls = [];
   const upstream = createServer((req, res) => {
     calls.push(req.headers);
@@ -32,6 +32,7 @@ async function setup() {
     origin,
     allowedUser: identity["tailscale-user-login"],
     daemonPort: upstream.address().port,
+    ...profileOptions,
   });
   const port = await gateway.listen();
   cleanups.push(() => gateway.close());
@@ -75,6 +76,7 @@ it("rejects missing/wrong Tailscale identity and foreign browser origins before 
     { ...identity, origin: "null" },
   ]) {
     expect((await fetch(`${base}/health`, { headers })).status).toBe(403);
+    expect((await fetch(`${base}/profile-api/api/v1/me`, { headers })).status).toBe(403);
     expect(await upgrade(port, "/ws", headers)).toBe(403);
   }
   expect(calls).toEqual([]);
@@ -120,4 +122,88 @@ it("requires an exact safe origin, an allowed identity and a valid loopback dest
   expect(() =>
     createDirectGateway({ origin, allowedUser: "owner@example.com", daemonPort: 0 }),
   ).toThrow();
+});
+
+it("proxies only profile authentication to the configured API after private authentication", async () => {
+  const requests = [];
+  const { base, calls } = await setup({
+    profileApiUrl: "https://accounts.example",
+    profileFetch: async (url, init) => {
+      requests.push({ url, init });
+      return new Response(JSON.stringify({ user: { name: "Test User" }, token: "test-token" }), {
+        headers: { "set-cookie": "secret=not-for-preview", "set-auth-token": "test-token" },
+      });
+    },
+  });
+  const response = await fetch(`${base}/desktop-daemon/profile-api/api/auth/sign-in/email`, {
+    method: "POST",
+    headers: { ...identity, origin, "content-type": "application/json", cookie: "private=secret" },
+    body: JSON.stringify({ email: "owner@example.com", password: "fixture-only" }),
+  });
+  expect(response.status).toBe(200);
+  expect(response.headers.get("cache-control")).toBe("no-store");
+  expect(response.headers.get("set-cookie")).toBeNull();
+  expect(response.headers.get("set-auth-token")).toBe("test-token");
+  await fetch(`${base}/profile-api/api/v1/me`, {
+    headers: { ...identity, authorization: "Bearer fixture" },
+  });
+  expect(requests.map(({ url }) => url)).toEqual([
+    "https://accounts.example/api/auth/sign-in/email",
+    "https://accounts.example/api/v1/me",
+  ]);
+  expect(requests[0].init.headers).toEqual({
+    "content-type": "application/json",
+    origin: "https://accounts.example",
+  });
+  expect(requests[0].init.redirect).toBe("error");
+  expect(requests[1].init.headers.authorization).toBe("Bearer fixture");
+  expect(calls).toEqual([]);
+  for (const path of [
+    "/api/v1/machines",
+    "/api/auth/sign-up/email",
+    "/api/v1/me?token=x",
+    "/api/v1/me/",
+    "//other.example/api/v1/me",
+  ])
+    expect((await fetch(`${base}/profile-api${path}`, { headers: identity })).status).toBe(404);
+  expect(
+    (await fetch(`${base}/profile-api/api/auth/sign-in/email`, { headers: identity })).status,
+  ).toBe(404);
+  expect(requests).toHaveLength(2);
+});
+
+it("profile proxy stays disabled by default and rejects unsafe origins and oversized credentials", async () => {
+  const { base } = await setup();
+  expect((await fetch(`${base}/profile-api/api/v1/me`, { headers: identity })).status).toBe(404);
+  for (const profileApiUrl of [
+    "http://accounts.example",
+    "https://user:secret@accounts.example",
+    "https://accounts.example/path",
+  ])
+    expect(() =>
+      createDirectGateway({
+        origin,
+        allowedUser: "owner@example.com",
+        daemonPort: 7420,
+        profileApiUrl,
+      }),
+    ).toThrow();
+  let forwarded = false;
+  const enabled = await setup({
+    profileApiUrl: "https://accounts.example",
+    profileFetch: async () => {
+      forwarded = true;
+      return new Response("{}");
+    },
+  });
+  expect(
+    (
+      await fetch(`${enabled.base}/profile-api/api/auth/sign-in/email`, {
+        method: "POST",
+        headers: { ...identity, "content-type": "application/json" },
+        body: "x".repeat(16_385),
+      })
+    ).status,
+  ).toBe(413);
+  expect(forwarded).toBe(false);
 });

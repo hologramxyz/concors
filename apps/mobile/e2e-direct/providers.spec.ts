@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { mobileDesktopSocket } from "../../../e2e/support/mobile-direct-ports.cjs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -22,7 +23,7 @@ for (const native of [false, true]) {
   }) => {
     const directory = await mkdtemp(join(tmpdir(), "concors-mobile-provider-"));
     const desktop = new DaemonConnection({
-      endpoint: describeDaemonEndpoint("ws://127.0.0.1:7440/ws"),
+      endpoint: describeDaemonEndpoint(mobileDesktopSocket),
       client: { kind: "desktop", name: "mobile-provider-acceptance", version: "0.1.0" },
     });
     const unsubscribe = desktop.subscribeWorkspace(() => undefined);
@@ -187,8 +188,8 @@ for (const native of [false, true]) {
           ]);
         }
         await expect(ui.getByRole("log")).not.toContainText("Keep my original conversation");
-        if (native) await nativeEvent({ kind: "press", control: "activate" }, "Tabs and panes");
-        else await ui.getByRole("combobox", { name: "Tabs and panes", exact: true }).click();
+        if (native) await nativeEvent({ kind: "press", control: "activate" }, "Tabs");
+        else await ui.getByRole("combobox", { name: "Tabs", exact: true }).click();
         await ui.locator(`[data-pane-choice][data-value="${tabId}:${paneId}"]`).click();
         await expect(ui.getByRole("log")).toContainText("Keep my original conversation");
         await expect(ui.getByRole("log")).not.toContainText(`Continue with ${label}`);

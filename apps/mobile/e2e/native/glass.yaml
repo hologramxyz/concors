@@ -50,5 +50,5 @@ env:
 - assertVisible: "Native Liquid Glass draft"
 - tapOn:
     id: native-header-chevron
-- assertVisible: "Tabs and panes"
+- assertVisible: "Tabs"
 - takeScreenshot: apps/mobile/test-results/native/tabs-drawer

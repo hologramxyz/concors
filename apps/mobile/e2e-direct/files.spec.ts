@@ -1,4 +1,8 @@
 import { test, expect, type Page } from "@playwright/test";
+import {
+  mobileDesktopSocket,
+  mobileDirectSocket,
+} from "../../../e2e/support/mobile-direct-ports.cjs";
 import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -15,7 +19,7 @@ async function setup(page: Page, projectName = "Mobile file test") {
   );
   await writeFile(join(root, ".hidden"), "private fixture\n");
   const desktop = new DaemonConnection({
-    endpoint: describeDaemonEndpoint("ws://127.0.0.1:7440/ws"),
+    endpoint: describeDaemonEndpoint(mobileDesktopSocket),
     client: { kind: "desktop", name: "mobile-file-control", version: "0.1.0" },
   });
   const off = desktop.subscribeWorkspace(() => undefined);
@@ -69,6 +73,62 @@ async function setup(page: Page, projectName = "Mobile file test") {
     },
   };
 }
+
+test("Files swipes back from directory rows and the editor edge without activating controls or losing drafts", async ({
+  page,
+}) => {
+  const { ui, root, cleanup } = await setup(page);
+  try {
+    const shell = ui.locator(".mobile-shell");
+    const toggle = ui.getByRole("button", { name: "Project files", exact: true });
+    await toggle.click();
+    const files = ui.getByRole("region", { name: "Project files", exact: true });
+    await expect(files).toHaveCSS("transform", "matrix(1, 0, 0, 1, 0, 0)");
+    const row = files.getByRole("button", { name: "src", exact: true });
+    const box = await row.boundingBox();
+    if (!box) throw new Error("Directory row is missing");
+    await swipe(page, { x: 70, y: box.y + 20 }, { x: 73, y: box.y + 150 });
+    await expect(shell).toHaveAttribute("data-files-open", "true");
+    await expect(row).toHaveAttribute("aria-expanded", "false");
+    await swipe(page, { x: 70, y: box.y + box.height / 2 }, { x: 340, y: box.y + box.height / 2 });
+    await expect(shell).toHaveAttribute("data-files-open", "false");
+    await expect(shell).toHaveAttribute("data-sidebar-open", "false");
+    await toggle.click();
+    await expect(row).toHaveAttribute("aria-expanded", "false");
+    await row.tap();
+    await files.getByRole("button", { name: "main.ts", exact: true }).tap();
+    const code = files.getByRole("textbox", { name: "Code editor: src/main.ts" });
+    const draft = "Keep this unsaved draft after swiping back";
+    await code.fill(draft);
+    const editor = await code.boundingBox();
+    if (!editor) throw new Error("Code editor is missing");
+    const y = editor.y + 16;
+    // Editing owns gestures in the text; the left navigation edge remains available.
+    await swipe(page, { x: 90, y }, { x: 340, y });
+    await expect(shell).toHaveAttribute("data-files-open", "true");
+    await expect(files.locator(".cm-gutters")).toHaveCSS("min-width", "28px");
+    await swipe(page, { x: 12, y }, { x: 340, y });
+    await expect(shell).toHaveAttribute("data-files-open", "false");
+    await expect(shell).toHaveAttribute("data-sidebar-open", "false");
+    await toggle.click();
+    await expect(files).toHaveCSS("transform", "matrix(1, 0, 0, 1, 0, 0)");
+    // The Files button opens the directory; the open-file tab retains the draft.
+    await files
+      .getByRole("navigation", { name: "Open files" })
+      .getByRole("button", { name: /^main.ts/ })
+      .click();
+    await expect(code).toHaveText(draft);
+    expect(await readFile(join(root, "src/main.ts"), "utf8")).toContain("42");
+    // A swipe beginning on a popup trigger belongs to that popup, not navigation.
+    const options = files.getByRole("button", { name: "File options" });
+    const menu = await options.boundingBox();
+    if (!menu) throw new Error("File options button is missing");
+    await swipe(page, { x: menu.x + 5, y: menu.y + 22 }, { x: 385, y: menu.y + 22 });
+    await expect(shell).toHaveAttribute("data-files-open", "true");
+  } finally {
+    await cleanup();
+  }
+});
 
 test("Files keeps shared glass controls and an icon-free directory breadcrumb in tree and editor views", async ({
   page,
@@ -154,12 +214,11 @@ test("terminal taps and horizontal swipes open real files and the sidebar withou
   try {
     const chat = ui.getByRole("textbox", { name: "Message Codex" });
     await chat.fill("Keep my chat draft during terminal gestures");
-    const picker = ui.getByRole("combobox", { name: "Tabs and panes" });
+    const picker = ui.getByRole("combobox", { name: "Tabs" });
     await picker.click();
-    await ui.getByRole("button", { name: "Actions for tab File review", exact: true }).click();
-    await ui.getByRole("menuitem", { name: "Add pane to this tab", exact: true }).click();
+    await ui.getByRole("button", { name: "New tab", exact: true }).click();
     await ui
-      .getByRole("dialog", { name: "Add pane", exact: true })
+      .getByRole("dialog", { name: "New tab", exact: true })
       .getByRole("button", { name: "Terminal", exact: true })
       .click();
     const terminal = ui.getByLabel("Terminal output", { exact: true });
@@ -173,7 +232,7 @@ test("terminal taps and horizontal swipes open real files and the sidebar withou
     const terminalSession = () => {
       const node = desktop.workspace?.projects
         .flatMap((project) => project.tabs)
-        .find((tab) => tab.id === tabId)
+        .find((tab) => tab.id === selection.split(":")[0])
         ?.nodes.find((node) => node.id === selection.split(":")[1]);
       return node?.kind === "pane" ? node.sessionId : null;
     };
@@ -225,7 +284,7 @@ test("Files explains an older daemon without sending unsupported file requests",
   page,
 }) => {
   let fileRequests = 0;
-  await page.routeWebSocket("ws://localhost:7440/ws", (socket) => {
+  await page.routeWebSocket(mobileDirectSocket, (socket) => {
     const server = socket.connectToServer();
     server.onMessage((raw) => {
       const message = JSON.parse(raw.toString()) as { type: string; capabilities?: string[] };
@@ -302,10 +361,12 @@ test("real mobile files preserve drafts, save explicitly and resolve competing d
     await confirm.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(code).toContainText("my unsaved file draft");
     await writeFile(join(root, "src/main.ts"), "an agent changed this file\n");
-    await files.getByRole("button", { name: "Save", exact: true }).click();
+    // Background conflict detection can disable Save before the tap. Wait for that
+    // protection, review the competing version, then explicitly save the kept draft.
     await expect(
       files.getByText("This file changed on the machine. Your version is kept."),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(files.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
     expect(await readFile(join(root, "src/main.ts"), "utf8")).toBe("an agent changed this file\n");
     await files.getByRole("button", { name: "Compare with disk" }).click();
     await expect(files.getByText("an agent changed this file", { exact: true })).toBeVisible();
@@ -318,7 +379,11 @@ test("real mobile files preserve drafts, save explicitly and resolve competing d
     await code.fill("Draft retained during connection retry");
     await files.getByRole("button", { name: "Back to chat" }).click();
     await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
-    await ui.getByRole("button", { name: "Desktop connection settings" }).click();
+    await ui.getByRole("button", { name: "Account: Your profile", exact: true }).click();
+    await ui
+      .getByRole("dialog", { name: "Account", exact: true })
+      .getByRole("button", { name: "Settings", exact: true })
+      .click();
     const settings = ui.getByRole("dialog", { name: "Settings", exact: true });
     await settings.getByRole("button", { name: "Reconnect", exact: true }).click();
     await settings.getByRole("button", { name: "Disconnect desktop", exact: true }).click();
@@ -375,6 +440,16 @@ test("mobile file browsing supports Markdown links, safe creation, hidden files 
     const files = ui.getByRole("region", { name: "Project files", exact: true });
     await expect(files.getByRole("button", { name: "README.md", exact: true })).toBeVisible();
     await files.getByRole("button", { name: "README.md", exact: true }).click();
+    await expect(files.getByRole("heading", { name: "Mobile project files" })).toBeVisible();
+    const link = await files.getByRole("link", { name: "the source", exact: true }).boundingBox();
+    if (!link) throw new Error("Markdown file link is missing");
+    await swipe(link.x + 5, 350, link.y + link.height / 2);
+    await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-files-open", "false");
+    await ui.getByRole("button", { name: "Project files", exact: true }).click();
+    await files
+      .getByRole("navigation", { name: "Open files" })
+      .getByRole("button", { name: /^README.md/ })
+      .click();
     await expect(files.getByRole("heading", { name: "Mobile project files" })).toBeVisible();
     await files.getByRole("link", { name: "the source", exact: true }).click();
     await expect(

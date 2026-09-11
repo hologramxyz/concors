@@ -4,6 +4,11 @@ The desktop/web workspace has a compact status bar showing the selected machine,
 percentage, and RAM used/total plus its percentage. It remains visible in settings,
 when the primary sidebar is collapsed, and while workspace content scrolls.
 
+Mobile reuses this status component in a compact row below the sidebar machine
+selector, not below the chat or in the profile footer. It shows CPU percentage and
+RAM used/total, with the same high-usage and unavailable/stale states. It subscribes
+only while the sidebar is open and stops that subscription when the sidebar closes.
+
 Readings come from the selected machine's daemon, not the browser or just Concors's
 process. Switching machines immediately drops the previous readings. CPU or RAM at
 90% or above shows a **High usage** label; this is visibility, not an automatic
@@ -26,7 +31,7 @@ workload limiter or a guarantee against running out of memory.
 Daemons advertise `host-usage`; supported clients opt in with `host.subscribe` and
 receive `host.usage` over the existing authenticated connection. No extra HTTP
 endpoint, external telemetry service, or credentials are introduced. The embedded
-mobile protocol relay preserves this capability; the visible bar is desktop/web UI.
+mobile protocol relay preserves this capability for the mobile sidebar as well.
 
 One shared sampler runs approximately every two seconds while at least one viewer
 is subscribed. Reads do not overlap; unsubscribing, disconnecting the last viewer,

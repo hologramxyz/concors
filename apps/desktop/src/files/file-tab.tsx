@@ -323,7 +323,7 @@ export function FileTab({ file }: { file: OpenFile }) {
       <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
         {state.base ? (
           preview ? (
-            <div className="h-full overflow-auto p-5">
+            <div data-file-preview className="h-full overflow-auto p-5">
               <AgentMarkdown sourcePath={file.path}>{state.content}</AgentMarkdown>
             </div>
           ) : (
