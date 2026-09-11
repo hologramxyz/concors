@@ -1,11 +1,13 @@
-import { useContext, useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { AgentStartedContext } from "./context";
-import {
-  AgentProviderIdSchema,
-  type AgentInfo,
-  type AgentProviderCatalog,
-} from "@concors/protocol";
+import { AgentProviderIdSchema, type AgentInfo } from "@concors/protocol";
+import { modelSelection } from "@concors/client-core";
+import { modelCatalog } from "./model-catalog";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
+
+const empty = { providers: [], pending: [], error: null };
+const emptySnapshot = () => empty;
+const emptySubscribe = () => () => undefined;
 
 export function useAgentModelSelection(agent: AgentInfo, onSelect: (model: string | null) => void) {
   const connection = useContext(TerminalConnectionContext);
@@ -17,44 +19,38 @@ export function useAgentModelSelection(agent: AgentInfo, onSelect: (model: strin
     },
     [connection, agent.id],
   );
-  const [catalog, setCatalog] = useState<AgentProviderCatalog[]>([]);
-  const [loading, setLoading] = useState(false),
-    [switching, setSwitching] = useState(false),
+  const epoch = connection?.workspace?.epoch;
+  const cache = useMemo(
+    () => (connection ? modelCatalog(connection, agent.directory, epoch) : null),
+    [connection, agent.directory, epoch],
+  );
+  const snapshot = useSyncExternalStore(
+    cache?.subscribe ?? emptySubscribe,
+    cache?.getSnapshot ?? emptySnapshot,
+  );
+  const [switching, setSwitching] = useState(false),
     [error, setError] = useState<string | null>(null);
-  const currentModels = agent.models ?? [];
-  const current: AgentProviderCatalog = { id: agent.provider, models: currentModels };
-  const providers = catalog.some((p) => p.id === agent.provider)
-    ? catalog.map((p) => (p.id === agent.provider ? current : p))
-    : [current, ...catalog];
-  const model = agent.settings?.model ?? agent.model;
-  const load = async (provider?: string) => {
-    if (
-      !connection ||
-      !connection.state ||
-      connection.state.status !== "ready" ||
-      !connection.state.daemon.capabilities?.includes("agent-providers")
-    )
-      return;
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await connection.requestAgent(
-        { kind: "provider-catalog", sessionId: agent.id, ...(provider ? { provider } : {}) },
-        crypto.randomUUID(),
-      );
-      if (result.outcome.status === "error") throw new Error(result.outcome.message);
-      const providers = result.outcome.providers ?? [];
-      setCatalog((previous) =>
-        providers.map((p) =>
-          !p.loaded ? (previous.find((old) => old.id === p.id && old.loaded) ?? p) : p,
-        ),
-      );
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load providers");
-    } finally {
-      setLoading(false);
-    }
+  const known = snapshot.providers.find((p) => p.id === agent.provider);
+  const currentModels = agent.models?.length ? agent.models : (known?.models ?? []);
+  const current = {
+    ...known,
+    id: agent.provider,
+    label: agent.providerLabel ?? known?.label,
+    models: currentModels,
+    loaded: !!currentModels.length,
   };
+  const providers = known
+    ? snapshot.providers.map((p) => (p.id === agent.provider ? current : p))
+    : [current, ...snapshot.providers];
+  const selection = modelSelection(agent, currentModels);
+  const load = (provider?: string) => cache?.load(agent, provider) ?? Promise.resolve();
+  const ready =
+    agent.status !== "starting" && !!agent.threadId && connection?.state.status === "ready";
+  useEffect(() => {
+    if (cache && ready) void cache.warm(agent);
+    // The shared cache coalesces both native/web composers and keeps menus warm across panes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cache, agent.id, ready]);
   const choose = async (next: string, id?: string) => {
     const provider = AgentProviderIdSchema.parse(id ?? agent.provider);
     if (provider === agent.provider) {
@@ -88,5 +84,14 @@ export function useAgentModelSelection(agent: AgentInfo, onSelect: (model: strin
       setSwitching(false);
     }
   };
-  return { currentModels, model, providers, load, choose, loading, switching, error };
+  return {
+    currentModels,
+    selection,
+    providers,
+    load,
+    choose,
+    pending: snapshot.pending,
+    switching,
+    error: error ?? snapshot.error,
+  };
 }
