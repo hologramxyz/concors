@@ -119,9 +119,19 @@ export class ProviderRegistry {
     return (_provider, args, cwd, env) => {
       const [command, ...prefix] = this.argv(config);
       const merged = { ...env, ...this.env(config) };
-      // Preserve caller-only transport credentials (e.g. OpenCode's private HTTP password).
+      // Internal transport credentials/configuration belong to the adapter, even if a
+      // profile supplies similarly named variables. Other profile variables win as usual.
       for (const [key, value] of Object.entries(env ?? {}))
-        if (process.env[key] !== value && !(key in (config.env ?? {}))) merged[key] = value;
+        if (
+          (config.engine === "opencode" &&
+            [
+              "OPENCODE_SERVER_USERNAME",
+              "OPENCODE_SERVER_PASSWORD",
+              "OPENCODE_CONFIG_CONTENT",
+            ].includes(key)) ||
+          (process.env[key] !== value && !(key in (config.env ?? {})))
+        )
+          merged[key] = value;
       const resolved = resolveTerminalCommand(command ?? "", [], process.platform, merged, cwd);
       return spawn(
         process.platform === "win32" ? (command ?? "") : resolved.command,
@@ -256,6 +266,7 @@ export class ProviderRegistry {
         job.error ??= `Installation failed (exit ${code ?? "unknown"}). Check the provider's installation guide.`;
       else {
         const config = this.config(id);
+        const previous = { ...this.saved };
         this.saved.providers = [
           ...this.saved.providers.filter((p) => p.id !== id),
           { ...config, enabled: true },
@@ -264,6 +275,7 @@ export class ProviderRegistry {
         try {
           this.persist();
         } catch {
+          this.saved = previous;
           job.status = "failed";
           job.error = "Installed, but could not save provider settings.";
         }

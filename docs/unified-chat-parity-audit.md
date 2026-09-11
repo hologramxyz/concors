@@ -1,16 +1,22 @@
 # Unified agent chat: Paseo parity audit
 
-**Audited September 10, 2026. Status: findings and implementation plan; no runtime fixes in this document's PR.**
+**Historical baseline: September 10, 2026, Concors `19e1243` after PR #48.**
 
-Concors has working foundations for Codex, Claude Code, OpenCode, and Pi, but it
-does not yet have Paseo's provider coverage or feature parity. In particular,
+The findings below describe that revision, before the fixes. See
+[provider support and implementation evidence](unified-chat-provider-support.md)
+for the current adapters, settings, native controls, session behavior, validation,
+and remaining limits. This audit is retained to make the original reproductions
+and comparison with Paseo reviewable.
+
+At the audited revision, Concors had working foundations for Codex, Claude Code, OpenCode, and Pi, but it
+did not yet have Paseo's provider coverage or feature parity. In particular,
 manual compaction is not consistently wired, canceling a tool request does not
 reliably cancel the turn, and several native features never reach our shared UI.
 Passing the existing tests is not sufficient to call these integrations complete.
 
 ## Scope and evidence
 
-- Concors: [`19e1243`](https://github.com/concors-dev/concors/commit/19e12437ed2d6acfdc94632c99db1d14970ec4c6), current `main` after PR #48.
+- Concors: [`19e1243`](https://github.com/concors-dev/concors/commit/19e12437ed2d6acfdc94632c99db1d14970ec4c6), the audited `main` after PR #48.
 - Paseo: [`d7c7044`](https://github.com/getpaseo/paseo/commit/d7c7044dfc91d1d18721dc8757ac3bb913d8c232), fetched for this audit. This supersedes the coverage assessment in the earlier [UI audit](paseo-ui-audit.md).
 - Reviewed provider registration, native adapters, command dispatch, permissions,
   models/modes, session lifecycle, persistence, composer/timeline, and the shared
