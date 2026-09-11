@@ -29,6 +29,7 @@ import { ControlPicker } from "./control-picker";
 import { Popover } from "radix-ui";
 import { ContextMeter } from "./context-meter";
 import { AgentModelPicker } from "./model-picker";
+import { findAgentModel } from "@concors/protocol";
 import { useAgentModelSelection } from "./use-model-selection";
 import { useDictation } from "./dictation";
 import { CompactLayoutContext } from "@/components/compact-layout";
@@ -282,7 +283,7 @@ export function AgentComposer({
   const nativeProvider = nativeModels.providers.find(
     (provider) => provider.id === nativeProviderPage,
   );
-  const effortModel = models.find((m) => m.id === (settings.model ?? agent.model));
+  const effortModel = findAgentModel(models, settings.model ?? agent.model);
   const controlsDisabled = !advanced || !connected || busy || configuring;
   useNativeSurface(
     nativeField,
