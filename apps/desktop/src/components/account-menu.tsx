@@ -11,7 +11,8 @@ import {
 } from "@/components/ui/dialog";
 
 import { initialOf, type SignedInAuth } from "@/auth/auth-state";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,7 +41,7 @@ export function AccountMenu({
     return <MobileAccountMenu auth={auth} onSignOut={onSignOut} onOpenSettings={onOpenSettings} />;
   return (
     <DropdownMenu>
-      <Tooltip>
+      <SidebarTooltip collapsed={collapsed}>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger
             className={`flex items-center rounded-md hover:bg-sidebar-accent aria-expanded:bg-sidebar-accent ${collapsed ? "sidebar-rail-control" : "h-9 w-full gap-2 px-2 text-left"}`}
@@ -65,7 +66,7 @@ export function AccountMenu({
         <TooltipContent side={collapsed ? "right" : "top"} sideOffset={6}>
           {auth.user.name} · Account and settings
         </TooltipContent>
-      </Tooltip>
+      </SidebarTooltip>
       <DropdownMenuContent align="start" side="top" className="w-56">
         <DropdownMenuLabel className="text-ui font-normal text-muted-foreground">
           <span className="block truncate text-foreground">{auth.user.name}</span>

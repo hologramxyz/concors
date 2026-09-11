@@ -1,4 +1,5 @@
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { visibleAgentSessions } from "./visible-sessions";
 import { AgentLoadingIcon } from "./activity";
 import { ProviderIcon } from "./provider-icon";
@@ -84,7 +85,7 @@ export function AgentSidebar({
           "Project no longer available";
         return (
           <li key={agent.id}>
-            <Tooltip delayDuration={250}>
+            <SidebarTooltip collapsed={compact} delayDuration={250}>
               <TooltipTrigger asChild>
                 <button
                   type="button"
@@ -150,7 +151,7 @@ export function AgentSidebar({
                   </p>
                 </div>
               </TooltipContent>
-            </Tooltip>
+            </SidebarTooltip>
           </li>
         );
       })}
