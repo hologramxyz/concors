@@ -45,7 +45,7 @@ export function TimelineItem({
           item.kind === "user" ? "ml-auto max-w-[90%] rounded-2xl bg-muted/65 px-4 py-3" : "py-1"
         }
       >
-        <div className="chat-markdown text-[16px] leading-7 break-words">
+        <div className="chat-markdown break-words">
           {item.kind === "user" ? (
             <p className="whitespace-pre-wrap">{item.text}</p>
           ) : (

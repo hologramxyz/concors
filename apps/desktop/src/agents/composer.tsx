@@ -801,7 +801,7 @@ export function AgentComposer({
                     if (!uncertain) void submit();
                   }
                 }}
-                className="max-h-48 min-h-16 w-full resize-none bg-transparent px-3 py-3 text-[16px] leading-relaxed outline-none disabled:opacity-50"
+                className="agent-composer-input max-h-48 min-h-16 w-full resize-none bg-transparent px-3 py-3 outline-none disabled:opacity-50"
               />
               {dictation.listening && (
                 <p role="status" className="px-3 pb-2 text-xs text-primary">

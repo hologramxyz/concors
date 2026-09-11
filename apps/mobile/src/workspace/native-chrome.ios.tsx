@@ -622,7 +622,7 @@ const styles = StyleSheet.create({
   glass: { flex: 1, borderRadius: 28 },
   composer: { flex: 1, padding: 6 },
   collapsed: { flexDirection: "row", alignItems: "center" },
-  input: { fontSize: 16, lineHeight: 23, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 6 },
+  input: { fontSize: 15, lineHeight: 21, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 6 },
   collapsedInput: { flex: 1, height: 42, paddingHorizontal: 4, paddingTop: 9 },
   toolbar: { flexDirection: "row", alignItems: "center", height: 44 },
   spacer: { flex: 1 },
