@@ -1,3 +1,4 @@
+import { rpcSessions } from "./rpc-sessions.ts";
 import { piHistory, messageIdentity } from "./history.ts";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile, readFile } from "node:fs/promises";
@@ -33,6 +34,7 @@ export class PiProvider extends EventProvider {
   private cwd: string;
   private launcher: typeof launch;
   private engine: "pi" | "omp";
+  private environment: NodeJS.ProcessEnv;
   private models = new Map<string, Record<string, unknown>>();
   private model: Record<string, unknown> = {};
   private thinkingLevel = "off";
@@ -42,11 +44,13 @@ export class PiProvider extends EventProvider {
     onInput: InputHandler,
     launcher: typeof launch = launch,
     engine: "pi" | "omp" = "pi",
+    env: NodeJS.ProcessEnv = process.env,
   ) {
     super(onInput);
     this.cwd = cwd;
     this.launcher = launcher;
     this.engine = engine;
+    this.environment = env;
     if (engine === "omp") this.directory = this.directory.replace(/pi-sessions$/, "omp-sessions");
   }
   async initialize() {
@@ -87,6 +91,7 @@ export class PiProvider extends EventProvider {
       ),
       (e) => {
         if (e["type"] === "ready") markReady(e);
+        if (this.rpc !== rpc) return;
         void this.event(e).catch((error) => {
           if (this.rpc === rpc && !this.interrupted) this.fail(error);
         });
@@ -117,6 +122,8 @@ export class PiProvider extends EventProvider {
     this.thinkingLevel = string(state["thinkingLevel"]) || "off";
     this.controls = AgentControlsSchema.parse({
       history: true,
+      importSessions: true,
+      steer: true,
       compact: true,
       contextUsage: true,
       commands: [
@@ -162,6 +169,11 @@ export class PiProvider extends EventProvider {
     const p = object(raw);
     let rpc = this.rpc;
     if (!rpc) throw new Error("Pi is disconnected");
+    if (method === "session/list")
+      return {
+        sessions: await rpcSessions(this.engine, this.cwd, this.directory, this.environment),
+      };
+    if (method === "session/steer") return rpc.request("steer", { message: string(p["text"]) });
     if (method === "session/controls") return this.controls;
     if (method === "model/list") {
       const data = object(await rpc.request("get_available_models"));
@@ -204,7 +216,12 @@ export class PiProvider extends EventProvider {
     }
     if (method === "turn/interrupt") {
       this.interrupted = true;
+      const ended = this.waitForEnd();
       await rpc.request("abort");
+      if (!(await ended)) {
+        this.finish();
+        this.disconnected();
+      }
       this.finish();
       return {};
     }

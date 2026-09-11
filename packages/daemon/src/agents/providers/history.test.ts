@@ -3,6 +3,12 @@ import { claudeHistory, piHistory, openCodeHistory } from "./history.ts";
 
 it("keeps Claude prompt identities and native assistant/tool IDs during replay", () => {
   const messages = [
+    { type: "user", uuid: "setting", message: { content: "<command-name>/model</command-name>" } },
+    {
+      type: "user",
+      uuid: "setting-result",
+      message: { content: "<local-command-stdout>Model changed</local-command-stdout>" },
+    },
     { type: "user", uuid: "turn-1", message: { content: "Read this" } },
     {
       type: "assistant",

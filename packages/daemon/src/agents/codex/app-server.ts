@@ -1,5 +1,7 @@
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { z } from "zod";
+import { codexMcp } from "../providers/mcp.ts";
+import type { McpServer } from "@concors/protocol";
 import { AgentControlsSchema } from "@concors/protocol";
 
 const Frame = z.object({
@@ -24,6 +26,7 @@ interface Pending {
  * Owns only transport lifetime. Session persistence and UI decisions belong to the caller.
  */
 export class CodexAppServer {
+  private mcp: McpServer[];
   readonly #child: ChildProcessWithoutNullStreams;
   readonly #pending = new Map<number, Pending>();
   readonly #notifications = new Set<(method: string, params: unknown) => void>();
@@ -42,8 +45,13 @@ export class CodexAppServer {
   #incomingRequests = 0;
   #compactions = new Map<string, { id: string; turnId: string; completed: boolean }>();
 
-  constructor(child: ChildProcessWithoutNullStreams, onRequest?: RequestHandler) {
+  constructor(
+    child: ChildProcessWithoutNullStreams,
+    onRequest?: RequestHandler,
+    mcp: McpServer[] = [],
+  ) {
     this.#child = child;
+    this.mcp = mcp;
     this.#requestHandler = onRequest;
     this.#exit = new Promise((resolve) => {
       this.#resolveExit = resolve;
@@ -89,13 +97,78 @@ export class CodexAppServer {
   }
   request(method: string, params: unknown = {}, timeoutMs = 30000): Promise<unknown> {
     if (!this.#ready) return Promise.reject(new Error("Initialize the Codex app server first"));
+    if (this.mcp.length && ["thread/start", "thread/resume", "session/fork"].includes(method))
+      params = {
+        ...(params as Record<string, unknown>),
+        config: { mcp_servers: codexMcp(this.mcp) },
+      };
+    if (method === "mcp/status")
+      return this.rpc("mcpServerStatus/list", { limit: 100 }).then((raw) => ({
+        servers: z
+          .object({
+            data: z.array(z.object({ name: z.string(), authStatus: z.string().optional() })),
+          })
+          .parse(raw)
+          .data.map((s) => ({ name: s.name, status: s.authStatus ?? "configured" })),
+      }));
+    if (method === "session/child-history")
+      return this.rpc("thread/read", {
+        threadId: (params as { childId: string }).childId,
+        includeTurns: true,
+      });
+    if (method === "session/list")
+      return this.rpc("thread/list", {
+        cwd: (params as { cwd: string }).cwd,
+        limit: 100,
+        archived: false,
+      }).then((raw) => {
+        const response = z
+          .object({
+            data: z.array(
+              z.object({
+                id: z.string(),
+                preview: z.string().default(""),
+                cwd: z.string(),
+                updatedAt: z.number(),
+              }),
+            ),
+          })
+          .parse(raw);
+        return {
+          sessions: response.data.map((s) => ({
+            id: s.id,
+            title: s.preview.slice(0, 150),
+            directory: s.cwd,
+            updatedAt: new Date(s.updatedAt * 1000).toISOString(),
+          })),
+        };
+      });
+    if (method === "session/fork") return this.rpc("thread/fork", params);
+    if (method === "session/rewind") {
+      const p = params as { threadId: string; numTurns: number };
+      return this.rpc("thread/rollback", { threadId: p.threadId, numTurns: p.numTurns });
+    }
+    if (method === "session/steer") {
+      const p = params as { threadId: string; turnId: string; text: string };
+      return this.rpc("turn/steer", {
+        threadId: p.threadId,
+        expectedTurnId: p.turnId,
+        input: [{ type: "text", text: p.text }],
+      });
+    }
     if (method === "session/controls")
       return Promise.resolve(
         AgentControlsSchema.parse({
           compact: true,
           contextUsage: true,
           history: true,
+          childHistory: true,
+          importSessions: true,
+          fork: true,
+          rewind: ["conversation"],
+          steer: true,
           mcp: true,
+          mcpStatus: true,
           commands: [{ name: "compact", description: "Summarize earlier context in this session" }],
         }),
       );

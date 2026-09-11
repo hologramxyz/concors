@@ -132,11 +132,15 @@ export class ProviderRegistry {
   }
   statuses(): ProviderStatus[] {
     return this.configs().map((config) => {
-      const { env, ...publicConfig } = config;
+      const { env, params, ...publicConfig } = config;
       const preset = providerPresets.find((p) => p.id === config.id),
         job = this.jobs.get(config.id);
       return {
         ...publicConfig,
+        ...(params?.supportsMcpServers === undefined
+          ? {}
+          : { params: { supportsMcpServers: params.supportsMcpServers } }),
+        mcpServerNames: params?.mcpServers?.map((s) => s.name) ?? [],
         envKeys: Object.keys(env ?? {}),
         installed: this.installed(config),
         customized: this.saved.providers.some((p) => p.id === config.id),
@@ -152,6 +156,7 @@ export class ProviderRegistry {
     if (op.kind !== "list" && this.receipts.has(request.requestId))
       return this.receipts.get(request.requestId) as ProviderResult;
     let result: ProviderResult;
+    const savedBefore = structuredClone(this.saved);
     try {
       if (op.kind === "save" || op.kind === "remove") {
         if (op.expectedRevision !== this.saved.revision)
@@ -160,6 +165,14 @@ export class ProviderRegistry {
           const config = ProviderConfigSchema.parse(op.config),
             previous = this.configs().find((p) => p.id === config.id);
           config.env = { ...previous?.env, ...config.env };
+          config.params = { ...previous?.params, ...config.params };
+          if (
+            config.params.mcpServers?.length &&
+            (["pi", "omp"].includes(config.engine) || config.params.supportsMcpServers === false)
+          )
+            throw new Error("This provider manages MCP through its own CLI configuration.");
+          if (config.engine === "codex" && config.params.mcpServers?.some((s) => s.type === "sse"))
+            throw new Error("Codex requires HTTP or stdio MCP servers.");
           config.env = Object.fromEntries(
             Object.entries(config.env).filter(([key]) => !op.removeEnv?.includes(key)),
           );
@@ -179,6 +192,7 @@ export class ProviderRegistry {
         outcome: { status: "ok", revision: this.saved.revision, providers: this.statuses() },
       };
     } catch (error) {
+      this.saved = savedBefore;
       result = {
         type: "provider.result",
         requestId: request.requestId,
