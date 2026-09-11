@@ -18,11 +18,16 @@ import {
 } from "@concors/protocol";
 import type { WorkspaceStore } from "../workspace/store.ts";
 import { ProviderRegistry } from "./providers/registry.ts";
+import { elicitationQuestions, elicitationContent } from "./elicitation.ts";
 import { mapCodexItem } from "./codex/items.ts";
 
 import { createProvider, type AgentProviderFactory } from "./providers/index.ts";
 import type { ConversationProvider as AgentProvider } from "./providers/contract.ts";
-import { agentProviderName, type AgentProviderCatalog } from "@concors/protocol";
+import {
+  agentProviderName,
+  NativeSessionSchema,
+  type AgentProviderCatalog,
+} from "@concors/protocol";
 export type { AgentProviderFactory } from "./providers/index.ts";
 export type { ConversationProvider as AgentProvider } from "./providers/contract.ts";
 
@@ -58,6 +63,7 @@ export class AgentManager {
   readonly #factory: AgentProviderFactory;
   readonly #runtimes = new Map<string, Runtime>();
   #closed = false;
+  private mutations = new Set<string>();
   private draining = new Set<string>();
   private deliveries = new Map<string, string>();
   private registry: ProviderRegistry;
@@ -95,7 +101,7 @@ export class AgentManager {
     });
   }
   private async drain(id: string): Promise<void> {
-    if (this.#closed || this.draining.has(id)) return;
+    if (this.#closed || this.draining.has(id) || this.mutations.has(id)) return;
     const info = this.#store.agent(id),
       head = info.queue?.[0];
     if (!head || info.queuePaused || !["idle", "done"].includes(info.status)) return;
@@ -234,7 +240,12 @@ export class AgentManager {
         }),
       );
       if (runtime.closed || this.#closed) throw new Error("Agent connection ended");
-      this.update(id, { threadId: response.thread.id, model: response.model ?? info.model });
+      this.update(id, {
+        threadId: response.thread.id,
+        model: response.model ?? info.model,
+        engine: this.registry.config(info.provider).engine,
+        providerLabel: this.registry.config(info.provider).label,
+      });
       try {
         const models = parseModels(
           await provider.request("model/list", {}),
@@ -277,6 +288,7 @@ export class AgentManager {
     return runtime.ready;
   }
   async request(request: AgentRequest): Promise<AgentResult> {
+    let mutation: string | undefined;
     try {
       if (this.#closed) throw new Error("Daemon is shutting down");
       const operation = request.operation;
@@ -322,8 +334,84 @@ export class AgentManager {
           },
         };
       }
+      if (op.kind === "child-history") {
+        const info = this.#store.agent(op.sessionId),
+          parent = this.#store.agentItem(info.id, op.itemId);
+        if (
+          !info.controls?.childHistory ||
+          !parent?.presentation?.children?.some((c) => c.id === op.childId)
+        )
+          throw new Error("This child conversation is not available from this session.");
+        const provider = await this.provider(info.id),
+          response = ThreadResponse.parse(
+            await provider.request("session/child-history", { childId: op.childId }),
+          );
+        const childItems: AgentItem[] = [];
+        for (const turn of response.thread.turns)
+          for (const raw of turn.items) {
+            const mapped = mapCodexItem(raw, turn.status !== "inProgress");
+            if (mapped)
+              childItems.push({
+                ...mapped,
+                sessionId: info.id,
+                turnId: turn.id,
+                position: childItems.length + 1,
+                revision: 0,
+                createdAt: new Date().toISOString(),
+              });
+          }
+        return {
+          type: "agent.result",
+          requestId: request.requestId,
+          outcome: {
+            status: "ok",
+            conversation: this.#store.agentConversation(info.id),
+            childItems: childItems.slice(-80),
+          },
+        };
+      }
+      if (op.kind === "mcp-status") {
+        const info = this.#store.agent(op.sessionId),
+          provider = await this.provider(info.id);
+        if (!this.#store.agent(info.id).controls?.mcpStatus)
+          throw new Error("This agent does not expose MCP server status.");
+        const response = z
+          .object({ servers: z.array(z.object({ name: z.string(), status: z.string() })).max(100) })
+          .parse(await provider.request("mcp/status"));
+        return {
+          type: "agent.result",
+          requestId: request.requestId,
+          outcome: {
+            status: "ok",
+            conversation: this.#store.agentConversation(info.id),
+            servers: response.servers,
+          },
+        };
+      }
+      if (op.kind === "sessions-list") {
+        const info = this.#store.agent(op.sessionId),
+          provider = await this.provider(info.id);
+        if (!this.#store.agent(info.id).controls?.importSessions)
+          throw new Error("This agent cannot list native sessions.");
+        const response = z
+          .object({ sessions: z.array(NativeSessionSchema).max(100) })
+          .parse(await provider.request("session/list", { cwd: info.directory }));
+        return {
+          type: "agent.result",
+          requestId: request.requestId,
+          outcome: {
+            status: "ok",
+            conversation: this.#store.agentConversation(info.id),
+            sessions: response.sessions.filter((s) => s.directory === info.directory),
+          },
+        };
+      }
       const receipt = this.#store.agentReceipt(request);
-      if (receipt) return this.result(request, receipt);
+      if (receipt) {
+        const error = this.#store.agentActionError(request.requestId);
+        if (error) throw new Error(error);
+        return this.result(request, receipt);
+      }
       if (op.kind === "switch-provider") {
         const previous = this.#store.agent(op.sessionId);
         if (previous.revision !== op.expectedRevision) throw new Error("Agent changed. Try again.");
@@ -335,6 +423,65 @@ export class AgentManager {
           throw new Error(catalog?.error ?? "Provider is not installed on this machine");
         if (op.model && !catalog.models.some((m) => m.id === op.model))
           throw new Error("That model is not available");
+      }
+      if (op.kind === "import-session" || op.kind === "fork-session") {
+        const previous = this.#store.agent(op.sessionId);
+        if (previous.revision !== op.expectedRevision) throw new Error("Agent changed. Try again.");
+        if (
+          op.kind === "fork-session" &&
+          (!previous.controls?.fork ||
+            ["starting", "working", "needs_input"].includes(previous.status))
+        )
+          throw new Error("Wait for this agent to finish before forking its session.");
+        if (op.kind === "import-session" && !previous.controls?.importSessions)
+          throw new Error("Native session import is not available for this agent.");
+        if (
+          op.kind === "import-session" &&
+          this.#store
+            .agents()
+            .some((a) => a.provider === previous.provider && a.threadId === op.nativeSessionId)
+        )
+          throw new Error("That session is already open in Concors.");
+        const now = new Date().toISOString();
+        const next: AgentInfo = {
+          ...previous,
+          id: randomUUID(),
+          name:
+            op.kind === "fork-session"
+              ? `${previous.name.slice(0, 70)} (fork)`
+              : "Imported session",
+          threadId: op.kind === "import-session" ? op.nativeSessionId : null,
+          turnId: null,
+          status: "starting",
+          queue: [],
+          queuePaused: false,
+          pending: [],
+          attention: null,
+          error: null,
+          revision: 0,
+          startedAt: now,
+          updatedAt: now,
+          turnStartedAt: null,
+          historyRevision: 0,
+        };
+        this.#store.reserveAgent(request, next);
+        this.#workspaceChanged();
+        this.#emit({ type: "agent.state", agent: next });
+        void (async () => {
+          if (op.kind === "fork-session") {
+            const provider = await this.provider(previous.id);
+            const response = ThreadResponse.parse(
+              await provider.request("session/fork", {
+                threadId: previous.threadId,
+                cwd: previous.directory,
+              }),
+            );
+            this.update(next.id, { threadId: response.thread.id });
+          }
+          await this.provider(next.id);
+          this.update(next.id, { status: "idle" });
+        })().catch((error) => this.fail(next.id, error));
+        return this.result(request, next.id);
       }
       if (op.kind === "start" || op.kind === "switch-provider") {
         const previous =
@@ -363,7 +510,9 @@ export class AgentManager {
         const info: AgentInfo = {
           id: randomUUID(),
           projectId: project.id,
-          name: agentProviderName(op.provider ?? "codex"),
+          name: this.registry.config(op.provider ?? "codex").label,
+          engine: this.registry.config(op.provider ?? "codex").engine,
+          providerLabel: this.registry.config(op.provider ?? "codex").label,
           directory,
           provider: op.provider ?? "codex",
           model: op.model ?? null,
@@ -390,6 +539,82 @@ export class AgentManager {
         return this.result(request, info.id);
       }
       const info = this.#store.agent(op.sessionId);
+      if (this.mutations.has(info.id))
+        throw new Error("This session is being changed. Try again when it finishes.");
+      if (op.kind === "steer") {
+        if (
+          !info.controls?.steer ||
+          info.turnId !== op.turnId ||
+          info.status !== "working" ||
+          op.text.startsWith("/")
+        )
+          throw new Error(
+            "Steering is only available during an active turn and does not run slash commands.",
+          );
+        this.#store.reserveAgentAction(request, info);
+        const runtime = this.#runtimes.get(info.id);
+        if (!runtime) throw new Error("Agent disconnected. The steering message was not replayed.");
+        await runtime.provider.request("session/steer", {
+          threadId: info.threadId,
+          turnId: op.turnId,
+          text: op.text,
+        });
+        this.item(info.id, op.turnId, {
+          id: `steer:${request.requestId}`,
+          kind: "user",
+          title: "You · steering",
+          text: op.text,
+          detail: "",
+          status: "completed",
+        });
+        return this.result(request, info.id);
+      }
+      if (op.kind === "rewind") {
+        if (
+          info.revision !== op.expectedRevision ||
+          ["starting", "working", "needs_input"].includes(info.status)
+        )
+          throw new Error("Wait for the agent to finish before rewinding.");
+        if (!info.controls?.rewind.includes(op.mode))
+          throw new Error("This rewind mode is not supported by the agent.");
+        const prompts = this.#store.agentPrompts(info.id).filter((i) => !i.id.startsWith("steer:")),
+          index = prompts.findIndex((i) => i.turnId === op.turnId);
+        if (index < 0) throw new Error("That turn is no longer available.");
+        mutation = info.id;
+        this.mutations.add(info.id);
+        const provider = await this.provider(info.id);
+        this.#store.reserveAgentAction(request, {
+          ...this.#store.agent(info.id),
+          queuePaused: true,
+        });
+        await provider.request("session/rewind", {
+          threadId: info.threadId,
+          nativeTurnId: this.#store.nativeTurnId(info.id, op.turnId),
+          numTurns: prompts.length - index,
+          mode: op.mode,
+        });
+        if (op.mode !== "files") this.#store.removeAgentTurnsFrom(info.id, op.turnId);
+        this.update(info.id, {
+          status: "idle",
+          turnId: null,
+          pending: [],
+          attention: null,
+          error: null,
+          queuePaused: true,
+          context: null,
+          historyRevision: (info.historyRevision ?? 0) + 1,
+        });
+        if (op.mode === "files")
+          this.item(info.id, op.turnId, {
+            id: `rewind:${request.requestId}`,
+            kind: "system",
+            title: "Files restored",
+            text: "Restored the file checkpoint. Conversation history is unchanged.",
+            detail: "",
+            status: "completed",
+          });
+        return this.result(request, info.id);
+      }
       if (op.kind === "queue-add" || op.kind === "queue-remove" || op.kind === "queue-pause") {
         let queue = info.queue ?? [],
           paused = info.queuePaused ?? false;
@@ -450,7 +675,7 @@ export class AgentManager {
       }
       if (op.kind === "configure") {
         if (
-          info.provider !== "codex" &&
+          (info.engine ?? info.provider) !== "codex" &&
           (op.settings.mode !== "default" || op.settings.planMode || op.settings.serviceTier)
         )
           throw new Error("This provider uses its native tool approvals and model defaults");
@@ -517,7 +742,7 @@ export class AgentManager {
         const next = {
           ...info,
           name:
-            info.name === agentProviderName(info.provider)
+            info.name === (info.providerLabel ?? agentProviderName(info.provider))
               ? op.text.split("\n")[0]?.slice(0, 80) || agentProviderName(info.provider)
               : info.name,
           status: "working" as const,
@@ -564,7 +789,19 @@ export class AgentManager {
         if (!pending || !resolver || !runtime || pending.turnId !== info.turnId)
           throw new Error("This request was already answered or is no longer active");
         let value: unknown;
-        if (pending.kind === "approval") {
+        if (pending.kind === "elicitation") {
+          value = {
+            action:
+              op.decision === "decline"
+                ? "decline"
+                : op.decision === "cancel"
+                  ? "cancel"
+                  : "accept",
+            ...(["decline", "cancel"].includes(op.decision ?? "")
+              ? {}
+              : { content: elicitationContent(pending.elicitation?.schema, op.answers ?? {}) }),
+          };
+        } else if (pending.kind === "approval") {
           if (!op.decision || !pending.decisions.includes(op.decision))
             throw new Error("Choose one of the available decisions");
           value = { decision: op.decision };
@@ -587,7 +824,7 @@ export class AgentManager {
           updatedAt: new Date().toISOString(),
         };
         this.#store.reserveAgentAction(request, next);
-        const cancel = pending.kind === "approval" && op.decision === "cancel";
+        const cancel = op.decision === "cancel";
         if (cancel) runtime.cancelledTurn = pending.turnId;
         runtime.pending.delete(pending.id);
         resolver.resolve(value);
@@ -596,6 +833,15 @@ export class AgentManager {
       }
       return this.result(request, op.sessionId);
     } catch (error) {
+      try {
+        if (this.#store.agentReceipt(request))
+          this.#store.saveAgentActionError(
+            request.requestId,
+            error instanceof Error ? error.message : String(error),
+          );
+      } catch {
+        /* A conflicting request ID never changes the original receipt. */
+      }
       return {
         type: "agent.result",
         requestId: request.requestId,
@@ -604,6 +850,11 @@ export class AgentManager {
           message: (error instanceof Error ? error.message : String(error)).slice(0, 4000),
         },
       };
+    } finally {
+      if (mutation) {
+        this.mutations.delete(mutation);
+        void this.drain(mutation).catch((error) => this.fail(mutation as string, error));
+      }
     }
   }
   private result(request: AgentRequest, id: string, before?: number): AgentResult {
@@ -719,9 +970,24 @@ export class AgentManager {
       }
       return;
     }
+    if (method === "session/disconnected") {
+      const runtime = this.#runtimes.get(id);
+      if (runtime) {
+        runtime.closed = true;
+        this.#runtimes.delete(id);
+        void runtime.provider.close();
+      }
+      return;
+    }
     if (method === "turn/nativeIdentity" && info.turnId) {
       const nativeId = z.string().min(1).max(4096).parse(params["nativeTurnId"]);
       this.#store.mapNativeTurn(id, nativeId, info.turnId);
+      return;
+    }
+    if (method === "session/models/updated") {
+      this.update(id, {
+        models: parseModels(params["models"], this.registry.config(info.provider).models),
+      });
       return;
     }
     if (method === "session/controls/updated") {
@@ -898,9 +1164,12 @@ export class AgentManager {
     raw: unknown,
     providerId: string | number,
   ): Promise<unknown> {
-    const scope = Scope.parse(raw);
     const params = ObjectValue.parse(raw);
     const info = this.#store.agent(id);
+    const elicitation = method === "mcpServer/elicitation/request";
+    const scope = Scope.parse(
+      elicitation ? { ...params, turnId: params["turnId"] ?? info.turnId } : raw,
+    );
     const runtime = this.#runtimes.get(id);
     if (
       !runtime ||
@@ -912,13 +1181,14 @@ export class AgentManager {
     const questions = method === "item/tool/requestUserInput" || method === "tool/requestUserInput";
     if (
       !questions &&
+      !elicitation &&
       !["item/commandExecution/requestApproval", "item/fileChange/requestApproval"].includes(method)
     )
       throw new Error(`Unsupported input request: ${method}`);
     const pending: AgentPending = {
       id: randomUUID(),
       turnId: scope.turnId,
-      kind: questions ? "questions" : "approval",
+      kind: elicitation ? "elicitation" : questions ? "questions" : "approval",
       title: questions
         ? `${agentProviderName(info.provider)} needs your input`
         : method.includes("fileChange")
@@ -939,6 +1209,22 @@ export class AgentManager {
       decisions: questions ? [] : ["accept", "decline", "cancel"],
       questions: questions ? z.array(AgentQuestionSchema).max(32).parse(params["questions"]) : [],
     };
+    if (elicitation) {
+      const schema = ObjectValue.parse(params["requestedSchema"] ?? {});
+      const url =
+        typeof params["url"] === "string" && /^https?:\/\//i.test(params["url"])
+          ? params["url"]
+          : undefined;
+      pending.title = `${String(params["serverName"] ?? "MCP server")} needs your input`;
+      pending.summary = String(params["message"] ?? "").slice(0, 4000);
+      pending.elicitation = { schema, ...(url ? { url } : {}) };
+      pending.questions = elicitationQuestions(schema);
+      pending.decisions = ["decline", "cancel"];
+    }
+    if (params["decisionLabels"])
+      pending.decisionLabels = z
+        .object({ accept: z.string().max(100).optional() })
+        .parse(params["decisionLabels"]);
     if (Array.isArray(params["availableDecisions"]))
       pending.decisions = pending.decisions.filter((d) =>
         (params["availableDecisions"] as unknown[]).includes(d),
