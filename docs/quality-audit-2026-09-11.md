@@ -135,6 +135,30 @@ validation remain separate requirements.
 
 ## Remaining validation boundaries
 
+### Verification after merging message navigation from main
+
+Merged main at `35b2c0f` (PR #61) into both follow-up branches. Message-index jumps
+now fetch bounded context on either side, retain live prompt entries while reading
+older history, and distinguish the current window's bottom from the actual tail.
+Mobile keeps its flat tabs/account drawer and receives main's color-theme provider.
+
+- Audit branch: 550 unit tests passed, with one optional live-API test skipped.
+- Mobile branch: 548 unit tests passed, with the same optional skip.
+- Both branches passed workspace type checks and repository lint/format checks.
+  The final desktop controller tests passed again after the jump-context adjustment.
+- Desktop web and daemon bundles passed; the mobile renderer built during type checks.
+- Eight focused desktop browser scenarios passed across the merge checks, including
+  three account providers, composer controls, chat cleanup, both history viewport
+  widths, and main's message-navigation journey. The final three-scenario history/
+  navigation run passed cleanly (1.2 minutes).
+- The initial merge browser run had six passes and two test targeting failures:
+  a hidden phone rail was queried as visible, and a subpixel tick was targeted in a
+  641-message rail. The long-history test now uses the full-size message list on both
+  widths; the separate rail test still verifies pointer and keyboard interaction.
+  No history or navigation assertions were removed.
+
+### Platform and service limits
+
 - Chromium browser fixtures exercise the mobile bridge contract, not actual SwiftUI, Android,
   WebKit/Safari, device keyboards, native accessibility, signing, push, or OS lifecycle behavior.
   The physical-device matrix in [the mobile release runbook](mobile-release.md) still applies.
