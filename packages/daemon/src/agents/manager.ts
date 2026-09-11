@@ -404,6 +404,17 @@ export class AgentManager {
           outcome: { status: "ok", conversation: this.#store.agentConversation(info.id), account },
         };
       }
+      if (op.kind === "list-messages") {
+        return {
+          type: "agent.result",
+          requestId: request.requestId,
+          outcome: {
+            status: "ok",
+            conversation: { agent: this.#store.agent(op.sessionId), items: [], hasMore: false },
+            messageIndex: this.#store.agentMessageIndex(op.sessionId, op.before),
+          },
+        };
+      }
       if (op.kind === "read") {
         const info = this.#store.agent(op.sessionId);
         if (info.threadId && !this.#runtimes.has(info.id) && !op.before) {
