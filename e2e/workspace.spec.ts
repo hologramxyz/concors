@@ -75,7 +75,7 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
       "aria-valuenow",
       "55",
     );
-    await first.getByRole("button", { name: "Terminal", exact: true }).click({ button: "right" });
+    await first.getByRole("button", { name: "Tab 1", exact: true }).click({ button: "right" });
     await first.getByRole("menuitem", { name: "Rename tab", exact: true }).click();
     await first.getByLabel("Tab name", { exact: true }).fill("Build and review");
     await first.getByRole("button", { name: "Save", exact: true }).click();
@@ -95,13 +95,13 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
     await first.getByRole("button", { name: "New tab", exact: true }).click();
     await first.getByRole("menuitem", { name: "Terminal", exact: true }).click();
     disconnected = false;
-    await expect(second.getByRole("button", { name: "Terminal", exact: true })).toHaveAttribute(
+    await expect(second.getByRole("button", { name: "Tab 2", exact: true })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
     const tabs = first.getByLabel("Project tabs");
     await tabs
-      .getByRole("button", { name: "Terminal", exact: true })
+      .getByRole("button", { name: "Tab 2", exact: true })
       .dragTo(tabs.getByRole("button", { name: "Build and review", exact: true }));
     await expect
       .poll(() =>
@@ -110,7 +110,7 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
           .locator("[data-tab-id] > button:first-child")
           .allTextContents(),
       )
-      .toEqual(["Terminal", "Build and review"]);
+      .toEqual(["Tab 2", "Build and review"]);
     await second.getByRole("button", { name: "Build and review", exact: true }).click();
     await expect(
       first.getByRole("button", { name: "Build and review", exact: true }),
@@ -120,10 +120,10 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
     await expect(first.getByRole("region", { name: "Terminal pane", exact: true })).toHaveCount(1);
     await expect(first.getByRole("separator", { name: "Resize split" })).toHaveCount(0);
 
-    await first.getByRole("button", { name: "Terminal", exact: true }).focus();
+    await first.getByRole("button", { name: "Tab 2", exact: true }).focus();
     await first.keyboard.press("Shift+F10");
     await first.getByRole("menuitem", { name: "Close tab", exact: true }).click();
-    await expect(second.getByRole("button", { name: "Terminal", exact: true })).toHaveCount(0);
+    await expect(second.getByRole("button", { name: "Tab 2", exact: true })).toHaveCount(0);
 
     await first.getByRole("button", { name: "Switch machine", exact: true }).click();
     await first.getByRole("menuitem", { name: /Second machine Online/i }).click();

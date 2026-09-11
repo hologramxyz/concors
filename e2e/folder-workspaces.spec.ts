@@ -48,7 +48,7 @@ test("new workspaces follow the original shell, inherit folders and preserve ope
     await tree.getByRole("button", { name: "same.ts", exact: true }).click();
     const editor = page.getByRole("textbox", { name: "Code editor: same.ts" });
     await editor.fill("const original = 3;\n");
-    await page.getByRole("button", { name: "Terminal", exact: true }).click();
+    await page.getByRole("button", { name: "Tab 1", exact: true }).click();
     await panes.first().getByRole("button", { name: "Pane actions" }).click();
     await page.getByRole("menuitem", { name: "Split horizontally", exact: true }).click();
     await expect(panes).toHaveCount(2);
@@ -75,7 +75,7 @@ test("new workspaces follow the original shell, inherit folders and preserve ope
     await tree.getByRole("button", { name: "same.ts", exact: true }).click();
     await expect(editor).toContainText("const other = 2");
     await expect(page.getByRole("button", { name: /^same.ts/ })).toHaveCount(3); // two tabs and one file tree entry
-    await page.getByRole("button", { name: "Terminal", exact: true }).click();
+    await page.getByRole("button", { name: "Tab 1", exact: true }).click();
     await cd(page, panes.first(), src);
     await expect(page.getByRole("heading", { name: "folder-flow", exact: true })).toBeVisible();
     await second.reload();
