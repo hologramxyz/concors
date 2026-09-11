@@ -48,6 +48,10 @@ test("terminal profiles sync, launch literal arguments, and switch within the sa
     await second.getByRole("button", { name: "New tab", exact: true }).click();
     await expect(second.getByRole("menuitem", { name: "Dev task", exact: true })).toBeVisible();
     await second.getByRole("menuitem", { name: "Dev task", exact: true }).click();
+    await expect(second.getByRole("button", { name: "Tab 2", exact: true })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     await expect(second.getByLabel("Terminal output").filter({ visible: true })).toContainText(
       'PROFILE:["two words","literal & $()"]',
     );

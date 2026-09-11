@@ -137,7 +137,7 @@ test("directional pane sequences, tab cycling, project memory and immediate Agen
     await page.getByPlaceholder("Type a command or search…").fill("Navigation project");
     await page.getByRole("option", { name: "Navigation project", exact: true }).click();
     await expect.poll(() => focusedPane(page)).toBe(left);
-    await expect(page.getByRole("button", { name: "Terminal", exact: true })).toHaveAttribute(
+    await expect(page.getByRole("button", { name: "Tab 1", exact: true })).toHaveAttribute(
       "aria-pressed",
       "true",
     );

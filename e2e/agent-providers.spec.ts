@@ -33,6 +33,10 @@ for (const [provider, label] of [
       await page.getByRole("option", { name: `Fixture ${provider} model`, exact: true }).click();
       const composer = page.getByRole("textbox", { name: `Message ${label}` });
       await expect(composer).toBeEnabled();
+      await expect(page.getByRole("button", { name: "Tab 3", exact: true })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
       for (const name of ["Import session", "Fork session", "Rewind", "MCP servers"])
         await expect(page.getByRole("button", { name, exact: true })).toHaveCount(0);
       await expect(page.getByRole("log")).not.toContainText("keep this Codex conversation");
@@ -50,7 +54,7 @@ for (const [provider, label] of [
       await expect(page.getByRole("log")).toContainText("new provider conversation");
       await page
         .getByLabel("Project tabs", { exact: true })
-        .getByRole("button", { name: "Agent", exact: true })
+        .getByRole("button", { name: "Tab 2", exact: true })
         .click();
       await expect(original).toBeEnabled();
       await expect(page.getByRole("log")).toContainText("keep this Codex conversation");

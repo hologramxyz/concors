@@ -146,12 +146,12 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
     await second.getByRole("menuitem", { name: "Settings", exact: true }).click();
     await second.getByRole("button", { name: "Back to app", exact: true }).click();
 
-    await page.getByRole("button", { name: "Terminal", exact: true }).click();
+    await page.getByRole("button", { name: "Tab 1", exact: true }).click();
     await agents
       .getByRole("button", { name: /Open in terminal.*Codex/ })
       .first()
       .click();
-    await expect(page.getByRole("button", { name: "Codex", exact: true })).toHaveAttribute(
+    await expect(page.getByRole("button", { name: "Tab 2", exact: true })).toHaveAttribute(
       "aria-pressed",
       "true",
     );

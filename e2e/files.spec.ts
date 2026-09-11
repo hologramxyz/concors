@@ -243,7 +243,7 @@ test("agent file links open Markdown and code tabs without leaving the workspace
     await expect
       .poll(() => readFileSync(join(root, "README.md"), "utf8"))
       .toBe("# Edited readme\n");
-    await page.getByRole("button", { name: "Agent", exact: true }).click();
+    await page.getByRole("button", { name: "Tab 2", exact: true }).click();
     await page.getByRole("link", { name: "the code", exact: true }).click();
     await expect(page.getByRole("textbox", { name: "Code editor: src/main.ts" })).toBeVisible();
     expect(new URL(page.url()).pathname).toBe("/");
