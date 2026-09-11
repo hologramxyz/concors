@@ -159,6 +159,21 @@ Mobile keeps its flat tabs/account drawer and receives main's color-theme provid
 
 ### Platform and service limits
 
+The mobile PR's full post-merge direct-daemon run had 15 passes and two failures.
+The theme test needed the mobile account-drawer entry point. Sign-in verification
+needed socket/project scope, then exposed a real first-click race: iframe focus
+could start a background read that disabled the sign-in button before its click.
+Background reads now leave the control enabled, and foreground actions wait for
+an in-flight read instead of being dropped. Authentication ownership is unchanged.
+
+Both mobile history tests and the corrected theme test passed in a focused recheck.
+After the first-click fix, the entire mobile connection/profile/consent/chat/terminal
+journey passed (1.7 minutes), covering all 17 distinct mobile scenarios across runs.
+The desktop regression deliberately holds a focus-triggered read while clicking
+sign-in; it and all three provider account journeys passed (four scenarios, 48.4 seconds).
+Desktop types passed on both branches, and the desktop web bundle built again.
+These results do not represent a single clean full-suite rerun.
+
 - Chromium browser fixtures exercise the mobile bridge contract, not actual SwiftUI, Android,
   WebKit/Safari, device keyboards, native accessibility, signing, push, or OS lifecycle behavior.
   The physical-device matrix in [the mobile release runbook](mobile-release.md) still applies.
