@@ -206,6 +206,9 @@ export class PiProvider extends EventProvider {
       const resumed = this.rpc;
       if (!resumed) throw new Error("Agent disconnected during resume");
       return {
+        ...(this.model["provider"] && this.model["id"]
+          ? { model: `${string(this.model["provider"])}/${string(this.model["id"])}` }
+          : {}),
         thread: {
           id: this.threadId,
           turns:

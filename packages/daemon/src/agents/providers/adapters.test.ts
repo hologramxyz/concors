@@ -78,8 +78,12 @@ it("maps Claude streaming and tool decisions, interrupts, and resumes the native
       messages.write(value);
     };
     return Object.assign(messages, {
-      initializationResult: async () => ({}),
-      supportedModels: async () => [{ value: "sonnet", displayName: "Sonnet" }],
+      initializationResult: async () => ({
+        models: [{ value: "default", displayName: "Default", resolvedModel: "claude-sonnet-5" }],
+      }),
+      supportedModels: async () => [
+        { value: "sonnet", displayName: "Sonnet 5", resolvedModel: "claude-sonnet-5" },
+      ],
       setModel: async () => undefined,
       setPermissionMode: async () => undefined,
       interrupt: interrupts,
@@ -93,6 +97,10 @@ it("maps Claude streaming and tool decisions, interrupts, and resumes the native
   const { notifications, failures } = observe(provider);
   await provider.initialize();
   const session = object(await provider.request("thread/start"));
+  expect(session["model"]).toBe("claude-sonnet-5");
+  expect(await provider.request("model/list")).toMatchObject({
+    data: [{ model: "sonnet", displayName: "Sonnet 5", resolvedModel: "claude-sonnet-5" }],
+  });
   await provider.request("turn/start", turn);
   expect(options!.permissionMode).toBe("default");
   expect(options!.allowDangerouslySkipPermissions).toBeUndefined();
@@ -101,7 +109,10 @@ it("maps Claude streaming and tool decisions, interrupts, and resumes the native
     type: "stream_event",
     event: { type: "content_block_delta", delta: { type: "text_delta", text: "Hello" } },
   });
-  emit({ type: "assistant", message: { id: "a", content: [{ type: "text", text: "Hello" }] } });
+  emit({
+    type: "assistant",
+    message: { id: "a", model: "claude-opus-5-1", content: [{ type: "text", text: "Hello" }] },
+  });
   await expect
     .poll(() =>
       notifications.some(
@@ -109,6 +120,12 @@ it("maps Claude streaming and tool decisions, interrupts, and resumes the native
       ),
     )
     .toBe(true);
+  expect(notifications).toContainEqual(
+    expect.objectContaining({
+      method: "session/model/updated",
+      params: expect.objectContaining({ model: "claude-opus-5-1" }),
+    }),
+  );
   emit({
     type: "assistant",
     message: {
@@ -272,7 +289,22 @@ it("reads OpenCode SSE deltas, scopes events, forwards decisions, and interrupts
   await provider.request("turn/start", { ...turn, model: "own-account/model" });
   const event = (type: string, properties: unknown) =>
     stream!.write(`data: ${JSON.stringify({ type, properties })}\n\n`);
-  event("message.updated", { info: { sessionID: "session", id: "message", role: "assistant" } });
+  event("message.updated", {
+    info: {
+      sessionID: "session",
+      id: "message",
+      role: "assistant",
+      providerID: "own-account",
+      modelID: "model",
+    },
+  });
+  await expect
+    .poll(() =>
+      notifications.some(
+        (n) => n.method === "session/model/updated" && n.params["model"] === "own-account/model",
+      ),
+    )
+    .toBe(true);
   event("message.part.updated", {
     part: { sessionID: "session", messageID: "message", id: "part", type: "text", text: "Hi" },
   });
