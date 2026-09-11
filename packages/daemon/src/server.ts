@@ -1,3 +1,4 @@
+import type { AccountBackendFactory } from "./agents/accounts/manager.ts";
 import type { AgentProviderFactory } from "./agents/manager.ts";
 import { timingSafeEqual } from "node:crypto";
 import { HEALTH_PATH, type HealthResponse } from "@concors/protocol";
@@ -13,6 +14,7 @@ export interface DaemonServerOptions {
   /** Private session hosts accept only their local gateway's credential. */
   readonly internalToken?: string;
   readonly agentProviderFactory?: AgentProviderFactory;
+  readonly accountBackendFactory?: AccountBackendFactory;
   /** Overrides for tests; production always uses the defaults. */
   readonly handshakeTimeoutMs?: number;
   /** In-memory by default for embedded/test servers. The CLI supplies a durable file. */
@@ -72,6 +74,9 @@ export function createDaemonServer(
     closeConnections = registerProtocolEndpoint(instance, {
       state,
       workspace,
+      ...(options.accountBackendFactory
+        ? { accountBackendFactory: options.accountBackendFactory }
+        : {}),
       ...(options.agentProviderFactory
         ? { agentProviderFactory: options.agentProviderFactory }
         : {}),
