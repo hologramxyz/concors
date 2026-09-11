@@ -1,3 +1,4 @@
+import { AgentAccounts, type AccountBackendFactory } from "./accounts/manager.ts";
 import { defaultSettings, parseModels, turnControls } from "./controls.ts";
 import { saveAttachments } from "./attachments.ts";
 import type { AgentAttachment } from "@concors/protocol";
@@ -67,6 +68,7 @@ export class AgentManager {
   private draining = new Set<string>();
   private deliveries = new Map<string, string>();
   private registry: ProviderRegistry;
+  readonly accounts: AgentAccounts;
   private catalogs = new Map<string, { expires: number; value: Promise<AgentProviderCatalog[]> }>();
   constructor(
     store: WorkspaceStore,
@@ -74,12 +76,30 @@ export class AgentManager {
     workspaceChanged: () => void,
     factory: AgentProviderFactory = createProvider,
     registry: ProviderRegistry = new ProviderRegistry(),
+    accountFactory?: AccountBackendFactory,
   ) {
     this.registry = registry;
     this.#store = store;
     this.#emit = emit;
     this.#workspaceChanged = workspaceChanged;
     this.#factory = factory;
+    this.accounts = new AgentAccounts(accountFactory, (info) => {
+      // Catalogs are keyed by directory, provider and registry revision.
+      this.catalogs.clear();
+      // Idle runtimes reload the provider's freshly saved credentials on the next send.
+      for (const [id, runtime] of this.#runtimes) {
+        const current = this.#store.agent(id);
+        if (
+          current.directory !== info.directory ||
+          current.provider !== info.provider ||
+          ["starting", "working", "needs_input"].includes(current.status)
+        )
+          continue;
+        runtime.closed = true;
+        this.#runtimes.delete(id);
+        void runtime.provider.close().catch(() => undefined);
+      }
+    });
     for (const info of store.agents())
       if (["starting", "working", "needs_input"].includes(info.status)) {
         store.saveAgent({
@@ -181,7 +201,7 @@ export class AgentManager {
         pending.reject(new Error("Agent connection ended"));
       runtime.pending.clear();
       this.#runtimes.delete(id);
-      void runtime.provider.close();
+      void runtime.provider.close().catch(() => undefined);
     }
     this.update(id, {
       status: "failed",
@@ -230,15 +250,35 @@ export class AgentManager {
     });
     runtime.ready = (async () => {
       await provider.initialize();
-      const response = ThreadResponse.parse(
-        await provider.request(info.threadId ? "thread/resume" : "thread/start", {
-          ...(info.threadId ? { threadId: info.threadId } : {}),
-          cwd: info.directory,
-          approvalPolicy: "on-request",
-          sandbox: "workspace-write",
-          ...(info.model ? { model: info.model } : {}),
-        }),
-      );
+      const options = {
+        cwd: info.directory,
+        approvalPolicy: "on-request",
+        sandbox: "workspace-write",
+        ...(info.model ? { model: info.model } : {}),
+      };
+      let response: z.infer<typeof ThreadResponse>;
+      try {
+        response = ThreadResponse.parse(
+          await provider.request(info.threadId ? "thread/resume" : "thread/start", {
+            ...options,
+            ...(info.threadId ? { threadId: info.threadId } : {}),
+          }),
+        );
+      } catch (error) {
+        // Codex can discard a thread closed before its first turn (including on sign-in).
+        // Only replace that empty thread; never discard history or replay reserved prompts.
+        if (
+          info.provider !== "codex" ||
+          !info.threadId ||
+          !(error instanceof Error) ||
+          error.message !== `no rollout found for thread id ${info.threadId}` ||
+          this.#store.hasAgentProviderHistory(id) ||
+          runtime.closed ||
+          this.#closed
+        )
+          throw error;
+        response = ThreadResponse.parse(await provider.request("thread/start", options));
+      }
       if (runtime.closed || this.#closed) throw new Error("Agent connection ended");
       this.update(id, {
         threadId: response.thread.id,
@@ -287,7 +327,7 @@ export class AgentManager {
     })();
     return runtime.ready;
   }
-  async request(request: AgentRequest): Promise<AgentResult> {
+  async request(request: AgentRequest, owner = "local"): Promise<AgentResult> {
     let mutation: string | undefined;
     try {
       if (this.#closed) throw new Error("Daemon is shutting down");
@@ -301,6 +341,15 @@ export class AgentManager {
               attachments: undefined,
             }
           : operation;
+      if (op.kind === "account") {
+        const info = this.#store.agent(op.sessionId);
+        const account = await this.accounts.request(owner, info, op.action);
+        return {
+          type: "agent.result",
+          requestId: request.requestId,
+          outcome: { status: "ok", conversation: this.#store.agentConversation(info.id), account },
+        };
+      }
       if (op.kind === "read") {
         const info = this.#store.agent(op.sessionId);
         if (info.threadId && !this.#runtimes.has(info.id) && !op.before) {
@@ -424,8 +473,7 @@ export class AgentManager {
         const catalog = (await this.catalog(previous, op.provider)).find(
           (p) => p.id === op.provider,
         );
-        if (!catalog || catalog.error)
-          throw new Error(catalog?.error ?? "Provider is not installed on this machine");
+        if (!catalog) throw new Error("Provider is not installed on this machine");
         if (op.model && !catalog.models.some((m) => m.id === op.model))
           throw new Error("That model is not available");
       }
@@ -1318,6 +1366,7 @@ export class AgentManager {
   async close(): Promise<void> {
     if (this.#closed) return;
     this.#closed = true;
+    await this.accounts.close();
     await Promise.all(
       [...this.#runtimes.values()].map(async (runtime) => {
         runtime.closed = true;
