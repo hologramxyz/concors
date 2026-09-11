@@ -214,15 +214,35 @@ export class AgentManager {
       } catch {
         this.update(id, { supportsPlan: false });
       }
-      const response = ThreadResponse.parse(
-        await provider.request(info.threadId ? "thread/resume" : "thread/start", {
-          ...(info.threadId ? { threadId: info.threadId } : {}),
-          cwd: info.directory,
-          approvalPolicy: "on-request",
-          sandbox: "workspace-write",
-          ...(info.model ? { model: info.model } : {}),
-        }),
-      );
+      const options = {
+        cwd: info.directory,
+        approvalPolicy: "on-request",
+        sandbox: "workspace-write",
+        ...(info.model ? { model: info.model } : {}),
+      };
+      let response: z.infer<typeof ThreadResponse>;
+      try {
+        response = ThreadResponse.parse(
+          await provider.request(info.threadId ? "thread/resume" : "thread/start", {
+            ...options,
+            ...(info.threadId ? { threadId: info.threadId } : {}),
+          }),
+        );
+      } catch (error) {
+        // Codex can discard a thread closed before its first turn (including on sign-in).
+        // Only replace that empty thread; never discard history or replay reserved prompts.
+        if (
+          info.provider !== "codex" ||
+          !info.threadId ||
+          !(error instanceof Error) ||
+          error.message !== `no rollout found for thread id ${info.threadId}` ||
+          this.#store.hasAgentProviderHistory(id) ||
+          runtime.closed ||
+          this.#closed
+        )
+          throw error;
+        response = ThreadResponse.parse(await provider.request("thread/start", options));
+      }
       if (runtime.closed || this.#closed) throw new Error("Agent connection ended");
       this.update(id, { threadId: response.thread.id, model: response.model ?? info.model });
       // Rehydrate provider history after restart using stable item and turn identities.
