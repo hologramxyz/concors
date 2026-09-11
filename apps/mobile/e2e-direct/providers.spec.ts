@@ -106,6 +106,7 @@ for (const native of [false, true]) {
       await expect(page.getByText(/OpenCode, Pi and custom agents/)).toBeVisible();
       await page.getByRole("button", { name: "Allow AI data sharing", exact: true }).click();
       const ui = page.frameLocator('iframe[title="Concors workspace"]');
+      await ui.getByRole("button", { name: "Codex", exact: true }).click();
       let sequence = 0;
       const send = async (label: string, text: string) => {
         if (native) {
@@ -181,7 +182,10 @@ for (const native of [false, true]) {
           expect(
             content?.kind === "composer" &&
               content.controls.map((control) => [control.id, control.icon]),
-          ).toEqual([["model", provider]]);
+          ).toEqual([
+            ["model", provider],
+            ["effort", "brain"],
+          ]);
         }
         await expect(ui.getByRole("log")).not.toContainText("Keep my original conversation");
         if (native) await nativeEvent({ kind: "press", control: "activate" }, "Tabs and panes");
@@ -190,6 +194,9 @@ for (const native of [false, true]) {
         await expect(ui.getByRole("log")).toContainText("Keep my original conversation");
         await expect(ui.getByRole("log")).not.toContainText(`Continue with ${label}`);
       }
+      await ui.getByRole("button", { name: "Fork session", exact: true }).click();
+      await expect(ui.locator(".mobile-pane")).not.toHaveAttribute("data-pane-id", paneId);
+      await expect(ui.getByRole("log")).not.toContainText("Keep my original conversation");
       expect(errors).toEqual([]);
     } finally {
       desktop.disconnect();
