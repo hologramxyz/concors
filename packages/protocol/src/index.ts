@@ -24,3 +24,6 @@ export * from "./agents.ts";
 export * from "./agent-controls.ts";
 
 export * from "./files.ts";
+
+export * from "./providers.ts";
+export * from "./provider-presets.ts";

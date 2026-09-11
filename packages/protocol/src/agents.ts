@@ -1,16 +1,24 @@
 import { z } from "zod";
 import { AgentControlsSchema, AgentFeatureValueSchema } from "./agent-controls.ts";
+import { ProviderIdSchema } from "./providers.ts";
+import { providerPresets } from "./provider-presets.ts";
 const Id = z.string().uuid();
 export const MAX_AGENT_MODELS = 4096;
 export const AgentModelIdSchema = z.string().min(1).max(1024);
-export const AgentProviderIdSchema = z.enum(["codex", "claude", "opencode", "pi"]);
+export const builtinAgentProviders = [
+  "codex",
+  "claude",
+  "opencode",
+  "pi",
+  "copilot",
+  "omp",
+] as const;
+export const AgentProviderIdSchema = ProviderIdSchema;
 export type AgentProviderId = z.infer<typeof AgentProviderIdSchema>;
-export const agentProviderNames: Record<AgentProviderId, string> = {
-  codex: "Codex",
-  claude: "Claude Code",
-  opencode: "OpenCode",
-  pi: "Pi",
-};
+export const agentProviderNames: Record<string, string> = Object.fromEntries(
+  providerPresets.map((p) => [p.id, p.label]),
+);
+export const agentProviderName = (id: string): string => agentProviderNames[id] ?? id;
 export const AgentModelSchema = z.object({
   id: AgentModelIdSchema,
   label: z.string(),
@@ -26,6 +34,8 @@ export const AgentModelSchema = z.object({
 export const AgentProviderCatalogSchema = z.object({
   id: AgentProviderIdSchema,
   models: z.array(AgentModelSchema).max(MAX_AGENT_MODELS),
+  label: z.string().optional(),
+  loaded: z.boolean().optional(),
   error: z.string().optional(),
 });
 export type AgentProviderCatalog = z.infer<typeof AgentProviderCatalogSchema>;
@@ -153,7 +163,11 @@ export const AgentConversationSchema = z.object({
 });
 export type AgentConversation = z.infer<typeof AgentConversationSchema>;
 export const AgentOperationSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("provider-catalog"), sessionId: Id }),
+  z.object({
+    kind: z.literal("provider-catalog"),
+    sessionId: Id,
+    provider: AgentProviderIdSchema.optional(),
+  }),
   z.object({
     kind: z.literal("switch-provider"),
     sessionId: Id,
