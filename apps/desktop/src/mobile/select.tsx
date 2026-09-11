@@ -172,8 +172,12 @@ export function MobileSelect({
           onCloseAutoFocus={(event) => {
             event.preventDefault();
             requestAnimationFrame(() => {
-              if (!document.querySelector('[data-slot="dialog-content"][data-state="open"]'))
-                trigger.current?.focus({ preventScroll: true });
+              const parent = document.querySelector(
+                '[data-slot="dialog-content"][data-state="open"]',
+              );
+              const target = trigger.current;
+              if (target && !target.closest("[inert]") && (!parent || parent.contains(target)))
+                target.focus({ preventScroll: true });
             });
           }}
         >
