@@ -1,5 +1,13 @@
 import { machineAvailability } from "@concors/client-core";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type CSSProperties,
+} from "react";
 import { FolderOpen, Menu, Search } from "lucide-react";
 import type { DaemonConnection } from "@concors/daemon-client";
 import type { MobileState, MobileTarget } from "@concors/client-core";
@@ -28,7 +36,6 @@ import { NewTabMenu } from "@/workspace/new-tab-menu";
 import { TAB_PROFILES } from "@/workspace/tab-profiles";
 import { CommandPalette } from "@/components/command-palette";
 import { MobileAccountMenu } from "@/components/account-menu";
-import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
 import { embeddedConnection, getHostState, hostAction, subscribeHost } from "./bridge";
 import { resolveMobileSelection, tabPanes } from "./selection";
@@ -470,9 +477,6 @@ function MobileWorkspaceContent({
                 style={{ width }}
               >
                 <div className="mobile-sidebar-head">
-                  <span className="mobile-sidebar-brand" role="img" aria-label="Concourse">
-                    <BrandMark />
-                  </span>
                   <NativeHeaderButton
                     icon="search"
                     className="mobile-icon mobile-glass ml-auto"
@@ -579,11 +583,15 @@ function MobileWorkspaceContent({
               <div
                 className="mobile-workspace"
                 data-testid="mobile-workspace"
-                style={{
-                  transform: `translateX(${gesture.offset}px)`,
-                  borderRadius: Math.min(32, gesture.offset),
-                  transition: gesture.dragging ? "none" : undefined,
-                }}
+                data-dragging={gesture.dragging}
+                style={
+                  {
+                    "--mobile-workspace-reveal": Math.min(1, gesture.offset / 32),
+                    transform: `translateX(${gesture.offset}px)`,
+                    borderRadius: Math.min(32, gesture.offset),
+                    transition: gesture.dragging ? "none" : undefined,
+                  } as CSSProperties
+                }
               >
                 <div
                   className="mobile-main"

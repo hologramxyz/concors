@@ -294,17 +294,6 @@ body {
   min-height: 60px;
   padding: 4px 10px;
 }
-.mobile-sidebar-brand {
-  display: grid;
-  place-items: center;
-  width: 48px;
-  height: 48px;
-  color: var(--sidebar-foreground);
-}
-.mobile-sidebar-brand svg {
-  width: 30px;
-  height: 30px;
-}
 .mobile-icon {
   display: inline-flex;
   align-items: center;
@@ -433,11 +422,34 @@ body {
   isolation: isolate;
   inset: 0;
   overflow: hidden;
-  background: var(--background);
+  background: transparent;
   transition:
     transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
     border-radius 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
   box-shadow: -6px 0 24px #00000018;
+}
+/* Only the rounded rim reveals the backdrop. Inset the opaque content with a
+   clip, not padding: navigation must never resize/reflow chat or a terminal. */
+.mobile-workspace::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
+  background: var(--background);
+  box-shadow:
+    inset 1px 1px 0 #ffffff70,
+    inset -1px -1px 0 #00000016;
+  opacity: var(--mobile-workspace-reveal, 0);
+  transition: opacity 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .mobile-workspace::before {
+    background: linear-gradient(135deg, #ffffff50, #ffffff08 45%, #ffffff28);
+    -webkit-backdrop-filter: blur(18px) saturate(1.5);
+    backdrop-filter: blur(18px) saturate(1.5);
+  }
 }
 .mobile-main {
   position: relative;
@@ -445,6 +457,16 @@ body {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  background: var(--background);
+  clip-path: inset(
+    calc(3px * var(--mobile-workspace-reveal, 0)) round
+      calc(29px * var(--mobile-workspace-reveal, 0))
+  );
+  transition: clip-path 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.mobile-workspace[data-dragging="true"]::before,
+.mobile-workspace[data-dragging="true"] .mobile-main {
+  transition: none;
 }
 .mobile-header,
 .mobile-files-header {
@@ -808,6 +830,7 @@ aside[aria-label="Agent notifications"] {
 .mobile-scrim {
   position: absolute;
   inset: 0;
+  clip-path: inset(3px round 29px);
   background: #00000030;
   border: 0;
   touch-action: pan-y;
@@ -1124,6 +1147,13 @@ aside[aria-label="Agent notifications"] {
   }
 }
 @media (prefers-reduced-transparency: reduce), (forced-colors: active) {
+  .mobile-workspace::before {
+    background: var(--background);
+    border-color: var(--border);
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
   :is(.mobile-header, .mobile-files-header, .mobile-sidebar-head) .mobile-glass,
   :is(.mobile-header, .mobile-files-header, .mobile-sidebar-head)
     .mobile-glass:is(:active, [data-state="open"]) {
@@ -1289,6 +1319,8 @@ aside[aria-label="Agent notifications"] {
 }
 @media (prefers-reduced-motion: reduce) {
   .mobile-workspace,
+  .mobile-workspace::before,
+  .mobile-main,
   .mobile-pane .mobile-composer {
     transition: none;
   }

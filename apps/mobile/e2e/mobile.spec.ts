@@ -881,7 +881,7 @@ test("account opens a bottom drawer with settings, sign out and focus restoratio
   await expect(page.getByRole("button", { name: "Explore demo" })).toBeVisible();
 });
 
-test("sidebar has one logo and glass search behind the rounded workspace, never a duplicate menu", async ({
+test("sidebar has no logo or duplicate menu, with glass search behind the rounded glass workspace", async ({
   page,
 }) => {
   const ui = await enter(page);
@@ -892,18 +892,57 @@ test("sidebar has one logo and glass search behind the rounded workspace, never 
   });
   const sidebar = ui.locator("#mobile-sidebar");
   const workspace = ui.getByTestId("mobile-workspace");
+  const main = workspace.locator(".mobile-main");
+  const closedSize = await main.evaluate((element) => [element.clientWidth, element.clientHeight]);
+  const rim = () =>
+    workspace.evaluate((element) => {
+      const style = getComputedStyle(element, "::before");
+      return {
+        opacity: style.opacity,
+        blur: style.backdropFilter,
+        pointerEvents: style.pointerEvents,
+      };
+    });
   await expect(sidebar).toHaveAttribute("inert", "");
   await expect(sidebar).toHaveCSS("isolation", "isolate");
   await expect(sidebar).toHaveCSS("overflow", "hidden");
   await expect(sidebar).toHaveCSS("z-index", "0");
   await expect(workspace).toHaveCSS("z-index", "1");
   await expect(workspace).toHaveCSS("border-top-left-radius", "0px");
+  await expect
+    .poll(rim)
+    .toEqual({ opacity: "0", blur: "blur(18px) saturate(1.5)", pointerEvents: "none" });
   await header.click();
-  await expect(sidebar.getByRole("img", { name: "Concourse", exact: true })).toBeVisible();
+  await expect(sidebar.getByRole("img", { name: "Concourse", exact: true })).toHaveCount(0);
+  await expect(sidebar.locator(".mobile-sidebar-head button")).toHaveCount(1);
   await expect(sidebar.locator('button[aria-label*="sidebar"]')).toHaveCount(0);
   await expect(workspace).toHaveCSS("border-top-left-radius", "32px");
   await expect(workspace).toHaveCSS("border-bottom-left-radius", "32px");
   await expect(workspace).toHaveCSS("overflow", "hidden");
+  await expect
+    .poll(rim)
+    .toEqual({ opacity: "1", blur: "blur(18px) saturate(1.5)", pointerEvents: "none" });
+  await expect(main).toHaveCSS("clip-path", "inset(3px round 29px)");
+  expect(await main.evaluate((element) => [element.clientWidth, element.clientHeight])).toEqual(
+    closedSize,
+  );
+  await page.screenshot({
+    path: "apps/mobile/test-results/mobile-workspace-glass-light.png",
+    animations: "disabled",
+  });
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.screenshot({
+    path: "apps/mobile/test-results/mobile-workspace-glass-dark.png",
+    animations: "disabled",
+  });
+  await page.emulateMedia({ reducedMotion: "reduce", forcedColors: "active" });
+  await expect.poll(async () => (await rim()).blur).toBe("none");
+  await expect(main).toHaveCSS("transition-duration", "0s");
+  await page.emulateMedia({
+    colorScheme: "light",
+    reducedMotion: "no-preference",
+    forcedColors: "none",
+  });
   const search = ui.getByRole("button", { name: "Search workspace", exact: true });
   await expect(search).toHaveClass(/mobile-glass/);
   await expect(search).toHaveCSS("backdrop-filter", glass.blur);
@@ -916,6 +955,8 @@ test("sidebar has one logo and glass search behind the rounded workspace, never 
   await expect(ui.getByRole("button", { name: "Search workspace", exact: true })).toBeFocused();
   await ui.getByRole("button", { name: "Return to workspace", exact: true }).click();
   await expect(workspace).toHaveCSS("border-top-left-radius", "0px");
+  await expect(main).toHaveCSS("clip-path", "inset(0px)");
+  await expect.poll(async () => (await rim()).opacity).toBe("0");
   await expect(sidebar).toHaveAttribute("inert", "");
   await expect(ui.getByRole("button", { name: "Search workspace", exact: true })).toHaveCount(0);
 });
