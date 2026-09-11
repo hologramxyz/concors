@@ -16,6 +16,7 @@ export type RelayConnection = Pick<
   | "onAgent"
   | "onTerminal"
   | "subscribeProjectSetups"
+  | "subscribeHostUsage"
   | "executeWorkspace"
   | "requestAgent"
   | "requestProject"
@@ -30,6 +31,7 @@ export function createProtocolRelay(
 ) {
   let disposed = false;
   let started = false;
+  let unsubscribeUsage: (() => void) | undefined;
   const subscriptions: (() => void)[] = [];
   const viewers = new Set<string>();
   const emit = (message: DaemonMessage) => {
@@ -67,6 +69,16 @@ export function createProtocolRelay(
       }
       if (!started) throw new Error("Embedded protocol handshake is required");
       switch (message.type) {
+        case "host.subscribe":
+          if (message.enabled) {
+            unsubscribeUsage ??= connection.subscribeHostUsage((usage) =>
+              emit({ type: "host.usage", usage }),
+            );
+          } else {
+            unsubscribeUsage?.();
+            unsubscribeUsage = undefined;
+          }
+          break;
         case "workspace.subscribe":
           if (connection.workspace)
             emit({ type: "workspace.snapshot", snapshot: connection.workspace });
@@ -105,6 +117,7 @@ export function createProtocolRelay(
     dispose() {
       if (disposed) return;
       disposed = true;
+      unsubscribeUsage?.();
       for (const unsubscribe of subscriptions) unsubscribe();
       for (const sessionId of viewers) detach(sessionId);
       viewers.clear();
