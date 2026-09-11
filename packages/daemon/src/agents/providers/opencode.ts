@@ -23,7 +23,7 @@ export class OpenCodeProvider extends EventProvider {
   private abort = new AbortController();
   private dispatcher = new Agent({ connections: 4 });
   private messages = new Map<string, string>();
-  private parts = new Map<string, { messageId: string; text: string }>();
+  private parts = new Map<string, { messageId: string; text: string; thinking: boolean }>();
   private cwd: string;
   private mcp: McpServer[];
   private launcher: typeof launch;
@@ -285,13 +285,15 @@ export class OpenCodeProvider extends EventProvider {
           id: this.threadId,
           turns:
             method === "thread/resume"
-              ? openCodeHistory(
-                  array(
-                    await this.call(`/session/${encodeURIComponent(this.threadId)}/message`),
-                  ).filter((raw) => {
-                    const cutoff = string(object(session["revert"] ?? {})["messageID"]);
-                    return !cutoff || string(object(object(raw)["info"])["id"]) < cutoff;
-                  }),
+              ? this.restoredHistory(
+                  openCodeHistory(
+                    array(
+                      await this.call(`/session/${encodeURIComponent(this.threadId)}/message`),
+                    ).filter((raw) => {
+                      const cutoff = string(object(session["revert"] ?? {})["messageID"]);
+                      return !cutoff || string(object(object(raw)["info"])["id"]) < cutoff;
+                    }),
+                  ),
                 )
               : [],
         },
@@ -465,11 +467,20 @@ export class OpenCodeProvider extends EventProvider {
       if (part["type"] === "compaction") this.startCompaction();
       if (part["type"] === "step-finish") this.updateUsage(part["tokens"]);
       if (this.summaries.has(string(part["messageID"])) || this.manualCompact) return;
-      if (part["type"] === "text")
-        this.parts.set(id, { messageId: string(part["messageID"]), text: string(part["text"]) });
-      if (part["type"] === "text" && this.messages.get(string(part["messageID"])) === "assistant")
+      if (part["type"] === "text" || part["type"] === "reasoning")
+        this.parts.set(id, {
+          messageId: string(part["messageID"]),
+          text: string(part["text"]),
+          thinking: part["type"] === "reasoning",
+        });
+      if (
+        ["text", "reasoning"].includes(string(part["type"])) &&
+        this.messages.get(string(part["messageID"])) === "assistant"
+      )
         this.item(
-          { id, type: "agentMessage", text: string(part["text"]) },
+          part["type"] === "reasoning"
+            ? { id, type: "reasoning", summary: [string(part["text"])] }
+            : { id, type: "agentMessage", text: string(part["text"]) },
           !!part["time"] && !!object(part["time"])["end"],
         );
       if (part["type"] === "tool") {
@@ -491,20 +502,69 @@ export class OpenCodeProvider extends EventProvider {
       if (this.manualCompact || (part && this.summaries.has(part.messageId))) return;
       if (part && this.messages.get(part.messageId) === "assistant") {
         part.text += string(p["delta"]);
-        this.item({ id, type: "agentMessage", text: part.text }, false);
+        this.item(
+          part.thinking
+            ? { id, type: "reasoning", summary: [part.text] }
+            : { id, type: "agentMessage", text: part.text },
+          false,
+        );
       }
     }
 
+    if (e["type"] === "todo.updated")
+      this.item(
+        { id: `tasks:${this.threadId}:${this.turnId}`, type: "plan", steps: array(p["todos"]) },
+        false,
+      );
+    if (e["type"] === "session.status") {
+      const status = object(p["status"] ?? {});
+      if (status["type"] === "retry")
+        this.item(
+          {
+            id: `retry:${this.turnId}`,
+            type: "notification",
+            title: "Retrying",
+            text: string(status["message"]) || "Waiting for the provider before retrying.",
+          },
+          false,
+        );
+    }
     // Keep reading SSE while waiting for user input; an interrupt/completion can resolve it.
     if (e["type"] === "permission.asked")
-      void this.permission(string(p["permission"]), p["patterns"])
-        .then((allowed) =>
-          this.call(`/permission/${encodeURIComponent(string(p["id"]))}/reply`, {
-            reply: allowed ? "once" : "reject",
-          }),
-        )
+      void this.onInput(
+        "item/commandExecution/requestApproval",
+        {
+          threadId: this.threadId,
+          turnId: this.turnId,
+          reason: string(p["permission"]),
+          command: JSON.stringify(p["patterns"]),
+          actions: [
+            { id: "once", label: "Allow once", decision: "accept" },
+            { id: "always", label: "Always allow", decision: "accept" },
+            { id: "reject", label: "Decline", decision: "decline" },
+            { id: "cancel", label: "Cancel turn", decision: "cancel" },
+          ],
+        },
+        string(p["id"]),
+      )
+        .then((raw) => {
+          const response = object(raw);
+          return this.call(`/permission/${encodeURIComponent(string(p["id"]))}/reply`, {
+            reply:
+              response["decision"] === "accept" && !this.interrupted
+                ? response["actionId"] === "always"
+                  ? "always"
+                  : "once"
+                : "reject",
+          });
+        })
         .catch((error) => {
-          if (this.turnId) this.fail(error);
+          if (
+            this.turnId &&
+            !this.interrupted &&
+            !(error instanceof Error && error.name === "AgentInputResolvedError")
+          )
+            this.fail(error);
         });
     if (e["type"] === "question.asked")
       void (async () => {
@@ -529,13 +589,20 @@ export class OpenCodeProvider extends EventProvider {
             string(p["id"]),
           ),
         );
+        if (result["decision"] === "decline" || result["decision"] === "cancel") {
+          await this.call(`/question/${encodeURIComponent(string(p["id"]))}/reject`, {});
+          return;
+        }
         const answers = object(result["answers"]);
         await this.call(`/question/${encodeURIComponent(string(p["id"]))}/reply`, {
           answers: questions.map((q) => array(object(answers[q.id])["answers"])),
         });
       })().catch((error) => {
-        if (this.turnId) this.fail(error);
+        if (this.turnId && !(error instanceof Error && error.name === "AgentInputResolvedError"))
+          this.fail(error);
       });
+    if (["permission.replied", "question.replied", "question.rejected"].includes(string(e["type"])))
+      this.emit("serverRequest/resolved", { requestId: p["requestID"] ?? p["id"] });
     if (e["type"] === "session.compacted") this.endCompaction();
     if (e["type"] === "session.idle" && !this.manualCompact) this.finish();
     if (e["type"] === "session.error") this.finish(JSON.stringify(p["error"]));
