@@ -12,11 +12,15 @@ and mobile keeps its existing swipe sidebar.
 - Agents show their provider logo with the existing live status: spinner while
   working, green when done, amber for input, red for failure, or gray when ready.
   Tooltips include the agent name, provider, workspace, status and unread state.
+  There is no extra Agents header icon; when no agents are present the entire
+  section is omitted. Empty workspaces show only the plus menu, with no placeholder.
 - The middle list scrolls independently, leaving the machine switcher and Account
   accessible in short windows. Navigation and collapsing do not restart sessions
   or discard chat drafts.
-- Servers remains the existing empty state: main does not yet implement server
-  discovery or preview links. This change does not expose ports or invent statuses.
+- The empty Servers section is omitted from the rail, with no header icon or
+  placeholder. The expanded sidebar keeps its existing empty state: main does not
+  yet implement discovery or preview links. This change does not expose ports or
+  invent statuses.
 
 `e2e/sidebar-rail.spec.ts` covers dimensions, tooltips, keyboard navigation, machine
 switching, settings round-trips, light/dark themes, reduced motion, narrow windows
