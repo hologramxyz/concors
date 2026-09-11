@@ -215,12 +215,11 @@ test("terminal taps and horizontal swipes open real files and the sidebar withou
   try {
     const chat = ui.getByRole("textbox", { name: "Message Codex" });
     await chat.fill("Keep my chat draft during terminal gestures");
-    const picker = ui.getByRole("combobox", { name: "Tabs and panes" });
+    const picker = ui.getByRole("combobox", { name: "Tabs" });
     await picker.click();
-    await ui.getByRole("button", { name: "Actions for tab File review", exact: true }).click();
-    await ui.getByRole("menuitem", { name: "Add pane to this tab", exact: true }).click();
+    await ui.getByRole("button", { name: "New tab", exact: true }).click();
     await ui
-      .getByRole("dialog", { name: "Add pane", exact: true })
+      .getByRole("dialog", { name: "New tab", exact: true })
       .getByRole("button", { name: "Terminal", exact: true })
       .click();
     const terminal = ui.getByLabel("Terminal output", { exact: true });
@@ -234,7 +233,7 @@ test("terminal taps and horizontal swipes open real files and the sidebar withou
     const terminalSession = () => {
       const node = desktop.workspace?.projects
         .flatMap((project) => project.tabs)
-        .find((tab) => tab.id === tabId)
+        .find((tab) => tab.id === selection.split(":")[0])
         ?.nodes.find((node) => node.id === selection.split(":")[1]);
       return node?.kind === "pane" ? node.sessionId : null;
     };
