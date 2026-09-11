@@ -251,7 +251,6 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
               connection.state.daemon.capabilities?.includes("agent-message-navigation")
             ) && conversation.hasEarlier
           }
-          onEarlier={() => conversation.load("earlier")}
           hasNewer={conversation.hasNewer}
         />
       </div>
