@@ -54,6 +54,7 @@ export class WorkspaceStore {
         CREATE TABLE IF NOT EXISTS project_setups (id TEXT PRIMARY KEY, request TEXT NOT NULL, setup TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS agents (id TEXT PRIMARY KEY, info TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS agent_items (position INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, item_id TEXT NOT NULL, item TEXT NOT NULL, UNIQUE(session_id, item_id));
+        CREATE INDEX IF NOT EXISTS agent_message_index ON agent_items (session_id, position) WHERE json_extract(item, '$.kind') = 'user';
         CREATE TABLE IF NOT EXISTS agent_native_turns (session_id TEXT NOT NULL, native_id TEXT NOT NULL, turn_id TEXT NOT NULL, PRIMARY KEY (session_id, native_id));
         CREATE TABLE IF NOT EXISTS agent_request_errors (id TEXT PRIMARY KEY, message TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS agent_queue (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, request TEXT NOT NULL);
@@ -588,6 +589,33 @@ export class WorkspaceStore {
         "SELECT 1 FROM agent_items WHERE session_id = ? AND (json_extract(item, '$.kind') != 'user' OR json_extract(item, '$.turnId') NOT LIKE 'pending:%') LIMIT 1",
       )
       .get(sessionId);
+  }
+  agentMessageIndex(id: string, before = Number.MAX_SAFE_INTEGER) {
+    this.agent(id);
+    const rows = this.#db
+      .prepare(
+        `SELECT position, json_extract(item, '$.id') AS id,
+        substr(json_extract(item, '$.text'), 1, 240) AS preview,
+        json_extract(item, '$.attachments[0].name') AS attachment
+       FROM agent_items WHERE session_id = ? AND position < ?
+       AND json_extract(item, '$.kind') = 'user' ORDER BY position DESC LIMIT 201`,
+      )
+      .all(id, before);
+    return {
+      messages: rows
+        .slice(0, 200)
+        .reverse()
+        .map((row) => ({
+          id: String(row["id"]),
+          position: Number(row["position"]),
+          preview: (
+            String(row["preview"] ?? "")
+              .replace(/\s+/g, " ")
+              .trim() || String(row["attachment"] ?? "Attachment")
+          ).slice(0, 240),
+        })),
+      hasMore: rows.length > 200,
+    };
   }
   agentConversation(
     id: string,

@@ -112,13 +112,13 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     await expect(page.getByTestId("pane-agent-loading")).toBeVisible();
     await expect(page.getByRole("log").locator(".agent-shimmer").first()).toHaveCSS(
       "animation-name",
-      "paseo-toolcall-shimmer",
+      "tool-activity-shimmer",
     );
     const runningTools = page.locator('[data-tool-status="running"]');
     await expect(runningTools).toHaveCount(3);
     for (const tool of await runningTools.all()) {
       const label = tool.locator("button .agent-shimmer").first();
-      await expect(label).toHaveCSS("animation-name", "paseo-toolcall-shimmer");
+      await expect(label).toHaveCSS("animation-name", "tool-activity-shimmer");
       await expect(label).toHaveCSS("-webkit-text-fill-color", "rgba(0, 0, 0, 0)");
       const position = await label.evaluate((el) => getComputedStyle(el).backgroundPosition);
       await expect
@@ -163,7 +163,7 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
         .getByRole("button", { name: /^Shell/ })
         .locator(".agent-shimmer")
         .first(),
-    ).toHaveCSS("animation-name", "paseo-toolcall-shimmer");
+    ).toHaveCSS("animation-name", "tool-activity-shimmer");
     await expect(page.getByLabel("Tool call").filter({ hasText: "fixture output" })).toBeVisible();
     await page.getByRole("button", { name: /^Edit/ }).click();
     await expect(page.getByText("+new line", { exact: true })).toBeVisible();

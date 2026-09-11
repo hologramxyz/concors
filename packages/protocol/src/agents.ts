@@ -221,6 +221,19 @@ export const AgentConversationSchema = z.object({
   hasNewer: z.boolean().optional(),
 });
 export type AgentConversation = z.infer<typeof AgentConversationSchema>;
+export const AgentMessageIndexSchema = z.object({
+  messages: z
+    .array(
+      z.object({
+        id: z.string(),
+        position: z.number().int().nonnegative(),
+        preview: z.string().max(240),
+      }),
+    )
+    .max(200),
+  hasMore: z.boolean(),
+});
+export type AgentMessageIndex = z.infer<typeof AgentMessageIndexSchema>;
 export const NativeSessionSchema = z.object({
   id: z.string().min(1).max(4096),
   title: z.string().max(4000),
@@ -316,6 +329,11 @@ export const AgentOperationSchema = z.discriminatedUnion("kind", [
     .refine((read) => read.before === undefined || read.after === undefined, {
       message: "Read history in one direction at a time",
     }),
+  z.object({
+    kind: z.literal("list-messages"),
+    sessionId: Id,
+    before: z.number().int().positive().optional(),
+  }),
   z.object({ kind: z.literal("seen"), sessionId: Id, attentionId: Id }),
   z.object({
     kind: z.literal("configure"),
@@ -371,6 +389,7 @@ export const AgentResultSchema = z.object({
         .optional(),
       account: AgentAccountSchema.optional(),
       attachment: AgentAttachmentSchema.optional(),
+      messageIndex: AgentMessageIndexSchema.optional(),
     }),
     z.object({ status: z.literal("error"), message: z.string() }),
   ]),

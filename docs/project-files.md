@@ -71,13 +71,9 @@ against another process deliberately changing directories during an operation.
 
 ## References and validation
 
-Reviewed Paseo revision `a7a708bec99e935ee4b8c6f7314a4b9a9984cfa6`, specifically its
-`file-explorer-pane.tsx`, `file-pane/editor/view.web.tsx`, `file-pane/editor/extensions.web.ts`,
-`file-pane/editor/model.ts`, `panels/file-panel.tsx`, `file-explorer/preview-target.ts`, and server
-`file-explorer/service.ts`. The design follows its file panel, CodeMirror/Vim, Markdown toggle,
-and explicit version-aware save behavior. Concors uses its existing tabs and daemon transport;
-no workspace schema migration or control-plane change is needed. Paseo's Apache-2.0 license is in
-`third-party/paseo-LICENSE`.
+The file panel uses CodeMirror/Vim, a Markdown preview toggle, and explicit
+version-aware saves through the existing tabs and daemon transport. Source
+provenance is recorded in [third-party notices](../third-party/source-notices.md).
 
 Unit coverage exercises traversal and symlinks, read limits, UTF-8/BOM/CRLF, executable permissions,
 concurrent saves and creation, safe parent paths, duplicate names, agent edits, lost acknowledgements,
