@@ -44,6 +44,11 @@ function setup() {
       requestId,
       outcome: { status: "error", message: "fixture" },
     })),
+    requestThemes: vi.fn<RelayConnection["requestThemes"]>(async (requestId) => ({
+      type: "theme.result",
+      requestId,
+      catalog: { directory: "/themes", themes: [], issues: [] },
+    })),
     requestProvider: vi.fn<RelayConnection["requestProvider"]>(async (_, requestId) => ({
       type: "provider.result",
       requestId,
@@ -106,6 +111,18 @@ describe("offline UI protocol relay", () => {
     });
     expect(connection.requestTerminal).toHaveBeenCalledWith({ kind: "attach", sessionId: id }, id);
     expect(messages.at(-1)).toMatchObject({ type: "terminal.result", requestId: id });
+    relay.dispose();
+  });
+  it("relays theme catalogs with the original request ID", async () => {
+    const { connection, relay, messages } = setup();
+    await relay.receive(hello);
+    await relay.receive({ type: "theme.request", requestId: id });
+    expect(connection.requestThemes).toHaveBeenCalledWith(id);
+    expect(messages.at(-1)).toMatchObject({
+      type: "theme.result",
+      requestId: id,
+      catalog: { directory: "/themes" },
+    });
     relay.dispose();
   });
   it("detaches subscribed terminals on disposal, never stops them, and drops stale input", async () => {

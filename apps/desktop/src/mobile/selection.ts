@@ -1,4 +1,9 @@
-import type { LayoutNode, WorkspaceSnapshot, WorkspaceTab } from "@concors/protocol";
+import type {
+  LayoutNode,
+  WorkspaceProject,
+  WorkspaceSnapshot,
+  WorkspaceTab,
+} from "@concors/protocol";
 import type { MobileTarget } from "@concors/client-core";
 export type PaneNode = Extract<LayoutNode, { kind: "pane" }>;
 /** Traverse the saved split tree, not storage order. Never rewrite the desktop layout. */
@@ -12,6 +17,20 @@ export function tabPanes(tab: WorkspaceTab): PaneNode[] {
     return !node ? [] : node.kind === "pane" ? [node] : [...walk(node.first), ...walk(node.second)];
   };
   return walk(tab.root);
+}
+/** Mobile calls each leaf a tab, but keeps the original IDs and desktop split tree. */
+export function projectPanes(project: WorkspaceProject) {
+  return project.tabs.flatMap((tab) => {
+    const panes = tabPanes(tab);
+    return panes.map((pane, index) => ({
+      tab,
+      pane,
+      // Split leaves have no saved names. Use the shared name and display position;
+      // never manufacture local-only names or change the shared tab to flatten it.
+      label: panes.length === 1 ? tab.name : `${tab.name} · ${index + 1}`,
+      profileLabel: pane.terminalProfile?.name ?? PROFILE_LABELS[pane.profile],
+    }));
+  });
 }
 export function resolveMobileSelection(workspace: WorkspaceSnapshot, target: MobileTarget) {
   if (target.sessionId) {

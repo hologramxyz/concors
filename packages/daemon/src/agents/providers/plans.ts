@@ -1,4 +1,4 @@
-/** Shared task snapshots, following the task primitives in Paseo's native adapters. */
+/** Shared task snapshots normalized from native provider events. */
 const record = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)

@@ -40,7 +40,7 @@ export function AgentPaneIcon({ sessionId }: { sessionId: string | null }) {
   );
 }
 
-// A quiet braille indicator accompanies Paseo's animated text treatment.
+// A quiet braille indicator accompanies the animated activity label.
 const frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 export function BrailleSpinner() {
   const [frame, setFrame] = useState(0);

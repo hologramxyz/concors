@@ -74,7 +74,7 @@ export function TerminalSurface({
     });
     themeObserver.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ["class"],
+      attributeFilter: ["class", "style", "data-color-theme"],
     });
     void document.fonts.ready.then(() => {
       if (disposed || !isVisible()) return;

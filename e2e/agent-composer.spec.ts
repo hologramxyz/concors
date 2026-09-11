@@ -6,6 +6,8 @@ import { test, expect, signedIn } from "./signed-in.ts";
 test("agent controls, uploads, tool details, plans, sub-agents, dictation and queued prompts work together", async ({
   page,
 }) => {
+  // This end-to-end journey includes uploads, streaming, a reload and narrow-layout checks.
+  test.setTimeout(60_000);
   const directory = await mkdtemp(join(tmpdir(), "concors-composer-"));
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -42,7 +44,6 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     await seedProject(page, "Composer acceptance", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
-    await page.getByRole("button", { name: "Codex", exact: true }).click();
     await page.getByRole("textbox", { name: "Message Codex" }).waitFor();
     await expect(page.getByLabel("Agent and model")).toBeEnabled();
     await page.getByLabel("Agent and model", { exact: true }).click();
@@ -105,17 +106,19 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     await expect(page.getByTestId("pane-agent-loading")).toHaveCount(0);
     await page.getByRole("textbox", { name: "Message Codex" }).fill("rich hold");
     await page.getByRole("button", { name: "Send message", exact: true }).click();
-    await expect(page.getByRole("log")).toContainText("Attached: notes.txt");
+    await expect(
+      page.getByRole("log").getByRole("button", { name: "notes.txt", exact: true }),
+    ).toBeVisible();
     await expect(page.getByTestId("pane-agent-loading")).toBeVisible();
     await expect(page.getByRole("log").locator(".agent-shimmer").first()).toHaveCSS(
       "animation-name",
-      "paseo-toolcall-shimmer",
+      "tool-activity-shimmer",
     );
     const runningTools = page.locator('[data-tool-status="running"]');
     await expect(runningTools).toHaveCount(3);
     for (const tool of await runningTools.all()) {
       const label = tool.locator("button .agent-shimmer").first();
-      await expect(label).toHaveCSS("animation-name", "paseo-toolcall-shimmer");
+      await expect(label).toHaveCSS("animation-name", "tool-activity-shimmer");
       await expect(label).toHaveCSS("-webkit-text-fill-color", "rgba(0, 0, 0, 0)");
       const position = await label.evaluate((el) => getComputedStyle(el).backgroundPosition);
       await expect
@@ -160,7 +163,7 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
         .getByRole("button", { name: /^Shell/ })
         .locator(".agent-shimmer")
         .first(),
-    ).toHaveCSS("animation-name", "paseo-toolcall-shimmer");
+    ).toHaveCSS("animation-name", "tool-activity-shimmer");
     await expect(page.getByLabel("Tool call").filter({ hasText: "fixture output" })).toBeVisible();
     await page.getByRole("button", { name: /^Edit/ }).click();
     await expect(page.getByText("+new line", { exact: true })).toBeVisible();
@@ -180,7 +183,9 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     ).toHaveClass(/lucide-plus/);
     await expect(page.getByLabel("Plan mode", { exact: true })).toHaveText("");
     await expect(page.getByLabel("Speed", { exact: true })).toHaveText("");
-    await expect(page.getByRole("log")).toContainText("Attached: notes.txt");
+    await expect(
+      page.getByRole("log").getByRole("button", { name: "notes.txt", exact: true }),
+    ).toBeVisible();
     await expect(page.getByTestId("pane-agent-loading")).toHaveCount(0);
     await expect(page.getByRole("log").locator(".agent-shimmer")).toHaveCount(0);
     await page.getByLabel("Agent tasks").locator("summary").first().click();

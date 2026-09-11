@@ -65,7 +65,7 @@ test("mobile saves and launches machine terminal profiles", async ({ page }) => 
     await expect(ui.getByLabel("Terminal output", { exact: true })).toContainText(
       'MOBILE_PROFILE:["two words","literal & $()"]',
     );
-    await expect(ui.getByRole("combobox", { name: "Tabs and panes" })).toContainText("Mobile task");
+    await expect(ui.getByRole("combobox", { name: "Tabs" })).toContainText("Mobile task");
     expect(errors).toEqual([]);
   } finally {
     desktop.disconnect();

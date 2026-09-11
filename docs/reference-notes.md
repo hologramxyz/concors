@@ -3,19 +3,12 @@
 Reviewed 2026-09-07 through source and documentation; apps were not launched.
 Second project is provisionally identified as Herdr (herdr.dev), matching the user's spoken description; confirmation requested.
 
-## Paseo
+## Structured chat
 
-- Repository: https://github.com/getpaseo/paseo
-- Reviewed commit: a7a708bec99e935ee4b8c6f7314a4b9a9984cfa6
-- Reference checkout: /tmp/concors-reference-paseo
-- Unified chat means a consistent structured conversation UI across providers. Provider adapters translate native sessions into shared events; each agent retains its own conversation.
-- Stream items include user messages, assistant messages, thoughts, tool calls, todo lists, notifications, compaction, and plugin items (`packages/app/src/types/stream.ts`).
-- Tool presentation separates readable summary, status, icon, error, file target, and expandable detail (`packages/app/src/tool-calls/presentation.ts`).
-- Chat rendering separates older virtualized history, recent mounted history, and live output (`packages/app/src/agent-stream/model.ts`). Turn footers show working state and timing (`turn-footer.tsx`).
-- Composer handles attachments, cancellation, queued messages, and optimistic submissions (`packages/app/src/composer/actions.ts`).
-- Timeline synchronization preserves message identity across acknowledgements/reconnects. Active-turn lifecycle is authoritative and separate from rendered messages; elapsed time follows turn liveness (`docs/timeline-sync.md`).
-- Workspace attention buckets prioritize needs-input, failure, running, attention, done (`packages/protocol/src/agent-state-bucket.ts`).
-- Provider integration paths and boundaries: `docs/providers.md`; lifecycle, child agents, resumable closure, archive: `docs/agent-lifecycle.md`.
+Provider adapters normalize native sessions into shared events. Each agent retains
+its own conversation. The timeline displays messages, tool results, plans,
+questions, and lifecycle events. The daemon owns working and attention states;
+clients share those states across chat, sidebar, and notifications.
 
 ## Herdr
 
@@ -33,4 +26,4 @@ Second project is provisionally identified as Herdr (herdr.dev), matching the us
 
 ## Potential Concors direction, pending the user's detailed prompt
 
-Use Paseo as the reference for structured provider-independent chat; use Herdr for spaces, agent navigation, status rollups, unseen completion, and distinct completion/input sounds. Define agent state once in the daemon/protocol and consume it consistently in chat, sidebar, and notifications. Keep lifecycle, attention acknowledgement, connection state, and runtime persistence distinct. No implementation decisions are finalized by this review.
+Use shared structured chat across providers; use Herdr for spaces, agent navigation, status rollups, unseen completion, and distinct completion/input sounds. Define agent state once in the daemon/protocol and consume it consistently in chat, sidebar, and notifications. Keep lifecycle, attention acknowledgement, connection state, and runtime persistence distinct. No implementation decisions are finalized by this review.

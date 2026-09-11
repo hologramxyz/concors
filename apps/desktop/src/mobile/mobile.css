@@ -149,54 +149,11 @@ body {
   overflow: auto;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 4px;
   padding: 2px;
 }
-.mobile-tab-card {
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  overflow: hidden;
-  background: color-mix(in srgb, var(--muted) 22%, var(--background));
-  flex-shrink: 0;
-}
-.mobile-tab-card[data-active="true"] {
-  border-color: color-mix(in srgb, var(--primary) 30%, var(--border));
-}
-.mobile-tab-card-heading {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 5px 6px;
-}
-.mobile-tab-choice {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  min-height: 44px;
-  align-items: center;
-  gap: 10px;
-  padding: 6px;
-  font-size: 15px;
-  font-weight: 600;
-  text-align: left;
-}
-.mobile-tab-choice > svg {
-  width: 18px;
-  height: 18px;
-  color: var(--muted-foreground);
-  flex-shrink: 0;
-}
-.mobile-tab-choice > span:first-of-type {
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.mobile-tab-panes {
-  padding: 0 6px 6px 18px;
-}
 .mobile-pane-row {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 2px;
@@ -240,7 +197,6 @@ body {
   color: var(--muted-foreground);
 }
 .mobile-row-actions:active,
-.mobile-tab-choice:active,
 .mobile-pane-choice:active {
   background: var(--muted);
 }
@@ -1026,24 +982,6 @@ aside[aria-label="Agent notifications"] {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
 }
-.mobile-session-destination {
-  display: flex;
-  gap: 4px;
-  padding: 4px;
-  border-radius: 16px;
-  background: var(--muted);
-}
-.mobile-session-destination button {
-  flex: 1;
-  padding: 8px;
-  border-radius: 12px;
-  font-size: 13px;
-  font-weight: 500;
-}
-.mobile-session-destination button[aria-pressed="true"] {
-  background: var(--background);
-  box-shadow: 0 1px 4px #00000012;
-}
 .mobile-composer-toolbar {
   flex-wrap: nowrap;
   gap: 0;
@@ -1357,4 +1295,24 @@ aside[aria-label="Agent notifications"] {
     padding-top: 4px;
     padding-bottom: 4px;
   }
+}
+
+/* Keep message navigation below the floating header, with room for touch targets. */
+.mobile-pane .message-list-trigger {
+  top: 76px;
+  right: 16px;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+}
+.mobile-pane .chat-timeline-shell [aria-label="Chat timeline"] {
+  padding-top: 128px;
+  scroll-padding-top: 128px;
+}
+.mobile-main:has(.mobile-notice) .message-list-trigger {
+  top: 4px;
+}
+.mobile-main:has(.mobile-notice) .chat-timeline-shell [aria-label="Chat timeline"] {
+  padding-top: 56px;
+  scroll-padding-top: 56px;
 }

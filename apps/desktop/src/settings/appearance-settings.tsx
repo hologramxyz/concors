@@ -1,3 +1,4 @@
+import { ColorThemeSettings } from "./color-theme-settings";
 import { Check, ChevronDown, Monitor, Moon, Sun } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -77,6 +78,7 @@ export function AppearanceSettings({
           </DropdownMenu>
         </Row>
       </Section>
+      <ColorThemeSettings />
       <Section
         title="Interface"
         description="Choose the corner style for frames, tabs, buttons, menus, and agent inputs."

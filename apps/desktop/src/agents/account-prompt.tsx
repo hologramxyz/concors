@@ -61,13 +61,26 @@ function AccountPrompt({
   const [copied, setCopied] = useState(false);
   const mounted = useRef(true);
   const isDismissed = useRef(hidden);
-  const pending = useRef(false);
+  const pending = useRef<Promise<void> | null>(null);
   const latest = useRef<AgentAccount | null>(null);
   const request = useCallback(
-    async (action: AgentAccountAction) => {
-      if (pending.current) return;
-      pending.current = true;
-      setBusy(true);
+    async (action: AgentAccountAction, background = false) => {
+      if (pending.current && action.type === "read") return;
+      // A focus refresh must not disable a button between pointerdown and click,
+      // or discard the user's action while that read is in flight.
+      while (pending.current) {
+        setBusy(true);
+        await pending.current;
+        if (!mounted.current || (isDismissed.current && action.type !== "cancel")) {
+          if (mounted.current) setBusy(false);
+          return;
+        }
+      }
+      let complete!: () => void;
+      pending.current = new Promise<void>((resolve) => {
+        complete = resolve;
+      });
+      if (!background) setBusy(true);
       setError(null);
       try {
         const result = await connection.requestAgent(
@@ -105,7 +118,8 @@ function AccountPrompt({
         if (mounted.current && !isDismissed.current)
           setError(cause instanceof Error ? cause.message : "Could not connect account");
       } finally {
-        pending.current = false;
+        pending.current = null;
+        complete();
         if (mounted.current) {
           setBusy(false);
           if (action.type === "complete") setValue("");
@@ -138,7 +152,7 @@ function AccountPrompt({
       if (mounted.current && !isDismissed.current) void request({ type: "read" });
     });
     const check = () => {
-      if (!latest.current?.challenge) void request({ type: "read" });
+      if (!latest.current?.challenge) void request({ type: "read" }, true);
     };
     window.addEventListener("focus", check);
     return () => window.removeEventListener("focus", check);
@@ -179,13 +193,7 @@ function AccountPrompt({
         Connect account
       </button>
     );
-  if (account?.status === "connected")
-    return (
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground" role="status">
-        <Check className="size-3.5" />
-        {agentProviderNames[agent.provider]} connected{account.label ? ` · ${account.label}` : ""}
-      </div>
-    );
+  if (account?.status === "connected") return null;
   const methods = account?.methods ?? [];
   const selected = methods.find((m) => m.id === method) ?? methods[0];
   const challenge = account?.challenge;
