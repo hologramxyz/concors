@@ -1,3 +1,4 @@
+import { TaskState, isTaskTool } from "./plans.ts";
 import { nativeToolItem } from "./tool-items.ts";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -52,6 +53,7 @@ export abstract class EventProvider implements ConversationProvider {
   protected turnId = "";
   protected closed = false;
   protected interrupted = false;
+  protected tasks = new TaskState();
   protected controls: AgentControls = AgentControlsSchema.parse({});
   protected compactionId: string | null = null;
   private ended = new Set<() => void>();
@@ -157,6 +159,10 @@ export abstract class EventProvider implements ConversationProvider {
       },
     });
   }
+  protected restoredHistory<T extends { items: unknown[] }>(turns: T[]): T[] {
+    this.tasks.restore(turns);
+    return turns;
+  }
   protected controlsChanged() {
     this.emit("session/controls/updated", { controls: this.controls });
   }
@@ -168,6 +174,14 @@ export abstract class EventProvider implements ConversationProvider {
     done: boolean,
     failed = false,
   ) {
+    if (isTaskTool(name)) {
+      if (!done) return;
+      const steps = this.tasks.update(name, input, output, done, failed);
+      if (steps) {
+        this.item({ id: `tasks:${id}`, type: "plan", steps }, false);
+        return;
+      }
+    }
     this.item(nativeToolItem(id, name, input, output, done, failed), done);
   }
   protected async permission(title: string, input: unknown): Promise<boolean> {
