@@ -22,13 +22,15 @@ export class OpenCodeProvider extends EventProvider {
   private messages = new Map<string, string>();
   private parts = new Map<string, { messageId: string; text: string }>();
   private cwd: string;
+  private launcher: typeof launch;
   private models = new Map<string, Record<string, unknown>>();
   private currentModel = "";
   private summaries = new Set<string>();
   private manualCompact = false;
-  constructor(cwd: string, onInput: InputHandler) {
+  constructor(cwd: string, onInput: InputHandler, launcher: typeof launch = launch) {
     super(onInput);
     this.cwd = cwd;
+    this.launcher = launcher;
     this.controls = AgentControlsSchema.parse({
       compact: true,
       contextUsage: true,
@@ -40,7 +42,7 @@ export class OpenCodeProvider extends EventProvider {
     });
   }
   async initialize() {
-    const child = launch(
+    const child = this.launcher(
       "opencode",
       ["serve", "--hostname", "127.0.0.1", "--port", "0"],
       this.cwd,
