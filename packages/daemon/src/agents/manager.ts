@@ -417,7 +417,12 @@ export class AgentManager {
       }
       if (op.kind === "read") {
         const info = this.#store.agent(op.sessionId);
-        if (info.threadId && !this.#runtimes.has(info.id) && !op.before) {
+        if (
+          info.threadId &&
+          !this.#runtimes.has(info.id) &&
+          op.before === undefined &&
+          op.after === undefined
+        ) {
           try {
             await this.provider(info.id);
           } catch (error) {
@@ -429,7 +434,7 @@ export class AgentManager {
             else this.fail(info.id, error);
           }
         }
-        return this.result(request, op.sessionId, op.before);
+        return this.result(request, op.sessionId, op.before, op.after);
       }
       if (op.kind === "seen") {
         const info = this.#store.agent(op.sessionId);
@@ -1096,11 +1101,11 @@ export class AgentManager {
     void this.drain(info.id).catch((error) => this.fail(info.id, error));
     return this.result(request, info.id);
   }
-  private result(request: AgentRequest, id: string, before?: number): AgentResult {
+  private result(request: AgentRequest, id: string, before?: number, after?: number): AgentResult {
     return {
       type: "agent.result",
       requestId: request.requestId,
-      outcome: { status: "ok", conversation: this.#store.agentConversation(id, before) },
+      outcome: { status: "ok", conversation: this.#store.agentConversation(id, before, after) },
     };
   }
   private async interrupt(id: string, runtime: Runtime, turnId: string): Promise<void> {

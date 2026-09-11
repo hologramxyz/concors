@@ -85,6 +85,41 @@ async function mockApi(page: Page) {
   return state;
 }
 
+test("authentication forms remain scrollable in short windows", async ({ page }) => {
+  await mockApi(page);
+  await page.setViewportSize({ width: 640, height: 320 });
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Sign in to Concors" })).toBeVisible();
+  const main = page.getByRole("main");
+  for (const mode of ["sign-in", "sign-up"] as const) {
+    if (mode === "sign-up") {
+      await page.getByRole("button", { name: "Create an account", exact: true }).click();
+      await expect(
+        page.getByRole("heading", { name: "Create your Concors account" }),
+      ).toBeVisible();
+    }
+    await main.evaluate((element) => {
+      element.scrollTop = 0;
+    });
+    expect(
+      await page
+        .getByText("concors", { exact: true })
+        .evaluate((element) => element.getBoundingClientRect().top),
+      `${mode} branding must be reachable at the top of the scroll area`,
+    ).toBeGreaterThanOrEqual(0);
+    const submit = page.getByRole("button", {
+      name: mode === "sign-in" ? "Sign in" : "Create account",
+      exact: true,
+    });
+    await submit.scrollIntoViewIfNeeded();
+    const bounds = await submit.boundingBox();
+    expect(bounds).not.toBeNull();
+    expect((bounds?.y ?? 0) + (bounds?.height ?? 0)).toBeLessThanOrEqual(320);
+    expect(await main.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  }
+  await page.screenshot({ path: "test-results/auth-short-window.png" });
+});
+
 test("the app is gated behind sign-in: sign in, restore on reload, sign out, create an account", async ({
   page,
 }) => {

@@ -21,6 +21,8 @@ export class FileDocument {
   };
   private listeners = new Set<() => void>();
   private generation = 0;
+  private checkGeneration = 0;
+  private errorOrigin: "operation" | "check" | null = null;
   readonly target: { projectId: string; epoch: string; path: string; directory?: string };
   constructor(target: FileDocument["target"]) {
     this.target = target;
@@ -32,7 +34,8 @@ export class FileDocument {
       this.listeners.delete(listener);
     };
   };
-  private update(next: Partial<FileSnapshot>) {
+  private update(next: Partial<FileSnapshot>, errorOrigin: "operation" | "check" = "operation") {
+    if ("error" in next) this.errorOrigin = next.error ? errorOrigin : null;
     this.snapshot = { ...this.snapshot, ...next };
     for (const listener of this.listeners) listener();
   }
@@ -72,13 +75,26 @@ export class FileDocument {
   async check(request: Request) {
     if (!this.snapshot.base || this.snapshot.busy) return;
     const generation = this.generation;
+    const checkGeneration = ++this.checkGeneration;
     try {
       const result = await request({ kind: "read", ...this.target });
-      if (generation !== this.generation || this.snapshot.busy) return;
+      if (
+        generation !== this.generation ||
+        checkGeneration !== this.checkGeneration ||
+        this.snapshot.busy
+      )
+        return;
       if (result.status === "read") {
         const changed = result.file.revision !== this.snapshot.base?.revision;
-        this.update({ changed, disk: changed ? result.file : null });
-      } else if ("message" in result) this.update({ error: result.message });
+        this.update({
+          changed,
+          disk: changed ? result.file : null,
+          ...(this.errorOrigin === "check" ? { error: null } : {}),
+        });
+      } else if ("message" in result && this.errorOrigin !== "operation") {
+        // Polling must not conceal a failed save or an explicit reload error.
+        this.update({ error: result.message }, "check");
+      }
     } catch {
       /* A disconnect is displayed by the workspace; keep the draft. */
     }

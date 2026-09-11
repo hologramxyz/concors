@@ -36,7 +36,7 @@ export function ProjectWorkspace({
   onCommand: (operation: WorkspaceOperation) => void;
   execute: (operation: WorkspaceOperation) => Promise<void>;
   onAddProject: () => void;
-  onOpenFolder: (mode: "open" | "clone") => void;
+  onOpenFolder: (mode: "open" | "clone", trigger?: HTMLElement | null) => void;
 }) {
   const connection = useContext(TerminalConnectionContext);
   const files = useFiles();
@@ -107,7 +107,11 @@ export function ProjectWorkspace({
           <Plus />
           New workspace
         </Button>
-        <Button variant="ghost" onClick={() => onOpenFolder("open")} disabled={!canEdit}>
+        <Button
+          variant="ghost"
+          onClick={(event) => onOpenFolder("open", event.currentTarget)}
+          disabled={!canEdit}
+        >
           Open folder…
         </Button>
       </div>

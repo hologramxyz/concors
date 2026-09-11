@@ -107,7 +107,6 @@ test("directional pane sequences, tab cycling, project memory and immediate Agen
     await expect.poll(() => focusedPane(page)).toBe(left);
     await sequence(page, "t", "Enter");
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
-    await page.getByRole("button", { name: "Codex", exact: true }).click();
     const input = page.getByRole("textbox", { name: "Message Codex" });
     await expect(input).toBeEnabled();
     await input.fill("keep these words");

@@ -51,6 +51,10 @@ test("workspace shortcuts create, search, split and close the active pane withou
     ).toBe(false);
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog")).toHaveCount(0);
+    // Let the closing dialog restore focus before moving it into the terminal.
+    await expect(
+      page.getByRole("button", { name: "Open workspace menu", exact: true }),
+    ).toBeFocused();
     await page.locator(".concors-terminal textarea").filter({ visible: true }).focus();
     await page.keyboard.type(`cd '${directory}'`);
     await page.keyboard.press("Enter");

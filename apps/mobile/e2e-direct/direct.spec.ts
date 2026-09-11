@@ -29,6 +29,7 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
   const projectId = crypto.randomUUID(),
     tabId = crypto.randomUUID(),
     paneId = crypto.randomUUID();
+  const agents = () => desktop.agents.filter((agent) => agent.projectId === projectId);
   const snapshot = () => {
     const current = desktop.workspace;
     if (!current) throw new Error("Desktop control client has no workspace snapshot");
@@ -72,18 +73,17 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
     await page.getByRole("button", { name: "Allow AI data sharing", exact: true }).click();
     const ui = page.frameLocator('iframe[title="Concors workspace"]');
-    await ui.getByRole("button", { name: "Codex", exact: true }).click();
     const input = ui.getByRole("textbox", { name: "Message Codex" });
     await expect(input).toBeEnabled();
     await input.fill("hello over the real daemon transport");
     await ui.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(ui.getByRole("log")).toContainText("Hello from Codex");
-    await expect.poll(() => desktop.agents.length).toBe(1);
+    await expect.poll(() => agents().length).toBe(1);
     await input.fill("approve command");
     await ui.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(ui.getByRole("region", { name: "Allow command execution?" })).toBeVisible();
     await ui.getByRole("button", { name: "Allow once", exact: true }).click();
-    await expect.poll(() => desktop.agents[0]?.status).toBe("done");
+    await expect.poll(() => agents()[0]?.status).toBe("done");
     await input.fill("primitive-form");
     await ui.getByRole("button", { name: "Send message", exact: true }).click();
     await ui.getByRole("checkbox", { name: "Unit tests Run the focused suite" }).click();
@@ -92,18 +92,18 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
       .getByRole("textbox", { name: "Additional notes", exact: true })
       .fill("  Keep indentation.\n");
     await ui.getByRole("button", { name: "Submit answers", exact: true }).click();
-    await expect.poll(() => desktop.agents[0]?.status).toBe("done");
+    await expect.poll(() => agents()[0]?.status).toBe("done");
     await input.fill("primitive-form");
     await ui.getByRole("button", { name: "Send message", exact: true }).click();
     await ui.getByRole("button", { name: "Dismiss", exact: true }).click();
-    await expect.poll(() => desktop.agents[0]?.status).toBe("done");
+    await expect.poll(() => agents()[0]?.status).toBe("done");
     await input.fill("primitive-plan");
     await ui.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(
       ui.getByRole("heading", { name: "Implementation plan", exact: true }),
     ).toBeVisible();
     await ui.getByRole("button", { name: "Approve plan", exact: true }).click();
-    await expect.poll(() => desktop.agents[0]?.status).toBe("done");
+    await expect.poll(() => agents()[0]?.status).toBe("done");
     await input.fill("primitive-read");
     await ui.getByRole("button", { name: "Send message", exact: true }).click();
     await ui

@@ -108,6 +108,40 @@ async function setup(resumeError?: string) {
   expect(providers).toHaveLength(1);
   return { a, b, id, url };
 }
+it("pages saved chat history in both directions without skipping byte-limited messages", async () => {
+  const { a, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "hold history" });
+  const provider = providers[0]!;
+  for (let index = 0; index < 120; index++)
+    provider.emit("item/completed", {
+      item: { id: `history-${index}`, type: "agentMessage", text: `${index}: ${"x".repeat(8000)}` },
+    });
+  const read = async (cursor: { before?: number; after?: number } = {}) => {
+    const result = await action(a, { kind: "read", sessionId: id, ...cursor });
+    if (result.outcome.status === "error") throw new Error(result.outcome.message);
+    return result.outcome.conversation;
+  };
+  let page = await read();
+  expect(page.hasNewer).toBe(false);
+  expect(page.items.length).toBeLessThan(80);
+  let all = page.items;
+  while (page.hasMore) {
+    page = await read({ before: page.items[0]!.position });
+    expect(page.items.length).toBeGreaterThan(0);
+    all = [...page.items, ...all];
+  }
+  expect(all).toHaveLength(122);
+  expect(new Set(all.map((item) => item.id)).size).toBe(all.length);
+  const forward = [...page.items];
+  while (page.hasNewer) {
+    page = await read({ after: page.items.at(-1)!.position });
+    expect(page.items.length).toBeGreaterThan(0);
+    forward.push(...page.items);
+  }
+  expect(forward).toEqual(all);
+  expect((await read({ before: 0 })).items).toEqual([]);
+  expect((await read({ after: all.at(-1)!.position })).items).toEqual([]);
+});
 it("streams one shared turn, reconnects without replay, persists history and resumes after restart", async () => {
   const { a, b, id, url } = await setup();
   const requestId = randomUUID();

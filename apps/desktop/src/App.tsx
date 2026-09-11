@@ -98,6 +98,20 @@ function AppContent() {
   const [localEndpoint, setLocalEndpoint] = useState<DaemonEndpoint | null>(null);
   const [selectionHost, setSelectionHost] = useState<{ scope: string; host: Host } | null>(null);
   const [addingProject, setAddingProject] = useState<"open" | "clone" | null>(null);
+  const projectDialogTrigger = useRef<HTMLElement | null>(null);
+  const openProjectDialog = (mode: "open" | "clone", trigger?: HTMLElement | null) => {
+    projectDialogTrigger.current = trigger ?? null;
+    setAddingProject(mode);
+  };
+  const cancelProjectDialog = () => {
+    setAddingProject(null);
+    const trigger = projectDialogTrigger.current;
+    // These controlled dialogs have no Radix DialogTrigger. Only cancellation returns
+    // to the opener; successful setup leaves focus with the newly opened workspace.
+    requestAnimationFrame(() => {
+      if (trigger?.isConnected) trigger.focus({ preventScroll: true });
+    });
+  };
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const theme = useTheme();
@@ -351,7 +365,7 @@ function AppContent() {
                         canEdit={canEdit && !newWorkspace.busy}
                         onSelectProject={selectProject}
                         onAddProject={startWorkspace}
-                        onOpenFolder={setAddingProject}
+                        onOpenFolder={openProjectDialog}
                         hostScope={hostScope}
                         selectedHost={selectedHost}
                         machineConnected={connection.state.status === "ready"}
@@ -449,7 +463,7 @@ function AppContent() {
                               onCommand={command}
                               execute={execute}
                               onAddProject={startWorkspace}
-                              onOpenFolder={setAddingProject}
+                              onOpenFolder={openProjectDialog}
                             />
                           ) : (
                             <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
@@ -508,7 +522,7 @@ function AppContent() {
                   {addingProject && (
                     <ProjectSetupDialog
                       mode={addingProject}
-                      onClose={() => setAddingProject(null)}
+                      onClose={cancelProjectDialog}
                       onAdded={() => {
                         setAddingProject(null);
                         setView("projects");

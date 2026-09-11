@@ -1,5 +1,5 @@
 import { FolderOpen, GitBranch, Plus } from "lucide-react";
-import { useContext, useState } from "react";
+import { useContext, useRef, useState } from "react";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import {
   Dialog,
@@ -22,10 +22,11 @@ export function NewWorkspaceMenu({
 }: {
   disabled: boolean;
   onNew: () => void;
-  onOpen: (mode: "open" | "clone") => void;
+  onOpen: (mode: "open" | "clone", trigger?: HTMLElement | null) => void;
 }) {
   const compact = useContext(CompactLayoutContext);
   const [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
   if (compact)
     return (
       <Dialog open={open} onOpenChange={setOpen}>
@@ -76,6 +77,7 @@ export function NewWorkspaceMenu({
     <div className="flex items-center">
       <DropdownMenu>
         <DropdownMenuTrigger
+          ref={trigger}
           aria-label="Open workspace menu"
           title="Open workspace menu"
           disabled={disabled}
@@ -88,11 +90,11 @@ export function NewWorkspaceMenu({
             <Plus />
             New workspace
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onOpen("open")}>
+          <DropdownMenuItem onSelect={() => onOpen("open", trigger.current)}>
             <FolderOpen />
             Open folder…
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onOpen("clone")}>
+          <DropdownMenuItem onSelect={() => onOpen("clone", trigger.current)}>
             <GitBranch />
             Clone repository…
           </DropdownMenuItem>

@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { activeOrganization, type SignedInAuth } from "@/auth/auth-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { copyText } from "@/lib/clipboard";
 import {
   Dialog,
   DialogContent,
@@ -271,16 +272,31 @@ function MachineCard({
 
 function CopyButton({ text }: { readonly text: string }) {
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState(false);
   return (
     <Button
       variant="ghost"
       size="icon-xs"
-      aria-label="Copy SSH command"
+      aria-label={error ? "Copy failed; try again" : "Copy SSH command"}
+      title={
+        error
+          ? "Could not copy. Select the SSH command and copy it manually."
+          : copied
+            ? "Copied"
+            : "Copy SSH command"
+      }
       onClick={() => {
-        void navigator.clipboard.writeText(text).then(() => {
-          setCopied(true);
-          setTimeout(() => setCopied(false), 1500);
-        });
+        void copyText(text).then(
+          () => {
+            setCopied(true);
+            setError(false);
+            setTimeout(() => setCopied(false), 1500);
+          },
+          () => {
+            setCopied(false);
+            setError(true);
+          },
+        );
       }}
     >
       {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}

@@ -1,11 +1,18 @@
-import type { ColorTheme } from "@concors/protocol";
+import { mobileThemeBackground, type ColorTheme } from "@concors/protocol";
 
 /** Explicit token mapping prevents custom files from changing layout or loading external CSS. */
 export function colorThemeTokens(
   theme: ColorTheme,
   mode: "light" | "dark",
+  compact = false,
 ): Record<string, string> {
-  if (theme.id === "concors") return {};
+  if (theme.id === "concors")
+    return compact
+      ? {
+          background: mobileThemeBackground(theme, mode),
+          "terminal-background": mobileThemeBackground(theme, mode),
+        }
+      : {};
   const c = theme[mode];
   const tokens: Record<string, string> = {
     background: c.background,
@@ -34,7 +41,7 @@ export function colorThemeTokens(
     "sidebar-border": c.border,
     "sidebar-ring": c.accent,
     selection: c.selection,
-    "terminal-background": c.surface,
+    "terminal-background": compact ? mobileThemeBackground(theme, mode) : c.surface,
     "terminal-foreground": c.foreground,
     "terminal-cursor": c.accent,
     "terminal-selection": c.selection,
@@ -43,9 +50,9 @@ export function colorThemeTokens(
     if (color) tokens[`terminal-${name}`] = color;
   return tokens;
 }
-export function applyColorTheme(theme: ColorTheme, mode: "light" | "dark") {
+export function applyColorTheme(theme: ColorTheme, mode: "light" | "dark", compact = false) {
   const root = document.documentElement;
-  const tokens = colorThemeTokens(theme, mode);
+  const tokens = colorThemeTokens(theme, mode, compact);
   for (const [key, color] of Object.entries(tokens)) root.style.setProperty(`--${key}`, color);
   root.dataset["colorTheme"] = theme.id;
   return () => {

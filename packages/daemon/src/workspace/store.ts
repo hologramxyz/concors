@@ -617,12 +617,18 @@ export class WorkspaceStore {
       hasMore: rows.length > 200,
     };
   }
-  agentConversation(id: string, before = Number.MAX_SAFE_INTEGER): AgentConversation {
+  agentConversation(
+    id: string,
+    before = Number.MAX_SAFE_INTEGER,
+    after?: number,
+  ): AgentConversation {
     const rows = this.#db
       .prepare(
-        "SELECT position, item FROM agent_items WHERE session_id = ? AND position < ? ORDER BY position DESC LIMIT 80",
+        after === undefined
+          ? "SELECT position, item FROM agent_items WHERE session_id = ? AND position < ? ORDER BY position DESC LIMIT 80"
+          : "SELECT position, item FROM agent_items WHERE session_id = ? AND position > ? ORDER BY position ASC LIMIT 80",
       )
-      .all(id, before);
+      .all(id, after ?? before);
     const items: AgentItem[] = [];
     let bytes = 0;
     for (const row of rows) {
@@ -632,7 +638,8 @@ export class WorkspaceStore {
       });
       bytes += Buffer.byteLength(JSON.stringify(item));
       if (bytes > 384 * 1024 && items.length) break;
-      items.unshift(item);
+      if (after === undefined) items.unshift(item);
+      else items.push(item);
     }
     const first = items[0]?.position;
     const hasMore =
@@ -640,7 +647,13 @@ export class WorkspaceStore {
       !!this.#db
         .prepare("SELECT 1 FROM agent_items WHERE session_id = ? AND position < ? LIMIT 1")
         .get(id, first);
-    return { agent: this.agent(id), items, hasMore };
+    const last = items.at(-1)?.position;
+    const hasNewer =
+      last !== undefined &&
+      !!this.#db
+        .prepare("SELECT 1 FROM agent_items WHERE session_id = ? AND position > ? LIMIT 1")
+        .get(id, last);
+    return { agent: this.agent(id), items, hasMore, hasNewer };
   }
 
   private reject(

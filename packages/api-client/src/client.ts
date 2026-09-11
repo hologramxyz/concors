@@ -142,19 +142,20 @@ export class ApiClient {
   }
 
   /**
-   * Ends the session. The local token is always dropped; revoking the session on the server is
-   * best-effort so signing out still works offline or after the session already expired.
+   * Ends the session. The local token is dropped immediately; revoking the session on the server
+   * is best-effort and must not clear a newer sign-in when its response arrives late.
    */
   async signOut(): Promise<void> {
     const hadCredentials = this.tokens.get() !== null;
+    // #request captures the original credential synchronously, before its first await.
+    const revocation = this.#request("POST", "/api/auth/sign-out", { body: {}, schema: null });
+    this.tokens.set(null);
     try {
-      await this.#request("POST", "/api/auth/sign-out", { body: {}, schema: null });
+      await revocation;
     } catch (error) {
       // An expired session answers 401: the goal (no session) is already reached. Anything else
       // only matters if the caller had a token worth revoking.
       if (!(error instanceof ApiError) && hadCredentials) throw error;
-    } finally {
-      this.tokens.set(null);
     }
   }
 

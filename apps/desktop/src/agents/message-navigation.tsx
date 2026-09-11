@@ -11,7 +11,7 @@ export function MessageNavigation({
   error,
   onRetry,
   hasEarlier,
-  onEarlier,
+  hasNewer,
 }: {
   entries: MessageEntry[];
   viewport: RefObject<HTMLDivElement | null>;
@@ -20,7 +20,7 @@ export function MessageNavigation({
   error: string | null;
   onRetry: () => void;
   hasEarlier: boolean;
-  onEarlier: () => Promise<void>;
+  hasNewer: boolean;
 }) {
   const [hovered, setHovered] = useState<number | null>(null);
   const [focused, setFocused] = useState<number | null>(null);
@@ -55,7 +55,7 @@ export function MessageNavigation({
       // Several prompts can fit in the final viewport. At the bottom, select the
       // final prompt rather than whichever one happens to sit near the top.
       // Allow for fractional scroll positions and rounded viewport dimensions.
-      if (el.scrollHeight - Math.max(0, el.scrollTop) - el.clientHeight <= 2) {
+      if (!hasNewer && el.scrollHeight - Math.max(0, el.scrollTop) - el.clientHeight <= 2) {
         setActive(entries.at(-1)?.id ?? null);
         return;
       }
@@ -82,7 +82,7 @@ export function MessageNavigation({
       observer.disconnect();
       cancelAnimationFrame(frame);
     };
-  }, [viewport, entries]);
+  }, [viewport, entries, hasNewer]);
   const jump = async (entry: MessageEntry) => {
     if (jumping) return;
     setJumping(true);
@@ -205,22 +205,17 @@ export function MessageNavigation({
               Jump to a message in this conversation.
             </Dialog.Description>
             <div className="chat-scroll min-h-0 overflow-y-auto">
-              {(hasEarlier || error) && (
+              {hasEarlier && (
+                <p className="p-3 text-sm text-muted-foreground">
+                  Scroll up in the conversation to load earlier messages.
+                </p>
+              )}
+              {error && (
                 <button
                   className="w-full rounded-md p-3 text-left text-sm hover:bg-muted"
-                  onClick={() => {
-                    if (error) onRetry();
-                    else
-                      void onEarlier().catch((cause: unknown) =>
-                        setJumpError(
-                          cause instanceof Error
-                            ? cause.message
-                            : "Could not load earlier messages.",
-                        ),
-                      );
-                  }}
+                  onClick={onRetry}
                 >
-                  Load earlier messages
+                  Retry loading messages
                 </button>
               )}
               {entries.map((entry, index) => (

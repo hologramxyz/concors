@@ -5,6 +5,44 @@ const initial: ProjectFile = { path: "a.ts", content: "one", revision: "1", size
 const target = { projectId: "p", epoch: "e", path: "a.ts" };
 const read = async (): Promise<FileResult["outcome"]> => ({ status: "read", file: initial });
 describe("editor drafts", () => {
+  it("clears a recovered background read error without replacing the draft", async () => {
+    const doc = new FileDocument(target);
+    await doc.load(read);
+    doc.edit("my draft");
+    await doc.check(async () => ({ status: "error", message: "Temporarily unreadable" }));
+    expect(doc.getSnapshot().error).toBe("Temporarily unreadable");
+    await doc.check(read);
+    expect(doc.getSnapshot()).toMatchObject({ content: "my draft", error: null });
+    expect(doc.dirty).toBe(true);
+  });
+
+  it("keeps failed-save feedback through successful and failed background reads", async () => {
+    const doc = new FileDocument(target);
+    await doc.load(read);
+    doc.edit("my draft");
+    await doc.save(async () => ({ status: "error", message: "Permission denied while saving" }));
+    await doc.check(read);
+    expect(doc.getSnapshot().error).toBe("Permission denied while saving");
+    await doc.check(async () => ({ status: "error", message: "Temporarily unreadable" }));
+    expect(doc.getSnapshot().error).toBe("Permission denied while saving");
+    await doc.check(read);
+    expect(doc.getSnapshot()).toMatchObject({
+      content: "my draft",
+      error: "Permission denied while saving",
+    });
+    expect(doc.dirty).toBe(true);
+  });
+
+  it("keeps explicit reload errors until a user-triggered operation succeeds", async () => {
+    const doc = new FileDocument(target);
+    await doc.load(read);
+    await doc.load(async () => ({ status: "error", message: "Reload failed" }));
+    await doc.check(read);
+    expect(doc.getSnapshot().error).toBe("Reload failed");
+    await doc.load(read);
+    expect(doc.getSnapshot().error).toBeNull();
+  });
+
   it("keeps edits typed while a save is in flight", async () => {
     const doc = new FileDocument(target);
     await doc.load(read);
@@ -93,6 +131,30 @@ describe("editor drafts", () => {
       content: "new",
       changed: false,
       base: { revision: "2" },
+    });
+  });
+
+  it("ignores a disk check that finishes after a newer refresh", async () => {
+    const doc = new FileDocument(target);
+    await doc.load(read);
+    doc.edit("my draft");
+    let settle!: (result: FileResult["outcome"]) => void;
+    const older = doc.check(
+      () =>
+        new Promise((resolve) => {
+          settle = resolve;
+        }),
+    );
+    await doc.check(async () => ({
+      status: "read",
+      file: { ...initial, content: "latest disk content", revision: "2" },
+    }));
+    settle({ status: "read", file: initial });
+    await older;
+    expect(doc.getSnapshot()).toMatchObject({
+      content: "my draft",
+      changed: true,
+      disk: { content: "latest disk content", revision: "2" },
     });
   });
 });

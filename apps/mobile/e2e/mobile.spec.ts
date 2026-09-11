@@ -104,7 +104,7 @@ test("chat-first shell reuses desktop approvals, streaming and bottom composer",
   expect(metrics.overflow).toBe(false);
   expect(errors).toEqual([]);
 });
-test("mobile header, terminal and host share one background in light and dark mode", async ({
+test("mobile header, terminal and host share one background across palettes and modes", async ({
   page,
 }) => {
   test.setTimeout(90_000);
@@ -118,11 +118,18 @@ test("mobile header, terminal and host share one background in light and dark mo
   await choose(ui, "Tabs and panes", activeTerminal);
   const terminal = ui.getByLabel("Terminal output", { exact: true });
   await expect(terminal).toBeVisible();
-  for (const [index, colorScheme] of (["light", "dark", "light"] as const).entries()) {
+  const appearances = [
+    ["Concors", "light", "rgb(244, 243, 239)"],
+    ["Concors", "dark", "rgb(20, 20, 20)"],
+    ["Cobalt", "dark", "rgb(16, 22, 37)"],
+    ["Concors", "light", "rgb(244, 243, 239)"],
+  ] as const;
+  for (const [index, [palette, colorScheme, color]] of appearances.entries()) {
     if (index > 0) {
       await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
       await openSettings(ui);
       await choose(ui, "Settings section", "appearance");
+      await ui.getByRole("radio", { name: palette, exact: true }).locator("..").click();
       await ui.getByRole("button", { name: "Theme", exact: true }).click();
       await ui
         .getByRole("menuitem", { name: colorScheme === "dark" ? "Dark" : "Light", exact: true })
@@ -132,7 +139,6 @@ test("mobile header, terminal and host share one background in light and dark mo
         .getByRole("button", { name: "Close", exact: true })
         .click();
     }
-    const color = colorScheme === "dark" ? "rgb(20, 20, 20)" : "rgb(244, 243, 239)";
     await expect(ui.getByTestId("mobile-workspace")).toHaveCSS("background-color", color);
     await expect(terminal.locator("..")).toHaveCSS("background-color", color);
     // xterm sets this inline from its theme, so assert the renderer as well as pane CSS.
@@ -146,7 +152,9 @@ test("mobile header, terminal and host share one background in light and dark mo
       color,
     );
     await expect(page.getByTestId("workspace-safe-area")).toHaveCSS("background-color", color);
-    await page.screenshot({ path: `apps/mobile/test-results/mobile-terminal-${colorScheme}.png` });
+    await page.screenshot({
+      path: `apps/mobile/test-results/mobile-terminal-${palette}-${colorScheme}.png`,
+    });
   }
   await choose(ui, "Tabs and panes", activeChat);
   await expect(ui.getByLabel("Agent conversation", { exact: true })).toHaveCSS(
