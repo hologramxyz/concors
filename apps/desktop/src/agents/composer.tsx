@@ -97,6 +97,9 @@ export function AgentComposer({
   const advanced =
     connection?.state.status === "ready" &&
     connection.state.daemon.capabilities?.includes("agent-composer");
+  const durableQueue =
+    connection?.state.status === "ready" &&
+    connection.state.daemon.capabilities?.includes("agent-queue");
   const active = ["starting", "working", "needs_input"].includes(agent.status);
   const showStop = active && (!compact || (!draft.trim() && !attachments.length));
   const settings = agent.settings ?? defaults,
@@ -139,7 +142,7 @@ export function AgentComposer({
       id: crypto.randomUUID(),
       draft: input,
       operation: {
-        kind: "send" as const,
+        kind: active && durableQueue ? ("queue-add" as const) : ("send" as const),
         sessionId: agent.id,
         text: input.message,
         attachments: input.attachments,
@@ -169,7 +172,7 @@ export function AgentComposer({
         message: input.message,
         attachments: input.attachments,
         canSubmit: connected && !busy && !uploading && !configuring && !!agent.threadId,
-        isAgentRunning: active,
+        isAgentRunning: active && !durableQueue,
         forceSend: attemptRef.current !== null,
         submitBehavior: "preserve-and-lock",
         queueMessage: (value) => {
@@ -195,11 +198,29 @@ export function AgentComposer({
   };
   const queueHead = queue[0];
   useEffect(() => {
-    if (active || !queueHead || !connected || busy || uncertain || sendingRef.current) return;
+    if (
+      durableQueue ||
+      active ||
+      !queueHead ||
+      !connected ||
+      busy ||
+      uncertain ||
+      sendingRef.current
+    )
+      return;
     void submit(queueHead, true);
     // Queue delivery is triggered by authoritative agent state; failures require explicit retry.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, queueHead, connected]);
+  }, [active, queueHead, connected, durableQueue]);
+  const queueAction = async (operation: import("@concors/protocol").AgentOperation) => {
+    try {
+      if (!connection) throw new Error("Machine is disconnected");
+      const result = await connection.requestAgent(operation, crypto.randomUUID());
+      if (result.outcome.status === "error") throw new Error(result.outcome.message);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not update the queue");
+    }
+  };
   const addFiles = async (files: FileList | File[]) => {
     if (uploading || !advanced) return;
     setUploading(true);
@@ -547,7 +568,48 @@ export function AgentComposer({
   return (
     <ComposerSurfaceContext value={owner}>
       <div className="space-y-2">
-        {!!queue.length && (
+        {durableQueue && !!agent.queue?.length && (
+          <div data-composer-queue className="max-h-28 space-y-2 overflow-y-auto">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>{agent.queuePaused ? "Queue paused" : "Follow-ups run on this machine"}</span>
+              <button
+                type="button"
+                disabled={!connected}
+                onClick={() =>
+                  void queueAction({
+                    kind: "queue-pause",
+                    sessionId: agent.id,
+                    paused: !agent.queuePaused,
+                  })
+                }
+              >
+                {agent.queuePaused ? "Resume queue" : "Pause queue"}
+              </button>
+            </div>
+            {agent.queue.map((entry) => (
+              <div
+                key={entry.id}
+                className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-xs"
+              >
+                <span className="text-muted-foreground">Queued</span>
+                <span className="min-w-0 flex-1 truncate">
+                  {entry.text || entry.attachments.map((a) => a.name).join(", ")}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Remove queued message"
+                  disabled={!connected}
+                  onClick={() =>
+                    void queueAction({ kind: "queue-remove", sessionId: agent.id, id: entry.id })
+                  }
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {!durableQueue && !!queue.length && (
           <div
             data-composer-queue
             className={compact ? "max-h-20 space-y-2 overflow-y-auto" : "space-y-2"}
