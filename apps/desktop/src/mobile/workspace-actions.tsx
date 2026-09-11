@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useCommand } from "@/shortcuts/context";
-import { Ellipsis, Pencil, Plus, Settings2, X } from "lucide-react";
+import { Ellipsis, Pencil, Settings2, X } from "lucide-react";
 import type { WorkspaceOperation, WorkspaceProject, WorkspaceTab } from "@concors/protocol";
 import type { MobileTarget } from "@concors/client-core";
 import {
@@ -113,11 +113,8 @@ export function WorkspaceActions({
               ))}
             </DropdownMenuRadioGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => profiles.openSettings(true)}>
-              <Plus /> Add terminal profile…
-            </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => profiles.openSettings()}>
-              <Settings2 /> Manage terminal profiles…
+              <Settings2 /> Edit pane profiles
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
