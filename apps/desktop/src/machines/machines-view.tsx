@@ -1,6 +1,6 @@
 import type { Machine } from "@concors/api-client";
 import { cn } from "cn";
-import { CalendarX, Check, Cloud, Copy, Plus, RefreshCw, Undo2 } from "lucide-react";
+import { CalendarX, Check, Cloud, Copy, Plus, RefreshCw, Server, Undo2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { activeOrganization, type SignedInAuth } from "@/auth/auth-state";
@@ -59,31 +59,36 @@ export function MachinesView({
   const empty = state.machines !== null && machines.length === 0;
 
   return (
-    <div data-machines-view className="mx-auto flex h-full w-full max-w-3xl flex-col px-8 py-8">
-      <div className="mb-6 flex items-center justify-between gap-4">
-        <div>
-          <h2 className="text-[15px] font-semibold">Machines</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Servers Concors runs for {organization?.name ?? "your organization"}, billed monthly.
+    <div
+      data-machines-view
+      className="mx-auto flex min-h-full w-full max-w-[1200px] flex-col px-5 py-8 sm:px-10 sm:py-12"
+    >
+      <div className="mb-8 flex flex-wrap items-start justify-between gap-5">
+        <div className="min-w-0">
+          <h2 className="text-2xl font-semibold tracking-tight">Machines</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Your cloud development machines, managed by Concors.
+          </p>
+          <p className="mt-1 text-xs break-words text-muted-foreground">
+            {organization?.name ?? "Your organization"} · Billed monthly
           </p>
         </div>
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
-            size="icon-sm"
+            className="size-[40px]"
+            size="icon"
             onClick={state.reload}
             disabled={state.loading}
             aria-label="Refresh"
           >
             <RefreshCw className={cn(state.loading && "animate-spin")} aria-hidden="true" />
           </Button>
-          <Button variant="outline" size="sm" className="gap-2 leading-none" disabled>
-            <span className="inline-flex h-full items-center">Connect a machine</span>
-            <span className="inline-flex h-5 items-center rounded bg-muted px-1.5 text-[10px] leading-none">
-              Coming soon
-            </span>
-          </Button>
-          <Button size="sm" onClick={() => setCreating(true)} disabled={state.catalog === null}>
+          <Button
+            className="h-[40px] gap-2 px-5"
+            onClick={() => setCreating(true)}
+            disabled={state.catalog === null || !organization}
+          >
             <Plus data-icon="inline-start" aria-hidden="true" />
             New machine
           </Button>
@@ -107,20 +112,23 @@ export function MachinesView({
           Loading machines…
         </p>
       ) : empty ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+        <div className="flex min-h-80 flex-col items-center justify-center gap-4 rounded-xl border border-dashed bg-card/40 p-8 text-center">
           <Cloud className="size-10 text-muted-foreground/50" aria-hidden="true" />
           <h3 className="text-lg font-medium">No machines yet</h3>
           <p className="max-w-sm text-sm text-muted-foreground">
-            Create a server for this organization. Add an SSH key in Settings first so you can log
-            in to it.
+            Create a machine to run agents, clone repositories, and keep your work in one place.
           </p>
-          <Button size="sm" onClick={() => setCreating(true)} disabled={state.catalog === null}>
+          <Button
+            className="h-[40px] gap-2 px-5"
+            onClick={() => setCreating(true)}
+            disabled={state.catalog === null || !organization}
+          >
             <Plus data-icon="inline-start" aria-hidden="true" />
             New machine
           </Button>
         </div>
       ) : (
-        <ul className="flex flex-col gap-3">
+        <ul aria-label="Cloud machines" className="flex flex-col gap-5">
           {machines.map((machine) => (
             <li
               key={machine.id}
@@ -196,10 +204,11 @@ function MachineCard({
   const tone = STATUS_TONE[machine.status];
   const ending = describeEnding(machine);
   return (
-    <div className="rounded-lg border p-4">
+    <div className="rounded-xl border bg-card/40 p-5 sm:p-6">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <Server className="mr-1 size-5 text-muted-foreground" aria-hidden="true" />
             <span
               className={cn(
                 "size-2 shrink-0 rounded-full",
@@ -208,11 +217,11 @@ function MachineCard({
               )}
               aria-hidden="true"
             />
-            <h3 className="truncate font-medium">{machine.name}</h3>
+            <h3 className="min-w-0 text-lg font-semibold break-all">{machine.name}</h3>
             <Badge variant="outline">{describeStatus(machine)}</Badge>
             {ending && <Badge variant="secondary">{ending}</Badge>}
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-2 text-sm text-muted-foreground">
             <span className="capitalize">{machine.size}</span> · {machine.region} ·{" "}
             {formatMonthly(machine.monthlyPrice)}
           </p>
@@ -240,32 +249,34 @@ function MachineCard({
         </p>
       )}
 
-      <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-xs">
-        <dt className="text-muted-foreground">Address</dt>
-        <dd className="selectable font-mono">{machine.ipv4 ?? "assigning…"}</dd>
-        <dt className="text-muted-foreground">Connect</dt>
-        <dd className="flex items-center gap-2">
-          {command ? (
+      <div className="mt-6 grid gap-6 border-t pt-5 lg:grid-cols-2 lg:gap-10">
+        <dl className="grid grid-cols-[auto_minmax(0,1fr)] content-start items-center gap-x-5 gap-y-3 text-sm">
+          <dt className="text-muted-foreground">Address</dt>
+          <dd className="selectable font-mono break-all">{machine.ipv4 ?? "assigning…"}</dd>
+          <dt className="text-muted-foreground">SSH</dt>
+          <dd className="flex min-w-0 items-center gap-2">
+            {command ? (
+              <>
+                <code className="selectable font-mono break-all">{command}</code>
+                <CopyButton text={command} />
+              </>
+            ) : (
+              <span className="text-muted-foreground">
+                {machine.status === "provisioning" ? "available once installed" : "—"}
+              </span>
+            )}
+          </dd>
+          {machine.paidUntil && (
             <>
-              <code className="selectable font-mono">{command}</code>
-              <CopyButton text={command} />
+              <dt className="text-muted-foreground">Paid until</dt>
+              <dd>
+                {new Date(machine.paidUntil).toLocaleDateString(undefined, { dateStyle: "medium" })}
+              </dd>
             </>
-          ) : (
-            <span className="text-muted-foreground">
-              {machine.status === "provisioning" ? "available once installed" : "—"}
-            </span>
           )}
-        </dd>
-        {machine.paidUntil && (
-          <>
-            <dt className="text-muted-foreground">Paid until</dt>
-            <dd>
-              {new Date(machine.paidUntil).toLocaleDateString(undefined, { dateStyle: "medium" })}
-            </dd>
-          </>
-        )}
-      </dl>
-      <MachineUsage machine={machine} />
+        </dl>
+        <MachineUsage machine={machine} />
+      </div>
     </div>
   );
 }
