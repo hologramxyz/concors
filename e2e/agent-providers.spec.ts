@@ -18,6 +18,7 @@ for (const [provider, label] of [
       await seedProject(page, "Provider picker", directory);
       await page.getByRole("button", { name: "New tab", exact: true }).click();
       await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+      await page.getByRole("button", { name: "Codex", exact: true }).click();
       const original = page.getByRole("textbox", { name: "Message Codex" });
       await expect(original).toBeEnabled();
       await original.fill("keep this Codex conversation");
@@ -30,9 +31,9 @@ for (const [provider, label] of [
       const composer = page.getByRole("textbox", { name: `Message ${label}` });
       await expect(composer).toBeEnabled();
       await expect(page.getByRole("log")).not.toContainText("keep this Codex conversation");
-      await expect(page.getByRole("button", { name: "Thinking effort", exact: true })).toHaveCount(
-        0,
-      );
+      await expect(
+        page.getByRole("button", { name: "Thinking effort", exact: true }),
+      ).toBeVisible();
       await expect(page.getByRole("button", { name: "Permission mode", exact: true })).toHaveCount(
         0,
       );
