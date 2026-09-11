@@ -30,12 +30,14 @@ Phone-specific behavior:
   tapping its text field opens the platform keyboard.
 - A swipeable Projects / Agents / Servers sidebar pushes the workspace to the right.
   Swipe back, press the mobile menu icon, or tap the workspace scrim to close it.
-- A compact name/avatar trigger opens an animated Account bottom drawer with Settings and Sign out.
-  Machine management is a settings section; the sidebar header has no redundant product title.
+- A compact name/avatar trigger opens an animated Account bottom drawer with the current machine,
+  Add machine setup guidance, Settings and Sign out. Direct previews use the same drawer with an
+  honest Desktop connection identity and Disconnect desktop. Existing-machine management remains
+  in Settings; no purchasing or provisioning is exposed. The sidebar has no redundant product title.
 - Tabs/panes, Machine, Search, Settings, Add Project and New Tab use the shared Radix dialog with animated
   bottom-sheet presentation, focus restoration and reduced-motion support.
   Opening Search or choosing a machine leaves the sidebar visible behind it.
-- Separate glass controls contain the sidebar toggle, picker and Files button (native SwiftUI
+- Separate glass controls contain the sidebar toggle, sidebar Search, picker and Files button (native SwiftUI
   glass on supported iOS builds; CSS backdrop blur in the web/Android renderer),
   with matching rounded pressed states and opaque fallbacks for reduced transparency.
   The picker uses a tab/pane breadcrumb and lightly indented
@@ -226,3 +228,32 @@ GitHub native checks remain blocked before startup by billing/spending limits.
 See the [support report](unified-chat-provider-support.md) for the native capability
 matrix, live CLI evidence, and remaining scope boundaries. No store build/upload
 or production daemon restart was performed by this follow-up.
+
+## Sidebar and main merge follow-up (2026-09-11)
+
+Main through `007d27d` is merged, including provider account sign-in (#54), saved
+machine selection (#55), and empty Codex thread recovery (#56). Conflict resolution
+retains expanded provider catalogs, private configuration, queued/session actions,
+and mobile-local navigation. Account sign-in now shares the daemon's provider registry
+and selects custom profile adapters by engine; unsupported engines do not get account RPCs.
+
+The sidebar menu and Search now use the same glass surfaces as the chat header:
+Expo UI SwiftUI buttons on supported native iOS, backdrop blur on web/Android,
+and the existing accessibility fallbacks. Both signed-in and direct-desktop footers
+open Account first. It contains the current machine, Add machine setup guidance,
+Settings, and Sign out/Disconnect. Direct preview deliberately shows Desktop connection
+instead of inventing a cloud identity. Add machine does not provision or purchase
+infrastructure; signed-in users can refresh and connect existing machines.
+
+Nested machine-sheet dismissal returns focus to Account; closing setup returns to
+the footer. Browser/native-bridge tests cover hiding native surfaces behind drawers,
+restoring them afterward, and keeping Search above the open sidebar.
+
+Verification: 476 repository unit tests passed, one opt-in live API test skipped;
+six focused mobile UI/native-bridge scenarios passed. Eight direct-daemon scenarios
+passed in the full run; the file-conflict scenario then passed in isolation after fixing
+its test race with background conflict detection (Save was correctly disabled).
+Direct coverage includes the account drawer, simulated provider sign-in, files, terminal
+profiles, and web/native-bridge provider navigation. Desktop/daemon/mobile typechecks
+and scoped lint passed. Browser bridge tests do not render SwiftUI or replace signed
+physical-device acceptance. Release evidence gates remain unchanged.
