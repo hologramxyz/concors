@@ -674,6 +674,7 @@ it("imports and forks native sessions into separate tabs without replaying a pro
   await expect.poll(() => a.agents.filter((agent) => agent.status === "idle").length).toBe(3);
   expect(providers[0]?.requests.filter((r) => r.method === "session/fork")).toHaveLength(1);
   expect(a.workspace?.projects[0]?.tabs).toHaveLength(3);
+  expect(a.workspace?.projects[0]?.tabs.map((tab) => tab.name)).toEqual(["Chat", "Tab 2", "Tab 3"]);
 });
 
 it("rewinds the selected turn only and publishes a history revision to all clients", async () => {

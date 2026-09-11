@@ -26,7 +26,7 @@ test("projects open a terminal immediately and new tabs start the chosen profile
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
     await page
-      .getByRole("button", { name: "Terminal", exact: true })
+      .getByRole("button", { name: "Tab 2", exact: true })
       .last()
       .click({ button: "right" });
     await page.getByRole("menuitem", { name: "Rename tab", exact: true }).click();

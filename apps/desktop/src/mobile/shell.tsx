@@ -34,7 +34,7 @@ import { useNewWorkspace } from "@/workspace/use-new-workspace";
 import { ProjectImage } from "@/workspace/project-image";
 import { SidebarSection } from "@/components/sidebar-section";
 import { NewTabMenu } from "@/workspace/new-tab-menu";
-import { TAB_PROFILES } from "@/workspace/tab-profiles";
+import { nextWorkspaceTabName } from "@concors/protocol";
 import { CommandPalette } from "@/components/command-palette";
 import { MobileAccountMenu } from "@/components/account-menu";
 import { Button } from "@/components/ui/button";
@@ -331,7 +331,7 @@ function MobileWorkspaceContent({
       setError(cause instanceof Error ? cause.message : "Could not update workspace"),
     );
   };
-  const createTab = (profile: PaneProfile, name?: string, terminalProfileId?: string) => {
+  const createTab = (profile: PaneProfile, terminalProfileId?: string) => {
     if (!project) return;
     const tabId = crypto.randomUUID(),
       paneId = crypto.randomUUID();
@@ -342,7 +342,7 @@ function MobileWorkspaceContent({
       expectedVersion: project.version,
       tabId,
       paneId,
-      name: name || TAB_PROFILES.find((item) => item.profile === profile)?.label || "Terminal",
+      name: nextWorkspaceTabName(project.tabs),
       profile,
       ...(terminalProfileId ? { terminalProfileId } : {}),
     })

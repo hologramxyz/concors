@@ -223,6 +223,7 @@ it.each(["claude", "opencode", "pi"] as const)(
     await expect.poll(() => c.agents.find((a) => a.id === next)?.status).toBe("idle");
     expect(c.agents.find((a) => a.id === next)?.provider).toBe(provider);
     expect(c.workspace?.projects[0]?.tabs).toHaveLength(2);
+    expect(c.workspace?.projects[0]?.tabs.map((tab) => tab.name)).toEqual(["Codex", "Tab 2"]);
     expect(c.workspace?.projects[0]?.tabs[0]?.nodes[0]?.kind).toBe("pane");
     expect((await c.requestAgent(operation, requestId)).outcome.status).toBe("ok");
     expect(c.agents).toHaveLength(2);

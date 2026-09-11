@@ -19,6 +19,7 @@ import {
   type TerminalInfo,
   type TerminalRequest,
   applyWorkspaceOperation,
+  nextWorkspaceTabName,
   WorkspaceOperationError,
   WorkspaceSnapshotSchema,
   WorkspaceResultSchema,
@@ -489,7 +490,7 @@ export class WorkspaceStore {
           expectedVersion: project.version,
           tabId,
           paneId,
-          name: info.name,
+          name: nextWorkspaceTabName(project.tabs),
           profile: "chat",
         });
         project = state.projects.find((p) => p.id === info.projectId);
