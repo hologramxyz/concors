@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { mobileDesktopSocket } from "../../../e2e/support/mobile-direct-ports";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,7 +9,7 @@ import type { WorkspaceOperation } from "@concors/protocol";
 test("mobile saves and launches machine terminal profiles", async ({ page }) => {
   const directory = await mkdtemp(join(tmpdir(), "concors-mobile-profiles-"));
   const desktop = new DaemonConnection({
-    endpoint: describeDaemonEndpoint("ws://127.0.0.1:7440/ws"),
+    endpoint: describeDaemonEndpoint(mobileDesktopSocket),
     client: { kind: "desktop", name: "profile-acceptance", version: "0.1.0" },
   });
   const unsubscribe = desktop.subscribeWorkspace(() => undefined);

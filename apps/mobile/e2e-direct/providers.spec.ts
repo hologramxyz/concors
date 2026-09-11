@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { mobileDesktopSocket } from "../../../e2e/support/mobile-direct-ports";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -22,7 +23,7 @@ for (const native of [false, true]) {
   }) => {
     const directory = await mkdtemp(join(tmpdir(), "concors-mobile-provider-"));
     const desktop = new DaemonConnection({
-      endpoint: describeDaemonEndpoint("ws://127.0.0.1:7440/ws"),
+      endpoint: describeDaemonEndpoint(mobileDesktopSocket),
       client: { kind: "desktop", name: "mobile-provider-acceptance", version: "0.1.0" },
     });
     const unsubscribe = desktop.subscribeWorkspace(() => undefined);
