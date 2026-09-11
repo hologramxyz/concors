@@ -114,7 +114,8 @@ jobs:
   workspace-browser:
     name: Workspace browser acceptance
     runs-on: ubuntu-latest
-    timeout-minutes: 7
+    # The complete single-worker suite takes about 8–10 minutes before dependency setup.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Disable unused Chrome package source
@@ -141,7 +142,8 @@ jobs:
       matrix:
         suite: [e2e, direct, managed]
     runs-on: ubuntu-latest
-    timeout-minutes: 7
+    # Include bundle generation and the full phone interaction suite (about 7 minutes).
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
