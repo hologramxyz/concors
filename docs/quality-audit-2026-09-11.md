@@ -109,6 +109,30 @@ account providers. The clean eight-scenario run followed that test correction.
 The larger full-suite totals above describe the preceding audit, not a full rerun
 after these UI removals. The CI billing and native-device limitations below still apply.
 
+## Follow-up: infinite history and direct agent startup
+
+Requested follow-up commits add automatic backward/forward chat scrolling and a
+240-message window on compatible daemons, with visible-message anchoring, retry
+feedback, and stale-page protection across history revisions. New agent panes open
+with the existing default provider/model without an initial chooser. The same
+implementation is also applied to mobile PR #62; its flat-tab changes are preserved.
+See [chat history](chat-history.md) for protocol compatibility and behavior details.
+
+Fresh audit-branch validation: 542 unit tests passed (one optional live-API test
+skipped), workspace type checks and lint/format passed, and desktop web/daemon
+bundles built successfully. The mobile renderer also built during type checking.
+The full desktop browser run had 58 passes and three 30-second timeouts under
+heavy VPS load (swap was full). A serial eight-scenario recheck passed every
+affected case, so all 61 distinct desktop scenarios passed across those runs;
+this is not presented as a clean single-run result. Three longer chat journeys
+now have a 60-second test budget; their assertions are unchanged. The resource
+usage tests passed again without any timeout or product changes.
+
+Focused mobile web/native-bridge history and provider-switching scenarios also
+passed on the audit branch. Mobile PR #62 receives its own branch-specific
+verification and preserves its dependency on PR #58. Hosted CI and physical-device
+validation remain separate requirements.
+
 ## Remaining validation boundaries
 
 - Chromium browser fixtures exercise the mobile bridge contract, not actual SwiftUI, Android,
