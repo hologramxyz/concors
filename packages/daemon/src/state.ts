@@ -32,6 +32,7 @@ export class DaemonState {
         "agent-chat",
         "agent-attention",
         "agent-composer",
+        "agent-queue",
         "agent-providers",
         "provider-settings",
         "agent-native-controls",

@@ -53,8 +53,22 @@ export function registerProtocolEndpoint(
   const handshakeTimeoutMs = options.handshakeTimeoutMs ?? DEFAULT_HANDSHAKE_TIMEOUT_MS;
   const connections = new Set<WebSocket>();
   const subscribers = new Set<WebSocket>();
+  const agentV2 = new WeakSet<WebSocket>();
   const send = (socket: WebSocket, message: DaemonMessage): void => {
     if (socket.readyState !== socket.OPEN) return;
+    if (!agentV2.has(socket) && (message.type === "agent.state" || message.type === "agent.item")) {
+      socket.send(
+        JSON.stringify({
+          type: "error",
+          error: createProtocolError(
+            "PROTOCOL_VERSION_UNSUPPORTED",
+            "Update Concors on this device to use unified agent chat with this daemon.",
+          ),
+        }),
+      );
+      socket.close(CLOSE_PROTOCOL_ERROR, "Agent client upgrade required");
+      return;
+    }
     if (socket.bufferedAmount > 2 * 1024 * 1024) {
       socket.close(1013, "Client must reconnect to catch up");
       return;
@@ -135,6 +149,21 @@ export function registerProtocolEndpoint(
     });
 
     new ConnectionHandler(socket, log, options.state, handshakeTimeoutMs, (message) => {
+      if (message.type === "client.hello") {
+        if (message.capabilities?.includes("agent-providers-v2")) agentV2.add(socket);
+        return;
+      }
+      if (message.type === "agent.request" && !agentV2.has(socket)) {
+        send(socket, {
+          type: "agent.result",
+          requestId: message.requestId,
+          outcome: {
+            status: "error",
+            message: "Update Concors on this device to use unified agent chat with this daemon.",
+          },
+        });
+        return;
+      }
       if (
         message.type === "terminal.request" ||
         message.type === "terminal.input" ||
@@ -310,6 +339,7 @@ class ConnectionHandler {
           "client connected",
         );
         this.send({ type: "daemon.ready", ...this.state.info() });
+        this.workspaceMessage(message);
         return;
       }
     }
