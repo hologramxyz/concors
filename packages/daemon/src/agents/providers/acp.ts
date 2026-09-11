@@ -368,6 +368,7 @@ export class AcpProvider extends EventProvider {
           })),
         ),
       });
+    if (this.currentModel) this.emit("session/model/updated", { model: this.currentModel });
     this.controlsChanged();
   }
   private commands(commands: unknown[]) {
@@ -652,6 +653,7 @@ export class AcpProvider extends EventProvider {
           id: this.threadId,
           turns: this.history,
         },
+        ...(this.currentModel ? { model: this.currentModel } : {}),
       };
     }
     if (method === "turn/interrupt") {

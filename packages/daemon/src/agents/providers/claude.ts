@@ -240,7 +240,10 @@ export class ClaudeProvider extends EventProvider {
       }
     })();
     const initial = await session.initializationResult();
-    this.currentModel = string(object(initial)["model"]);
+    this.models = initial.models ?? [];
+    // Initialization reports model rows, not a top-level model field. The
+    // provider's default alias resolves according to this account/project.
+    this.currentModel = this.models.find((m) => m.value === "default")?.resolvedModel ?? "";
     this.controls = AgentControlsSchema.parse({
       history: true,
       childHistory: !this.transcriptStore,
@@ -346,6 +349,8 @@ export class ClaudeProvider extends EventProvider {
         this.models.map((m) => ({
           id: m.value,
           label: m.displayName,
+          ...(m.resolvedModel ? { resolvedModel: m.resolvedModel } : {}),
+          isDefault: m.value === "default",
           efforts: m.supportedEffortLevels ?? [],
         })),
       );
@@ -354,6 +359,7 @@ export class ClaudeProvider extends EventProvider {
     if (method === "thread/resume") await this.open(string(p["threadId"]));
     if (method === "thread/start" || method === "thread/resume")
       return {
+        ...(this.currentModel ? { model: this.currentModel } : {}),
         thread: {
           id: this.threadId,
           turns:
@@ -467,6 +473,8 @@ export class ClaudeProvider extends EventProvider {
     return result;
   }
   private event(m: Record<string, unknown>) {
+    if (m["type"] === "system" && m["subtype"] === "init" && m["model"] && !m["parent_tool_use_id"])
+      this.reportModel(string(m["model"]));
     if (!this.turnId) return;
     const parent = string(m["parent_tool_use_id"]);
     if (parent) {
@@ -561,7 +569,7 @@ export class ClaudeProvider extends EventProvider {
     }
     if (m["type"] === "assistant") {
       const message = object(m["message"]);
-      if (message["model"]) this.currentModel = string(message["model"]);
+      if (message["model"]) this.reportModel(string(message["model"]));
       const usage = object(message["usage"] ?? {});
       if (Object.keys(usage).length) {
         this.currentUsed = [
@@ -657,6 +665,11 @@ export class ClaudeProvider extends EventProvider {
           : undefined,
       );
     }
+  }
+  private reportModel(model: string) {
+    if (!model) return;
+    this.currentModel = model;
+    this.emit("session/model/updated", { model });
   }
   private updateModelFeatures() {
     const model = this.models.find(
