@@ -17,7 +17,7 @@ export function MachineUsage({ machine }: { readonly machine: Machine }) {
       </p>
     );
   return (
-    <section aria-label={`${machine.name} resource usage`} className="min-w-0">
+    <section aria-label={`${machine.name} resource usage`} className="flex min-w-0 flex-col">
       <div className="grid gap-4 sm:grid-cols-2">
         {(["memory", "disk"] as const).map((kind) => {
           const value = usage[kind];
@@ -54,9 +54,6 @@ export function MachineUsage({ machine }: { readonly machine: Machine }) {
                   <p className="mt-2 text-xs text-muted-foreground tabular-nums">
                     {formatResourceBytes(value.totalBytes - value.availableBytes)} /{" "}
                     {formatResourceBytes(value.totalBytes)} used
-                    <span className="mt-1 block">
-                      {formatResourceBytes(value.availableBytes)} available
-                    </span>
                   </p>
                 </>
               )}
@@ -64,7 +61,7 @@ export function MachineUsage({ machine }: { readonly machine: Machine }) {
           );
         })}
       </div>
-      <p className="mt-4 text-xs text-muted-foreground">
+      <p className="mt-auto pt-4 text-right text-[11px] text-muted-foreground/70">
         {freshness === "stale" ? "Out of date · last updated " : "Updated "}
         <time dateTime={usage.sampledAt} title={new Date(usage.sampledAt).toLocaleString()}>
           {new Date(usage.sampledAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
