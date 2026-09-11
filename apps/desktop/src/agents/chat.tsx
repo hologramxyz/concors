@@ -1,5 +1,6 @@
 import { ProviderStart } from "./provider-start";
 import { completedTurnFooters } from "./duration";
+import { SessionActions } from "./session-actions";
 import { AgentComposer } from "./composer";
 import { TimelineItem } from "./timeline-item";
 import { useViewedAgent } from "@/notifications/context";
@@ -267,17 +268,20 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
           {!compact && feedback}
           {latestPlan && <PlanProgress compact item={latestPlan} />}
           {agent && (
-            <AgentComposer
-              key={agent.id}
-              agent={agent}
-              connected={!!connected && !busy}
-              onInterrupt={() => {
-                if (agent.turnId)
-                  void run(() =>
-                    perform({ kind: "interrupt", sessionId, turnId: agent.turnId ?? "" }),
-                  );
-              }}
-            />
+            <>
+              <SessionActions agent={agent} items={conversation.items} connected={!!connected} />
+              <AgentComposer
+                key={agent.id}
+                agent={agent}
+                connected={!!connected && !busy}
+                onInterrupt={() => {
+                  if (agent.turnId)
+                    void run(() =>
+                      perform({ kind: "interrupt", sessionId, turnId: agent.turnId ?? "" }),
+                    );
+                }}
+              />
+            </>
           )}
         </div>
       </div>
@@ -326,7 +330,7 @@ function PendingInput({
                 onClick={() => void onRespond({ decision })}
               >
                 {decision === "accept"
-                  ? "Allow once"
+                  ? (pending.decisionLabels?.accept ?? "Allow once")
                   : decision === "decline"
                     ? "Decline"
                     : "Cancel turn"}
@@ -352,6 +356,16 @@ function PendingInput({
             });
           }}
         >
+          {pending.elicitation?.url && (
+            <a
+              href={pending.elicitation.url}
+              target="_blank"
+              rel="noreferrer"
+              className="block text-xs underline"
+            >
+              Open the server’s authentication page
+            </a>
+          )}
           {pending.questions.map((q) => (
             <fieldset key={q.id} className="block space-y-2 text-xs">
               <legend>{q.question}</legend>
@@ -387,7 +401,7 @@ function PendingInput({
                   aria-label={q.options?.length ? `Other answer: ${q.question}` : q.question}
                   type={q.isSecret ? "password" : "text"}
                   value={other[q.id] ?? ""}
-                  required={!answers[q.id]?.length}
+                  required={q.required !== false && !answers[q.id]?.length}
                   disabled={disabled}
                   onChange={(e) => {
                     setOther((current) => ({ ...current, [q.id]: e.target.value }));
@@ -402,11 +416,29 @@ function PendingInput({
             className={button}
             disabled={
               disabled ||
-              pending.questions.some((q) => !answers[q.id]?.length && !other[q.id]?.trim())
+              pending.questions.some(
+                (q) => q.required !== false && !answers[q.id]?.length && !other[q.id]?.trim(),
+              )
             }
           >
-            Submit answers
+            {pending.elicitation?.url
+              ? "Authentication completed"
+              : pending.questions.length
+                ? "Submit answers"
+                : "Continue"}
           </button>
+          {pending.kind === "elicitation" &&
+            pending.decisions.map((decision) => (
+              <button
+                key={decision}
+                type="button"
+                className={button}
+                disabled={disabled}
+                onClick={() => void onRespond({ decision })}
+              >
+                {decision === "cancel" ? "Cancel turn" : "Decline"}
+              </button>
+            ))}
         </form>
       )}
     </section>

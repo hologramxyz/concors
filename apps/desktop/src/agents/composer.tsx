@@ -21,6 +21,7 @@ import {
   type AgentSettings,
   type AgentAttachment,
   type AgentProviderId,
+  type AgentOperation,
 } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { submitAgentInput } from "./paseo/submit";
@@ -69,7 +70,11 @@ export function AgentComposer({
     setBusy,
     attempt: attemptRef,
     sending: sendingRef,
-  } = useAgentDraft(useContext(AgentDraftScopeContext) ?? connection, agent.id);
+  } = useAgentDraft(
+    useContext(AgentDraftScopeContext) ?? connection,
+    agent.id,
+    connection?.workspace?.machineId,
+  );
   const [uploading, setUploading] = useState(false),
     [configuring, setConfiguring] = useState(false),
     [error, setError] = useState<string | null>(null);
@@ -136,13 +141,18 @@ export function AgentComposer({
       setConfiguring(false);
     }
   };
-  const send = async (input: Draft) => {
+  const send = async (input: Draft, steering = false) => {
     if (!connection) throw new Error("Machine is disconnected");
     const next = attemptRef.current ?? {
       id: crypto.randomUUID(),
       draft: input,
       operation: {
-        kind: active && durableQueue ? ("queue-add" as const) : ("send" as const),
+        kind: steering
+          ? ("steer" as const)
+          : active && durableQueue
+            ? ("queue-add" as const)
+            : ("send" as const),
+        turnId: agent.turnId ?? "",
         sessionId: agent.id,
         text: input.message,
         attachments: input.attachments,
@@ -164,7 +174,11 @@ export function AgentComposer({
       throw e;
     }
   };
-  const submit = async (input: Draft = { message: draft, attachments }, queued = false) => {
+  const submit = async (
+    input: Draft = { message: draft, attachments },
+    queued = false,
+    steering = false,
+  ) => {
     if (sendingRef.current) return;
     sendingRef.current = true;
     try {
@@ -173,14 +187,14 @@ export function AgentComposer({
         attachments: input.attachments,
         canSubmit: connected && !busy && !uploading && !configuring && !!agent.threadId,
         isAgentRunning: active && !durableQueue,
-        forceSend: attemptRef.current !== null,
+        forceSend: attemptRef.current !== null || steering,
         submitBehavior: "preserve-and-lock",
         queueMessage: (value) => {
           setQueue((q) => [...q, value]);
           setDraft("");
           setAttachments([]);
         },
-        submitMessage: () => send(input),
+        submitMessage: () => send(input, steering),
         clearDraft: () => {
           if (!queued) {
             setDraft("");
@@ -212,7 +226,7 @@ export function AgentComposer({
     // Queue delivery is triggered by authoritative agent state; failures require explicit retry.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, queueHead, connected, durableQueue]);
-  const queueAction = async (operation: import("@concors/protocol").AgentOperation) => {
+  const queueAction = async (operation: AgentOperation) => {
     try {
       if (!connection) throw new Error("Machine is disconnected");
       const result = await connection.requestAgent(operation, crypto.randomUUID());
@@ -335,11 +349,11 @@ export function AgentComposer({
         },
         {
           id: "mode",
-          label: `Mode: ${agent.provider === "codex" ? settings.mode : (settings.nativeMode ?? agent.controls?.currentMode ?? "default")}`,
+          label: `Mode: ${(agent.engine ?? agent.provider) === "codex" ? settings.mode : (settings.nativeMode ?? agent.controls?.currentMode ?? "default")}`,
           icon: "shield" as const,
           disabled: controlsDisabled,
           options:
-            agent.provider !== "codex"
+            (agent.engine ?? agent.provider) !== "codex"
               ? (agent.controls?.modes ?? []).map((mode) => ({
                   id: mode.id,
                   label: mode.label,
@@ -378,7 +392,7 @@ export function AgentComposer({
                   },
                 ]
               : []),
-            ...(agent.provider === "codex"
+            ...((agent.engine ?? agent.provider) === "codex"
               ? [{ id: "speed:", label: "Default speed", selected: !settings.serviceTier }]
               : []),
             ...(agent.controls?.commands ?? []).map((c) => ({
@@ -410,7 +424,7 @@ export function AgentComposer({
         },
       ].filter(
         (control) =>
-          agent.provider === "codex" ||
+          (agent.engine ?? agent.provider) === "codex" ||
           control.id === "model" ||
           (control.id === "effort" && !!effortModel?.efforts.length) ||
           (control.id === "mode" && !!agent.controls?.modes.length) ||
@@ -471,7 +485,7 @@ export function AgentComposer({
             void configure({ ...settings, effort: value || null });
           else if (
             event.control === "mode" &&
-            agent.provider === "codex" &&
+            (agent.engine ?? agent.provider) === "codex" &&
             ["default", "auto-review", "full-access"].includes(value)
           )
             void configure({ ...settings, mode: value as AgentSettings["mode"] });
@@ -519,7 +533,7 @@ export function AgentComposer({
           <ListTodo className="size-4" />
         </button>
       )}
-      {agent.provider === "codex" && !!effortModel?.serviceTiers?.length && (
+      {(agent.engine ?? agent.provider) === "codex" && !!effortModel?.serviceTiers?.length && (
         <ControlPicker
           label="Speed"
           value={settings.serviceTier ?? ""}
@@ -568,6 +582,23 @@ export function AgentComposer({
   return (
     <ComposerSurfaceContext value={owner}>
       <div className="space-y-2">
+        {active && agent.controls?.steer && !!draft.trim() && !attachments.length && (
+          <button
+            type="button"
+            className="rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted disabled:opacity-40"
+            disabled={
+              !connected ||
+              busy ||
+              uncertain ||
+              !agent.turnId ||
+              agent.turnId.startsWith("pending:") ||
+              draft.trim().startsWith("/")
+            }
+            onClick={() => void submit({ message: draft, attachments: [] }, false, true)}
+          >
+            Steer the current turn
+          </button>
+        )}
         {durableQueue && !!agent.queue?.length && (
           <div data-composer-queue className="max-h-28 space-y-2 overflow-y-auto">
             <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -748,7 +779,7 @@ export function AgentComposer({
                     e.shiftKey &&
                     !configuring &&
                     advanced &&
-                    agent.provider === "codex"
+                    (agent.engine ?? agent.provider) === "codex"
                   ) {
                     e.preventDefault();
                     const modes: AgentSettings["mode"][] = [
@@ -842,17 +873,18 @@ export function AgentComposer({
                       onSelect={(effort) => void configure({ ...settings, effort: effort || null })}
                     />
                   )}
-                  {!!agent.controls?.modes.length && agent.provider !== "codex" && (
-                    <ControlPicker
-                      label="Agent mode"
-                      showValue={!compact}
-                      value={settings.nativeMode ?? agent.controls.currentMode ?? ""}
-                      icon={<Shield className="size-4" />}
-                      disabled={controlsDisabled}
-                      options={agent.controls.modes}
-                      onSelect={(nativeMode) => void configure({ ...settings, nativeMode })}
-                    />
-                  )}
+                  {!!agent.controls?.modes.length &&
+                    (agent.engine ?? agent.provider) !== "codex" && (
+                      <ControlPicker
+                        label="Agent mode"
+                        showValue={!compact}
+                        value={settings.nativeMode ?? agent.controls.currentMode ?? ""}
+                        icon={<Shield className="size-4" />}
+                        disabled={controlsDisabled}
+                        options={agent.controls.modes}
+                        onSelect={(nativeMode) => void configure({ ...settings, nativeMode })}
+                      />
+                    )}
                   {(agent.controls?.features ?? []).map((feature) => (
                     <ControlPicker
                       key={feature.id}
@@ -895,7 +927,7 @@ export function AgentComposer({
                       }}
                     />
                   )}
-                  {agent.provider === "codex" && (
+                  {(agent.engine ?? agent.provider) === "codex" && (
                     <ControlPicker
                       label="Permission mode"
                       showValue={!compact}
