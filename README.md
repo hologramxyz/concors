@@ -148,6 +148,12 @@ VITE_CONCORS_API_URL=http://localhost:3000        # Concors control-plane API (h
 
 Only `VITE_*` variables reach the frontend and they are public. Secrets never go there.
 
+### Color themes
+
+Settings → Appearance includes seven palettes, each with light and dark modes. You can also
+ask an agent to create a custom theme by saving a JSON file in the machine's theme directory.
+See [Color themes](docs/themes.md) for the format, examples, and live reload behavior.
+
 ### Accounts
 
 The app requires a Concors account: signed out, you only see the sign-in screen; the workspace

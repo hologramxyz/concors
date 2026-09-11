@@ -71,10 +71,12 @@ describe("WebSocket handshake", () => {
         capabilities: [
           "host-usage",
           "terminal-profiles",
+          "color-themes",
           "project-files",
           "project-file-create",
           "folder-workspaces",
           "agent-chat",
+          "agent-message-navigation",
           "agent-accounts",
           "agent-attention",
           "agent-composer",

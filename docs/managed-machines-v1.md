@@ -33,13 +33,6 @@ The control plane already provides, deployed on Railway `dev`:
 - machine fields `hostname`, `certificateExpiresAt`, `agentInstalledAt`, `agentVersion`,
   `agentSeenAt`, `agentError` on every machine response.
 
-Paseo (`/tmp/paseo`, cloned 2026-09-09) was reviewed as the reference. What we take from it: one
-daemon binary for every placement; a client-side **host** = stable id + several **connections** of
-different kinds with a preferred one; the daemon enrolls with its cloud service (Hub) using a
-one-time token and keeps an outbound channel; terminals die on daemon restart while agents resume
-through the providers (`claude --resume`, `codex resume`). Our session host already does better
-than that last point. What we do not take in v1: the relay, pairing QR codes, password auth.
-
 ## 2. Decisions
 
 1. **One daemon.** `@concors/daemon` gains a _managed mode_; `packages/agent` is deleted from
@@ -61,7 +54,7 @@ than that last point. What we do not take in v1: the relay, pairing QR codes, pa
    no enrollment endpoint; the control plane writes the file over SSH.
 7. **The daemon ships as a versioned release artifact of this repo.** The control plane pins a
    version and installs from the artifact. It never contains daemon code.
-8. **Client host model follows Paseo.** A host has connections; v1 has two kinds: `local`
+8. **One host, multiple connection kinds.** A host has connections; v1 has two kinds: `local`
    (bundled daemon) and `direct` (`wss://<hostname>/ws` with a machine token). The list for cloud
    machines comes from the control plane, not from a typed URL.
 
@@ -290,15 +283,12 @@ Acceptance: phone and desktop attached to the same terminal on test-vps-3.
   restarting the session host (runtime code changes). Proposal: a `hostRuntimeVersion` field in
   the release metadata; the installer restarts the host only when it changes.
 - **Host allowlist / DNS rebinding.** The managed gateway should accept only its own hostname in
-  the `Host` header (Paseo does this). Cheap; include in D1 if time allows.
+  the `Host` header. Cheap; include in D1 if time allows.
 - **Where dev-server previews go.** `*.<hostname>` is already in the certificate. Preview
   routing (mvp-plan §6) can be a second listener or a path on the gateway; not v1.
 
 ## 8. References
 
-- Paseo: `/tmp/paseo` — `packages/app/src/types/host-connection.ts` (host model),
-  `packages/server/src/server/relay-transport.ts` (outbound relay), `public-docs/security.md`,
-  `docs/hub.md` (enrollment), `docs/service-proxy.md` (previews).
 - Reference remote-access implementation: `concors-server/packages/agent/src/*` and its tests;
   installer: `concors-server/src/modules/machines/machine-agent.ts`; control plane docs:
   `concors-server/README.md` sections "Hostnames", "Certificates", "The agent", "Machine tokens".

@@ -98,7 +98,7 @@ updated native Tabs label. These are not physical-device or real-provider releas
 
 | Area              | Shared implementation                                                                | Phone behavior                                                                                                       |
 | ----------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
-| Composer          | `agents/composer.tsx`, `draft.ts`, Paseo submit logic                                | Attachments, queue, retry, model/effort/permissions/plan/speed/context, interrupt; native keyboard dictation         |
+| Composer          | `agents/composer.tsx`, `draft.ts`, shared submit logic                               | Attachments, queue, retry, model/effort/permissions/plan/speed/context, interrupt; native keyboard dictation         |
 | Agent providers   | Shared provider settings, model picker, daemon registry and native control bridge    | Six built-ins, 38 optional ACP presets, own-account configuration; switching/import/fork opens a separate local chat |
 | Conversation      | `agents/chat.tsx`, `timeline-item.tsx`, `markdown.tsx`, `plan-progress.tsx`          | Same history, streaming, approvals/questions, thinking, tool/MCP/diff/sub-agent rendering and copy actions           |
 | Projects          | `workspace/project-setup-dialog.tsx`, `project-actions.tsx`                          | Open/create/clone/remove; setup continues remotely                                                                   |

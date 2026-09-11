@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
+import { MachineUsage } from "./machine-usage.tsx";
 import { CreateMachineDialog } from "./create-machine-dialog.tsx";
 import {
   describeEnding,
@@ -263,6 +264,7 @@ function MachineCard({
           </>
         )}
       </dl>
+      <MachineUsage machine={machine} />
     </div>
   );
 }

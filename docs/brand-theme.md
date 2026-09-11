@@ -3,11 +3,16 @@
 Reference: `concors-web` main, commit `7397675`, specifically `src/styles.css`,
 `src/App.tsx`, `src/main.tsx`, and `public/favicon.svg`.
 
+These rules describe the default **Concors** palette. Settings → Appearance also offers
+optional color palettes and custom theme files; see [Color themes](themes.md). Selecting
+Concors restores the original styles. Palette choices preserve the typography, spacing,
+and geometric brand mark.
+
 - Primary actions use ink with white labels in light mode, and light gray with dark labels in dark mode.
 - Selected controls, focus rings, resize handles, badges, and links use neutral foreground colors.
 - Native form controls inherit the same neutral accent. Text selection uses soft gray in both themes.
-- The application retains its paper surfaces, Geist typography, and geometric brand mark; cobalt
-  belongs to the landing page, not the client interface.
+- The default application retains its paper surfaces, Geist typography, and geometric brand mark.
+  Cobalt is available as an optional palette inspired by the landing page.
 - Geist and Geist Mono are bundled locally for offline desktop/mobile use.
 - The sign-in wordmark and browser favicon reuse the current geometric brand mark.
 

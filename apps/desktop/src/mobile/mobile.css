@@ -1296,3 +1296,23 @@ aside[aria-label="Agent notifications"] {
     padding-bottom: 4px;
   }
 }
+
+/* Keep message navigation below the floating header, with room for touch targets. */
+.mobile-pane .message-list-trigger {
+  top: 76px;
+  right: 16px;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+}
+.mobile-pane .chat-timeline-shell [aria-label="Chat timeline"] {
+  padding-top: 128px;
+  scroll-padding-top: 128px;
+}
+.mobile-main:has(.mobile-notice) .message-list-trigger {
+  top: 4px;
+}
+.mobile-main:has(.mobile-notice) .chat-timeline-shell [aria-label="Chat timeline"] {
+  padding-top: 56px;
+  scroll-padding-top: 56px;
+}
