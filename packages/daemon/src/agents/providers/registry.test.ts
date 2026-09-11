@@ -114,3 +114,38 @@ it("preserves argv boundaries and credentials for a configured executable", asyn
     key: "fixture",
   });
 });
+
+it("keeps MCP headers and process environment private while preserving existing overrides", async () => {
+  const root = await mkdtemp(join(tmpdir(), "concors-mcp-settings-"));
+  directories.push(root);
+  const registry = new ProviderRegistry(root);
+  const config = {
+    ...registry.config("claude"),
+    params: {
+      mcpServers: [
+        {
+          name: "docs",
+          type: "http" as const,
+          url: "https://example.test/mcp",
+          headers: { Authorization: "Bearer fixture-secret" },
+        },
+      ],
+    },
+  };
+  const result = registry.request({
+    type: "provider.request",
+    requestId: randomUUID(),
+    operation: { kind: "save", expectedRevision: 0, config },
+  });
+  expect(result.outcome.status).toBe("ok");
+  expect(JSON.stringify(result)).not.toContain("fixture-secret");
+  expect(registry.statuses().find((p) => p.id === "claude")?.mcpServerNames).toEqual(["docs"]);
+  const edited = { ...registry.config("claude"), label: "Personal Claude", params: {} };
+  registry.request({
+    type: "provider.request",
+    requestId: randomUUID(),
+    operation: { kind: "save", expectedRevision: 1, config: edited },
+  });
+  expect(registry.config("claude").params?.mcpServers).toHaveLength(1);
+  expect(JSON.stringify(registry.terminalEnvironment())).not.toContain("fixture-secret");
+});

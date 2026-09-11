@@ -1,3 +1,5 @@
+import { openCodeMcp } from "./mcp.ts";
+import type { McpServer } from "@concors/protocol";
 import { openCodeHistory } from "./history.ts";
 import { Agent } from "undici";
 import { randomBytes } from "node:crypto";
@@ -23,20 +25,32 @@ export class OpenCodeProvider extends EventProvider {
   private messages = new Map<string, string>();
   private parts = new Map<string, { messageId: string; text: string }>();
   private cwd: string;
+  private mcp: McpServer[];
   private launcher: typeof launch;
   private models = new Map<string, Record<string, unknown>>();
   private currentModel = "";
   private summaries = new Set<string>();
   private manualCompact = false;
-  constructor(cwd: string, onInput: InputHandler, launcher: typeof launch = launch) {
+  constructor(
+    cwd: string,
+    onInput: InputHandler,
+    launcher: typeof launch = launch,
+    mcp: McpServer[] = [],
+  ) {
     super(onInput);
     this.cwd = cwd;
+    this.mcp = mcp;
     this.launcher = launcher;
     this.controls = AgentControlsSchema.parse({
       history: true,
+      childHistory: true,
+      importSessions: true,
+      fork: true,
+      rewind: ["both"],
       compact: true,
       contextUsage: true,
       mcp: true,
+      mcpStatus: true,
       commands: [
         { name: "compact", description: "Summarize earlier context" },
         { name: "summarize", description: "Summarize earlier context" },
@@ -52,7 +66,10 @@ export class OpenCodeProvider extends EventProvider {
         ...process.env,
         OPENCODE_SERVER_USERNAME: "concors",
         OPENCODE_SERVER_PASSWORD: this.password,
-        OPENCODE_CONFIG_CONTENT: JSON.stringify({ permission: "ask" }),
+        OPENCODE_CONFIG_CONTENT: JSON.stringify({
+          permission: "ask",
+          ...(this.mcp.length ? { mcp: openCodeMcp(this.mcp) } : {}),
+        }),
       },
     );
     this.child = child;
@@ -136,6 +153,44 @@ export class OpenCodeProvider extends EventProvider {
   }
   async request(method: string, raw: unknown = {}) {
     const p = object(raw);
+    if (method === "mcp/status")
+      return {
+        servers: Object.entries(object(await this.call("/mcp"))).map(([name, status]) => ({
+          name,
+          status: string(object(status)["status"]),
+        })),
+      };
+    if (method === "session/child-history")
+      return {
+        thread: {
+          id: string(p["childId"]),
+          turns: openCodeHistory(
+            array(await this.call(`/session/${encodeURIComponent(string(p["childId"]))}/message`)),
+          ),
+        },
+      };
+    if (method === "session/list")
+      return {
+        sessions: array(await this.call("/session?limit=100"))
+          .map(object)
+          .filter((s) => s["directory"] === this.cwd)
+          .map((s) => ({
+            id: string(s["id"]),
+            title: string(s["title"]),
+            directory: this.cwd,
+            updatedAt: new Date(Number(object(s["time"])["updated"])).toISOString(),
+          })),
+      };
+    if (method === "session/fork") {
+      const fork = object(
+        await this.call(`/session/${encodeURIComponent(this.threadId)}/fork`, {}),
+      );
+      return { thread: { id: string(fork["id"]), turns: [] } };
+    }
+    if (method === "session/rewind")
+      return this.call(`/session/${encodeURIComponent(this.threadId)}/revert`, {
+        messageID: string(p["nativeTurnId"]),
+      });
     if (method === "session/controls") {
       try {
         this.controls.modes = array(await this.call("/agent"))
@@ -215,7 +270,12 @@ export class OpenCodeProvider extends EventProvider {
           turns:
             method === "thread/resume"
               ? openCodeHistory(
-                  array(await this.call(`/session/${encodeURIComponent(this.threadId)}/message`)),
+                  array(
+                    await this.call(`/session/${encodeURIComponent(this.threadId)}/message`),
+                  ).filter((raw) => {
+                    const cutoff = string(object(session["revert"] ?? {})["messageID"]);
+                    return !cutoff || string(object(object(raw)["info"])["id"]) < cutoff;
+                  }),
                 )
               : [],
         },
@@ -223,7 +283,12 @@ export class OpenCodeProvider extends EventProvider {
     }
     if (method === "turn/interrupt") {
       this.interrupted = true;
+      const ended = this.waitForEnd();
       await this.call(`/session/${encodeURIComponent(this.threadId)}/abort`, {});
+      if (!(await ended)) {
+        this.finish();
+        this.disconnected();
+      }
       this.finish();
       return {};
     }

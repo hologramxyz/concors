@@ -54,6 +54,24 @@ export abstract class EventProvider implements ConversationProvider {
   protected interrupted = false;
   protected controls: AgentControls = AgentControlsSchema.parse({});
   protected compactionId: string | null = null;
+  private ended = new Set<() => void>();
+  protected waitForEnd(timeoutMs = 3000): Promise<boolean> {
+    return new Promise((resolve) => {
+      const done = () => {
+        clearTimeout(timer);
+        this.ended.delete(done);
+        resolve(true);
+      };
+      const timer = setTimeout(() => {
+        this.ended.delete(done);
+        resolve(false);
+      }, timeoutMs);
+      this.ended.add(done);
+    });
+  }
+  protected disconnected() {
+    this.emit("session/disconnected", {});
+  }
   private notifications = new Set<(method: string, params: unknown) => void>();
   private failures = new Set<(error: Error) => void>();
   protected readonly onInput: InputHandler;
@@ -103,6 +121,7 @@ export abstract class EventProvider implements ConversationProvider {
       },
     });
     this.turnId = "";
+    for (const done of this.ended) done();
   }
   protected item(item: Record<string, unknown>, done = true) {
     if (!this.turnId) return;

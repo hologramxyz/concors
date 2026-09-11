@@ -118,7 +118,9 @@ it("maps Claude streaming and tool decisions, interrupts, and resumes the native
   expect(input).toHaveBeenCalledOnce();
   await provider.request("turn/interrupt");
   expect(interrupts).toHaveBeenCalledOnce();
-  expect(object(notifications.at(-1)!.params["turn"])["status"]).toBe("interrupted");
+  expect(
+    object(notifications.findLast((n) => n.method === "turn/completed")!.params["turn"])["status"],
+  ).toBe("interrupted");
   const threadId = object(session["thread"])["id"];
   await provider.request("thread/resume", { threadId });
   expect(options!.resume).toBe(threadId);
@@ -246,7 +248,9 @@ it("reads OpenCode SSE deltas, scopes events, forwards decisions, and interrupts
   expect(requests.every((r) => r.auth?.startsWith("Basic "))).toBe(true);
   await provider.request("turn/interrupt");
   expect(requests.some((r) => r.path === "/session/session/abort")).toBe(true);
-  expect(object(notifications.at(-1)!.params["turn"])["status"]).toBe("interrupted");
+  expect(
+    object(notifications.findLast((n) => n.method === "turn/completed")!.params["turn"])["status"],
+  ).toBe("interrupted");
   await provider.request("command/execute", {
     ...turn,
     model: "own-account/model",
@@ -346,7 +350,9 @@ it("maps Pi JSONL, denies tool confirmation, and ignores a cancelled pending dia
   await provider.request("turn/interrupt");
   rejectDialog(new Error("Turn interrupted"));
   await new Promise((resolve) => setImmediate(resolve));
-  expect(object(notifications.at(-1)!.params["turn"])["status"]).toBe("interrupted");
+  expect(
+    object(notifications.findLast((n) => n.method === "turn/completed")!.params["turn"])["status"],
+  ).toBe("interrupted");
   expect(
     notifications.some((n) => n.params["item"] && object(n.params["item"])["text"] === "Hello Pi"),
   ).toBe(true);
@@ -525,4 +531,63 @@ it("waits for OMP readiness, negotiates v2, and uses RPC UI approvals instead of
     "get_state",
     "get_available_commands",
   ]);
+});
+
+it("recovers ACP turns with stable chunk identities instead of appending duplicate replay items", async () => {
+  const process = child();
+  new AgentSideConnection(
+    (client) => ({
+      initialize: async () => ({
+        protocolVersion: PROTOCOL_VERSION,
+        agentCapabilities: { loadSession: true },
+        authMethods: [],
+      }),
+      authenticate: async () => ({}),
+      newSession: async () => ({ sessionId: "saved" }),
+      cancel: async () => {
+        /* No active prompt in this replay fixture. */
+      },
+      prompt: async () => ({ stopReason: "end_turn" as const }),
+      loadSession: async (p) => {
+        for (let i = 0; i < 2; i++) {
+          await client.sessionUpdate({
+            sessionId: p.sessionId,
+            update: {
+              sessionUpdate: "user_message_chunk",
+              content: { type: "text", text: "same prompt" },
+            },
+          });
+          for (const text of ["Hello ", "again"])
+            await client.sessionUpdate({
+              sessionId: p.sessionId,
+              update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text } },
+            });
+        }
+        return {};
+      },
+    }),
+    ndJsonStream(
+      Writable.toWeb(process.stdout as PassThrough),
+      Readable.toWeb(process.stdin as PassThrough) as ReadableStream<Uint8Array>,
+    ),
+  );
+  const provider = new AcpProvider(
+    tmpdir(),
+    async () => ({ decision: "decline" }),
+    { id: "fixture-acp", label: "Fixture", engine: "acp", command: ["fixture"], enabled: true },
+    () => process,
+  );
+  observe(provider);
+  await provider.initialize();
+  const first = await provider.request("thread/resume", { threadId: "saved" });
+  const second = await provider.request("thread/resume", { threadId: "saved" });
+  expect(second).toEqual(first);
+  const turns = object(object(first)["thread"])["turns"] as {
+    id: string;
+    items: { text?: string }[];
+  }[];
+  expect(turns).toHaveLength(2);
+  expect(turns[0]?.id).not.toBe(turns[1]?.id);
+  expect(turns.map((t) => t.items.length)).toEqual([2, 2]);
+  expect(turns.map((t) => t.items[1]?.text)).toEqual(["Hello again", "Hello again"]);
 });

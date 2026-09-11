@@ -3,6 +3,10 @@ import { readFile } from "node:fs/promises";
 import {
   query,
   getSessionMessages,
+  getSubagentMessages,
+  listSessions,
+  forkSession,
+  type SessionStore,
   type Query,
   type SDKUserMessage,
   type Options,
@@ -10,6 +14,9 @@ import {
   type PermissionMode,
 } from "@anthropic-ai/claude-agent-sdk";
 import { AgentControlsSchema } from "@concors/protocol";
+import { claudeMcp } from "./mcp.ts";
+import type { McpServer } from "@concors/protocol";
+import { claudeStore } from "./claude-store.ts";
 import { claudeHistory } from "./history.ts";
 import { launch } from "./launch.ts";
 import { resolveProfile } from "../../terminal/profiles.ts";
@@ -41,15 +48,21 @@ export class ClaudeProvider extends EventProvider {
   private lastBoundary = "";
   private readonly cwd: string;
   private launcher: typeof launch;
+  private mcp: McpServer[];
+  private transcriptStore: SessionStore | undefined;
   private readonly createQuery: typeof query;
   constructor(
     cwd: string,
     onInput: InputHandler,
     createQuery = query,
     launcher: typeof launch = launch,
+    configDirectory?: string,
+    mcp: McpServer[] = [],
   ) {
     super(onInput);
     this.cwd = cwd;
+    this.mcp = mcp;
+    if (configDirectory) this.transcriptStore = claudeStore(configDirectory);
     this.launcher = launcher;
     this.createQuery = createQuery;
   }
@@ -89,6 +102,8 @@ export class ClaudeProvider extends EventProvider {
         return child;
       },
       includePartialMessages: true,
+      enableFileCheckpointing: true,
+      ...(this.mcp.length ? { mcpServers: claudeMcp(this.mcp) } : {}),
       settingSources: ["user", "project", "local"],
       permissionMode: "default",
       hooks: {
@@ -107,6 +122,26 @@ export class ClaudeProvider extends EventProvider {
         ],
       },
       ...(resume ? { resume } : { sessionId: this.threadId }),
+      onElicitation: async (request) => {
+        const result = object(
+          await this.onInput(
+            "mcpServer/elicitation/request",
+            { ...request, threadId: this.threadId, turnId: this.turnId },
+            randomUUID(),
+          ),
+        );
+        return {
+          action: result["action"] as "accept" | "decline" | "cancel",
+          ...(result["content"]
+            ? {
+                content: object(result["content"]) as Record<
+                  string,
+                  string | number | boolean | string[]
+                >,
+              }
+            : {}),
+        };
+      },
       canUseTool: async (name, input) => {
         if (name === "AskUserQuestion") {
           const questions = array(input["questions"]).map((raw, index) => {
@@ -169,9 +204,14 @@ export class ClaudeProvider extends EventProvider {
     this.currentModel = string(object(initial)["model"]);
     this.controls = AgentControlsSchema.parse({
       history: true,
+      childHistory: !this.transcriptStore,
+      importSessions: true,
+      fork: true,
+      rewind: ["files"],
       compact: true,
       contextUsage: true,
       mcp: true,
+      mcpStatus: true,
       modes: [
         { id: "default", label: "Always ask" },
         { id: "plan", label: "Plan", description: "Analyze before making changes" },
@@ -209,6 +249,51 @@ export class ClaudeProvider extends EventProvider {
     const p = object(raw),
       session = this.session;
     if (!session) throw new Error("Claude Code is disconnected");
+    if (method === "mcp/status")
+      return {
+        servers: (await session.mcpServerStatus()).map((s) => ({ name: s.name, status: s.status })),
+      };
+    if (method === "session/child-history")
+      return {
+        thread: {
+          id: string(p["childId"]),
+          turns: claudeHistory(
+            await getSubagentMessages(this.threadId, string(p["childId"]), {
+              dir: this.cwd,
+              limit: 1000,
+            }),
+          ),
+        },
+      };
+    if (method === "session/list")
+      return {
+        sessions: (
+          await listSessions({
+            dir: this.cwd,
+            limit: 100,
+            includeWorktrees: false,
+            ...(this.transcriptStore ? { sessionStore: this.transcriptStore } : {}),
+          })
+        ).map((s) => ({
+          id: s.sessionId,
+          title: s.customTitle ?? s.summary,
+          directory: s.cwd ?? this.cwd,
+          updatedAt: new Date(s.lastModified).toISOString(),
+        })),
+      };
+    if (method === "session/fork") {
+      const result = await forkSession(this.threadId, {
+        dir: this.cwd,
+        ...(this.transcriptStore ? { sessionStore: this.transcriptStore } : {}),
+      });
+      return { thread: { id: result.sessionId, turns: [] } };
+    }
+    if (method === "session/rewind") {
+      const result = await session.rewindFiles(string(p["nativeTurnId"]));
+      if (!result.canRewind)
+        throw new Error(result.error ?? "No file checkpoint is available for this turn");
+      return {};
+    }
     if (method === "session/controls") return this.controls;
     if (method === "model/list") {
       this.models = await session.supportedModels();
@@ -238,6 +323,7 @@ export class ClaudeProvider extends EventProvider {
                   await getSessionMessages(this.threadId, {
                     dir: this.cwd,
                     includeSystemMessages: true,
+                    ...(this.transcriptStore ? { sessionStore: this.transcriptStore } : {}),
                   }),
                 )
               : [],
@@ -245,7 +331,12 @@ export class ClaudeProvider extends EventProvider {
       };
     if (method === "turn/interrupt") {
       this.interrupted = true;
+      const ended = this.waitForEnd();
       await session.interrupt();
+      if (!(await ended)) {
+        this.finish();
+        this.disconnected();
+      }
       this.finish();
       return {};
     }
@@ -291,6 +382,18 @@ export class ClaudeProvider extends EventProvider {
       const item = object(value);
       if (item["type"] === "text") content.push({ type: "text", text: string(item["text"]) });
       if (item["type"] === "localImage") {
+        const model = this.models.find((m) => m.value === this.currentModel);
+        if (
+          !/^(?:claude-)?(?:opus|sonnet|haiku)(?:-|$)/.test(
+            model?.resolvedModel ?? this.currentModel,
+          )
+        ) {
+          content.push({
+            type: "text",
+            text: `Image available on this machine at: ${string(item["path"])}`,
+          });
+          continue;
+        }
         const bytes = await readFile(string(item["path"]));
         const mime =
           bytes[0] === 0x89
@@ -355,7 +458,14 @@ export class ClaudeProvider extends EventProvider {
             id = string(c["tool_use_id"]),
             tool = this.tools.get(id);
           if (c["type"] === "tool_result" && tool)
-            this.tool(id, tool.name, tool.input, c["content"], true, c["is_error"] === true);
+            this.tool(
+              id,
+              tool.name,
+              tool.input,
+              { content: c["content"], details: m["tool_use_result"] },
+              true,
+              c["is_error"] === true,
+            );
         }
       return;
     }

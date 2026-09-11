@@ -17,18 +17,29 @@ export function providerFactory(registry: ProviderRegistry): AgentProviderFactor
       launch = registry.launcher(config);
     switch (config.engine) {
       case "claude":
-        return new ClaudeProvider(cwd, onInput, undefined, launch);
+        return new ClaudeProvider(
+          cwd,
+          onInput,
+          undefined,
+          launch,
+          config.env?.["CLAUDE_CONFIG_DIR"],
+          config.params?.mcpServers,
+        );
       case "opencode":
-        return new OpenCodeProvider(cwd, onInput, launch);
+        return new OpenCodeProvider(cwd, onInput, launch, config.params?.mcpServers);
       case "pi":
       case "omp":
-        return new PiProvider(cwd, onInput, launch, config.engine);
+        return new PiProvider(cwd, onInput, launch, config.engine, {
+          ...process.env,
+          ...config.env,
+        });
       case "acp":
         return new AcpProvider(cwd, onInput, config, launch);
       case "codex":
         return new CodexAppServer(
           launch("codex", ["app-server", "--listen", "stdio://"], cwd),
           onInput,
+          config.params?.mcpServers,
         );
     }
   };

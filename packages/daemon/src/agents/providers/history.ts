@@ -22,7 +22,13 @@ export function claudeHistory(messages: unknown[]): NativeTurn[] {
         typeof message["content"] === "string"
           ? [{ type: "text", text: message["content"] }]
           : array(message["content"]).map(object);
-    if (entry["parent_tool_use_id"]) continue;
+    if (entry["parent_tool_use_id"] || entry["isMeta"]) continue;
+    if (
+      entry["type"] === "user" &&
+      typeof message["content"] === "string" &&
+      /^<(?:command-name|local-command-(?:stdout|stderr|caveat))>/.test(message["content"].trim())
+    )
+      continue;
     if (entry["type"] === "user" && !content.some((c) => c["type"] === "tool_result")) {
       turn = {
         id: string(entry["uuid"]),

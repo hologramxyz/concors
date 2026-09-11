@@ -101,7 +101,8 @@ export function nativeToolItem(
     };
   if (["agent", "task", "subagent", "spawn_agent", "dispatch_agent"].includes(normalized)) {
     const child = text(
-      details["sessionId"] ??
+      details["agentId"] ??
+        details["sessionId"] ??
         details["sessionID"] ??
         result["sessionId"] ??
         result["sessionID"] ??

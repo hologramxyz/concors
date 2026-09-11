@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Readable, Writable } from "node:stream";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import spawn from "cross-spawn";
 import {
@@ -23,6 +23,8 @@ import {
   modelCatalog,
   type InputHandler,
 } from "./contract.ts";
+import { acpMcp } from "./mcp.ts";
+import type { NativeTurn } from "./history.ts";
 import type { launch } from "./launch.ts";
 
 const choices = (option: SessionConfigOption) =>
@@ -47,7 +49,26 @@ export class AcpProvider extends EventProvider {
   private tools = new Map<string, Record<string, unknown>>();
   private activePrompt: Promise<void> | undefined;
   private loading = false;
-  private history: Record<string, unknown>[] = [];
+  private history: NativeTurn[] = [];
+  private turnIndex = 0;
+  private messageIndex = 0;
+  private thoughtIndex = 0;
+  private lastUpdate = "";
+  private commandsReceived = false;
+  private commandsReady: (() => void) | undefined;
+  private modelEfforts = new Map<string, { efforts: string[]; defaultEffort: string | null }>();
+  private identity(type: string, index: number) {
+    return `acp:${this.threadId}:${this.turnIndex}:${type}:${index}`;
+  }
+  private resetText() {
+    this.responseId = "";
+    this.responseText = "";
+    this.thoughtId = "";
+    this.thoughtText = "";
+    this.messageIndex = 0;
+    this.thoughtIndex = 0;
+    this.tools.clear();
+  }
   private terminals = new Map<
     string,
     {
@@ -76,7 +97,10 @@ export class AcpProvider extends EventProvider {
       requestPermission: (request) => this.approve(request),
       readTextFile: async (p) => {
         this.checkSession(p.sessionId);
-        const content = await readFile(resolve(this.cwd, p.path), "utf8");
+        const path = resolve(this.cwd, p.path);
+        if ((await stat(path)).size > 2 * 1024 * 1024)
+          throw new Error("File exceeds the 2 MB preview limit");
+        const content = await readFile(path, "utf8");
         if (Buffer.byteLength(content) > 2 * 1024 * 1024)
           throw new Error("File exceeds the 2 MB preview limit");
         const lines = content.split("\n"),
@@ -162,8 +186,17 @@ export class AcpProvider extends EventProvider {
       },
       extNotification: async (method, params) => {
         // Kiro publishes commands through its ACP extension instead of the standard update.
-        if (this.config.id === "acp-kiro" && method.includes("commands")) {
-          this.commands(array(params["commands"] ?? params["availableCommands"]));
+        if (this.config.id === "acp-kiro" && method === "_kiro.dev/commands/available") {
+          this.commands(
+            [...array(params["commands"]), ...array(params["prompts"])].map((raw) => {
+              const c = object(raw);
+              return {
+                ...c,
+                kind: string(c["serverName"]).startsWith("skill:") ? "skill" : "command",
+                input: { hint: object(c["meta"] ?? {})["hint"] },
+              };
+            }),
+          );
         }
       },
     };
@@ -190,6 +223,7 @@ export class AcpProvider extends EventProvider {
     });
     this.capabilities = response.agentCapabilities ?? {};
     this.controls.history = !!this.capabilities.loadSession;
+    this.controls.importSessions = !!this.capabilities.sessionCapabilities?.list;
     this.controls.fork = !!this.capabilities.sessionCapabilities?.fork;
     this.controls.mcp = this.config.params?.supportsMcpServers !== false;
   }
@@ -206,20 +240,34 @@ export class AcpProvider extends EventProvider {
   private async approve(p: RequestPermissionRequest) {
     if (p.sessionId !== this.threadId || !this.turnId || this.interrupted)
       return { outcome: { outcome: "cancelled" as const } };
-    const once = p.options.find((o) => o.kind === "allow_once"),
+    const once =
+        p.options.find((o) => o.kind === "allow_once") ??
+        p.options.find((o) => o.kind === "allow_always"),
       deny =
         p.options.find((o) => o.kind === "reject_once") ??
         p.options.find((o) => o.kind === "reject_always");
-    // Never reinterpret Accept as a permanent grant when an agent only offers allow_always.
     if (!once)
       return deny
         ? { outcome: { outcome: "selected" as const, optionId: deny.optionId } }
         : { outcome: { outcome: "cancelled" as const } };
     try {
-      const allowed = await this.permission(
-        p.toolCall.title ?? "Allow agent tool?",
-        p.toolCall.rawInput ?? p.toolCall.content,
+      const response = object(
+        await this.onInput(
+          "item/commandExecution/requestApproval",
+          {
+            threadId: this.threadId,
+            turnId: this.turnId,
+            reason: p.toolCall.title ?? "Allow agent tool?",
+            command: JSON.stringify(p.toolCall.rawInput ?? p.toolCall.content),
+            availableDecisions: ["accept", "decline", "cancel"],
+            decisionLabels: {
+              accept: once.kind === "allow_always" ? "Always allow" : "Allow once",
+            },
+          },
+          randomUUID(),
+        ),
       );
+      const allowed = response["decision"] === "accept" && !this.closed;
       if (this.interrupted) return { outcome: { outcome: "cancelled" as const } };
       return allowed
         ? { outcome: { outcome: "selected" as const, optionId: once.optionId } }
@@ -269,9 +317,37 @@ export class AcpProvider extends EventProvider {
         value: c.currentValue,
         ...(c.type === "select" ? { options: choices(c) } : {}),
       }));
+    const effort = this.configOptions.find((c) => c.category === "thought_level");
+    if (this.currentModel)
+      this.modelEfforts.set(this.currentModel, {
+        efforts: effort
+          ? effort.type === "boolean"
+            ? ["off", "on"]
+            : choices(effort).map((o) => o.id)
+          : [],
+        defaultEffort: effort
+          ? effort.type === "boolean"
+            ? effort.currentValue
+              ? "on"
+              : "off"
+            : effort.currentValue
+          : null,
+      });
+    if (this.models.length)
+      this.emit("session/models/updated", {
+        models: modelCatalog(
+          this.models.map((m) => ({
+            ...m,
+            ...(this.modelEfforts.get(m.id) ?? { efforts: [], defaultEffort: null }),
+            supportsImages: this.capabilities.promptCapabilities?.image === true,
+          })),
+        ),
+      });
     this.controlsChanged();
   }
   private commands(commands: unknown[]) {
+    this.commandsReceived = true;
+    this.commandsReady?.();
     this.controls.commands = commands
       .map(object)
       .filter((c) => c["name"])
@@ -299,25 +375,45 @@ export class AcpProvider extends EventProvider {
       this.controlsChanged();
       return;
     }
-    if (!this.turnId && !this.loading) return;
+    if ((!this.turnId && !this.loading) || this.interrupted) return;
+    const previousUpdate = this.lastUpdate;
+    this.lastUpdate = update.sessionUpdate;
+    if (this.loading && update.sessionUpdate === "user_message_chunk") {
+      if (previousUpdate !== "user_message_chunk") {
+        this.turnIndex++;
+        this.resetText();
+        this.history.push({
+          id: `acp:${this.threadId}:${this.turnIndex}`,
+          status: "completed",
+          items: [{ id: this.identity("user", 0), type: "userMessage", content: [] }],
+        });
+      }
+      const user = this.history.at(-1)?.items[0];
+      if (user) (user["content"] as unknown[]).push(update.content);
+      return;
+    }
     const emit = (item: Record<string, unknown>, done = true) => {
-      if (this.loading) this.history.push(item);
-      else this.item(item, done);
+      if (this.loading) {
+        const turn = this.history.at(-1);
+        if (!turn) return;
+        const index = turn.items.findIndex((i) => i["id"] === item["id"]);
+        const saved = {
+          ...item,
+          ...(item["status"] === "inProgress" ? { status: "interrupted" } : {}),
+        };
+        if (index < 0) turn.items.push(saved);
+        else turn.items[index] = saved;
+      } else this.item(item, done);
     };
     if (update.sessionUpdate === "agent_message_chunk" && update.content.type === "text") {
-      this.responseId ||= randomUUID();
+      this.responseId ||= this.identity("message", ++this.messageIndex);
       this.responseText += update.content.text;
       emit({ id: this.responseId, type: "agentMessage", text: this.responseText }, false);
     }
     if (update.sessionUpdate === "agent_thought_chunk" && update.content.type === "text") {
-      this.thoughtId ||= randomUUID();
+      this.thoughtId ||= this.identity("thought", ++this.thoughtIndex);
       this.thoughtText += update.content.text;
       emit({ id: this.thoughtId, type: "reasoning", text: this.thoughtText }, false);
-    }
-    if (update.sessionUpdate === "user_message_chunk" && this.loading) {
-      this.responseId = "";
-      this.responseText = "";
-      emit({ id: randomUUID(), type: "userMessage", content: [update.content] });
     }
     if (update.sessionUpdate === "tool_call" || update.sessionUpdate === "tool_call_update") {
       this.responseId = "";
@@ -354,7 +450,7 @@ export class AcpProvider extends EventProvider {
     }
     if (update.sessionUpdate === "plan")
       emit({
-        id: "plan:" + this.turnId,
+        id: this.identity("plan", 0),
         type: "plan",
         text: update.entries.map((e) => `${e.status}: ${e.content}`).join("\n"),
       });
@@ -369,16 +465,78 @@ export class AcpProvider extends EventProvider {
   async request(method: string, raw: unknown = {}) {
     const connection = this.connection,
       p = object(raw);
-    if (!connection) throw new Error("Agent is disconnected");
+    if (!connection || this.closed)
+      throw new Error("Agent is disconnected. Reopen this session to reconnect.");
+    if (method === "session/list") {
+      const response = await connection.listSessions({ cwd: this.cwd });
+      return {
+        sessions: array(object(response)["sessions"])
+          .slice(0, 100)
+          .map(object)
+          .map((s) => ({
+            id: string(s["sessionId"]),
+            title: string(s["title"]) || "Agent session",
+            directory: string(s["cwd"]),
+            updatedAt: string(s["updatedAt"]) || new Date().toISOString(),
+          })),
+      };
+    }
+    if (method === "session/fork") {
+      const response = await connection.unstable_forkSession({
+        sessionId: this.threadId,
+        cwd: this.cwd,
+        mcpServers: acpMcp(this.config.params?.mcpServers ?? []),
+      });
+      return { thread: { id: response.sessionId, turns: [] } };
+    }
     if (method === "session/controls") return this.controls;
     if (method === "collaborationMode/list") return { data: [] };
     if (method === "model/list") {
       const effort = this.configOptions.find((c) => c.category === "thought_level");
+      const thinking = () => {
+        const e = this.configOptions.find((c) => c.category === "thought_level");
+        return {
+          efforts: e ? (e.type === "boolean" ? ["off", "on"] : choices(e).map((o) => o.id)) : [],
+          defaultEffort: e
+            ? e.type === "boolean"
+              ? e.currentValue
+                ? "on"
+                : "off"
+              : e.currentValue
+            : null,
+        };
+      };
+      if (this.currentModel) this.modelEfforts.set(this.currentModel, thinking());
+      const modelOption = this.configOptions.find((c) => c.category === "model");
+      if (this.config.id === "acp-kimi" && modelOption && effort && !this.turnId) {
+        const original = this.currentModel;
+        try {
+          for (const m of this.models)
+            if (!this.modelEfforts.has(m.id)) {
+              this.state(
+                await connection.setSessionConfigOption({
+                  sessionId: this.threadId,
+                  configId: modelOption.id,
+                  value: m.id,
+                }),
+              );
+              this.modelEfforts.set(m.id, thinking());
+            }
+        } finally {
+          if (original && this.currentModel !== original)
+            this.state(
+              await connection.setSessionConfigOption({
+                sessionId: this.threadId,
+                configId: modelOption.id,
+                value: original,
+              }),
+            );
+        }
+      }
       return modelCatalog(
         this.models.map((m) => ({
           ...m,
-          efforts: effort ? choices(effort).map((e) => e.id) : [],
-          defaultEffort: effort?.type === "select" ? effort.currentValue : null,
+          ...(this.modelEfforts.get(m.id) ?? { efforts: [], defaultEffort: null }),
           supportsImages: this.capabilities.promptCapabilities?.image === true,
         })),
       );
@@ -386,7 +544,11 @@ export class AcpProvider extends EventProvider {
     if (method === "thread/start" || method === "thread/resume") {
       this.loading = method === "thread/resume";
       this.history = [];
-      const args = { cwd: this.cwd, mcpServers: [] };
+      this.turnIndex = 0;
+      this.lastUpdate = "";
+      this.resetText();
+      this.interrupted = false;
+      const args = { cwd: this.cwd, mcpServers: acpMcp(this.config.params?.mcpServers ?? []) };
       try {
         if (this.loading) {
           if (!this.capabilities.loadSession)
@@ -410,20 +572,51 @@ export class AcpProvider extends EventProvider {
       } finally {
         this.loading = false;
       }
+      if (
+        ["acp-cursor", "acp-kiro", "acp-trae"].includes(this.config.id) &&
+        !this.commandsReceived
+      ) {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          await new Promise<void>((resolve) => {
+            this.commandsReady = resolve;
+            timer = setTimeout(resolve, 10000);
+          });
+        } finally {
+          if (timer) clearTimeout(timer);
+          this.commandsReady = undefined;
+        }
+      }
       return {
         thread: {
           id: this.threadId,
-          turns: this.history.length
-            ? [{ id: "import:" + this.threadId, status: "completed", items: this.history }]
-            : [],
+          turns: this.history,
         },
       };
     }
     if (method === "turn/interrupt") {
       this.interrupted = true;
-      await connection.cancel({ sessionId: this.threadId });
-      await this.activePrompt;
-      this.finish();
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        const acknowledged = await Promise.race([
+          (async () => {
+            await connection.cancel({ sessionId: this.threadId });
+            await this.activePrompt;
+            return true;
+          })(),
+          new Promise<false>((resolve) => {
+            timer = setTimeout(() => resolve(false), 5000);
+          }),
+        ]);
+        this.finish();
+        // Retire an unresponsive stream before another prompt can receive its late frames.
+        if (!acknowledged) {
+          this.disconnected();
+          await this.close();
+        }
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
       return {};
     }
     if (method !== "turn/start" && method !== "command/execute")
@@ -464,7 +657,10 @@ export class AcpProvider extends EventProvider {
     }
     const effort = this.configOptions.find((c) => c.category === "thought_level");
     if (effort && p["effort"] && p["effort"] !== effort.currentValue)
-      await writeConfig(effort, string(p["effort"]));
+      await writeConfig(
+        effort,
+        effort.type === "boolean" ? p["effort"] === "on" : string(p["effort"]),
+      );
     for (const [id, value] of Object.entries(object(p["features"] ?? {}))) {
       const c = this.configOptions.find((o) => o.id === id);
       if (c && c.currentValue !== value) await writeConfig(c, value as string | boolean);
@@ -495,13 +691,11 @@ export class AcpProvider extends EventProvider {
         });
       }
     }
-    this.responseText = "";
-    this.responseId = "";
-    this.thoughtId = "";
-    this.thoughtText = "";
-    this.tools.clear();
+    this.resetText();
+    this.turnIndex++;
     const result = this.begin(),
       turnId = this.turnId;
+    this.emit("turn/nativeIdentity", { nativeTurnId: `acp:${this.threadId}:${this.turnIndex}` });
     this.activePrompt = connection
       .prompt({ sessionId: this.threadId, prompt })
       .then((response) => {
