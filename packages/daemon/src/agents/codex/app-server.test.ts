@@ -13,6 +13,15 @@ readline.createInterface({input:process.stdin}).on('line', line => {
   if(frame.method==='initialized') {initialized=true;return;}
   if(!initialized) {send({id:frame.id,error:{code:-1,message:'Not initialized'}});return;}
   switch(frame.method) {
+    case 'thread/compact/start': {
+      send({id:frame.id,result:{}});
+      send({method:'turn/started',params:{threadId:frame.params.threadId,turn:{id:'compact-turn',status:'inProgress'}}});
+      send({method:'item/started',params:{threadId:frame.params.threadId,turnId:'compact-turn',item:{id:'compact-item',type:'contextCompaction'}}});
+      send({method:'thread/compacted',params:{threadId:frame.params.threadId,turnId:'compact-turn'}});
+      send({method:'item/completed',params:{threadId:frame.params.threadId,turnId:'compact-turn',item:{id:'compact-item',type:'contextCompaction'}}});
+      send({method:'thread/compacted',params:{threadId:frame.params.threadId,turnId:'compact-turn'}});
+      break;
+    }
     case 'echo':setTimeout(()=>send({id:frame.id,result:frame.params}),frame.params.delay || 0);break;
     case 'notify': {
       const data=Buffer.from(JSON.stringify({method:'item/agentMessage/delta',params:{delta:'hello 🌍'}})+'\\n');
@@ -109,4 +118,25 @@ it("rejects auto-review when the provider does not report a supported version", 
   expect(await client.request("echo", { value: "still connected" })).toEqual({
     value: "still connected",
   });
+});
+
+it("dispatches native compaction and reconciles duplicate completion channels", async () => {
+  const client = open();
+  const events: { method: string; params: unknown }[] = [];
+  client.onNotification((method, params) => events.push({ method, params }));
+  await client.initialize();
+  expect(
+    await client.request("command/execute", { name: "compact", args: "", threadId: "thread" }),
+  ).toMatchObject({ turn: { id: "compact-turn" } });
+  await expect.poll(() => events.filter((e) => e.method === "item/completed")).toHaveLength(1);
+  expect(events.find((e) => e.method === "item/completed")?.params).toMatchObject({
+    item: { id: "compact-item", type: "contextCompaction" },
+  });
+  await expect(
+    client.request("command/execute", {
+      name: "compact",
+      args: "ignored instructions",
+      threadId: "thread",
+    }),
+  ).rejects.toThrow("does not accept");
 });

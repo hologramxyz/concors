@@ -27,6 +27,7 @@ export function countHostSessions(host: HostDescriptor): Promise<number> {
       socket.send(
         JSON.stringify({
           type: "client.hello",
+          capabilities: ["agent-providers-v2"],
           protocolVersion: PROTOCOL_VERSION,
           client: { kind: "cli", name: "concors-heartbeat", version: DAEMON_VERSION },
         }),

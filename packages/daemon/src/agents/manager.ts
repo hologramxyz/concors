@@ -6,6 +6,8 @@ import { randomUUID } from "node:crypto";
 import { stat } from "node:fs/promises";
 import { z } from "zod";
 import {
+  AgentControlsSchema,
+  parseAgentCommand,
   AgentQuestionSchema,
   type AgentInfo,
   type AgentItem,
@@ -15,14 +17,15 @@ import {
   type AgentResult,
 } from "@concors/protocol";
 import type { WorkspaceStore } from "../workspace/store.ts";
-import { resolveProfile } from "../terminal/profiles.ts";
+import { ProviderRegistry } from "./providers/registry.ts";
+import { elicitationQuestions, elicitationContent } from "./elicitation.ts";
 import { mapCodexItem } from "./codex/items.ts";
 
 import { createProvider, type AgentProviderFactory } from "./providers/index.ts";
 import type { ConversationProvider as AgentProvider } from "./providers/contract.ts";
 import {
-  AgentProviderIdSchema,
-  agentProviderNames,
+  agentProviderName,
+  NativeSessionSchema,
   type AgentProviderCatalog,
 } from "@concors/protocol";
 export type { AgentProviderFactory } from "./providers/index.ts";
@@ -50,6 +53,7 @@ interface Runtime {
   ready: Promise<AgentProvider>;
   pending: Map<string, PendingResolver>;
   closed: boolean;
+  cancelledTurn: string | null;
 }
 
 export class AgentManager {
@@ -59,13 +63,19 @@ export class AgentManager {
   readonly #factory: AgentProviderFactory;
   readonly #runtimes = new Map<string, Runtime>();
   #closed = false;
+  private mutations = new Set<string>();
+  private draining = new Set<string>();
+  private deliveries = new Map<string, string>();
+  private registry: ProviderRegistry;
   private catalogs = new Map<string, { expires: number; value: Promise<AgentProviderCatalog[]> }>();
   constructor(
     store: WorkspaceStore,
     emit: (event: AgentEvent) => void,
     workspaceChanged: () => void,
     factory: AgentProviderFactory = createProvider,
+    registry: ProviderRegistry = new ProviderRegistry(),
   ) {
+    this.registry = registry;
     this.#store = store;
     this.#emit = emit;
     this.#workspaceChanged = workspaceChanged;
@@ -75,6 +85,7 @@ export class AgentManager {
         store.saveAgent({
           ...info,
           status: "interrupted",
+          queuePaused: true,
           pending: [],
           attention: null,
           error:
@@ -83,6 +94,38 @@ export class AgentManager {
           updatedAt: new Date().toISOString(),
         });
       }
+    queueMicrotask(() => {
+      if (!this.#closed)
+        for (const info of store.agents())
+          void this.drain(info.id).catch((error) => this.fail(info.id, error));
+    });
+  }
+  private async drain(id: string): Promise<void> {
+    if (this.#closed || this.draining.has(id) || this.mutations.has(id)) return;
+    const info = this.#store.agent(id),
+      head = info.queue?.[0];
+    if (!head || info.queuePaused || !["idle", "done"].includes(info.status)) return;
+    const request = this.#store.queuedRequest(head.id, id);
+    if (!request) {
+      this.update(id, {
+        queuePaused: true,
+        error: "Queued message is unavailable. Remove it and try again.",
+      });
+      return;
+    }
+    this.draining.add(id);
+    this.deliveries.set(request.requestId, head.id);
+    try {
+      const result = await this.request(request);
+      if (result.outcome.status === "error")
+        this.update(id, { queuePaused: true, error: result.outcome.message });
+    } finally {
+      this.deliveries.delete(request.requestId);
+      this.draining.delete(id);
+      queueMicrotask(() => {
+        void this.drain(id).catch((error) => this.fail(id, error));
+      });
+    }
   }
   private update(id: string, patch: Partial<AgentInfo>): AgentInfo {
     const prior = this.#store.agent(id);
@@ -107,6 +150,10 @@ export class AgentManager {
     else if (!["done", "needs_input"].includes(next.status)) next.attention = null;
     this.#store.saveAgent(next);
     this.#emit({ type: "agent.state", agent: next });
+    if (["idle", "done"].includes(next.status) && next.queue?.length && !next.queuePaused)
+      queueMicrotask(() => {
+        void this.drain(id).catch((error) => this.fail(id, error));
+      });
     return next;
   }
   private item(
@@ -138,6 +185,7 @@ export class AgentManager {
     }
     this.update(id, {
       status: "failed",
+      queuePaused: true,
       pending: [],
       error: (error instanceof Error ? error.message : String(error)).slice(0, 4000),
     });
@@ -166,6 +214,7 @@ export class AgentManager {
       ready: Promise.resolve(provider),
       pending: new Map(),
       closed: false,
+      cancelledTurn: null,
     };
     this.#runtimes.set(id, runtime);
     provider.onNotification((method, params) => {
@@ -181,8 +230,27 @@ export class AgentManager {
     });
     runtime.ready = (async () => {
       await provider.initialize();
+      const response = ThreadResponse.parse(
+        await provider.request(info.threadId ? "thread/resume" : "thread/start", {
+          ...(info.threadId ? { threadId: info.threadId } : {}),
+          cwd: info.directory,
+          approvalPolicy: "on-request",
+          sandbox: "workspace-write",
+          ...(info.model ? { model: info.model } : {}),
+        }),
+      );
+      if (runtime.closed || this.#closed) throw new Error("Agent connection ended");
+      this.update(id, {
+        threadId: response.thread.id,
+        model: response.model ?? info.model,
+        engine: this.registry.config(info.provider).engine,
+        providerLabel: this.registry.config(info.provider).label,
+      });
       try {
-        const models = parseModels(await provider.request("model/list", {}));
+        const models = parseModels(
+          await provider.request("model/list", {}),
+          this.registry.config(info.provider).models,
+        );
         this.update(id, { models });
       } catch {
         /* Older providers can still run their configured model. */
@@ -195,20 +263,17 @@ export class AgentManager {
       } catch {
         this.update(id, { supportsPlan: false });
       }
-      const response = ThreadResponse.parse(
-        await provider.request(info.threadId ? "thread/resume" : "thread/start", {
-          ...(info.threadId ? { threadId: info.threadId } : {}),
-          cwd: info.directory,
-          approvalPolicy: "on-request",
-          sandbox: "workspace-write",
-          ...(info.model ? { model: info.model } : {}),
-        }),
-      );
-      if (runtime.closed || this.#closed) throw new Error("Agent connection ended");
-      this.update(id, { threadId: response.thread.id, model: response.model ?? info.model });
+      try {
+        this.update(id, {
+          controls: AgentControlsSchema.parse(await provider.request("session/controls")),
+        });
+      } catch {
+        // Older transports have no capability contract. They do not receive new controls.
+      }
       // Rehydrate provider history after restart using stable item and turn identities.
       for (const turn of response.thread.turns)
-        for (const raw of turn.items) this.lifecycle(id, turn.id, raw, true);
+        for (const raw of turn.items)
+          this.lifecycle(id, this.#store.nativeTurn(id, turn.id), raw, true);
       if (info.threadId) {
         const active = response.thread.turns.findLast((t) => t.status === "inProgress");
         if (active) {
@@ -223,10 +288,30 @@ export class AgentManager {
     return runtime.ready;
   }
   async request(request: AgentRequest): Promise<AgentResult> {
+    let mutation: string | undefined;
     try {
       if (this.#closed) throw new Error("Daemon is shutting down");
-      const op = request.operation;
-      if (op.kind === "read") return this.result(request, op.sessionId, op.before);
+      const operation = request.operation;
+      const op =
+        operation.kind === "command"
+          ? {
+              kind: "send" as const,
+              sessionId: operation.sessionId,
+              text: `/${operation.name}${operation.args ? ` ${operation.args}` : ""}`,
+              attachments: undefined,
+            }
+          : operation;
+      if (op.kind === "read") {
+        const info = this.#store.agent(op.sessionId);
+        if (info.threadId && !this.#runtimes.has(info.id) && !op.before) {
+          try {
+            await this.provider(info.id);
+          } catch {
+            /* Keep the saved conversation visible if native recovery fails. */
+          }
+        }
+        return this.result(request, op.sessionId, op.before);
+      }
       if (op.kind === "seen") {
         const info = this.#store.agent(op.sessionId);
         if (info.attention?.id === op.attentionId && !info.attention.seen)
@@ -238,7 +323,7 @@ export class AgentManager {
       }
       if (op.kind === "provider-catalog") {
         const info = this.#store.agent(op.sessionId);
-        const providers = await this.catalog(info);
+        const providers = await this.catalog(info, op.provider);
         return {
           type: "agent.result",
           requestId: request.requestId,
@@ -249,17 +334,154 @@ export class AgentManager {
           },
         };
       }
+      if (op.kind === "child-history") {
+        const info = this.#store.agent(op.sessionId),
+          parent = this.#store.agentItem(info.id, op.itemId);
+        if (
+          !info.controls?.childHistory ||
+          !parent?.presentation?.children?.some((c) => c.id === op.childId)
+        )
+          throw new Error("This child conversation is not available from this session.");
+        const provider = await this.provider(info.id),
+          response = ThreadResponse.parse(
+            await provider.request("session/child-history", { childId: op.childId }),
+          );
+        const childItems: AgentItem[] = [];
+        for (const turn of response.thread.turns)
+          for (const raw of turn.items) {
+            const mapped = mapCodexItem(raw, turn.status !== "inProgress");
+            if (mapped)
+              childItems.push({
+                ...mapped,
+                sessionId: info.id,
+                turnId: turn.id,
+                position: childItems.length + 1,
+                revision: 0,
+                createdAt: new Date().toISOString(),
+              });
+          }
+        return {
+          type: "agent.result",
+          requestId: request.requestId,
+          outcome: {
+            status: "ok",
+            conversation: this.#store.agentConversation(info.id),
+            childItems: childItems.slice(-80),
+          },
+        };
+      }
+      if (op.kind === "mcp-status") {
+        const info = this.#store.agent(op.sessionId),
+          provider = await this.provider(info.id);
+        if (!this.#store.agent(info.id).controls?.mcpStatus)
+          throw new Error("This agent does not expose MCP server status.");
+        const response = z
+          .object({ servers: z.array(z.object({ name: z.string(), status: z.string() })).max(100) })
+          .parse(await provider.request("mcp/status"));
+        return {
+          type: "agent.result",
+          requestId: request.requestId,
+          outcome: {
+            status: "ok",
+            conversation: this.#store.agentConversation(info.id),
+            servers: response.servers,
+          },
+        };
+      }
+      if (op.kind === "sessions-list") {
+        const info = this.#store.agent(op.sessionId),
+          provider = await this.provider(info.id);
+        if (!this.#store.agent(info.id).controls?.importSessions)
+          throw new Error("This agent cannot list native sessions.");
+        const response = z
+          .object({ sessions: z.array(NativeSessionSchema).max(100) })
+          .parse(await provider.request("session/list", { cwd: info.directory }));
+        return {
+          type: "agent.result",
+          requestId: request.requestId,
+          outcome: {
+            status: "ok",
+            conversation: this.#store.agentConversation(info.id),
+            sessions: response.sessions.filter((s) => s.directory === info.directory),
+          },
+        };
+      }
       const receipt = this.#store.agentReceipt(request);
-      if (receipt) return this.result(request, receipt);
+      if (receipt) {
+        const error = this.#store.agentActionError(request.requestId);
+        if (error) throw new Error(error);
+        return this.result(request, receipt);
+      }
       if (op.kind === "switch-provider") {
         const previous = this.#store.agent(op.sessionId);
         if (previous.revision !== op.expectedRevision) throw new Error("Agent changed. Try again.");
         if (previous.provider === op.provider) throw new Error("Choose a different provider");
-        const catalog = (await this.catalog(previous)).find((p) => p.id === op.provider);
+        const catalog = (await this.catalog(previous, op.provider)).find(
+          (p) => p.id === op.provider,
+        );
         if (!catalog || catalog.error)
           throw new Error(catalog?.error ?? "Provider is not installed on this machine");
         if (op.model && !catalog.models.some((m) => m.id === op.model))
           throw new Error("That model is not available");
+      }
+      if (op.kind === "import-session" || op.kind === "fork-session") {
+        const previous = this.#store.agent(op.sessionId);
+        if (previous.revision !== op.expectedRevision) throw new Error("Agent changed. Try again.");
+        if (
+          op.kind === "fork-session" &&
+          (!previous.controls?.fork ||
+            ["starting", "working", "needs_input"].includes(previous.status))
+        )
+          throw new Error("Wait for this agent to finish before forking its session.");
+        if (op.kind === "import-session" && !previous.controls?.importSessions)
+          throw new Error("Native session import is not available for this agent.");
+        if (
+          op.kind === "import-session" &&
+          this.#store
+            .agents()
+            .some((a) => a.provider === previous.provider && a.threadId === op.nativeSessionId)
+        )
+          throw new Error("That session is already open in Concors.");
+        const now = new Date().toISOString();
+        const next: AgentInfo = {
+          ...previous,
+          id: randomUUID(),
+          name:
+            op.kind === "fork-session"
+              ? `${previous.name.slice(0, 70)} (fork)`
+              : "Imported session",
+          threadId: op.kind === "import-session" ? op.nativeSessionId : null,
+          turnId: null,
+          status: "starting",
+          queue: [],
+          queuePaused: false,
+          pending: [],
+          attention: null,
+          error: null,
+          revision: 0,
+          startedAt: now,
+          updatedAt: now,
+          turnStartedAt: null,
+          historyRevision: 0,
+        };
+        this.#store.reserveAgent(request, next);
+        this.#workspaceChanged();
+        this.#emit({ type: "agent.state", agent: next });
+        void (async () => {
+          if (op.kind === "fork-session") {
+            const provider = await this.provider(previous.id);
+            const response = ThreadResponse.parse(
+              await provider.request("session/fork", {
+                threadId: previous.threadId,
+                cwd: previous.directory,
+              }),
+            );
+            this.update(next.id, { threadId: response.thread.id });
+          }
+          await this.provider(next.id);
+          this.update(next.id, { status: "idle" });
+        })().catch((error) => this.fail(next.id, error));
+        return this.result(request, next.id);
       }
       if (op.kind === "start" || op.kind === "switch-provider") {
         const previous =
@@ -288,7 +510,9 @@ export class AgentManager {
         const info: AgentInfo = {
           id: randomUUID(),
           projectId: project.id,
-          name: agentProviderNames[op.provider ?? "codex"],
+          name: this.registry.config(op.provider ?? "codex").label,
+          engine: this.registry.config(op.provider ?? "codex").engine,
+          providerLabel: this.registry.config(op.provider ?? "codex").label,
           directory,
           provider: op.provider ?? "codex",
           model: op.model ?? null,
@@ -315,25 +539,163 @@ export class AgentManager {
         return this.result(request, info.id);
       }
       const info = this.#store.agent(op.sessionId);
+      if (this.mutations.has(info.id))
+        throw new Error("This session is being changed. Try again when it finishes.");
+      if (op.kind === "steer") {
+        if (
+          !info.controls?.steer ||
+          info.turnId !== op.turnId ||
+          info.status !== "working" ||
+          op.text.startsWith("/")
+        )
+          throw new Error(
+            "Steering is only available during an active turn and does not run slash commands.",
+          );
+        this.#store.reserveAgentAction(request, info);
+        const runtime = this.#runtimes.get(info.id);
+        if (!runtime) throw new Error("Agent disconnected. The steering message was not replayed.");
+        await runtime.provider.request("session/steer", {
+          threadId: info.threadId,
+          turnId: op.turnId,
+          text: op.text,
+        });
+        this.item(info.id, op.turnId, {
+          id: `steer:${request.requestId}`,
+          kind: "user",
+          title: "You · steering",
+          text: op.text,
+          detail: "",
+          status: "completed",
+        });
+        return this.result(request, info.id);
+      }
+      if (op.kind === "rewind") {
+        if (
+          info.revision !== op.expectedRevision ||
+          ["starting", "working", "needs_input"].includes(info.status)
+        )
+          throw new Error("Wait for the agent to finish before rewinding.");
+        if (!info.controls?.rewind.includes(op.mode))
+          throw new Error("This rewind mode is not supported by the agent.");
+        const prompts = this.#store.agentPrompts(info.id).filter((i) => !i.id.startsWith("steer:")),
+          index = prompts.findIndex((i) => i.turnId === op.turnId);
+        if (index < 0) throw new Error("That turn is no longer available.");
+        mutation = info.id;
+        this.mutations.add(info.id);
+        const provider = await this.provider(info.id);
+        this.#store.reserveAgentAction(request, {
+          ...this.#store.agent(info.id),
+          queuePaused: true,
+        });
+        await provider.request("session/rewind", {
+          threadId: info.threadId,
+          nativeTurnId: this.#store.nativeTurnId(info.id, op.turnId),
+          numTurns: prompts.length - index,
+          mode: op.mode,
+        });
+        if (op.mode !== "files") this.#store.removeAgentTurnsFrom(info.id, op.turnId);
+        this.update(info.id, {
+          status: "idle",
+          turnId: null,
+          pending: [],
+          attention: null,
+          error: null,
+          queuePaused: true,
+          context: null,
+          historyRevision: (info.historyRevision ?? 0) + 1,
+        });
+        if (op.mode === "files")
+          this.item(info.id, op.turnId, {
+            id: `rewind:${request.requestId}`,
+            kind: "system",
+            title: "Files restored",
+            text: "Restored the file checkpoint. Conversation history is unchanged.",
+            detail: "",
+            status: "completed",
+          });
+        return this.result(request, info.id);
+      }
+      if (op.kind === "queue-add" || op.kind === "queue-remove" || op.kind === "queue-pause") {
+        let queue = info.queue ?? [],
+          paused = info.queuePaused ?? false;
+        let delivery: AgentRequest | undefined;
+        if (op.kind === "queue-add") {
+          if (queue.length >= 20) throw new Error("Queue up to 20 follow-ups per agent.");
+          queue = [
+            ...queue,
+            {
+              id: request.requestId,
+              text: op.text,
+              attachments: (op.attachments ?? []).map((a) => ({ name: a.name, mime: a.mime })),
+              queuedAt: new Date().toISOString(),
+            },
+          ];
+          delivery = {
+            type: "agent.request",
+            requestId: randomUUID(),
+            operation: {
+              kind: "send",
+              sessionId: info.id,
+              text: op.text,
+              attachments: op.attachments,
+            },
+          };
+        } else if (op.kind === "queue-remove") {
+          queue = queue.filter((entry) => entry.id !== op.id);
+        } else paused = op.paused;
+        const resume =
+          op.kind === "queue-pause" && !paused && ["failed", "interrupted"].includes(info.status);
+        const next = {
+          ...info,
+          queue,
+          queuePaused: paused,
+          ...(resume ? { status: "idle" as const, error: null } : {}),
+          revision: info.revision + 1,
+        };
+        this.#store.reserveAgentAction(request, next, {
+          ...(delivery ? { add: delivery } : {}),
+          ...(op.kind === "queue-remove" ? { remove: op.id } : {}),
+        });
+        this.#emit({ type: "agent.state", agent: next });
+        queueMicrotask(() => {
+          void this.drain(info.id).catch((error) => this.fail(info.id, error));
+        });
+        return this.result(request, info.id);
+      }
       if (op.kind === "refresh-models") {
         const provider = await this.provider(info.id);
         this.update(info.id, {
-          models: parseModels(await provider.request("model/list", {})),
+          models: parseModels(
+            await provider.request("model/list", {}),
+            this.registry.config(info.provider).models,
+          ),
           updatedAt: info.updatedAt,
         });
         return this.result(request, info.id);
       }
       if (op.kind === "configure") {
         if (
-          info.provider !== "codex" &&
-          (op.settings.mode !== "default" ||
-            op.settings.planMode ||
-            op.settings.serviceTier ||
-            op.settings.effort)
+          (info.engine ?? info.provider) !== "codex" &&
+          (op.settings.mode !== "default" || op.settings.planMode || op.settings.serviceTier)
         )
           throw new Error("This provider uses its native tool approvals and model defaults");
         if (info.revision !== op.expectedRevision)
           throw new Error("Agent settings changed. Try again.");
+        if (
+          op.settings.nativeMode &&
+          !info.controls?.modes.some((m) => m.id === op.settings.nativeMode)
+        )
+          throw new Error("That mode is not available for this provider.");
+        for (const [key, value] of Object.entries(op.settings.features ?? {})) {
+          const feature = info.controls?.features.find((f) => f.id === key);
+          if (
+            !feature ||
+            (feature.options
+              ? !feature.options.some((o) => o.id === value)
+              : typeof value !== "boolean")
+          )
+            throw new Error("That feature is not available for this provider.");
+        }
         if (
           op.settings.model &&
           info.models?.length &&
@@ -367,12 +729,21 @@ export class AgentManager {
           throw new Error(
             "This conversation could not be started. Create a new chat pane after fixing the connection.",
           );
+        const command = parseAgentCommand(op.text);
+        if (command) {
+          if (!info.controls?.commands.some((c) => c.name === command.name))
+            throw new Error(
+              `/${command.name} is not available for this agent. Check its commands or update its CLI.`,
+            );
+          if (op.attachments?.length)
+            throw new Error("Send attachments in a message, separately from a command.");
+        }
         const turnId = `pending:${request.requestId}`;
         const next = {
           ...info,
           name:
-            info.name === agentProviderNames[info.provider]
-              ? op.text.split("\n")[0]?.slice(0, 80) || agentProviderNames[info.provider]
+            info.name === (info.providerLabel ?? agentProviderName(info.provider))
+              ? op.text.split("\n")[0]?.slice(0, 80) || agentProviderName(info.provider)
               : info.name,
           status: "working" as const,
           turnId,
@@ -383,7 +754,9 @@ export class AgentManager {
           revision: info.revision + 1,
           updatedAt: new Date().toISOString(),
         };
-        this.#store.reserveAgentAction(request, next);
+        const queueId = this.deliveries.get(request.requestId);
+        if (queueId) next.queue = (info.queue ?? []).filter((entry) => entry.id !== queueId);
+        this.#store.reserveAgentAction(request, next, queueId ? { remove: queueId } : undefined);
         this.#emit({ type: "agent.state", agent: next });
         this.item(info.id, turnId, {
           id: `prompt:${request.requestId}`,
@@ -408,10 +781,7 @@ export class AgentManager {
         const runtime = this.#runtimes.get(info.id);
         if (!runtime) throw new Error("Agent connection is no longer active");
         this.#store.reserveAgentAction(request, info);
-        await runtime.provider.request("turn/interrupt", {
-          threadId: info.threadId,
-          turnId: op.turnId,
-        });
+        await this.interrupt(info.id, runtime, op.turnId);
       } else {
         const pending = info.pending.find((p) => p.id === op.pendingId);
         const runtime = this.#runtimes.get(info.id);
@@ -419,7 +789,19 @@ export class AgentManager {
         if (!pending || !resolver || !runtime || pending.turnId !== info.turnId)
           throw new Error("This request was already answered or is no longer active");
         let value: unknown;
-        if (pending.kind === "approval") {
+        if (pending.kind === "elicitation") {
+          value = {
+            action:
+              op.decision === "decline"
+                ? "decline"
+                : op.decision === "cancel"
+                  ? "cancel"
+                  : "accept",
+            ...(["decline", "cancel"].includes(op.decision ?? "")
+              ? {}
+              : { content: elicitationContent(pending.elicitation?.schema, op.answers ?? {}) }),
+          };
+        } else if (pending.kind === "approval") {
           if (!op.decision || !pending.decisions.includes(op.decision))
             throw new Error("Choose one of the available decisions");
           value = { decision: op.decision };
@@ -442,12 +824,24 @@ export class AgentManager {
           updatedAt: new Date().toISOString(),
         };
         this.#store.reserveAgentAction(request, next);
+        const cancel = op.decision === "cancel";
+        if (cancel) runtime.cancelledTurn = pending.turnId;
         runtime.pending.delete(pending.id);
         resolver.resolve(value);
         this.#emit({ type: "agent.state", agent: next });
+        if (cancel) await this.interrupt(info.id, runtime, pending.turnId);
       }
       return this.result(request, op.sessionId);
     } catch (error) {
+      try {
+        if (this.#store.agentReceipt(request))
+          this.#store.saveAgentActionError(
+            request.requestId,
+            error instanceof Error ? error.message : String(error),
+          );
+      } catch {
+        /* A conflicting request ID never changes the original receipt. */
+      }
       return {
         type: "agent.result",
         requestId: request.requestId,
@@ -456,6 +850,11 @@ export class AgentManager {
           message: (error instanceof Error ? error.message : String(error)).slice(0, 4000),
         },
       };
+    } finally {
+      if (mutation) {
+        this.mutations.delete(mutation);
+        void this.drain(mutation).catch((error) => this.fail(mutation as string, error));
+      }
     }
   }
   private result(request: AgentRequest, id: string, before?: number): AgentResult {
@@ -464,6 +863,22 @@ export class AgentManager {
       requestId: request.requestId,
       outcome: { status: "ok", conversation: this.#store.agentConversation(id, before) },
     };
+  }
+  private async interrupt(id: string, runtime: Runtime, turnId: string): Promise<void> {
+    runtime.cancelledTurn = turnId;
+    try {
+      await runtime.provider.request("turn/interrupt", {
+        threadId: this.#store.agent(id).threadId,
+        turnId,
+      });
+    } catch (error) {
+      // A provider can finish while its cancel request is in flight. A terminal
+      // state is authoritative; otherwise preserve the error and allow retry.
+      if (this.#store.agent(id).status !== "interrupted") {
+        runtime.cancelledTurn = null;
+        throw error;
+      }
+    }
   }
   private async send(
     id: string,
@@ -476,10 +891,12 @@ export class AgentManager {
     const uploaded = attachments.length
       ? await saveAttachments(this.#store.attachmentsDirectory, id, attachments)
       : [];
+    const command = parseAgentCommand(text);
     const response = z.object({ turn: Turn }).parse(
-      await provider.request("turn/start", {
+      await provider.request(command ? "command/execute" : "turn/start", {
         threadId: info.threadId,
         input: [...(text ? [{ type: "text", text }] : []), ...uploaded],
+        ...(command ?? {}),
         ...turnControls({ ...info, settings: settings ?? defaultSettings }),
       }),
     );
@@ -514,7 +931,7 @@ export class AgentManager {
     this.item(id, turnId, {
       ...mapped,
       ...(mapped.kind === "assistant"
-        ? { title: agentProviderNames[this.#store.agent(id).provider] }
+        ? { title: agentProviderName(this.#store.agent(id).provider) }
         : {}),
     });
   }
@@ -553,11 +970,35 @@ export class AgentManager {
       }
       return;
     }
+    if (method === "session/disconnected") {
+      const runtime = this.#runtimes.get(id);
+      if (runtime) {
+        runtime.closed = true;
+        this.#runtimes.delete(id);
+        void runtime.provider.close();
+      }
+      return;
+    }
+    if (method === "turn/nativeIdentity" && info.turnId) {
+      const nativeId = z.string().min(1).max(4096).parse(params["nativeTurnId"]);
+      this.#store.mapNativeTurn(id, nativeId, info.turnId);
+      return;
+    }
+    if (method === "session/models/updated") {
+      this.update(id, {
+        models: parseModels(params["models"], this.registry.config(info.provider).models),
+      });
+      return;
+    }
+    if (method === "session/controls/updated") {
+      this.update(id, { controls: AgentControlsSchema.parse(params["controls"]) });
+      return;
+    }
     if (method === "thread/tokenUsage/updated") {
       const usage = z
         .object({
           last: z.object({ totalTokens: z.number().nonnegative() }),
-          total: z.object({ totalTokens: z.number().nonnegative() }),
+          total: z.object({ totalTokens: z.number().nonnegative().nullable() }),
           modelContextWindow: z.number().positive().nullable(),
         })
         .safeParse(params["tokenUsage"]);
@@ -574,6 +1015,7 @@ export class AgentManager {
     }
     if (method === "turn/started") {
       const turn = Turn.parse(params["turn"]);
+      if (this.#runtimes.get(id)?.cancelledTurn === turn.id) return;
       this.started(id, turn.id);
       return;
     }
@@ -592,8 +1034,13 @@ export class AgentManager {
     }
     if (method === "turn/completed") {
       const turn = Turn.parse(params["turn"]);
-      if (turn.id !== info.turnId) return;
+      if (turn.id !== info.turnId || !["starting", "working", "needs_input"].includes(info.status))
+        return;
       const runtime = this.#runtimes.get(id);
+      if (runtime?.cancelledTurn === turn.id) {
+        turn.status = "interrupted";
+        turn.error = null;
+      }
       if (runtime) {
         for (const p of runtime.pending.values()) p.reject(new Error("Turn ended"));
         runtime.pending.clear();
@@ -648,11 +1095,13 @@ export class AgentManager {
               ? "interrupted"
               : "failed",
         pending: [],
+        queuePaused: turn.status === "completed" ? (info.queuePaused ?? false) : true,
         error: turn.error?.message ?? null,
       });
       return;
     }
     if (params["turnId"] !== info.turnId) return;
+    if (this.#runtimes.get(id)?.cancelledTurn === params["turnId"]) return;
     if (method === "item/started" || method === "item/completed")
       this.lifecycle(id, String(params["turnId"]), params["item"], method === "item/completed");
     else if (
@@ -684,7 +1133,7 @@ export class AgentManager {
             ? "Run command"
             : method === "item/reasoning/summaryTextDelta"
               ? "Thinking"
-              : agentProviderNames[info.provider]),
+              : agentProviderName(info.provider)),
         text: tool ? (prior?.text ?? "") : (prior?.text ?? "") + event.delta,
         detail: tool ? (prior?.detail ?? "") + event.delta : (prior?.detail ?? ""),
         status: "running",
@@ -715,9 +1164,12 @@ export class AgentManager {
     raw: unknown,
     providerId: string | number,
   ): Promise<unknown> {
-    const scope = Scope.parse(raw);
     const params = ObjectValue.parse(raw);
     const info = this.#store.agent(id);
+    const elicitation = method === "mcpServer/elicitation/request";
+    const scope = Scope.parse(
+      elicitation ? { ...params, turnId: params["turnId"] ?? info.turnId } : raw,
+    );
     const runtime = this.#runtimes.get(id);
     if (
       !runtime ||
@@ -729,15 +1181,16 @@ export class AgentManager {
     const questions = method === "item/tool/requestUserInput" || method === "tool/requestUserInput";
     if (
       !questions &&
+      !elicitation &&
       !["item/commandExecution/requestApproval", "item/fileChange/requestApproval"].includes(method)
     )
       throw new Error(`Unsupported input request: ${method}`);
     const pending: AgentPending = {
       id: randomUUID(),
       turnId: scope.turnId,
-      kind: questions ? "questions" : "approval",
+      kind: elicitation ? "elicitation" : questions ? "questions" : "approval",
       title: questions
-        ? `${agentProviderNames[info.provider]} needs your input`
+        ? `${agentProviderName(info.provider)} needs your input`
         : method.includes("fileChange")
           ? "Allow file changes?"
           : "Allow command execution?",
@@ -754,8 +1207,24 @@ export class AgentManager {
         .slice(0, 4000),
       detail: JSON.stringify(params, null, 2).slice(0, 16000),
       decisions: questions ? [] : ["accept", "decline", "cancel"],
-      questions: questions ? z.array(AgentQuestionSchema).max(3).parse(params["questions"]) : [],
+      questions: questions ? z.array(AgentQuestionSchema).max(32).parse(params["questions"]) : [],
     };
+    if (elicitation) {
+      const schema = ObjectValue.parse(params["requestedSchema"] ?? {});
+      const url =
+        typeof params["url"] === "string" && /^https?:\/\//i.test(params["url"])
+          ? params["url"]
+          : undefined;
+      pending.title = `${String(params["serverName"] ?? "MCP server")} needs your input`;
+      pending.summary = String(params["message"] ?? "").slice(0, 4000);
+      pending.elicitation = { schema, ...(url ? { url } : {}) };
+      pending.questions = elicitationQuestions(schema);
+      pending.decisions = ["decline", "cancel"];
+    }
+    if (params["decisionLabels"])
+      pending.decisionLabels = z
+        .object({ accept: z.string().max(100).optional() })
+        .parse(params["decisionLabels"]);
     if (Array.isArray(params["availableDecisions"]))
       pending.decisions = pending.decisions.filter((d) =>
         (params["availableDecisions"] as unknown[]).includes(d),
@@ -766,60 +1235,70 @@ export class AgentManager {
     this.update(id, { status: "needs_input", pending: [...info.pending, pending] });
     return result;
   }
-  private catalog(info: AgentInfo): Promise<AgentProviderCatalog[]> {
-    const cached = this.catalogs.get(info.directory);
-    if (cached && cached.expires > Date.now()) return cached.value;
-    const value = Promise.all(
-      AgentProviderIdSchema.options.map(async (id) => {
-        try {
-          resolveProfile(id);
-        } catch {
-          return null;
-        }
-        if (id === info.provider && info.models?.length) return { id, models: info.models };
-        let provider: AgentProvider | undefined;
-        let timer: ReturnType<typeof setTimeout> | undefined;
-        try {
-          provider = this.#factory(
-            info.directory,
-            async () => {
-              throw new Error("No prompts are sent during model discovery");
-            },
-            id,
-          );
-          const current = provider;
-          const models = await Promise.race([
-            (async () => {
-              await current.initialize();
-              return parseModels(await current.request("model/list", {}));
-            })(),
-            new Promise<never>((_, reject) => {
-              timer = setTimeout(() => reject(new Error("Model discovery timed out")), 15000);
-            }),
-          ]);
-          return {
-            id,
-            models,
-            ...(!models.length
-              ? { error: "No models available. Connect an account using the provider CLI." }
-              : {}),
-          };
-        } catch {
-          return {
-            id,
-            models: [],
-            error:
-              "Could not load models. Check the provider installation and sign in using its CLI.",
-          };
-        } finally {
-          clearTimeout(timer);
-          await provider?.close();
-        }
+  private async catalog(info: AgentInfo, selected?: string): Promise<AgentProviderCatalog[]> {
+    const configs = this.registry.configs().filter((c) => c.enabled && this.registry.installed(c));
+    return Promise.all(
+      configs.map(async (config): Promise<AgentProviderCatalog> => {
+        const id = config.id,
+          label = config.label;
+        if (id === info.provider && info.models?.length)
+          return { id, label, models: info.models, loaded: true };
+        if (id !== selected) return { id, label, models: [], loaded: false };
+        const key = `${info.directory}:${id}:${this.registry.revision}`;
+        const cached = this.catalogs.get(key);
+        if (cached && cached.expires > Date.now())
+          return (await cached.value)[0] ?? { id, label, models: [], loaded: false };
+        const value = (async (): Promise<AgentProviderCatalog[]> => {
+          let provider: AgentProvider | undefined, timer: ReturnType<typeof setTimeout> | undefined;
+          try {
+            provider = this.#factory(
+              info.directory,
+              async () => {
+                throw new Error("Model discovery cannot approve tools or send prompts");
+              },
+              id,
+            );
+            const current = provider;
+            const models = await Promise.race([
+              (async () => {
+                await current.initialize();
+                await current.request("thread/start", {
+                  cwd: info.directory,
+                  approvalPolicy: "on-request",
+                  sandbox: "workspace-write",
+                });
+                return parseModels(await current.request("model/list", {}), config.models);
+              })(),
+              new Promise<never>((_, reject) => {
+                timer = setTimeout(
+                  () =>
+                    reject(new Error("Model discovery timed out. Check the provider in Settings.")),
+                  90000,
+                );
+              }),
+            ]);
+            return [{ id, label, models, loaded: true }];
+          } catch (error) {
+            return [
+              {
+                id,
+                label,
+                models: [],
+                loaded: true,
+                error: error instanceof Error ? error.message : "Could not load provider models",
+              },
+            ];
+          } finally {
+            clearTimeout(timer);
+            await provider?.close();
+          }
+        })();
+        if (this.catalogs.size >= 128)
+          this.catalogs.delete(this.catalogs.keys().next().value ?? "");
+        this.catalogs.set(key, { expires: Date.now() + 60000, value });
+        return (await value)[0] ?? { id, label, models: [], loaded: false };
       }),
-    ).then((items) => items.filter((item) => item !== null));
-    if (this.catalogs.size >= 32) this.catalogs.delete(this.catalogs.keys().next().value ?? "");
-    this.catalogs.set(info.directory, { expires: Date.now() + 30000, value });
-    return value;
+    );
   }
   async close(): Promise<void> {
     if (this.#closed) return;

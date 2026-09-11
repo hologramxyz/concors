@@ -1,3 +1,8 @@
+import {
+  ProviderRequestSchema,
+  type ProviderOperation,
+  type ProviderResult,
+} from "@concors/protocol";
 import { FileRequestSchema, type FileOperation, type FileResult } from "@concors/protocol";
 import {
   AgentRequestSchema,
@@ -118,6 +123,14 @@ export class DaemonConnection {
     string,
     {
       resolve: (result: FileResult) => void;
+      reject: (error: Error) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
+  >();
+  readonly #providerRequests = new Map<
+    string,
+    {
+      resolve: (result: ProviderResult) => void;
       reject: (error: Error) => void;
       timer: ReturnType<typeof setTimeout>;
     }
@@ -275,6 +288,28 @@ export class DaemonConnection {
     });
   }
 
+  requestProvider(operation: ProviderOperation, requestId: string): Promise<ProviderResult> {
+    if (this.#state.status !== "ready" || !this.#workspace)
+      return Promise.reject(new Error("Workspace is disconnected"));
+    const request = ProviderRequestSchema.parse({ type: "provider.request", requestId, operation });
+    if (this.#providerRequests.has(requestId))
+      return Promise.reject(new Error("Request is already pending"));
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.#providerRequests.delete(requestId);
+        reject(new Error("Provider request timed out. Reload settings before retrying."));
+      }, 10000);
+      this.#providerRequests.set(requestId, { resolve, reject, timer });
+      try {
+        this.#socket?.send(JSON.stringify(request));
+      } catch (error) {
+        clearTimeout(timer);
+        this.#providerRequests.delete(requestId);
+        reject(error);
+      }
+    });
+  }
+
   get agents(): AgentInfo[] {
     return this.#agents;
   }
@@ -292,14 +327,19 @@ export class DaemonConnection {
     if (this.#agentRequests.has(requestId))
       return Promise.reject(new Error("Request is already pending"));
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.#agentRequests.delete(requestId);
-        reject(
-          new Error(
-            "Agent request timed out. Reconnect and check the conversation before retrying with the same request ID.",
-          ),
-        );
-      }, 35000);
+      const timer = setTimeout(
+        () => {
+          this.#agentRequests.delete(requestId);
+          reject(
+            new Error(
+              "Agent request timed out. Reconnect and check the conversation before retrying with the same request ID.",
+            ),
+          );
+        },
+        operation.kind === "provider-catalog" || operation.kind === "switch-provider"
+          ? 100000
+          : 35000,
+      );
       this.#agentRequests.set(requestId, { resolve, reject, timer });
       try {
         this.#socket?.send(JSON.stringify(request));
@@ -413,6 +453,7 @@ export class DaemonConnection {
         this.#setState({ status: "handshaking" });
         const hello: ClientHelloMessage = {
           type: "client.hello",
+          capabilities: ["agent-providers-v2"],
           protocolVersion: this.#protocolVersion,
           client: this.#client,
         };
@@ -499,6 +540,15 @@ export class DaemonConnection {
             if (pending) {
               clearTimeout(pending.timer);
               this.#fileRequests.delete(message.requestId);
+              pending.resolve(message);
+            }
+            break;
+          }
+          case "provider.result": {
+            const pending = this.#providerRequests.get(message.requestId);
+            if (pending) {
+              clearTimeout(pending.timer);
+              this.#providerRequests.delete(message.requestId);
               pending.resolve(message);
             }
             break;
@@ -664,6 +714,11 @@ export class DaemonConnection {
         );
       }
       this.#fileRequests.clear();
+      for (const pending of this.#providerRequests.values()) {
+        clearTimeout(pending.timer);
+        pending.reject(new Error("Connection lost. Reload provider settings before retrying."));
+      }
+      this.#providerRequests.clear();
     }
     for (const listener of this.#listeners) {
       listener(state);

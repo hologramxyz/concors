@@ -1,7 +1,10 @@
+import { rpcSessions } from "./rpc-sessions.ts";
+import { piHistory, messageIdentity } from "./history.ts";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { AgentControlsSchema } from "@concors/protocol";
 import {
   EventProvider,
   array,
@@ -12,6 +15,7 @@ import {
   type InputHandler,
 } from "./contract.ts";
 import { launch } from "./launch.ts";
+import { supportsJsonlRpcProtocolV2 } from "./jsonl-frame-decoder.ts";
 import { JsonLines } from "./json-lines.ts";
 // Pi's tool_call hook waits for the native RPC confirmation dialog before each tool executes.
 // This extension is supplied explicitly on every launch, including resumed sessions.
@@ -28,9 +32,26 @@ export class PiProvider extends EventProvider {
   private text = "";
   private messageId = "";
   private cwd: string;
-  constructor(cwd: string, onInput: InputHandler) {
+  private launcher: typeof launch;
+  private engine: "pi" | "omp";
+  private environment: NodeJS.ProcessEnv;
+  private models = new Map<string, Record<string, unknown>>();
+  private model: Record<string, unknown> = {};
+  private thinkingLevel = "off";
+  private toolInputs = new Map<string, { name: string; input: unknown }>();
+  constructor(
+    cwd: string,
+    onInput: InputHandler,
+    launcher: typeof launch = launch,
+    engine: "pi" | "omp" = "pi",
+    env: NodeJS.ProcessEnv = process.env,
+  ) {
     super(onInput);
     this.cwd = cwd;
+    this.launcher = launcher;
+    this.engine = engine;
+    this.environment = env;
+    if (engine === "omp") this.directory = this.directory.replace(/pi-sessions$/, "omp-sessions");
   }
   async initialize() {
     await this.open();
@@ -42,42 +63,134 @@ export class PiProvider extends EventProvider {
     await mkdir(this.directory, { recursive: true, mode: 0o700 });
     const extension = join(this.directory, "concors-approvals.mjs");
     await writeFile(extension, guard, { mode: 0o600 });
+    let markReady: (value: Record<string, unknown>) => void = () => {
+      /* Only OMP waits for readiness. */
+    };
+    let rejectReady: (error: Error) => void = () => {
+      /* Only OMP waits for readiness. */
+    };
+    const ready =
+      this.engine === "omp"
+        ? new Promise<Record<string, unknown>>((resolve, reject) => {
+            markReady = resolve;
+            rejectReady = reject;
+          })
+        : null;
     const rpc = new JsonLines(
-      launch(
-        "pi",
+      this.launcher(
+        this.engine,
         [
           "--mode",
-          "rpc",
-          "--extension",
-          extension,
+          this.engine === "omp" ? "rpc-ui" : "rpc",
+          ...(this.engine === "omp"
+            ? ["--approval-mode", "always-ask"]
+            : ["--extension", extension]),
           ...(file ? ["--session", file] : ["--no-session"]),
         ],
         this.cwd,
       ),
       (e) => {
+        if (e["type"] === "ready") markReady(e);
+        if (this.rpc !== rpc) return;
         void this.event(e).catch((error) => {
           if (this.rpc === rpc && !this.interrupted) this.fail(error);
         });
       },
       (error) => {
+        rejectReady(error);
         if (this.rpc === rpc) this.fail(error);
       },
     );
     this.rpc = rpc;
-    await rpc.request("get_state");
+    if (ready) {
+      const timer = setTimeout(() => rejectReady(new Error("OMP did not become ready")), 20000);
+      try {
+        const handshake = await ready;
+        if (supportsJsonlRpcProtocolV2(handshake)) {
+          const negotiated = object(
+            await rpc.request("negotiate_protocol", { protocolVersion: 2 }),
+          );
+          if (negotiated["protocolVersion"] !== 2)
+            throw new Error("OMP did not accept RPC protocol v2");
+        }
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+    const state = object(await rpc.request("get_state"));
+    this.model = object(state["model"] ?? {});
+    this.thinkingLevel = string(state["thinkingLevel"]) || "off";
+    this.controls = AgentControlsSchema.parse({
+      history: true,
+      importSessions: true,
+      steer: true,
+      compact: true,
+      contextUsage: true,
+      commands: [
+        {
+          name: "compact",
+          description: "Summarize earlier context",
+          argumentHint: "[instructions]",
+        },
+        {
+          name: "autocompact",
+          description: "Configure automatic compaction",
+          argumentHint: "[on|off|toggle]",
+        },
+      ],
+      features: [
+        {
+          id: "auto_compaction",
+          label: "Automatic compaction",
+          value: state["autoCompactionEnabled"] !== false,
+        },
+      ],
+    });
+    try {
+      const commands = object(
+        await rpc.request(this.engine === "omp" ? "get_available_commands" : "get_commands"),
+      );
+      for (const raw of array(commands["commands"])) {
+        const command = object(raw),
+          name = string(command["name"]);
+        if (name && !this.controls.commands.some((c) => c.name === name))
+          this.controls.commands.push({
+            name,
+            description: string(command["description"]),
+            kind: command["source"] === "skill" ? "skill" : "command",
+            argumentHint: string(object(command["input"] ?? {})["hint"]),
+          });
+      }
+    } catch {
+      /* Older Pi versions do not expose extension commands. */
+    }
   }
   async request(method: string, raw: unknown = {}) {
     const p = object(raw);
     let rpc = this.rpc;
     if (!rpc) throw new Error("Pi is disconnected");
+    if (method === "session/list")
+      return {
+        sessions: await rpcSessions(this.engine, this.cwd, this.directory, this.environment),
+      };
+    if (method === "session/steer") return rpc.request("steer", { message: string(p["text"]) });
+    if (method === "session/controls") return this.controls;
     if (method === "model/list") {
       const data = object(await rpc.request("get_available_models"));
       return modelCatalog(
         array(data["models"]).map((value) => {
           const m = object(value);
+          this.models.set(string(m["provider"]) + "/" + string(m["id"]), m);
           return {
             id: string(m["provider"]) + "/" + string(m["id"]),
             label: string(m["name"]) || string(m["id"]),
+            efforts: m["reasoning"]
+              ? ["off", "minimal", "low", "medium", "high", "xhigh", "max"]
+              : [],
+            supportsImages: array(m["input"]).includes("image"),
+            ...(typeof m["contextWindow"] === "number" && m["contextWindow"] > 0
+              ? { contextWindow: m["contextWindow"] }
+              : {}),
           };
         }),
       );
@@ -89,30 +202,113 @@ export class PiProvider extends EventProvider {
           ? string(p["threadId"])
           : join(this.directory, randomUUID() + ".jsonl");
       await this.open(this.threadId);
-      return { thread: { id: this.threadId, turns: [] } };
+      const resumed = this.rpc;
+      if (!resumed) throw new Error("Agent disconnected during resume");
+      return {
+        thread: {
+          id: this.threadId,
+          turns:
+            method === "thread/resume"
+              ? piHistory(array(object(await resumed.request("get_messages"))["messages"]))
+              : [],
+        },
+      };
     }
     if (method === "turn/interrupt") {
       this.interrupted = true;
+      const ended = this.waitForEnd();
       await rpc.request("abort");
+      if (!(await ended)) {
+        this.finish();
+        this.disconnected();
+      }
       this.finish();
       return {};
     }
-    if (method !== "turn/start") throw new Error(`Unsupported Pi operation: ${method}`);
+    if (method === "command/execute") {
+      const name = string(p["name"]),
+        args = string(p["args"]);
+      if (!this.controls.commands.some((c) => c.name === name))
+        throw new Error("Unknown Pi command");
+      if (name === "compact" || name === "autocompact") {
+        if (name === "autocompact" && !["", "on", "off", "toggle"].includes(args))
+          throw new Error("Use /autocompact [on|off|toggle]");
+        const result = this.begin(),
+          turnId = this.turnId;
+        if (name === "compact") this.startCompaction();
+        const auto = this.controls.features.find((f) => f.id === "auto_compaction");
+        const enabled = args === "on" || (args !== "off" && auto?.value !== true);
+        void rpc
+          .request(
+            name === "compact" ? "compact" : "set_auto_compaction",
+            name === "compact" ? (args ? { customInstructions: args } : {}) : { enabled },
+            300000,
+          )
+          .then(async () => {
+            if (turnId !== this.turnId) return;
+            if (name === "compact") this.endCompaction();
+            else {
+              if (auto) auto.value = enabled;
+              this.controlsChanged();
+              this.item({
+                id: randomUUID(),
+                type: "agentMessage",
+                text: `Automatic compaction ${enabled ? "enabled" : "disabled"}.`,
+              });
+            }
+            await this.refreshUsage();
+            if (turnId === this.turnId) this.finish();
+          })
+          .catch((error: Error) => {
+            if (turnId === this.turnId) {
+              this.endCompaction(error.message);
+              this.finish(error.message);
+            }
+          });
+        return result;
+      }
+      p["input"] = [{ type: "text", text: `/${name}${args ? ` ${args}` : ""}` }];
+    } else if (method !== "turn/start") throw new Error(`Unsupported Pi operation: ${method}`);
     if (object(p["sandboxPolicy"])["type"] === "dangerFullAccess")
       throw new Error("Pi tool calls require approval in Concors");
     const model = string(p["model"]);
     if (model) {
       const slash = model.indexOf("/");
       if (slash < 1) throw new Error("Invalid Pi model");
-      await rpc.request("set_model", {
-        provider: model.slice(0, slash),
-        modelId: model.slice(slash + 1),
-      });
+      const selected = object(
+        await rpc.request("set_model", {
+          provider: model.slice(0, slash),
+          modelId: model.slice(slash + 1),
+        }),
+      );
+      this.model = selected["id"] ? selected : (this.models.get(model) ?? {});
+    }
+    const effort = string(p["effort"]);
+    if (effort && effort !== this.thinkingLevel) {
+      await rpc.request("set_thinking_level", { level: effort });
+      this.thinkingLevel = effort;
+    }
+    const features = object(p["features"] ?? {});
+    const auto = this.controls.features.find((f) => f.id === "auto_compaction");
+    if (
+      typeof features["auto_compaction"] === "boolean" &&
+      features["auto_compaction"] !== auto?.value
+    ) {
+      await rpc.request("set_auto_compaction", { enabled: features["auto_compaction"] });
+      if (auto) auto.value = features["auto_compaction"];
+      this.controlsChanged();
     }
     const inputs = array(p["input"]).map(object);
     const images = [];
     for (const item of inputs)
       if (item["type"] === "localImage") {
+        if (!array(this.model["input"]).includes("image")) {
+          inputs.push({
+            type: "text",
+            text: `Image available on this machine at: ${string(item["path"])}`,
+          });
+          continue;
+        }
         const bytes = await readFile(string(item["path"]));
         images.push({
           type: "image",
@@ -132,13 +328,16 @@ export class PiProvider extends EventProvider {
     this.messageId = randomUUID();
     rpc = this.rpc;
     if (!rpc) throw new Error("Pi is disconnected");
-    await rpc.request("prompt", {
-      message: inputs
-        .filter((i) => i["type"] === "text")
-        .map((i) => string(i["text"]))
-        .join("\n"),
-      ...(images.length ? { images } : {}),
-    });
+    const ack = object(
+      (await rpc.request("prompt", {
+        message: inputs
+          .filter((i) => i["type"] === "text")
+          .map((i) => string(i["text"]))
+          .join("\n"),
+        ...(images.length ? { images } : {}),
+      })) ?? {},
+    );
+    if (ack["agentInvoked"] === false) this.finish();
     return result;
   }
   private async event(e: Record<string, unknown>) {
@@ -148,12 +347,28 @@ export class PiProvider extends EventProvider {
         this.rpc?.write({ type: "extension_ui_response", id, cancelled: true, confirmed: false });
         return;
       }
+      if (
+        this.engine === "omp" &&
+        e["method"] === "select" &&
+        string(e["title"]).startsWith("Allow tool: ") &&
+        array(e["options"]).includes("Approve") &&
+        array(e["options"]).includes("Deny")
+      ) {
+        const allowed = await this.permission(string(e["title"]), e["message"]);
+        this.rpc?.write({
+          type: "extension_ui_response",
+          id,
+          value: allowed ? "Approve" : "Deny",
+          ...(this.interrupted ? { cancelled: true } : {}),
+        });
+        return;
+      }
       if (e["method"] === "confirm") {
         const confirmed = await this.permission(string(e["title"]), e["message"]);
         this.rpc?.write({ type: "extension_ui_response", id, confirmed });
         return;
       }
-      if (e["method"] === "select" || e["method"] === "input") {
+      if (e["method"] === "select" || e["method"] === "input" || e["method"] === "editor") {
         const options =
           e["method"] === "select"
             ? array(e["options"]).map((label) => ({ label: String(label), description: "" }))
@@ -177,8 +392,17 @@ export class PiProvider extends EventProvider {
       return;
     }
     if (!this.turnId) return;
+    if (e["type"] === "command_output")
+      this.item({ id: randomUUID(), type: "agentMessage", text: string(e["text"]) });
+    if (["compaction_start", "auto_compaction_start"].includes(string(e["type"])))
+      this.startCompaction();
+    if (["compaction_end", "auto_compaction_end"].includes(string(e["type"])))
+      this.endCompaction(string(e["errorMessage"]) || (e["aborted"] ? "Interrupted" : undefined));
     if (e["type"] === "message_start") {
-      this.messageId = randomUUID();
+      const message = object(e["message"] ?? {});
+      this.messageId = messageIdentity(message, randomUUID());
+      if (message["role"] === "user")
+        this.emit("turn/nativeIdentity", { nativeTurnId: this.messageId });
       this.text = "";
     }
     if (e["type"] === "message_update") {
@@ -196,16 +420,46 @@ export class PiProvider extends EventProvider {
         if (m["errorMessage"]) this.finish(string(m["errorMessage"]));
       }
     }
-    if (string(e["type"]).startsWith("tool_execution_"))
+    if (string(e["type"]).startsWith("tool_execution_")) {
+      const id = string(e["toolCallId"]),
+        prior = this.toolInputs.get(id);
+      const tool = {
+        name: string(e["toolName"]) || prior?.name || "Tool",
+        input: e["args"] ?? prior?.input,
+      };
+      this.toolInputs.set(id, tool);
       this.tool(
-        string(e["toolCallId"]),
-        string(e["toolName"]),
-        e["args"],
+        id,
+        tool.name,
+        tool.input,
         e["result"] ?? e["partialResult"],
         e["type"] === "tool_execution_end",
         e["isError"] === true,
       );
-    if (e["type"] === "agent_end") this.finish();
+    }
+    if (e["type"] === "agent_end" || e["type"] === "agent_settled") {
+      const turnId = this.turnId;
+      await this.refreshUsage();
+      if (turnId === this.turnId) this.finish();
+    }
+  }
+  private async refreshUsage() {
+    const rpc = this.rpc;
+    if (!rpc || this.closed) return;
+    try {
+      const stats = object(await rpc.request("get_session_stats"));
+      const state = stats["contextUsage"] ? stats : object(await rpc.request("get_state"));
+      const context = object(state["contextUsage"] ?? {}),
+        tokens = object(stats["tokens"] ?? {});
+      if (typeof context["tokens"] === "number")
+        this.usage(
+          context["tokens"],
+          typeof context["contextWindow"] === "number" ? context["contextWindow"] : null,
+          typeof tokens["total"] === "number" ? tokens["total"] : null,
+        );
+    } catch {
+      /* Usage is optional; a statistics failure must not lose a finished reply. */
+    }
   }
   async close() {
     this.closed = true;

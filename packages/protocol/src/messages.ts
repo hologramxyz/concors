@@ -1,3 +1,4 @@
+import { ProviderRequestSchema, ProviderResultSchema } from "./providers.ts";
 import { FileRequestSchema, FileResultSchema } from "./files.ts";
 import { AgentRequestSchema, AgentResultSchema, AgentEventSchema } from "./agents.ts";
 import { ProjectRequestSchema, ProjectResultSchema, ProjectSetupsSchema } from "./projects.ts";
@@ -40,6 +41,7 @@ export const ClientHelloMessageSchema = z.object({
   type: z.literal("client.hello"),
   protocolVersion: ProtocolVersionSchema,
   client: ClientInfoSchema,
+  capabilities: z.array(z.string().max(100)).max(64).optional(),
 });
 export type ClientHelloMessage = z.infer<typeof ClientHelloMessageSchema>;
 
@@ -52,6 +54,7 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
   ProjectRequestSchema,
   AgentRequestSchema,
   FileRequestSchema,
+  ProviderRequestSchema,
 ]);
 export type ClientMessage = z.infer<typeof ClientMessageSchema>;
 
@@ -78,6 +81,7 @@ export const DaemonMessageSchema = z.discriminatedUnion("type", [
   ProjectResultSchema,
   ProjectSetupsSchema,
   FileResultSchema,
+  ProviderResultSchema,
   AgentResultSchema,
   ...AgentEventSchema.options,
 ]);

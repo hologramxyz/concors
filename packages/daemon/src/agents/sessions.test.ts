@@ -28,6 +28,7 @@ async function boot() {
     workspacePath: join(directory, "state.db"),
     agentProviderFactory: (_cwd, handler) => {
       const provider = new TestAgentProvider(handler);
+      provider.cwd = _cwd;
       providers.push(provider);
       return provider;
     },
@@ -188,6 +189,46 @@ it("marks a crashed active turn interrupted and never replays a durable prompt r
   expect((await action(b, op, requestId)).outcome.status).toBe("ok");
   expect(TestAgentProvider.turns).toBe(count);
   expect(b.agents[0]?.pending).toEqual([]);
+});
+
+it("cancels the turn from an approval, settles other requests, and ignores late output", async () => {
+  const { a, b, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "approve command" });
+  await expect.poll(() => a.agents[0]?.pending.length).toBe(1);
+  const pending = a.agents[0]!.pending[0]!;
+  const provider = providers[0]!;
+  const other = provider
+    .onRequest(
+      "item/commandExecution/requestApproval",
+      {
+        threadId: provider.threadId,
+        turnId: pending.turnId,
+        command: "second command",
+      },
+      "second-approval",
+    )
+    .catch((error: Error) => error.message);
+  await expect.poll(() => b.agents[0]?.pending.length).toBe(2);
+  expect(
+    (await action(a, { kind: "respond", sessionId: id, pendingId: pending.id, decision: "cancel" }))
+      .outcome.status,
+  ).toBe("ok");
+  await expect.poll(() => b.agents[0]?.status).toBe("interrupted");
+  expect(await other).toBe("Turn ended");
+  expect(provider.requests.some((r) => r.method === "turn/interrupt")).toBe(true);
+  provider.emit("item/completed", {
+    item: { id: "late-output", type: "agentMessage", text: "Should not appear" },
+  });
+  provider.finish();
+  const result = await action(b, { kind: "read", sessionId: id });
+  expect(result.outcome).toMatchObject({
+    status: "ok",
+    conversation: { agent: { status: "interrupted", pending: [] } },
+  });
+  if (result.outcome.status === "ok")
+    expect(result.outcome.conversation.items.some((i) => i.id === "late-output")).toBe(false);
+  await action(a, { kind: "send", sessionId: id, text: "next message" });
+  await expect.poll(() => b.agents[0]?.status).toBe("done");
 });
 
 it("syncs attention acknowledgements, rejects stale reads, and preserves unread state across restart", async () => {
@@ -472,4 +513,160 @@ it("switches a bound Agent pane to a terminal without stopping the shared agent"
   expect(b.agents[0]?.status).toBe("working");
   expect(providers[0]?.closed).toBe(false);
   expect((await action(b, { kind: "read", sessionId: id })).outcome.status).toBe("ok");
+});
+
+it("delivers durable follow-ups after every client disconnects and deduplicates enqueue retries", async () => {
+  const { a, b, id, url } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "hold this turn" });
+  await expect.poll(() => a.agents[0]?.turnId?.startsWith("turn-")).toBe(true);
+  const requestId = randomUUID();
+  const queued: AgentOperation = {
+    kind: "queue-add",
+    sessionId: id,
+    text: "continue after disconnect",
+  };
+  expect((await action(a, queued, requestId)).outcome.status).toBe("ok");
+  expect((await action(b, queued, requestId)).outcome.status).toBe("ok");
+  expect(a.agents[0]?.queue).toHaveLength(1);
+  a.disconnect();
+  b.disconnect();
+  providers[0]!.finish();
+  await expect
+    .poll(() => providers[0]?.requests.filter((r) => r.method === "turn/start").length)
+    .toBe(2);
+  const c = await open(url);
+  await expect.poll(() => c.agents[0]?.status).toBe("done");
+  expect(c.agents[0]?.queue).toHaveLength(0);
+  const result = await action(c, { kind: "read", sessionId: id });
+  if (result.outcome.status === "ok")
+    expect(
+      result.outcome.conversation.items.filter((i) => i.kind === "user").map((i) => i.text),
+    ).toEqual(["hold this turn", "continue after disconnect"]);
+});
+
+it("pauses queued work across an interrupted daemon restart until explicitly resumed", async () => {
+  const { a, b, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "hold before restart" });
+  await expect.poll(() => a.agents[0]?.turnId?.startsWith("turn-")).toBe(true);
+  const requestId = randomUUID(),
+    queued: AgentOperation = { kind: "queue-add", sessionId: id, text: "after restart" };
+  await action(a, queued, requestId);
+  a.disconnect();
+  b.disconnect();
+  await server!.close();
+  const c = await open(await boot());
+  expect(c.agents[0]).toMatchObject({ status: "interrupted", queuePaused: true });
+  expect(c.agents[0]?.queue).toHaveLength(1);
+  expect((await action(c, queued, requestId)).outcome.status).toBe("ok");
+  expect(c.agents[0]?.queue).toHaveLength(1);
+  await action(c, { kind: "queue-pause", sessionId: id, paused: false });
+  await expect.poll(() => c.agents[0]?.status).toBe("done");
+  expect(c.agents[0]?.queue).toHaveLength(0);
+  const resumed = providers[1];
+  expect(resumed?.requests.filter((r) => r.method === "turn/start")).toHaveLength(1);
+});
+
+it("keeps queued attachment bytes private and removes canceled follow-ups", async () => {
+  const { a, id } = await setup();
+  await action(a, { kind: "queue-pause", sessionId: id, paused: true });
+  const requestId = randomUUID(),
+    secret = Buffer.from("private attachment fixture").toString("base64");
+  const result = await action(
+    a,
+    {
+      kind: "queue-add",
+      sessionId: id,
+      text: "see file",
+      attachments: [{ name: "sample.txt", mime: "text/plain", data: secret }],
+    },
+    requestId,
+  );
+  expect(result.outcome.status).toBe("ok");
+  expect(JSON.stringify(result)).not.toContain(secret);
+  expect(a.agents[0]?.queue?.[0]?.attachments).toEqual([
+    { name: "sample.txt", mime: "text/plain" },
+  ]);
+  await action(a, { kind: "queue-remove", sessionId: id, id: requestId });
+  await action(a, { kind: "queue-pause", sessionId: id, paused: false });
+  expect(a.agents[0]?.queue).toHaveLength(0);
+  expect(providers[0]?.requests.filter((r) => r.method === "turn/start")).toHaveLength(0);
+});
+
+it("imports and forks native sessions into separate tabs without replaying a prompt", async () => {
+  const { a, id } = await setup();
+  const listed = await action(a, { kind: "sessions-list", sessionId: id });
+  expect(listed.outcome.status).toBe("ok");
+  if (listed.outcome.status === "ok")
+    expect(listed.outcome.sessions?.[0]?.id).toBe("external-thread");
+  const importId = randomUUID(),
+    op: AgentOperation = {
+      kind: "import-session",
+      sessionId: id,
+      nativeSessionId: "external-thread",
+      expectedRevision: a.agents[0]!.revision,
+    };
+  await action(a, op, importId);
+  await action(a, op, importId);
+  await expect.poll(() => a.agents.filter((agent) => agent.status === "idle").length).toBe(2);
+  expect(a.agents.some((agent) => agent.threadId === "external-thread")).toBe(true);
+  expect(
+    providers.flatMap((p) => p.requests).filter((r) => r.method === "turn/start"),
+  ).toHaveLength(0);
+  const forkId = randomUUID(),
+    fork: AgentOperation = {
+      kind: "fork-session",
+      sessionId: id,
+      expectedRevision: a.agents.find((agent) => agent.id === id)!.revision,
+    };
+  await action(a, fork, forkId);
+  await action(a, fork, forkId);
+  await expect.poll(() => a.agents.filter((agent) => agent.status === "idle").length).toBe(3);
+  expect(providers[0]?.requests.filter((r) => r.method === "session/fork")).toHaveLength(1);
+  expect(a.workspace?.projects[0]?.tabs).toHaveLength(3);
+});
+
+it("rewinds the selected turn only and publishes a history revision to all clients", async () => {
+  const { a, b, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "first prompt" });
+  await expect.poll(() => a.agents[0]?.status).toBe("done");
+  await action(a, { kind: "send", sessionId: id, text: "second prompt" });
+  await expect.poll(() => a.agents[0]?.status).toBe("done");
+  const read = await action(a, { kind: "read", sessionId: id });
+  expect(read.outcome.status).toBe("ok");
+  if (read.outcome.status !== "ok") return;
+  const turnId = read.outcome.conversation.items.find((i) => i.text === "second prompt")!.turnId;
+  const result = await action(a, {
+    kind: "rewind",
+    sessionId: id,
+    turnId,
+    mode: "conversation",
+    expectedRevision: a.agents[0]!.revision,
+  });
+  expect(result.outcome.status).toBe("ok");
+  if (result.outcome.status === "ok")
+    expect(
+      result.outcome.conversation.items.filter((i) => i.kind === "user").map((i) => i.text),
+    ).toEqual(["first prompt"]);
+  await expect.poll(() => b.agents[0]?.historyRevision).toBe(1);
+  expect(b.agents[0]?.queuePaused).toBe(true);
+  expect(providers[0]?.requests.find((r) => r.method === "session/rewind")?.params).toMatchObject({
+    numTurns: 1,
+  });
+});
+
+it("steers an active turn once without scheduling another turn", async () => {
+  const { a, b, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "hold the turn" });
+  await expect.poll(() => a.agents[0]?.turnId?.startsWith("turn-")).toBe(true);
+  const req = randomUUID(),
+    op: AgentOperation = {
+      kind: "steer",
+      sessionId: id,
+      turnId: a.agents[0]!.turnId!,
+      text: "Focus on the parser",
+    };
+  expect((await action(a, op, req)).outcome.status).toBe("ok");
+  await action(b, op, req);
+  expect(providers[0]?.requests.filter((r) => r.method === "session/steer")).toHaveLength(1);
+  expect(providers[0]?.requests.filter((r) => r.method === "turn/start")).toHaveLength(1);
 });

@@ -1,3 +1,4 @@
+import { ProvidersSettings } from "@/settings/providers-settings";
 import { NotificationSettings } from "@/notifications/settings";
 import type { ConnectionState, DaemonEndpoint } from "@concors/daemon-client";
 import type { ReactNode } from "react";
@@ -51,6 +52,9 @@ export function SettingsView({
   let content: ReactNode;
 
   switch (page) {
+    case "providers":
+      content = <ProvidersSettings />;
+      break;
     case "terminals":
       content = (
         <TerminalsSettings
