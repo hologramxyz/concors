@@ -9,7 +9,9 @@ for (const [provider, label] of [
   ["claude", "Claude Code"],
   ["opencode", "OpenCode"],
 ] as const) {
-  test(`${label}: dismiss sign-in, send without it, reopen and connect`, async ({ page }) => {
+  test(`${label}: dismiss sign-in, connect and keep account identity out of chat`, async ({
+    page,
+  }) => {
     const directory = await mkdtemp(join(tmpdir(), "concors-account-ui-"));
     try {
       await signedIn(page);
@@ -60,12 +62,17 @@ for (const [provider, label] of [
           .fill("test-private-credential");
         await prompt.getByRole("button", { name: "Connect", exact: true }).click();
       }
-      await expect(
-        page.getByRole("status").filter({ hasText: `${label} connected` }),
-      ).toBeVisible();
+      await expect(prompt).toHaveCount(0);
+      await expect(page.getByRole("status").filter({ hasText: `${label} connected` })).toHaveCount(
+        0,
+      );
+      await expect(page.getByText("fixture-account@example.test", { exact: false })).toHaveCount(0);
       await expect(page.getByRole("log")).not.toContainText("test-private-credential");
       await expect(page.getByRole("log")).not.toContainText("TEST-CODE");
       await expect(composer).toBeEnabled();
+      await composer.fill("Continue after connecting an account");
+      await page.getByRole("button", { name: "Send message", exact: true }).click();
+      await expect(page.getByRole("log")).toContainText("Continue after connecting an account");
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

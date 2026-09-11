@@ -180,13 +180,7 @@ function AccountPrompt({
         Connect account
       </button>
     );
-  if (account?.status === "connected")
-    return (
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground" role="status">
-        <Check className="size-3.5" />
-        {agentProviderNames[agent.provider]} connected{account.label ? ` · ${account.label}` : ""}
-      </div>
-    );
+  if (account?.status === "connected") return null;
   const methods = account?.methods ?? [];
   const selected = methods.find((m) => m.id === method) ?? methods[0];
   const challenge = account?.challenge;
