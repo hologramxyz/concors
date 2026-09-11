@@ -6,27 +6,35 @@ backend deployment, account deletion, or store upload has been performed.
 
 ## Critical path
 
-| Work                 | Owner / decision        | Acceptance                                                                                                                                                                      |
-| -------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| First-release scope  | Product                 | Existing-account companion approved and implemented; storefront review remains pending. Decide whether push ships in v1.                                                        |
-| Production workspace | Backend                 | Managed daemon installer (server PR #1), opt-in discovery, updated artifact with active-socket expiry, and signed phone/desktop acceptance on a dedicated non-customer machine. |
-| Account lifecycle    | Backend + product       | Password recovery delivery; durable deletion; explicit handling of shared organization ownership, machines, subscriptions and retained records. No client-only deletion.        |
-| Public pages         | Website + privacy owner | Actual privacy/support pages and working deletion request; accurate retention and subprocessors.                                                                                |
-| App links            | Website + signing owner | JSON association files with the real Apple team ID and Play signing certificate fingerprints.                                                                                   |
-| AI safety            | Backend + privacy owner | Provider disclosure/consent, content safeguards and functioning in-app reporting under applicable store policy. A support email alone is not an in-app report workflow.         |
-| Distribution         | Team account owner      | Verified Apple/Google accounts, Expo project, agreements, app records, signing, reviewer contacts and any Play testing requirement.                                             |
-| Installed acceptance | Device QA               | Signed physical iPhone/Android tests; permissions, accessibility and a 16 KB Android device.                                                                                    |
+| Work                 | Owner / decision        | Acceptance                                                                                                                                                                                                        |
+| -------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| First-release scope  | Product                 | Existing-account companion approved and implemented; storefront review remains pending. Decide whether push ships in v1.                                                                                          |
+| Production workspace | Backend                 | Installer PR #1 is merged; deploy a reviewed artifact with active-socket expiry and prove signed phone/desktop acceptance on a dedicated non-customer machine. Optional discovery does not gate workspace access. |
+| Account lifecycle    | Backend + product       | Password recovery delivery; durable deletion; explicit handling of shared organization ownership, machines, subscriptions and retained records. No client-only deletion.                                          |
+| Public pages         | Website + privacy owner | Actual privacy/support pages and working deletion request; accurate retention and subprocessors.                                                                                                                  |
+| App links            | Website + signing owner | JSON association files with the real Apple team ID and Play signing certificate fingerprints.                                                                                                                     |
+| AI safety            | Backend + privacy owner | Provider disclosure/consent, content safeguards and functioning in-app reporting under applicable store policy. A support email alone is not an in-app report workflow.                                           |
+| Distribution         | Team account owner      | Verified Apple/Google accounts, Expo project, agreements, app records, signing, reviewer contacts and any Play testing requirement.                                                                               |
+| Installed acceptance | Device QA               | Signed physical iPhone/Android tests; permissions, accessibility and a 16 KB Android device.                                                                                                                      |
 
-Source audit: `concors-server` main `2f2ea5a` exposes authenticated tmux terminal
-sessions; open server PR #1 replaces that agent with the shared managed daemon.
-The companion server PR adds only default-disabled capability discovery. There is no reviewed mobile-device,
+Source audit: `concors-server` main `f8d0353` includes the shared managed daemon
+installer from merged PR #1. Mobile/desktop use the same machine discovery and JWT
+contract; a separate mobile gateway is not needed. Companion server PR #2 remains
+optional capability discovery for push/deletion, not a prerequisite to connect. There is no reviewed mobile-device,
 deletion or AI-report route. Email auth has no password-reset email delivery configured.
 See [backend contract](../../../docs/mobile-backend.md).
 
-Public GET checks on 2026-09-09 returned the same 1,315-byte marketing HTML shell for
+Public GET checks on 2026-09-10 returned the same 1,319-byte marketing HTML shell for
 `/privacy`, `/support`, `/account/delete`, `/.well-known/apple-app-site-association`
-and `/.well-known/assetlinks.json`. Website source has no corresponding policy/request
-routes. HTTP 200 alone is not sufficient; association responses must be JSON.
+and `/.well-known/assetlinks.json`, identical to the homepage (SHA-256
+`96406f161db88f858713458983ca587092b02d1af142bcd7454ece7b936e788e`).
+Policy/request functionality still needs rendered-page and owner review; HTTP 200 alone
+is not evidence. The association responses are invalid because they are HTML, not JSON.
+
+Apple/Google account approvals are still in progress per the release owner. GitHub
+native CI is independently blocked by billing/spending limits: iOS run `34541160016`
+and Android run `34541160032` did not start. Resolve billing before manually rerunning
+native workflows; do not treat these results as compiler failures or native acceptance.
 
 ## Listing and screenshots
 
@@ -58,16 +66,17 @@ not guarantee how Apple classifies the app or guarantee approval.
 This engineering inventory is **not a publishable privacy policy**. Confirm production
 collection, purposes, processors, retention, deletion and regional terms before disclosures.
 
-| Data                                                            | Current path/storage                                                          | Needs confirmation                                      |
-| --------------------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------- |
-| Name, email, user/org IDs                                       | Native sign-in → API; account state in memory                                 | Controller, retention, recovery/deletion                |
-| Session credential                                              | SecureStore; bearer header to API; never renderer state                       | Production revocation, backups/reinstall                |
-| Prompts, replies, tool data, attachments, code, terminal output | Phone ↔ daemon; configured AI provider receives agent input/tool-read content | Provider settings, logs, subprocessors, exact retention |
-| AI consent                                                      | Version, account/org or private-endpoint scope, timestamp in SecureStore      | Approved disclosure; native persistence/withdrawal      |
-| Preferences/drafts                                              | Device theme/corners/sound; chat/file drafts in memory                        | Data-loss warnings, reinstall                           |
-| Push registration                                               | Optional installation ID/Expo token; generic ID-only event routing            | Backend, APNs/FCM/Expo retention, revocation            |
-| Attachments                                                     | System document selection; bounded cache read/cleanup                         | Physical picker cancellation/denial, provider retention |
-| Billing/deletion                                                | Shared UI and allowlisted API; newer methods explicitly unsupported           | Launch scope, store rules, retained records, ownership  |
+| Data                                                            | Current path/storage                                                                                                | Needs confirmation                                                |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Name, email, user/org IDs                                       | Native sign-in → API; account state in memory                                                                       | Controller, retention, recovery/deletion                          |
+| Session credential                                              | SecureStore; bearer header to API; never renderer state                                                             | Production revocation, backups/reinstall                          |
+| Machine access credential                                       | Short-lived JWT in device-only SecureStore; WebSocket subprotocol; cleared on disconnect/background/sign-out        | Native clearing, bounded revocation and expiry                    |
+| Prompts, replies, tool data, attachments, code, terminal output | Phone ↔ daemon; configured AI provider receives agent input/tool-read content                                       | Provider settings, logs, subprocessors, exact retention           |
+| AI consent                                                      | Version 2 names Codex/OpenAI, Claude/Anthropic, OpenCode, Pi and configured providers; scoped record in SecureStore | Provider/privacy approval; upgrade reconfirmation and withdrawal  |
+| Preferences/drafts                                              | Device theme/corners/sound; chat/file drafts in memory                                                              | Data-loss warnings, reinstall                                     |
+| Push registration                                               | Optional installation ID/Expo token; generic ID-only event routing                                                  | Backend, APNs/FCM/Expo retention, revocation                      |
+| Attachments                                                     | System document selection; bounded cache read/cleanup                                                               | Physical picker cancellation/denial, provider retention           |
+| Commerce / deletion                                             | Mobile hides/rejects signup, purchasing and billing; deletion UI depends on an implemented backend capability       | Storefront scope, actual deletion, retained records and ownership |
 
 No analytics or advertising SDK was intentionally added here. This is **not** a declaration
 that the service collects no data. Review Xcode's privacy report for the signed archive;
@@ -91,9 +100,13 @@ evidence can reference a team record; do not commit credentials or private netwo
 APP_VARIANT=production EXPO_PUBLIC_DEMO=false pnpm --filter @concors/mobile release:check --json
 ```
 
-After all gates genuinely pass, use [the release runbook](../../../docs/mobile-release.md)
-for team-signed TestFlight/Play internal candidates. Internal upload is not review submission
-or publication. Obtain release-owner approval before submitting for review or public release.
+Use [the release runbook](../../../docs/mobile-release.md) to build production-identity
+`candidate` binaries once team configuration/signing is available. Candidate checks do
+not require device evidence that can only be collected afterwards, but still reject
+demo, private overrides and incorrect production configuration. With owner approval,
+upload the exact build to TestFlight/Play internal testing to collect that evidence.
+All gates must genuinely pass before requesting review; internal upload is not public
+publication. No gate has been marked verified by this sync.
 
 ## Policy references checked 2026-09-09
 

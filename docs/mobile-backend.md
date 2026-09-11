@@ -16,7 +16,8 @@ sessions in its private loopback host. No second terminal-agent bridge is needed
   A new reviewed daemon release and rollout are required before claiming the
   documented revocation window.
 - [Server PR #1](https://github.com/concors-dev/concors-server/pull/1) replaces the
-  legacy tmux agent with the daemon release. It is a dependency, not duplicated here.
+  legacy tmux agent with the daemon release and is merged into server main (`f8d0353`).
+  A merged installer is not proof that the updated artifact is deployed to a machine.
 - Optional mobile capabilities control push and account deletion. Managed workspace access
   uses contracts 4.2 and 4.6 directly and does not depend on capability discovery.
 - Mobile now uses the existing `POST /api/v1/machines/:id/token` endpoint and
@@ -76,7 +77,7 @@ The read-only `pnpm --filter @concors/mobile live:preflight` checks the same man
 metadata and discovery. It does not create a session or prove live/native acceptance.
 Credentials belong in private local/CI environment variables, never public Expo vars.
 
-Before enabling managed access: review/merge the installer and client/daemon changes,
+Before claiming production acceptance: deploy the merged installer/client changes,
 publish the updated daemon artifact, install on a non-customer test machine, and prove
 desktop/phone concurrency, token expiry/revocation, files, chat approvals and
 background/reconnect on signed native builds. No deployment, fleet update, signing,

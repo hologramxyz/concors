@@ -1,5 +1,8 @@
+import { TaskState, isTaskTool } from "./plans.ts";
+import { nativeToolItem } from "./tool-items.ts";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { AgentControlsSchema, type AgentControls } from "@concors/protocol";
 
 export type InputHandler = (
   method: string,
@@ -26,12 +29,23 @@ export const textContent = (value: unknown): string =>
         .map((v) => string(object(v)["text"]))
         .filter(Boolean)
         .join("\n");
-export const modelCatalog = (models: { id: string; label: string; efforts?: string[] }[]) => ({
-  data: models.slice(0, 100).map((m) => ({
+export const modelCatalog = (
+  models: {
+    id: string;
+    label: string;
+    efforts?: string[];
+    defaultEffort?: string | null;
+    supportsImages?: boolean;
+    contextWindow?: number;
+  }[],
+) => ({
+  data: models.map((m) => ({
     model: m.id,
     displayName: m.label,
     supportedReasoningEfforts: (m.efforts ?? []).map((reasoningEffort) => ({ reasoningEffort })),
-    defaultReasoningEffort: null,
+    defaultReasoningEffort: m.defaultEffort ?? null,
+    ...(m.supportsImages === undefined ? {} : { supportsImages: m.supportsImages }),
+    ...(m.contextWindow === undefined ? {} : { contextWindow: m.contextWindow }),
   })),
 });
 export abstract class EventProvider implements ConversationProvider {
@@ -39,6 +53,27 @@ export abstract class EventProvider implements ConversationProvider {
   protected turnId = "";
   protected closed = false;
   protected interrupted = false;
+  protected tasks = new TaskState();
+  protected controls: AgentControls = AgentControlsSchema.parse({});
+  protected compactionId: string | null = null;
+  private ended = new Set<() => void>();
+  protected waitForEnd(timeoutMs = 3000): Promise<boolean> {
+    return new Promise((resolve) => {
+      const done = () => {
+        clearTimeout(timer);
+        this.ended.delete(done);
+        resolve(true);
+      };
+      const timer = setTimeout(() => {
+        this.ended.delete(done);
+        resolve(false);
+      }, timeoutMs);
+      this.ended.add(done);
+    });
+  }
+  protected disconnected() {
+    this.emit("session/disconnected", {});
+  }
   private notifications = new Set<(method: string, params: unknown) => void>();
   private failures = new Set<(error: Error) => void>();
   protected readonly onInput: InputHandler;
@@ -75,6 +110,10 @@ export abstract class EventProvider implements ConversationProvider {
   }
   protected finish(error?: string) {
     if (!this.turnId) return;
+    if (this.compactionId)
+      this.endCompaction(
+        error ?? (this.interrupted ? "Interrupted" : "No compaction result was reported."),
+      );
     this.emit("turn/completed", {
       turn: {
         id: this.turnId,
@@ -84,9 +123,48 @@ export abstract class EventProvider implements ConversationProvider {
       },
     });
     this.turnId = "";
+    for (const done of this.ended) done();
   }
   protected item(item: Record<string, unknown>, done = true) {
+    if (!this.turnId) return;
     this.emit(done ? "item/completed" : "item/started", { item });
+  }
+  protected startCompaction() {
+    if (this.compactionId) return;
+    this.compactionId = randomUUID();
+    this.item({ id: this.compactionId, type: "contextCompaction", status: "inProgress" }, false);
+  }
+  protected endCompaction(error?: string) {
+    if (!this.compactionId) return;
+    this.item({
+      id: this.compactionId,
+      type: "contextCompaction",
+      status: error ? (this.interrupted ? "interrupted" : "failed") : "completed",
+      message: error ?? "Earlier context was summarized.",
+    });
+    this.compactionId = null;
+  }
+  protected usage(used: number, limit: number | null, total: number | null = null) {
+    if (
+      !Number.isFinite(used) ||
+      used < 0 ||
+      (total !== null && (!Number.isFinite(total) || total < 0))
+    )
+      return;
+    this.emit("thread/tokenUsage/updated", {
+      tokenUsage: {
+        last: { totalTokens: used },
+        total: { totalTokens: total },
+        modelContextWindow: limit && Number.isFinite(limit) && limit > 0 ? limit : null,
+      },
+    });
+  }
+  protected restoredHistory<T extends { items: unknown[] }>(turns: T[]): T[] {
+    this.tasks.restore(turns);
+    return turns;
+  }
+  protected controlsChanged() {
+    this.emit("session/controls/updated", { controls: this.controls });
   }
   protected tool(
     id: string,
@@ -96,17 +174,15 @@ export abstract class EventProvider implements ConversationProvider {
     done: boolean,
     failed = false,
   ) {
-    this.item(
-      {
-        id,
-        type: "mcpToolCall",
-        tool: name,
-        arguments: input,
-        result: output,
-        status: failed ? "failed" : done ? "completed" : "inProgress",
-      },
-      done,
-    );
+    if (isTaskTool(name)) {
+      if (!done) return;
+      const steps = this.tasks.update(name, input, output, done, failed);
+      if (steps) {
+        this.item({ id: `tasks:${id}`, type: "plan", steps }, false);
+        return;
+      }
+    }
+    this.item(nativeToolItem(id, name, input, output, done, failed), done);
   }
   protected async permission(title: string, input: unknown): Promise<boolean> {
     const result = object(
@@ -122,6 +198,6 @@ export abstract class EventProvider implements ConversationProvider {
         randomUUID(),
       ),
     );
-    return result["decision"] === "accept";
+    return !this.interrupted && !this.closed && result["decision"] === "accept";
   }
 }

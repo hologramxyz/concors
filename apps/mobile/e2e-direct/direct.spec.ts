@@ -70,6 +70,7 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
     await page.getByRole("button", { name: "Allow AI data sharing", exact: true }).click();
     const ui = page.frameLocator('iframe[title="Concors workspace"]');
+    await ui.getByRole("button", { name: "Codex", exact: true }).click();
     const input = ui.getByRole("textbox", { name: "Message Codex" });
     await expect(input).toBeEnabled();
     await input.fill("hello over the real daemon transport");
@@ -81,6 +82,41 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await expect(ui.getByRole("region", { name: "Allow command execution?" })).toBeVisible();
     await ui.getByRole("button", { name: "Allow once", exact: true }).click();
     await expect.poll(() => desktop.agents[0]?.status).toBe("done");
+    await input.fill("primitive-form");
+    await ui.getByRole("button", { name: "Send message", exact: true }).click();
+    await ui.getByRole("checkbox", { name: "Unit tests Run the focused suite" }).click();
+    await ui.getByRole("checkbox", { name: "Type check Verify types" }).click();
+    await ui
+      .getByRole("textbox", { name: "Additional notes", exact: true })
+      .fill("  Keep indentation.\n");
+    await ui.getByRole("button", { name: "Submit answers", exact: true }).click();
+    await expect.poll(() => desktop.agents[0]?.status).toBe("done");
+    await input.fill("primitive-form");
+    await ui.getByRole("button", { name: "Send message", exact: true }).click();
+    await ui.getByRole("button", { name: "Dismiss", exact: true }).click();
+    await expect.poll(() => desktop.agents[0]?.status).toBe("done");
+    await input.fill("primitive-plan");
+    await ui.getByRole("button", { name: "Send message", exact: true }).click();
+    await expect(
+      ui.getByRole("heading", { name: "Implementation plan", exact: true }),
+    ).toBeVisible();
+    await ui.getByRole("button", { name: "Approve plan", exact: true }).click();
+    await expect.poll(() => desktop.agents[0]?.status).toBe("done");
+    await input.fill("primitive-read");
+    await ui.getByRole("button", { name: "Send message", exact: true }).click();
+    await ui
+      .getByRole("article", { name: "Tool call", exact: true })
+      .filter({ hasText: "src/app.ts" })
+      .getByRole("button")
+      .first()
+      .click();
+    await expect(ui.getByText("export const previewWorks = true;", { exact: true })).toBeVisible();
+    const viewport = await ui
+      .locator("body")
+      .evaluate((el) => ({ scroll: el.scrollWidth, width: el.clientWidth }));
+    expect(viewport.scroll).toBeLessThanOrEqual(viewport.width);
+    await page.screenshot({ path: test.info().outputPath("mobile-chat-primitives.png") });
+
     await execute({
       kind: "tab.rename",
       projectId,
@@ -119,6 +155,25 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await ui.getByRole("button", { name: "Desktop connection settings" }).click();
     const settings = ui.getByRole("dialog", { name: "Settings", exact: true });
     await expect(settings).toContainText(snapshot().machineId);
+    await settings.getByRole("combobox", { name: "Settings section" }).click();
+    await ui.getByRole("option", { name: "Providers", exact: true }).click();
+    await expect(settings.getByRole("heading", { name: "Agent providers" })).toBeVisible();
+    await settings.getByRole("textbox", { name: "Search providers" }).fill("Copilot");
+    await expect(settings.getByText("GitHub Copilot", { exact: true })).toBeVisible();
+    await settings.getByRole("button", { name: "Configure GitHub Copilot" }).click();
+    const providerEditor = ui.getByRole("dialog", { name: "Configure GitHub Copilot" });
+    await providerEditor.getByLabel("Name", { exact: true }).fill("Mobile Copilot");
+    await providerEditor.getByRole("button", { name: "Save provider" }).click();
+    await expect(providerEditor).toHaveCount(0);
+    const savedProvider = await desktop.requestProvider({ kind: "list" }, crypto.randomUUID());
+    expect(savedProvider.outcome.status).toBe("ok");
+    if (savedProvider.outcome.status === "ok")
+      expect(savedProvider.outcome.providers.find((p) => p.id === "copilot")?.label).toBe(
+        "Mobile Copilot",
+      );
+    expect(await settings.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+    await page.screenshot({ path: "/tmp/concors-mobile-providers.png", fullPage: true });
+
     await settings.getByRole("combobox", { name: "Settings section" }).click();
     await expect(ui.getByRole("option", { name: "Billing", exact: true })).toHaveCount(0);
     await ui.getByRole("option", { name: "Shortcuts", exact: true }).click();

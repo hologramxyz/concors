@@ -16,11 +16,12 @@ import {
   X,
 } from "lucide-react";
 import {
-  agentProviderNames,
+  agentProviderName,
   type AgentInfo,
   type AgentSettings,
   type AgentAttachment,
   type AgentProviderId,
+  type AgentOperation,
 } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { submitAgentInput } from "./paseo/submit";
@@ -35,6 +36,12 @@ import { ComposerSurfaceContext, useComposerExpansion } from "./composer-expansi
 import { useComposerMotion } from "./composer-motion";
 import { NativeSurfaceContext, useNativeSurface } from "@/components/native-surface";
 const defaults: AgentSettings = { model: null, effort: null, mode: "default" };
+const nativeProviderIcons: Record<string, "model" | "claude" | "opencode" | "pi"> = {
+  codex: "model",
+  claude: "claude",
+  opencode: "opencode",
+  pi: "pi",
+} as const;
 export function AgentComposer({
   agent,
   connected,
@@ -69,7 +76,11 @@ export function AgentComposer({
     setBusy,
     attempt: attemptRef,
     sending: sendingRef,
-  } = useAgentDraft(useContext(AgentDraftScopeContext) ?? connection, agent.id);
+  } = useAgentDraft(
+    useContext(AgentDraftScopeContext) ?? connection,
+    agent.id,
+    connection?.workspace?.machineId,
+  );
   const [uploading, setUploading] = useState(false),
     [configuring, setConfiguring] = useState(false),
     [error, setError] = useState<string | null>(null);
@@ -97,6 +108,9 @@ export function AgentComposer({
   const advanced =
     connection?.state.status === "ready" &&
     connection.state.daemon.capabilities?.includes("agent-composer");
+  const durableQueue =
+    connection?.state.status === "ready" &&
+    connection.state.daemon.capabilities?.includes("agent-queue");
   const active = ["starting", "working", "needs_input"].includes(agent.status);
   const showStop = active && (!compact || (!draft.trim() && !attachments.length));
   const settings = agent.settings ?? defaults,
@@ -133,13 +147,18 @@ export function AgentComposer({
       setConfiguring(false);
     }
   };
-  const send = async (input: Draft) => {
+  const send = async (input: Draft, steering = false) => {
     if (!connection) throw new Error("Machine is disconnected");
     const next = attemptRef.current ?? {
       id: crypto.randomUUID(),
       draft: input,
       operation: {
-        kind: "send" as const,
+        kind: steering
+          ? ("steer" as const)
+          : active && durableQueue
+            ? ("queue-add" as const)
+            : ("send" as const),
+        turnId: agent.turnId ?? "",
         sessionId: agent.id,
         text: input.message,
         attachments: input.attachments,
@@ -161,7 +180,11 @@ export function AgentComposer({
       throw e;
     }
   };
-  const submit = async (input: Draft = { message: draft, attachments }, queued = false) => {
+  const submit = async (
+    input: Draft = { message: draft, attachments },
+    queued = false,
+    steering = false,
+  ) => {
     if (sendingRef.current) return;
     sendingRef.current = true;
     try {
@@ -169,15 +192,15 @@ export function AgentComposer({
         message: input.message,
         attachments: input.attachments,
         canSubmit: connected && !busy && !uploading && !configuring && !!agent.threadId,
-        isAgentRunning: active,
-        forceSend: attemptRef.current !== null,
+        isAgentRunning: active && !durableQueue,
+        forceSend: attemptRef.current !== null || steering,
         submitBehavior: "preserve-and-lock",
         queueMessage: (value) => {
           setQueue((q) => [...q, value]);
           setDraft("");
           setAttachments([]);
         },
-        submitMessage: () => send(input),
+        submitMessage: () => send(input, steering),
         clearDraft: () => {
           if (!queued) {
             setDraft("");
@@ -195,11 +218,29 @@ export function AgentComposer({
   };
   const queueHead = queue[0];
   useEffect(() => {
-    if (active || !queueHead || !connected || busy || uncertain || sendingRef.current) return;
+    if (
+      durableQueue ||
+      active ||
+      !queueHead ||
+      !connected ||
+      busy ||
+      uncertain ||
+      sendingRef.current
+    )
+      return;
     void submit(queueHead, true);
     // Queue delivery is triggered by authoritative agent state; failures require explicit retry.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, queueHead, connected]);
+  }, [active, queueHead, connected, durableQueue]);
+  const queueAction = async (operation: AgentOperation) => {
+    try {
+      if (!connection) throw new Error("Machine is disconnected");
+      const result = await connection.requestAgent(operation, crypto.randomUUID());
+      if (result.outcome.status === "error") throw new Error(result.outcome.message);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not update the queue");
+    }
+  };
   const addFiles = async (files: FileList | File[]) => {
     if (uploading || !advanced) return;
     setUploading(true);
@@ -227,7 +268,8 @@ export function AgentComposer({
   };
   const nativeModels = useAgentModelSelection(
     agent,
-    (model) => void configure({ ...settings, model, effort: null, serviceTier: null }),
+    (model) =>
+      void configure({ ...settings, model, effort: null, serviceTier: null, features: {} }),
   );
   const [nativeProviderPage, setNativeProviderPage] = useState<AgentProviderId | undefined>(
     agent.provider,
@@ -260,9 +302,14 @@ export function AgentComposer({
         {
           id: "model",
           label: nativeProvider
-            ? `${agentProviderNames[nativeProvider.id]} · Agent and model`
+            ? `${nativeProvider.label ?? agentProviderName(nativeProvider.id)} · Agent and model`
             : "Choose an agent provider",
-          icon: nativeProvider?.id === "codex" ? ("model" as const) : ("options" as const),
+          icon:
+            nativeProviderIcons[
+              nativeProvider?.id === agent.provider
+                ? (agent.engine ?? agent.provider)
+                : (nativeProvider?.id ?? agent.provider)
+            ] ?? ("options" as const),
           disabled: controlsDisabled || agent.status === "starting" || nativeModels.switching,
           options: nativeProvider
             ? [
@@ -288,7 +335,7 @@ export function AgentComposer({
                 .map((provider) => ({
                   id: provider.id,
                   label:
-                    agentProviderNames[provider.id] +
+                    (provider.label ?? agentProviderName(provider.id)) +
                     (provider.id === agent.provider ? " · Current chat" : " · Starts a new chat"),
                   selected: provider.id === agent.provider,
                 })),
@@ -313,30 +360,37 @@ export function AgentComposer({
         },
         {
           id: "mode",
-          label: `Permission mode: ${settings.mode}`,
+          label: `Mode: ${(agent.engine ?? agent.provider) === "codex" ? settings.mode : (settings.nativeMode ?? agent.controls?.currentMode ?? "default")}`,
           icon: "shield" as const,
           disabled: controlsDisabled,
-          options: [
-            {
-              id: "default",
-              label: "Default permissions · asks for approval",
-              selected: settings.mode === "default",
-            },
-            {
-              id: "auto-review",
-              label: "Auto-review · same sandbox",
-              selected: settings.mode === "auto-review",
-            },
-            {
-              id: "full-access",
-              label: "Full access · no approval prompts",
-              selected: settings.mode === "full-access",
-            },
-          ],
+          options:
+            (agent.engine ?? agent.provider) !== "codex"
+              ? (agent.controls?.modes ?? []).map((mode) => ({
+                  id: mode.id,
+                  label: mode.label,
+                  selected: (settings.nativeMode ?? agent.controls?.currentMode) === mode.id,
+                }))
+              : [
+                  {
+                    id: "default",
+                    label: "Default permissions · asks for approval",
+                    selected: settings.mode === "default",
+                  },
+                  {
+                    id: "auto-review",
+                    label: "Auto-review · same sandbox",
+                    selected: settings.mode === "auto-review",
+                  },
+                  {
+                    id: "full-access",
+                    label: "Full access · no approval prompts",
+                    selected: settings.mode === "full-access",
+                  },
+                ],
         },
         {
           id: "options",
-          label: "Plan mode and speed",
+          label: "Agent commands and options",
           icon: "options" as const,
           disabled: controlsDisabled,
           options: [
@@ -349,7 +403,29 @@ export function AgentComposer({
                   },
                 ]
               : []),
-            { id: "speed:", label: "Default speed", selected: !settings.serviceTier },
+            ...((agent.engine ?? agent.provider) === "codex"
+              ? [{ id: "speed:", label: "Default speed", selected: !settings.serviceTier }]
+              : []),
+            ...(agent.controls?.commands ?? []).map((c) => ({
+              id: `command:${c.name}`,
+              label: `/${c.name} · ${c.description}`,
+              selected: false,
+            })),
+            ...(agent.controls?.features ?? []).flatMap((f) =>
+              f.options
+                ? f.options.map((o) => ({
+                    id: `feature:${JSON.stringify([f.id, o.id])}`,
+                    label: `${f.label}: ${o.label}`,
+                    selected: (settings.features?.[f.id] ?? f.value) === o.id,
+                  }))
+                : [
+                    {
+                      id: `feature:${JSON.stringify([f.id, !(settings.features?.[f.id] ?? f.value)])}`,
+                      label: `${f.label}: ${(settings.features?.[f.id] ?? f.value) ? "on" : "off"}`,
+                      selected: !!(settings.features?.[f.id] ?? f.value),
+                    },
+                  ],
+            ),
             ...(effortModel?.serviceTiers ?? []).map((tier) => ({
               id: `speed:${tier.id}`,
               label: tier.label,
@@ -357,9 +433,17 @@ export function AgentComposer({
             })),
           ],
         },
-      ].filter((control) => agent.provider === "codex" || control.id === "model"),
+      ].filter(
+        (control) =>
+          (agent.engine ?? agent.provider) === "codex" ||
+          control.id === "model" ||
+          (control.id === "effort" && !!effortModel?.efforts.length) ||
+          (control.id === "mode" && !!agent.controls?.modes.length) ||
+          (control.id === "options" &&
+            (!!agent.controls?.commands.length || !!agent.controls?.features.length)),
+      ),
       context: agent.context?.limit
-        ? `${agent.context.used.toLocaleString()} / ${agent.context.limit.toLocaleString()} tokens · ${Math.round((agent.context.used / agent.context.limit) * 100)}% used\n${agent.context.total.toLocaleString()} cumulative tokens`
+        ? `${agent.context.used.toLocaleString()} / ${agent.context.limit.toLocaleString()} tokens · ${Math.round((agent.context.used / agent.context.limit) * 100)}% used\n${agent.context.total === null ? "" : agent.context.total.toLocaleString() + " cumulative tokens"}`
         : "Usage will appear after the agent reports it.",
     },
     (event) => {
@@ -398,7 +482,10 @@ export function AgentComposer({
               const provider = nativeModels.providers.find(
                 (entry) => entry.id === value && !entry.error,
               );
-              if (provider) setNativeProviderPage(provider.id);
+              if (provider) {
+                setNativeProviderPage(provider.id);
+                void nativeModels.load(provider.id);
+              }
             } else if (!value || nativeProvider.models.some((model) => model.id === value)) {
               void nativeModels.choose(value, nativeProvider.id);
             }
@@ -409,10 +496,26 @@ export function AgentComposer({
             void configure({ ...settings, effort: value || null });
           else if (
             event.control === "mode" &&
+            (agent.engine ?? agent.provider) === "codex" &&
             ["default", "auto-review", "full-access"].includes(value)
           )
             void configure({ ...settings, mode: value as AgentSettings["mode"] });
+          else if (event.control === "mode" && agent.controls?.modes.some((m) => m.id === value))
+            void configure({ ...settings, nativeMode: value });
           else if (event.control === "options") {
+            if (
+              value.startsWith("command:") &&
+              agent.controls?.commands.some((c) => c.name === value.slice(8))
+            ) {
+              setDraft(`/${value.slice(8)} `);
+              return;
+            }
+            if (value.startsWith("feature:")) {
+              const [id, next] = JSON.parse(value.slice(8)) as [string, boolean | string];
+              if (agent.controls?.features.some((f) => f.id === id))
+                void configure({ ...settings, features: { ...settings.features, [id]: next } });
+              return;
+            }
             if (value === "plan" && agent.supportsPlan)
               void configure({ ...settings, planMode: !settings.planMode });
             else if (
@@ -441,7 +544,7 @@ export function AgentComposer({
           <ListTodo className="size-4" />
         </button>
       )}
-      {agent.provider === "codex" && !!effortModel?.serviceTiers?.length && (
+      {(agent.engine ?? agent.provider) === "codex" && !!effortModel?.serviceTiers?.length && (
         <ControlPicker
           label="Speed"
           value={settings.serviceTier ?? ""}
@@ -490,7 +593,65 @@ export function AgentComposer({
   return (
     <ComposerSurfaceContext value={owner}>
       <div className="space-y-2">
-        {!!queue.length && (
+        {active && agent.controls?.steer && !!draft.trim() && !attachments.length && (
+          <button
+            type="button"
+            className="rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted disabled:opacity-40"
+            disabled={
+              !connected ||
+              busy ||
+              uncertain ||
+              !agent.turnId ||
+              agent.turnId.startsWith("pending:") ||
+              draft.trim().startsWith("/")
+            }
+            onClick={() => void submit({ message: draft, attachments: [] }, false, true)}
+          >
+            Steer the current turn
+          </button>
+        )}
+        {durableQueue && !!agent.queue?.length && (
+          <div data-composer-queue className="max-h-28 space-y-2 overflow-y-auto">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>{agent.queuePaused ? "Queue paused" : "Follow-ups run on this machine"}</span>
+              <button
+                type="button"
+                disabled={!connected}
+                onClick={() =>
+                  void queueAction({
+                    kind: "queue-pause",
+                    sessionId: agent.id,
+                    paused: !agent.queuePaused,
+                  })
+                }
+              >
+                {agent.queuePaused ? "Resume queue" : "Pause queue"}
+              </button>
+            </div>
+            {agent.queue.map((entry) => (
+              <div
+                key={entry.id}
+                className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-xs"
+              >
+                <span className="text-muted-foreground">Queued</span>
+                <span className="min-w-0 flex-1 truncate">
+                  {entry.text || entry.attachments.map((a) => a.name).join(", ")}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Remove queued message"
+                  disabled={!connected}
+                  onClick={() =>
+                    void queueAction({ kind: "queue-remove", sessionId: agent.id, id: entry.id })
+                  }
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {!durableQueue && !!queue.length && (
           <div
             data-composer-queue
             className={compact ? "max-h-20 space-y-2 overflow-y-auto" : "space-y-2"}
@@ -601,7 +762,7 @@ export function AgentComposer({
               <textarea
                 ref={textarea}
                 data-agent-composer
-                aria-label={`Message ${agentProviderNames[agent.provider]}`}
+                aria-label={`Message ${agentProviderName(agent.provider)}`}
                 placeholder={
                   compact && !expanded
                     ? "Message your agent"
@@ -629,7 +790,7 @@ export function AgentComposer({
                     e.shiftKey &&
                     !configuring &&
                     advanced &&
-                    agent.provider === "codex"
+                    (agent.engine ?? agent.provider) === "codex"
                   ) {
                     e.preventDefault();
                     const modes: AgentSettings["mode"][] = [
@@ -692,10 +853,16 @@ export function AgentComposer({
                     showValue={!compact}
                     disabled={controlsDisabled}
                     onSelect={(model) =>
-                      void configure({ ...settings, model, effort: null, serviceTier: null })
+                      void configure({
+                        ...settings,
+                        model,
+                        effort: null,
+                        serviceTier: null,
+                        features: {},
+                      })
                     }
                   />
-                  {agent.provider === "codex" && (
+                  {!!effortModel?.efforts.length && (
                     <ControlPicker
                       label="Thinking effort"
                       showValue={!compact}
@@ -717,7 +884,61 @@ export function AgentComposer({
                       onSelect={(effort) => void configure({ ...settings, effort: effort || null })}
                     />
                   )}
-                  {agent.provider === "codex" && (
+                  {!!agent.controls?.modes.length &&
+                    (agent.engine ?? agent.provider) !== "codex" && (
+                      <ControlPicker
+                        label="Agent mode"
+                        showValue={!compact}
+                        value={settings.nativeMode ?? agent.controls.currentMode ?? ""}
+                        icon={<Shield className="size-4" />}
+                        disabled={controlsDisabled}
+                        options={agent.controls.modes}
+                        onSelect={(nativeMode) => void configure({ ...settings, nativeMode })}
+                      />
+                    )}
+                  {(agent.controls?.features ?? []).map((feature) => (
+                    <ControlPicker
+                      key={feature.id}
+                      label={feature.label}
+                      showValue={!compact}
+                      value={String(settings.features?.[feature.id] ?? feature.value)}
+                      icon={<SlidersHorizontal className="size-4" />}
+                      disabled={controlsDisabled}
+                      options={
+                        feature.options ?? [
+                          { id: "true", label: "On" },
+                          { id: "false", label: "Off" },
+                        ]
+                      }
+                      onSelect={(value) =>
+                        void configure({
+                          ...settings,
+                          features: {
+                            ...settings.features,
+                            [feature.id]: feature.options ? value : value === "true",
+                          },
+                        })
+                      }
+                    />
+                  ))}
+                  {!!agent.controls?.commands.length && (
+                    <ControlPicker
+                      label="Agent commands"
+                      value=""
+                      selectedLabel="Commands"
+                      icon={<SlidersHorizontal className="size-4" />}
+                      disabled={controlsDisabled}
+                      options={agent.controls.commands.map((c) => ({
+                        id: c.name,
+                        label: `/${c.name}`,
+                        description: c.description,
+                      }))}
+                      onSelect={(name) => {
+                        setDraft(`/${name} `);
+                      }}
+                    />
+                  )}
+                  {(agent.engine ?? agent.provider) === "codex" && (
                     <ControlPicker
                       label="Permission mode"
                       showValue={!compact}

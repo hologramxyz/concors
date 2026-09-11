@@ -42,6 +42,7 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     await seedProject(page, "Composer acceptance", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("button", { name: "Codex", exact: true }).click();
     await page.getByRole("textbox", { name: "Message Codex" }).waitFor();
     await expect(page.getByLabel("Agent and model")).toBeEnabled();
     await page.getByLabel("Agent and model", { exact: true }).click();
@@ -167,6 +168,8 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     await page.getByRole("button", { name: "Queue message", exact: true }).click();
     await expect(page.getByText("Queued", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Interrupt agent", exact: true }).click();
+    await expect(page.getByText("Queue paused", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Resume queue", exact: true }).click();
     await expect(page.getByRole("log")).toContainText("queued follow-up");
     await expect(page.getByRole("button", { name: "Queue message", exact: true })).toHaveCount(0);
     await page.reload();

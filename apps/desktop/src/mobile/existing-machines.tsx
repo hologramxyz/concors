@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { machineAvailability, type MobileState } from "@concors/client-core";
+import { machineAvailability, machineStatusLabel, type MobileState } from "@concors/client-core";
 import { Button } from "@/components/ui/button";
 import { Section } from "@/views/settings-primitives";
 import { hostAction } from "./bridge";
@@ -45,7 +45,12 @@ export function ExistingMachines({
             <li key={machine.id} className="flex items-center gap-3 py-4">
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">{machine.name}</p>
-                <p className="text-sm text-muted-foreground">{machineAvailability(machine)}</p>
+                <p className="text-sm text-muted-foreground">
+                  {machineStatusLabel(
+                    machineAvailability(machine),
+                    host.machineId === machine.id && host.phase === "ready",
+                  )}
+                </p>
               </div>
               <Button
                 variant="outline"

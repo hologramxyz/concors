@@ -1,3 +1,4 @@
+import { planSteps } from "../providers/plans.ts";
 import { z } from "zod";
 import type { AgentItem } from "@concors/protocol";
 import { normalizeCommandExecutionCommand } from "./command-display.ts";
@@ -34,9 +35,29 @@ export function mapCodexItem(
           .join("\n"),
       };
     case "agentMessage":
+      if (item["delivery"] === "async" && Array.isArray(item["questions"]))
+        return {
+          ...base,
+          kind: "system",
+          title: "Agent questions",
+          text: item["questions"]
+            .map((q) =>
+              typeof q === "object" && q ? text((q as Record<string, unknown>)["title"]) : "",
+            )
+            .filter(Boolean)
+            .join("\n"),
+        };
       return { ...base, kind: "assistant", title: "Codex", text: text(item["text"]) };
     case "plan":
-      return { ...base, kind: "plan", title: "Plan", text: text(item["text"]) };
+      return {
+        ...base,
+        kind: "plan",
+        title: "Plan",
+        text: text(item["text"]),
+        ...(Array.isArray(item["steps"])
+          ? { presentation: { type: "plan", steps: planSteps(item["steps"]) } }
+          : {}),
+      };
     case "reasoning":
       return {
         ...base,
@@ -65,6 +86,28 @@ export function mapCodexItem(
           .filter(Boolean)
           .join("\n"),
       };
+    case "fileRead":
+      return {
+        ...base,
+        kind: "tool",
+        title: "Read file",
+        text: text(item["path"]),
+        detail: text(item["output"]),
+        presentation: {
+          type: "files",
+          fileOperation: "read",
+          files: text(item["path"]) ? [{ path: text(item["path"]), diff: "" }] : [],
+        },
+      };
+    case "search":
+      return {
+        ...base,
+        kind: "tool",
+        title: text(item["tool"]) || "Search",
+        text: text(item["query"]),
+        detail: text(item["output"]),
+        presentation: { type: "search" },
+      };
     case "fileChange":
       return {
         ...base,
@@ -72,6 +115,7 @@ export function mapCodexItem(
         title: "Edit files",
         presentation: {
           type: "files",
+          fileOperation: "edit",
           files: z
             .array(z.object({ path: z.string(), diff: z.string().optional() }))
             .catch([])
@@ -80,7 +124,11 @@ export function mapCodexItem(
             .map((f) => ({ path: f.path, diff: (f.diff ?? "").slice(0, 16000) })),
         },
         text: "File changes",
-        detail: detail(item["changes"]),
+        detail: detail({
+          changes: item["changes"],
+          input: item["nativeInput"],
+          output: item["nativeOutput"],
+        }),
       };
     case "collabAgentToolCall": {
       const states = z
@@ -117,7 +165,11 @@ export function mapCodexItem(
         presentation: {
           type: "sub_agent",
           children: [
-            { id: text(item["agentThreadId"]), status: text(item["kind"]), message: null },
+            {
+              id: text(item["agentThreadId"]),
+              status: text(item["kind"]),
+              message: text(item["message"]).slice(0, 4000) || null,
+            },
           ],
         },
       };
@@ -143,12 +195,30 @@ export function mapCodexItem(
         text: text(item["query"]),
         detail: detail(item["action"]),
       };
+    case "notification":
+      return {
+        ...base,
+        kind: "system",
+        title: text(item["title"]) || "Agent update",
+        text: text(item["text"]),
+      };
     case "contextCompaction":
       return {
         ...base,
         kind: "system",
-        title: "Context compacted",
-        text: "Earlier context was summarized by Codex.",
+        title:
+          status === "running"
+            ? "Compacting context"
+            : status === "completed"
+              ? "Context compacted"
+              : "Compaction interrupted or failed",
+        text:
+          text(item["message"]) ||
+          (status === "running"
+            ? "Summarizing earlier context…"
+            : status === "completed"
+              ? "Earlier context was summarized."
+              : "The context could not be compacted."),
       };
     default:
       return {
