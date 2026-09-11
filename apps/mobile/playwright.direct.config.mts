@@ -5,7 +5,7 @@ import {
   mobileDirectSocket,
   mobileWebOrigin,
   mobileWebPort,
-} from "../../e2e/support/mobile-direct-ports.ts";
+} from "../../e2e/support/mobile-direct-ports.cjs";
 const cwd = fileURLToPath(new URL("../..", import.meta.url));
 export default defineConfig({
   testDir: "./e2e-direct",

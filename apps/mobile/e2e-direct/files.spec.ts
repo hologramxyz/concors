@@ -1,5 +1,8 @@
 import { test, expect, type Page } from "@playwright/test";
-import { mobileDesktopSocket, mobileDirectSocket } from "../../../e2e/support/mobile-direct-ports";
+import {
+  mobileDesktopSocket,
+  mobileDirectSocket,
+} from "../../../e2e/support/mobile-direct-ports.cjs";
 import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
