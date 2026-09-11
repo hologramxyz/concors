@@ -49,6 +49,7 @@ test("visited tabs retain terminal screens and chat drafts without reconnecting 
     expect(await configure.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
     await page.screenshot({ path: "test-results/desktop-tab-menu.png" });
     await menu.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("button", { name: "Codex", exact: true }).click();
     const input = page.getByRole("textbox", { name: "Message Codex" });
     await expect(input).toBeEnabled();
     await expect(input).toBeFocused();
