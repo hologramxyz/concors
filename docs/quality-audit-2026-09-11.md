@@ -86,6 +86,29 @@ No checks were removed, and this does not resolve the separate account billing b
   on reload; the other two passed. That interrupted batch is not reported as all-green;
   the fresh 58-scenario desktop run above subsequently passed without interruption.
 
+## Requested chat cleanup after review
+
+Three additional, separate UI commits remove the connected-provider/email badge,
+the import/fork/rewind/MCP action toolbar, and the composer's Commands picker.
+The unused session-action component is deleted. Authentication, provider credentials,
+daemon session APIs, typed slash commands, and model/effort/permission controls are unchanged.
+Native composer menus also stop listing commands; their remaining conversation options stay.
+
+Fresh validation after this cleanup: 530 unit tests passed (one optional live-API test
+skipped), all workspace type checks and repository lint/format checks passed, and the
+desktop web build passed. Eight focused desktop browser scenarios and both mobile
+provider-switching scenarios (web composer and native-bridge contract) passed.
+The new browser regression explicitly advertises session tools, MCP status and a
+compact command, then verifies their controls are absent at desktop and narrow widths
+and after reload. Screenshots confirm the connected-account identity is absent.
+
+An initial test-only assumption that the ephemeral account backend retained login on
+reload failed; the reload regression now explicitly models an existing CLI login.
+Real sign-in interactions still exercise the account backend for all three supported
+account providers. The clean eight-scenario run followed that test correction.
+The larger full-suite totals above describe the preceding audit, not a full rerun
+after these UI removals. The CI billing and native-device limitations below still apply.
+
 ## Remaining validation boundaries
 
 - Chromium browser fixtures exercise the mobile bridge contract, not actual SwiftUI, Android,
