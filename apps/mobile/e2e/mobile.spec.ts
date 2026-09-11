@@ -9,40 +9,33 @@ async function choose(ui: FrameLocator, label: string, value: string) {
   await ui.getByRole("combobox", { name: label, exact: true }).click();
   await ui
     .locator(
-      `${label === "Tabs and panes" ? "[data-pane-choice]" : '[role="option"]'}[data-value="${value}"]`,
+      `${label === "Tabs" ? "[data-pane-choice]" : '[role="option"]'}[data-value="${value}"]`,
     )
     .click();
 }
 async function openPicker(ui: FrameLocator) {
-  const picker = ui.locator('[role="combobox"][aria-label="Tabs and panes"]');
+  const picker = ui.locator('[role="combobox"][aria-label="Tabs"]');
   if ((await picker.getAttribute("aria-expanded")) !== "true") await picker.click();
 }
 async function newTab(ui: FrameLocator) {
   await openPicker(ui);
   await ui
-    .getByRole("dialog", { name: "Tabs and panes", exact: true })
+    .getByRole("dialog", { name: "Tabs", exact: true })
     .getByRole("button", { name: "New tab", exact: true })
     .click();
 }
-async function workspaceActions(ui: FrameLocator, kind: "tab" | "pane") {
-  const value = await ui
-    .locator('[role="combobox"][aria-label="Tabs and panes"]')
-    .getAttribute("data-value");
+async function workspaceActions(ui: FrameLocator) {
+  const value = await ui.locator('[role="combobox"][aria-label="Tabs"]').getAttribute("data-value");
   await openPicker(ui);
-  const row =
-    kind === "tab"
-      ? ui.locator(`.mobile-tab-card:has([data-pane-choice][data-value="${value}"])`)
-      : ui.locator(`.mobile-pane-row:has([data-pane-choice][data-value="${value}"])`);
-  await row
-    .getByRole("button", { name: kind === "tab" ? /^Actions for tab / : /^Actions for pane / })
-    .click();
+  const row = ui.locator(`.mobile-pane-row:has([data-pane-choice][data-value="${value}"])`);
+  await row.getByRole("button", { name: /^Actions for tab / }).click();
 }
 async function paneCount(ui: FrameLocator, count: number) {
   await openPicker(ui);
   await expect(ui.locator("[data-pane-choice]")).toHaveCount(count);
   await ui.locator("[data-pane-choice]").first().press("Escape");
 }
-async function closePickerSheet(ui: FrameLocator, name = "Tabs and panes") {
+async function closePickerSheet(ui: FrameLocator, name = "Tabs") {
   const sheet = ui.getByRole("dialog", { name, exact: true });
   await sheet.getByRole("button", { name: "Close", exact: true }).click();
   await expect(sheet).toHaveCount(0);
@@ -115,7 +108,7 @@ test("mobile header, terminal and host share one background in light and dark mo
   await expect(header.getByRole("button", { name: "Workspace actions", exact: true })).toHaveCount(
     0,
   );
-  await choose(ui, "Tabs and panes", activeTerminal);
+  await choose(ui, "Tabs", activeTerminal);
   const terminal = ui.getByLabel("Terminal output", { exact: true });
   await expect(terminal).toBeVisible();
   for (const [index, colorScheme] of (["light", "dark", "light"] as const).entries()) {
@@ -148,7 +141,7 @@ test("mobile header, terminal and host share one background in light and dark mo
     await expect(page.getByTestId("workspace-safe-area")).toHaveCSS("background-color", color);
     await page.screenshot({ path: `apps/mobile/test-results/mobile-terminal-${colorScheme}.png` });
   }
-  await choose(ui, "Tabs and panes", activeChat);
+  await choose(ui, "Tabs", activeChat);
   await expect(ui.getByLabel("Agent conversation", { exact: true })).toHaveCSS(
     "background-color",
     "rgb(244, 243, 239)",
@@ -167,14 +160,14 @@ test("shared composer preserves attachments and queued messages across pane chan
     buffer: Buffer.from("Mobile parity"),
   });
   await expect(ui.getByLabel("Remove notes.txt")).toBeVisible();
-  await choose(ui, "Tabs and panes", activeTerminal);
-  await choose(ui, "Tabs and panes", activeChat);
+  await choose(ui, "Tabs", activeTerminal);
+  await choose(ui, "Tabs", activeChat);
   await expect(composer).toHaveValue("A queued follow-up");
   await expect(ui.getByLabel("Remove notes.txt")).toBeVisible();
   await ui.getByRole("button", { name: "Queue message", exact: true }).click();
   await expect(ui.locator("[data-composer-queue]")).toContainText("A queued follow-up");
-  await choose(ui, "Tabs and panes", activeTerminal);
-  await choose(ui, "Tabs and panes", activeChat);
+  await choose(ui, "Tabs", activeTerminal);
+  await choose(ui, "Tabs", activeChat);
   await expect(ui.locator("[data-composer-queue]")).toContainText("A queued follow-up");
   await ui.getByRole("button", { name: "Allow once", exact: true }).click();
   await expect(ui.getByText(/This is a simulated response/)).toBeVisible();
@@ -253,7 +246,7 @@ test("Files responds in the demo and terminal swipes keep both panels reachable"
   page,
 }) => {
   const ui = await enter(page);
-  await choose(ui, "Tabs and panes", activeTerminal);
+  await choose(ui, "Tabs", activeTerminal);
   const terminal = ui.getByLabel("Terminal output", { exact: true });
   await expect(terminal).toBeVisible();
   const shell = ui.locator(".mobile-shell");
@@ -284,7 +277,7 @@ test("Files responds in the demo and terminal swipes keep both panels reachable"
   await expect(shell).toHaveAttribute("data-sidebar-open", "true");
   await touchSwipe(page, { x: 200, y: 240 }, { x: 30, y: 240 });
   await expect(shell).toHaveAttribute("data-sidebar-open", "false");
-  await expect(ui.getByRole("combobox", { name: "Tabs and panes" })).toHaveAttribute(
+  await expect(ui.getByRole("combobox", { name: "Tabs" })).toHaveAttribute(
     "data-value",
     activeTerminal,
   );
@@ -300,24 +293,22 @@ test("Files responds in the demo and terminal swipes keep both panels reachable"
   await ui.getByRole("menu").press("Escape");
   await expect(shell).toHaveAttribute("data-sidebar-open", "true");
 });
-test("tab and pane changes use the authoritative workspace operations", async ({ page }) => {
+test("flat tab changes use the authoritative workspace operations", async ({ page }) => {
   const ui = await enter(page);
   await newTab(ui);
   await ui.getByRole("button", { name: "Agent", exact: true }).click();
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
-  await workspaceActions(ui, "tab");
+  await workspaceActions(ui);
   await ui.getByRole("menuitem", { name: "Rename tab" }).click();
   await ui.getByRole("textbox", { name: "Tab name" }).fill("Second conversation");
   await ui.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(ui.getByRole("combobox", { name: "Tabs and panes" })).toContainText(
-    "Second conversation",
-  );
-  await workspaceActions(ui, "pane");
+  await expect(ui.getByRole("combobox", { name: "Tabs" })).toContainText("Second conversation");
+  await workspaceActions(ui);
   await expect(
     ui.getByRole("menuitem", { name: /Split|New pane|Arrange panes|Move tab/ }),
   ).toHaveCount(0);
-  await ui.getByRole("menuitem", { name: "Close pane…", exact: true }).click();
-  await ui.getByRole("button", { name: "Close pane", exact: true }).click();
+  await ui.getByRole("menuitem", { name: "Close tab…", exact: true }).click();
+  await ui.getByRole("button", { name: "Close tab", exact: true }).click();
   await paneCount(ui, 2);
 });
 test("sidebar pushes the workspace and settings opens as a drawer over the same draft", async ({
@@ -365,12 +356,12 @@ test("top select switches split panes and cold session links survive sign-in", a
   await page.getByRole("button", { name: "Explore demo" }).click();
   const ui = workspace(page);
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
-  await choose(ui, "Tabs and panes", activeTerminal);
+  await choose(ui, "Tabs", activeTerminal);
   await expect(ui.getByLabel("Terminal output", { exact: true })).toBeVisible();
   await ui.locator(".xterm-helper-textarea").pressSequentially("ls");
   await ui.locator(".xterm-helper-textarea").press("Enter");
   await expect(ui.locator(".xterm-accessibility-tree")).toContainText("ls");
-  await choose(ui, "Tabs and panes", activeChat);
+  await choose(ui, "Tabs", activeChat);
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
   await openSettings(ui);
@@ -417,7 +408,7 @@ test("folder workspaces and shared settings remain available from the sidebar", 
     .getByRole("button", { name: "Open folder", exact: true })
     .click();
   await expect(ui.getByRole("dialog", { name: "Open folder" })).toHaveCount(0);
-  await expect(ui.getByRole("combobox", { name: "Tabs and panes" })).toContainText("Phone project");
+  await expect(ui.getByRole("combobox", { name: "Tabs" })).toContainText("Phone project");
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
   await openSettings(ui);
   await choose(ui, "Settings section", "notifications");
@@ -437,7 +428,7 @@ test("new workspace completion opens its own project and closes the sidebar", as
   await ui.getByRole("button", { name: "Open workspace menu", exact: true }).click();
   await ui.getByRole("button", { name: "New workspace", exact: true }).click();
   await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "false");
-  await expect(ui.getByRole("combobox", { name: "Tabs and panes", exact: true })).toContainText(
+  await expect(ui.getByRole("combobox", { name: "Tabs", exact: true })).toContainText(
     "New workspace",
   );
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
@@ -503,19 +494,17 @@ test("compact toolbar keeps icon controls and send on one row at phone widths", 
     }
     const header = ui.locator(".mobile-header");
     await expect(header).not.toContainText("Concors");
-    const chevronInside = await ui
-      .getByRole("combobox", { name: "Tabs and panes" })
-      .evaluate((picker) => {
-        const bounds = picker.getBoundingClientRect();
-        const chevron = picker.querySelector(".mobile-select-chevron")?.getBoundingClientRect();
-        if (!chevron) return false;
-        return (
-          chevron.right <= bounds.right &&
-          chevron.left >= bounds.left &&
-          chevron.top >= bounds.top &&
-          chevron.bottom <= bounds.bottom
-        );
-      });
+    const chevronInside = await ui.getByRole("combobox", { name: "Tabs" }).evaluate((picker) => {
+      const bounds = picker.getBoundingClientRect();
+      const chevron = picker.querySelector(".mobile-select-chevron")?.getBoundingClientRect();
+      if (!chevron) return false;
+      return (
+        chevron.right <= bounds.right &&
+        chevron.left >= bounds.left &&
+        chevron.top >= bounds.top &&
+        chevron.bottom <= bounds.bottom
+      );
+    });
     expect(chevronInside).toBe(true);
   }
 });
@@ -589,7 +578,7 @@ test("composer expands on focus, preserves portaled controls, and collapses afte
   await input.fill("Keep this multiline\ndraft");
   await expect(primary).toHaveCount(1);
   await expect(primary).toHaveAttribute("aria-label", "Queue message");
-  await ui.getByRole("combobox", { name: "Tabs and panes" }).tap();
+  await ui.getByRole("combobox", { name: "Tabs" }).tap();
   await expect(form).toHaveAttribute("data-expanded", "false");
   await closePickerSheet(ui);
   await input.click();
@@ -623,22 +612,20 @@ test("composer expands on focus, preserves portaled controls, and collapses afte
   expect(centered).toBe(true);
 });
 
-test("tab picker opens a bottom sheet, dismisses without reopening and groups panes beneath tabs", async ({
-  page,
-}) => {
+test("flat tab picker opens a bottom sheet and dismisses without reopening", async ({ page }) => {
   const ui = await enter(page);
-  const picker = ui.getByRole("combobox", { name: "Tabs and panes" });
-  const list = ui.getByRole("dialog", { name: "Tabs and panes", exact: true });
+  const picker = ui.getByRole("combobox", { name: "Tabs" });
+  const list = ui.getByRole("dialog", { name: "Tabs", exact: true });
   for (let i = 0; i < 3; i++) {
     const trigger = await picker.boundingBox();
     if (!trigger) throw new Error("Picker trigger is not visible");
     await picker.tap();
     await expect(list).toBeVisible();
-    await expect(ui.getByRole("dialog", { name: "Tabs and panes", exact: true })).toHaveAttribute(
+    await expect(ui.getByRole("dialog", { name: "Tabs", exact: true })).toHaveAttribute(
       "data-mobile-drawer",
       "true",
     );
-    await expect(list.locator(".mobile-tab-card")).toHaveCount(1);
+    await expect(list.locator(".mobile-tab-card")).toHaveCount(0);
     await expect(list.locator("[data-pane-choice]")).toHaveCount(2);
     // A second tap at the trigger's position lands on the modal scrim: close only.
     await page.touchscreen.tap(trigger.x + trigger.width / 2, trigger.y + trigger.height / 2);
@@ -653,57 +640,41 @@ test("tab picker opens a bottom sheet, dismisses without reopening and groups pa
   await list.locator("[data-pane-choice]").last().press("Enter");
   await expect(picker).toHaveAttribute("data-value", activeTerminal);
   await expect(ui.getByLabel("Terminal output", { exact: true })).toBeVisible();
-  await choose(ui, "Tabs and panes", activeChat);
+  await choose(ui, "Tabs", activeChat);
   await newTab(ui);
-  let drawer = ui.getByRole("dialog", { name: "New tab", exact: true });
+  const drawer = ui.getByRole("dialog", { name: "New tab", exact: true });
   for (const name of ["Codex", "Claude Code", "OpenCode"]) {
     await expect(
       drawer.getByRole("button", { name, exact: true }).locator(".mobile-session-icon svg"),
     ).toHaveCount(1);
   }
-  await drawer.getByRole("button", { name: "Add pane to this tab", exact: true }).click();
-  drawer = ui.getByRole("dialog", { name: "Add pane", exact: true });
+  await expect(drawer.getByRole("button", { name: /Add pane/ })).toHaveCount(0);
   await drawer.getByRole("button", { name: "Agent", exact: true }).click();
-  await expect(picker).toContainText("Mobile launch");
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
-  const addedPane = await picker.getAttribute("data-value");
-  if (!addedPane) throw new Error("New pane was not selected");
-  expect(addedPane?.startsWith(ids.tab + ":")).toBe(true);
+  const added = await picker.getAttribute("data-value");
+  if (!added) throw new Error("New tab was not selected");
+  expect(added.startsWith(ids.tab + ":")).toBe(false);
   await picker.click();
-  await expect(list.locator(".mobile-tab-card")).toHaveCount(1);
+  await expect(list.locator(".mobile-tab-card")).toHaveCount(0);
   await expect(list.locator("[data-pane-choice]")).toHaveCount(3);
+  await expect(list.locator(".mobile-pane-choice")).toContainText([
+    "Mobile launch · 1",
+    "Mobile launch · 2",
+    "Agent",
+  ]);
   await closePickerSheet(ui);
-  await newTab(ui);
-  await ui
-    .getByRole("dialog", { name: "New tab", exact: true })
-    .getByRole("button", { name: "Agent", exact: true })
-    .click();
-  await expect(picker).not.toHaveAttribute("data-value", addedPane);
-  await picker.click();
-  await expect(list.locator(".mobile-tab-card")).toHaveCount(2);
-  await expect(list.locator(".mobile-tab-card").first().locator("[data-pane-choice]")).toHaveCount(
-    3,
-  );
-  await expect(list.locator(".mobile-tab-card").last().locator("[data-pane-choice]")).toHaveCount(
-    1,
-  );
-  await list.locator(`[data-value="${addedPane}"]`).click();
-  await workspaceActions(ui, "pane");
-  await ui.getByRole("menuitem", { name: "Close pane…", exact: true }).click();
-  await ui.getByRole("button", { name: "Close pane", exact: true }).click();
-  await picker.click();
-  await expect(list.locator(".mobile-tab-card")).toHaveCount(2);
-  await expect(list.locator(".mobile-tab-card").first().locator("[data-pane-choice]")).toHaveCount(
-    2,
-  );
+  await workspaceActions(ui);
+  await ui.getByRole("menuitem", { name: "Close tab…", exact: true }).click();
+  await ui.getByRole("button", { name: "Close tab", exact: true }).click();
+  await paneCount(ui, 2);
 });
 
-test("drawer actions target their own tab and pane without changing the current selection", async ({
+test("flat tab actions configure and close inactive leaves without changing the current selection", async ({
   page,
 }) => {
   test.setTimeout(90_000);
   const ui = await enter(page);
-  const picker = ui.getByRole("combobox", { name: "Tabs and panes", includeHidden: true });
+  const picker = ui.getByRole("combobox", { name: "Tabs", includeHidden: true });
   await expect(
     ui.locator(".mobile-header").getByRole("button", { name: "Project files" }),
   ).toBeEnabled();
@@ -717,36 +688,34 @@ test("drawer actions target their own tab and pane without changing the current 
   const selected = await picker.getAttribute("data-value");
   if (!selected) throw new Error("New tab was not selected");
   await picker.click();
-  const drawer = ui.getByRole("dialog", { name: "Tabs and panes", exact: true });
-  const firstTab = drawer.locator(".mobile-tab-card").first();
-  await firstTab
-    .getByRole("button", { name: "Actions for pane 2 in Mobile launch", exact: true })
+  const drawer = ui.getByRole("dialog", { name: "Tabs", exact: true });
+  const inactive = drawer.locator(`.mobile-pane-row:has([data-value="${activeTerminal}"])`);
+  await inactive
+    .getByRole("button", { name: "Actions for tab Mobile launch · 2", exact: true })
     .click();
+  await expect(ui.getByRole("menuitem", { name: "Rename tab", exact: true })).toHaveCount(0);
+  await expect(ui.getByRole("menuitem", { name: /Add pane|Move tab|Split/ })).toHaveCount(0);
   await ui.getByRole("menuitemradio", { name: "OpenCode", exact: true }).click();
-  await expect(firstTab.locator("[data-pane-choice]").last()).toContainText("OpenCode");
+  await expect(inactive.locator("[data-pane-choice]")).toContainText("OpenCode");
   await expect(picker).toHaveAttribute("data-value", selected);
-  await firstTab
-    .getByRole("button", { name: "Actions for tab Mobile launch", exact: true })
+  await page.screenshot({ path: test.info().outputPath("mobile-flat-tabs.png") });
+  await inactive
+    .getByRole("button", { name: "Actions for tab Mobile launch · 2", exact: true })
     .click();
-  await ui.getByRole("menuitem", { name: "Add pane to this tab", exact: true }).click();
-  await ui
-    .getByRole("dialog", { name: "Add pane", exact: true })
-    .getByRole("button", { name: "Agent", exact: true })
-    .click();
-  await expect(picker).toContainText("Mobile launch");
-  await picker.click();
-  await expect(firstTab.locator("[data-pane-choice]")).toHaveCount(3);
-  await expect(drawer.locator(".mobile-tab-card").last().locator("[data-pane-choice]")).toHaveCount(
-    1,
-  );
-  await page.screenshot({ path: "apps/mobile/test-results/mobile-tabs-and-panes.png" });
-  await closePickerSheet(ui);
-  // Hardware keyboard actions remain available with the management drawer unmounted.
-  await picker.press("Control+Shift+p");
-  await picker.press("Backspace");
-  await expect(ui.getByRole("dialog", { name: "Close pane?", exact: true })).toBeVisible();
-  await ui.getByRole("button", { name: "Cancel", exact: true }).click();
-  await paneCount(ui, 4);
+  await ui.getByRole("menuitem", { name: "Close tab…", exact: true }).click();
+  await ui.getByRole("button", { name: "Close tab", exact: true }).click();
+  await expect(picker).toHaveAttribute("data-value", selected);
+  await paneCount(ui, 2);
+  await choose(ui, "Tabs", activeChat);
+  await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
+  // The old pane-close shortcut is a compatibility alias, not another mobile action.
+  for (const prefix of ["p", "t"]) {
+    await picker.press(`Control+Shift+${prefix}`);
+    await picker.press("Backspace");
+    await expect(ui.getByRole("dialog", { name: "Close tab?", exact: true })).toBeVisible();
+    await ui.getByRole("button", { name: "Cancel", exact: true }).click();
+  }
+  await paneCount(ui, 2);
 });
 
 test("glass controls retain their shape and composer height animates with reduced-motion support", async ({
@@ -789,7 +758,7 @@ test("glass controls retain their shape and composer height animates with reduce
   await expect(header.getByRole("button")).toHaveCount(2);
   await expect(header.locator(".mobile-glass")).toHaveCount(3);
   await expect(header.getByRole("button", { name: "New tab", exact: true })).toHaveCount(0);
-  const picker = ui.getByRole("combobox", { name: "Tabs and panes" });
+  const picker = ui.getByRole("combobox", { name: "Tabs" });
   const normal = await picker.evaluate((el) => ({
     radius: getComputedStyle(el).borderRadius,
     background: getComputedStyle(el).backgroundColor,
@@ -802,7 +771,7 @@ test("glass controls retain their shape and composer height animates with reduce
   await expect(coveredPicker).toHaveCSS("border-radius", normal.radius);
   await expect(coveredPicker).toHaveCSS("background-color", normal.background);
   await expect(ui.locator(".mobile-picker-help")).toHaveCount(0);
-  const list = ui.getByRole("dialog", { name: "Tabs and panes", exact: true });
+  const list = ui.getByRole("dialog", { name: "Tabs", exact: true });
   expect(
     await list
       .locator("[data-pane-choice]")
@@ -973,10 +942,9 @@ test("mobile Shortcuts settings preserve supported commands and all entry points
     "Settings",
     "Workspace",
     "Tabs",
-    "Panes",
   ]);
   await expect(settings).toContainText("With an external keyboard");
-  await expect(settings).toContainText("Create and arrange split layouts on desktop.");
+  await expect(settings).toContainText("Move through the flat Tabs list.");
   const bindings = BINDINGS.filter((binding) => isCompactCommand(binding.id));
   await expect(settings.locator("dt")).toHaveCount(bindings.length);
   for (const binding of bindings) {

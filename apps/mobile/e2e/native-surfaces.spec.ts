@@ -169,8 +169,8 @@ test("native surface bridge preserves navigation, drafts, settings, attachments 
       (await snapshot(page))?.surfaces.some((item) => item.content.kind === "composer"),
     )
     .toBe(true);
-  await event(page, "button", "Tabs and panes", { kind: "press", control: "activate" });
-  await expect(ui.getByRole("dialog", { name: "Tabs and panes", exact: true })).toBeVisible();
+  await event(page, "button", "Tabs", { kind: "press", control: "activate" });
+  await expect(ui.getByRole("dialog", { name: "Tabs", exact: true })).toBeVisible();
   await expect.poll(async () => (await snapshot(page))?.surfaces).toEqual([]);
   // A delayed event from the covered native header cannot act through the drawer.
   const frame = page.frames().find((item) => item !== page.mainFrame());
@@ -187,7 +187,7 @@ test("native surface bridge preserves navigation, drafts, settings, attachments 
   } satisfies MobileHostMessage);
   await expect(ui.locator(".mobile-files")).toHaveAttribute("data-open", "false");
   await ui
-    .getByRole("dialog", { name: "Tabs and panes", exact: true })
+    .getByRole("dialog", { name: "Tabs", exact: true })
     .getByRole("button", { name: "Close", exact: true })
     .click();
   await expect
