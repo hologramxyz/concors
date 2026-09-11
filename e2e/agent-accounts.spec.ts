@@ -4,6 +4,61 @@ import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
 
+test("the first sign-in click survives a background focus refresh", async ({ page }) => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-account-focus-"));
+  let holdNextRead = false;
+  let heldRequest: string | undefined;
+  let release: (() => void) | undefined;
+  await page.routeWebSocket("ws://127.0.0.1:7429/ws", (socket) => {
+    const server = socket.connectToServer();
+    socket.onMessage((raw) => {
+      const event = JSON.parse(String(raw));
+      if (
+        holdNextRead &&
+        event.type === "agent.request" &&
+        event.operation.kind === "account" &&
+        event.operation.action.type === "read"
+      ) {
+        holdNextRead = false;
+        heldRequest = event.requestId;
+      }
+      server.send(raw);
+    });
+    server.onMessage((raw) => {
+      const event = JSON.parse(String(raw));
+      if (heldRequest && event.requestId === heldRequest) {
+        heldRequest = undefined;
+        release = () => {
+          release = undefined;
+          socket.send(raw);
+        };
+      } else socket.send(raw);
+    });
+  });
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "First-click sign-in", directory);
+    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    const prompt = page.getByRole("region", { name: "Codex account connection", exact: true });
+    const signIn = prompt.getByRole("button", { name: "Sign in with ChatGPT", exact: true });
+    await expect(signIn).toBeEnabled();
+    holdNextRead = true;
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect.poll(() => !!release).toBe(true);
+    await expect(signIn).toBeEnabled();
+    await signIn.click();
+    release?.();
+    await expect(prompt).toHaveCount(0, { timeout: 10_000 });
+    await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
+    await expect(page.getByText(/Codex connected|fixture-account@example\.test/)).toHaveCount(0);
+  } finally {
+    release?.();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 for (const [provider, label] of [
   ["codex", "Codex"],
   ["claude", "Claude Code"],
