@@ -8,6 +8,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { createDaemonServer, type DaemonServer } from "../server.ts";
 import { loadDaemonConfig } from "../config.ts";
 import { TestAgentProvider } from "./testing/provider.ts";
+import { TestAccountBackend } from "./testing/account.ts";
 
 // Every test here spawns a daemon plus a fake provider; Windows CI runners need well over the
 // 5 s default before the first turn streams.
@@ -23,11 +24,27 @@ afterEach(async () => {
   if (directory) await rm(directory, { recursive: true, force: true });
   providers.length = 0;
 });
-async function boot() {
+async function boot(resumeError?: string) {
   server = createDaemonServer(loadDaemonConfig({ port: 0, logLevel: "silent" }, {}), {
     workspacePath: join(directory, "state.db"),
+    accountBackendFactory: (info) => new TestAccountBackend(info),
     agentProviderFactory: (_cwd, handler) => {
       const provider = new TestAgentProvider(handler);
+      if (resumeError) {
+        provider.threadId = `fixture-thread-${providers.length}`;
+        const request = provider.request.bind(provider);
+        vi.spyOn(provider, "request").mockImplementation(async (method, params) => {
+          if (method === "thread/resume") {
+            provider.requests.push({ method, params });
+            throw new Error(
+              resumeError === "missing"
+                ? `no rollout found for thread id ${(params as { threadId: string }).threadId}`
+                : resumeError,
+            );
+          }
+          return request(method, params);
+        });
+      }
       providers.push(provider);
       return provider;
     },
@@ -48,9 +65,9 @@ async function open(url: string) {
 async function action(c: DaemonConnection, op: AgentOperation, id = randomUUID()) {
   return c.requestAgent(op, id);
 }
-async function setup() {
+async function setup(resumeError?: string) {
   directory = await mkdtemp(join(tmpdir(), "concors-chat-"));
-  const url = await boot();
+  const url = await boot(resumeError);
   const a = await open(url),
     b = await open(url);
   const projectId = randomUUID(),
@@ -472,4 +489,92 @@ it("switches a bound Agent pane to a terminal without stopping the shared agent"
   expect(b.agents[0]?.status).toBe("working");
   expect(providers[0]?.closed).toBe(false);
   expect((await action(b, { kind: "read", sessionId: id })).outcome.status).toBe("ok");
+});
+
+it.each(["sign-in", "restart"])(
+  "recovers an empty Codex thread after %s and sends only the new prompt",
+  async (reason) => {
+    const { a, b, id } = await setup("missing");
+    const oldThread = a.agents[0]!.threadId;
+    let c = a;
+    if (reason === "sign-in") {
+      const flow = await action(a, {
+        kind: "account",
+        sessionId: id,
+        action: { type: "start", methodId: "fixture" },
+      });
+      if (flow.outcome.status !== "ok" || !flow.outcome.account?.challenge)
+        throw new Error("Missing challenge");
+      const result = await action(a, {
+        kind: "account",
+        sessionId: id,
+        action: {
+          type: "complete",
+          flowId: flow.outcome.account.challenge.flowId,
+          value: "test-credential",
+        },
+      });
+      expect(result.outcome.status === "ok" && result.outcome.account?.status).toBe("connected");
+      expect(providers[0]!.closed).toBe(true);
+    } else {
+      a.disconnect();
+      b.disconnect();
+      await server!.close();
+      c = await open(await boot("missing"));
+    }
+    const count = TestAgentProvider.turns;
+    const requestId = randomUUID();
+    const op: AgentOperation = { kind: "send", sessionId: id, text: "hello after recovery" };
+    await action(c, op, requestId);
+    await expect.poll(() => c.agents[0]?.status).toBe("done");
+    expect(c.agents[0]!.threadId).not.toBe(oldThread);
+    expect(
+      providers[1]!.requests.filter((r) => r.method.startsWith("thread/")).map((r) => r.method),
+    ).toEqual(["thread/resume", "thread/start"]);
+    expect(providers[1]!.requests.find((r) => r.method === "turn/start")?.params).toMatchObject({
+      threadId: c.agents[0]!.threadId,
+      input: [{ type: "text", text: op.text }],
+    });
+    await action(c, op, requestId);
+    expect(TestAgentProvider.turns).toBe(count + 1);
+  },
+);
+
+it("does not replace a missing Codex thread that has provider history", async () => {
+  const { a, b, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "first message" });
+  await expect.poll(() => a.agents[0]?.status).toBe("done");
+  const oldThread = a.agents[0]!.threadId;
+  a.disconnect();
+  b.disconnect();
+  await server!.close();
+  const c = await open(await boot("missing"));
+  const count = TestAgentProvider.turns;
+  await action(c, { kind: "send", sessionId: id, text: "second message" });
+  await expect.poll(() => c.agents[0]?.status).toBe("failed");
+  expect(c.agents[0]!.threadId).toBe(oldThread);
+  expect(providers[1]!.requests.some((r) => r.method === "thread/start")).toBe(false);
+  expect(TestAgentProvider.turns).toBe(count);
+});
+
+it("preserves resume errors and recovers a later retry without replaying failed prompts", async () => {
+  const { a, b, id } = await setup();
+  a.disconnect();
+  b.disconnect();
+  await server!.close();
+  const c = await open(await boot("Authentication failed"));
+  const count = TestAgentProvider.turns;
+  await action(c, { kind: "send", sessionId: id, text: "do not replay this" });
+  await expect.poll(() => c.agents[0]?.status).toBe("failed");
+  expect(c.agents[0]!.error).toBe("Authentication failed");
+  expect(providers[1]!.requests.some((r) => r.method === "thread/start")).toBe(false);
+  c.disconnect();
+  await server!.close();
+  const d = await open(await boot("missing"));
+  await action(d, { kind: "send", sessionId: id, text: "only this prompt" });
+  await expect.poll(() => d.agents[0]?.status).toBe("done");
+  expect(TestAgentProvider.turns).toBe(count + 1);
+  expect(providers[2]!.requests.find((r) => r.method === "turn/start")?.params).toMatchObject({
+    input: [{ type: "text", text: "only this prompt" }],
+  });
 });
