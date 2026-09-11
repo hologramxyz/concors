@@ -197,6 +197,7 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
       "mobile-direct-terminal",
     );
     await expect.poll(() => project().tabs.length).toBe(2);
+    expect(project().tabs.map((tab) => tab.name)).toEqual(["Renamed from desktop", "Tab 2"]);
     await expect.poll(() => desktop.terminals.length).toBe(1);
     const terminalId = desktop.terminals[0]?.id;
     await picker.click();
