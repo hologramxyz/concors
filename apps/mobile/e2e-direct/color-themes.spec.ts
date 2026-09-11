@@ -12,7 +12,11 @@ test("mobile applies built-in and local-file palettes through the native prefere
   await page.getByRole("button", { name: "Allow AI data sharing", exact: true }).click();
   const ui = page.frameLocator('iframe[title="Concors workspace"]');
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
-  await ui.getByRole("button", { name: "Desktop connection settings" }).click();
+  await ui.getByRole("button", { name: "Account: Your profile", exact: true }).click();
+  await ui
+    .getByRole("dialog", { name: "Account", exact: true })
+    .getByRole("button", { name: "Settings", exact: true })
+    .click();
   await ui.getByRole("radio", { name: "Cobalt", exact: true }).locator("..").click();
   await ui.getByRole("button", { name: "Theme", exact: true }).click();
   await ui.getByRole("menuitem", { name: "Dark", exact: true }).click();
