@@ -128,12 +128,17 @@ confirmation. Save files first; unsent drafts are discarded, while remote sessio
 The in-memory demo does not share data with AI providers and skips this gate.
 
 The host uses the same `DaemonConnection` protocol as desktop and obtains the actual
-machine ID from its workspace snapshot. Cloud login, inventory and API requests are
-not needed and are explicitly blocked in this mode. Account credentials are not read,
-sent, created or revoked. Appearance and connection diagnostics remain available;
-account/billing/provisioning/push controls are unavailable. Full onboarding design is deferred.
+machine ID from its workspace snapshot. Cloud login is not needed for the workspace;
+inventory, billing, provisioning and push API calls remain blocked in this mode.
+The footer is a profile entry, not a machine status label. Tap **Your profile → Sign in**
+to verify the same Concourse account used on desktop; its actual name and email then
+appear in the footer/drawer. This optional profile session is isolated in memory and
+never grants cloud machine access or changes the desktop connection. Passwords and
+session tokens stay in the outer host, not the embedded workspace renderer. Reloading
+the private browser preview requires signing in again; normal native account login
+continues to use the existing SecureStore flow.
 
-Use **Desktop connection → Settings → Disconnect desktop** to leave. This detaches
+Use **Your profile → Settings → Disconnect desktop** to leave. This detaches
 the phone, not the daemon's agents or terminals. Reconnects retain in-memory drafts;
 explicit disconnect or page reload discards unsent input. Cold session links must match
 the connected daemon. The direct option is disabled in production builds.
@@ -143,6 +148,12 @@ development adapter. It validates one Tailscale identity and the exact preview o
 then forwards only `/ws` and `/health` to a fixed loopback daemon port. It adapts the
 approved origin without changing the daemon's production origin allowlist; it does not
 forward cookies, account authorization or Tailscale identity headers to the daemon.
+For optional profile login, set `CONCORS_DIRECT_PROFILE_API_URL` on the adapter to the
+same exact HTTPS account API origin used by desktop. This is disabled by default.
+The private `/desktop-daemon/profile-api` route only forwards email sign-in, sign-out,
+and `/api/v1/me`, with exact methods, bounded bodies, no redirects and no cookie forwarding.
+The same Tailscale identity/origin check protects these routes. It does not substitute
+a Tailscale profile or copy a desktop session token.
 
 Example on the computer running the daemon (replace the origin and login):
 
@@ -208,11 +219,12 @@ the in-memory demo cannot prove real provider switching or saved profile launch.
 6. Where available, import a native session or fork an idle conversation. The phone
    should open the new chat while the original remains in Tabs and panes. Rewind
    names its exact scope; file checkpoints and conversation rollback differ.
-7. Open the sidebar: its menu and search buttons should match the floating chat
-   header. Tap your name/avatar to open Account, not Settings. The drawer starts
+7. Open the sidebar: it has the Concourse logo and glass Search, with no extra menu
+   button. The workspace slides above it with a visible 32px rounded edge; hidden
+   sidebar controls must never show through the main view. Tap your name/avatar to open Account, not Settings. The drawer starts
    with the machine selector, followed by Add machine, Settings and Sign out.
-   Direct previews show **Desktop connection** (there is no cloud identity), with
-   the same drawer and **Disconnect desktop** instead of Sign out. Add machine
+   Direct previews offer **Your profile → Sign in** until you authenticate your real
+   Concourse account, with **Disconnect desktop** kept separate from profile sign-out. Add machine
    explains setup and refreshes existing cloud machines; it does not provision or
    purchase one. Closing nested machine sheets restores focus to the account drawer.
 
@@ -261,7 +273,7 @@ See [file behavior and safety boundaries](../../docs/project-files.md).
 ### Glass rendering: web styling versus native iOS
 
 The iOS workspace now uses [Expo UI SwiftUI buttons](https://docs.expo.dev/versions/latest/sdk/ui/swift-ui/button/)
-with `buttonStyle('glass')` for both sidebar menu buttons, sidebar Search, tabs/panes,
+with `buttonStyle('glass')` for the workspace menu button, sidebar Search, tabs/panes,
 Files, Back and directory controls.
 The agent composer uses a real React Native `TextInput` above an
 [Expo GlassEffect `GlassView`](https://docs.expo.dev/versions/latest/sdk/glass-effect/) background.
