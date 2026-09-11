@@ -15,6 +15,7 @@ export * from "./client.ts";
 export * from "./messages.ts";
 export * from "./transport.ts";
 export * from "./workspace.ts";
+export * from "./tab-names.ts";
 export * from "./workspace-reducer.ts";
 export * from "./terminal.ts";
 export * from "./terminal-profiles.ts";
