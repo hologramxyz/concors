@@ -23,6 +23,7 @@ import type { WebSocket } from "ws";
 import type { WorkspaceStore } from "../workspace/store.ts";
 
 import type { DaemonState } from "../state.ts";
+import { createHostUsageMonitor } from "../host/usage.ts";
 
 export interface ProtocolEndpointOptions {
   readonly agentProviderFactory?: AgentProviderFactory;
@@ -56,6 +57,7 @@ export function registerProtocolEndpoint(
   const connections = new Set<WebSocket>();
   const subscribers = new Set<WebSocket>();
   const agentV2 = new WeakSet<WebSocket>();
+  const hostUsage = createHostUsageMonitor();
   const send = (socket: WebSocket, message: DaemonMessage): void => {
     if (socket.readyState !== socket.OPEN) return;
     if (!agentV2.has(socket) && (message.type === "agent.state" || message.type === "agent.item")) {
@@ -117,6 +119,7 @@ export function registerProtocolEndpoint(
   );
   app.addHook("onClose", async () => {
     providers.close();
+    hostUsage.close();
     await agents.close();
     projects.close();
     terminals.close();
@@ -140,12 +143,14 @@ export function registerProtocolEndpoint(
     }
     const log = request.log.child({ connection: request.id });
     connections.add(socket);
+    let unsubscribeUsage: (() => void) | undefined;
     const viewer = {
       id: randomUUID(),
       send: (event: TerminalEvent) => send(socket, event),
       active: () => socket.readyState === socket.OPEN,
     };
     socket.on("close", () => {
+      unsubscribeUsage?.();
       connections.delete(socket);
       subscribers.delete(socket);
       terminals.detach(viewer.id);
@@ -166,6 +171,17 @@ export function registerProtocolEndpoint(
             message: "Update Concors on this device to use unified agent chat with this daemon.",
           },
         });
+        return;
+      }
+      if (message.type === "host.subscribe") {
+        if (message.enabled) {
+          unsubscribeUsage ??= hostUsage.subscribe((usage) =>
+            send(socket, { type: "host.usage", usage }),
+          );
+        } else {
+          unsubscribeUsage?.();
+          unsubscribeUsage = undefined;
+        }
         return;
       }
       if (
@@ -241,6 +257,7 @@ export function registerProtocolEndpoint(
 
   return async () => {
     providers.close();
+    hostUsage.close();
     await agents.close();
     projects.close();
     terminals.close();
