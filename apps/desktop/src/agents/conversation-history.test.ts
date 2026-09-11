@@ -190,3 +190,77 @@ it("bounds streaming at the tail, but keeps a reader's older messages when they 
   expect(history.getSnapshot().items.at(-1)?.position).toBe(240);
   expect(history.getSnapshot().hasNewer).toBe(true);
 });
+it("jumps directly to indexed messages in either direction and resumes contiguous paging", async () => {
+  const { history, all, read } = fixture();
+  await history.load("latest");
+  await history.reveal(100);
+  expect(read).toHaveBeenLastCalledWith({ before: 101 });
+  expect(history.getSnapshot().items).toEqual(all.slice(21, 101));
+  expect(history.getSnapshot().hasNewer).toBe(true);
+  await history.load("newer");
+  expect(history.getSnapshot().items).toEqual(all.slice(21, 181));
+  await history.reveal(600);
+  expect(read).toHaveBeenLastCalledWith({ before: 601 });
+  expect(history.getSnapshot().items).toEqual(all.slice(521, 601));
+  await history.load("earlier");
+  expect(history.getSnapshot().items).toEqual(all.slice(441, 601));
+  expect(history.getSnapshot().items.length).toBeLessThanOrEqual(HISTORY_WINDOW);
+});
+it("supersedes pending edge loads when jumping, including to already loaded messages", async () => {
+  const { history, page, read } = fixture();
+  await history.load("latest");
+  const pending = deferred<AgentConversation>();
+  read.mockImplementationOnce(() => pending.promise);
+  const older = history.load("earlier");
+  await history.reveal(100);
+  const jumped = history.getSnapshot().items;
+  pending.resolve(page({ before: 720 }));
+  await older;
+  expect(history.getSnapshot().items).toEqual(jumped);
+  const later = deferred<AgentConversation>();
+  read.mockImplementationOnce(() => later.promise);
+  const newer = history.load("newer");
+  await history.reveal(100);
+  later.resolve(page({ after: 100 }));
+  await newer;
+  expect(history.getSnapshot().items).toEqual(jumped);
+  expect(history.getSnapshot().loading).toBeNull();
+});
+it("keeps the visible window when an indexed jump fails and permits retry", async () => {
+  const { history, read, all } = fixture();
+  await history.load("latest");
+  const current = history.getSnapshot().items;
+  read.mockRejectedValueOnce(new Error("Connection interrupted"));
+  await expect(history.reveal(100)).rejects.toThrow("Connection interrupted");
+  expect(history.getSnapshot().items).toEqual(current);
+  expect(history.getSnapshot().loading).toBeNull();
+  await history.reveal(100);
+  expect(history.getSnapshot().items).toEqual(all.slice(21, 101));
+});
+it("rejects stale indexed jumps after history changes without restoring deleted messages", async () => {
+  const { history, read, page } = fixture();
+  await history.load("latest");
+  const pending = deferred<AgentConversation>();
+  read.mockImplementationOnce(() => pending.promise);
+  const jumped = expect(history.reveal(100)).rejects.toThrow("Conversation changed");
+  const replacement = { ...page(), agent: { ...agent, historyRevision: 1 }, items: [item(900)] };
+  read.mockResolvedValueOnce(replacement);
+  history.invalidate(replacement.agent);
+  await vi.waitFor(() => expect(history.getSnapshot().items).toEqual(replacement.items));
+  pending.resolve(page({ before: 101 }));
+  await jumped;
+  expect(history.getSnapshot().items).toEqual(replacement.items);
+});
+it("keeps a contiguous tail when jumping on a backward-only daemon", async () => {
+  const { page, all } = fixture();
+  const read = vi.fn(async (cursor: HistoryCursor) => {
+    const { hasNewer: _, ...legacy } = page(cursor);
+    return legacy;
+  });
+  const history = new ConversationHistory(read);
+  await history.load("latest");
+  await history.reveal(0);
+  expect(history.getSnapshot().items).toEqual(all);
+  expect(history.getSnapshot().hasEarlier).toBe(false);
+  expect(read.mock.calls.every(([cursor]) => cursor.after === undefined)).toBe(true);
+});

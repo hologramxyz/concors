@@ -7,6 +7,7 @@ import { mockChatHistory } from "./support/chat-history.ts";
 
 for (const width of [1360, 390]) {
   test(`chat automatically pages both ways with stable anchors at ${width}px`, async ({ page }) => {
+    test.setTimeout(60_000);
     const directory = await mkdtemp(join(tmpdir(), "concors-history-browser-"));
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
@@ -71,6 +72,8 @@ for (const width of [1360, 390]) {
       }
       history.append();
       await expect(timeline.getByText("History 0 message 640", { exact: true })).toHaveCount(0);
+      const navigation = page.getByRole("navigation", { name: "Your messages", exact: true });
+      await expect(navigation.getByRole("button")).toHaveCount(641);
       const anchor = await scrollToEdge("bottom");
       await expect
         .poll(() => history.requests.some((request) => request.after !== undefined))
@@ -96,6 +99,30 @@ for (const width of [1360, 390]) {
       await expect(timeline.locator("[data-message-id]")).toHaveCount(80);
       await expect(timeline.getByText("History 0 message 640", { exact: true })).toBeVisible();
       await expect(page.getByRole("button", { name: "Latest", exact: true })).toHaveCount(0);
+      // The merged navigator jumps across trimmed windows, on desktop and narrow panes.
+      for (const position of [100, 640]) {
+        if (width === 390) {
+          await page.getByRole("button", { name: "Browse your messages", exact: true }).click();
+          await page
+            .getByRole("dialog", { name: "Your messages", exact: true })
+            .getByRole("button", {
+              name: `${position + 1} History 0 message ${position}`,
+              exact: true,
+            })
+            .click();
+        } else {
+          await navigation
+            .getByRole("button", {
+              name: `Message ${position + 1} of 641: History 0 message ${position}`,
+              exact: true,
+            })
+            .click();
+        }
+        await expect(
+          timeline.getByText(`History 0 message ${position}`, { exact: true }),
+        ).toBeInViewport();
+        expect(await timeline.locator("[data-message-id]").count()).toBeLessThanOrEqual(240);
+      }
       const release = history.pauseNext("earlier");
       await scrollToEdge("top");
       await expect(timeline.getByRole("status")).toContainText("Loading earlier messages");
