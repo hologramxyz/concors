@@ -236,12 +236,20 @@ function ProviderEditor({
     [enabled, setEnabled] = useState(provider?.enabled ?? true);
   const [envKey, setEnvKey] = useState(""),
     [envValue, setEnvValue] = useState("");
+  const [mcp, setMcp] = useState("");
   const [removeEnv, setRemoveEnv] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null),
     [busy, setBusy] = useState(false);
   const initialRevision = useRef(revision);
   const submit = async () => {
     setError(null);
+    let mcpServers: unknown;
+    try {
+      if (mcp.trim()) mcpServers = JSON.parse(mcp);
+    } catch {
+      setError("MCP servers must be a JSON array.");
+      return;
+    }
     const parsed = ProviderConfigSchema.safeParse({
       id,
       label,
@@ -252,7 +260,7 @@ function ProviderEditor({
         .split("\n")
         .map((m) => m.trim())
         .filter(Boolean),
-      params: provider?.params,
+      params: { ...provider?.params, ...(mcpServers === undefined ? {} : { mcpServers }) },
       ...(envKey ? { env: { [envKey]: envValue } } : {}),
     });
     if (!parsed.success) {
@@ -393,6 +401,33 @@ function ProviderEditor({
               </label>
             </div>
           </details>
+          {!["pi", "omp"].includes(engine) && provider?.params?.supportsMcpServers !== false && (
+            <details>
+              <summary className="cursor-pointer text-sm">MCP servers</summary>
+              <p className="mt-3 text-xs text-muted-foreground">
+                {provider?.mcpServerNames?.length
+                  ? `Configured: ${provider.mcpServerNames.join(", ")}. `
+                  : ""}
+                Leave blank to keep the current servers. Enter [] to remove these overrides. The
+                agent also loads its own MCP configuration.
+              </p>
+              <label className="mt-3 block space-y-1 text-sm">
+                Replace MCP configuration
+                <Textarea
+                  aria-label="MCP server configuration"
+                  className="min-h-28 font-mono text-xs"
+                  value={mcp}
+                  onChange={(e) => setMcp(e.target.value)}
+                  spellCheck={false}
+                  placeholder={'[{"name":"docs","type":"http","url":"https://example.com/mcp"}]'}
+                />
+              </label>
+              <p className="mt-2 text-xs text-muted-foreground">
+                HTTP/SSE: name, type, url, optional headers. Stdio: name, type, command, args,
+                optional env. Credential values stay on the machine.
+              </p>
+            </details>
+          )}
           {error && (
             <p role="alert" className="text-sm text-destructive">
               {error}
