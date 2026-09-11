@@ -95,4 +95,28 @@ describe("editor drafts", () => {
       base: { revision: "2" },
     });
   });
+
+  it("ignores a disk check that finishes after a newer refresh", async () => {
+    const doc = new FileDocument(target);
+    await doc.load(read);
+    doc.edit("my draft");
+    let settle!: (result: FileResult["outcome"]) => void;
+    const older = doc.check(
+      () =>
+        new Promise((resolve) => {
+          settle = resolve;
+        }),
+    );
+    await doc.check(async () => ({
+      status: "read",
+      file: { ...initial, content: "latest disk content", revision: "2" },
+    }));
+    settle({ status: "read", file: initial });
+    await older;
+    expect(doc.getSnapshot()).toMatchObject({
+      content: "my draft",
+      changed: true,
+      disk: { content: "latest disk content", revision: "2" },
+    });
+  });
 });
