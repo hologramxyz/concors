@@ -30,7 +30,7 @@ export function AgentAccountPrompt({ agent, canEdit }: { agent: AgentInfo; canEd
     !connection ||
     connection.state.status !== "ready" ||
     !connection.state.daemon.capabilities?.includes("agent-accounts") ||
-    agent.provider === "pi"
+    !["codex", "claude", "opencode"].includes(agent.engine ?? agent.provider)
   )
     return null;
   return (
