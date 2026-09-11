@@ -66,7 +66,15 @@ export function nativeToolItem(
             : "";
         return {
           path: text(edit["file_path"] ?? edit["filePath"] ?? edit["path"]) || path,
-          diff: diff || snippet,
+          diff:
+            diff ||
+            snippet ||
+            (typeof edit["content"] === "string"
+              ? edit["content"]
+                  .split("\n")
+                  .map((line) => "+" + line)
+                  .join("\n")
+              : ""),
         };
       })
       .filter((change) => change.path);
