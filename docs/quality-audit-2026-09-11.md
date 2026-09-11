@@ -7,6 +7,20 @@ and mocked account/billing/provider services, without changing live sessions or 
 
 This is a regression-focused audit, not a claim that every platform is defect-free.
 
+## Areas exercised
+
+Browser-driven interaction covered sign-in/restoration/sign-out; sidebar search and grouped
+settings; appearance, custom palettes, corner styles and shortcuts; workspace folders, tabs,
+split panes and terminal continuity; agent selection, streaming, approvals, attachments and
+drafts; file browsing/editing/conflict recovery; machine selection and CPU/RAM freshness;
+and mocked VPS billing success, decline and cancellation flows. Phone-sized checks also
+exercise touch navigation, reduced-height composers, drawer focus restoration, native-bridge
+contracts, reconnect recovery and shared desktop/phone sessions. Screenshots were inspected
+for short authentication forms, long settings values, phone files, chat and theme surfaces.
+
+This covers the checked-out app and its shared packages, not the separate marketing website,
+production account lifecycle or unmerged feature branches.
+
 ## Confirmed issues fixed
 
 | Issue                                                                                                               | Fix and regression evidence                                                                                                                                                                                        |
@@ -31,6 +45,12 @@ replacing failed-save feedback. File drafts and provider form edits are preserve
 Three additional file-state unit tests and two browser scenarios cover recovery and
 verify that a rendered refresh cannot make an unsuccessful save appear successful.
 
+The final pass exposed lost keyboard focus when cancelling a project dialog opened from
+a menu. A focused regression failed three times before the fix. Desktop cancellation now
+returns to the actual opener (workspace menu or empty-state button); successful setup does
+not run that cancellation handler. Coverage exercises both Close and Escape, then continues
+by keyboard. The mobile drawer's existing focus handling is unchanged.
+
 Each runtime fix is a separate commit with its regression coverage. Separate test-only
 commits update intentional provider-picker/attachment-preview UI expectations and wait
 for dialog focus restoration before typing into a terminal. No product shortcut behavior
@@ -44,7 +64,7 @@ No checks were removed, and this does not resolve the separate account billing b
 
 - Initial pass completed (started at 07:52 UTC).
 - Second pass completed at 11:21 UTC (started at 10:52 UTC), adding two confirmed recovery fixes.
-- Final pass is planned around 13:52 UTC.
+- Final pass completed at 14:27 UTC (started at 13:52 UTC), fixing project-dialog focus recovery and repeating final validation.
 - Follow-ups are part of the active audit session, not a permanently installed scheduler.
 
 ## Validation
@@ -53,13 +73,18 @@ No checks were removed, and this does not resolve the separate account billing b
 - Final workspace typecheck and repository lint/format checks passed.
 - Final desktop web and daemon builds passed, as did the bundled mobile renderer and JavaScript/Hermes exports for web, Android and iOS.
 - Isolated Linux daemon bundle smoke passed: version, health, workspace, terminal input/output, resize and stop.
-- Desktop acceptance: all 57 scenarios passed in a clean full run during the second pass (8.1 minutes). Attachment recovery passed three repeats,
+- Desktop acceptance: all 58 scenarios passed in a clean full run during the final pass (8.2 minutes), including project-dialog cancellation. The second pass also had a clean 57-scenario run (8.1 minutes). Attachment recovery passed three repeats,
   and all three shortcut scenarios passed three repeats after explicit focus synchronization.
-- Phone-size browser suites: 37 passed (26 demo/native bridge, 10 direct-daemon, one managed phone/desktop integration). All 10 direct-daemon scenarios passed again during the second pass (4.4 minutes). The initial demo baseline had 25 passes and one confirmed theme failure; all 26 passed after the fix.
+- Phone-size browser suites: 37 passed (26 demo/native bridge, 10 direct-daemon, one managed phone/desktop integration). All 10 direct-daemon scenarios passed again during the second pass (4.4 minutes); all 26 demo/native-bridge scenarios (6.9 minutes) and the managed integration (29.6 seconds) passed again in the final pass. The initial demo baseline had 25 passes and one confirmed theme failure; all 26 passed after the fix.
 - An earlier full desktop run finished with 54 passes and one interrupted reload (8.3 minutes).
   Its trace shows Chromium `ERR_NETWORK_CHANGED` failures loading app modules; the app did not
   mount. The unchanged palette/reload scenario then passed three separate repeats, followed
   by the clean full-suite run above. No app behavior or assertions were changed for that interruption.
+- The first final-pass desktop run had 56 passes and the project-dialog focus failure described above.
+  After its fix, all three cancellation repeats and nine shortcut checks passed. One of three
+  separate project-flow repeats was interrupted by Chromium `ERR_INSUFFICIENT_RESOURCES`
+  on reload; the other two passed. That interrupted batch is not reported as all-green;
+  the fresh 58-scenario desktop run above subsequently passed without interruption.
 
 ## Remaining validation boundaries
 
