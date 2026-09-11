@@ -1,3 +1,4 @@
+import { AgentAccountActionSchema, AgentAccountSchema } from "./agent-accounts.ts";
 import { z } from "zod";
 const Id = z.string().uuid();
 export const AgentProviderIdSchema = z.enum(["codex", "claude", "opencode", "pi"]);
@@ -143,6 +144,7 @@ export const AgentConversationSchema = z.object({
 });
 export type AgentConversation = z.infer<typeof AgentConversationSchema>;
 export const AgentOperationSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("account"), sessionId: Id, action: AgentAccountActionSchema }),
   z.object({ kind: z.literal("provider-catalog"), sessionId: Id }),
   z.object({
     kind: z.literal("switch-provider"),
@@ -205,6 +207,7 @@ export const AgentResultSchema = z.object({
     z.object({
       status: z.literal("ok"),
       conversation: AgentConversationSchema,
+      account: AgentAccountSchema.optional(),
       providers: z.array(AgentProviderCatalogSchema).max(16).optional(),
     }),
     z.object({ status: z.literal("error"), message: z.string() }),

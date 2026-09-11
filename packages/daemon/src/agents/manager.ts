@@ -1,3 +1,4 @@
+import { AgentAccounts, type AccountBackendFactory } from "./accounts/manager.ts";
 import { defaultSettings, parseModels, turnControls } from "./controls.ts";
 import { saveAttachments } from "./attachments.ts";
 import type { AgentAttachment } from "@concors/protocol";
@@ -59,17 +60,35 @@ export class AgentManager {
   readonly #factory: AgentProviderFactory;
   readonly #runtimes = new Map<string, Runtime>();
   #closed = false;
+  readonly accounts: AgentAccounts;
   private catalogs = new Map<string, { expires: number; value: Promise<AgentProviderCatalog[]> }>();
   constructor(
     store: WorkspaceStore,
     emit: (event: AgentEvent) => void,
     workspaceChanged: () => void,
     factory: AgentProviderFactory = createProvider,
+    accountFactory?: AccountBackendFactory,
   ) {
     this.#store = store;
     this.#emit = emit;
     this.#workspaceChanged = workspaceChanged;
     this.#factory = factory;
+    this.accounts = new AgentAccounts(accountFactory, (info) => {
+      this.catalogs.delete(info.directory);
+      // Idle runtimes reload the provider's freshly saved credentials on the next send.
+      for (const [id, runtime] of this.#runtimes) {
+        const current = this.#store.agent(id);
+        if (
+          current.directory !== info.directory ||
+          current.provider !== info.provider ||
+          ["starting", "working", "needs_input"].includes(current.status)
+        )
+          continue;
+        runtime.closed = true;
+        this.#runtimes.delete(id);
+        void runtime.provider.close().catch(() => undefined);
+      }
+    });
     for (const info of store.agents())
       if (["starting", "working", "needs_input"].includes(info.status)) {
         store.saveAgent({
@@ -134,7 +153,7 @@ export class AgentManager {
         pending.reject(new Error("Agent connection ended"));
       runtime.pending.clear();
       this.#runtimes.delete(id);
-      void runtime.provider.close();
+      void runtime.provider.close().catch(() => undefined);
     }
     this.update(id, {
       status: "failed",
@@ -222,10 +241,19 @@ export class AgentManager {
     })();
     return runtime.ready;
   }
-  async request(request: AgentRequest): Promise<AgentResult> {
+  async request(request: AgentRequest, owner = "local"): Promise<AgentResult> {
     try {
       if (this.#closed) throw new Error("Daemon is shutting down");
       const op = request.operation;
+      if (op.kind === "account") {
+        const info = this.#store.agent(op.sessionId);
+        const account = await this.accounts.request(owner, info, op.action);
+        return {
+          type: "agent.result",
+          requestId: request.requestId,
+          outcome: { status: "ok", conversation: this.#store.agentConversation(info.id), account },
+        };
+      }
       if (op.kind === "read") return this.result(request, op.sessionId, op.before);
       if (op.kind === "seen") {
         const info = this.#store.agent(op.sessionId);
@@ -256,8 +284,7 @@ export class AgentManager {
         if (previous.revision !== op.expectedRevision) throw new Error("Agent changed. Try again.");
         if (previous.provider === op.provider) throw new Error("Choose a different provider");
         const catalog = (await this.catalog(previous)).find((p) => p.id === op.provider);
-        if (!catalog || catalog.error)
-          throw new Error(catalog?.error ?? "Provider is not installed on this machine");
+        if (!catalog) throw new Error("Provider is not installed on this machine");
         if (op.model && !catalog.models.some((m) => m.id === op.model))
           throw new Error("That model is not available");
       }
@@ -824,6 +851,7 @@ export class AgentManager {
   async close(): Promise<void> {
     if (this.#closed) return;
     this.#closed = true;
+    await this.accounts.close();
     await Promise.all(
       [...this.#runtimes.values()].map(async (runtime) => {
         runtime.closed = true;
