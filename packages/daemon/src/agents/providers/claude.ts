@@ -240,6 +240,7 @@ export class ClaudeProvider extends EventProvider {
       }
     })();
     const initial = await session.initializationResult();
+    this.models = initial.models ?? [];
     this.currentModel = string(object(initial)["model"]);
     // Modern initialize responses contain models but no selected model. Read the CLI's
     // effective configuration without sending a prompt or guessing from its recommended alias.
@@ -493,6 +494,8 @@ export class ClaudeProvider extends EventProvider {
     return result;
   }
   private event(m: Record<string, unknown>) {
+    if (m["type"] === "system" && m["subtype"] === "init" && m["model"] && !m["parent_tool_use_id"])
+      this.reportModel(string(m["model"]));
     if (!this.turnId) return;
     const parent = string(m["parent_tool_use_id"]);
     if (parent) {
@@ -537,10 +540,6 @@ export class ClaudeProvider extends EventProvider {
       return;
     }
     if (m["type"] === "system") {
-      if (m["subtype"] === "init" && m["model"]) {
-        this.currentModel = string(m["model"]);
-        this.emit("session/model/updated", { model: this.currentModel });
-      }
       if (m["subtype"] === "status" && m["status"] === "compacting") {
         this.compactCompleted = false;
         this.startCompaction();
@@ -591,10 +590,7 @@ export class ClaudeProvider extends EventProvider {
     }
     if (m["type"] === "assistant") {
       const message = object(m["message"]);
-      if (message["model"] && message["model"] !== this.currentModel) {
-        this.currentModel = string(message["model"]);
-        this.emit("session/model/updated", { model: this.currentModel });
-      }
+      if (message["model"]) this.reportModel(string(message["model"]));
       const usage = object(message["usage"] ?? {});
       if (Object.keys(usage).length) {
         this.currentUsed = [
@@ -690,6 +686,11 @@ export class ClaudeProvider extends EventProvider {
           : undefined,
       );
     }
+  }
+  private reportModel(model: string) {
+    if (!model) return;
+    this.currentModel = model;
+    this.emit("session/model/updated", { model });
   }
   private updateModelFeatures() {
     const model = this.models.find(

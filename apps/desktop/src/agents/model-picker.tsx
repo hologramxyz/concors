@@ -19,6 +19,7 @@ export function AgentModelPicker({
   const { selection, providers, load, choose, switching, error } = useAgentModelSelection(
     agent,
     onSelect,
+    !disabled && agent.status !== "starting",
   );
   return (
     <>
@@ -49,13 +50,24 @@ export function AgentModelPicker({
             (p.loaded
               ? "No models reported. Check this provider in Settings."
               : "Models are being discovered. They will appear here automatically."),
-          options: (p.id === agent.provider ? selection.options : modelOptions(p.models)).map(
-            (m) => ({
+          status: p.error,
+          options: [
+            // An empty catalog must still allow opening a provider to sign in.
+            ...(!p.models.length
+              ? [
+                  {
+                    id: "",
+                    label: `Use ${p.label ?? agentProviderName(p.id)}`,
+                    icon: <ProviderIcon provider={p.id} />,
+                  },
+                ]
+              : []),
+            ...(p.id === agent.provider ? selection.options : modelOptions(p.models)).map((m) => ({
               id: m.id,
               label: m.label,
               icon: <ProviderIcon provider={p.id} />,
-            }),
-          ),
+            })),
+          ],
         }))}
         onSelect={(value, provider) => void choose(value, provider)}
       />

@@ -21,6 +21,7 @@ function setup() {
     state: { status: "ready", daemon: { capabilities: ["agent-providers"] } },
     workspace: { epoch: "machine-epoch" },
     requestAgent,
+    subscribe: vi.fn(),
   } as unknown as DaemonConnection;
   return { connection, requestAgent, cache: new ModelCatalog(connection) };
 }
@@ -47,6 +48,7 @@ it("keeps cached rows visible while refreshing and after discovery errors", asyn
       }),
   );
   const refresh = cache.load(agent, "claude", true);
+  await Promise.resolve();
   expect(cache.getSnapshot().providers[1]?.models[0]?.id).toBe("claude-model");
   finish(
     result([row("codex"), { id: "claude", loaded: true, models: [], error: "Temporary outage" }]),
@@ -71,6 +73,7 @@ it("isolates machines and projects and rejects results from before an invalidati
       }),
   );
   const first = cache.load(agent);
+  await Promise.resolve();
   invalidateModelCatalogs(connection);
   finish(result([row("claude", "Old account model")]));
   await first;

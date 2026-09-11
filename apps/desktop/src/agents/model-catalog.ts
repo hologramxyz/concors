@@ -1,5 +1,6 @@
 import type { DaemonConnection } from "@concors/daemon-client";
 import type { AgentInfo, AgentProviderCatalog } from "@concors/protocol";
+import { ProviderCatalogCache } from "./provider-catalog-cache";
 
 const FRESH_MS = 5 * 60_000;
 const caches = new WeakMap<DaemonConnection, Map<string, ModelCatalog>>();
@@ -16,9 +17,11 @@ export class ModelCatalog {
   private requests = new Map<string, Promise<void>>();
   private fetched = new Map<string, number>();
   private version = 0;
+  private rows = new ProviderCatalogCache();
   readonly connection: DaemonConnection;
   constructor(connection: DaemonConnection) {
     this.connection = connection;
+    this.rows.subscribe(() => this.publish({ providers: this.rows.getSnapshot() }));
   }
   getSnapshot = () => this.snapshot;
   subscribe = (listener: () => void) => {
@@ -35,6 +38,7 @@ export class ModelCatalog {
     this.version++;
     this.fetched.clear();
     this.requests.clear();
+    this.rows.clear();
     this.publish({ providers: [], pending: [], error: null });
   }
   load(agent: AgentInfo, provider?: string, force = false): Promise<void> {
@@ -45,7 +49,7 @@ export class ModelCatalog {
       !connection.state.daemon.capabilities?.includes("agent-providers")
     )
       return Promise.resolve();
-    const key = provider ?? "";
+    const key = provider ?? agent.provider;
     const pending = this.requests.get(key);
     if (pending) return pending;
     const fetched = this.fetched.get(key);
@@ -55,32 +59,22 @@ export class ModelCatalog {
     this.publish({ pending: [...this.snapshot.pending, key], error: null });
     const request = (async () => {
       try {
-        const result = await connection.requestAgent(
-          { kind: "provider-catalog", sessionId: agent.id, provider: provider ?? agent.provider },
-          crypto.randomUUID(),
-        );
-        if (version !== this.version) return;
-        if (result.outcome.status === "error") throw new Error(result.outcome.message);
-        const previous = this.snapshot.providers;
-        const providers = (result.outcome.providers ?? []).map((next) => {
-          const old = previous.find((item) => item.id === next.id);
-          // Keep usable models visible during refreshes and transient discovery failures.
-          return (!next.loaded || next.error) && old?.models.length
-            ? { ...old, ...(next.error ? { error: next.error } : {}) }
-            : next;
+        const revision = this.rows.getSnapshot()[0]?.revision;
+        await this.rows.load(key, async () => {
+          const result = await connection.requestAgent(
+            { kind: "provider-catalog", sessionId: agent.id, provider: key },
+            crypto.randomUUID(),
+          );
+          if (result.outcome.status === "error") throw new Error(result.outcome.message);
+          return result.outcome.providers ?? [];
         });
-        this.fetched.set(key, Date.now());
-        for (const entry of providers)
-          if (
-            entry.loaded &&
-            !entry.error &&
-            (entry.id === provider || entry.id === agent.provider)
-          )
-            this.fetched.set(entry.id, Date.now());
+        if (version !== this.version) return;
+        const providers = this.rows.getSnapshot();
+        if (revision !== providers[0]?.revision) this.fetched.clear();
+        const selected = providers.find((item) => item.id === key);
+        if (selected?.loaded && !selected.error) this.fetched.set(key, Date.now());
         // Failed cold loads can be retried by reopening; do not cache a failure for five minutes.
-        if (provider && providers.find((item) => item.id === provider)?.error)
-          this.fetched.delete(key);
-        this.publish({ providers });
+        else this.fetched.delete(key);
       } catch (cause) {
         if (version === this.version)
           this.publish({
@@ -124,11 +118,16 @@ export function modelCatalog(
   if (!projects) {
     projects = new Map();
     caches.set(connection, projects);
+    const entries = projects;
+    connection.subscribe((state) => {
+      if (state.status !== "ready") for (const catalog of entries.values()) catalog.invalidate();
+    });
   }
   const key = JSON.stringify([epoch, directory]);
   let catalog = projects.get(key);
   if (!catalog) {
     catalog = new ModelCatalog(connection);
+    if (projects.size >= 64) projects.delete(projects.keys().next().value ?? "");
     projects.set(key, catalog);
   }
   return catalog;

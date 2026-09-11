@@ -329,12 +329,14 @@ it.each(["codex", "claude"] as const)(
       ["test-working", "working"],
       ["test-approval", "needs_input"],
       ["test-idle", "idle"],
+      ["test-working", "working"],
+      ["test-idle", "idle"],
     ]) {
       first.connection.sendTerminalInput(id, `${command}\r`);
       for (const client of [first, observer])
         await expect
-          .poll(() => client.connection.terminals.find((s) => s.id === id)?.agentActivity)
-          .toBe(activity);
+          .poll(() => client.connection.terminals.find((s) => s.id === id))
+          .toMatchObject({ agentActivity: activity, agentTurnCompleted: activity === "idle" });
     }
     observer.connection.disconnect();
     await observer.connection.connect();
@@ -342,12 +344,12 @@ it.each(["codex", "claude"] as const)(
       .poll(() => observer.connection.terminals.find((s) => s.id === id)?.detectedAgent)
       .toBe(agent);
     await expect
-      .poll(() => observer.connection.terminals.find((s) => s.id === id)?.agentActivity)
-      .toBe("idle");
+      .poll(() => observer.connection.terminals.find((s) => s.id === id))
+      .toMatchObject({ agentActivity: "idle", agentTurnCompleted: true });
     first.connection.sendTerminalInput(id, "exit\r");
     await expect
       .poll(() => observer.connection.terminals.find((s) => s.id === id), { timeout: 10000 })
-      .toMatchObject({ detectedAgent: null, status: "running" });
+      .toMatchObject({ detectedAgent: null, status: "running", agentTurnCompleted: false });
     first.connection.sendTerminalInput(id, `${agent}\r`);
     await expect
       .poll(() => observer.connection.terminals.find((s) => s.id === id)?.detectedAgent, {

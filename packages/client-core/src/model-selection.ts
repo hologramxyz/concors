@@ -1,4 +1,4 @@
-import type { AgentInfo } from "@concors/protocol";
+import { findAgentModel, type AgentInfo } from "@concors/protocol";
 
 type Model = NonNullable<AgentInfo["models"]>[number];
 const ambiguous = /^(?:machine default|default(?: \(recommended\))?)$/i;
@@ -48,15 +48,33 @@ export function modelSelection(
 ) {
   const requested = agent.settings?.model ?? agent.model;
   const source =
-    models.find((model) => model.id === requested) ??
-    models.find((model) => model.resolvedModel === requested) ??
+    findAgentModel(models, requested) ??
     (!requested ? models.find((model) => model.isDefault) : undefined);
   const options = modelOptions(models);
   const selected =
     source &&
     (options.find((model) => model.id === source.id) ??
       options.find((model) => (model.resolvedModel ?? model.id) === source.resolvedModel));
-  if (selected) return { options, value: selected.id, label: selected.label };
+  if (selected) {
+    // Older daemons can expose only a Default row while still reporting the
+    // concrete session model. Preserve its binding but show the actual model.
+    if (
+      ambiguous.test(selected.id) &&
+      !selected.resolvedModel &&
+      agent.model &&
+      !ambiguous.test(agent.model)
+    ) {
+      const label = modelLabel({ ...selected, id: agent.model, label: agent.model });
+      return {
+        options: options.map((option) =>
+          option.id === selected.id ? { ...option, label } : option,
+        ),
+        value: selected.id,
+        label,
+      };
+    }
+    return { options, value: selected.id, label: selected.label };
+  }
   if (requested && !ambiguous.test(requested)) {
     const current: Model = { id: requested, label: requested, efforts: [], defaultEffort: null };
     current.label = modelLabel(current);
