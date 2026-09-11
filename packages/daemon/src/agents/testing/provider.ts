@@ -87,7 +87,68 @@ export class TestAgentProvider implements AgentProvider {
     this.turnId = `turn-${++TestAgentProvider.turns}`;
     this.emit("turn/started", { turn: { id: this.turnId, status: "inProgress", items: [] } });
     const text = (input["input"] as { text: string }[])[0]?.text ?? "";
-    if (text.includes("approve")) {
+    if (text === "primitive-form") {
+      void this.onRequest(
+        "item/tool/requestUserInput",
+        {
+          threadId: this.threadId,
+          turnId: this.turnId,
+          questions: [
+            {
+              id: "checks",
+              header: "Checks",
+              question: "Which checks should run?",
+              multiSelect: true,
+              allowOther: true,
+              options: [
+                { label: "Unit tests", description: "Run the focused suite" },
+                { label: "Type check", description: "Verify types" },
+              ],
+            },
+            {
+              id: "notes",
+              header: "Notes",
+              question: "Additional notes",
+              required: false,
+              multiline: true,
+              defaultValue: "Keep the public API stable.",
+              options: [],
+            },
+          ],
+        },
+        "primitive-form",
+      )
+        .then(() => this.finish())
+        .catch(() => undefined);
+    } else if (text === "primitive-plan") {
+      void this.onRequest(
+        "item/commandExecution/requestApproval",
+        {
+          threadId: this.threadId,
+          turnId: this.turnId,
+          approvalKind: "plan",
+          plan: "## Implementation plan\n\nAdd regression coverage before changing the handler.",
+          actions: [
+            { id: "implement", label: "Approve plan", decision: "accept" },
+            { id: "reject", label: "Request changes", decision: "decline" },
+            { id: "cancel", label: "Cancel turn", decision: "cancel" },
+          ],
+        },
+        "primitive-plan",
+      )
+        .then(() => this.finish())
+        .catch(() => undefined);
+    } else if (text === "primitive-read") {
+      this.emit("item/completed", {
+        item: {
+          id: `read-${this.turnId}`,
+          type: "fileRead",
+          path: "src/app.ts",
+          output: "export const previewWorks = true;",
+        },
+      });
+      this.finish();
+    } else if (text.includes("approve")) {
       this.emit("item/started", {
         item: {
           id: `tool-${this.turnId}`,

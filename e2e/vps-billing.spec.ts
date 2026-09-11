@@ -289,8 +289,9 @@ test("existing cloud machines appear directly in the switcher and refresh when r
   await page.goto("/");
   await page.getByRole("button", { name: "Switch machine", exact: true }).click();
   await expect(page.getByRole("menuitem", { name: /build-agent provisioning/i })).toBeVisible();
+  // The local daemon may or may not have finished connecting when the menu opens.
   await expect(
-    page.getByRole("menuitem", { name: "This computer Selected", exact: true }),
+    page.getByRole("menuitem", { name: /^This computer (Selected|Connected)$/ }),
   ).toBeVisible();
   await page.keyboard.press("Escape");
   state.created = false;

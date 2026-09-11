@@ -38,6 +38,7 @@ export class ClaudeProvider extends EventProvider {
   private tools = new Map<string, { name: string; input: unknown }>();
   private messageId = "";
   private text = "";
+  private thinking = new Map<number, string>();
   private models: ModelInfo[] = [];
   private currentModel = "";
   private currentUsed = 0;
@@ -150,6 +151,7 @@ export class ClaudeProvider extends EventProvider {
               id: String(index),
               header: string(q["header"]),
               question: string(q["question"]),
+              allowOther: true,
               ...(typeof q["multiSelect"] === "boolean" ? { multiSelect: q["multiSelect"] } : {}),
               options: array(q["options"]).map((v) => {
                 const o = object(v);
@@ -164,6 +166,12 @@ export class ClaudeProvider extends EventProvider {
               randomUUID(),
             ),
           );
+          if (response["decision"] === "decline" || response["decision"] === "cancel")
+            return {
+              behavior: "deny",
+              message: "Question dismissed in Concors",
+              ...(response["decision"] === "cancel" ? { interrupt: true } : {}),
+            };
           const answers = object(response["answers"]);
           return {
             behavior: "allow",
@@ -176,6 +184,37 @@ export class ClaudeProvider extends EventProvider {
                 ]),
               ),
             },
+          };
+        }
+        if (name === "ExitPlanMode") {
+          const response = object(
+            await this.onInput(
+              "item/commandExecution/requestApproval",
+              {
+                threadId: this.threadId,
+                turnId: this.turnId,
+                approvalKind: "plan",
+                plan: string(input["plan"]),
+                reason: "Approve this plan to let Claude continue with implementation.",
+                actions: [
+                  { id: "implement", label: "Approve plan", decision: "accept" },
+                  { id: "reject", label: "Request changes", decision: "decline" },
+                  { id: "cancel", label: "Cancel turn", decision: "cancel" },
+                ],
+              },
+              randomUUID(),
+            ),
+          );
+          if (response["decision"] === "accept" && !this.interrupted) {
+            await this.session?.setPermissionMode("default");
+            this.controls.currentMode = "default";
+            this.controlsChanged();
+            return { behavior: "allow", updatedInput: input };
+          }
+          return {
+            behavior: "deny",
+            message: "Plan not approved. Ask the user what should change before implementing.",
+            ...(response["decision"] === "cancel" ? { interrupt: true } : {}),
           };
         }
         return (await this.permission(name, input))
@@ -319,12 +358,14 @@ export class ClaudeProvider extends EventProvider {
           id: this.threadId,
           turns:
             method === "thread/resume"
-              ? claudeHistory(
-                  await getSessionMessages(this.threadId, {
-                    dir: this.cwd,
-                    includeSystemMessages: true,
-                    ...(this.transcriptStore ? { sessionStore: this.transcriptStore } : {}),
-                  }),
+              ? this.restoredHistory(
+                  claudeHistory(
+                    await getSessionMessages(this.threadId, {
+                      dir: this.cwd,
+                      includeSystemMessages: true,
+                      ...(this.transcriptStore ? { sessionStore: this.transcriptStore } : {}),
+                    }),
+                  ),
                 )
               : [],
         },
@@ -499,9 +540,19 @@ export class ClaudeProvider extends EventProvider {
       if (e["type"] === "message_start") {
         this.messageId = string(object(e["message"])["id"]);
         this.text = "";
+        this.thinking.clear();
       }
       if (e["type"] === "content_block_delta") {
         const d = object(e["delta"]);
+        if (d["type"] === "thinking_delta") {
+          const index = Number(e["index"] ?? 0),
+            value = (this.thinking.get(index) ?? "") + string(d["thinking"]);
+          this.thinking.set(index, value);
+          this.item(
+            { id: `${this.messageId}:thinking:${index}`, type: "reasoning", summary: [value] },
+            false,
+          );
+        }
         if (d["type"] === "text_delta") {
           this.text += string(d["text"]);
           this.item({ id: this.messageId, type: "agentMessage", text: this.text }, false);
@@ -523,6 +574,15 @@ export class ClaudeProvider extends EventProvider {
       }
       const id = string(message["id"]);
       const content = array(message["content"]);
+      content.forEach((raw, index) => {
+        const block = object(raw);
+        if (block["type"] === "thinking" && string(block["thinking"]))
+          this.item({
+            id: `${id}:thinking:${index}`,
+            type: "reasoning",
+            summary: [string(block["thinking"])],
+          });
+      });
       const text = textContent(content.filter((v) => object(v)["type"] === "text"));
       if (text) this.item({ id, type: "agentMessage", text });
       for (const value of content) {
@@ -540,7 +600,15 @@ export class ClaudeProvider extends EventProvider {
         if (c["type"] !== "tool_result") continue;
         const id = string(c["tool_use_id"]),
           tool = this.tools.get(id);
-        if (tool) this.tool(id, tool.name, tool.input, c["content"], true, c["is_error"] === true);
+        if (tool)
+          this.tool(
+            id,
+            tool.name,
+            tool.input,
+            { content: c["content"], details: m["tool_use_result"] },
+            true,
+            c["is_error"] === true,
+          );
       }
     if (m["type"] === "result") {
       const commandResult = string(m["result"]);

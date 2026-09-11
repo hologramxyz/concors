@@ -303,7 +303,16 @@ export class CodexAppServer {
           })
           .then(
             (result) => {
-              if (!this.#failure) this.write({ id: frame.id, result });
+              if (!this.#failure) {
+                const value =
+                  result && typeof result === "object" ? (result as Record<string, unknown>) : {};
+                const nativeResult = method.endsWith("/requestUserInput")
+                  ? { answers: value["answers"] ?? {} }
+                  : method.endsWith("/requestApproval")
+                    ? { decision: value["decision"] }
+                    : result;
+                this.write({ id: frame.id, result: nativeResult });
+              }
             },
             (error: unknown) => {
               if (!this.#failure)

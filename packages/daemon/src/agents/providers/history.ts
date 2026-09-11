@@ -1,3 +1,4 @@
+import { TaskState, isTaskTool } from "./plans.ts";
 import { array, object, string, textContent } from "./contract.ts";
 import { nativeToolItem } from "./tool-items.ts";
 export interface NativeTurn {
@@ -11,7 +12,31 @@ export const messageIdentity = (message: Record<string, unknown>, fallback: stri
     ? `message:${message["timestamp"]}`
     : fallback);
 
+function historyTool(
+  tasks: TaskState,
+  id: string,
+  name: string,
+  input: unknown,
+  output: unknown,
+  done: boolean,
+  failed: boolean,
+) {
+  if (isTaskTool(name) && done) {
+    const steps = tasks.update(name, input, output, done, failed);
+    if (steps) return { id: `tasks:${id}`, type: "plan", steps, status: "completed" };
+  }
+  return nativeToolItem(id, name, input, output, done, failed);
+}
+function thinkingItems(content: Record<string, unknown>[], id: string) {
+  return content.flatMap((part, index) =>
+    part["type"] === "thinking" && string(part["thinking"])
+      ? [{ id: `${id}:thinking:${index}`, type: "reasoning", summary: [string(part["thinking"])] }]
+      : [],
+  );
+}
+
 export function claudeHistory(messages: unknown[]): NativeTurn[] {
+  const tasks = new TaskState();
   const turns: NativeTurn[] = [];
   const tools = new Map<string, { name: string; input: unknown }>();
   let turn: NativeTurn | undefined;
@@ -46,13 +71,15 @@ export function claudeHistory(messages: unknown[]): NativeTurn[] {
           type: "agentMessage",
           text,
         });
+      turn.items.push(...thinkingItems(content, string(message["id"]) || string(entry["uuid"])));
       for (const c of content)
         if (c["type"] === "tool_use") {
           const tool = { name: string(c["name"]), input: c["input"] };
           tools.set(string(c["id"]), tool);
-          turn.items.push(
-            nativeToolItem(string(c["id"]), tool.name, tool.input, null, false, false),
-          );
+          if (!isTaskTool(tool.name))
+            turn.items.push(
+              nativeToolItem(string(c["id"]), tool.name, tool.input, null, false, false),
+            );
         }
     }
     if (entry["type"] === "user")
@@ -62,7 +89,15 @@ export function claudeHistory(messages: unknown[]): NativeTurn[] {
             tool = tools.get(id);
           if (tool)
             turn.items.push(
-              nativeToolItem(id, tool.name, tool.input, c["content"], true, c["is_error"] === true),
+              historyTool(
+                tasks,
+                id,
+                tool.name,
+                tool.input,
+                { content: c["content"], details: entry["tool_use_result"] },
+                true,
+                c["is_error"] === true,
+              ),
             );
         }
   }
@@ -70,6 +105,7 @@ export function claudeHistory(messages: unknown[]): NativeTurn[] {
 }
 
 export function piHistory(messages: unknown[]): NativeTurn[] {
+  const tasks = new TaskState();
   const turns: NativeTurn[] = [],
     tools = new Map<string, { name: string; input: unknown }>();
   let turn: NativeTurn | undefined;
@@ -92,15 +128,17 @@ export function piHistory(messages: unknown[]): NativeTurn[] {
     if (message["role"] === "assistant") {
       const text = textContent(content.filter((c) => c["type"] === "text"));
       if (text) turn.items.push({ id, type: "agentMessage", text });
+      turn.items.push(...thinkingItems(content, id));
       if (message["stopReason"] === "error") turn.status = "failed";
       if (message["stopReason"] === "aborted") turn.status = "interrupted";
       for (const c of content)
         if (c["type"] === "toolCall") {
           const tool = { name: string(c["name"]), input: c["arguments"] };
           tools.set(string(c["id"]), tool);
-          turn.items.push(
-            nativeToolItem(string(c["id"]), tool.name, tool.input, null, false, false),
-          );
+          if (!isTaskTool(tool.name))
+            turn.items.push(
+              nativeToolItem(string(c["id"]), tool.name, tool.input, null, false, false),
+            );
         }
     }
     if (message["role"] === "toolResult") {
@@ -108,7 +146,15 @@ export function piHistory(messages: unknown[]): NativeTurn[] {
         tool = tools.get(id);
       if (tool)
         turn.items.push(
-          nativeToolItem(id, tool.name, tool.input, content, true, message["isError"] === true),
+          historyTool(
+            tasks,
+            id,
+            tool.name,
+            tool.input,
+            { content, details: message["details"] },
+            true,
+            message["isError"] === true,
+          ),
         );
     }
   }
@@ -116,6 +162,7 @@ export function piHistory(messages: unknown[]): NativeTurn[] {
 }
 
 export function openCodeHistory(messages: unknown[]): NativeTurn[] {
+  const tasks = new TaskState();
   const turns: NativeTurn[] = [],
     byId = new Map<string, NativeTurn>();
   let turn: NativeTurn | undefined;
@@ -145,10 +192,13 @@ export function openCodeHistory(messages: unknown[]): NativeTurn[] {
     for (const p of parts) {
       if (p["type"] === "text")
         turn.items.push({ id: string(p["id"]), type: "agentMessage", text: string(p["text"]) });
+      if (p["type"] === "reasoning")
+        turn.items.push({ id: string(p["id"]), type: "reasoning", summary: [string(p["text"])] });
       if (p["type"] === "tool") {
         const state = object(p["state"]);
         turn.items.push(
-          nativeToolItem(
+          historyTool(
+            tasks,
             string(p["id"]),
             string(p["tool"]),
             state["input"],

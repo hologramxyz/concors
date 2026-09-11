@@ -1,3 +1,4 @@
+import { AgentAccountActionSchema, AgentAccountSchema } from "./agent-accounts.ts";
 import { z } from "zod";
 import { AgentControlsSchema, AgentFeatureValueSchema } from "./agent-controls.ts";
 import { ProviderIdSchema, ProviderEngineSchema } from "./providers.ts";
@@ -45,6 +46,9 @@ export const AgentQuestionSchema = z.object({
   question: z.string(),
   isSecret: z.boolean().default(false),
   required: z.boolean().optional(),
+  multiline: z.boolean().optional(),
+  placeholder: z.string().max(1000).optional(),
+  defaultValue: z.string().max(16000).optional(),
   multiSelect: z.boolean().optional(),
   allowOther: z.boolean().optional(),
   options: z
@@ -56,8 +60,22 @@ export type AgentQuestion = z.infer<typeof AgentQuestionSchema>;
 export const AgentPendingSchema = z.object({
   id: Id,
   turnId: z.string(),
+  asynchronous: z.boolean().optional(),
+  sourceItemId: z.string().max(4096).optional(),
   kind: z.enum(["approval", "questions", "elicitation"]),
   title: z.string(),
+  approvalKind: z.enum(["tool", "plan", "mode"]).optional(),
+  plan: z.string().max(16000).optional(),
+  actions: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(512),
+        label: z.string().min(1).max(100),
+        decision: z.enum(["accept", "decline", "cancel"]),
+      }),
+    )
+    .max(32)
+    .optional(),
   elicitation: z
     .object({ schema: z.record(z.string(), z.unknown()), url: z.string().url().optional() })
     .optional(),
@@ -100,12 +118,20 @@ const AgentPresentationSchema = z.object({
   output: z.string().max(16000).optional(),
   input: z.string().max(16000).optional(),
   exitCode: z.number().nullable().optional(),
+  fileOperation: z.enum(["read", "edit"]).optional(),
   files: z
     .array(z.object({ path: z.string(), diff: z.string().max(16000) }))
     .max(100)
     .optional(),
   steps: z
-    .array(z.object({ step: z.string(), status: z.string() }))
+    .array(
+      z.object({
+        step: z.string(),
+        status: z.string(),
+        id: z.string().optional(),
+        activeForm: z.string().optional(),
+      }),
+    )
     .max(100)
     .optional(),
   children: z
@@ -179,6 +205,10 @@ export const AgentItemSchema = z.object({
   text: z.string(),
   detail: z.string(),
   presentation: AgentPresentationSchema.optional(),
+  attachments: z
+    .array(z.object({ name: z.string().max(200), mime: z.string().max(100) }))
+    .max(3)
+    .optional(),
   status: z.enum(["running", "completed", "failed", "interrupted"]),
   createdAt: z.string().datetime(),
 });
@@ -197,6 +227,18 @@ export const NativeSessionSchema = z.object({
 });
 export type NativeSession = z.infer<typeof NativeSessionSchema>;
 export const AgentOperationSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("read-attachment"),
+    sessionId: Id,
+    itemId: z.string().max(4096),
+    index: z.number().int().min(0).max(2),
+  }),
+  z.object({
+    kind: z.literal("implement-plan"),
+    sessionId: Id,
+    itemId: z.string().min(1).max(4096),
+    expectedRevision: z.number().int().nonnegative(),
+  }),
   z.object({
     kind: z.literal("child-history"),
     sessionId: Id,
@@ -244,6 +286,7 @@ export const AgentOperationSchema = z.discriminatedUnion("kind", [
     sessionId: Id,
     provider: AgentProviderIdSchema.optional(),
   }),
+  z.object({ kind: z.literal("account"), sessionId: Id, action: AgentAccountActionSchema }),
   z.object({
     kind: z.literal("switch-provider"),
     sessionId: Id,
@@ -293,8 +336,9 @@ export const AgentOperationSchema = z.discriminatedUnion("kind", [
     kind: z.literal("respond"),
     sessionId: Id,
     pendingId: Id,
+    actionId: z.string().min(1).max(512).optional(),
     decision: z.enum(["accept", "decline", "cancel"]).optional(),
-    answers: z.record(z.string(), z.array(z.string().max(4000)).max(128)).optional(),
+    answers: z.record(z.string(), z.array(z.string().max(16000)).max(128)).optional(),
   }),
 ]);
 export type AgentOperation = z.infer<typeof AgentOperationSchema>;
@@ -318,6 +362,8 @@ export const AgentResultSchema = z.object({
         .array(z.object({ name: z.string(), status: z.string() }))
         .max(100)
         .optional(),
+      account: AgentAccountSchema.optional(),
+      attachment: AgentAttachmentSchema.optional(),
     }),
     z.object({ status: z.literal("error"), message: z.string() }),
   ]),
