@@ -18,7 +18,6 @@ for (const [provider, label] of [
       await seedProject(page, "Provider picker", directory);
       await page.getByRole("button", { name: "New tab", exact: true }).click();
       await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
-      await page.getByRole("button", { name: "Codex", exact: true }).click();
       const original = page.getByRole("textbox", { name: "Message Codex" });
       await expect(original).toBeEnabled();
       await original.fill("keep this Codex conversation");
