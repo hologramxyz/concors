@@ -146,6 +146,12 @@ export class AcpProvider extends EventProvider {
           const bytes = Buffer.from(entry.output + chunk.toString());
           entry.truncated ||= bytes.length > limit;
           entry.output = bytes.subarray(-limit).toString();
+          for (const [toolCallId, tool] of this.tools)
+            if (array(tool["content"]).some((c) => object(c)["terminalId"] === id))
+              this.update({
+                sessionId: this.threadId,
+                update: { sessionUpdate: "tool_call_update", toolCallId, rawOutput: entry.output },
+              });
         };
         child.stdout?.on("data", output);
         child.stderr?.on("data", output);
@@ -259,16 +265,35 @@ export class AcpProvider extends EventProvider {
             turnId: this.turnId,
             reason: p.toolCall.title ?? "Allow agent tool?",
             command: JSON.stringify(p.toolCall.rawInput ?? p.toolCall.content),
-            availableDecisions: ["accept", "decline", "cancel"],
-            decisionLabels: {
-              accept: once.kind === "allow_always" ? "Always allow" : "Allow once",
-            },
+            actions: [
+              ...p.options.map((option) => ({
+                id: option.optionId,
+                label:
+                  option.name ||
+                  (option.kind === "allow_once"
+                    ? "Allow once"
+                    : option.kind === "allow_always"
+                      ? "Always allow"
+                      : option.kind === "reject_always"
+                        ? "Always reject"
+                        : "Decline"),
+                decision: option.kind.startsWith("allow") ? "accept" : "decline",
+              })),
+              { id: "concors:cancel", label: "Cancel turn", decision: "cancel" },
+            ],
           },
           randomUUID(),
         ),
       );
+      const selected = p.options.find((option) => option.optionId === response["actionId"]);
       const allowed = response["decision"] === "accept" && !this.closed;
-      if (this.interrupted) return { outcome: { outcome: "cancelled" as const } };
+      if (this.interrupted || response["decision"] === "cancel")
+        return { outcome: { outcome: "cancelled" as const } };
+      if (
+        selected &&
+        (selected.kind.startsWith("allow") ? allowed : response["decision"] === "decline")
+      )
+        return { outcome: { outcome: "selected" as const, optionId: selected.optionId } };
       return allowed
         ? { outcome: { outcome: "selected" as const, optionId: once.optionId } }
         : deny
@@ -413,7 +438,7 @@ export class AcpProvider extends EventProvider {
     if (update.sessionUpdate === "agent_thought_chunk" && update.content.type === "text") {
       this.thoughtId ||= this.identity("thought", ++this.thoughtIndex);
       this.thoughtText += update.content.text;
-      emit({ id: this.thoughtId, type: "reasoning", text: this.thoughtText }, false);
+      emit({ id: this.thoughtId, type: "reasoning", summary: [this.thoughtText] }, false);
     }
     if (update.sessionUpdate === "tool_call" || update.sessionUpdate === "tool_call_update") {
       this.responseId = "";
@@ -423,6 +448,17 @@ export class AcpProvider extends EventProvider {
       const content = array(tool["content"]).map(object),
         done = tool["status"] === "completed" || tool["status"] === "failed";
       const diffs = content.filter((c) => c["type"] === "diff");
+      const output =
+        content
+          .map((c) =>
+            c["type"] === "terminal"
+              ? (this.terminals.get(string(c["terminalId"]))?.output ?? "")
+              : c["type"] === "content"
+                ? string(object(c["content"])["text"])
+                : "",
+          )
+          .filter(Boolean)
+          .join("\n") || (typeof tool["rawOutput"] === "string" ? tool["rawOutput"] : "");
       emit(
         {
           id: update.toolCallId,
@@ -430,16 +466,35 @@ export class AcpProvider extends EventProvider {
             ? "fileChange"
             : tool["kind"] === "execute"
               ? "commandExecution"
-              : "mcpToolCall",
+              : tool["kind"] === "read"
+                ? "fileRead"
+                : tool["kind"] === "search"
+                  ? "search"
+                  : "mcpToolCall",
           tool: string(tool["title"]) || string(tool["kind"]),
           command: string(object(tool["rawInput"] ?? {})["command"]) || string(tool["title"]),
+          aggregatedOutput: output,
+          output,
+          path: string(
+            object(tool["rawInput"])["path"] ?? object(array(tool["locations"])[0])["path"],
+          ),
+          query: string(object(tool["rawInput"])["query"] ?? tool["title"]),
           arguments: tool["rawInput"],
           result: tool["rawOutput"] ?? content,
           ...(diffs.length
             ? {
                 changes: diffs.map((d) => ({
                   path: d["path"],
-                  diff: `--- before\n${string(d["oldText"])}\n+++ after\n${string(d["newText"])}`,
+                  diff:
+                    string(d["oldText"])
+                      .split("\n")
+                      .map((line) => "-" + line)
+                      .join("\n") +
+                    "\n" +
+                    string(d["newText"])
+                      .split("\n")
+                      .map((line) => "+" + line)
+                      .join("\n"),
                 })),
               }
             : {}),
@@ -449,11 +504,15 @@ export class AcpProvider extends EventProvider {
       );
     }
     if (update.sessionUpdate === "plan")
-      emit({
-        id: this.identity("plan", 0),
-        type: "plan",
-        text: update.entries.map((e) => `${e.status}: ${e.content}`).join("\n"),
-      });
+      emit(
+        {
+          id: this.identity("plan", 0),
+          type: "plan",
+          status: this.loading ? "completed" : "inProgress",
+          steps: update.entries.map((e) => ({ step: e.content, status: e.status })),
+        },
+        this.loading,
+      );
     if (update.sessionUpdate === "usage_update") {
       const usage = object(update);
       if (typeof usage["used"] === "number") {
@@ -704,7 +763,7 @@ export class AcpProvider extends EventProvider {
         if (this.responseId)
           this.item({ id: this.responseId, type: "agentMessage", text: this.responseText });
         if (this.thoughtId)
-          this.item({ id: this.thoughtId, type: "reasoning", text: this.thoughtText });
+          this.item({ id: this.thoughtId, type: "reasoning", summary: [this.thoughtText] });
         this.finish();
       })
       .catch((error: Error) => {
