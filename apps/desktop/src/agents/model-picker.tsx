@@ -45,7 +45,10 @@ export function AgentModelPicker({
           description: p.id === agent.provider ? "Current conversation" : "Starts a new chat",
           icon: <ProviderIcon provider={p.id} />,
           emptyMessage:
-            p.error ?? "Models are being discovered. They will appear here automatically.",
+            p.error ??
+            (p.loaded
+              ? "No models reported. Check this provider in Settings."
+              : "Models are being discovered. They will appear here automatically."),
           options: (p.id === agent.provider ? selection.options : modelOptions(p.models)).map(
             (m) => ({
               id: m.id,

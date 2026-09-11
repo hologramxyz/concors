@@ -4,6 +4,8 @@ import { AgentProviderIdSchema, type AgentInfo } from "@concors/protocol";
 import { modelSelection } from "@concors/client-core";
 import { modelCatalog } from "./model-catalog";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
+import { PaneVisibilityContext } from "@/components/compact-layout";
+import { useTabVisible } from "@/workspace/tab-visibility";
 
 const empty = { providers: [], pending: [], error: null };
 const emptySnapshot = () => empty;
@@ -11,6 +13,8 @@ const emptySubscribe = () => () => undefined;
 
 export function useAgentModelSelection(agent: AgentInfo, onSelect: (model: string | null) => void) {
   const connection = useContext(TerminalConnectionContext);
+  const paneVisible = useContext(PaneVisibilityContext);
+  const tabVisible = useTabVisible();
   const onStarted = useContext(AgentStartedContext);
   const generation = useRef(0);
   useEffect(
@@ -37,7 +41,7 @@ export function useAgentModelSelection(agent: AgentInfo, onSelect: (model: strin
     id: agent.provider,
     label: agent.providerLabel ?? known?.label,
     models: currentModels,
-    loaded: !!currentModels.length,
+    loaded: known?.loaded || !!currentModels.length,
   };
   const providers = known
     ? snapshot.providers.map((p) => (p.id === agent.provider ? current : p))
@@ -45,7 +49,11 @@ export function useAgentModelSelection(agent: AgentInfo, onSelect: (model: strin
   const selection = modelSelection(agent, currentModels);
   const load = (provider?: string) => cache?.load(agent, provider) ?? Promise.resolve();
   const ready =
-    agent.status !== "starting" && !!agent.threadId && connection?.state.status === "ready";
+    paneVisible &&
+    tabVisible &&
+    agent.status !== "starting" &&
+    !!agent.threadId &&
+    connection?.state.status === "ready";
   useEffect(() => {
     if (cache && ready) void cache.warm(agent);
     // The shared cache coalesces both native/web composers and keeps menus warm across panes.

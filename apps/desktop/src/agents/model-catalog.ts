@@ -48,13 +48,15 @@ export class ModelCatalog {
     const key = provider ?? "";
     const pending = this.requests.get(key);
     if (pending) return pending;
-    if (!force && Date.now() - (this.fetched.get(key) ?? 0) < FRESH_MS) return Promise.resolve();
+    const fetched = this.fetched.get(key);
+    if (!force && fetched !== undefined && Date.now() - fetched < FRESH_MS)
+      return Promise.resolve();
     const version = this.version;
     this.publish({ pending: [...this.snapshot.pending, key], error: null });
     const request = (async () => {
       try {
         const result = await connection.requestAgent(
-          { kind: "provider-catalog", sessionId: agent.id, ...(provider ? { provider } : {}) },
+          { kind: "provider-catalog", sessionId: agent.id, provider: provider ?? agent.provider },
           crypto.randomUUID(),
         );
         if (version !== this.version) return;
