@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import { readFile } from "node:fs/promises";
+import { AgentControlsSchema } from "@concors/protocol";
 import {
   EventProvider,
   array,
@@ -21,9 +22,22 @@ export class OpenCodeProvider extends EventProvider {
   private messages = new Map<string, string>();
   private parts = new Map<string, { messageId: string; text: string }>();
   private cwd: string;
+  private models = new Map<string, Record<string, unknown>>();
+  private currentModel = "";
+  private summaries = new Set<string>();
+  private manualCompact = false;
   constructor(cwd: string, onInput: InputHandler) {
     super(onInput);
     this.cwd = cwd;
+    this.controls = AgentControlsSchema.parse({
+      compact: true,
+      contextUsage: true,
+      mcp: true,
+      commands: [
+        { name: "compact", description: "Summarize earlier context" },
+        { name: "summarize", description: "Summarize earlier context" },
+      ],
+    });
   }
   async initialize() {
     const child = launch(
@@ -103,15 +117,47 @@ export class OpenCodeProvider extends EventProvider {
     if (!response.ok) throw new Error(`OpenCode request failed (${response.status})`);
     return response;
   }
-  private async call(path: string, body?: unknown, method = body === undefined ? "GET" : "POST") {
+  private async call(
+    path: string,
+    body?: unknown,
+    method = body === undefined ? "GET" : "POST",
+    timeoutMs = 15000,
+  ) {
     const response = await this.fetch(path, {
       method,
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      signal: AbortSignal.any([this.abort.signal, AbortSignal.timeout(timeoutMs)]),
     });
     return response.status === 204 ? {} : ((await response.json()) as unknown);
   }
   async request(method: string, raw: unknown = {}) {
     const p = object(raw);
+    if (method === "session/controls") {
+      try {
+        this.controls.modes = array(await this.call("/agent"))
+          .map(object)
+          .filter((a) => !a["hidden"] && a["mode"] !== "subagent")
+          .map((a) => ({
+            id: string(a["name"]),
+            label: string(a["name"]),
+            description: string(a["description"]),
+          }));
+        const commands = array(await this.call("/command")).map(object);
+        this.controls.commands = this.controls.commands.filter(
+          (c) => c.name === "compact" || c.name === "summarize",
+        );
+        for (const c of commands)
+          if (c["name"] && !this.controls.commands.some((old) => old.name === c["name"]))
+            this.controls.commands.push({
+              name: string(c["name"]),
+              description: string(c["description"]),
+              kind: "command",
+            });
+      } catch {
+        /* Older servers can still use the built-in compaction command. */
+      }
+      return this.controls;
+    }
     if (method === "model/list") {
       const catalog = object(await this.call("/provider"));
       const connected = array(catalog["connected"]);
@@ -122,9 +168,18 @@ export class OpenCodeProvider extends EventProvider {
           .flatMap((provider) =>
             Object.values(object(provider["models"])).map((value) => {
               const m = object(value);
+              this.models.set(string(provider["id"]) + "/" + string(m["id"]), m);
+              const variants = Object.keys(object(m["variants"] ?? {}));
+              const limit = object(m["limit"] ?? {})["context"];
               return {
                 id: string(provider["id"]) + "/" + string(m["id"]),
                 label: string(m["name"]) || string(m["id"]),
+                efforts: variants.length ? ["default", ...variants] : [],
+                defaultEffort: variants.length ? "default" : null,
+                supportsImages:
+                  m["attachment"] === true ||
+                  object(object(m["modalities"] ?? {})["input"] ?? {})["image"] === true,
+                ...(typeof limit === "number" && limit > 0 ? { contextWindow: limit } : {}),
               };
             }),
           ),
@@ -158,17 +213,77 @@ export class OpenCodeProvider extends EventProvider {
       this.finish();
       return {};
     }
+    if (method === "command/execute") {
+      const name = string(p["name"]);
+      if (!this.controls.commands.some((c) => c.name === name))
+        throw new Error("Unknown OpenCode command");
+      const model = string(p["model"]) || this.currentModel,
+        slash = model.indexOf("/");
+      const compact = name === "compact" || name === "summarize";
+      if (compact && slash < 1)
+        throw new Error("Select a model or send a message before compacting this session.");
+      if (compact && string(p["args"]))
+        throw new Error("OpenCode compaction does not accept additional instructions.");
+      const result = this.begin(),
+        turnId = this.turnId;
+      this.manualCompact = compact;
+      if (compact) this.startCompaction();
+      void this.call(
+        `/session/${encodeURIComponent(this.threadId)}/${compact ? "summarize" : "command"}`,
+        compact
+          ? { providerID: model.slice(0, slash), modelID: model.slice(slash + 1) }
+          : {
+              command: name,
+              arguments: string(p["args"]),
+              ...(model ? { model } : {}),
+              ...(p["nativeMode"] ? { agent: p["nativeMode"] } : {}),
+            },
+        "POST",
+        300000,
+      )
+        .then((response) => {
+          if (compact && response !== true && this.compactionId)
+            throw new Error("OpenCode did not confirm compaction.");
+          if (turnId !== this.turnId) return;
+          if (compact) this.endCompaction();
+          this.manualCompact = false;
+          this.finish();
+        })
+        .catch((error: Error) => {
+          if (turnId === this.turnId) {
+            this.manualCompact = false;
+            this.endCompaction(error.message);
+            this.finish(error.message);
+          }
+        });
+      return result;
+    }
     if (method !== "turn/start") throw new Error(`Unsupported OpenCode operation: ${method}`);
     if (object(p["sandboxPolicy"])["type"] === "dangerFullAccess")
       throw new Error("OpenCode uses tool approvals in Concors");
     const model = string(p["model"]),
       slash = model.indexOf("/");
     if (model && slash < 1) throw new Error("Invalid OpenCode model");
+    if (model) this.currentModel = model;
     const parts = [];
     for (const value of array(p["input"])) {
       const item = object(value);
       if (item["type"] === "text") parts.push({ type: "text", text: string(item["text"]) });
       if (item["type"] === "localImage") {
+        const capabilities = this.models.get(this.currentModel);
+        if (
+          !capabilities ||
+          !(
+            capabilities["attachment"] === true ||
+            object(object(capabilities["modalities"] ?? {})["input"] ?? {})["image"] === true
+          )
+        ) {
+          parts.push({
+            type: "text",
+            text: `Image available on this machine at: ${string(item["path"])}`,
+          });
+          continue;
+        }
         const bytes = await readFile(string(item["path"]));
         const mime =
           bytes[0] === 0x89
@@ -184,8 +299,12 @@ export class OpenCodeProvider extends EventProvider {
     const result = this.begin();
     this.messages.clear();
     this.parts.clear();
+    this.summaries.clear();
+    this.manualCompact = false;
     await this.call(`/session/${encodeURIComponent(this.threadId)}/prompt_async`, {
       parts,
+      ...(p["nativeMode"] ? { agent: p["nativeMode"] } : {}),
+      ...(p["effort"] && p["effort"] !== "default" ? { variant: p["effort"] } : {}),
       ...(model
         ? { model: { providerID: model.slice(0, slash), modelID: model.slice(slash + 1) } }
         : {}),
@@ -227,12 +346,27 @@ export class OpenCodeProvider extends EventProvider {
       const info = object(p["info"]);
       if (info["sessionID"] !== this.threadId) return;
       this.messages.set(string(info["id"]), string(info["role"]));
+      if (
+        info["summary"] === true ||
+        info["agent"] === "compaction" ||
+        info["mode"] === "compaction" ||
+        (this.manualCompact && info["role"] === "assistant")
+      )
+        this.summaries.add(string(info["id"]));
+      if (info["role"] === "assistant") {
+        if (info["providerID"] && info["modelID"])
+          this.currentModel = string(info["providerID"]) + "/" + string(info["modelID"]);
+        this.updateUsage(info["tokens"]);
+      }
       if (info["error"]) this.finish(string(object(info["error"])["message"]) || "OpenCode failed");
     }
     if (e["type"] === "message.part.updated") {
       const part = object(p["part"]);
       if (part["sessionID"] !== this.threadId) return;
       const id = string(part["id"]);
+      if (part["type"] === "compaction") this.startCompaction();
+      if (part["type"] === "step-finish") this.updateUsage(part["tokens"]);
+      if (this.summaries.has(string(part["messageID"])) || this.manualCompact) return;
       if (part["type"] === "text")
         this.parts.set(id, { messageId: string(part["messageID"]), text: string(part["text"]) });
       if (part["type"] === "text" && this.messages.get(string(part["messageID"])) === "assistant")
@@ -256,6 +390,7 @@ export class OpenCodeProvider extends EventProvider {
     if (e["type"] === "message.part.delta" && p["field"] === "text") {
       const id = string(p["partID"]),
         part = this.parts.get(id);
+      if (this.manualCompact || (part && this.summaries.has(part.messageId))) return;
       if (part && this.messages.get(part.messageId) === "assistant") {
         part.text += string(p["delta"]);
         this.item({ id, type: "agentMessage", text: part.text }, false);
@@ -275,16 +410,14 @@ export class OpenCodeProvider extends EventProvider {
         });
     if (e["type"] === "question.asked")
       void (async () => {
-        if (array(p["questions"]).length > 3) {
-          await this.call(`/question/${encodeURIComponent(string(p["id"]))}/reject`, {});
-          return;
-        }
         const questions = array(p["questions"]).map((value, index) => {
           const q = object(value);
           return {
             id: String(index),
             header: string(q["header"]),
             question: string(q["question"]),
+            ...(typeof q["multiple"] === "boolean" ? { multiSelect: q["multiple"] } : {}),
+            ...(typeof q["custom"] === "boolean" ? { allowOther: q["custom"] } : {}),
             options: array(q["options"]).map((v) => {
               const o = object(v);
               return { label: string(o["label"]), description: string(o["description"]) };
@@ -305,8 +438,23 @@ export class OpenCodeProvider extends EventProvider {
       })().catch((error) => {
         if (this.turnId) this.fail(error);
       });
-    if (e["type"] === "session.idle") this.finish();
+    if (e["type"] === "session.compacted") this.endCompaction();
+    if (e["type"] === "session.idle" && !this.manualCompact) this.finish();
     if (e["type"] === "session.error") this.finish(JSON.stringify(p["error"]));
+  }
+  private updateUsage(raw: unknown) {
+    if (!raw || this.manualCompact) return;
+    const tokens = object(raw),
+      cache = object(tokens["cache"] ?? {});
+    const used = [
+      tokens["input"],
+      tokens["output"],
+      tokens["reasoning"],
+      cache["read"],
+      cache["write"],
+    ].reduce<number>((sum, v) => sum + (typeof v === "number" ? v : 0), 0);
+    const limit = object(this.models.get(this.currentModel)?.["limit"] ?? {})["context"];
+    if (used > 0) this.usage(used, typeof limit === "number" ? limit : null);
   }
   async close() {
     this.closed = true;

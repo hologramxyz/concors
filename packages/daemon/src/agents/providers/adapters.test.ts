@@ -119,6 +119,13 @@ it("maps Claude streaming and tool decisions, interrupts, and resumes the native
   const threadId = object(session["thread"])["id"];
   await provider.request("thread/resume", { threadId });
   expect(options!.resume).toBe(threadId);
+  await provider.request("command/execute", { ...turn, name: "compact", args: "Keep decisions" });
+  emit({ type: "system", subtype: "status", status: "compacting" });
+  emit({ type: "system", subtype: "compact_boundary", uuid: "boundary", compact_metadata: { post_tokens: 123 } });
+  emit({ type: "system", subtype: "compact_boundary", uuid: "boundary" });
+  emit({ type: "result", is_error: false });
+  await expect.poll(() => notifications.filter((n) => n.method === "item/completed" && object(n.params["item"])["type"] === "contextCompaction").length).toBe(1);
+  expect(notifications.some((n) => n.method === "thread/tokenUsage/updated" && object(object(n.params["tokenUsage"])["last"])["totalTokens"] === 123)).toBe(true);
   expect(failures).toEqual([]);
 });
 
@@ -147,7 +154,7 @@ it("reads OpenCode SSE deltas, scopes events, forwards decisions, and interrupts
                 { id: "unconnected", models: { x: { id: "hidden", name: "Hidden" } } },
               ],
             }
-          : path === "/session"
+          : path.endsWith("/summarize") ? true : path === "/session"
             ? { id: "session" }
             : {},
       ),
@@ -215,6 +222,10 @@ it("reads OpenCode SSE deltas, scopes events, forwards decisions, and interrupts
   await provider.request("turn/interrupt");
   expect(requests.some((r) => r.path === "/session/session/abort")).toBe(true);
   expect(object(notifications.at(-1)!.params["turn"])["status"]).toBe("interrupted");
+  await provider.request("command/execute", { ...turn, model: "own-account/model", name: "compact" });
+  await expect.poll(() => notifications.filter((n) => n.method === "item/completed" && object(n.params["item"])["type"] === "contextCompaction").length).toBe(1);
+  expect(requests.find((r) => r.path.endsWith("/summarize"))?.body).toEqual({ providerID: "own-account", modelID: "model" });
+  expect(requests.filter((r) => r.path.endsWith("/prompt_async"))).toHaveLength(1);
   expect(failures).toEqual([]);
 });
 
@@ -301,5 +312,9 @@ it("maps Pi JSONL, denies tool confirmation, and ignores a cancelled pending dia
   expect(commands.some((c) => c["type"] === "set_model" && c["provider"] === "own")).toBe(true);
   await provider.request("thread/resume", { threadId: object(first["thread"])["id"] });
   expect(vi.mocked(launch).mock.calls.at(-1)![1]).toContain("--extension");
+  await provider.request("command/execute", { ...turn, name: "compact", args: "Keep decisions" });
+  await expect.poll(() => notifications.filter((n) => n.method === "item/completed" && object(n.params["item"])["type"] === "contextCompaction").length).toBe(1);
+  expect(commands.find((c) => c["type"] === "compact")).toMatchObject({ customInstructions: "Keep decisions" });
+  expect(commands.filter((c) => c["type"] === "prompt")).toHaveLength(1);
   expect(failures).toEqual([]);
 });
