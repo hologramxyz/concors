@@ -5,7 +5,10 @@ import {
   type Query,
   type SDKUserMessage,
   type Options,
+  type ModelInfo,
+  type PermissionMode,
 } from "@anthropic-ai/claude-agent-sdk";
+import { AgentControlsSchema } from "@concors/protocol";
 import { launch } from "./launch.ts";
 import { resolveProfile } from "../../terminal/profiles.ts";
 import {
@@ -26,6 +29,13 @@ export class ClaudeProvider extends EventProvider {
   private tools = new Map<string, { name: string; input: unknown }>();
   private messageId = "";
   private text = "";
+  private models: ModelInfo[] = [];
+  private currentModel = "";
+  private currentUsed = 0;
+  private contextLimit: number | null = null;
+  private totalTokens: number | null = null;
+  private compactCompleted = false;
+  private lastBoundary = "";
   private readonly cwd: string;
   private readonly createQuery: typeof query;
   constructor(cwd: string, onInput: InputHandler, createQuery = query) {
@@ -71,20 +81,31 @@ export class ClaudeProvider extends EventProvider {
       includePartialMessages: true,
       settingSources: ["user", "project", "local"],
       permissionMode: "default",
+      hooks: {
+        PostCompact: [
+          {
+            hooks: [
+              async (input) => {
+                if (!object(input)["agent_id"] && this.compactionId) {
+                  this.endCompaction();
+                  this.compactCompleted = true;
+                }
+                return {};
+              },
+            ],
+          },
+        ],
+      },
       ...(resume ? { resume } : { sessionId: this.threadId }),
       canUseTool: async (name, input) => {
         if (name === "AskUserQuestion") {
-          if (array(input["questions"]).length > 3)
-            return {
-              behavior: "deny",
-              message: "Ask at most three questions at a time in Concors",
-            };
           const questions = array(input["questions"]).map((raw, index) => {
             const q = object(raw);
             return {
               id: String(index),
               header: string(q["header"]),
               question: string(q["question"]),
+              ...(typeof q["multiSelect"] === "boolean" ? { multiSelect: q["multiSelect"] } : {}),
               options: array(q["options"]).map((v) => {
                 const o = object(v);
                 return { label: string(o["label"]), description: string(o["description"]) };
@@ -125,7 +146,7 @@ export class ClaudeProvider extends EventProvider {
           if (generation !== this.generation || this.closed) return;
           this.event(object(message));
         }
-        if (this.turnId) this.finish("Claude Code stopped before completing the turn");
+        if (generation === this.generation && this.turnId) this.finish("Claude Code stopped before completing the turn");
       } catch (error) {
         if (generation === this.generation && !this.closed) {
           if (this.interrupted) this.finish();
@@ -133,16 +154,66 @@ export class ClaudeProvider extends EventProvider {
         }
       }
     })();
-    await session.initializationResult();
+    const initial = await session.initializationResult();
+    this.currentModel = string(object(initial)["model"]);
+    this.controls = AgentControlsSchema.parse({
+      compact: true,
+      contextUsage: true,
+      mcp: true,
+      modes: [
+        { id: "default", label: "Always ask" },
+        { id: "plan", label: "Plan", description: "Analyze before making changes" },
+        {
+          id: "acceptEdits",
+          label: "Accept edits",
+          description: "Approve edits automatically; other tools still follow Claude permissions",
+        },
+      ],
+      currentMode: "default",
+      commands: [
+        {
+          name: "compact",
+          description: "Summarize earlier context",
+          argumentHint: "[instructions]",
+        },
+      ],
+    });
+    if (session.supportedCommands) {
+      const commands = await session.supportedCommands();
+      this.controls.commands = [
+        { name: "compact", description: "Summarize earlier context", kind: "command" },
+        ...commands
+          .filter((c) => c.name !== "compact")
+          .map((c) => ({
+            name: c.name,
+            description: c.description,
+            argumentHint: c.argumentHint,
+            kind: "command" as const,
+          })),
+      ];
+    }
   }
   async request(method: string, raw: unknown = {}) {
     const p = object(raw),
       session = this.session;
     if (!session) throw new Error("Claude Code is disconnected");
-    if (method === "model/list")
+    if (method === "session/controls") return this.controls;
+    if (method === "model/list") {
+      this.models = await session.supportedModels();
+      if (this.models.some((m) => m.supportsAutoMode))
+        this.controls.modes = [
+          ...this.controls.modes.filter((m) => m.id !== "auto"),
+          { id: "auto", label: "Auto review", description: "Claude reviews permission requests" },
+        ];
+      this.updateModelFeatures();
       return modelCatalog(
-        (await session.supportedModels()).map((m) => ({ id: m.value, label: m.displayName })),
+        this.models.map((m) => ({
+          id: m.value,
+          label: m.displayName,
+          efforts: m.supportedEffortLevels ?? [],
+        })),
       );
+    }
     if (method === "collaborationMode/list") return { data: [] };
     if (method === "thread/resume") await this.open(string(p["threadId"]));
     if (method === "thread/start" || method === "thread/resume")
@@ -153,11 +224,43 @@ export class ClaudeProvider extends EventProvider {
       this.finish();
       return {};
     }
-    if (method !== "turn/start") throw new Error(`Unsupported Claude operation: ${method}`);
+    if (method !== "turn/start" && method !== "command/execute")
+      throw new Error(`Unsupported Claude operation: ${method}`);
+    if (method === "command/execute") {
+      if (!this.controls.commands.some((c) => c.name === p["name"]))
+        throw new Error("Unknown Claude command");
+      p["input"] = [
+        { type: "text", text: `/${string(p["name"])}${p["args"] ? ` ${string(p["args"])}` : ""}` },
+      ];
+    }
     await session.setModel(typeof p["model"] === "string" ? p["model"] : undefined);
+    if (p["model"]) this.currentModel = string(p["model"]);
+    this.updateModelFeatures();
     if (object(p["sandboxPolicy"])["type"] === "dangerFullAccess")
       throw new Error("Claude Code uses its normal tool approvals in Concors");
-    await session.setPermissionMode("default");
+    const mode = string(p["nativeMode"]) || "default";
+    if (!this.controls.modes.some((m) => m.id === mode))
+      throw new Error("Unsupported Claude permission mode");
+    await session.setPermissionMode(mode as PermissionMode);
+    this.controls.currentMode = mode;
+    if (session.applyFlagSettings) {
+      const effort = p["effort"];
+      if (effort && !["low", "medium", "high", "xhigh", "max"].includes(string(effort)))
+        throw new Error("Unsupported Claude thinking effort");
+      await session.applyFlagSettings({
+        effortLevel: effort ? (effort as "low" | "medium" | "high" | "xhigh" | "max") : null,
+      });
+      const features = object(p["features"] ?? {});
+      const fast = features["fast_mode"];
+      if (fast !== undefined) {
+        if (fast && !this.controls.features.some((f) => f.id === "fast_mode"))
+          throw new Error("Fast mode is not available for this Claude model");
+        await session.applyFlagSettings({ fastMode: fast === true });
+        const feature = this.controls.features.find((f) => f.id === "fast_mode");
+        if (feature) feature.value = fast === true;
+      }
+    }
+    this.controlsChanged();
     const content: SDKUserMessage["message"]["content"] = [];
     for (const value of array(p["input"])) {
       const item = object(value);
@@ -179,6 +282,7 @@ export class ClaudeProvider extends EventProvider {
       }
     }
     const result = this.begin();
+    this.compactCompleted = false;
     this.tools.clear();
     this.messageId = "";
     this.text = "";
@@ -193,6 +297,31 @@ export class ClaudeProvider extends EventProvider {
   }
   private event(m: Record<string, unknown>) {
     if (!this.turnId || m["parent_tool_use_id"]) return;
+    if (m["type"] === "system") {
+      if (m["subtype"] === "status" && m["status"] === "compacting") {
+        this.compactCompleted = false;
+        this.startCompaction();
+      }
+      if (m["subtype"] === "compact_boundary" && this.lastBoundary !== string(m["uuid"])) {
+        this.lastBoundary = string(m["uuid"]);
+        if (!this.compactCompleted) {
+          this.startCompaction();
+          this.endCompaction();
+        }
+        this.compactCompleted = true;
+        const tokens = object(m["compact_metadata"] ?? {})["post_tokens"];
+        if (typeof tokens === "number") {
+          this.currentUsed = tokens;
+          this.usage(tokens, this.contextLimit, this.totalTokens);
+        }
+      }
+      if (m["subtype"] === "local_command_output")
+        this.item({
+          id: string(m["uuid"]) || randomUUID(),
+          type: "agentMessage",
+          text: string(m["content"]),
+        });
+    }
     if (m["type"] === "stream_event") {
       const e = object(m["event"]);
       if (e["type"] === "message_start") {
@@ -209,6 +338,17 @@ export class ClaudeProvider extends EventProvider {
     }
     if (m["type"] === "assistant") {
       const message = object(m["message"]);
+      if (message["model"]) this.currentModel = string(message["model"]);
+      const usage = object(message["usage"] ?? {});
+      if (Object.keys(usage).length) {
+        this.currentUsed = [
+          "input_tokens",
+          "cache_read_input_tokens",
+          "cache_creation_input_tokens",
+          "output_tokens",
+        ].reduce((n, key) => n + (typeof usage[key] === "number" ? usage[key] : 0), 0);
+        this.usage(this.currentUsed, this.contextLimit, this.totalTokens);
+      }
       const id = string(message["id"]);
       const content = array(message["content"]);
       const text = textContent(content.filter((v) => object(v)["type"] === "text"));
@@ -230,12 +370,52 @@ export class ClaudeProvider extends EventProvider {
           tool = this.tools.get(id);
         if (tool) this.tool(id, tool.name, tool.input, c["content"], true, c["is_error"] === true);
       }
-    if (m["type"] === "result")
+    if (m["type"] === "result") {
+      const modelUsage = object(m["modelUsage"] ?? {});
+      const entries: (Record<string, unknown> & { id: string })[] = Object.entries(modelUsage).map(
+        ([id, usage]) => ({ id, ...object(usage) }),
+      );
+      const current =
+        entries.find(
+          (u) => u.id === this.currentModel || u["canonicalModel"] === this.currentModel,
+        ) ?? (entries.length === 1 ? entries[0] : undefined);
+      if (current && typeof current["contextWindow"] === "number")
+        this.contextLimit = current["contextWindow"];
+      if (entries.length)
+        this.totalTokens = entries.reduce(
+          (n, u) =>
+            n +
+            [
+              "inputTokens",
+              "outputTokens",
+              "cacheReadInputTokens",
+              "cacheCreationInputTokens",
+            ].reduce((sum, key) => sum + (typeof u[key] === "number" ? u[key] : 0), 0),
+          0,
+        );
+      if (this.currentUsed) this.usage(this.currentUsed, this.contextLimit, this.totalTokens);
       this.finish(
         m["is_error"] === true
           ? array(m["errors"]).map(String).join("\n") || "Claude Code failed"
           : undefined,
       );
+    }
+  }
+  private updateModelFeatures() {
+    const model = this.models.find(
+      (m) => m.value === this.currentModel || m.resolvedModel === this.currentModel,
+    );
+    const previous = this.controls.features.find((f) => f.id === "fast_mode")?.value ?? false;
+    this.controls.features = model?.supportsFastMode
+      ? [
+          {
+            id: "fast_mode",
+            label: "Fast mode",
+            description: "Uses Claude's faster service tier; additional usage may apply",
+            value: previous,
+          },
+        ]
+      : [];
   }
   async close() {
     this.closed = true;
