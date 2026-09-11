@@ -29,3 +29,5 @@ export * from "./files.ts";
 export * from "./providers.ts";
 export * from "./provider-presets.ts";
 export * from "./agent-accounts.ts";
+export * from "./themes.ts";
+export * from "./theme-presets.ts";
