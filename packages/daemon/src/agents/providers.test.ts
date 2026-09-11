@@ -1,3 +1,5 @@
+import { DatabaseSync } from "node:sqlite";
+import { TestAccountBackend } from "./testing/account.ts";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -32,6 +34,7 @@ async function setup() {
   vi.stubEnv("PATH", directory + delimiter + (process.env["PATH"] ?? ""));
   server = createDaemonServer(loadDaemonConfig({ port: 0, logLevel: "silent" }, {}), {
     workspacePath: join(directory, "state.db"),
+    accountBackendFactory: (info) => new TestAccountBackend(info),
     agentProviderFactory: (_cwd, onInput, provider = "codex") => {
       const runtime = new TestAgentProvider(onInput, provider);
       instances.push({ provider, runtime });
@@ -167,4 +170,61 @@ it("rejects stale provider switches and unavailable models without adding tabs",
     ).toBe("error");
   expect(c.agents).toHaveLength(1);
   expect(c.workspace?.projects[0]?.tabs).toHaveLength(1);
+});
+
+it("keeps account exchanges out of receipts and broadcasts, scoped to the initiating socket", async () => {
+  const { c, id } = await setup();
+  const events: string[] = [];
+  c.onAgent((event) => events.push(JSON.stringify(event)));
+  const another = new DaemonConnection({
+    endpoint: c.endpoint,
+    client: { kind: "test", name: "another", version: "0.0.0" },
+  });
+  try {
+    another.subscribeWorkspace(() => undefined);
+    await another.connect();
+    await expect.poll(() => another.workspace).not.toBeNull();
+    const flow = await c.requestAgent(
+      { kind: "account", sessionId: id, action: { type: "start", methodId: "fixture" } },
+      randomUUID(),
+    );
+    if (flow.outcome.status !== "ok" || !flow.outcome.account?.challenge)
+      throw new Error("Expected sign-in challenge");
+    const flowId = flow.outcome.account.challenge.flowId;
+    const other = await another.requestAgent(
+      { kind: "account", sessionId: id, action: { type: "read" } },
+      randomUUID(),
+    );
+    expect(other.outcome.status === "ok" && other.outcome.account?.challenge).toBeUndefined();
+    const rejected = await another.requestAgent(
+      {
+        kind: "account",
+        sessionId: id,
+        action: { type: "complete", flowId, value: "test-private-credential" },
+      },
+      randomUUID(),
+    );
+    expect(rejected.outcome.status).toBe("error");
+    const result = await c.requestAgent(
+      {
+        kind: "account",
+        sessionId: id,
+        action: { type: "complete", flowId, value: "test-private-credential" },
+      },
+      randomUUID(),
+    );
+    expect(result.outcome.status === "ok" && result.outcome.account?.status).toBe("connected");
+    const db = new DatabaseSync(join(directory, "state.db"), { readOnly: true });
+    try {
+      const receipts = JSON.stringify(db.prepare("SELECT request FROM agent_requests").all());
+      expect(receipts).not.toContain('"account"');
+      expect(receipts).not.toContain("test-private-credential");
+    } finally {
+      db.close();
+    }
+    expect(events.join("\n")).not.toContain("test-private-credential");
+    expect(events.join("\n")).not.toContain("TEST-CODE");
+  } finally {
+    another.disconnect();
+  }
 });

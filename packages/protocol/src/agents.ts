@@ -1,3 +1,4 @@
+import { AgentAccountActionSchema, AgentAccountSchema } from "./agent-accounts.ts";
 import { z } from "zod";
 import { AgentControlsSchema, AgentFeatureValueSchema } from "./agent-controls.ts";
 import { ProviderIdSchema, ProviderEngineSchema } from "./providers.ts";
@@ -244,6 +245,7 @@ export const AgentOperationSchema = z.discriminatedUnion("kind", [
     sessionId: Id,
     provider: AgentProviderIdSchema.optional(),
   }),
+  z.object({ kind: z.literal("account"), sessionId: Id, action: AgentAccountActionSchema }),
   z.object({
     kind: z.literal("switch-provider"),
     sessionId: Id,
@@ -318,6 +320,7 @@ export const AgentResultSchema = z.object({
         .array(z.object({ name: z.string(), status: z.string() }))
         .max(100)
         .optional(),
+      account: AgentAccountSchema.optional(),
     }),
     z.object({ status: z.literal("error"), message: z.string() }),
   ]),
