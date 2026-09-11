@@ -72,16 +72,10 @@ export function AgentSidebar({
     })),
   ].toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   if (!agents.length)
-    return (
-      <p
-        className={`py-2 text-ui text-muted-foreground ${compact ? "text-center" : "px-2"}`}
-        title={compact ? "No agents yet" : undefined}
-      >
-        {compact && <span aria-hidden="true">—</span>}
-        <span className={compact ? "sr-only" : undefined}>No agents yet.</span>
-      </p>
+    return compact ? null : (
+      <p className="px-2 py-2 text-ui text-muted-foreground">No agents yet.</p>
     );
-  return (
+  const list = (
     <ul className="mt-1 space-y-0.5">
       {agents.map((agent) => {
         const { running, status, unread } = agent;
@@ -162,4 +156,5 @@ export function AgentSidebar({
       })}
     </ul>
   );
+  return compact ? <section aria-label="Agents">{list}</section> : list;
 }
