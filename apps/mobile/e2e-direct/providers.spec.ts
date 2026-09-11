@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { mobileDesktopSocket } from "../../../e2e/support/mobile-direct-ports";
+import { mobileDesktopSocket } from "../../../e2e/support/mobile-direct-ports.cjs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
