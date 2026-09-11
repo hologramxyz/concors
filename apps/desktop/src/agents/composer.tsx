@@ -36,7 +36,7 @@ import { ComposerSurfaceContext, useComposerExpansion } from "./composer-expansi
 import { useComposerMotion } from "./composer-motion";
 import { NativeSurfaceContext, useNativeSurface } from "@/components/native-surface";
 const defaults: AgentSettings = { model: null, effort: null, mode: "default" };
-const nativeProviderIcons = {
+const nativeProviderIcons: Record<string, "model" | "claude" | "opencode" | "pi"> = {
   codex: "model",
   claude: "claude",
   opencode: "opencode",
@@ -304,7 +304,12 @@ export function AgentComposer({
           label: nativeProvider
             ? `${agentProviderName(nativeProvider.id)} · Agent and model`
             : "Choose an agent provider",
-          icon: nativeProviderIcons[nativeProvider?.id ?? agent.provider],
+          icon:
+            nativeProviderIcons[
+              nativeProvider?.id === agent.provider
+                ? (agent.engine ?? agent.provider)
+                : (nativeProvider?.id ?? agent.provider)
+            ] ?? ("options" as const),
           disabled: controlsDisabled || agent.status === "starting" || nativeModels.switching,
           options: nativeProvider
             ? [
