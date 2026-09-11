@@ -52,6 +52,13 @@ export function MessageNavigation({
     let frame = 0;
     const update = () => {
       frame = 0;
+      // Several prompts can fit in the final viewport. At the bottom, select the
+      // final prompt rather than whichever one happens to sit near the top.
+      // Allow for fractional scroll positions and rounded viewport dimensions.
+      if (el.scrollHeight - Math.max(0, el.scrollTop) - el.clientHeight <= 2) {
+        setActive(entries.at(-1)?.id ?? null);
+        return;
+      }
       const inset = Math.max(36, Number.parseFloat(getComputedStyle(el).scrollPaddingTop) || 0);
       const top = el.getBoundingClientRect().top + inset;
       const messages = el.querySelectorAll<HTMLElement>("[data-user-message]");
