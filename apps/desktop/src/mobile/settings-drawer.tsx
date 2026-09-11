@@ -1,3 +1,4 @@
+import { ProvidersSettings } from "@/settings/providers-settings";
 import { useState } from "react";
 import { Server } from "lucide-react";
 import type { ConnectionState } from "@concors/daemon-client";
@@ -93,7 +94,9 @@ export function SettingsDrawer({
                 .filter(
                   (item) =>
                     !host.direct ||
-                    ["appearance", "shortcuts", "advanced", "terminals"].includes(item.page),
+                    ["appearance", "shortcuts", "advanced", "terminals", "providers"].includes(
+                      item.page,
+                    ),
                 )
                 .map(({ page, label, icon: Icon }) => ({
                   value: page,
@@ -117,7 +120,11 @@ export function SettingsDrawer({
               Demo · Account actions are simulated.
             </p>
           )}
-          {page === "terminals" ? (
+          {page === "providers" ? (
+            <div className="p-4">
+              <ProvidersSettings />
+            </div>
+          ) : page === "terminals" ? (
             <div className="p-4">
               <TerminalsSettings
                 creating={creatingTerminalProfile}

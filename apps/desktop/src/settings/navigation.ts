@@ -7,6 +7,7 @@ import {
   Settings2,
   UserRound,
   Terminal,
+  Bot,
   type LucideIcon,
 } from "lucide-react";
 
@@ -16,6 +17,7 @@ export type SettingsPage =
   | "shortcuts"
   | "notifications"
   | "terminals"
+  | "providers"
   | "billing"
   | "ssh-keys"
   | "advanced";
@@ -50,6 +52,7 @@ export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
   {
     label: "Workspace",
     items: [
+      { page: "providers", label: "Providers", icon: Bot },
       { page: "terminals", label: "Terminals", icon: Terminal },
       { page: "billing", label: "Billing", icon: CreditCard },
       { page: "ssh-keys", label: "SSH keys", icon: KeyRound },
