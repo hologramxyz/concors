@@ -10,6 +10,7 @@ import { demoMe } from "../src/demo/fixtures";
 test("mobile connects without cloud login and shares real daemon chat, panes and terminal sessions", async ({
   page,
 }) => {
+  // This scenario exercises the full connection, chat, navigation, terminal and consent flow.
   test.setTimeout(180_000);
   const directory = await mkdtemp(join(tmpdir(), "concors-mobile-direct-project-"));
   const desktop = new DaemonConnection({
@@ -43,8 +44,16 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     });
   });
   const workspaceSockets: string[] = [];
+  const accountStatuses: string[] = [];
   page.on("websocket", (socket) => {
-    if (new URL(socket.url()).pathname === "/ws") workspaceSockets.push(socket.url());
+    if (new URL(socket.url()).pathname !== "/ws") return;
+    workspaceSockets.push(socket.url());
+    socket.on("framereceived", ({ payload }) => {
+      if (typeof payload !== "string") return;
+      const event = JSON.parse(payload);
+      if (event.type === "agent.result" && event.outcome?.account)
+        accountStatuses.push(event.outcome.account.status);
+    });
   });
   const unsubscribe = desktop.subscribeWorkspace(() => undefined);
   const errors: string[] = [];
@@ -56,6 +65,7 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
   const projectId = crypto.randomUUID(),
     tabId = crypto.randomUUID(),
     paneId = crypto.randomUUID();
+  const agents = () => desktop.agents.filter((agent) => agent.projectId === projectId);
   const snapshot = () => {
     const current = desktop.workspace;
     if (!current) throw new Error("Desktop control client has no workspace snapshot");
@@ -99,23 +109,25 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
     await page.getByRole("button", { name: "Allow AI data sharing", exact: true }).click();
     const ui = page.frameLocator('iframe[title="Concors workspace"]');
-    await ui.getByRole("button", { name: "Codex", exact: true }).click();
     const input = ui.getByRole("textbox", { name: "Message Codex" });
     await expect(input).toBeEnabled();
     // Main's provider account flow must also cross the mobile relay without a real OAuth login.
     const signIn = ui.getByRole("region", { name: "Codex account connection", exact: true });
     await signIn.getByRole("button", { name: "Sign in with ChatGPT", exact: true }).click();
-    await expect(signIn.getByText("TEST-CODE", { exact: true })).toBeVisible();
-    await expect(ui.getByText("Codex connected", { exact: true })).toBeVisible();
+    // Account flows are socket-scoped: observe the phone's result, not the separate
+    // desktop control connection's fixture account. Completed sign-in has no chat badge.
+    await expect.poll(() => accountStatuses, { timeout: 10_000 }).toContain("connected");
+    await expect(signIn).toHaveCount(0);
+    await expect(ui.getByText(/Codex connected|fixture-account@example\.test/)).toHaveCount(0);
     await input.fill("hello over the real daemon transport");
     await ui.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(ui.getByRole("log")).toContainText("Hello from Codex");
-    await expect.poll(() => desktop.agents.length).toBe(1);
+    await expect.poll(() => agents().length).toBe(1);
     await input.fill("approve command");
     await ui.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(ui.getByRole("region", { name: "Allow command execution?" })).toBeVisible();
     await ui.getByRole("button", { name: "Allow once", exact: true }).click();
-    await expect.poll(() => desktop.agents[0]?.status).toBe("done");
+    await expect.poll(() => agents()[0]?.status).toBe("done");
     await input.fill("primitive-form");
     await ui.getByRole("button", { name: "Send message", exact: true }).click();
     await ui.getByRole("checkbox", { name: "Unit tests Run the focused suite" }).click();
@@ -124,18 +136,18 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
       .getByRole("textbox", { name: "Additional notes", exact: true })
       .fill("  Keep indentation.\n");
     await ui.getByRole("button", { name: "Submit answers", exact: true }).click();
-    await expect.poll(() => desktop.agents[0]?.status).toBe("done");
+    await expect.poll(() => agents()[0]?.status).toBe("done");
     await input.fill("primitive-form");
     await ui.getByRole("button", { name: "Send message", exact: true }).click();
     await ui.getByRole("button", { name: "Dismiss", exact: true }).click();
-    await expect.poll(() => desktop.agents[0]?.status).toBe("done");
+    await expect.poll(() => agents()[0]?.status).toBe("done");
     await input.fill("primitive-plan");
     await ui.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(
       ui.getByRole("heading", { name: "Implementation plan", exact: true }),
     ).toBeVisible();
     await ui.getByRole("button", { name: "Approve plan", exact: true }).click();
-    await expect.poll(() => desktop.agents[0]?.status).toBe("done");
+    await expect.poll(() => agents()[0]?.status).toBe("done");
     await input.fill("primitive-read");
     await ui.getByRole("button", { name: "Send message", exact: true }).click();
     await ui
@@ -150,6 +162,17 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
       .evaluate((el) => ({ scroll: el.scrollWidth, width: el.clientWidth }));
     expect(viewport.scroll).toBeLessThanOrEqual(viewport.width);
     await page.screenshot({ path: test.info().outputPath("mobile-chat-primitives.png") });
+    await ui.getByRole("button", { name: "Browse your messages" }).click();
+    const messages = ui.getByRole("dialog", { name: "Your messages", exact: true });
+    await expect(
+      messages.getByRole("button", { name: /hello over the real daemon transport/ }),
+    ).toBeVisible();
+    await page.screenshot({ path: test.info().outputPath("mobile-message-navigation.png") });
+    await messages.getByRole("button", { name: /hello over the real daemon transport/ }).click();
+    await expect(messages).not.toBeVisible();
+    await expect(
+      ui.getByRole("log").getByText("hello over the real daemon transport", { exact: true }),
+    ).toBeInViewport();
 
     await execute({
       kind: "tab.rename",
@@ -158,15 +181,12 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
       tabId,
       name: "Renamed from desktop",
     });
-    const picker = ui.getByRole("combobox", { name: "Tabs and panes" });
+    const picker = ui.getByRole("combobox", { name: "Tabs" });
     await expect(picker).toContainText("Renamed from desktop");
     await picker.click();
+    await ui.getByRole("button", { name: "New tab", exact: true }).click();
     await ui
-      .getByRole("button", { name: "Actions for tab Renamed from desktop", exact: true })
-      .click();
-    await ui.getByRole("menuitem", { name: "Add pane to this tab", exact: true }).click();
-    await ui
-      .getByRole("dialog", { name: "Add pane", exact: true })
+      .getByRole("dialog", { name: "New tab", exact: true })
       .getByRole("button", { name: "Terminal", exact: true })
       .click();
     await expect(ui.getByLabel("Terminal output", { exact: true })).toBeVisible();
@@ -176,9 +196,7 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await expect(ui.getByLabel("Terminal output", { exact: true })).toContainText(
       "mobile-direct-terminal",
     );
-    await expect
-      .poll(() => project().tabs[0]?.nodes.filter((node) => node.kind === "pane").length)
-      .toBe(2);
+    await expect.poll(() => project().tabs.length).toBe(2);
     await expect.poll(() => desktop.terminals.length).toBe(1);
     const terminalId = desktop.terminals[0]?.id;
     await picker.click();
@@ -253,7 +271,8 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await settings.getByRole("combobox", { name: "Settings section" }).click();
     await expect(ui.getByRole("option", { name: "Billing", exact: true })).toHaveCount(0);
     await ui.getByRole("option", { name: "Shortcuts", exact: true }).click();
-    await expect(settings.getByRole("heading", { name: "Panes", exact: true })).toBeVisible();
+    await expect(settings.getByRole("heading", { name: "Tabs", exact: true })).toBeVisible();
+    await expect(settings.getByRole("heading", { name: "Panes", exact: true })).toHaveCount(0);
     await expect(settings).toContainText("With an external keyboard");
     await expect(settings.getByText("New pane beside current", { exact: true })).toHaveCount(0);
     await settings.getByRole("combobox", { name: "Settings section" }).click();

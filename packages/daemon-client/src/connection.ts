@@ -1,3 +1,4 @@
+import { ThemeRequestSchema, type ThemeResult } from "@concors/protocol";
 import {
   ProviderRequestSchema,
   type ProviderOperation,
@@ -158,6 +159,14 @@ export class DaemonConnection {
     string,
     {
       resolve: (result: ProviderResult) => void;
+      reject: (error: Error) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
+  >();
+  readonly #themeRequests = new Map<
+    string,
+    {
+      resolve: (result: ThemeResult) => void;
       reject: (error: Error) => void;
       timer: ReturnType<typeof setTimeout>;
     }
@@ -332,6 +341,28 @@ export class DaemonConnection {
       } catch (error) {
         clearTimeout(timer);
         this.#providerRequests.delete(requestId);
+        reject(error);
+      }
+    });
+  }
+
+  requestThemes(requestId: string): Promise<ThemeResult> {
+    if (this.#state.status !== "ready" || !this.#workspace)
+      return Promise.reject(new Error("Workspace is disconnected"));
+    const request = ThemeRequestSchema.parse({ type: "theme.request", requestId });
+    if (this.#themeRequests.has(requestId))
+      return Promise.reject(new Error("Request is already pending"));
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.#themeRequests.delete(requestId);
+        reject(new Error("Theme request timed out. Reload settings before retrying."));
+      }, 10000);
+      this.#themeRequests.set(requestId, { resolve, reject, timer });
+      try {
+        this.#socket?.send(JSON.stringify(request));
+      } catch (error) {
+        clearTimeout(timer);
+        this.#themeRequests.delete(requestId);
         reject(error);
       }
     });
@@ -587,6 +618,15 @@ export class DaemonConnection {
             }
             break;
           }
+          case "theme.result": {
+            const pending = this.#themeRequests.get(message.requestId);
+            if (pending) {
+              clearTimeout(pending.timer);
+              this.#themeRequests.delete(message.requestId);
+              pending.resolve(message);
+            }
+            break;
+          }
           case "project.result": {
             const pending = this.#projectRequests.get(message.requestId);
             if (pending) {
@@ -755,6 +795,11 @@ export class DaemonConnection {
         pending.reject(new Error("Connection lost. Reload provider settings before retrying."));
       }
       this.#providerRequests.clear();
+      for (const pending of this.#themeRequests.values()) {
+        clearTimeout(pending.timer);
+        pending.reject(new Error("Connection lost. Reload theme settings before retrying."));
+      }
+      this.#themeRequests.clear();
     }
     for (const listener of this.#listeners) {
       listener(state);

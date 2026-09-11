@@ -34,15 +34,16 @@ Phone-specific behavior:
   Add machine setup guidance, Settings and Sign out. Direct previews use the same drawer with an
   honest Desktop connection identity and Disconnect desktop. Existing-machine management remains
   in Settings; no purchasing or provisioning is exposed. The sidebar has no redundant product title.
-- Tabs/panes, Machine, Search, Settings, Add Project and New Tab use the shared Radix dialog with animated
+- Tabs, Machine, Search, Settings, Add Project and New Tab use the shared Radix dialog with animated
   bottom-sheet presentation, focus restoration and reduced-motion support.
   Opening Search or choosing a machine leaves the sidebar visible behind it.
 - Separate glass controls contain the sidebar toggle, sidebar Search, picker and Files button (native SwiftUI
   glass on supported iOS builds; CSS backdrop blur in the web/Android renderer),
   with matching rounded pressed states and opaque fallbacks for reduced transparency.
-  The picker uses a tab/pane breadcrumb and lightly indented
-  pane options under named tab headings with counts, without hierarchy lines or guide text.
-  Tab/pane and machine selection open bottom drawers with scrollable, touch-sized options.
+  The Tabs picker shows a flat list of every pane in the project, with a name and profile per row.
+  There are no desktop tab headings, counts or indentation. Split leaves use the shared tab name
+  plus display position; the original IDs, split geometry and sessions are preserved.
+  Tab and machine selection open bottom drawers with scrollable, touch-sized options.
   The backdrop, Close button and Escape dismiss them and restore focus. Tapping the
   covered trigger dismisses via the backdrop without reopening. The settings section
   picker remains a popover. Pane choices support arrow keys and Home/End; machine and settings
@@ -59,11 +60,13 @@ Phone-specific behavior:
   follow-up content, or Send when idle. Controls fit a single row down to 320px width.
 - Desktop split/placement/arrangement/resize controls and commands are intentionally
   absent on phones. Existing desktop split panes remain accessible in the top picker.
-- The tab/pane drawer has tab cards with per-tab menus (add pane, rename, close), per-pane
-  menus (profile, close) and a New Tab footer. Creation uses the shared new-session drawer
-  and locally packaged provider logos. Add Pane uses the shared split operation without
-  exposing geometry. Each menu targets its own row, including unselected tabs/panes.
-  Closing the last pane warns that its tab will also close; hardware close shortcuts remain.
+- The flat Tabs drawer has one menu per row (type/profile, close, and rename for single-pane
+  desktop tabs) and a New Tab footer. Creation uses the shared new-session drawer and provider
+  logos, always creating a new single-pane desktop tab. Close always sends `pane.close`, never
+  `tab.close`, so siblings survive. Closing an inactive row preserves the current selection;
+  the last pane's confirmation explains that its empty desktop tab is removed too.
+  No local-only names or schema migrations are introduced. Desktop split siblings cannot be
+  renamed independently, so mobile does not offer a misleading rename action for those rows.
 - Files opens full-screen from the right, with a directory tree and separate open-file strip.
   Swipe left from chat or the terminal opens it, swipe right returns; the sidebar retains the
   opposite gesture. Horizontal terminal gestures are handled before xterm can consume them;
@@ -79,18 +82,27 @@ Phone-specific behavior:
 - Drafts, attachments, queues and uncertain-send retry IDs survive pane/tab navigation
   and foreground socket replacement. They remain memory-only and account scoped;
   a full renderer reload discards unsent input. Changing machines starts a new draft scope.
-- External keyboards use the shared command palette/shortcuts. Pane focus follows
-  the top picker's order. Soft Enter adds a newline; the send button submits.
+- External keyboards use the shared command palette/shortcuts. Next/Previous tab follows
+  the flat picker's order across desktop tab boundaries. Legacy pane-focus/close shortcuts
+  remain aliases, not extra menu/settings entries. Soft Enter adds a newline; the send button submits.
 
 ## Source parity
 
+The flat Tabs follow-up is covered by `apps/mobile/e2e-direct/flat-tabs.spec.ts` using an
+isolated real daemon and two protocol clients (deterministic coding-provider fixture).
+It checks nested splits across desktop tabs, flat keyboard order, unchanged saved layout
+and desktop selection on navigation, live desktop rename/split/close updates, mobile
+single-pane tab creation, row-specific profile changes, leaf-only close and draft/session
+retention. Browser/native-bridge tests cover repeated dismissal, per-row menus and the
+updated native Tabs label. These are not physical-device or real-provider release checks.
+
 | Area              | Shared implementation                                                                | Phone behavior                                                                                                       |
 | ----------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
-| Composer          | `agents/composer.tsx`, `draft.ts`, Paseo submit logic                                | Attachments, queue, retry, model/effort/permissions/plan/speed/context, interrupt; native keyboard dictation         |
+| Composer          | `agents/composer.tsx`, `draft.ts`, shared submit logic                               | Attachments, queue, retry, model/effort/permissions/plan/speed/context, interrupt; native keyboard dictation         |
 | Agent providers   | Shared provider settings, model picker, daemon registry and native control bridge    | Six built-ins, 38 optional ACP presets, own-account configuration; switching/import/fork opens a separate local chat |
 | Conversation      | `agents/chat.tsx`, `timeline-item.tsx`, `markdown.tsx`, `plan-progress.tsx`          | Same history, streaming, approvals/questions, thinking, tool/MCP/diff/sub-agent rendering and copy actions           |
 | Projects          | `workspace/project-setup-dialog.tsx`, `project-actions.tsx`                          | Open/create/clone/remove; setup continues remotely                                                                   |
-| Tabs/panes        | Protocol workspace reducer, `workspace/new-tab-menu.tsx`                             | Hierarchical picker; new-tab/add-pane drawer; rename/profile/confirmed close; no desktop geometry controls           |
+| Tabs/panes        | Protocol workspace reducer, `workspace/new-tab-menu.tsx`                             | Flat pane list labeled Tabs; new single-pane tab; safe rename/profile/leaf-only close; no layout migration           |
 | Project files     | `files/tree.tsx`, `file-tab.tsx`, `code-editor.tsx`, `document.ts`, file protocol    | Full-page tree/editor, Markdown, links, create, explicit save/conflicts; local file tabs and draft guards            |
 | Terminal          | `terminal/terminal-pane.tsx`, `surface.tsx` and xterm                                | Same replay, input ownership, resize/recovery; extra key strip and confirmed stop                                    |
 | Terminal profiles | `terminal/profiles-context.tsx`, `workspace/new-tab-menu.tsx`, shared settings       | Machine-synced profiles and literal command arguments; add/manage from the creation drawer or Terminals settings     |
@@ -138,7 +150,7 @@ CI exposed a notification-test setup race: a ready label from an older project d
 prove the separate control socket had received the newly created agent. The test now
 awaits its own project/session; three consecutive isolated notification runs pass.
 The phone suite covers 320/375/390/430px toolbars, contained picker chevrons, repeated
-backdrop dismissal without reopening, hierarchical tab/pane creation and closing, collapsed/expanded composer
+backdrop dismissal without reopening, flat tab creation and leaf-only closing, collapsed/expanded composer
 focus and keyboard dismissal, single centered send/stop actions,
 drawer focus/animations/reduced motion, sidebar-preserving search and machine selection,
 account menus and machine management.

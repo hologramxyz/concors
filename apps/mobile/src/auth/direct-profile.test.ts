@@ -44,3 +44,16 @@ it("rejects insecure, credential-bearing or ambiguous private profile endpoints"
     expect(() => createDirectProfileSession(endpoint)).toThrow();
   expect(() => createDirectProfileSession("ws://localhost:7440/ws")).not.toThrow();
 });
+
+it("keeps profile authentication inside a path-hosted preview's private gateway", async () => {
+  const requests: string[] = [];
+  const session = createDirectProfileSession(
+    "wss://private.example/mobile/desktop-daemon/ws",
+    async (input) => {
+      requests.push(String(input));
+      return new Response(JSON.stringify(demoMe));
+    },
+  );
+  await session.api.getMe();
+  expect(requests).toEqual(["https://private.example/mobile/desktop-daemon/profile-api/api/v1/me"]);
+});

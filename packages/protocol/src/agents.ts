@@ -217,8 +217,23 @@ export const AgentConversationSchema = z.object({
   agent: AgentInfoSchema,
   items: z.array(AgentItemSchema).max(80),
   hasMore: z.boolean(),
+  // Optional for compatibility with daemons that only support backward paging.
+  hasNewer: z.boolean().optional(),
 });
 export type AgentConversation = z.infer<typeof AgentConversationSchema>;
+export const AgentMessageIndexSchema = z.object({
+  messages: z
+    .array(
+      z.object({
+        id: z.string(),
+        position: z.number().int().nonnegative(),
+        preview: z.string().max(240),
+      }),
+    )
+    .max(200),
+  hasMore: z.boolean(),
+});
+export type AgentMessageIndex = z.infer<typeof AgentMessageIndexSchema>;
 export const NativeSessionSchema = z.object({
   id: z.string().min(1).max(4096),
   title: z.string().max(4000),
@@ -304,8 +319,18 @@ export const AgentOperationSchema = z.discriminatedUnion("kind", [
     expectedVersion: z.number().int().nonnegative(),
     model: AgentModelIdSchema.optional(),
   }),
+  z
+    .object({
+      kind: z.literal("read"),
+      sessionId: Id,
+      before: z.number().int().nonnegative().optional(),
+      after: z.number().int().nonnegative().optional(),
+    })
+    .refine((read) => read.before === undefined || read.after === undefined, {
+      message: "Read history in one direction at a time",
+    }),
   z.object({
-    kind: z.literal("read"),
+    kind: z.literal("list-messages"),
     sessionId: Id,
     before: z.number().int().positive().optional(),
   }),
@@ -364,6 +389,7 @@ export const AgentResultSchema = z.object({
         .optional(),
       account: AgentAccountSchema.optional(),
       attachment: AgentAttachmentSchema.optional(),
+      messageIndex: AgentMessageIndexSchema.optional(),
     }),
     z.object({ status: z.literal("error"), message: z.string() }),
   ]),

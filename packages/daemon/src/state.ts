@@ -27,10 +27,12 @@ export class DaemonState {
       capabilities: [
         HOST_USAGE_CAPABILITY,
         "terminal-profiles",
+        "color-themes",
         "project-files",
         "project-file-create",
         "folder-workspaces",
         "agent-chat",
+        "agent-message-navigation",
         "agent-accounts",
         "agent-attention",
         "agent-composer",

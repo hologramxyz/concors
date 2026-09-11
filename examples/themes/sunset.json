@@ -1,0 +1,14 @@
+{
+  "$schema": "../../docs/themes.schema.json",
+  "version": 1,
+  "id": "sunset",
+  "name": "Sunset",
+  "description": "Warm amber on parchment and deep brown.",
+  "extends": "sand",
+  "light": { "accent": "#984522", "selection": "#f1d4bc" },
+  "dark": {
+    "accent": "#ffc092",
+    "selection": "#624431",
+    "terminal": { "red": "#f39c8b", "yellow": "#edc583", "bright-red": "#ffb3a4" }
+  }
+}

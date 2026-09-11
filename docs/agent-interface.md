@@ -12,39 +12,10 @@ account using a regular terminal. Installation is separate from authentication.
 See [provider support](unified-chat-provider-support.md) for the exact capability
 matrix, configuration details, and verification limits.
 
-## Paseo reuse
+## Third-party components
 
-See [provider support](unified-chat-provider-support.md) for current behavior and
-the [historical parity audit](unified-chat-parity-audit.md) for the original defects. The
-earlier [UI audit](paseo-ui-audit.md) records the initial composer/timeline port.
-
-The following source files were imported from `getpaseo/paseo` revision
-`a7a708bec99e935ee4b8c6f7314a4b9a9984cfa6`, under Apache-2.0. The copyright
-notice and full license are retained in `third-party/paseo-LICENSE`.
-
-| Upstream source                                             | Concors destination under `apps/desktop/src/agents/paseo` |
-| ----------------------------------------------------------- | --------------------------------------------------------- |
-| `packages/protocol/src/agent-types.ts`                      | `agent-types.ts` (tool detail types extracted)            |
-| `packages/protocol/src/tool-call-display.ts`                | `tool-call-display.ts`                                    |
-| `packages/protocol/src/path-utils.ts`                       | `path-utils.ts`                                           |
-| `packages/protocol/src/tool-name-normalization.ts`          | `tool-name-normalization.ts`                              |
-| `packages/app/src/utils/tool-call-detail-state.ts`          | `tool-call-detail-state.ts`                               |
-| `packages/app/src/utils/extract-tool-call-file-path.ts`     | `extract-tool-call-file-path.ts`                          |
-| `packages/app/src/composer/submit.ts`                       | `submit.ts`                                               |
-| `packages/app/src/composer/agent-controls/model-loading.ts` | `model-loading.ts`                                        |
-
-Changes adapt imports, strict optional/indexed types, array syntax, and the English
-send-error fallback. The tool icon type is narrowed to the needs of the DOM adapter.
-`timeline-item.tsx` and `composer.tsx` connect these helpers to React DOM and Concors'
-daemon protocol; Paseo's React Native components cannot be mounted directly here.
-Daemon mode presets also follow Paseo's `codex-app-server-agent.ts`.
-
-Additional imports: `components/icons/codex-icon.tsx`,
-`components/context-window-meter.utils.ts`, `utils/tool-call-icon-name.ts`, and
-`utils/highlight-cache.ts`. DOM adapters replace React Native SVG/clipboard/style
-APIs, and the cache constructor uses erasable TypeScript syntax. Syntax highlighting
-uses the published `@getpaseo/highlight@0.7.2` package; its packaged third-party
-parser licenses remain with the dependency.
+Source provenance, adaptation notes, and license locations are recorded in
+[third-party source notices](../third-party/source-notices.md).
 
 ## Behavior
 
@@ -113,3 +84,17 @@ See [the detailed primitive audit](chat-primitives-audit.md) for structured task
 plan implementation/review, questions/editors/confirmations, permission scopes,
 async question recovery, attachments and the shared mobile verification. It also
 records the remaining custom-UI and provider-dependent limitations.
+
+## Message navigation
+
+The tick rail beside a wide conversation indexes every saved user message.
+Hover to preview a prompt; nearby ticks expand without moving their click targets.
+Click to jump, or focus the rail and use Up/Down, Home/End, and Enter. Reading an
+older prompt pauses output-follow until you scroll back down or choose **Latest**.
+
+**Browse your messages** opens the same index as a list in narrow panes and on
+mobile. The index reads bounded, session-scoped preview pages independently of
+the visible timeline; jumping loads the missing history without resending a prompt.
+A history revision invalidates the old index. Older daemons fall back to loaded messages,
+with more loaded automatically as you scroll up in the conversation. Native CLI text remains on the
+machine; no provider request is needed to list the saved prompts.
