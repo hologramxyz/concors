@@ -6,6 +6,7 @@ import { BrailleSpinner } from "./activity";
 import { AgentMarkdown, CopyButton } from "./markdown";
 export function PlanProgress({ item, compact = false }: { item: AgentItem; compact?: boolean }) {
   const steps = item.presentation?.steps ?? [];
+  if (!steps.length && !item.text.trim()) return null;
   const completed = steps.filter((s) => s.status === "completed").length;
   return (
     <details
@@ -36,7 +37,9 @@ export function PlanProgress({ item, compact = false }: { item: AgentItem; compa
                   <Circle className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                 )}
                 <span className={step.status === "completed" ? "text-muted-foreground" : ""}>
-                  {step.step}
+                  {step.status === "inProgress" && item.status === "running"
+                    ? (step.activeForm ?? step.step)
+                    : step.step}
                 </span>
               </li>
             ))}

@@ -33,6 +33,7 @@ it("renders native shell, file and search tools without relabeling them as MCP",
   );
   expect(edit?.presentation).toEqual({
     type: "files",
+    fileOperation: "edit",
     files: [{ path: "app.ts", diff: "-before\n+after" }],
   });
   const read = mapCodexItem(

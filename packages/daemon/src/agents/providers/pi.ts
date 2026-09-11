@@ -20,7 +20,7 @@ import { JsonLines } from "./json-lines.ts";
 // Pi's tool_call hook waits for the native RPC confirmation dialog before each tool executes.
 // This extension is supplied explicitly on every launch, including resumed sessions.
 const guard = `export default function(pi) { pi.on("tool_call", async (event,ctx) => {
-  const allowed = await ctx.ui.confirm("Allow " + event.toolName + "?", JSON.stringify(event));
+  const allowed = await ctx.ui.confirm("Concors tool approval: " + event.toolName, JSON.stringify(event));
   if (!allowed) return {block:true,reason:"Declined in Concors"};
 }); }`;
 export class PiProvider extends EventProvider {
@@ -30,6 +30,7 @@ export class PiProvider extends EventProvider {
     "pi-sessions",
   );
   private text = "";
+  private thinking = new Map<number, string>();
   private messageId = "";
   private cwd: string;
   private launcher: typeof launch;
@@ -209,7 +210,9 @@ export class PiProvider extends EventProvider {
           id: this.threadId,
           turns:
             method === "thread/resume"
-              ? piHistory(array(object(await resumed.request("get_messages"))["messages"]))
+              ? this.restoredHistory(
+                  piHistory(array(object(await resumed.request("get_messages"))["messages"])),
+                )
               : [],
         },
       };
@@ -363,9 +366,44 @@ export class PiProvider extends EventProvider {
         });
         return;
       }
-      if (e["method"] === "confirm") {
+      if (e["method"] === "confirm" && string(e["title"]).startsWith("Concors tool approval: ")) {
         const confirmed = await this.permission(string(e["title"]), e["message"]);
         this.rpc?.write({ type: "extension_ui_response", id, confirmed });
+        return;
+      }
+      if (e["method"] === "confirm") {
+        const response = object(
+          await this.onInput(
+            "item/tool/requestUserInput",
+            {
+              threadId: this.threadId,
+              turnId: this.turnId,
+              questions: [
+                {
+                  id: "confirm",
+                  header: "Confirm",
+                  question: [string(e["title"]), string(e["message"])].filter(Boolean).join("\n\n"),
+                  required: true,
+                  allowOther: false,
+                  options: [
+                    { label: "Yes", description: "" },
+                    { label: "No", description: "" },
+                  ],
+                },
+              ],
+            },
+            String(id),
+          ),
+        );
+        this.rpc?.write({
+          type: "extension_ui_response",
+          id,
+          confirmed:
+            !response["decision"] &&
+            array(object(object(response["answers"])["confirm"])["answers"])[0] === "Yes" &&
+            !this.interrupted,
+          ...(response["decision"] ? { cancelled: true } : {}),
+        });
         return;
       }
       if (e["method"] === "select" || e["method"] === "input" || e["method"] === "editor") {
@@ -379,19 +417,62 @@ export class PiProvider extends EventProvider {
             {
               threadId: this.threadId,
               turnId: this.turnId,
-              questions: [{ id: "value", header: "Pi", question: string(e["title"]), options }],
+              questions: [
+                {
+                  id: "value",
+                  header: this.engine === "omp" ? "OMP" : "Pi",
+                  question: string(e["title"]),
+                  options,
+                  allowOther: e["method"] !== "select",
+                  required:
+                    e["method"] === "select" ||
+                    (e["method"] === "input" &&
+                      !/\boptional\b|\bskip\b/i.test(string(e["placeholder"]))),
+                  multiline: e["method"] === "editor",
+                  placeholder: string(e["placeholder"]),
+                  defaultValue: string(e["prefill"]),
+                },
+              ],
+              decisionLabels: { decline: "Dismiss" },
             },
             String(id),
           ),
         );
+        if (response["decision"] === "decline" || response["decision"] === "cancel") {
+          this.rpc?.write({ type: "extension_ui_response", id, cancelled: true });
+          return;
+        }
         const answer = object(object(response["answers"])["value"]);
-        this.rpc?.write({ type: "extension_ui_response", id, value: array(answer["answers"])[0] });
+        this.rpc?.write({
+          type: "extension_ui_response",
+          id,
+          value: array(answer["answers"])[0] ?? "",
+        });
+        return;
+      }
+      if (e["method"] === "notify") {
+        this.item({
+          id: `notice:${id}`,
+          type: "notification",
+          title: "Agent notice",
+          text: string(e["message"]),
+        });
         return;
       }
       this.rpc?.write({ type: "extension_ui_response", id, cancelled: true });
       return;
     }
     if (!this.turnId) return;
+    if (["auto_retry_start", "auto_retry_end"].includes(string(e["type"])))
+      this.item(
+        {
+          id: `retry:${this.turnId}`,
+          type: "notification",
+          title: e["type"] === "auto_retry_start" ? "Retrying" : "Retry finished",
+          text: string(e["errorMessage"]) || "The provider is retrying the request.",
+        },
+        e["type"] === "auto_retry_end",
+      );
     if (e["type"] === "command_output")
       this.item({ id: randomUUID(), type: "agentMessage", text: string(e["text"]) });
     if (["compaction_start", "auto_compaction_start"].includes(string(e["type"])))
@@ -404,9 +485,19 @@ export class PiProvider extends EventProvider {
       if (message["role"] === "user")
         this.emit("turn/nativeIdentity", { nativeTurnId: this.messageId });
       this.text = "";
+      this.thinking.clear();
     }
     if (e["type"] === "message_update") {
       const event = object(e["assistantMessageEvent"]);
+      if (event["type"] === "thinking_delta") {
+        const index = Number(event["contentIndex"] ?? 0),
+          value = (this.thinking.get(index) ?? "") + string(event["delta"]);
+        this.thinking.set(index, value);
+        this.item(
+          { id: `${this.messageId}:thinking:${index}`, type: "reasoning", summary: [value] },
+          false,
+        );
+      }
       if (event["type"] === "text_delta") {
         this.text += string(event["delta"]);
         this.item({ id: this.messageId, type: "agentMessage", text: this.text }, false);
@@ -414,7 +505,26 @@ export class PiProvider extends EventProvider {
     }
     if (e["type"] === "message_end") {
       const m = object(e["message"]);
+      if (m["role"] === "custom" && m["display"] !== false) {
+        const text = textContent(m["content"]);
+        if (text)
+          this.item({
+            id: messageIdentity(m, this.messageId),
+            type: "notification",
+            title: "Agent update",
+            text,
+          });
+      }
       if (m["role"] === "assistant") {
+        array(m["content"]).forEach((raw, index) => {
+          const block = object(raw);
+          if (block["type"] === "thinking" && string(block["thinking"]))
+            this.item({
+              id: `${this.messageId}:thinking:${index}`,
+              type: "reasoning",
+              summary: [string(block["thinking"])],
+            });
+        });
         const text = textContent(array(m["content"]).filter((v) => object(v)["type"] === "text"));
         if (text) this.item({ id: this.messageId, type: "agentMessage", text });
         if (m["errorMessage"]) this.finish(string(m["errorMessage"]));

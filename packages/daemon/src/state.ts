@@ -37,6 +37,7 @@ export class DaemonState {
         "agent-providers",
         "provider-settings",
         "agent-native-controls",
+        "agent-plan-implementation",
         "pane-rearrangement",
         "workspace-pane-rearrangement",
         "directional-pane-split",

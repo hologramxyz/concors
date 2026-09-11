@@ -9,6 +9,7 @@ import {
 } from "../../packages/daemon/src/terminal/testing/profile.ts";
 import { createDaemonServer } from "../../packages/daemon/src/server.ts";
 import { loadDaemonConfig } from "../../packages/daemon/src/config.ts";
+import { TestAccountBackend } from "../../packages/daemon/src/agents/testing/account.ts";
 import { TestAgentProvider } from "../../packages/daemon/src/agents/testing/provider.ts";
 import { TestAccountBackend } from "../../packages/daemon/src/agents/testing/account.ts";
 import { mobileDirectPort, mobileWebOrigin } from "./mobile-direct-ports.cjs";
