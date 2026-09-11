@@ -1,7 +1,8 @@
-import { useContext, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { Dialog } from "radix-ui";
 import { GitFork, History, Undo2, X } from "lucide-react";
 import type { AgentInfo, AgentItem, AgentOperation, NativeSession } from "@concors/protocol";
+import { AgentStartedContext } from "./context";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 
 export function SessionActions({
@@ -14,6 +15,14 @@ export function SessionActions({
   connected: boolean;
 }) {
   const connection = useContext(TerminalConnectionContext);
+  const onStarted = useContext(AgentStartedContext),
+    generation = useRef(0);
+  useEffect(
+    () => () => {
+      generation.current++;
+    },
+    [connection, agent.id],
+  );
   const [page, setPage] = useState<"import" | "rewind" | "mcp" | null>(null),
     [sessions, setSessions] = useState<NativeSession[]>([]);
   const [busy, setBusy] = useState(false),
@@ -30,8 +39,14 @@ export function SessionActions({
     return null;
   const perform = async (op: AgentOperation) => {
     if (!connection) throw new Error("Machine is disconnected");
+    const attempt = generation.current;
     const result = await connection.requestAgent(op, crypto.randomUUID());
     if (result.outcome.status === "error") throw new Error(result.outcome.message);
+    if (
+      attempt === generation.current &&
+      (op.kind === "fork-session" || op.kind === "import-session")
+    )
+      onStarted?.(result.outcome.conversation.agent.id);
     return result.outcome;
   };
   const run = async (work: () => Promise<void>) => {
