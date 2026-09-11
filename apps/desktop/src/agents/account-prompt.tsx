@@ -12,6 +12,7 @@ import {
 } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { openExternal } from "@/tauri/open-external";
+import { invalidateModelCatalogs } from "./model-catalog";
 
 const button = "rounded-md border px-2.5 py-1.5 text-xs hover:bg-muted disabled:opacity-40";
 function dismissed(key: string) {
@@ -112,6 +113,8 @@ function AccountPrompt({
           !next.message
         )
           next.message = "Sign-in expired or was cancelled. Try again.";
+        if (next.status === "connected" && latest.current && latest.current.status !== "connected")
+          invalidateModelCatalogs(connection);
         latest.current = next;
         setAccount(next);
         if (action.type === "complete" || next.status === "connected") setValue("");
