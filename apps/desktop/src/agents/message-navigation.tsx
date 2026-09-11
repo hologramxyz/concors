@@ -52,7 +52,8 @@ export function MessageNavigation({
     let frame = 0;
     const update = () => {
       frame = 0;
-      const top = el.getBoundingClientRect().top + 36;
+      const inset = Math.max(36, Number.parseFloat(getComputedStyle(el).scrollPaddingTop) || 0);
+      const top = el.getBoundingClientRect().top + inset;
       const messages = el.querySelectorAll<HTMLElement>("[data-user-message]");
       let current = messages[0]?.dataset.userMessage ?? null;
       for (const message of messages) {
@@ -96,6 +97,7 @@ export function MessageNavigation({
       <nav
         ref={rail}
         aria-label="Your messages"
+        aria-busy={loading || jumping}
         className="message-rail"
         onPointerLeave={clearHover}
       >
