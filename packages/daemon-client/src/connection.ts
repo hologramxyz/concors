@@ -453,6 +453,7 @@ export class DaemonConnection {
         this.#setState({ status: "handshaking" });
         const hello: ClientHelloMessage = {
           type: "client.hello",
+          capabilities: ["agent-providers-v2"],
           protocolVersion: this.#protocolVersion,
           client: this.#client,
         };

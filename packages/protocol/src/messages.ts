@@ -41,6 +41,7 @@ export const ClientHelloMessageSchema = z.object({
   type: z.literal("client.hello"),
   protocolVersion: ProtocolVersionSchema,
   client: ClientInfoSchema,
+  capabilities: z.array(z.string().max(100)).max(64).optional(),
 });
 export type ClientHelloMessage = z.infer<typeof ClientHelloMessageSchema>;
 
