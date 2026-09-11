@@ -192,7 +192,8 @@ the in-memory demo cannot prove real provider switching or saved profile launch.
    In an agent chat, tap the composer and its model icon. Go back to providers, choose
    an installed Claude Code, OpenCode or Pi provider, then a model. The new chat should
    open automatically; use Tabs and panes to return to the original conversation.
-   Provider accounts must already be configured on the connected machine.
+   Current daemons with `agent-accounts` also offer dismissible Codex, Claude and
+   OpenCode sign-in in the chat. Other providers still use their own CLI setup.
 2. In Tabs and panes, choose New tab → Add terminal profile. Save a harmless command
    (for example, `pwd` on a Unix machine), close settings, and launch that profile
    from New tab. The same saved profile should appear on desktop.
@@ -207,6 +208,13 @@ the in-memory demo cannot prove real provider switching or saved profile launch.
 6. Where available, import a native session or fork an idle conversation. The phone
    should open the new chat while the original remains in Tabs and panes. Rewind
    names its exact scope; file checkpoints and conversation rollback differ.
+7. Open the sidebar: its menu and search buttons should match the floating chat
+   header. Tap your name/avatar to open Account, not Settings. The drawer starts
+   with the machine selector, followed by Add machine, Settings and Sign out.
+   Direct previews show **Desktop connection** (there is no cloud identity), with
+   the same drawer and **Disconnect desktop** instead of Sign out. Add machine
+   explains setup and refreshes existing cloud machines; it does not provision or
+   purchase one. Closing nested machine sheets restores focus to the account drawer.
 
 The full [provider support report](../../docs/unified-chat-provider-support.md)
 covers six built-in agents, 38 opt-in ACP presets, credential/MCP settings, native
@@ -253,7 +261,8 @@ See [file behavior and safety boundaries](../../docs/project-files.md).
 ### Glass rendering: web styling versus native iOS
 
 The iOS workspace now uses [Expo UI SwiftUI buttons](https://docs.expo.dev/versions/latest/sdk/ui/swift-ui/button/)
-with `buttonStyle('glass')` for the sidebar, tabs/panes, Files, Back and directory controls.
+with `buttonStyle('glass')` for both sidebar menu buttons, sidebar Search, tabs/panes,
+Files, Back and directory controls.
 The agent composer uses a real React Native `TextInput` above an
 [Expo GlassEffect `GlassView`](https://docs.expo.dev/versions/latest/sdk/glass-effect/) background.
 These views sit **above** WKWebView, with chat scrolling behind the composer; they are not CSS
@@ -369,6 +378,13 @@ pnpm exec playwright install chromium
 pnpm test:mobile:e2e
 pnpm test:mobile:direct
 pnpm mobile:build
+```
+
+If another checkout owns the direct-suite ports, use a separate pair (the production
+daemon origin allowlist is unchanged):
+
+```bash
+CONCORS_MOBILE_DIRECT_PORT=7458 CONCORS_MOBILE_WEB_PORT=8098 pnpm test:mobile:direct
 ```
 
 The browser suite covers chat, approvals, streaming, attachments, queue/draft retention,
