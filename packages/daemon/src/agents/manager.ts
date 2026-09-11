@@ -1,4 +1,8 @@
-import { AgentAccounts, type AccountBackendFactory } from "./accounts/manager.ts";
+import {
+  AgentAccounts,
+  createAccountBackend,
+  type AccountBackendFactory,
+} from "./accounts/manager.ts";
 import { defaultSettings, parseModels, turnControls } from "./controls.ts";
 import { saveAttachments } from "./attachments.ts";
 import type { AgentAttachment } from "@concors/protocol";
@@ -83,23 +87,26 @@ export class AgentManager {
     this.#emit = emit;
     this.#workspaceChanged = workspaceChanged;
     this.#factory = factory;
-    this.accounts = new AgentAccounts(accountFactory, (info) => {
-      // Catalogs are keyed by directory, provider and registry revision.
-      this.catalogs.clear();
-      // Idle runtimes reload the provider's freshly saved credentials on the next send.
-      for (const [id, runtime] of this.#runtimes) {
-        const current = this.#store.agent(id);
-        if (
-          current.directory !== info.directory ||
-          current.provider !== info.provider ||
-          ["starting", "working", "needs_input"].includes(current.status)
-        )
-          continue;
-        runtime.closed = true;
-        this.#runtimes.delete(id);
-        void runtime.provider.close().catch(() => undefined);
-      }
-    });
+    this.accounts = new AgentAccounts(
+      accountFactory ?? ((info) => createAccountBackend(info, registry)),
+      (info) => {
+        // Catalogs are keyed by directory, provider and registry revision.
+        this.catalogs.clear();
+        // Idle runtimes reload the provider's freshly saved credentials on the next send.
+        for (const [id, runtime] of this.#runtimes) {
+          const current = this.#store.agent(id);
+          if (
+            current.directory !== info.directory ||
+            current.provider !== info.provider ||
+            ["starting", "working", "needs_input"].includes(current.status)
+          )
+            continue;
+          runtime.closed = true;
+          this.#runtimes.delete(id);
+          void runtime.provider.close().catch(() => undefined);
+        }
+      },
+    );
     for (const info of store.agents())
       if (["starting", "working", "needs_input"].includes(info.status)) {
         store.saveAgent({

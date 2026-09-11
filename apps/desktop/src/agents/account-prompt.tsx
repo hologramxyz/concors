@@ -4,7 +4,7 @@ import type { DaemonConnection } from "@concors/daemon-client";
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { Check, Copy, ExternalLink, LoaderCircle, X } from "lucide-react";
 import {
-  agentProviderNames,
+  agentProviderName,
   type AgentAccount,
   type AgentAccountAction,
   type AgentInfo,
@@ -30,7 +30,7 @@ export function AgentAccountPrompt({ agent, canEdit }: { agent: AgentInfo; canEd
     !connection ||
     connection.state.status !== "ready" ||
     !connection.state.daemon.capabilities?.includes("agent-accounts") ||
-    agent.provider === "pi"
+    !["codex", "claude", "opencode"].includes(agent.engine ?? agent.provider)
   )
     return null;
   return (
@@ -183,7 +183,8 @@ function AccountPrompt({
     return (
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground" role="status">
         <Check className="size-3.5" />
-        {agentProviderNames[agent.provider]} connected{account.label ? ` · ${account.label}` : ""}
+        {agent.providerLabel ?? agentProviderName(agent.provider)} connected
+        {account.label ? ` · ${account.label}` : ""}
       </div>
     );
   const methods = account?.methods ?? [];
@@ -191,16 +192,16 @@ function AccountPrompt({
   const challenge = account?.challenge;
   return (
     <section
-      aria-label={`${agentProviderNames[agent.provider]} account connection`}
+      aria-label={`${agent.providerLabel ?? agentProviderName(agent.provider)} account connection`}
       className="rounded-xl border bg-muted/30 p-3 text-sm"
     >
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="font-medium">
             Connect your{" "}
-            {agent.provider === "codex"
+            {(agent.engine ?? agent.provider) === "codex"
               ? "ChatGPT"
-              : agent.provider === "claude"
+              : (agent.engine ?? agent.provider) === "claude"
                 ? "Claude"
                 : "model provider"}{" "}
             account
