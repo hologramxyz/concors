@@ -28,6 +28,7 @@ import { NewTabMenu } from "@/workspace/new-tab-menu";
 import { TAB_PROFILES } from "@/workspace/tab-profiles";
 import { CommandPalette } from "@/components/command-palette";
 import { MobileAccountMenu } from "@/components/account-menu";
+import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
 import { embeddedConnection, getHostState, hostAction, subscribeHost } from "./bridge";
 import { resolveMobileSelection, tabPanes } from "./selection";
@@ -468,14 +469,9 @@ function MobileWorkspaceContent({
                 style={{ width }}
               >
                 <div className="mobile-sidebar-head">
-                  <NativeHeaderButton
-                    icon="menu"
-                    className="mobile-icon mobile-glass"
-                    aria-label="Close sidebar"
-                    onClick={() => setSidebarOpen(false)}
-                  >
-                    <Menu />
-                  </NativeHeaderButton>
+                  <span className="mobile-sidebar-brand" role="img" aria-label="Concourse">
+                    <BrandMark />
+                  </span>
                   <NativeHeaderButton
                     icon="search"
                     className="mobile-icon mobile-glass ml-auto"
@@ -540,6 +536,10 @@ function MobileWorkspaceContent({
                 </nav>
                 <div className="mobile-sidebar-footer">
                   <MobileAccountMenu
+                    profile={host.profile ?? null}
+                    {...(host.direct
+                      ? { onOpenProfile: () => runHost({ kind: "open-profile" }) }
+                      : {})}
                     auth={
                       host.me
                         ? {
@@ -569,6 +569,7 @@ function MobileWorkspaceContent({
                 data-testid="mobile-workspace"
                 style={{
                   transform: `translateX(${gesture.offset}px)`,
+                  borderRadius: Math.min(32, gesture.offset),
                   transition: gesture.dragging ? "none" : undefined,
                 }}
               >
