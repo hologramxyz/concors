@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { mobileDesktopSocket, mobileDirectSocket } from "../../../e2e/support/mobile-direct-ports";
 import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -15,7 +16,7 @@ async function setup(page: Page, projectName = "Mobile file test") {
   );
   await writeFile(join(root, ".hidden"), "private fixture\n");
   const desktop = new DaemonConnection({
-    endpoint: describeDaemonEndpoint("ws://127.0.0.1:7440/ws"),
+    endpoint: describeDaemonEndpoint(mobileDesktopSocket),
     client: { kind: "desktop", name: "mobile-file-control", version: "0.1.0" },
   });
   const off = desktop.subscribeWorkspace(() => undefined);
@@ -226,7 +227,7 @@ test("Files explains an older daemon without sending unsupported file requests",
   page,
 }) => {
   let fileRequests = 0;
-  await page.routeWebSocket("ws://localhost:7440/ws", (socket) => {
+  await page.routeWebSocket(mobileDirectSocket, (socket) => {
     const server = socket.connectToServer();
     server.onMessage((raw) => {
       const message = JSON.parse(raw.toString()) as { type: string; capabilities?: string[] };
