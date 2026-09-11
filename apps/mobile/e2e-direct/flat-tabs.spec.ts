@@ -179,9 +179,21 @@ test("flat mobile tabs stay synced with desktop nested splits without flattening
     await expect.poll(() => project().tabs.length).toBe(3);
     const added = project().tabs[2];
     if (!added) throw new Error("Missing newly created tab");
+    expect(added.name).toBe("Tab 3");
     expect(added.nodes).toHaveLength(1);
     expect(layout().slice(0, 2)).toEqual(originalLayout);
     await expect(picker).toHaveAttribute("data-value", `${added.id}:${added.root}`);
+    await picker.click();
+    await drawer.getByRole("button", { name: "Actions for tab Tab 3", exact: true }).click();
+    await ui.getByRole("menuitem", { name: "Rename tab", exact: true }).click();
+    await ui.getByLabel("Tab name", { exact: true }).fill("Mobile review");
+    await ui.getByRole("button", { name: "Save", exact: true }).click();
+    await expect
+      .poll(() => project().tabs.find((tab) => tab.id === added.id)?.name)
+      .toBe("Mobile review");
+    // Renaming does not change the tab/pane identity shared with desktop.
+    await expect(picker).toHaveAttribute("data-value", `${added.id}:${added.root}`);
+    await expect(drawer).not.toBeVisible();
     await picker.click();
     await drawer.locator(`[data-value="${tabId}:${paneId}"]`).click();
     await expect(input).toHaveValue("Keep this draft while switching tabs");

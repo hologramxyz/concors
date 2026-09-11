@@ -80,7 +80,7 @@ it("opens and creates real folders, preserving duplicate receipts and existing f
   for (const project of store.snapshot().projects) {
     expect(project.tabs).toHaveLength(1);
     expect(project.tabs[0]).toMatchObject({
-      name: "Terminal",
+      name: "Tab 1",
       nodes: [{ kind: "pane", profile: "shell", sessionId: null }],
     });
   }

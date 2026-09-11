@@ -64,6 +64,11 @@ test("workspace shortcuts create, search, split and close the active pane withou
     await page.keyboard.press("Control+Shift+t");
     await page.keyboard.press("Enter");
     await page.getByRole("menuitem", { name: "Codex", exact: true }).click();
+    const tab = page.getByLabel("Project tabs", { exact: true }).getByRole("button", {
+      name: "Tab 2",
+      exact: true,
+    });
+    await expect(tab).toHaveAttribute("aria-pressed", "true");
     const panes = page.getByRole("region", { name: "Codex pane", exact: true });
     await expect(panes).toHaveCount(1);
     await expect(page.getByLabel("Terminal output").filter({ visible: true })).toContainText(
@@ -151,7 +156,7 @@ test("workspace shortcuts create, search, split and close the active pane withou
     await page.keyboard.press("Control+Shift+t");
     await page.keyboard.press("Backspace");
     await expect(panes).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Codex", exact: true })).toHaveCount(0);
+    await expect(tab).toHaveCount(0);
     await page.keyboard.press("Control+Shift+k");
     await page.getByPlaceholder("Type a command or search…").fill(basename(directory));
     await page.getByRole("option", { name: basename(directory), exact: true }).click();

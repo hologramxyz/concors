@@ -710,7 +710,7 @@ test("flat tab picker opens a bottom sheet and dismisses without reopening", asy
   await expect(list.locator(".mobile-pane-choice")).toContainText([
     "Mobile launch · 1",
     "Mobile launch · 2",
-    "Agent",
+    "Tab 2",
   ]);
   await closePickerSheet(ui);
   await workspaceActions(ui);

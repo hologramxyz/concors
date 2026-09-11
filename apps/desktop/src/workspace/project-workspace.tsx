@@ -7,7 +7,7 @@ import { shortcutLabel } from "@/shortcuts/bindings";
 import type { PaneFocusRequest } from "./session-pane";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { NewTabMenu } from "./new-tab-menu";
-import { TAB_PROFILES } from "./tab-profiles";
+import { nextWorkspaceTabName } from "@concors/protocol";
 import { ContextMenu } from "radix-ui";
 import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { FolderOpen, Pencil, Plus, X } from "lucide-react";
@@ -116,7 +116,7 @@ export function ProjectWorkspace({
         </Button>
       </div>
     );
-  const createTab = (profile: PaneProfile, name?: string, terminalProfileId?: string) => {
+  const createTab = (profile: PaneProfile, terminalProfileId?: string) => {
     files.select(scope, null);
     if (!connection?.workspace || !canEdit || creating.current) return;
     const sourcePane =
@@ -134,7 +134,7 @@ export function ProjectWorkspace({
         expectedVersion: project.version,
         tabId,
         paneId,
-        name: name || (TAB_PROFILES.find((item) => item.profile === profile)?.label ?? "Terminal"),
+        name: nextWorkspaceTabName(project.tabs),
         profile,
         ...(terminalProfileId ? { terminalProfileId } : {}),
         ...(sourcePane ? { sourcePaneId: sourcePane.id } : {}),
