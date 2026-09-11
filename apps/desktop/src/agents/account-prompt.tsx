@@ -1,4 +1,5 @@
 import { PaneVisibilityContext } from "@/components/compact-layout";
+import { copyText } from "@/lib/clipboard";
 import { useTabVisible } from "@/workspace/tab-visibility";
 import type { DaemonConnection } from "@concors/daemon-client";
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
@@ -238,9 +239,15 @@ function AccountPrompt({
                 aria-label="Copy sign-in code"
                 onClick={() => {
                   if (challenge.code)
-                    void navigator.clipboard.writeText(challenge.code).then(
-                      () => setCopied(true),
-                      () => setError("Could not copy. Select the code and copy it manually."),
+                    void copyText(challenge.code).then(
+                      () => {
+                        setCopied(true);
+                        setError(null);
+                      },
+                      () => {
+                        setCopied(false);
+                        setError("Could not copy. Select the code and copy it manually.");
+                      },
                     );
                 }}
               >

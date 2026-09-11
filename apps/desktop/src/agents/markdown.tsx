@@ -4,6 +4,7 @@ import { Children, isValidElement, useState, lazy, Suspense, type ReactNode } fr
 import Markdown, { defaultUrlTransform } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Check, Copy } from "lucide-react";
+import { copyText } from "@/lib/clipboard";
 const HighlightedCode = lazy(() => import("./highlighted-code"));
 
 export function CopyButton({ text, label = "Copy message" }: { text: string; label?: string }) {
@@ -16,12 +17,15 @@ export function CopyButton({ text, label = "Copy message" }: { text: string; lab
       title={copied ? "Copied" : error ? "Copy failed; try again" : label}
       className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
       onClick={() => {
-        void navigator.clipboard.writeText(text).then(
+        void copyText(text).then(
           () => {
             setCopied(true);
             setError(false);
           },
-          () => setError(true),
+          () => {
+            setCopied(false);
+            setError(true);
+          },
         );
       }}
       onBlur={() => setCopied(false)}
