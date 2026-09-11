@@ -6,6 +6,10 @@ follow the selected appearance. Settings keeps its dedicated, full-width sidebar
 and mobile keeps its existing swipe sidebar.
 
 - Machine switching, expand/collapse, Search and Account remain accessible.
+- Sidebar tooltips are enabled only in the collapsed rail, including keyboard
+  focus. The expanded sidebar has no hover/focus tooltips on its controls or rows.
+  Tooltip surfaces, text and arrows follow the same light/dark and palette colors
+  as menus instead of using an inverted, bright foreground-colored background.
 - Workspaces show the first grapheme of their name. Hover or keyboard focus reveals
   the full name and directory. The plus menu replaces the workspace section heading
   in the rail; there is no redundant folder icon.
