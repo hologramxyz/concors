@@ -101,15 +101,20 @@ for (const width of [1360, 390]) {
       await expect(page.getByRole("button", { name: "Latest", exact: true })).toHaveCount(0);
       // The merged navigator jumps across trimmed windows, on desktop and narrow panes.
       for (const position of [100, 640]) {
-        // The list gives dense histories full-size targets at every viewport width.
-        await page.getByRole("button", { name: "Browse your messages", exact: true }).click();
-        await page
-          .getByRole("dialog", { name: "Your messages", exact: true })
-          .getByRole("button", {
-            name: `${position + 1} History 0 message ${position}`,
-            exact: true,
-          })
-          .click();
+        if (width >= 640) {
+          await expect(page.getByRole("button", { name: "Browse your messages" })).toBeHidden();
+          await navigation.locator(`button[aria-label^="Message ${position + 1} of"]`).focus();
+          await page.keyboard.press("Enter");
+        } else {
+          await page.getByRole("button", { name: "Browse your messages", exact: true }).click();
+          await page
+            .getByRole("dialog", { name: "Your messages", exact: true })
+            .getByRole("button", {
+              name: `${position + 1} History 0 message ${position}`,
+              exact: true,
+            })
+            .click();
+        }
         await expect(
           timeline.getByText(`History 0 message ${position}`, { exact: true }),
         ).toBeInViewport();
