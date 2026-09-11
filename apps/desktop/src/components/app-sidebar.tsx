@@ -8,7 +8,8 @@ import { shortcutLabel } from "@/shortcuts/bindings";
 import { AgentSidebar } from "@/agents/list";
 import { SidebarSection } from "./sidebar-section";
 import { PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { cn } from "cn";
 import type { WorkspaceSnapshot, WorkspaceOperation } from "@concors/protocol";
 import type { View } from "@/navigation";
@@ -83,7 +84,7 @@ export function AppSidebar(props: AppSidebarProps) {
               props.collapsed ? "flex-col-reverse" : "ml-auto",
             )}
           >
-            <Tooltip>
+            <SidebarTooltip collapsed={props.collapsed}>
               <TooltipTrigger asChild>
                 <button
                   type="button"
@@ -100,8 +101,8 @@ export function AppSidebar(props: AppSidebarProps) {
               <TooltipContent side={props.collapsed ? "right" : "bottom"}>
                 Search ({shortcutLabel("search")})
               </TooltipContent>
-            </Tooltip>
-            <Tooltip>
+            </SidebarTooltip>
+            <SidebarTooltip collapsed={props.collapsed}>
               <TooltipTrigger asChild>
                 <button
                   id={props.collapsed ? "expand-sidebar" : "collapse-sidebar"}
@@ -125,7 +126,7 @@ export function AppSidebar(props: AppSidebarProps) {
               <TooltipContent side={props.collapsed ? "right" : "bottom"}>
                 {props.collapsed ? "Expand sidebar" : "Collapse sidebar"}
               </TooltipContent>
-            </Tooltip>
+            </SidebarTooltip>
           </div>
         </div>
         <div

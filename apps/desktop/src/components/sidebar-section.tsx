@@ -1,6 +1,7 @@
 import { useId, useState, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 
 export function SidebarSection({
   title,
@@ -29,7 +30,7 @@ export function SidebarSection({
           </>
         ) : (
           <h2 className="min-w-0 flex-1">
-            <Tooltip>
+            <SidebarTooltip collapsed={compact}>
               <TooltipTrigger asChild>
                 <button
                   type="button"
@@ -51,7 +52,7 @@ export function SidebarSection({
               <TooltipContent side={compact ? "right" : "bottom"} sideOffset={6}>
                 {title} · {expanded ? "Hide" : "Show"}
               </TooltipContent>
-            </Tooltip>
+            </SidebarTooltip>
           </h2>
         )}
         {!compact && action}
