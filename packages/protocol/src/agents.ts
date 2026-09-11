@@ -113,6 +113,18 @@ export const AgentInfoSchema = z.object({
   supportsPlan: z.boolean().optional(),
   controls: AgentControlsSchema.optional(),
   models: z.array(AgentModelSchema).max(MAX_AGENT_MODELS).optional(),
+  queue: z
+    .array(
+      z.object({
+        id: Id,
+        text: z.string().max(16000),
+        attachments: z.array(z.object({ name: z.string(), mime: z.string() })).max(3),
+        queuedAt: z.string().datetime(),
+      }),
+    )
+    .max(20)
+    .optional(),
+  queuePaused: z.boolean().optional(),
   context: z
     .object({
       used: z.number().nonnegative(),
@@ -163,6 +175,16 @@ export const AgentConversationSchema = z.object({
 });
 export type AgentConversation = z.infer<typeof AgentConversationSchema>;
 export const AgentOperationSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("queue-add"),
+      sessionId: Id,
+      text: z.string().trim().max(16000),
+      attachments: z.array(AgentAttachmentSchema).max(3).optional(),
+    })
+    .refine((v) => v.text.length > 0 || !!v.attachments?.length, "Add a message or attachment"),
+  z.object({ kind: z.literal("queue-remove"), sessionId: Id, id: Id }),
+  z.object({ kind: z.literal("queue-pause"), sessionId: Id, paused: z.boolean() }),
   z.object({
     kind: z.literal("provider-catalog"),
     sessionId: Id,
@@ -235,7 +257,7 @@ export const AgentResultSchema = z.object({
     z.object({
       status: z.literal("ok"),
       conversation: AgentConversationSchema,
-      providers: z.array(AgentProviderCatalogSchema).max(16).optional(),
+      providers: z.array(AgentProviderCatalogSchema).max(128).optional(),
     }),
     z.object({ status: z.literal("error"), message: z.string() }),
   ]),

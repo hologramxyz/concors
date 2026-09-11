@@ -513,3 +513,80 @@ it("switches a bound Agent pane to a terminal without stopping the shared agent"
   expect(providers[0]?.closed).toBe(false);
   expect((await action(b, { kind: "read", sessionId: id })).outcome.status).toBe("ok");
 });
+
+it("delivers durable follow-ups after every client disconnects and deduplicates enqueue retries", async () => {
+  const { a, b, id, url } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "hold this turn" });
+  await expect.poll(() => a.agents[0]?.turnId?.startsWith("turn-")).toBe(true);
+  const requestId = randomUUID();
+  const queued: AgentOperation = {
+    kind: "queue-add",
+    sessionId: id,
+    text: "continue after disconnect",
+  };
+  expect((await action(a, queued, requestId)).outcome.status).toBe("ok");
+  expect((await action(b, queued, requestId)).outcome.status).toBe("ok");
+  expect(a.agents[0]?.queue).toHaveLength(1);
+  a.disconnect();
+  b.disconnect();
+  providers[0]!.finish();
+  await expect
+    .poll(() => providers[0]?.requests.filter((r) => r.method === "turn/start").length)
+    .toBe(2);
+  const c = await open(url);
+  await expect.poll(() => c.agents[0]?.status).toBe("done");
+  expect(c.agents[0]?.queue).toHaveLength(0);
+  const result = await action(c, { kind: "read", sessionId: id });
+  if (result.outcome.status === "ok")
+    expect(
+      result.outcome.conversation.items.filter((i) => i.kind === "user").map((i) => i.text),
+    ).toEqual(["hold this turn", "continue after disconnect"]);
+});
+
+it("pauses queued work across an interrupted daemon restart until explicitly resumed", async () => {
+  const { a, b, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "hold before restart" });
+  await expect.poll(() => a.agents[0]?.turnId?.startsWith("turn-")).toBe(true);
+  const requestId = randomUUID(),
+    queued: AgentOperation = { kind: "queue-add", sessionId: id, text: "after restart" };
+  await action(a, queued, requestId);
+  a.disconnect();
+  b.disconnect();
+  await server!.close();
+  const c = await open(await boot());
+  expect(c.agents[0]).toMatchObject({ status: "interrupted", queuePaused: true });
+  expect(c.agents[0]?.queue).toHaveLength(1);
+  expect((await action(c, queued, requestId)).outcome.status).toBe("ok");
+  expect(c.agents[0]?.queue).toHaveLength(1);
+  await action(c, { kind: "queue-pause", sessionId: id, paused: false });
+  await expect.poll(() => c.agents[0]?.status).toBe("done");
+  expect(c.agents[0]?.queue).toHaveLength(0);
+  const resumed = providers[1];
+  expect(resumed?.requests.filter((r) => r.method === "turn/start")).toHaveLength(1);
+});
+
+it("keeps queued attachment bytes private and removes canceled follow-ups", async () => {
+  const { a, id } = await setup();
+  await action(a, { kind: "queue-pause", sessionId: id, paused: true });
+  const requestId = randomUUID(),
+    secret = Buffer.from("private attachment fixture").toString("base64");
+  const result = await action(
+    a,
+    {
+      kind: "queue-add",
+      sessionId: id,
+      text: "see file",
+      attachments: [{ name: "sample.txt", mime: "text/plain", data: secret }],
+    },
+    requestId,
+  );
+  expect(result.outcome.status).toBe("ok");
+  expect(JSON.stringify(result)).not.toContain(secret);
+  expect(a.agents[0]?.queue?.[0]?.attachments).toEqual([
+    { name: "sample.txt", mime: "text/plain" },
+  ]);
+  await action(a, { kind: "queue-remove", sessionId: id, id: requestId });
+  await action(a, { kind: "queue-pause", sessionId: id, paused: false });
+  expect(a.agents[0]?.queue).toHaveLength(0);
+  expect(providers[0]?.requests.filter((r) => r.method === "turn/start")).toHaveLength(0);
+});

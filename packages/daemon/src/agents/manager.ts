@@ -58,6 +58,8 @@ export class AgentManager {
   readonly #factory: AgentProviderFactory;
   readonly #runtimes = new Map<string, Runtime>();
   #closed = false;
+  private draining = new Set<string>();
+  private deliveries = new Map<string, string>();
   private registry: ProviderRegistry;
   private catalogs = new Map<string, { expires: number; value: Promise<AgentProviderCatalog[]> }>();
   constructor(
@@ -77,6 +79,7 @@ export class AgentManager {
         store.saveAgent({
           ...info,
           status: "interrupted",
+          queuePaused: true,
           pending: [],
           attention: null,
           error:
@@ -85,6 +88,38 @@ export class AgentManager {
           updatedAt: new Date().toISOString(),
         });
       }
+    queueMicrotask(() => {
+      if (!this.#closed)
+        for (const info of store.agents())
+          void this.drain(info.id).catch((error) => this.fail(info.id, error));
+    });
+  }
+  private async drain(id: string): Promise<void> {
+    if (this.#closed || this.draining.has(id)) return;
+    const info = this.#store.agent(id),
+      head = info.queue?.[0];
+    if (!head || info.queuePaused || !["idle", "done"].includes(info.status)) return;
+    const request = this.#store.queuedRequest(head.id, id);
+    if (!request) {
+      this.update(id, {
+        queuePaused: true,
+        error: "Queued message is unavailable. Remove it and try again.",
+      });
+      return;
+    }
+    this.draining.add(id);
+    this.deliveries.set(request.requestId, head.id);
+    try {
+      const result = await this.request(request);
+      if (result.outcome.status === "error")
+        this.update(id, { queuePaused: true, error: result.outcome.message });
+    } finally {
+      this.deliveries.delete(request.requestId);
+      this.draining.delete(id);
+      queueMicrotask(() => {
+        void this.drain(id).catch((error) => this.fail(id, error));
+      });
+    }
   }
   private update(id: string, patch: Partial<AgentInfo>): AgentInfo {
     const prior = this.#store.agent(id);
@@ -109,6 +144,10 @@ export class AgentManager {
     else if (!["done", "needs_input"].includes(next.status)) next.attention = null;
     this.#store.saveAgent(next);
     this.#emit({ type: "agent.state", agent: next });
+    if (["idle", "done"].includes(next.status) && next.queue?.length && !next.queuePaused)
+      queueMicrotask(() => {
+        void this.drain(id).catch((error) => this.fail(id, error));
+      });
     return next;
   }
   private item(
@@ -140,6 +179,7 @@ export class AgentManager {
     }
     this.update(id, {
       status: "failed",
+      queuePaused: true,
       pending: [],
       error: (error instanceof Error ? error.message : String(error)).slice(0, 4000),
     });
@@ -350,6 +390,53 @@ export class AgentManager {
         return this.result(request, info.id);
       }
       const info = this.#store.agent(op.sessionId);
+      if (op.kind === "queue-add" || op.kind === "queue-remove" || op.kind === "queue-pause") {
+        let queue = info.queue ?? [],
+          paused = info.queuePaused ?? false;
+        let delivery: AgentRequest | undefined;
+        if (op.kind === "queue-add") {
+          if (queue.length >= 20) throw new Error("Queue up to 20 follow-ups per agent.");
+          queue = [
+            ...queue,
+            {
+              id: request.requestId,
+              text: op.text,
+              attachments: (op.attachments ?? []).map((a) => ({ name: a.name, mime: a.mime })),
+              queuedAt: new Date().toISOString(),
+            },
+          ];
+          delivery = {
+            type: "agent.request",
+            requestId: randomUUID(),
+            operation: {
+              kind: "send",
+              sessionId: info.id,
+              text: op.text,
+              attachments: op.attachments,
+            },
+          };
+        } else if (op.kind === "queue-remove") {
+          queue = queue.filter((entry) => entry.id !== op.id);
+        } else paused = op.paused;
+        const resume =
+          op.kind === "queue-pause" && !paused && ["failed", "interrupted"].includes(info.status);
+        const next = {
+          ...info,
+          queue,
+          queuePaused: paused,
+          ...(resume ? { status: "idle" as const, error: null } : {}),
+          revision: info.revision + 1,
+        };
+        this.#store.reserveAgentAction(request, next, {
+          ...(delivery ? { add: delivery } : {}),
+          ...(op.kind === "queue-remove" ? { remove: op.id } : {}),
+        });
+        this.#emit({ type: "agent.state", agent: next });
+        queueMicrotask(() => {
+          void this.drain(info.id).catch((error) => this.fail(info.id, error));
+        });
+        return this.result(request, info.id);
+      }
       if (op.kind === "refresh-models") {
         const provider = await this.provider(info.id);
         this.update(info.id, {
@@ -442,7 +529,9 @@ export class AgentManager {
           revision: info.revision + 1,
           updatedAt: new Date().toISOString(),
         };
-        this.#store.reserveAgentAction(request, next);
+        const queueId = this.deliveries.get(request.requestId);
+        if (queueId) next.queue = (info.queue ?? []).filter((entry) => entry.id !== queueId);
+        this.#store.reserveAgentAction(request, next, queueId ? { remove: queueId } : undefined);
         this.#emit({ type: "agent.state", agent: next });
         this.item(info.id, turnId, {
           id: `prompt:${request.requestId}`,
@@ -740,6 +829,7 @@ export class AgentManager {
               ? "interrupted"
               : "failed",
         pending: [],
+        queuePaused: turn.status === "completed" ? (info.queuePaused ?? false) : true,
         error: turn.error?.message ?? null,
       });
       return;

@@ -54,6 +54,7 @@ export class WorkspaceStore {
         CREATE TABLE IF NOT EXISTS agents (id TEXT PRIMARY KEY, info TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS agent_items (position INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, item_id TEXT NOT NULL, item TEXT NOT NULL, UNIQUE(session_id, item_id));
         CREATE TABLE IF NOT EXISTS agent_native_turns (session_id TEXT NOT NULL, native_id TEXT NOT NULL, turn_id TEXT NOT NULL, PRIMARY KEY (session_id, native_id));
+        CREATE TABLE IF NOT EXISTS agent_queue (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, request TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS agent_requests (id TEXT PRIMARY KEY, request TEXT NOT NULL, session_id TEXT NOT NULL);
         PRAGMA user_version = 4;
       `);
@@ -385,12 +386,30 @@ export class WorkspaceStore {
       throw new Error("Request ID already used with different parameters");
     return String(row["session_id"]);
   }
-  reserveAgentAction(request: AgentRequest, info: AgentInfo): void {
+  queuedRequest(id: string, sessionId: string): AgentRequest | null {
+    const row = this.#db
+      .prepare("SELECT request FROM agent_queue WHERE id = ? AND session_id = ?")
+      .get(id, sessionId);
+    return row ? (JSON.parse(String(row["request"])) as AgentRequest) : null;
+  }
+  reserveAgentAction(
+    request: AgentRequest,
+    info: AgentInfo,
+    queue?: { add?: AgentRequest; remove?: string },
+  ): void {
     this.#db.exec("BEGIN IMMEDIATE");
     try {
       this.#db
         .prepare("INSERT INTO agent_requests (id, request, session_id) VALUES (?, ?, ?)")
         .run(request.requestId, JSON.stringify(request), info.id);
+      if (queue?.add)
+        this.#db
+          .prepare("INSERT INTO agent_queue (id, session_id, request) VALUES (?, ?, ?)")
+          .run(request.requestId, info.id, JSON.stringify(queue.add));
+      if (queue?.remove)
+        this.#db
+          .prepare("DELETE FROM agent_queue WHERE id = ? AND session_id = ?")
+          .run(queue.remove, info.id);
       this.saveAgent(info);
       this.#db.exec("COMMIT");
     } catch (error) {
