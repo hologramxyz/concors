@@ -158,15 +158,12 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
       tabId,
       name: "Renamed from desktop",
     });
-    const picker = ui.getByRole("combobox", { name: "Tabs and panes" });
+    const picker = ui.getByRole("combobox", { name: "Tabs" });
     await expect(picker).toContainText("Renamed from desktop");
     await picker.click();
+    await ui.getByRole("button", { name: "New tab", exact: true }).click();
     await ui
-      .getByRole("button", { name: "Actions for tab Renamed from desktop", exact: true })
-      .click();
-    await ui.getByRole("menuitem", { name: "Add pane to this tab", exact: true }).click();
-    await ui
-      .getByRole("dialog", { name: "Add pane", exact: true })
+      .getByRole("dialog", { name: "New tab", exact: true })
       .getByRole("button", { name: "Terminal", exact: true })
       .click();
     await expect(ui.getByLabel("Terminal output", { exact: true })).toBeVisible();
@@ -176,9 +173,7 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await expect(ui.getByLabel("Terminal output", { exact: true })).toContainText(
       "mobile-direct-terminal",
     );
-    await expect
-      .poll(() => project().tabs[0]?.nodes.filter((node) => node.kind === "pane").length)
-      .toBe(2);
+    await expect.poll(() => project().tabs.length).toBe(2);
     await expect.poll(() => desktop.terminals.length).toBe(1);
     const terminalId = desktop.terminals[0]?.id;
     await picker.click();
@@ -253,7 +248,8 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await settings.getByRole("combobox", { name: "Settings section" }).click();
     await expect(ui.getByRole("option", { name: "Billing", exact: true })).toHaveCount(0);
     await ui.getByRole("option", { name: "Shortcuts", exact: true }).click();
-    await expect(settings.getByRole("heading", { name: "Panes", exact: true })).toBeVisible();
+    await expect(settings.getByRole("heading", { name: "Tabs", exact: true })).toBeVisible();
+    await expect(settings.getByRole("heading", { name: "Panes", exact: true })).toHaveCount(0);
     await expect(settings).toContainText("With an external keyboard");
     await expect(settings.getByText("New pane beside current", { exact: true })).toHaveCount(0);
     await settings.getByRole("combobox", { name: "Settings section" }).click();

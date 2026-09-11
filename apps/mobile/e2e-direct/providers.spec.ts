@@ -189,8 +189,8 @@ for (const native of [false, true]) {
           ]);
         }
         await expect(ui.getByRole("log")).not.toContainText("Keep my original conversation");
-        if (native) await nativeEvent({ kind: "press", control: "activate" }, "Tabs and panes");
-        else await ui.getByRole("combobox", { name: "Tabs and panes", exact: true }).click();
+        if (native) await nativeEvent({ kind: "press", control: "activate" }, "Tabs");
+        else await ui.getByRole("combobox", { name: "Tabs", exact: true }).click();
         await ui.locator(`[data-pane-choice][data-value="${tabId}:${paneId}"]`).click();
         await expect(ui.getByRole("log")).toContainText("Keep my original conversation");
         await expect(ui.getByRole("log")).not.toContainText(`Continue with ${label}`);
