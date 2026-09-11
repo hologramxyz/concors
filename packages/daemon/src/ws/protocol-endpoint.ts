@@ -69,6 +69,12 @@ export function registerProtocolEndpoint(
       send(target, { type: "project.setups", setups: options.workspace.projectSetups() });
     }
   });
+  const attachments = options.workspace.attachmentsDirectory;
+  const providers = new ProviderRegistry(
+    basename(attachments) === "attachments"
+      ? join(dirname(attachments), "providers")
+      : attachments + "-providers",
+  );
   const terminals = new TerminalManager(
     options.workspace,
     () => {
@@ -78,12 +84,7 @@ export function registerProtocolEndpoint(
     (session) => {
       for (const target of subscribers) send(target, { type: "terminal.state", session });
     },
-  );
-  const attachments = options.workspace.attachmentsDirectory;
-  const providers = new ProviderRegistry(
-    basename(attachments) === "attachments"
-      ? join(dirname(attachments), "providers")
-      : attachments + "-providers",
+    () => providers.terminalEnvironment(),
   );
   const agents = new AgentManager(
     options.workspace,
