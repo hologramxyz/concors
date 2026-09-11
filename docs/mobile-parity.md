@@ -231,11 +231,11 @@ or production daemon restart was performed by this follow-up.
 
 ## Sidebar and main merge follow-up (2026-09-11)
 
-Main through `007d27d` is merged, including provider account sign-in (#54), saved
-machine selection (#55), and empty Codex thread recovery (#56). Conflict resolution
-retains expanded provider catalogs, private configuration, queued/session actions,
-and mobile-local navigation. Account sign-in now shares the daemon's provider registry
-and selects custom profile adapters by engine; unsupported engines do not get account RPCs.
+This separate follow-up starts from main through `8f494ee`, after #53 (including
+#52) merged. It retains main's provider account sign-in (#54), saved machine
+selection (#55), empty Codex thread recovery (#56), and unified chat primitives.
+The daemon, protocol and shared agent implementations match main; this PR adds no
+separate mobile provider backend.
 
 The sidebar menu and Search now use the same glass surfaces as the chat header:
 Expo UI SwiftUI buttons on supported native iOS, backdrop blur on web/Android,
@@ -249,11 +249,15 @@ Nested machine-sheet dismissal returns focus to Account; closing setup returns t
 the footer. Browser/native-bridge tests cover hiding native surfaces behind drawers,
 restoring them afterward, and keeping Search above the open sidebar.
 
-Verification: 476 repository unit tests passed, one opt-in live API test skipped;
-six focused mobile UI/native-bridge scenarios passed. Eight direct-daemon scenarios
-passed in the full run; the file-conflict scenario then passed in isolation after fixing
-its test race with background conflict detection (Save was correctly disabled).
-Direct coverage includes the account drawer, simulated provider sign-in, files, terminal
-profiles, and web/native-bridge provider navigation. Desktop/daemon/mobile typechecks
-and scoped lint passed. Browser bridge tests do not render SwiftUI or replace signed
-physical-device acceptance. Release evidence gates remain unchanged.
+Post-merge verification: 483 repository unit tests passed, one opt-in live API test
+skipped; all six focused mobile UI/native-bridge scenarios passed. Desktop/daemon/mobile
+typechecks, scoped lint and formatting passed.
+Both direct-daemon follow-up scenarios also passed on this final merge: shared
+chat/terminal/account/reconnect flow and file drafts/saves/conflict protection.
+
+Before the final main merge, eight direct-daemon scenarios passed in the full run;
+the file-conflict scenario then passed in isolation after fixing its test race with
+background conflict detection (Save was correctly disabled). That coverage includes
+the account drawer, simulated provider sign-in, files, terminal profiles, and
+web/native-bridge provider navigation. Browser bridge tests do not render SwiftUI or
+replace signed physical-device acceptance. Release evidence gates remain unchanged.
