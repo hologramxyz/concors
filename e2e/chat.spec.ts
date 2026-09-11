@@ -20,6 +20,7 @@ test("shared chat streams, handles approvals and removes detached sidebar entrie
     await seedProject(page, "Chat acceptance", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("button", { name: "Codex", exact: true }).click();
     await expect(page.getByLabel("Agent status: Ready").first()).toBeVisible();
     const agentList = page
       .getByRole("navigation", { name: "Primary" })
@@ -88,7 +89,7 @@ test("shared chat streams, handles approvals and removes detached sidebar entrie
     await expect(page.getByRole("button", { name: "Allow once", exact: true })).toHaveCount(0);
     await page.getByRole("textbox", { name: "Message Codex" }).fill("question");
     await page.getByRole("button", { name: "Send message", exact: true }).click();
-    await second.getByRole("button", { name: "Blue", exact: true }).click();
+    await second.getByRole("radio", { name: "Blue Use blue", exact: true }).click();
     await second.getByRole("button", { name: "Submit answers", exact: true }).click();
     await expect(page.getByLabel("Agent status: Done").first()).toBeVisible();
     await page.getByRole("textbox", { name: "Message Codex" }).fill("hello again");
@@ -109,6 +110,7 @@ test("shared chat streams, handles approvals and removes detached sidebar entrie
     await expect(remoteAgents.getByRole("list").getByRole("button")).toHaveCount(0);
     await page.getByRole("button", { name: "Pane actions" }).click();
     await page.getByRole("menuitemradio", { name: "Agent", exact: true }).click();
+    await page.getByRole("button", { name: "Codex", exact: true }).click();
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
     await expect(agentList.getByRole("list").getByRole("button")).toHaveCount(1);
     await page.getByRole("button", { name: "Close pane", exact: true }).click();

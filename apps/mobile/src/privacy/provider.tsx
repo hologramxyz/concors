@@ -102,7 +102,7 @@ export function AIConsentScreen() {
             workspace content read by its tools to that agent’s configured AI provider.
           </Copy>
           <Copy>
-            Codex uses OpenAI; Claude Code uses Anthropic. OpenCode and custom agents use the
+            Codex uses OpenAI; Claude Code uses Anthropic. OpenCode, Pi and custom agents use the
             provider configured on your machine, which may be another company or a local model.
             Check that configuration before sharing sensitive content.
           </Copy>

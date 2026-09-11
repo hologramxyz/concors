@@ -62,7 +62,7 @@ export function ContextMeter({ context }: { context: AgentInfo["context"] }) {
               ? `${formatTokenCount(context.used)} / ${formatTokenCount(context.limit)} tokens · ${Math.round(percent ?? 0)}% used`
               : "Usage will appear after the agent reports it."}
           </p>
-          {context && (
+          {context && context.total !== null && (
             <p className="mt-1 text-xs text-muted-foreground">
               {formatTokenCount(context.total)} cumulative tokens
             </p>

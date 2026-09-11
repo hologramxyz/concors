@@ -1,6 +1,9 @@
 import type { ExpoConfig } from "expo/config";
+import { version } from "./package.json";
 
 const variant = process.env.APP_VARIANT ?? "development";
+if (!["development", "preview", "production"].includes(variant))
+  throw new Error("APP_VARIANT must be development, preview or production.");
 const production = variant === "production";
 const identifier = "dev.concors.mobile";
 const projectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
@@ -8,7 +11,7 @@ const projectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
 const config: ExpoConfig = {
   name: production ? "Concors" : "Concors Preview",
   slug: "concors-mobile",
-  version: "0.1.0",
+  version,
   scheme: production ? "concors" : "concors-preview",
   platforms: ["ios", "android", "web"],
   orientation: "default",
@@ -62,20 +65,21 @@ const config: ExpoConfig = {
     "expo-router",
     "expo-secure-store",
     "expo-font",
+    ["expo-dev-client", { addGeneratedScheme: variant === "development" }],
     [
       "expo-splash-screen",
       {
         image: "./assets/splash.png",
         imageWidth: 160,
         backgroundColor: "#f4f3ef",
-        dark: { backgroundColor: "#151714" },
+        dark: { backgroundColor: "#141414" },
       },
     ],
     [
       "expo-notifications",
       {
         icon: "./assets/notification-icon.png",
-        color: "#20211f",
+        color: "#202020",
         defaultChannel: "agent-attention",
       },
     ],

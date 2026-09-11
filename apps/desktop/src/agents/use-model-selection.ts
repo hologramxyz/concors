@@ -1,4 +1,5 @@
-import { useContext, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
+import { AgentStartedContext } from "./context";
 import {
   AgentProviderIdSchema,
   type AgentInfo,
@@ -8,6 +9,14 @@ import { TerminalConnectionContext } from "@/terminal/connection-context";
 
 export function useAgentModelSelection(agent: AgentInfo, onSelect: (model: string | null) => void) {
   const connection = useContext(TerminalConnectionContext);
+  const onStarted = useContext(AgentStartedContext);
+  const generation = useRef(0);
+  useEffect(
+    () => () => {
+      generation.current++;
+    },
+    [connection, agent.id],
+  );
   const [catalog, setCatalog] = useState<AgentProviderCatalog[]>([]);
   const [loading, setLoading] = useState(false),
     [switching, setSwitching] = useState(false),
@@ -18,10 +27,9 @@ export function useAgentModelSelection(agent: AgentInfo, onSelect: (model: strin
     ? catalog.map((p) => (p.id === agent.provider ? current : p))
     : [current, ...catalog];
   const model = agent.settings?.model ?? agent.model;
-  const load = async () => {
+  const load = async (provider?: string) => {
     if (
       !connection ||
-      loading ||
       !connection.state ||
       connection.state.status !== "ready" ||
       !connection.state.daemon.capabilities?.includes("agent-providers")
@@ -31,11 +39,16 @@ export function useAgentModelSelection(agent: AgentInfo, onSelect: (model: strin
     setError(null);
     try {
       const result = await connection.requestAgent(
-        { kind: "provider-catalog", sessionId: agent.id },
+        { kind: "provider-catalog", sessionId: agent.id, ...(provider ? { provider } : {}) },
         crypto.randomUUID(),
       );
       if (result.outcome.status === "error") throw new Error(result.outcome.message);
-      setCatalog(result.outcome.providers ?? []);
+      const providers = result.outcome.providers ?? [];
+      setCatalog((previous) =>
+        providers.map((p) =>
+          !p.loaded ? (previous.find((old) => old.id === p.id && old.loaded) ?? p) : p,
+        ),
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load providers");
     } finally {
@@ -49,6 +62,7 @@ export function useAgentModelSelection(agent: AgentInfo, onSelect: (model: strin
       return;
     }
     if (!connection) return;
+    const attempt = generation.current;
     setSwitching(true);
     setError(null);
     try {
@@ -62,10 +76,15 @@ export function useAgentModelSelection(agent: AgentInfo, onSelect: (model: strin
         },
         crypto.randomUUID(),
       );
+      // A late switch must not navigate a different pane, account or machine.
+      if (attempt !== generation.current) return;
       if (result.outcome.status === "error") throw new Error(result.outcome.message);
+      onStarted?.(result.outcome.conversation.agent.id);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not start provider");
+      if (attempt === generation.current)
+        setError(e instanceof Error ? e.message : "Could not start provider");
     } finally {
+      // Always release this hook's busy state if its connection was replaced.
       setSwitching(false);
     }
   };

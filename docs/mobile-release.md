@@ -13,7 +13,7 @@ No signed IPA/AAB, store release or production validation is implied by bundle e
 Test the real workspace now using the [direct desktop connection](../apps/mobile/README.md#first-connect-to-the-same-daemon-as-desktop).
 It reuses the existing daemon over a private tunnel without a cloud login or server PR.
 Prepare team-owned Expo/Apple/Google accounts in parallel. Managed cloud access requires
-the [managed daemon rollout and capability discovery](mobile-backend.md).
+the [managed daemon rollout](mobile-backend.md); capability discovery is optional.
 
 ## Next implementation slices
 
@@ -24,9 +24,10 @@ the [managed daemon rollout and capability discovery](mobile-backend.md).
    terminal input and reconnects. The preview-only direct mode is implemented; cloud
    login and a fake inventory entry are not required. Defer the login/empty-state design.
 3. **Managed cloud workspace:** the mobile transport now uses `/machines/:id/token`
-   and the managed daemon's `/ws` bearer subprotocol. Coordinate server installer PR #1,
-   the default-disabled mobile capability route, and a new daemon release containing
-   active-socket expiry enforcement before rollout. The old `/connect` proposal is unused.
+   and the managed daemon's `/ws` bearer subprotocol. Server installer PR #1 is merged;
+   coordinate a new daemon release containing active-socket expiry enforcement and its
+   rollout. Capability discovery gates optional push/deletion, not workspace access.
+   The old `/connect` proposal is unused.
 4. **Cloud acceptance:** identify a non-customer test account/machine, run
    `pnpm --filter @concors/mobile live:preflight`, then prove that desktop and phone see
    the same real project, tabs, agent history and tool events. Test send, approval,
@@ -59,9 +60,11 @@ policies, particularly remote execution and digital services.
    `dev.concors.mobile` or change `app.config.ts` before creating records. Previews use `.preview`.
 2. Link a team Expo project from `apps/mobile`. Dynamic config needs the returned UUID
    recorded as `EXPO_PUBLIC_EAS_PROJECT_ID` locally and in EAS environments; `eas init`
-   cannot be assumed to rewrite `app.config.ts`. Set `EXPO_OWNER` if needed.
+   cannot be assumed to rewrite `app.config.ts`. Candidate/production checks require
+   `EXPO_OWNER` to identify the owning Expo team explicitly.
 3. Configure real HTTPS API/project ID in development/preview/production environments.
-   Production disables demo/private daemon overrides. `EXPO_PUBLIC_*` must contain no secrets.
+   Production disables demo/private daemon overrides. Set `EXPO_OWNER` to the team that
+   owns the Expo project. `EXPO_PUBLIC_*` must contain no secrets.
 4. Configure APNs and FCM v1 credentials under team ownership. Supply `GOOGLE_SERVICES_JSON`
    as an EAS file variable. Never commit service-account keys/signing credentials.
 5. Create App Store Connect/Play records, set iOS `ascAppId` in the submit profile and
@@ -134,16 +137,55 @@ Describe following agent progress, answering requests and continuing terminal/ch
 sessions on existing machines. State account/connected-machine requirements and remote
 execution. Only promise notifications after real delivery is verified.
 
-## Production gate and submission
+## Production-identity candidates, then submission
+
+The `candidate` build profile creates an IPA/AAB with the **production** bundle/package
+ID, scheme, app links and production EAS environment. Unlike `.preview`, it can be used
+to collect TestFlight/Play internal evidence for the actual app record. It does not
+enable demo data, private daemon overrides or the development launcher scheme. Both
+candidate and production use the version in `apps/mobile/package.json`; evidence must
+reference that same version.
+
+This separates building a binary from approving its release: physical-device and binary
+privacy evidence cannot exist before the binary does. `candidate:check` validates the
+declared configuration only, not account ownership, signing or service availability.
+It never changes `readiness.json` or approves submission. Custom production profiles
+still run the full evidence check; only the explicit `candidate` profile uses build checks.
+
+With the team's real API URL, project UUID and owner loaded in your environment:
+
+```bash
+APP_VARIANT=production EXPO_PUBLIC_DEMO=false pnpm --filter @concors/mobile candidate:check --json
+# After account/signing setup, from apps/mobile:
+pnpm dlx eas-cli@latest build --platform all --profile candidate
+```
+
+Do not use auto-submit. Record commit, app version, native build numbers and EAS build IDs.
+Inspect the artifacts first. With release-owner approval, upload the **explicit candidate
+build ID** using the candidate submit profile for TestFlight/Play internal testing:
+
+```bash
+pnpm dlx eas-cli@latest submit --platform ios --profile candidate --id IOS_BUILD_ID
+pnpm dlx eas-cli@latest submit --platform android --profile candidate --id ANDROID_BUILD_ID
+```
+
+Replace those IDs with reviewed builds, not preview/demo artifacts. Internal testing is
+not review submission or public publication, and the consoles may require additional
+agreements/metadata. Run the physical-device matrix on that exact build and use its
+real screenshots/privacy report as evidence. Rebuilding later requires revalidation.
+
+### Full submission gate
 
 Update `apps/mobile/release/readiness.json` only after verifying each item. Every required
 gate needs `status: "verified"`, a named `verifiedBy`, ISO `verifiedAt` and nonempty
 `evidence`; choose the approved `releaseModel` as well. It **fails intentionally today**.
 EAS pre-install and standard asset/native/export scripts enforce the checklist whenever
-the build profile or app variant is production, including custom EAS profiles. Empty,
+the build profile or app variant is production, except the explicit candidate build above. Empty,
 missing, duplicate or evidence-free gates cannot pass. This workflow guard is not an
 independent compliance audit. `release:check --json` produces a machine-readable report.
-Development/preview builds remain available. CI never uploads/submits automatically.
+Development/preview builds remain available. These are workflow checks, not a security
+boundary around manually invoked store CLIs. Always run the full check before requesting
+review. CI never uploads/submits automatically.
 
 ```bash
 pnpm --filter @concors/mobile release:check
@@ -156,3 +198,14 @@ pnpm dlx eas-cli@latest submit --platform android --profile production
 
 TestFlight/Play internal upload is not public publication. Finish testing, metadata and
 review submission in each console; allow time for review and fixes.
+
+## Current infrastructure blocker (2026-09-10)
+
+GitHub's latest native jobs did not start: the check annotation reports failed account
+payments or an exhausted spending limit. There are no compiler/test logs for those runs.
+The retained mobile CI changes keep native workflows manual-only and automatic jobs
+bounded to seven minutes. Do not dispatch more native runs until the repository owner
+resolves **Billing & plans**. Then manually run `mobile-ios.yml` and `mobile-android.yml`
+on the reviewed PR commit; these generate preview-identity engineering artifacts, not
+store candidates. Local web/Hermes exports and browser tests cannot replace native CI
+or signed physical-device evidence.

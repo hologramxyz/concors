@@ -1,4 +1,4 @@
-import { machineAvailability } from "@concors/client-core";
+import { machineAvailability, machineStatusLabel } from "@concors/client-core";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { FolderOpen, Menu, Search, Server } from "lucide-react";
 import type { DaemonConnection } from "@concors/daemon-client";
@@ -423,7 +423,7 @@ function MobileWorkspaceContent({
     >
       <AgentDraftScopeContext value={draftScope}>
         <NotificationProvider connection={connection} onOpen={openAgent} inAppOnly>
-          <AgentsProvider connection={connection}>
+          <AgentsProvider connection={connection} onStarted={openAgent}>
             <div
               className="mobile-shell"
               data-sidebar-open={sidebarOpen}
@@ -507,7 +507,10 @@ function MobileWorkspaceContent({
                               value: machine.id,
                               label: machine.name,
                               icon: <Server />,
-                              description: machineAvailability(machine),
+                              description: machineStatusLabel(
+                                machineAvailability(machine),
+                                host.machineId === machine.id && host.phase === "ready",
+                              ),
                               disabled: machineAvailability(machine) !== "connectable",
                             })),
                       },

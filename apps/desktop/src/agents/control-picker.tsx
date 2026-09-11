@@ -6,7 +6,7 @@ import { ArrowLeft, Check, ChevronRight, Search } from "lucide-react";
 export interface ControlOption {
   id: string;
   label: string;
-  description?: string;
+  description?: string | undefined;
   icon?: ReactNode;
 }
 export interface ControlGroup extends ControlOption {
@@ -25,6 +25,7 @@ export function ControlPicker({
   showValue = false,
   selectedLabel,
   onOpen,
+  onGroupChange,
   status,
 }: {
   label: string;
@@ -38,6 +39,7 @@ export function ControlPicker({
   showValue?: boolean;
   selectedLabel?: string;
   onOpen?: () => void;
+  onGroupChange?: (id: string) => void;
   status?: string | undefined;
 }) {
   const [open, setOpen] = useState(false),
@@ -66,6 +68,7 @@ export function ControlPicker({
   );
   const navigate = (next: string | undefined) => {
     setGroupId(next);
+    if (next) onGroupChange?.(next);
     setQuery("");
     setActive(0);
     if (list.current) list.current.scrollTop = 0;

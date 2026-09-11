@@ -5,6 +5,7 @@ import {
   useSyncExternalStore,
   type SetStateAction,
 } from "react";
+import { draftStorageKey, readDraft, writeDraft } from "./draft-storage";
 import type { AgentAttachment, AgentOperation } from "@concors/protocol";
 /** Mobile keeps a per-machine draft scope while its native socket pauses/reconnects. */
 export const AgentDraftScopeContext = createContext<object | null>(null);
@@ -15,7 +16,7 @@ export interface InputDraft {
 export interface ComposerAttempt {
   id: string;
   draft: InputDraft;
-  operation: Extract<AgentOperation, { kind: "send" }>;
+  operation: Extract<AgentOperation, { kind: "send" | "queue-add" | "steer" }>;
 }
 interface Draft extends InputDraft {
   queue: InputDraft[];
@@ -31,18 +32,36 @@ interface DraftStore {
   values: Map<string, Draft>;
   sessions: Map<string, Session>;
   listeners: Set<() => void>;
+  restored: Set<string>;
 }
 const stores = new WeakMap<object, DraftStore>();
 const disconnected = {};
-/** Connection-scoped memory survives pane/tab unmounts; no prompts or attachment data go to disk. */
-export function useAgentDraft(connection: object | null, id: string) {
+/** Drafts are scoped to a machine/session; storage restores uncertain request IDs without resending. */
+export function useAgentDraft(connection: object | null, id: string, machineId?: string) {
   const key = connection ?? disconnected;
   let cached = stores.get(key);
   if (!cached) {
-    cached = { values: new Map(), sessions: new Map(), listeners: new Set() };
+    cached = { values: new Map(), sessions: new Map(), listeners: new Set(), restored: new Set() };
     stores.set(key, cached);
   }
   const store = cached;
+  const storageKey = machineId ? draftStorageKey(machineId, id) : null;
+  if (storageKey && !store.restored.has(storageKey)) {
+    store.restored.add(storageKey);
+    try {
+      const saved = readDraft(localStorage, storageKey);
+      if (saved && !store.values.has(id)) {
+        const attempt =
+          saved.attempt && ["send", "queue-add", "steer"].includes(saved.attempt.operation.kind)
+            ? (saved.attempt as ComposerAttempt)
+            : null;
+        store.values.set(id, { ...saved.draft, busy: false, uncertain: !!attempt });
+        store.sessions.set(id, { attempt, sending: false });
+      }
+    } catch {
+      /* Native webviews without storage retain the in-memory draft scope. */
+    }
+  }
   const value = useSyncExternalStore(
     useCallback(
       (listener: () => void) => {
@@ -67,6 +86,17 @@ export function useAgentDraft(connection: object | null, id: string) {
     )
       store.values.delete(id);
     else store.values.set(id, draft);
+    if (storageKey)
+      try {
+        writeDraft(localStorage, storageKey, {
+          version: 1,
+          updatedAt: Date.now(),
+          draft: { message: draft.message, attachments: draft.attachments, queue: draft.queue },
+          attempt: store.sessions.get(id)?.attempt ?? null,
+        });
+      } catch {
+        /* Storage may be unavailable in a native webview. */
+      }
     for (const listener of store.listeners) listener();
   };
   const sessionRefs = useMemo(() => {

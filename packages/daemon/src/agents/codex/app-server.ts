@@ -1,5 +1,8 @@
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { z } from "zod";
+import { codexMcp } from "../providers/mcp.ts";
+import type { McpServer } from "@concors/protocol";
+import { AgentControlsSchema } from "@concors/protocol";
 
 const Frame = z.object({
   id: z.union([z.string(), z.number()]).optional(),
@@ -23,6 +26,7 @@ interface Pending {
  * Owns only transport lifetime. Session persistence and UI decisions belong to the caller.
  */
 export class CodexAppServer {
+  private mcp: McpServer[];
   readonly #child: ChildProcessWithoutNullStreams;
   readonly #pending = new Map<number, Pending>();
   readonly #notifications = new Set<(method: string, params: unknown) => void>();
@@ -39,9 +43,15 @@ export class CodexAppServer {
   #exit: Promise<void>;
   #resolveExit: () => void = () => undefined;
   #incomingRequests = 0;
+  #compactions = new Map<string, { id: string; turnId: string; completed: boolean }>();
 
-  constructor(child: ChildProcessWithoutNullStreams, onRequest?: RequestHandler) {
+  constructor(
+    child: ChildProcessWithoutNullStreams,
+    onRequest?: RequestHandler,
+    mcp: McpServer[] = [],
+  ) {
     this.#child = child;
+    this.mcp = mcp;
     this.#requestHandler = onRequest;
     this.#exit = new Promise((resolve) => {
       this.#resolveExit = resolve;
@@ -87,6 +97,91 @@ export class CodexAppServer {
   }
   request(method: string, params: unknown = {}, timeoutMs = 30000): Promise<unknown> {
     if (!this.#ready) return Promise.reject(new Error("Initialize the Codex app server first"));
+    if (this.mcp.length && ["thread/start", "thread/resume", "session/fork"].includes(method))
+      params = {
+        ...(params as Record<string, unknown>),
+        config: { mcp_servers: codexMcp(this.mcp) },
+      };
+    if (method === "mcp/status")
+      return this.rpc("mcpServerStatus/list", { limit: 100 }).then((raw) => ({
+        servers: z
+          .object({
+            data: z.array(z.object({ name: z.string(), authStatus: z.string().optional() })),
+          })
+          .parse(raw)
+          .data.map((s) => ({ name: s.name, status: s.authStatus ?? "configured" })),
+      }));
+    if (method === "session/child-history")
+      return this.rpc("thread/read", {
+        threadId: (params as { childId: string }).childId,
+        includeTurns: true,
+      });
+    if (method === "session/list")
+      return this.rpc("thread/list", {
+        cwd: (params as { cwd: string }).cwd,
+        limit: 100,
+        archived: false,
+      }).then((raw) => {
+        const response = z
+          .object({
+            data: z.array(
+              z.object({
+                id: z.string(),
+                preview: z.string().default(""),
+                cwd: z.string(),
+                updatedAt: z.number(),
+              }),
+            ),
+          })
+          .parse(raw);
+        return {
+          sessions: response.data.map((s) => ({
+            id: s.id,
+            title: s.preview.slice(0, 150),
+            directory: s.cwd,
+            updatedAt: new Date(s.updatedAt * 1000).toISOString(),
+          })),
+        };
+      });
+    if (method === "session/fork") return this.rpc("thread/fork", params);
+    if (method === "session/rewind") {
+      const p = params as { threadId: string; numTurns: number };
+      return this.rpc("thread/rollback", { threadId: p.threadId, numTurns: p.numTurns });
+    }
+    if (method === "session/steer") {
+      const p = params as { threadId: string; turnId: string; text: string };
+      return this.rpc("turn/steer", {
+        threadId: p.threadId,
+        expectedTurnId: p.turnId,
+        input: [{ type: "text", text: p.text }],
+      });
+    }
+    if (method === "session/controls")
+      return Promise.resolve(
+        AgentControlsSchema.parse({
+          compact: true,
+          contextUsage: true,
+          history: true,
+          childHistory: true,
+          importSessions: true,
+          fork: true,
+          rewind: ["conversation"],
+          steer: true,
+          mcp: true,
+          mcpStatus: true,
+          commands: [{ name: "compact", description: "Summarize earlier context in this session" }],
+        }),
+      );
+    if (method === "command/execute") {
+      const command = z
+        .object({ threadId: z.string(), name: z.literal("compact"), args: z.string().default("") })
+        .parse(params);
+      if (command.args)
+        return Promise.reject(
+          new Error("Codex compaction does not accept additional instructions."),
+        );
+      return this.compact(command.threadId);
+    }
     if (
       method === "turn/start" &&
       !this.#autoReviewAvailable &&
@@ -98,6 +193,38 @@ export class CodexAppServer {
         ),
       );
     return this.rpc(method, params, timeoutMs);
+  }
+  private compact(threadId: string): Promise<unknown> {
+    // Native compaction starts a real Codex turn. Wait for its identity rather
+    // than creating a second synthetic turn or treating /compact as a prompt.
+    return new Promise((resolve, reject) => {
+      const cleanup = () => {
+        clearTimeout(timer);
+        this.#notifications.delete(notified);
+        this.#failures.delete(failed);
+      };
+      const failed = (error: Error) => {
+        cleanup();
+        reject(error);
+      };
+      const notified = (method: string, raw: unknown) => {
+        const result = z
+          .object({ threadId: z.string(), turn: z.object({ id: z.string(), status: z.string() }) })
+          .safeParse(raw);
+        if (method === "turn/started" && result.success && result.data.threadId === threadId) {
+          cleanup();
+          resolve({ turn: result.data.turn });
+        }
+      };
+      const timer = setTimeout(
+        () =>
+          failed(new Error("Codex compaction did not report a turn. Reconnect before retrying.")),
+        30000,
+      );
+      this.#notifications.add(notified);
+      this.#failures.add(failed);
+      void this.rpc("thread/compact/start", { threadId }).catch(failed);
+    });
   }
   private rpc(method: string, params: unknown, timeoutMs = 30000): Promise<unknown> {
     if (this.#failure) return Promise.reject(this.#failure);
@@ -176,7 +303,16 @@ export class CodexAppServer {
           })
           .then(
             (result) => {
-              if (!this.#failure) this.write({ id: frame.id, result });
+              if (!this.#failure) {
+                const value =
+                  result && typeof result === "object" ? (result as Record<string, unknown>) : {};
+                const nativeResult = method.endsWith("/requestUserInput")
+                  ? { answers: value["answers"] ?? {} }
+                  : method.endsWith("/requestApproval")
+                    ? { decision: value["decision"] }
+                    : result;
+                this.write({ id: frame.id, result: nativeResult });
+              }
             },
             (error: unknown) => {
               if (!this.#failure)
@@ -195,7 +331,40 @@ export class CodexAppServer {
           .finally(() => {
             this.#incomingRequests--;
           });
-      } else for (const listener of this.#notifications) listener(frame.method, frame.params);
+      } else {
+        const p = z.record(z.string(), z.unknown()).parse(frame.params ?? {});
+        const item = z
+          .object({ id: z.string(), type: z.string() })
+          .passthrough()
+          .safeParse(p["item"]);
+        const threadId = String(p["threadId"] ?? "");
+        if (frame.method === "turn/started") this.#compactions.delete(threadId);
+        let compaction = this.#compactions.get(threadId);
+        if (item.success && item.data.type === "contextCompaction") {
+          if (compaction?.id !== item.data.id) {
+            compaction = { id: item.data.id, turnId: String(p["turnId"] ?? ""), completed: false };
+            this.#compactions.set(threadId, compaction);
+          }
+          if (frame.method === "item/completed") {
+            if (compaction.completed) return;
+            compaction.completed = true;
+          }
+        }
+        if (frame.method === "thread/compacted") {
+          if (compaction?.completed) return;
+          const turnId = String(p["turnId"] ?? compaction?.turnId ?? "");
+          compaction = { id: compaction?.id ?? `compact:${turnId}`, turnId, completed: true };
+          this.#compactions.set(threadId, compaction);
+          for (const listener of this.#notifications)
+            listener("item/completed", {
+              ...p,
+              turnId,
+              item: { id: compaction.id, type: "contextCompaction", status: "completed" },
+            });
+          return;
+        }
+        for (const listener of this.#notifications) listener(frame.method, frame.params);
+      }
       return;
     }
     if (frame.id === undefined || (!("result" in frame) && !frame.error))

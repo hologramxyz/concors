@@ -1,18 +1,15 @@
+import { PendingInput } from "./pending-input";
+import { ProviderStart } from "./provider-start";
 import { AgentAccountPrompt } from "./account-prompt";
 import { completedTurnFooters } from "./duration";
+import { SessionActions } from "./session-actions";
 import { AgentComposer } from "./composer";
 import { TimelineItem } from "./timeline-item";
 import { useViewedAgent } from "@/notifications/context";
 import { CompactLayoutContext, PaneVisibilityContext } from "@/components/compact-layout";
 import { useContext, useEffect, useRef, useState } from "react";
 import { ArrowDown } from "lucide-react";
-import type {
-  AgentOperation,
-  AgentPending,
-  LayoutNode,
-  WorkspaceProject,
-  WorkspaceTab,
-} from "@concors/protocol";
+import type { AgentOperation, LayoutNode, WorkspaceProject, WorkspaceTab } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { Activity } from "./activity";
 import { PlanProgress } from "./plan-progress";
@@ -37,11 +34,22 @@ export function ChatPane({
   const [retry, setRetry] = useState(0);
   const attempted = useRef(false);
   const startId = useRef(crypto.randomUUID());
+  const [provider, setProvider] = useState<string | null>(null);
+  const chooseProvider =
+    connection?.state.status === "ready" &&
+    connection.state.daemon.capabilities?.includes("provider-settings");
   const available =
     connection?.state.status === "ready" &&
     connection.state.daemon.capabilities?.includes("agent-chat");
   useEffect(() => {
-    if (node.sessionId || !canEdit || !available || !connection?.workspace || attempted.current)
+    if (
+      (chooseProvider && !provider) ||
+      node.sessionId ||
+      !canEdit ||
+      !available ||
+      !connection?.workspace ||
+      attempted.current
+    )
       return;
     attempted.current = true;
     const current = connection.workspace;
@@ -51,6 +59,7 @@ export function ChatPane({
       .requestAgent(
         {
           kind: "start",
+          ...(provider ? { provider } : {}),
           epoch: current.epoch,
           projectId: project.id,
           tabId: tab.id,
@@ -68,9 +77,22 @@ export function ChatPane({
       .catch((cause: unknown) => {
         setError(cause instanceof Error ? cause.message : "Could not prepare agent");
       });
-  }, [node.sessionId, node.id, canEdit, available, connection, project.id, tab.id, retry]);
+  }, [
+    node.sessionId,
+    node.id,
+    canEdit,
+    available,
+    connection,
+    project.id,
+    tab.id,
+    retry,
+    chooseProvider,
+    provider,
+  ]);
   if (node.sessionId)
     return <Chat key={node.sessionId} sessionId={node.sessionId} canEdit={canEdit} />;
+  if (chooseProvider && !provider)
+    return <ProviderStart disabled={!canEdit || !available} onChoose={setProvider} />;
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="Agent conversation">
       <div className="min-h-0 flex-1" role="log" aria-label="Chat timeline" />
@@ -95,8 +117,8 @@ export function ChatPane({
           <div className="rounded-2xl border bg-background p-2">
             <textarea
               data-agent-composer
-              aria-label="Message Codex"
-              placeholder="Message Codex…"
+              aria-label="Preparing agent"
+              placeholder="Preparing agent…"
               disabled
               className="min-h-16 w-full resize-none bg-transparent px-3 py-3 text-[16px] leading-relaxed outline-none"
             />
@@ -121,6 +143,18 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
   const [atBottom, setAtBottom] = useState(true);
   const footers = completedTurnFooters(conversation.items);
   const latestPlan = conversation.items.findLast((item) => item.kind === "plan");
+  const proposal = conversation.items.findLast(
+    (item) => item.kind === "plan" && item.text.trim() && !item.presentation?.steps?.length,
+  );
+  const canImplement =
+    proposal &&
+    proposal.status === "completed" &&
+    proposal.turnId === agent?.turnId &&
+    agent?.settings?.planMode &&
+    agent.supportsPlan &&
+    !["working", "starting", "needs_input"].includes(agent.status) &&
+    connection?.state.status === "ready" &&
+    connection.state.daemon.capabilities?.includes("agent-plan-implementation");
   const active = agent && ["working", "needs_input"].includes(agent.status);
   const connected = canEdit && connection?.state.status === "ready";
   useEffect(() => {
@@ -241,123 +275,43 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
         <div className="mx-auto max-w-5xl space-y-3">
           {!compact && feedback}
           {latestPlan && <PlanProgress compact item={latestPlan} />}
+          {canImplement && (
+            <button
+              className={button}
+              disabled={!connected || busy}
+              onClick={() =>
+                void run(() =>
+                  perform({
+                    kind: "implement-plan",
+                    sessionId,
+                    itemId: proposal.id,
+                    expectedRevision: agent.revision,
+                  }),
+                )
+              }
+            >
+              Implement plan
+            </button>
+          )}
           {agent && <AgentAccountPrompt agent={agent} canEdit={!!connected} />}
           {agent && (
-            <AgentComposer
-              key={agent.id}
-              agent={agent}
-              connected={!!connected && !busy}
-              onInterrupt={() => {
-                if (agent.turnId)
-                  void run(() =>
-                    perform({ kind: "interrupt", sessionId, turnId: agent.turnId ?? "" }),
-                  );
-              }}
-            />
+            <>
+              <SessionActions agent={agent} items={conversation.items} connected={!!connected} />
+              <AgentComposer
+                key={agent.id}
+                agent={agent}
+                connected={!!connected && !busy}
+                onInterrupt={() => {
+                  if (agent.turnId)
+                    void run(() =>
+                      perform({ kind: "interrupt", sessionId, turnId: agent.turnId ?? "" }),
+                    );
+                }}
+              />
+            </>
           )}
         </div>
       </div>
     </div>
-  );
-}
-function PendingInput({
-  pending,
-  disabled,
-  onRespond,
-}: {
-  pending: AgentPending;
-  disabled: boolean;
-  onRespond: (value: {
-    decision?: "accept" | "decline" | "cancel";
-    answers?: Record<string, string[]>;
-  }) => Promise<void>;
-}) {
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  return (
-    <section
-      aria-label={pending.title}
-      className="space-y-3 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3"
-    >
-      <h3 className="text-sm font-medium">{pending.title}</h3>
-      {pending.summary && (
-        <p className="text-xs break-words whitespace-pre-wrap">{pending.summary}</p>
-      )}
-      {pending.kind === "approval" ? (
-        <>
-          <details>
-            <summary className="cursor-pointer text-xs text-muted-foreground">
-              Review request details
-            </summary>
-            <pre className="chat-scroll mt-2 max-h-40 overflow-auto text-xs break-words whitespace-pre-wrap">
-              {pending.detail}
-            </pre>
-          </details>
-          <div className="flex gap-2">
-            {pending.decisions.map((decision) => (
-              <button
-                key={decision}
-                className={button}
-                disabled={disabled}
-                onClick={() => void onRespond({ decision })}
-              >
-                {decision === "accept"
-                  ? "Allow once"
-                  : decision === "decline"
-                    ? "Decline"
-                    : "Cancel turn"}
-              </button>
-            ))}
-          </div>
-        </>
-      ) : (
-        <form
-          className="space-y-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void onRespond({
-              answers: Object.fromEntries(
-                pending.questions.map((q) => [q.id, [answers[q.id] ?? ""]]),
-              ),
-            });
-          }}
-        >
-          {pending.questions.map((q) => (
-            <fieldset key={q.id} className="block space-y-2 text-xs">
-              <legend>{q.question}</legend>
-              {q.options && (
-                <div className="flex flex-wrap gap-2">
-                  {q.options.map((option) => (
-                    <button
-                      type="button"
-                      key={option.label}
-                      title={option.description}
-                      className={`${button} ${answers[q.id] === option.label ? "border-primary bg-primary/10" : ""}`}
-                      disabled={disabled}
-                      onClick={() =>
-                        setAnswers((current) => ({ ...current, [q.id]: option.label }))
-                      }
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-              <input
-                aria-label={q.question}
-                type={q.isSecret ? "password" : "text"}
-                value={answers[q.id] ?? ""}
-                required
-                disabled={disabled}
-                onChange={(e) => setAnswers((current) => ({ ...current, [q.id]: e.target.value }))}
-                className="w-full rounded border bg-background px-2 py-1.5"
-              />
-            </fieldset>
-          ))}
-          <button className={button} disabled={disabled}>
-            Submit answers
-          </button>
-        </form>
-      )}
-    </section>
   );
 }

@@ -30,6 +30,7 @@ async function boot(resumeError?: string) {
     accountBackendFactory: (info) => new TestAccountBackend(info),
     agentProviderFactory: (_cwd, handler) => {
       const provider = new TestAgentProvider(handler);
+      provider.cwd = _cwd;
       if (resumeError) {
         provider.threadId = `fixture-thread-${providers.length}`;
         const request = provider.request.bind(provider);
@@ -205,6 +206,46 @@ it("marks a crashed active turn interrupted and never replays a durable prompt r
   expect((await action(b, op, requestId)).outcome.status).toBe("ok");
   expect(TestAgentProvider.turns).toBe(count);
   expect(b.agents[0]?.pending).toEqual([]);
+});
+
+it("cancels the turn from an approval, settles other requests, and ignores late output", async () => {
+  const { a, b, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "approve command" });
+  await expect.poll(() => a.agents[0]?.pending.length).toBe(1);
+  const pending = a.agents[0]!.pending[0]!;
+  const provider = providers[0]!;
+  const other = provider
+    .onRequest(
+      "item/commandExecution/requestApproval",
+      {
+        threadId: provider.threadId,
+        turnId: pending.turnId,
+        command: "second command",
+      },
+      "second-approval",
+    )
+    .catch((error: Error) => error.message);
+  await expect.poll(() => b.agents[0]?.pending.length).toBe(2);
+  expect(
+    (await action(a, { kind: "respond", sessionId: id, pendingId: pending.id, decision: "cancel" }))
+      .outcome.status,
+  ).toBe("ok");
+  await expect.poll(() => b.agents[0]?.status).toBe("interrupted");
+  expect(await other).toBe("Turn ended");
+  expect(provider.requests.some((r) => r.method === "turn/interrupt")).toBe(true);
+  provider.emit("item/completed", {
+    item: { id: "late-output", type: "agentMessage", text: "Should not appear" },
+  });
+  provider.finish();
+  const result = await action(b, { kind: "read", sessionId: id });
+  expect(result.outcome).toMatchObject({
+    status: "ok",
+    conversation: { agent: { status: "interrupted", pending: [] } },
+  });
+  if (result.outcome.status === "ok")
+    expect(result.outcome.conversation.items.some((i) => i.id === "late-output")).toBe(false);
+  await action(a, { kind: "send", sessionId: id, text: "next message" });
+  await expect.poll(() => b.agents[0]?.status).toBe("done");
 });
 
 it("syncs attention acknowledgements, rejects stale reads, and preserves unread state across restart", async () => {
@@ -491,6 +532,227 @@ it("switches a bound Agent pane to a terminal without stopping the shared agent"
   expect((await action(b, { kind: "read", sessionId: id })).outcome.status).toBe("ok");
 });
 
+it("delivers durable follow-ups after every client disconnects and deduplicates enqueue retries", async () => {
+  const { a, b, id, url } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "hold this turn" });
+  await expect.poll(() => a.agents[0]?.turnId?.startsWith("turn-")).toBe(true);
+  const requestId = randomUUID();
+  const queued: AgentOperation = {
+    kind: "queue-add",
+    sessionId: id,
+    text: "continue after disconnect",
+  };
+  expect((await action(a, queued, requestId)).outcome.status).toBe("ok");
+  expect((await action(b, queued, requestId)).outcome.status).toBe("ok");
+  expect(a.agents[0]?.queue).toHaveLength(1);
+  a.disconnect();
+  b.disconnect();
+  providers[0]!.finish();
+  await expect
+    .poll(() => providers[0]?.requests.filter((r) => r.method === "turn/start").length)
+    .toBe(2);
+  const c = await open(url);
+  await expect.poll(() => c.agents[0]?.status).toBe("done");
+  expect(c.agents[0]?.queue).toHaveLength(0);
+  const result = await action(c, { kind: "read", sessionId: id });
+  if (result.outcome.status === "ok")
+    expect(
+      result.outcome.conversation.items.filter((i) => i.kind === "user").map((i) => i.text),
+    ).toEqual(["hold this turn", "continue after disconnect"]);
+});
+
+it("pauses queued work across an interrupted daemon restart until explicitly resumed", async () => {
+  const { a, b, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "hold before restart" });
+  await expect.poll(() => a.agents[0]?.turnId?.startsWith("turn-")).toBe(true);
+  const requestId = randomUUID(),
+    queued: AgentOperation = { kind: "queue-add", sessionId: id, text: "after restart" };
+  await action(a, queued, requestId);
+  a.disconnect();
+  b.disconnect();
+  await server!.close();
+  const c = await open(await boot());
+  expect(c.agents[0]).toMatchObject({ status: "interrupted", queuePaused: true });
+  expect(c.agents[0]?.queue).toHaveLength(1);
+  expect((await action(c, queued, requestId)).outcome.status).toBe("ok");
+  expect(c.agents[0]?.queue).toHaveLength(1);
+  await action(c, { kind: "queue-pause", sessionId: id, paused: false });
+  await expect.poll(() => c.agents[0]?.status).toBe("done");
+  expect(c.agents[0]?.queue).toHaveLength(0);
+  const resumed = providers[1];
+  expect(resumed?.requests.filter((r) => r.method === "turn/start")).toHaveLength(1);
+});
+
+it("keeps queued attachment bytes private and removes canceled follow-ups", async () => {
+  const { a, id } = await setup();
+  await action(a, { kind: "queue-pause", sessionId: id, paused: true });
+  const requestId = randomUUID(),
+    secret = Buffer.from("private attachment fixture").toString("base64");
+  const result = await action(
+    a,
+    {
+      kind: "queue-add",
+      sessionId: id,
+      text: "see file",
+      attachments: [{ name: "sample.txt", mime: "text/plain", data: secret }],
+    },
+    requestId,
+  );
+  expect(result.outcome.status).toBe("ok");
+  expect(JSON.stringify(result)).not.toContain(secret);
+  expect(a.agents[0]?.queue?.[0]?.attachments).toEqual([
+    { name: "sample.txt", mime: "text/plain" },
+  ]);
+  await action(a, { kind: "queue-remove", sessionId: id, id: requestId });
+  await action(a, { kind: "queue-pause", sessionId: id, paused: false });
+  expect(a.agents[0]?.queue).toHaveLength(0);
+  expect(providers[0]?.requests.filter((r) => r.method === "turn/start")).toHaveLength(0);
+});
+
+it("imports and forks native sessions into separate tabs without replaying a prompt", async () => {
+  const { a, id } = await setup();
+  const listed = await action(a, { kind: "sessions-list", sessionId: id });
+  expect(listed.outcome.status).toBe("ok");
+  if (listed.outcome.status === "ok")
+    expect(listed.outcome.sessions?.[0]?.id).toBe("external-thread");
+  const importId = randomUUID(),
+    op: AgentOperation = {
+      kind: "import-session",
+      sessionId: id,
+      nativeSessionId: "external-thread",
+      expectedRevision: a.agents[0]!.revision,
+    };
+  await action(a, op, importId);
+  await action(a, op, importId);
+  await expect.poll(() => a.agents.filter((agent) => agent.status === "idle").length).toBe(2);
+  expect(a.agents.some((agent) => agent.threadId === "external-thread")).toBe(true);
+  expect(
+    providers.flatMap((p) => p.requests).filter((r) => r.method === "turn/start"),
+  ).toHaveLength(0);
+  const forkId = randomUUID(),
+    fork: AgentOperation = {
+      kind: "fork-session",
+      sessionId: id,
+      expectedRevision: a.agents.find((agent) => agent.id === id)!.revision,
+    };
+  await action(a, fork, forkId);
+  await action(a, fork, forkId);
+  await expect.poll(() => a.agents.filter((agent) => agent.status === "idle").length).toBe(3);
+  expect(providers[0]?.requests.filter((r) => r.method === "session/fork")).toHaveLength(1);
+  expect(a.workspace?.projects[0]?.tabs).toHaveLength(3);
+});
+
+it("rewinds the selected turn only and publishes a history revision to all clients", async () => {
+  const { a, b, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "first prompt" });
+  await expect.poll(() => a.agents[0]?.status).toBe("done");
+  await action(a, { kind: "send", sessionId: id, text: "second prompt" });
+  await expect.poll(() => a.agents[0]?.status).toBe("done");
+  const read = await action(a, { kind: "read", sessionId: id });
+  expect(read.outcome.status).toBe("ok");
+  if (read.outcome.status !== "ok") return;
+  const turnId = read.outcome.conversation.items.find((i) => i.text === "second prompt")!.turnId;
+  const result = await action(a, {
+    kind: "rewind",
+    sessionId: id,
+    turnId,
+    mode: "conversation",
+    expectedRevision: a.agents[0]!.revision,
+  });
+  expect(result.outcome.status).toBe("ok");
+  if (result.outcome.status === "ok")
+    expect(
+      result.outcome.conversation.items.filter((i) => i.kind === "user").map((i) => i.text),
+    ).toEqual(["first prompt"]);
+  await expect.poll(() => b.agents[0]?.historyRevision).toBe(1);
+  expect(b.agents[0]?.queuePaused).toBe(true);
+  expect(providers[0]?.requests.find((r) => r.method === "session/rewind")?.params).toMatchObject({
+    numTurns: 1,
+  });
+});
+
+it("steers an active turn once without scheduling another turn", async () => {
+  const { a, b, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "hold the turn" });
+  await expect.poll(() => a.agents[0]?.turnId?.startsWith("turn-")).toBe(true);
+  const req = randomUUID(),
+    op: AgentOperation = {
+      kind: "steer",
+      sessionId: id,
+      turnId: a.agents[0]!.turnId!,
+      text: "Focus on the parser",
+    };
+  expect((await action(a, op, req)).outcome.status).toBe("ok");
+  await action(b, op, req);
+  expect(providers[0]?.requests.filter((r) => r.method === "session/steer")).toHaveLength(1);
+  expect(providers[0]?.requests.filter((r) => r.method === "turn/start")).toHaveLength(1);
+});
+
+it("holds the source session steady while a native fork is in flight", async () => {
+  const { a, b, id } = await setup();
+  const provider = providers[0]!;
+  const original = provider.request.bind(provider);
+  let release!: () => void;
+  const waiting = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  vi.spyOn(provider, "request").mockImplementation(async (method, params) => {
+    if (method === "session/fork") await waiting;
+    return original(method, params);
+  });
+  const fork = await action(a, {
+    kind: "fork-session",
+    sessionId: id,
+    expectedRevision: a.agents[0]!.revision,
+  });
+  expect(fork.outcome.status).toBe("ok");
+  expect(
+    (await action(b, { kind: "send", sessionId: id, text: "concurrent change" })).outcome.status,
+  ).toBe("error");
+  expect(
+    (
+      await action(b, {
+        kind: "fork-session",
+        sessionId: id,
+        expectedRevision: a.agents.find((agent) => agent.id === id)!.revision,
+      })
+    ).outcome.status,
+  ).toBe("error");
+  release();
+  await expect.poll(() => a.agents.filter((agent) => agent.status === "idle").length).toBe(2);
+  expect(
+    (await action(b, { kind: "send", sessionId: id, text: "after fork" })).outcome.status,
+  ).toBe("ok");
+});
+
+it("keeps saved history visible and retries a failed native recovery", async () => {
+  const { a, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "saved prompt" });
+  await expect.poll(() => a.agents[0]?.status).toBe("done");
+  const resume = TestAgentProvider.prototype.request;
+  providers[0]!.emit("session/disconnected", {});
+  const spy = vi.spyOn(TestAgentProvider.prototype, "request").mockImplementation(async function (
+    this: TestAgentProvider,
+    method,
+    params,
+  ) {
+    if (method === "thread/resume") throw new Error("Temporary account error");
+    return resume.call(this, method, params);
+  });
+  try {
+    const read = await action(a, { kind: "read", sessionId: id });
+    expect(read.outcome.status).toBe("ok");
+    if (read.outcome.status === "ok")
+      expect(read.outcome.conversation.items.some((i) => i.text === "saved prompt")).toBe(true);
+    await expect.poll(() => a.agents[0]?.status).toBe("failed");
+  } finally {
+    spy.mockRestore();
+  }
+  const before = providers.length;
+  await action(a, { kind: "read", sessionId: id });
+  expect(providers).toHaveLength(before + 1);
+  expect(providers.at(-1)?.requests.some((r) => r.method === "thread/resume")).toBe(true);
+});
 it.each(["sign-in", "restart"])(
   "recovers an empty Codex thread after %s and sends only the new prompt",
   async (reason) => {
@@ -577,4 +839,254 @@ it("preserves resume errors and recovers a later retry without replaying failed 
   expect(providers[2]!.requests.find((r) => r.method === "turn/start")?.params).toMatchObject({
     input: [{ type: "text", text: "only this prompt" }],
   });
+});
+
+it("keeps invalid question replies pending, accepts optional blanks, and redacts private answers from the shared timeline", async () => {
+  const { a, b, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "hold the turn" });
+  await expect.poll(() => a.agents[0]?.turnId?.startsWith("turn-")).toBe(true);
+  const input = providers[0]!.onRequest(
+    "item/tool/requestUserInput",
+    {
+      threadId: a.agents[0]!.threadId,
+      turnId: a.agents[0]!.turnId,
+      questions: [
+        {
+          id: "checks",
+          header: "Checks",
+          question: "Which checks?",
+          multiSelect: true,
+          allowOther: false,
+          options: [
+            { label: "Unit", description: "Fast" },
+            { label: "Browser", description: "UI" },
+          ],
+        },
+        { id: "secret", header: "Key", question: "Private value", isSecret: true },
+        { id: "note", header: "Note", question: "Notes?", required: false },
+      ],
+    },
+    "question",
+  );
+  await expect.poll(() => b.agents[0]?.pending.length).toBe(1);
+  const pendingId = b.agents[0]!.pending[0]!.id;
+  expect(
+    (
+      await action(a, {
+        kind: "respond",
+        sessionId: id,
+        pendingId,
+        answers: { checks: ["Invalid"] },
+      })
+    ).outcome.status,
+  ).toBe("error");
+  expect(b.agents[0]?.pending).toHaveLength(1);
+  expect(
+    (
+      await action(b, {
+        kind: "respond",
+        sessionId: id,
+        pendingId,
+        answers: { checks: ["Unit", "Browser"], secret: ["private-fixture"], note: [] },
+      })
+    ).outcome.status,
+  ).toBe("ok");
+  expect(await input).toEqual({
+    answers: {
+      checks: { answers: ["Unit", "Browser"] },
+      secret: { answers: ["private-fixture"] },
+      note: { answers: [] },
+    },
+  });
+  const read = await action(a, { kind: "read", sessionId: id });
+  expect(JSON.stringify(read)).not.toContain("private-fixture");
+  expect(JSON.stringify(read)).toContain("[private answer]");
+});
+
+it("preserves explicit permission actions and lets a question cancel the whole turn", async () => {
+  const { a, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "hold the turn" });
+  await expect.poll(() => a.agents[0]?.turnId?.startsWith("turn-")).toBe(true);
+  const scope = { threadId: a.agents[0]!.threadId, turnId: a.agents[0]!.turnId };
+  const input = providers[0]!.onRequest(
+    "item/commandExecution/requestApproval",
+    { ...scope, availableDecisions: ["accept", "acceptForSession", "decline", "cancel"] },
+    "approval",
+  );
+  await expect.poll(() => a.agents[0]?.pending.length).toBe(1);
+  const pendingId = a.agents[0]!.pending[0]!.id;
+  expect(
+    (
+      await action(a, {
+        kind: "respond",
+        sessionId: id,
+        pendingId,
+        actionId: "invented",
+        decision: "accept",
+      })
+    ).outcome.status,
+  ).toBe("error");
+  await action(a, {
+    kind: "respond",
+    sessionId: id,
+    pendingId,
+    actionId: "acceptForSession",
+    decision: "accept",
+  });
+  expect(await input).toMatchObject({ decision: "acceptForSession" });
+  const question = providers[0]!.onRequest(
+    "item/tool/requestUserInput",
+    { ...scope, questions: [{ id: "answer", header: "Question", question: "Proceed?" }] },
+    "question",
+  );
+  await expect.poll(() => a.agents[0]?.pending.length).toBe(1);
+  await action(a, {
+    kind: "respond",
+    sessionId: id,
+    pendingId: a.agents[0]!.pending[0]!.id,
+    decision: "cancel",
+  });
+  expect(await question).toMatchObject({ decision: "cancel" });
+  await expect.poll(() => a.agents[0]?.status).toBe("interrupted");
+  expect(a.agents[0]?.pending).toEqual([]);
+});
+
+it("keeps async questions across turns and restart, and durably resolves answers once", async () => {
+  const { a, b, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "hold" });
+  const provider = providers[0]!;
+  const question = {
+    id: "async-1",
+    type: "agentMessage",
+    delivery: "async",
+    questions: [{ title: "Which approach?", options: ["Small change", "Full rewrite"] }],
+  };
+  provider.emit("item/completed", { item: question });
+  await expect.poll(() => b.agents[0]?.pending.length).toBe(1);
+  expect(b.agents[0]?.status).toBe("working");
+  expect(b.agents[0]?.attention?.kind).toBe("needs_input");
+  provider.finish();
+  await expect.poll(() => a.agents[0]?.status).toBe("done");
+  await action(a, { kind: "send", sessionId: id, text: "hold again" });
+  expect(a.agents[0]?.pending).toHaveLength(1);
+  a.disconnect();
+  b.disconnect();
+  await server!.close();
+  const c = await open(await boot());
+  expect(c.agents[0]?.pending).toHaveLength(1);
+  const pending = c.agents[0]!.pending[0]!;
+  const op: AgentOperation = {
+    kind: "respond",
+    sessionId: id,
+    pendingId: pending.id,
+    answers: { "0": ["Small change"] },
+  };
+  const requestId = randomUUID();
+  expect((await action(c, op, requestId)).outcome.status).toBe("ok");
+  expect((await action(c, op, requestId)).outcome.status).toBe("ok");
+  expect(c.agents[0]?.queue).toHaveLength(1);
+  expect(c.agents[0]?.pending).toHaveLength(0);
+  const history = await action(c, { kind: "read", sessionId: id });
+  expect(
+    history.outcome.status === "ok" &&
+      history.outcome.conversation.items.some((i) => i.id === "async-response:async-1"),
+  ).toBe(true);
+  await action(c, { kind: "send", sessionId: id, text: "hold resumed" });
+  providers.at(-1)!.emit("item/completed", { item: question });
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  expect(c.agents[0]?.pending).toHaveLength(0);
+});
+
+it("implements only the current completed plan and keeps normal tool permissions", async () => {
+  const { a, id } = await setup();
+  let info = a.agents[0]!;
+  await action(a, {
+    kind: "configure",
+    sessionId: id,
+    expectedRevision: info.revision,
+    settings: { model: "fixture", effort: "high", mode: "default", planMode: true },
+  });
+  await action(a, { kind: "send", sessionId: id, text: "hold" });
+  providers[0]!.emit("item/completed", {
+    item: { id: "proposal", type: "plan", text: "## Plan\n\nAdd a test, then implement." },
+  });
+  providers[0]!.finish();
+  await expect.poll(() => a.agents[0]?.status).toBe("done");
+  info = a.agents[0]!;
+  const op: AgentOperation = {
+    kind: "implement-plan",
+    sessionId: id,
+    expectedRevision: info.revision,
+    itemId: "proposal",
+  };
+  expect((await action(a, { ...op, expectedRevision: info.revision - 1 })).outcome.status).toBe(
+    "error",
+  );
+  const requestId = randomUUID();
+  expect((await action(a, op, requestId)).outcome.status).toBe("ok");
+  expect((await action(a, op, requestId)).outcome.status).toBe("ok");
+  await expect
+    .poll(() => providers[0]!.requests.filter((r) => r.method === "turn/start").length)
+    .toBe(2);
+  expect(providers[0]!.requests.filter((r) => r.method === "turn/start")[1]?.params).toMatchObject({
+    collaborationMode: { mode: "default" },
+    sandboxPolicy: { type: "workspaceWrite" },
+    input: [
+      { type: "text", text: "Implement this plan:\n\n## Plan\n\nAdd a test, then implement." },
+    ],
+  });
+});
+
+it("previews submitted attachments after restart without broadcasting the bytes in timeline items", async () => {
+  const { a, b, id } = await setup();
+  const requestId = randomUUID(),
+    data = Buffer.from("# Attached document").toString("base64");
+  await action(
+    a,
+    {
+      kind: "send",
+      sessionId: id,
+      text: "Read the attachment",
+      attachments: [{ name: "notes.md", mime: "text/markdown", data }],
+    },
+    requestId,
+  );
+  await expect.poll(() => a.agents[0]?.status).toBe("done");
+  const read = await action(b, { kind: "read", sessionId: id });
+  expect(
+    read.outcome.status === "ok" && read.outcome.conversation.items.find((i) => i.kind === "user"),
+  ).toMatchObject({
+    text: "Read the attachment",
+    attachments: [{ name: "notes.md", mime: "text/markdown" }],
+  });
+  expect(JSON.stringify(read)).not.toContain(data);
+  a.disconnect();
+  b.disconnect();
+  await server!.close();
+  const c = await open(await boot());
+  const result = await action(c, {
+    kind: "read-attachment",
+    sessionId: id,
+    itemId: `prompt:${requestId}`,
+    index: 0,
+  });
+  expect(result.outcome.status === "ok" && result.outcome.attachment).toEqual({
+    name: "notes.md",
+    mime: "text/markdown",
+    data,
+  });
+  expect(
+    (
+      await action(c, {
+        kind: "read-attachment",
+        sessionId: id,
+        itemId: `prompt:${requestId}`,
+        index: 1,
+      })
+    ).outcome.status,
+  ).toBe("error");
+  expect(
+    (await action(c, { kind: "read-attachment", sessionId: id, itemId: "/etc/passwd", index: 0 }))
+      .outcome.status,
+  ).toBe("error");
 });

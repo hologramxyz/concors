@@ -7,7 +7,7 @@ import { join, delimiter } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 import { DaemonConnection, describeDaemonEndpoint } from "@concors/daemon-client";
 import {
-  AgentProviderIdSchema,
+  builtinAgentProviders,
   type AgentOperation,
   type AgentProviderId,
 } from "@concors/protocol";
@@ -27,7 +27,7 @@ afterEach(async () => {
 });
 async function setup() {
   directory = await mkdtemp(join(tmpdir(), "concors-providers-test-"));
-  for (const id of AgentProviderIdSchema.options)
+  for (const id of builtinAgentProviders)
     await writeFile(join(directory, id + (process.platform === "win32" ? ".cmd" : "")), "", {
       mode: 0o755,
     });
@@ -98,7 +98,10 @@ it.each(["claude", "opencode", "pi"] as const)(
       "claude",
       "opencode",
       "pi",
+      "copilot",
     ]);
+    expect(instances).toHaveLength(1);
+    expect(catalog.outcome.providers?.find((p) => p.id === provider)?.loaded).toBe(false);
     expect(c.agents).toHaveLength(1);
     expect(TestAgentProvider.turns).toBe(before);
     const operation: AgentOperation = {
