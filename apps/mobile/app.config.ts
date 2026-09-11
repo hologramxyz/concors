@@ -5,6 +5,13 @@ const variant = process.env.APP_VARIANT ?? "development";
 if (!["development", "preview", "production"].includes(variant))
   throw new Error("APP_VARIANT must be development, preview or production.");
 const production = variant === "production";
+// Static web previews may share standard HTTPS with other apps under a dedicated path.
+// Do not change production/native release routing or accept an external asset origin here.
+const webBasePath = process.env.CONCORS_MOBILE_WEB_BASE_PATH;
+if (webBasePath && (production || !/^\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/.test(webBasePath)))
+  throw new Error(
+    "CONCORS_MOBILE_WEB_BASE_PATH requires a preview build and an absolute URL path.",
+  );
 const identifier = "dev.concors.mobile";
 const projectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
 
@@ -61,6 +68,7 @@ const config: ExpoConfig = {
       : {}),
   },
   web: { bundler: "metro", output: "single", favicon: "./assets/icon.png" },
+  ...(webBasePath ? { experiments: { baseUrl: webBasePath } } : {}),
   plugins: [
     "expo-router",
     "expo-secure-store",
