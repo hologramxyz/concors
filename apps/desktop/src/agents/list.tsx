@@ -51,8 +51,15 @@ export function AgentSidebar({
             ? "Working"
             : session.agentActivity === "needs_input"
               ? "Needs input"
-              : "Open in terminal",
-      color: session.agentActivity === "needs_input" ? "bg-amber-500" : "bg-muted-foreground/60",
+              : session.agentActivity === "idle" && session.agentTurnCompleted
+                ? "Done"
+                : "Open in terminal",
+      color:
+        session.agentActivity === "needs_input"
+          ? "bg-amber-500"
+          : session.agentActivity === "idle" && session.agentTurnCompleted
+            ? "bg-emerald-500"
+            : "bg-muted-foreground/60",
       unread: false,
     })),
   ].toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt));
