@@ -88,7 +88,7 @@ it("maps Claude streaming and tool decisions, interrupts, and resumes the native
       },
     }) as unknown as Query;
   });
-  const input = vi.fn(async () => ({ decision: "decline" }));
+  const input = vi.fn(async (): Promise<Record<string, unknown>> => ({ decision: "decline" }));
   const provider = new ClaudeProvider(directory, input, createQuery);
   const { notifications, failures } = observe(provider);
   await provider.initialize();
@@ -109,6 +109,38 @@ it("maps Claude streaming and tool decisions, interrupts, and resumes the native
       ),
     )
     .toBe(true);
+  emit({
+    type: "assistant",
+    message: {
+      id: "tasks-a",
+      content: [
+        {
+          type: "tool_use",
+          id: "todo",
+          name: "TodoWrite",
+          input: { todos: [{ content: "Verify native plans", status: "in_progress" }] },
+        },
+      ],
+    },
+  });
+  emit({
+    type: "user",
+    message: { content: [{ type: "tool_result", tool_use_id: "todo", content: "Updated" }] },
+  });
+  emit({
+    type: "stream_event",
+    event: {
+      type: "content_block_delta",
+      index: 1,
+      delta: { type: "thinking_delta", thinking: "Checking results" },
+    },
+  });
+  await expect
+    .poll(() => notifications.some((n) => object(n.params["item"] ?? {})["type"] === "plan"))
+    .toBe(true);
+  expect(notifications.some((n) => JSON.stringify(n.params).includes("Checking results"))).toBe(
+    true,
+  );
   const decision = await options!.canUseTool!(
     "Bash",
     { command: "echo test" },
@@ -116,6 +148,31 @@ it("maps Claude streaming and tool decisions, interrupts, and resumes the native
   );
   expect(decision?.behavior).toBe("deny");
   expect(input).toHaveBeenCalledOnce();
+  input.mockResolvedValueOnce({ decision: "decline" });
+  expect(
+    (
+      await options!.canUseTool!(
+        "AskUserQuestion",
+        { questions: [{ header: "Scope", question: "Where?", options: [] }] },
+        { signal: new AbortController().signal, toolUseID: "q", requestId: "q" },
+      )
+    )?.behavior,
+  ).toBe("deny");
+  input.mockResolvedValueOnce({ decision: "accept", actionId: "implement" });
+  expect(
+    (
+      await options!.canUseTool!(
+        "ExitPlanMode",
+        { plan: "## Plan\nReview tests" },
+        { signal: new AbortController().signal, toolUseID: "plan", requestId: "plan" },
+      )
+    )?.behavior,
+  ).toBe("allow");
+  expect(input).toHaveBeenLastCalledWith(
+    "item/commandExecution/requestApproval",
+    expect.objectContaining({ approvalKind: "plan", plan: "## Plan\nReview tests" }),
+    expect.any(String),
+  );
   await provider.request("turn/interrupt");
   expect(interrupts).toHaveBeenCalledOnce();
   expect(
@@ -204,7 +261,7 @@ it("reads OpenCode SSE deltas, scopes events, forwards decisions, and interrupts
     );
     return process;
   });
-  const input = vi.fn(async () => ({ decision: "decline" }));
+  const input = vi.fn(async (): Promise<Record<string, unknown>> => ({ decision: "decline" }));
   const provider = new OpenCodeProvider(tmpdir(), input);
   const { notifications, failures } = observe(provider);
   await provider.initialize();
@@ -246,6 +303,46 @@ it("reads OpenCode SSE deltas, scopes events, forwards decisions, and interrupts
     notifications.some((n) => n.params["item"] && object(n.params["item"])["text"] === "Hi there"),
   ).toBe(true);
   expect(requests.every((r) => r.auth?.startsWith("Basic "))).toBe(true);
+  input.mockResolvedValueOnce({ decision: "accept", actionId: "always" });
+  event("permission.asked", {
+    sessionID: "session",
+    id: "always",
+    permission: "bash",
+    patterns: ["echo test"],
+  });
+  await expect
+    .poll(() => requests.find((r) => r.path === "/permission/always/reply")?.body)
+    .toEqual({ reply: "always" });
+  input.mockResolvedValueOnce({ decision: "decline" });
+  event("question.asked", {
+    sessionID: "session",
+    id: "question",
+    questions: [{ header: "Scope", question: "Where?", options: [] }],
+  });
+  await expect.poll(() => requests.some((r) => r.path === "/question/question/reject")).toBe(true);
+  event("todo.updated", {
+    sessionID: "session",
+    todos: [{ content: "Verify", status: "in_progress" }],
+  });
+  event("message.part.updated", {
+    part: {
+      sessionID: "session",
+      messageID: "message",
+      id: "thinking",
+      type: "reasoning",
+      text: "Checking ",
+    },
+  });
+  event("message.part.delta", {
+    sessionID: "session",
+    partID: "thinking",
+    field: "text",
+    delta: "results",
+  });
+  await expect
+    .poll(() => notifications.some((n) => JSON.stringify(n.params).includes("Checking results")))
+    .toBe(true);
+  expect(notifications.some((n) => object(n.params["item"] ?? {})["type"] === "plan")).toBe(true);
   await provider.request("turn/interrupt");
   expect(requests.some((r) => r.path === "/session/session/abort")).toBe(true);
   expect(
@@ -307,6 +404,8 @@ it("maps Pi JSONL, denies tool confirmation, and ignores a cancelled pending dia
   const input = vi
     .fn()
     .mockResolvedValueOnce({ decision: "decline" })
+    .mockResolvedValueOnce({ answers: { value: { answers: ["  preserve indentation\n"] } } })
+    .mockResolvedValueOnce({ decision: "decline" })
     .mockImplementationOnce(
       () =>
         new Promise((_resolve, reject) => {
@@ -341,12 +440,35 @@ it("maps Pi JSONL, denies tool confirmation, and ignores a cancelled pending dia
     .toMatchObject({ type: "extension_ui_response", confirmed: false });
   event({
     type: "extension_ui_request",
+    id: "editor",
+    method: "editor",
+    title: "Edit notes",
+    prefill: "  initial notes\n",
+  });
+  await expect
+    .poll(() => commands.find((c) => c["id"] === "editor"))
+    .toMatchObject({ value: "  preserve indentation\n" });
+  expect(input.mock.calls[1]?.[1]).toMatchObject({
+    questions: [{ required: false, multiline: true, defaultValue: "  initial notes\n" }],
+  });
+  event({
+    type: "extension_ui_request",
+    id: "select",
+    method: "select",
+    title: "Choose target",
+    options: ["One", "Two"],
+  });
+  await expect
+    .poll(() => commands.find((c) => c["id"] === "select"))
+    .toMatchObject({ cancelled: true });
+  event({
+    type: "extension_ui_request",
     id: "second",
     method: "confirm",
     title: "Read file?",
     message: "read",
   });
-  await expect.poll(() => input.mock.calls.length).toBe(2);
+  await expect.poll(() => input.mock.calls.length).toBe(4);
   await provider.request("turn/interrupt");
   rejectDialog(new Error("Turn interrupted"));
   await new Promise((resolve) => setImmediate(resolve));
@@ -441,6 +563,20 @@ it("negotiates ACP controls, switches models, streams tools and respects native 
         await client.sessionUpdate({
           sessionId: p.sessionId,
           update: {
+            sessionUpdate: "plan",
+            entries: [{ content: "Verify ACP", priority: "medium", status: "in_progress" }],
+          },
+        });
+        await client.sessionUpdate({
+          sessionId: p.sessionId,
+          update: {
+            sessionUpdate: "agent_thought_chunk",
+            content: { type: "text", text: "Checking ACP results" },
+          },
+        });
+        await client.sessionUpdate({
+          sessionId: p.sessionId,
+          update: {
             sessionUpdate: "agent_message_chunk",
             content: { type: "text", text: "Understood." },
           },
@@ -475,6 +611,14 @@ it("negotiates ACP controls, switches models, streams tools and respects native 
   await expect
     .poll(() => notifications.filter((n) => n.method === "turn/completed").length)
     .toBe(1);
+  expect(notifications.some((n) => object(n.params["item"] ?? {})["steps"])).toBe(true);
+  expect(
+    notifications.some((n) =>
+      JSON.stringify(object(n.params["item"] ?? {})["summary"] ?? "").includes(
+        "Checking ACP results",
+      ),
+    ),
+  ).toBe(true);
   expect(models).toEqual(["model-b"]);
   expect(modes).toEqual(["plan"]);
   await provider.request("command/execute", { ...turn, name: "compact", args: "" });

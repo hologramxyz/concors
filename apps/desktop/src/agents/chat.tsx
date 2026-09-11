@@ -1,4 +1,6 @@
+import { PendingInput } from "./pending-input";
 import { ProviderStart } from "./provider-start";
+import { AgentAccountPrompt } from "./account-prompt";
 import { completedTurnFooters } from "./duration";
 import { SessionActions } from "./session-actions";
 import { AgentComposer } from "./composer";
@@ -7,13 +9,7 @@ import { useViewedAgent } from "@/notifications/context";
 import { CompactLayoutContext, PaneVisibilityContext } from "@/components/compact-layout";
 import { useContext, useEffect, useRef, useState } from "react";
 import { ArrowDown } from "lucide-react";
-import type {
-  AgentOperation,
-  AgentPending,
-  LayoutNode,
-  WorkspaceProject,
-  WorkspaceTab,
-} from "@concors/protocol";
+import type { AgentOperation, LayoutNode, WorkspaceProject, WorkspaceTab } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { Activity } from "./activity";
 import { PlanProgress } from "./plan-progress";
@@ -147,6 +143,18 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
   const [atBottom, setAtBottom] = useState(true);
   const footers = completedTurnFooters(conversation.items);
   const latestPlan = conversation.items.findLast((item) => item.kind === "plan");
+  const proposal = conversation.items.findLast(
+    (item) => item.kind === "plan" && item.text.trim() && !item.presentation?.steps?.length,
+  );
+  const canImplement =
+    proposal &&
+    proposal.status === "completed" &&
+    proposal.turnId === agent?.turnId &&
+    agent?.settings?.planMode &&
+    agent.supportsPlan &&
+    !["working", "starting", "needs_input"].includes(agent.status) &&
+    connection?.state.status === "ready" &&
+    connection.state.daemon.capabilities?.includes("agent-plan-implementation");
   const active = agent && ["working", "needs_input"].includes(agent.status);
   const connected = canEdit && connection?.state.status === "ready";
   useEffect(() => {
@@ -267,6 +275,25 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
         <div className="mx-auto max-w-5xl space-y-3">
           {!compact && feedback}
           {latestPlan && <PlanProgress compact item={latestPlan} />}
+          {canImplement && (
+            <button
+              className={button}
+              disabled={!connected || busy}
+              onClick={() =>
+                void run(() =>
+                  perform({
+                    kind: "implement-plan",
+                    sessionId,
+                    itemId: proposal.id,
+                    expectedRevision: agent.revision,
+                  }),
+                )
+              }
+            >
+              Implement plan
+            </button>
+          )}
+          {agent && <AgentAccountPrompt agent={agent} canEdit={!!connected} />}
           {agent && (
             <>
               <SessionActions agent={agent} items={conversation.items} connected={!!connected} />
@@ -286,161 +313,5 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
         </div>
       </div>
     </div>
-  );
-}
-function PendingInput({
-  pending,
-  disabled,
-  onRespond,
-}: {
-  pending: AgentPending;
-  disabled: boolean;
-  onRespond: (value: {
-    decision?: "accept" | "decline" | "cancel";
-    answers?: Record<string, string[]>;
-  }) => Promise<void>;
-}) {
-  const [answers, setAnswers] = useState<Record<string, string[]>>({});
-  const [other, setOther] = useState<Record<string, string>>({});
-  return (
-    <section
-      aria-label={pending.title}
-      className="space-y-3 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3"
-    >
-      <h3 className="text-sm font-medium">{pending.title}</h3>
-      {pending.summary && (
-        <p className="text-xs break-words whitespace-pre-wrap">{pending.summary}</p>
-      )}
-      {pending.kind === "approval" ? (
-        <>
-          <details>
-            <summary className="cursor-pointer text-xs text-muted-foreground">
-              Review request details
-            </summary>
-            <pre className="chat-scroll mt-2 max-h-40 overflow-auto text-xs break-words whitespace-pre-wrap">
-              {pending.detail}
-            </pre>
-          </details>
-          <div className="flex gap-2">
-            {pending.decisions.map((decision) => (
-              <button
-                key={decision}
-                className={button}
-                disabled={disabled}
-                onClick={() => void onRespond({ decision })}
-              >
-                {decision === "accept"
-                  ? (pending.decisionLabels?.accept ?? "Allow once")
-                  : decision === "decline"
-                    ? "Decline"
-                    : "Cancel turn"}
-              </button>
-            ))}
-          </div>
-        </>
-      ) : (
-        <form
-          className="space-y-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void onRespond({
-              answers: Object.fromEntries(
-                pending.questions.map((q) => [
-                  q.id,
-                  [
-                    ...(answers[q.id] ?? []),
-                    ...(other[q.id]?.trim() ? [(other[q.id] ?? "").trim()] : []),
-                  ],
-                ]),
-              ),
-            });
-          }}
-        >
-          {pending.elicitation?.url && (
-            <a
-              href={pending.elicitation.url}
-              target="_blank"
-              rel="noreferrer"
-              className="block text-xs underline"
-            >
-              Open the server’s authentication page
-            </a>
-          )}
-          {pending.questions.map((q) => (
-            <fieldset key={q.id} className="block space-y-2 text-xs">
-              <legend>{q.question}</legend>
-              {q.options && (
-                <div className="flex flex-wrap gap-2">
-                  {q.options.map((option) => (
-                    <button
-                      type="button"
-                      key={option.label}
-                      title={option.description}
-                      className={`${button} ${answers[q.id]?.includes(option.label) ? "border-primary bg-primary/10" : ""}`}
-                      aria-pressed={answers[q.id]?.includes(option.label) ?? false}
-                      disabled={disabled}
-                      onClick={() => {
-                        setAnswers((current) => ({
-                          ...current,
-                          [q.id]: q.multiSelect
-                            ? current[q.id]?.includes(option.label)
-                              ? (current[q.id] ?? []).filter((v) => v !== option.label)
-                              : [...(current[q.id] ?? []), option.label]
-                            : [option.label],
-                        }));
-                        if (!q.multiSelect) setOther((current) => ({ ...current, [q.id]: "" }));
-                      }}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {(q.allowOther !== false || !q.options?.length) && (
-                <input
-                  aria-label={q.options?.length ? `Other answer: ${q.question}` : q.question}
-                  type={q.isSecret ? "password" : "text"}
-                  value={other[q.id] ?? ""}
-                  required={q.required !== false && !answers[q.id]?.length}
-                  disabled={disabled}
-                  onChange={(e) => {
-                    setOther((current) => ({ ...current, [q.id]: e.target.value }));
-                    if (!q.multiSelect) setAnswers((current) => ({ ...current, [q.id]: [] }));
-                  }}
-                  className="w-full rounded border bg-background px-2 py-1.5"
-                />
-              )}
-            </fieldset>
-          ))}
-          <button
-            className={button}
-            disabled={
-              disabled ||
-              pending.questions.some(
-                (q) => q.required !== false && !answers[q.id]?.length && !other[q.id]?.trim(),
-              )
-            }
-          >
-            {pending.elicitation?.url
-              ? "Authentication completed"
-              : pending.questions.length
-                ? "Submit answers"
-                : "Continue"}
-          </button>
-          {pending.kind === "elicitation" &&
-            pending.decisions.map((decision) => (
-              <button
-                key={decision}
-                type="button"
-                className={button}
-                disabled={disabled}
-                onClick={() => void onRespond({ decision })}
-              >
-                {decision === "cancel" ? "Cancel turn" : "Decline"}
-              </button>
-            ))}
-        </form>
-      )}
-    </section>
   );
 }

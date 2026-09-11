@@ -36,7 +36,9 @@ export function PlanProgress({ item, compact = false }: { item: AgentItem; compa
                   <Circle className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                 )}
                 <span className={step.status === "completed" ? "text-muted-foreground" : ""}>
-                  {step.step}
+                  {step.status === "inProgress" && item.status === "running"
+                    ? (step.activeForm ?? step.step)
+                    : step.step}
                 </span>
               </li>
             ))}

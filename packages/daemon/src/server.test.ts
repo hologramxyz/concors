@@ -74,6 +74,8 @@ describe("WebSocket handshake", () => {
           "project-file-create",
           "folder-workspaces",
           "agent-chat",
+          "agent-accounts",
+          "agent-plan-implementation",
           "agent-attention",
           "agent-composer",
           "agent-queue",

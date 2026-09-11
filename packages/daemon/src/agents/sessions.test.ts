@@ -8,6 +8,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { createDaemonServer, type DaemonServer } from "../server.ts";
 import { loadDaemonConfig } from "../config.ts";
 import { TestAgentProvider } from "./testing/provider.ts";
+import { TestAccountBackend } from "./testing/account.ts";
 
 // Every test here spawns a daemon plus a fake provider; Windows CI runners need well over the
 // 5 s default before the first turn streams.
@@ -23,12 +24,28 @@ afterEach(async () => {
   if (directory) await rm(directory, { recursive: true, force: true });
   providers.length = 0;
 });
-async function boot() {
+async function boot(resumeError?: string) {
   server = createDaemonServer(loadDaemonConfig({ port: 0, logLevel: "silent" }, {}), {
     workspacePath: join(directory, "state.db"),
+    accountBackendFactory: (info) => new TestAccountBackend(info),
     agentProviderFactory: (_cwd, handler) => {
       const provider = new TestAgentProvider(handler);
       provider.cwd = _cwd;
+      if (resumeError) {
+        provider.threadId = `fixture-thread-${providers.length}`;
+        const request = provider.request.bind(provider);
+        vi.spyOn(provider, "request").mockImplementation(async (method, params) => {
+          if (method === "thread/resume") {
+            provider.requests.push({ method, params });
+            throw new Error(
+              resumeError === "missing"
+                ? `no rollout found for thread id ${(params as { threadId: string }).threadId}`
+                : resumeError,
+            );
+          }
+          return request(method, params);
+        });
+      }
       providers.push(provider);
       return provider;
     },
@@ -49,9 +66,9 @@ async function open(url: string) {
 async function action(c: DaemonConnection, op: AgentOperation, id = randomUUID()) {
   return c.requestAgent(op, id);
 }
-async function setup() {
+async function setup(resumeError?: string) {
   directory = await mkdtemp(join(tmpdir(), "concors-chat-"));
-  const url = await boot();
+  const url = await boot(resumeError);
   const a = await open(url),
     b = await open(url);
   const projectId = randomUUID(),
@@ -735,4 +752,341 @@ it("keeps saved history visible and retries a failed native recovery", async () 
   await action(a, { kind: "read", sessionId: id });
   expect(providers).toHaveLength(before + 1);
   expect(providers.at(-1)?.requests.some((r) => r.method === "thread/resume")).toBe(true);
+});
+it.each(["sign-in", "restart"])(
+  "recovers an empty Codex thread after %s and sends only the new prompt",
+  async (reason) => {
+    const { a, b, id } = await setup("missing");
+    const oldThread = a.agents[0]!.threadId;
+    let c = a;
+    if (reason === "sign-in") {
+      const flow = await action(a, {
+        kind: "account",
+        sessionId: id,
+        action: { type: "start", methodId: "fixture" },
+      });
+      if (flow.outcome.status !== "ok" || !flow.outcome.account?.challenge)
+        throw new Error("Missing challenge");
+      const result = await action(a, {
+        kind: "account",
+        sessionId: id,
+        action: {
+          type: "complete",
+          flowId: flow.outcome.account.challenge.flowId,
+          value: "test-credential",
+        },
+      });
+      expect(result.outcome.status === "ok" && result.outcome.account?.status).toBe("connected");
+      expect(providers[0]!.closed).toBe(true);
+    } else {
+      a.disconnect();
+      b.disconnect();
+      await server!.close();
+      c = await open(await boot("missing"));
+    }
+    const count = TestAgentProvider.turns;
+    const requestId = randomUUID();
+    const op: AgentOperation = { kind: "send", sessionId: id, text: "hello after recovery" };
+    await action(c, op, requestId);
+    await expect.poll(() => c.agents[0]?.status).toBe("done");
+    expect(c.agents[0]!.threadId).not.toBe(oldThread);
+    expect(
+      providers[1]!.requests.filter((r) => r.method.startsWith("thread/")).map((r) => r.method),
+    ).toEqual(["thread/resume", "thread/start"]);
+    expect(providers[1]!.requests.find((r) => r.method === "turn/start")?.params).toMatchObject({
+      threadId: c.agents[0]!.threadId,
+      input: [{ type: "text", text: op.text }],
+    });
+    await action(c, op, requestId);
+    expect(TestAgentProvider.turns).toBe(count + 1);
+  },
+);
+
+it("does not replace a missing Codex thread that has provider history", async () => {
+  const { a, b, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "first message" });
+  await expect.poll(() => a.agents[0]?.status).toBe("done");
+  const oldThread = a.agents[0]!.threadId;
+  a.disconnect();
+  b.disconnect();
+  await server!.close();
+  const c = await open(await boot("missing"));
+  const count = TestAgentProvider.turns;
+  await action(c, { kind: "send", sessionId: id, text: "second message" });
+  await expect.poll(() => c.agents[0]?.status).toBe("failed");
+  expect(c.agents[0]!.threadId).toBe(oldThread);
+  expect(providers[1]!.requests.some((r) => r.method === "thread/start")).toBe(false);
+  expect(TestAgentProvider.turns).toBe(count);
+});
+
+it("preserves resume errors and recovers a later retry without replaying failed prompts", async () => {
+  const { a, b, id } = await setup();
+  a.disconnect();
+  b.disconnect();
+  await server!.close();
+  const c = await open(await boot("Authentication failed"));
+  const count = TestAgentProvider.turns;
+  await action(c, { kind: "send", sessionId: id, text: "do not replay this" });
+  await expect.poll(() => c.agents[0]?.status).toBe("failed");
+  expect(c.agents[0]!.error).toBe("Authentication failed");
+  expect(providers[1]!.requests.some((r) => r.method === "thread/start")).toBe(false);
+  c.disconnect();
+  await server!.close();
+  const d = await open(await boot("missing"));
+  await action(d, { kind: "send", sessionId: id, text: "only this prompt" });
+  await expect.poll(() => d.agents[0]?.status).toBe("done");
+  expect(TestAgentProvider.turns).toBe(count + 1);
+  expect(providers[2]!.requests.find((r) => r.method === "turn/start")?.params).toMatchObject({
+    input: [{ type: "text", text: "only this prompt" }],
+  });
+});
+
+it("keeps invalid question replies pending, accepts optional blanks, and redacts private answer receipts", async () => {
+  const { a, b, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "hold the turn" });
+  await expect.poll(() => a.agents[0]?.turnId?.startsWith("turn-")).toBe(true);
+  const input = providers[0]!.onRequest(
+    "item/tool/requestUserInput",
+    {
+      threadId: a.agents[0]!.threadId,
+      turnId: a.agents[0]!.turnId,
+      questions: [
+        {
+          id: "checks",
+          header: "Checks",
+          question: "Which checks?",
+          multiSelect: true,
+          allowOther: false,
+          options: [
+            { label: "Unit", description: "Fast" },
+            { label: "Browser", description: "UI" },
+          ],
+        },
+        { id: "secret", header: "Key", question: "Private value", isSecret: true },
+        { id: "note", header: "Note", question: "Notes?", required: false },
+      ],
+    },
+    "question",
+  );
+  await expect.poll(() => b.agents[0]?.pending.length).toBe(1);
+  const pendingId = b.agents[0]!.pending[0]!.id;
+  expect(
+    (
+      await action(a, {
+        kind: "respond",
+        sessionId: id,
+        pendingId,
+        answers: { checks: ["Invalid"] },
+      })
+    ).outcome.status,
+  ).toBe("error");
+  expect(b.agents[0]?.pending).toHaveLength(1);
+  expect(
+    (
+      await action(b, {
+        kind: "respond",
+        sessionId: id,
+        pendingId,
+        answers: { checks: ["Unit", "Browser"], secret: ["private-fixture"], note: [] },
+      })
+    ).outcome.status,
+  ).toBe("ok");
+  expect(await input).toEqual({
+    answers: {
+      checks: { answers: ["Unit", "Browser"] },
+      secret: { answers: ["private-fixture"] },
+      note: { answers: [] },
+    },
+  });
+  const read = await action(a, { kind: "read", sessionId: id });
+  expect(JSON.stringify(read)).not.toContain("private-fixture");
+  expect(JSON.stringify(read)).toContain("[private answer]");
+});
+
+it("preserves explicit permission actions and lets a question cancel the whole turn", async () => {
+  const { a, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "hold the turn" });
+  await expect.poll(() => a.agents[0]?.turnId?.startsWith("turn-")).toBe(true);
+  const scope = { threadId: a.agents[0]!.threadId, turnId: a.agents[0]!.turnId };
+  const input = providers[0]!.onRequest(
+    "item/commandExecution/requestApproval",
+    { ...scope, availableDecisions: ["accept", "acceptForSession", "decline", "cancel"] },
+    "approval",
+  );
+  await expect.poll(() => a.agents[0]?.pending.length).toBe(1);
+  const pendingId = a.agents[0]!.pending[0]!.id;
+  expect(
+    (
+      await action(a, {
+        kind: "respond",
+        sessionId: id,
+        pendingId,
+        actionId: "invented",
+        decision: "accept",
+      })
+    ).outcome.status,
+  ).toBe("error");
+  await action(a, {
+    kind: "respond",
+    sessionId: id,
+    pendingId,
+    actionId: "acceptForSession",
+    decision: "accept",
+  });
+  expect(await input).toMatchObject({ decision: "acceptForSession" });
+  const question = providers[0]!.onRequest(
+    "item/tool/requestUserInput",
+    { ...scope, questions: [{ id: "answer", header: "Question", question: "Proceed?" }] },
+    "question",
+  );
+  await expect.poll(() => a.agents[0]?.pending.length).toBe(1);
+  await action(a, {
+    kind: "respond",
+    sessionId: id,
+    pendingId: a.agents[0]!.pending[0]!.id,
+    decision: "cancel",
+  });
+  expect(await question).toMatchObject({ decision: "cancel" });
+  await expect.poll(() => a.agents[0]?.status).toBe("interrupted");
+  expect(a.agents[0]?.pending).toEqual([]);
+});
+
+it("keeps async questions across turns and restart, and durably resolves answers once", async () => {
+  const { a, b, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "hold" });
+  const provider = providers[0]!;
+  const question = {
+    id: "async-1",
+    type: "agentMessage",
+    delivery: "async",
+    questions: [{ title: "Which approach?", options: ["Small change", "Full rewrite"] }],
+  };
+  provider.emit("item/completed", { item: question });
+  await expect.poll(() => b.agents[0]?.pending.length).toBe(1);
+  expect(b.agents[0]?.status).toBe("working");
+  expect(b.agents[0]?.attention?.kind).toBe("needs_input");
+  provider.finish();
+  await expect.poll(() => a.agents[0]?.status).toBe("done");
+  await action(a, { kind: "send", sessionId: id, text: "hold again" });
+  expect(a.agents[0]?.pending).toHaveLength(1);
+  a.disconnect();
+  b.disconnect();
+  await server!.close();
+  const c = await open(await boot());
+  expect(c.agents[0]?.pending).toHaveLength(1);
+  const pending = c.agents[0]!.pending[0]!;
+  const op: AgentOperation = {
+    kind: "respond",
+    sessionId: id,
+    pendingId: pending.id,
+    answers: { "0": ["Small change"] },
+  };
+  const requestId = randomUUID();
+  expect((await action(c, op, requestId)).outcome.status).toBe("ok");
+  expect((await action(c, op, requestId)).outcome.status).toBe("ok");
+  expect(c.agents[0]?.queue).toHaveLength(1);
+  expect(c.agents[0]?.pending).toHaveLength(0);
+  const history = await action(c, { kind: "read", sessionId: id });
+  expect(
+    history.outcome.status === "ok" &&
+      history.outcome.conversation.items.some((i) => i.id === "async-response:async-1"),
+  ).toBe(true);
+  await action(c, { kind: "send", sessionId: id, text: "hold resumed" });
+  providers.at(-1)!.emit("item/completed", { item: question });
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  expect(c.agents[0]?.pending).toHaveLength(0);
+});
+
+it("implements only the current completed plan and keeps normal tool permissions", async () => {
+  const { a, id } = await setup();
+  let info = a.agents[0]!;
+  await action(a, {
+    kind: "configure",
+    sessionId: id,
+    expectedRevision: info.revision,
+    settings: { model: "fixture", effort: "high", mode: "default", planMode: true },
+  });
+  await action(a, { kind: "send", sessionId: id, text: "hold" });
+  providers[0]!.emit("item/completed", {
+    item: { id: "proposal", type: "plan", text: "## Plan\n\nAdd a test, then implement." },
+  });
+  providers[0]!.finish();
+  await expect.poll(() => a.agents[0]?.status).toBe("done");
+  info = a.agents[0]!;
+  const op: AgentOperation = {
+    kind: "implement-plan",
+    sessionId: id,
+    expectedRevision: info.revision,
+    itemId: "proposal",
+  };
+  expect((await action(a, { ...op, expectedRevision: info.revision - 1 })).outcome.status).toBe(
+    "error",
+  );
+  const requestId = randomUUID();
+  expect((await action(a, op, requestId)).outcome.status).toBe("ok");
+  expect((await action(a, op, requestId)).outcome.status).toBe("ok");
+  await expect
+    .poll(() => providers[0]!.requests.filter((r) => r.method === "turn/start").length)
+    .toBe(2);
+  expect(providers[0]!.requests.filter((r) => r.method === "turn/start")[1]?.params).toMatchObject({
+    collaborationMode: { mode: "default" },
+    sandboxPolicy: { type: "workspaceWrite" },
+    input: [
+      { type: "text", text: "Implement this plan:\n\n## Plan\n\nAdd a test, then implement." },
+    ],
+  });
+});
+
+it("previews submitted attachments after restart without broadcasting the bytes in timeline items", async () => {
+  const { a, b, id } = await setup();
+  const requestId = randomUUID(),
+    data = Buffer.from("# Attached document").toString("base64");
+  await action(
+    a,
+    {
+      kind: "send",
+      sessionId: id,
+      text: "Read the attachment",
+      attachments: [{ name: "notes.md", mime: "text/markdown", data }],
+    },
+    requestId,
+  );
+  await expect.poll(() => a.agents[0]?.status).toBe("done");
+  const read = await action(b, { kind: "read", sessionId: id });
+  expect(
+    read.outcome.status === "ok" && read.outcome.conversation.items.find((i) => i.kind === "user"),
+  ).toMatchObject({
+    text: "Read the attachment",
+    attachments: [{ name: "notes.md", mime: "text/markdown" }],
+  });
+  expect(JSON.stringify(read)).not.toContain(data);
+  a.disconnect();
+  b.disconnect();
+  await server!.close();
+  const c = await open(await boot());
+  const result = await action(c, {
+    kind: "read-attachment",
+    sessionId: id,
+    itemId: `prompt:${requestId}`,
+    index: 0,
+  });
+  expect(result.outcome.status === "ok" && result.outcome.attachment).toEqual({
+    name: "notes.md",
+    mime: "text/markdown",
+    data,
+  });
+  expect(
+    (
+      await action(c, {
+        kind: "read-attachment",
+        sessionId: id,
+        itemId: `prompt:${requestId}`,
+        index: 1,
+      })
+    ).outcome.status,
+  ).toBe("error");
+  expect(
+    (await action(c, { kind: "read-attachment", sessionId: id, itemId: "/etc/passwd", index: 0 }))
+      .outcome.status,
+  ).toBe("error");
 });

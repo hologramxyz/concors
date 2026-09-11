@@ -33,3 +33,19 @@ export function saveHost(scope: string, host: Host): void {
     /* A storage failure must not prevent connecting. */
   }
 }
+
+const SELECTED_MACHINE_KEY = "concors.selected-machine.v1";
+export function loadSelectedMachineId(scope: string): string | null {
+  try {
+    return localStorage.getItem(`${SELECTED_MACHINE_KEY}:${scope}`);
+  } catch {
+    return null;
+  }
+}
+export function saveSelectedMachineId(scope: string, machineId: string): void {
+  try {
+    localStorage.setItem(`${SELECTED_MACHINE_KEY}:${scope}`, machineId);
+  } catch {
+    /* A storage failure must not prevent connecting. */
+  }
+}

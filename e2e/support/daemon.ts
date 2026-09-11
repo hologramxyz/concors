@@ -1,3 +1,4 @@
+import { TestAccountBackend } from "../../packages/daemon/src/agents/testing/account.ts";
 import { copyFileSync } from "node:fs";
 import { delimiter } from "node:path";
 import {
@@ -28,6 +29,7 @@ const port = Number(process.env["CONCORS_E2E_DAEMON_PORT"] ?? 7429);
 if (![7429, 7430].includes(port)) throw new Error("Invalid fixture daemon port");
 const server = createDaemonServer(loadDaemonConfig({ port, logLevel: "warn" }, {}), {
   workspacePath: join(directory, "workspace.sqlite"),
+  accountBackendFactory: (info) => new TestAccountBackend(info),
   agentProviderFactory: (_cwd, handler, provider) => new TestAgentProvider(handler, provider),
 });
 // Test-only origin adaptation for a second local checkout. Production retains its

@@ -1,6 +1,7 @@
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import {
+  AgentAttachmentSchema,
   AgentInfoSchema,
   AgentItemSchema,
   type AgentInfo,
@@ -434,7 +435,7 @@ export class WorkspaceStore {
   reserveAgentAction(
     request: AgentRequest,
     info: AgentInfo,
-    queue?: { add?: AgentRequest; remove?: string },
+    queue?: { add?: AgentRequest; remove?: string; resolution?: AgentItem },
   ): void {
     this.#db.exec("BEGIN IMMEDIATE");
     try {
@@ -449,6 +450,7 @@ export class WorkspaceStore {
         this.#db
           .prepare("DELETE FROM agent_queue WHERE id = ? AND session_id = ?")
           .run(queue.remove, info.id);
+      if (queue?.resolution) this.saveAgentItem(queue.resolution);
       this.saveAgent(info);
       this.#db.exec("COMMIT");
     } catch (error) {
@@ -533,6 +535,18 @@ export class WorkspaceStore {
         })
       : null;
   }
+  agentAttachment(sessionId: string, itemId: string, index: number) {
+    if (!this.agentItem(sessionId, itemId) || !itemId.startsWith("prompt:"))
+      throw new Error("Attachment is unavailable");
+    const row = this.#db
+      .prepare("SELECT request FROM agent_requests WHERE id = ? AND session_id = ?")
+      .get(itemId.slice(7), sessionId);
+    const request = row ? (JSON.parse(String(row["request"])) as AgentRequest) : undefined;
+    const op = request?.operation;
+    if (op?.kind !== "send" || !op.attachments?.[index])
+      throw new Error("Attachment is unavailable");
+    return AgentAttachmentSchema.parse(op.attachments[index]);
+  }
   saveAgentItem(item: AgentItem): AgentItem {
     // Keep individual frames bounded, while retaining older items in the paginated history.
     const bound = (text: string, limit: number) =>
@@ -565,6 +579,15 @@ export class WorkspaceStore {
           position: Number(row["position"]),
         }),
       );
+  }
+  hasAgentProviderHistory(sessionId: string): boolean {
+    // Check all history, not just the most recent page. Pending user prompts are reserved
+    // locally before reaching a provider; every other item is evidence of provider activity.
+    return !!this.#db
+      .prepare(
+        "SELECT 1 FROM agent_items WHERE session_id = ? AND (json_extract(item, '$.kind') != 'user' OR json_extract(item, '$.turnId') NOT LIKE 'pending:%') LIMIT 1",
+      )
+      .get(sessionId);
   }
   agentConversation(id: string, before = Number.MAX_SAFE_INTEGER): AgentConversation {
     const rows = this.#db
