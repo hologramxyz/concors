@@ -337,7 +337,7 @@ export function AgentComposer({
                   id: provider.id,
                   label:
                     (provider.label ?? agentProviderName(provider.id)) +
-                    (provider.id === agent.provider ? " · Current chat" : " · Starts a new chat"),
+                    (provider.id === agent.provider ? " · Current chat" : " · Use in this pane"),
                   selected: provider.id === agent.provider,
                 })),
         },
