@@ -20,6 +20,8 @@ import {
 } from "@concors/protocol";
 import {
   PROTOCOL_VERSION,
+  HOST_USAGE_CAPABILITY,
+  type HostUsage,
   TerminalRequestSchema,
   TerminalInputSchema,
   type TerminalEvent,
@@ -100,6 +102,31 @@ const DEFAULT_HANDSHAKE_TIMEOUT_MS = 5_000;
  * (backoff, UI prompts) belongs to the host application.
  */
 export class DaemonConnection {
+  #hostUsage: HostUsage | null = null;
+  readonly #hostUsageListeners = new Set<(usage: HostUsage | null) => void>();
+
+  /** Shared opt-in stream. Older daemons receive no unsupported subscription messages. */
+  subscribeHostUsage(listener: (usage: HostUsage | null) => void): () => void {
+    const first = this.#hostUsageListeners.size === 0;
+    this.#hostUsageListeners.add(listener);
+    listener(this.#hostUsage);
+    if (first) this.#subscribeHostUsage(true);
+    return () => {
+      this.#hostUsageListeners.delete(listener);
+      if (!this.#hostUsageListeners.size) {
+        this.#subscribeHostUsage(false);
+        this.#hostUsage = null;
+      }
+    };
+  }
+
+  #subscribeHostUsage(enabled: boolean): void {
+    if (
+      this.#state.status === "ready" &&
+      this.#state.daemon.capabilities?.includes(HOST_USAGE_CAPABILITY)
+    )
+      this.#socket?.send(JSON.stringify({ type: "host.subscribe", enabled }));
+  }
   readonly endpoint: DaemonEndpoint;
 
   #state: ConnectionState = { status: "disconnected" };
@@ -527,6 +554,7 @@ export class DaemonConnection {
               ...(message.capabilities ? { capabilities: message.capabilities } : {}),
             };
             this.#setState({ status: "ready", daemon });
+            if (this.#hostUsageListeners.size > 0) this.#subscribeHostUsage(true);
             if (this.#workspaceListeners.size > 0)
               socket?.send(JSON.stringify({ type: "workspace.subscribe" }));
             if (!settled) {
@@ -536,6 +564,12 @@ export class DaemonConnection {
             }
             break;
           }
+          case "host.usage":
+            if (this.#state.status === "ready" && this.#hostUsageListeners.size > 0) {
+              this.#hostUsage = message.usage;
+              for (const listener of this.#hostUsageListeners) listener(message.usage);
+            }
+            break;
           case "agent.list":
           case "agent.state":
           case "agent.item":
@@ -716,6 +750,8 @@ export class DaemonConnection {
   #setState(state: ConnectionState): void {
     this.#state = state;
     if (state.status !== "ready") {
+      this.#hostUsage = null;
+      for (const listener of this.#hostUsageListeners) listener(null);
       this.#workspace = null;
       for (const pending of this.#agentRequests.values()) {
         clearTimeout(pending.timer);

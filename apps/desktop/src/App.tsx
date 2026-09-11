@@ -1,6 +1,7 @@
 import { ColorThemeProvider } from "@/theme/color-theme-provider";
 import { useColorThemePreference } from "@/theme/use-color-theme";
 import { FilesSidebar } from "@/files/sidebar";
+import { ResourceStatus } from "@/host/resource-status";
 import { FilesProvider } from "@/files/provider";
 import { useCommand } from "@/shortcuts/context";
 import { ShortcutProvider } from "@/shortcuts/provider";
@@ -485,6 +486,11 @@ function AppContent() {
                           </div>
                         )}
                       </main>
+                      <ResourceStatus
+                        connection={connection.transport}
+                        state={connection.state}
+                        machine={selectedHost.label}
+                      />
                     </div>
                     <FilesSidebar project={view === "projects" ? activeProject : undefined} />
                   </div>

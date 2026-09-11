@@ -91,6 +91,88 @@ function startConnection() {
 }
 
 describe("DaemonConnection", () => {
+  it("resubscribes after reconnect without accepting the old socket's readings", async () => {
+    const { connection, socket, ready, sockets } = startConnection();
+    const listener = vi.fn();
+    connection.subscribeHostUsage(listener);
+    socket.serverOpen();
+    socket.serverSend({ ...READY, capabilities: ["host-usage"] });
+    await ready;
+    socket.serverClose();
+    const reconnected = connection.connect();
+    const next = sockets[1]!;
+    next.serverOpen();
+    next.serverSend({ ...READY, capabilities: ["host-usage"] });
+    await reconnected;
+    expect(next.sent.map((raw) => JSON.parse(raw))).toContainEqual({
+      type: "host.subscribe",
+      enabled: true,
+    });
+    const count = listener.mock.calls.length;
+    socket.serverSend({ type: "host.usage", usage: null });
+    expect(listener).toHaveBeenCalledTimes(count);
+    connection.disconnect();
+  });
+  it("opts into host usage once, clears disconnected readings, and stops after the last observer", async () => {
+    const { connection, socket, ready } = startConnection();
+    const first = vi.fn(),
+      second = vi.fn();
+    const offFirst = connection.subscribeHostUsage(first);
+    expect(socket.sent).toEqual([]);
+    socket.serverOpen();
+    socket.serverSend({ ...READY, capabilities: ["host-usage"] });
+    await ready;
+    const usage = {
+      sampledAt: 1,
+      cpuPercent: 80,
+      cpuCount: 2,
+      memory: { usedBytes: 6, totalBytes: 8 },
+    };
+    socket.serverSend({ type: "host.usage", usage });
+    expect(first).toHaveBeenLastCalledWith(usage);
+    const offSecond = connection.subscribeHostUsage(second);
+    expect(second).toHaveBeenLastCalledWith(usage);
+    expect(
+      socket.sent
+        .map((raw) => JSON.parse(raw))
+        .filter((message) => message.type === "host.subscribe"),
+    ).toEqual([{ type: "host.subscribe", enabled: true }]);
+    offFirst();
+    offSecond();
+    expect(JSON.parse(socket.sent.at(-1)!)).toEqual({ type: "host.subscribe", enabled: false });
+    connection.subscribeHostUsage(second);
+    expect(second).toHaveBeenLastCalledWith(null);
+    socket.serverSend({ type: "host.usage", usage });
+    socket.serverClose();
+    expect(second).toHaveBeenLastCalledWith(null);
+  });
+
+  it("does not request metrics from older daemons or without subscribers", async () => {
+    const { connection, socket, ready } = startConnection();
+    socket.serverOpen();
+    socket.serverSend(READY);
+    await ready;
+    const off = connection.subscribeHostUsage(vi.fn());
+    off();
+    expect(socket.sent).toHaveLength(1);
+    connection.disconnect();
+  });
+
+  it("ignores malformed usage and replaces failed readings with unavailable", async () => {
+    const { connection, socket, ready } = startConnection();
+    const listener = vi.fn();
+    connection.subscribeHostUsage(listener);
+    socket.serverOpen();
+    socket.serverSend({ ...READY, capabilities: ["host-usage"] });
+    await ready;
+    socket.serverSend(JSON.stringify({ type: "host.usage", usage: { cpuPercent: 500 } }));
+    expect(connection.state.status).toBe("ready");
+    expect(listener).toHaveBeenCalledTimes(2);
+    socket.serverSend({ type: "host.usage", usage: null });
+    expect(listener).toHaveBeenLastCalledWith(null);
+    connection.disconnect();
+  });
+
   it.each([
     { protocols: "concors.bearer.test-token" },
     { protocols: ["concors.bearer.test-token"] as const },

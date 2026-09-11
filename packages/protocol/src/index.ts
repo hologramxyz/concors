@@ -10,6 +10,7 @@
 export * from "./version.ts";
 export * from "./errors.ts";
 export * from "./daemon.ts";
+export * from "./host.ts";
 export * from "./client.ts";
 export * from "./messages.ts";
 export * from "./transport.ts";

@@ -1,3 +1,4 @@
+import type { MachineResources } from "./resources.ts";
 import type { Logger } from "./log.ts";
 
 /*
@@ -15,6 +16,7 @@ export interface HeartbeatOptions {
   agentToken: string;
   version: string;
   countSessions: () => Promise<number>;
+  collectResources?: () => Promise<MachineResources>;
   logger: Logger;
   fetchImpl?: typeof fetch;
   intervalMs?: number;
@@ -24,6 +26,7 @@ export interface HeartbeatBody {
   version: string;
   uptimeSeconds: number;
   sessions: number;
+  resources?: MachineResources | null;
 }
 
 export function createHeartbeat(options: HeartbeatOptions): {
@@ -41,10 +44,14 @@ export function createHeartbeat(options: HeartbeatOptions): {
 
   async function send(): Promise<void> {
     const started = generation;
+    const resources = options.collectResources
+      ? await options.collectResources().catch(() => null)
+      : undefined;
     const body: HeartbeatBody = {
       version: options.version,
       uptimeSeconds: Math.round(process.uptime()),
       sessions: await options.countSessions().catch(() => 0),
+      ...(resources !== undefined ? { resources } : {}),
     };
     if (started !== generation) return;
     controller = new AbortController();
