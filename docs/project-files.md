@@ -11,6 +11,11 @@ Dotfiles are hidden by default; the visibility preference is remembered on this 
 load on expansion, and the filter searches filenames already loaded. Expanded folders stay open
 when the sidebar closes and reopens or refreshes. The drawer omits the absolute project path footer.
 
+The file tree and open-file tabs share colored file-type icons on desktop and mobile. Icons match
+extensions and familiar filenames such as `Dockerfile`, `package.json`, and `.gitignore`, with a
+neutral fallback for unknown types. They are bundled with the client and adjusted for light and dark
+themes; file labels remain the accessible names. Folders and symbolic links keep distinct icons.
+
 New files and folders use paths relative to the project, with existing parent folders. A new file
 opens in an editor tab; a new folder expands in the tree. The daemon advertises
 `project-file-create` separately, so older machines keep browsing/editing and disable creation.
