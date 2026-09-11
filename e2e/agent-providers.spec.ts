@@ -11,6 +11,8 @@ for (const [provider, label] of [
   test(`select ${label}, stream a reply, and return to the original Codex chat`, async ({
     page,
   }) => {
+    // Exercise provider discovery, streaming, reload and return to the original conversation.
+    test.setTimeout(60_000);
     const directory = await mkdtemp(join(tmpdir(), "concors-provider-ui-"));
     try {
       await signedIn(page);
