@@ -16,6 +16,7 @@ export function AttachmentPreview({
   const connection = useContext(TerminalConnectionContext);
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState<AgentAttachment | null>(null);
+  const [text, setText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const show = async () => {
     setOpen(true);
@@ -30,17 +31,28 @@ export function AttachmentPreview({
       if (result.outcome.status === "error") throw new Error(result.outcome.message);
       if (!result.outcome.attachment)
         throw new Error("Update this machine to preview attachments.");
-      setValue(result.outcome.attachment);
+      const attachment = result.outcome.attachment;
+      let previewText: string | null = null;
+      if (
+        attachment.mime.startsWith("text/") ||
+        ["application/json", "application/xml"].includes(attachment.mime)
+      ) {
+        try {
+          previewText = new TextDecoder().decode(
+            Uint8Array.from(atob(attachment.data), (c) => c.charCodeAt(0)),
+          );
+        } catch {
+          throw new Error("This attachment is damaged and could not be previewed.");
+        }
+      }
+      setText(previewText);
+      setValue(attachment);
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not load attachment");
     }
   };
   const isImage =
     value && ["image/png", "image/jpeg", "image/webp", "image/gif"].includes(value.mime);
-  const isText =
-    value &&
-    (value.mime.startsWith("text/") ||
-      ["application/json", "application/xml"].includes(value.mime));
   return (
     <>
       <button
@@ -77,12 +89,8 @@ export function AttachmentPreview({
                   src={`data:${value.mime};base64,${value.data}`}
                   alt={value.name}
                 />
-              ) : isText ? (
-                <pre className="text-sm break-words whitespace-pre-wrap">
-                  {new TextDecoder().decode(
-                    Uint8Array.from(atob(value.data), (c) => c.charCodeAt(0)),
-                  )}
-                </pre>
+              ) : text !== null ? (
+                <pre className="text-sm break-words whitespace-pre-wrap">{text}</pre>
               ) : (
                 <p className="text-sm">
                   This file is attached to the conversation. Its format cannot be previewed here.
