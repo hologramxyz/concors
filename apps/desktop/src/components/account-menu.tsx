@@ -1,5 +1,5 @@
-import { ChevronsUpDown, LogOut, Settings } from "lucide-react";
-import { useContext, useState } from "react";
+import { ChevronsUpDown, LogOut, Plus, Server, Settings } from "lucide-react";
+import { useContext, useState, type ReactNode } from "react";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import {
   Dialog,
@@ -66,30 +66,57 @@ export function AccountMenu({ auth, onSignOut, onOpenSettings }: AccountMenuProp
   );
 }
 
-function MobileAccountMenu({ auth, onSignOut, onOpenSettings }: AccountMenuProps) {
+export function MobileAccountMenu({
+  auth,
+  onSignOut,
+  onOpenSettings,
+  machinePicker,
+  onAddMachine,
+}: Omit<AccountMenuProps, "auth"> & {
+  auth: SignedInAuth | null;
+  machinePicker?: ReactNode;
+  onAddMachine?: () => void;
+}) {
   const [open, setOpen] = useState(false);
+  const name = auth?.user.name || auth?.user.email || "Desktop connection";
+  const avatar = auth ? initialOf(auth.user) : <Server className="size-4" aria-hidden="true" />;
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger className="mobile-account-trigger" aria-label={`Account: ${auth.user.name}`}>
-        <span className="mobile-account-avatar">{initialOf(auth.user)}</span>
-        <span className="min-w-0 flex-1 truncate">{auth.user.name}</span>
+      <DialogTrigger className="mobile-account-trigger" aria-label={`Account: ${name}`}>
+        <span className="mobile-account-avatar">{avatar}</span>
+        <span className="min-w-0 flex-1 truncate">{name}</span>
         <ChevronsUpDown className="size-4 text-muted-foreground" aria-hidden="true" />
       </DialogTrigger>
       <DialogContent className="mobile-account-drawer">
         <DialogHeader>
           <DialogTitle>Account</DialogTitle>
           <DialogDescription className="sr-only">
-            Manage your account settings or sign out.
+            Choose a machine, manage settings or disconnect.
           </DialogDescription>
         </DialogHeader>
+        {machinePicker && <div className="mobile-account-machine">{machinePicker}</div>}
         <div className="mobile-account-identity">
-          <span className="mobile-account-avatar">{initialOf(auth.user)}</span>
+          <span className="mobile-account-avatar">{avatar}</span>
           <div className="min-w-0">
-            <p className="truncate font-medium">{auth.user.name}</p>
-            <p className="truncate text-sm text-muted-foreground">{auth.user.email}</p>
+            <p className="truncate font-medium">{name}</p>
+            <p className="truncate text-sm text-muted-foreground">
+              {auth ? auth.user.email : "Private preview · no cloud account"}
+            </p>
           </div>
         </div>
         <div className="mobile-account-actions">
+          {onAddMachine && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onAddMachine();
+              }}
+            >
+              <Plus aria-hidden="true" />
+              Add machine
+            </button>
+          )}
           <button
             type="button"
             onClick={() => {
@@ -108,7 +135,7 @@ function MobileAccountMenu({ auth, onSignOut, onOpenSettings }: AccountMenuProps
             }}
           >
             <LogOut aria-hidden="true" />
-            Sign out
+            {auth ? "Sign out" : "Disconnect desktop"}
           </button>
         </div>
       </DialogContent>

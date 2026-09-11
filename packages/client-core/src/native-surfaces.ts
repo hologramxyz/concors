@@ -4,6 +4,7 @@ import { AgentAttachmentSchema } from "@concors/protocol";
 const text = z.string().max(16000);
 export const NativeIconSchema = z.enum([
   "menu",
+  "search",
   "files",
   "back",
   "chevron",
