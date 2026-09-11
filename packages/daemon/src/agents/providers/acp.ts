@@ -476,9 +476,10 @@ export class AcpProvider extends EventProvider {
           aggregatedOutput: output,
           output,
           path: string(
-            object(tool["rawInput"])["path"] ?? object(array(tool["locations"])[0])["path"],
+            object(tool["rawInput"] ?? {})["path"] ??
+              object(array(tool["locations"])[0] ?? {})["path"],
           ),
-          query: string(object(tool["rawInput"])["query"] ?? tool["title"]),
+          query: string(object(tool["rawInput"] ?? {})["query"] ?? tool["title"]),
           arguments: tool["rawInput"],
           result: tool["rawOutput"] ?? content,
           ...(diffs.length

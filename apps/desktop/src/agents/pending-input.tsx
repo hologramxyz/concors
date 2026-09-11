@@ -84,9 +84,9 @@ export function PendingInput({
                   [
                     ...(answers[q.id] ?? []),
                     ...(q.multiline && other[q.id]
-                      ? [other[q.id]!]
+                      ? [other[q.id] ?? ""]
                       : other[q.id]?.trim()
-                        ? [other[q.id]!.trim()]
+                        ? [(other[q.id] ?? "").trim()]
                         : []),
                   ],
                 ]),
@@ -160,9 +160,9 @@ export function PendingInput({
                               return;
                             event.preventDefault();
                             const choices = Array.from(
-                              event.currentTarget.parentElement!.querySelectorAll<HTMLButtonElement>(
+                              event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>(
                                 '[role="radio"]',
-                              ),
+                              ) ?? [],
                             );
                             const index =
                               event.key === "Home"

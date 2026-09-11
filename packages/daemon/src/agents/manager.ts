@@ -1079,7 +1079,8 @@ export class AgentManager {
       ...(delivery ? { add: delivery } : {}),
       resolution,
     });
-    this.#emit({ type: "agent.item", item: this.#store.agentItem(info.id, resolution.id)! });
+    const savedResolution = this.#store.agentItem(info.id, resolution.id);
+    if (savedResolution) this.#emit({ type: "agent.item", item: savedResolution });
     this.#emit({ type: "agent.state", agent: next });
     void this.drain(info.id).catch((error) => this.fail(info.id, error));
     return this.result(request, info.id);
