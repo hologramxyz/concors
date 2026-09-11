@@ -503,3 +503,36 @@ test("mobile file browsing supports Markdown links, safe creation, hidden files 
     await cleanup();
   }
 });
+
+test("file icons remain colored and consistent between mobile files and tabs", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  const { ui, root, cleanup } = await setup(page, "File icon preview");
+  try {
+    await writeFile(join(root, "app.js"), "console.log('ready');\n");
+    await writeFile(join(root, "config.yaml"), "port: 3000\n");
+    await ui.getByRole("button", { name: "Project files", exact: true }).click();
+    const files = ui.getByRole("region", { name: "Project files", exact: true });
+    await files.getByRole("button", { name: "src", exact: true }).tap();
+    const source = files.getByRole("button", { name: "main.ts", exact: true });
+    const sourceIcon = source.locator("[data-file-icon]");
+    await expect(sourceIcon).toBeVisible();
+    const shape = await sourceIcon.innerHTML();
+    for (const name of ["app.js", "config.yaml", "README.md"]) {
+      const icon = files.getByRole("button", { name, exact: true }).locator("[data-file-icon]");
+      await expect(icon).toBeVisible();
+      await expect(icon).toHaveAttribute("aria-hidden", "true");
+      expect(await icon.innerHTML()).not.toBe(shape);
+    }
+    expect(await files.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await page.screenshot({ path: test.info().outputPath("mobile-file-icons.png") });
+    await source.tap();
+    const tab = files
+      .getByRole("navigation", { name: "Open files" })
+      .getByRole("button", { name: "main.ts", exact: true });
+    await expect(tab.locator("[data-file-icon]")).toBeVisible();
+    expect(await tab.locator("[data-file-icon]").innerHTML()).toBe(shape);
+    await expect(files.getByRole("textbox", { name: "Code editor: src/main.ts" })).toBeVisible();
+  } finally {
+    await cleanup();
+  }
+});
