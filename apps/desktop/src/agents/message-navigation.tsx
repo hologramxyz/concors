@@ -11,7 +11,6 @@ export function MessageNavigation({
   error,
   onRetry,
   hasEarlier,
-  onEarlier,
   hasNewer,
 }: {
   entries: MessageEntry[];
@@ -21,7 +20,6 @@ export function MessageNavigation({
   error: string | null;
   onRetry: () => void;
   hasEarlier: boolean;
-  onEarlier: () => Promise<void>;
   hasNewer: boolean;
 }) {
   const [hovered, setHovered] = useState<number | null>(null);
@@ -207,22 +205,17 @@ export function MessageNavigation({
               Jump to a message in this conversation.
             </Dialog.Description>
             <div className="chat-scroll min-h-0 overflow-y-auto">
-              {(hasEarlier || error) && (
+              {hasEarlier && (
+                <p className="p-3 text-sm text-muted-foreground">
+                  Scroll up in the conversation to load earlier messages.
+                </p>
+              )}
+              {error && (
                 <button
                   className="w-full rounded-md p-3 text-left text-sm hover:bg-muted"
-                  onClick={() => {
-                    if (error) onRetry();
-                    else
-                      void onEarlier().catch((cause: unknown) =>
-                        setJumpError(
-                          cause instanceof Error
-                            ? cause.message
-                            : "Could not load earlier messages.",
-                        ),
-                      );
-                  }}
+                  onClick={onRetry}
                 >
-                  Load earlier messages
+                  Retry loading messages
                 </button>
               )}
               {entries.map((entry, index) => (
