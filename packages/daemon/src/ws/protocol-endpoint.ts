@@ -1,6 +1,7 @@
 import { dirname, join, basename } from "node:path";
 import { ProviderRegistry } from "../agents/providers/registry.ts";
 import { providerFactory } from "../agents/providers/index.ts";
+import type { AccountBackendFactory } from "../agents/accounts/manager.ts";
 import { ProjectFiles } from "../files/service.ts";
 import { AgentManager, type AgentProviderFactory } from "../agents/manager.ts";
 import { ProjectManager } from "../projects/manager.ts";
@@ -25,6 +26,7 @@ import type { DaemonState } from "../state.ts";
 
 export interface ProtocolEndpointOptions {
   readonly agentProviderFactory?: AgentProviderFactory;
+  readonly accountBackendFactory?: AccountBackendFactory;
   readonly state: DaemonState;
   readonly workspace: WorkspaceStore;
   /** How long a freshly-opened socket may stay silent before we drop it. */
@@ -111,6 +113,7 @@ export function registerProtocolEndpoint(
     },
     options.agentProviderFactory ?? providerFactory(providers),
     providers,
+    options.accountBackendFactory,
   );
   app.addHook("onClose", async () => {
     providers.close();
@@ -146,6 +149,7 @@ export function registerProtocolEndpoint(
       connections.delete(socket);
       subscribers.delete(socket);
       terminals.detach(viewer.id);
+      void agents.accounts.detach(viewer.id);
     });
 
     new ConnectionHandler(socket, log, options.state, handshakeTimeoutMs, (message) => {
@@ -183,7 +187,7 @@ export function registerProtocolEndpoint(
         else if (message.type === "file.request")
           void files.request(message).then((result) => send(socket, result));
         else if (message.type === "agent.request")
-          void agents.request(message).then((result) => send(socket, result));
+          void agents.request(message, viewer.id).then((result) => send(socket, result));
         else if (message.type === "project.request") {
           if (message.operation.kind === "browse")
             void projects.browse(message).then((result) => send(socket, result));
