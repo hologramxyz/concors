@@ -105,7 +105,9 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     await expect(page.getByTestId("pane-agent-loading")).toHaveCount(0);
     await page.getByRole("textbox", { name: "Message Codex" }).fill("rich hold");
     await page.getByRole("button", { name: "Send message", exact: true }).click();
-    await expect(page.getByRole("log")).toContainText("Attached: notes.txt");
+    await page.getByRole("log").getByRole("button", { name: "notes.txt", exact: true }).click();
+    await expect(page.getByRole("dialog")).toContainText("A project note");
+    await page.getByRole("button", { name: "Close attachment", exact: true }).click();
     await expect(page.getByTestId("pane-agent-loading")).toBeVisible();
     await expect(page.getByRole("log").locator(".agent-shimmer").first()).toHaveCSS(
       "animation-name",
@@ -180,7 +182,9 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     ).toHaveClass(/lucide-plus/);
     await expect(page.getByLabel("Plan mode", { exact: true })).toHaveText("");
     await expect(page.getByLabel("Speed", { exact: true })).toHaveText("");
-    await expect(page.getByRole("log")).toContainText("Attached: notes.txt");
+    await page.getByRole("log").getByRole("button", { name: "notes.txt", exact: true }).click();
+    await expect(page.getByRole("dialog")).toContainText("A project note");
+    await page.getByRole("button", { name: "Close attachment", exact: true }).click();
     await expect(page.getByTestId("pane-agent-loading")).toHaveCount(0);
     await expect(page.getByRole("log").locator(".agent-shimmer")).toHaveCount(0);
     await page.getByLabel("Agent tasks").locator("summary").first().click();
