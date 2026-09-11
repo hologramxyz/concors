@@ -19,6 +19,7 @@ import {
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { AgentMarkdown, CopyButton } from "@/agents/markdown";
 import { Button } from "@/components/ui/button";
+import { copyText } from "@/lib/clipboard";
 import type { FileOperation } from "@concors/protocol";
 import { useFiles, type OpenFile } from "./context";
 import { loadCodeEditor } from "./editor-loader";
@@ -168,9 +169,9 @@ export function FileTab({ file }: { file: OpenFile }) {
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onSelect={() => {
-                  void navigator.clipboard
-                    .writeText(state.content)
-                    .catch(() => prompts.notify("Could not copy this file to the clipboard."));
+                  void copyText(state.content).catch(() =>
+                    prompts.notify("Could not copy this file to the clipboard."),
+                  );
                 }}
               >
                 <Copy />

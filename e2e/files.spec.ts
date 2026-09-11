@@ -35,6 +35,63 @@ async function openSource(page: Page) {
   return tree;
 }
 
+test("copy reports unavailable clipboard access and recovers without page errors", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined });
+  });
+  const root = await project(page);
+  try {
+    await openSource(page);
+    await page.getByRole("button", { name: "Copy file", exact: true }).click();
+    const failed = page.getByRole("button", { name: "Copy failed; try again", exact: true });
+    await expect(failed).toBeVisible();
+    expect(errors).toEqual([]);
+
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          writeText: async () => {
+            throw new DOMException("Denied", "NotAllowedError");
+          },
+        },
+      });
+    });
+    await failed.click();
+    await expect(failed).toBeVisible();
+    expect(errors).toEqual([]);
+
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          writeText: async (text: string) => {
+            sessionStorage.setItem("audit-clipboard", text);
+          },
+        },
+      });
+    });
+    await failed.click();
+    await expect(page.getByRole("button", { name: "Copied", exact: true })).toBeVisible();
+    expect(await page.evaluate(() => sessionStorage.getItem("audit-clipboard"))).toContain(
+      "answer = 42",
+    );
+
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined });
+    });
+    await page.getByRole("button", { name: "Copied", exact: true }).click();
+    await expect(failed).toBeVisible();
+    expect(errors).toEqual([]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("browse, edit, preserve drafts across file tabs, preview Markdown and follow links", async ({
   page,
 }) => {
