@@ -13,6 +13,7 @@ import {
 
 import { ClientInfoSchema } from "./client.ts";
 import { DaemonInfoSchema } from "./daemon.ts";
+import { HostSubscribeSchema, HostUsageMessageSchema } from "./host.ts";
 import { ProtocolErrorSchema } from "./errors.ts";
 import { ProtocolVersionSchema } from "./version.ts";
 import {
@@ -48,6 +49,7 @@ export type ClientHelloMessage = z.infer<typeof ClientHelloMessageSchema>;
 
 export const ClientMessageSchema = z.discriminatedUnion("type", [
   ClientHelloMessageSchema,
+  HostSubscribeSchema,
   WorkspaceSubscribeSchema,
   WorkspaceCommandSchema,
   TerminalRequestSchema,
@@ -75,6 +77,7 @@ export type ErrorMessage = z.infer<typeof ErrorMessageSchema>;
 
 export const DaemonMessageSchema = z.discriminatedUnion("type", [
   DaemonReadyMessageSchema,
+  HostUsageMessageSchema,
   ErrorMessageSchema,
   WorkspaceSnapshotMessageSchema,
   WorkspaceResultSchema,

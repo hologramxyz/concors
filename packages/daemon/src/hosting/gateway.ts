@@ -14,6 +14,7 @@ import {
 } from "../managed/auth.ts";
 import type { ManagedConfig, TlsMaterial } from "../managed/config.ts";
 import type { Logger } from "../managed/log.ts";
+import { collectMachineResources } from "../managed/resources.ts";
 import { createHeartbeat } from "../managed/heartbeat.ts";
 import { countHostSessions } from "../managed/sessions.ts";
 import { DAEMON_VERSION } from "../version.ts";
@@ -52,6 +53,7 @@ export function createPersistentGateway(
     ? createHeartbeat({
         ...managed.config,
         version: DAEMON_VERSION,
+        collectResources: collectMachineResources,
         countSessions: async () => countHostSessions(await host()),
         logger: managed.logger,
         ...(managed.heartbeatFetch ? { fetchImpl: managed.heartbeatFetch } : {}),
