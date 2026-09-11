@@ -1,6 +1,5 @@
 import { expect, it, vi } from "vitest";
-import { ProviderCatalogCache, providerCatalogCache } from "./provider-catalog-cache";
-import type { DaemonConnection } from "@concors/daemon-client";
+import { ProviderCatalogCache } from "./provider-catalog-cache";
 import type { AgentProviderCatalog } from "@concors/protocol";
 
 const row = (id = "claude", revision = "0:0"): AgentProviderCatalog => ({
@@ -71,11 +70,4 @@ it("ignores a slow response from an older account/config revision", async () => 
   slow.resolve([row("claude", "2:0")]);
   await pending;
   expect(cache.getSnapshot()).toEqual([row("codex", "2:1")]);
-});
-it("scopes cached metadata by connection and directory, sharing it across chat remounts", () => {
-  const a = { subscribe: vi.fn() } as unknown as DaemonConnection;
-  const b = { subscribe: vi.fn() } as unknown as DaemonConnection;
-  expect(providerCatalogCache(a, "/one")).toBe(providerCatalogCache(a, "/one"));
-  expect(providerCatalogCache(a, "/one")).not.toBe(providerCatalogCache(a, "/two"));
-  expect(providerCatalogCache(a, "/one")).not.toBe(providerCatalogCache(b, "/one"));
 });

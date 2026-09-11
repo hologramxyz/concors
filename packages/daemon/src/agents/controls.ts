@@ -51,6 +51,7 @@ const Catalog = z.object({
       displayName: z.string(),
       resolvedModel: AgentModelIdSchema.optional(),
       isDefault: z.boolean().optional(),
+      description: z.string().optional(),
       hidden: z.boolean().optional(),
       serviceTiers: z
         .array(z.object({ id: z.string(), name: z.string(), description: z.string() }))
@@ -75,6 +76,7 @@ export function parseModels(raw: unknown, filter?: string[]): NonNullable<AgentI
     label: m.displayName,
     ...(m.resolvedModel ? { resolvedModel: m.resolvedModel } : {}),
     ...(m.isDefault === undefined ? {} : { isDefault: m.isDefault }),
+    ...(m.description ? { description: m.description } : {}),
     efforts: m.supportedReasoningEfforts.map((e) => e.reasoningEffort),
     defaultEffort: m.defaultReasoningEffort ?? null,
     ...(m.supportsImages === undefined ? {} : { supportsImages: m.supportsImages }),

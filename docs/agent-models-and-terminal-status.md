@@ -8,14 +8,14 @@ canonical IDs, so Claude aliases such as “Fable” or “Opus” can display t
 version and context variant. There is no pinned list of model versions. Capability
 lookups (including thinking effort) match canonical IDs as well as aliases.
 
-Claude reads its default from initialization model rows and publishes root-session
-model events. OpenCode publishes assistant model events and restores saved session
+Claude reads its effective model from the CLI's context metadata, retains initialization
+model rows, and publishes root-session model events. OpenCode publishes assistant model events and restores saved session
 model metadata. Pi and ACP return their current native model on startup/resume;
 ACP also forwards model changes. Unrelated child-session events do not replace the
 parent's model.
 
-If a provider has not reported any concrete model yet, the UI says “Model not
-reported”; it does not guess a version. A provider with an empty catalog can still
+If a provider has not reported any concrete model yet, the UI says “Select model”;
+it does not guess a version. A provider with an empty catalog can still
 be opened to authenticate, using its native automatic selection. For OpenCode
 versions without session model metadata, an automatically selected model becomes
 known when the provider reports its first response. Choosing a catalog model shows
@@ -23,14 +23,15 @@ that selection immediately.
 
 ## Catalog lifecycle
 
-- The client keeps bounded, memory-only catalogs per daemon connection and project
-  directory, shared across chat remounts. Disconnect clears them.
-- Cached choices remain visible and usable during refresh. Only a provider without
-  any model rows shows initial loading; errors remain visible alongside retained
-  choices. In-flight discovery is deduplicated.
-- The active, enabled composer refreshes on mount, picker opening, window focus,
-  and once per minute while the document is visible. Visiting another provider
-  refreshes that provider. Hidden/disabled chat panes do not warm catalogs.
+- The client keeps bounded, memory-only catalogs per daemon connection, workspace
+  epoch, and project directory, shared across chat remounts. Disconnect clears them.
+- Cached choices remain visible and usable during refresh. A cold catalog can take
+  time to discover; there is no global loading banner. Errors remain visible alongside
+  retained choices. In-flight discovery is deduplicated.
+- The visible, enabled composer checks its five-minute cache on mount, picker
+  opening, window focus, and once per minute while the document is visible. Installed
+  providers warm in the background with at most two discovery requests at a time.
+  Hidden/disabled chat panes do not warm catalogs.
 - Daemon entries are valid for 60 seconds after successful discovery, with a
   five-second retry backoff after failure. Startup seeds the cache. Configuration
   and account revisions invalidate it; late pre-change results cannot restore an

@@ -38,3 +38,13 @@ it("reports an oversized provider catalog rather than silently hiding models", (
     ),
   ).toThrow("Filter its catalog");
 });
+
+it("preserves canonical model IDs and recommendations from native catalogs", () => {
+  expect(
+    parseModels(
+      modelCatalog([
+        { id: "opus", label: "Opus", resolvedModel: "claude-opus-5", isDefault: true },
+      ]),
+    )[0],
+  ).toMatchObject({ id: "opus", resolvedModel: "claude-opus-5", isDefault: true });
+});

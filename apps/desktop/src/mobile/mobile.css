@@ -748,9 +748,6 @@ aside[aria-label="Agent notifications"] {
 .mobile-pane form:has([data-agent-composer]) button {
   min-height: 36px;
 }
-.mobile-pane .chat-markdown {
-  font-size: 16px;
-}
 .mobile-pane .chat-markdown pre {
   max-width: 100%;
   overflow-x: auto;

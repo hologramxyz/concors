@@ -125,25 +125,13 @@ export function NewTabMenu({
                   type="button"
                   onClick={() => {
                     setOpen(false);
-                    profiles.openSettings(true);
-                  }}
-                >
-                  <span className="mobile-session-icon">
-                    <Plus />
-                  </span>
-                  <span>Add terminal profile…</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOpen(false);
                     profiles.openSettings();
                   }}
                 >
                   <span className="mobile-session-icon">
                     <Settings2 />
                   </span>
-                  <span>Manage terminal profiles…</span>
+                  <span>Edit pane profiles</span>
                 </button>
               </div>
             </DialogContent>
@@ -192,19 +180,10 @@ export function NewTabMenu({
               className="whitespace-nowrap"
               onSelect={() => {
                 menuTransfersFocus.current = true;
-                profiles.openSettings(true);
-              }}
-            >
-              <Plus /> Add terminal profile…
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="whitespace-nowrap"
-              onSelect={() => {
-                menuTransfersFocus.current = true;
                 profiles.openSettings();
               }}
             >
-              <Settings2 /> Manage terminal profiles…
+              <Settings2 /> Edit pane profiles
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

@@ -1,3 +1,4 @@
+import { modelOptions } from "@concors/client-core";
 import { AgentDraftScopeContext, useAgentDraft, type InputDraft as Draft } from "./draft";
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
@@ -114,8 +115,7 @@ export function AgentComposer({
     connection.state.daemon.capabilities?.includes("agent-queue");
   const active = ["starting", "working", "needs_input"].includes(agent.status);
   const showStop = active && (!compact || (!draft.trim() && !attachments.length));
-  const settings = agent.settings ?? defaults,
-    models = agent.models ?? [];
+  const settings = agent.settings ?? defaults;
   const dictation = useDictation((text) =>
     setDraft((value) => (value + (value ? " " : "") + text).slice(0, 16000)),
   );
@@ -271,6 +271,7 @@ export function AgentComposer({
     agent,
     (model) =>
       void configure({ ...settings, model, effort: null, serviceTier: null, features: {} }),
+    native && !!advanced && connected && !busy,
   );
   const [nativeProviderPage, setNativeProviderPage] = useState<AgentProviderId | undefined>(
     agent.provider,
@@ -283,7 +284,7 @@ export function AgentComposer({
   const nativeProvider = nativeModels.providers.find(
     (provider) => provider.id === nativeProviderPage,
   );
-  const effortModel = findAgentModel(models, settings.model ?? agent.model);
+  const effortModel = findAgentModel(nativeModels.currentModels, nativeModels.selection.value);
   const controlsDisabled = !advanced || !connected || busy || configuring;
   useNativeSurface(
     nativeField,
@@ -315,24 +316,23 @@ export function AgentComposer({
           options: nativeProvider
             ? [
                 { id: "__providers__", label: "← Back to providers", selected: false },
-                ...(!nativeProvider.error
+                ...(!nativeProvider.error || nativeProvider.models.length
                   ? [
-                      {
-                        id: "",
-                        label: "Machine default",
-                        selected: nativeProvider.id === agent.provider && !settings.model,
-                      },
-                      ...nativeProvider.models.map((model) => ({
+                      ...(nativeProvider.id === agent.provider
+                        ? nativeModels.selection.options
+                        : modelOptions(nativeProvider.models)
+                      ).map((model) => ({
                         id: model.id,
                         label: model.label,
                         selected:
-                          nativeProvider.id === agent.provider && settings.model === model.id,
+                          nativeProvider.id === agent.provider &&
+                          nativeModels.selection.value === model.id,
                       })),
                     ]
                   : []),
               ]
             : nativeModels.providers
-                .filter((provider) => !provider.error)
+                .filter((provider) => !provider.error || provider.models.length)
                 .map((provider) => ({
                   id: provider.id,
                   label:
@@ -801,7 +801,7 @@ export function AgentComposer({
                     if (!uncertain) void submit();
                   }
                 }}
-                className="max-h-48 min-h-16 w-full resize-none bg-transparent px-3 py-3 text-[16px] leading-relaxed outline-none disabled:opacity-50"
+                className="agent-composer-input max-h-48 min-h-16 w-full resize-none bg-transparent px-3 py-3 outline-none disabled:opacity-50"
               />
               {dictation.listening && (
                 <p role="status" className="px-3 pb-2 text-xs text-primary">

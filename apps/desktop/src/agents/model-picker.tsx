@@ -1,10 +1,6 @@
+import { modelOptions } from "@concors/client-core";
 import { LoaderCircle } from "lucide-react";
-import {
-  agentProviderName,
-  agentModelName,
-  agentModelSelection,
-  type AgentInfo,
-} from "@concors/protocol";
+import { agentProviderName, type AgentInfo } from "@concors/protocol";
 import { ControlPicker } from "./control-picker";
 import { ProviderIcon } from "./provider-icon";
 import { useAgentModelSelection } from "./use-model-selection";
@@ -20,16 +16,18 @@ export function AgentModelPicker({
   showValue?: boolean;
   onSelect: (model: string | null) => void;
 }) {
-  const { currentModels, providers, load, choose, loadingProvider, switching, error } =
-    useAgentModelSelection(agent, onSelect, !disabled && agent.status !== "starting");
-  const selected = agentModelSelection(agent, currentModels);
+  const { selection, providers, load, choose, switching, error } = useAgentModelSelection(
+    agent,
+    onSelect,
+    !disabled && agent.status !== "starting",
+  );
   return (
     <>
       <ControlPicker
         label="Agent and model"
         showValue={showValue}
-        selectedLabel={selected.label}
-        value={selected.value}
+        selectedLabel={selection.label}
+        value={selection.value}
         icon={
           agent.status === "starting" || switching ? (
             <LoaderCircle className="size-4 animate-spin" />
@@ -47,24 +45,26 @@ export function AgentModelPicker({
           label: p.label ?? agentProviderName(p.id),
           description: p.id === agent.provider ? "Current conversation" : "Starts a new chat",
           icon: <ProviderIcon provider={p.id} />,
-          emptyMessage: p.error ?? "No models reported. Check this provider in Settings.",
-          status: loadingProvider === p.id && !p.models.length ? "Loading models…" : p.error,
+          emptyMessage:
+            p.error ??
+            (p.loaded
+              ? "No models reported. Check this provider in Settings."
+              : "Models are being discovered. They will appear here automatically."),
+          status: p.error,
           options: [
-            // Keep provider switching/sign-in possible when an older or signed-out
-            // provider cannot report models yet; never invent a concrete model.
+            // An empty catalog must still allow opening a provider to sign in.
             ...(!p.models.length
               ? [
                   {
                     id: "",
                     label: `Use ${p.label ?? agentProviderName(p.id)}`,
-                    description: "Let this provider choose the model",
                     icon: <ProviderIcon provider={p.id} />,
                   },
                 ]
               : []),
-            ...p.models.map((m) => ({
+            ...(p.id === agent.provider ? selection.options : modelOptions(p.models)).map((m) => ({
               id: m.id,
-              label: agentModelName(m, p.models),
+              label: m.label,
               icon: <ProviderIcon provider={p.id} />,
             })),
           ],
