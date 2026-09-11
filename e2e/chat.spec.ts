@@ -20,7 +20,6 @@ test("shared chat streams, handles approvals and removes detached sidebar entrie
     await seedProject(page, "Chat acceptance", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
-    await page.getByRole("button", { name: "Codex", exact: true }).click();
     await expect(page.getByLabel("Agent status: Ready").first()).toBeVisible();
     const agentList = page
       .getByRole("navigation", { name: "Primary" })
@@ -28,6 +27,7 @@ test("shared chat streams, handles approvals and removes detached sidebar entrie
     await expect(agentList.getByRole("img", { name: "Agent status: Ready" })).toBeVisible();
     await expect(agentList.getByText("Chat acceptance", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
+    await expect(page.getByRole("heading", { name: "Choose an agent" })).toHaveCount(0);
     await expect(page.getByRole("log")).toBeEmpty();
     await expect(page.getByText("Start a conversation", { exact: true })).toHaveCount(0);
     await expect(
@@ -110,7 +110,6 @@ test("shared chat streams, handles approvals and removes detached sidebar entrie
     await expect(remoteAgents.getByRole("list").getByRole("button")).toHaveCount(0);
     await page.getByRole("button", { name: "Pane actions" }).click();
     await page.getByRole("menuitemradio", { name: "Agent", exact: true }).click();
-    await page.getByRole("button", { name: "Codex", exact: true }).click();
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
     await expect(agentList.getByRole("list").getByRole("button")).toHaveCount(1);
     await page.getByRole("button", { name: "Close pane", exact: true }).click();

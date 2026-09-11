@@ -1,5 +1,4 @@
 import { PendingInput } from "./pending-input";
-import { ProviderStart } from "./provider-start";
 import { AgentAccountPrompt } from "./account-prompt";
 import { completedTurnFooters } from "./duration";
 import { SessionActions } from "./session-actions";
@@ -35,22 +34,11 @@ export function ChatPane({
   const [retry, setRetry] = useState(0);
   const attempted = useRef(false);
   const startId = useRef(crypto.randomUUID());
-  const [provider, setProvider] = useState<string | null>(null);
-  const chooseProvider =
-    connection?.state.status === "ready" &&
-    connection.state.daemon.capabilities?.includes("provider-settings");
   const available =
     connection?.state.status === "ready" &&
     connection.state.daemon.capabilities?.includes("agent-chat");
   useEffect(() => {
-    if (
-      (chooseProvider && !provider) ||
-      node.sessionId ||
-      !canEdit ||
-      !available ||
-      !connection?.workspace ||
-      attempted.current
-    )
+    if (node.sessionId || !canEdit || !available || !connection?.workspace || attempted.current)
       return;
     attempted.current = true;
     const current = connection.workspace;
@@ -60,7 +48,6 @@ export function ChatPane({
       .requestAgent(
         {
           kind: "start",
-          ...(provider ? { provider } : {}),
           epoch: current.epoch,
           projectId: project.id,
           tabId: tab.id,
@@ -78,22 +65,9 @@ export function ChatPane({
       .catch((cause: unknown) => {
         setError(cause instanceof Error ? cause.message : "Could not prepare agent");
       });
-  }, [
-    node.sessionId,
-    node.id,
-    canEdit,
-    available,
-    connection,
-    project.id,
-    tab.id,
-    retry,
-    chooseProvider,
-    provider,
-  ]);
+  }, [node.sessionId, node.id, canEdit, available, connection, project.id, tab.id, retry]);
   if (node.sessionId)
     return <Chat key={node.sessionId} sessionId={node.sessionId} canEdit={canEdit} />;
-  if (chooseProvider && !provider)
-    return <ProviderStart disabled={!canEdit || !available} onChoose={setProvider} />;
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="Agent conversation">
       <div className="min-h-0 flex-1" role="log" aria-label="Chat timeline" />

@@ -17,7 +17,6 @@ for (const width of [1360, 390]) {
       await seedProject(page, "Infinite history", directory);
       await page.getByRole("button", { name: "New tab", exact: true }).click();
       await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
-      await page.getByRole("button", { name: "Codex", exact: true }).click();
       const timeline = page.getByRole("log", { name: "Chat timeline" });
       await expect(timeline.getByText("History 0 message 639", { exact: true })).toBeVisible();
       if (width === 390) {
