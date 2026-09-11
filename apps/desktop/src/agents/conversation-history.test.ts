@@ -194,16 +194,17 @@ it("jumps directly to indexed messages in either direction and resumes contiguou
   const { history, all, read } = fixture();
   await history.load("latest");
   await history.reveal(100);
-  expect(read).toHaveBeenLastCalledWith({ before: 101 });
-  expect(history.getSnapshot().items).toEqual(all.slice(21, 101));
+  expect(read).toHaveBeenNthCalledWith(2, { before: 101 });
+  expect(read).toHaveBeenLastCalledWith({ after: 100 });
+  expect(history.getSnapshot().items).toEqual(all.slice(21, 181));
   expect(history.getSnapshot().hasNewer).toBe(true);
   await history.load("newer");
-  expect(history.getSnapshot().items).toEqual(all.slice(21, 181));
+  expect(history.getSnapshot().items).toEqual(all.slice(21, 261));
   await history.reveal(600);
-  expect(read).toHaveBeenLastCalledWith({ before: 601 });
-  expect(history.getSnapshot().items).toEqual(all.slice(521, 601));
+  expect(read).toHaveBeenLastCalledWith({ after: 600 });
+  expect(history.getSnapshot().items).toEqual(all.slice(521, 681));
   await history.load("earlier");
-  expect(history.getSnapshot().items).toEqual(all.slice(441, 601));
+  expect(history.getSnapshot().items).toEqual(all.slice(441, 681));
   expect(history.getSnapshot().items.length).toBeLessThanOrEqual(HISTORY_WINDOW);
 });
 it("supersedes pending edge loads when jumping, including to already loaded messages", async () => {
@@ -235,7 +236,7 @@ it("keeps the visible window when an indexed jump fails and permits retry", asyn
   expect(history.getSnapshot().items).toEqual(current);
   expect(history.getSnapshot().loading).toBeNull();
   await history.reveal(100);
-  expect(history.getSnapshot().items).toEqual(all.slice(21, 101));
+  expect(history.getSnapshot().items).toEqual(all.slice(21, 181));
 });
 it("rejects stale indexed jumps after history changes without restoring deleted messages", async () => {
   const { history, read, page } = fixture();
