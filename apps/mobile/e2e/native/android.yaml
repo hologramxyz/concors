@@ -28,6 +28,6 @@ appId: dev.concors.mobile.preview
 - takeScreenshot: apps/mobile/test-results/android/files
 - tapOn: "Back to chat"
 - assertVisible: "Android draft survives navigation"
-- tapOn: "Tabs and panes"
+- tapOn: "Tabs"
 - assertVisible: "New tab"
 - takeScreenshot: apps/mobile/test-results/android/tabs-drawer
