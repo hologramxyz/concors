@@ -390,7 +390,7 @@ export function AgentComposer({
         },
         {
           id: "options",
-          label: "Agent commands and options",
+          label: "Conversation options",
           icon: "options" as const,
           disabled: controlsDisabled,
           options: [
@@ -406,11 +406,6 @@ export function AgentComposer({
             ...((agent.engine ?? agent.provider) === "codex"
               ? [{ id: "speed:", label: "Default speed", selected: !settings.serviceTier }]
               : []),
-            ...(agent.controls?.commands ?? []).map((c) => ({
-              id: `command:${c.name}`,
-              label: `/${c.name} · ${c.description}`,
-              selected: false,
-            })),
             ...(agent.controls?.features ?? []).flatMap((f) =>
               f.options
                 ? f.options.map((o) => ({
@@ -439,8 +434,7 @@ export function AgentComposer({
           control.id === "model" ||
           (control.id === "effort" && !!effortModel?.efforts.length) ||
           (control.id === "mode" && !!agent.controls?.modes.length) ||
-          (control.id === "options" &&
-            (!!agent.controls?.commands.length || !!agent.controls?.features.length)),
+          (control.id === "options" && !!agent.controls?.features.length),
       ),
       context: agent.context?.limit
         ? `${agent.context.used.toLocaleString()} / ${agent.context.limit.toLocaleString()} tokens · ${Math.round((agent.context.used / agent.context.limit) * 100)}% used\n${agent.context.total === null ? "" : agent.context.total.toLocaleString() + " cumulative tokens"}`
@@ -503,13 +497,6 @@ export function AgentComposer({
           else if (event.control === "mode" && agent.controls?.modes.some((m) => m.id === value))
             void configure({ ...settings, nativeMode: value });
           else if (event.control === "options") {
-            if (
-              value.startsWith("command:") &&
-              agent.controls?.commands.some((c) => c.name === value.slice(8))
-            ) {
-              setDraft(`/${value.slice(8)} `);
-              return;
-            }
             if (value.startsWith("feature:")) {
               const [id, next] = JSON.parse(value.slice(8)) as [string, boolean | string];
               if (agent.controls?.features.some((f) => f.id === id))
@@ -921,23 +908,6 @@ export function AgentComposer({
                       }
                     />
                   ))}
-                  {!!agent.controls?.commands.length && (
-                    <ControlPicker
-                      label="Agent commands"
-                      value=""
-                      selectedLabel="Commands"
-                      icon={<SlidersHorizontal className="size-4" />}
-                      disabled={controlsDisabled}
-                      options={agent.controls.commands.map((c) => ({
-                        id: c.name,
-                        label: `/${c.name}`,
-                        description: c.description,
-                      }))}
-                      onSelect={(name) => {
-                        setDraft(`/${name} `);
-                      }}
-                    />
-                  )}
                   {(agent.engine ?? agent.provider) === "codex" && (
                     <ControlPicker
                       label="Permission mode"
