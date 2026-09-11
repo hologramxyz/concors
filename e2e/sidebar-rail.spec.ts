@@ -33,6 +33,8 @@ test("collapsed sidebar keeps workspace, machine, search and account navigation 
     await seedProject(page, "Beta workspace", join(directory, "beta"));
     const rail = page.getByRole("navigation", { name: "Primary" });
     const shell = page.locator(".sidebar-shell");
+    await expect(rail.getByText("No agents yet.", { exact: true })).toBeVisible();
+    await expect(rail.getByText("No servers discovered.", { exact: true })).toBeVisible();
     await rail.getByRole("button", { name: "Collapse sidebar", exact: true }).click();
     await expect(shell).toHaveCSS("width", "44px");
     await expect(rail).toBeVisible();
@@ -41,6 +43,8 @@ test("collapsed sidebar keeps workspace, machine, search and account navigation 
     await expect(expand).toBeFocused();
     await expect(expand).toHaveAttribute("aria-expanded", "false");
     await expect(rail.getByRole("button", { name: "Workspaces", exact: true })).toHaveCount(0);
+    await expect(rail.getByRole("region", { name: "Agents", exact: true })).toHaveCount(0);
+    await expect(rail.getByRole("region", { name: "Servers", exact: true })).toHaveCount(0);
     for (const button of await rail.locator(".sidebar-rail-control").all()) {
       const bounds = await button.boundingBox();
       expect(bounds?.width).toBe(32);
@@ -50,8 +54,6 @@ test("collapsed sidebar keeps workspace, machine, search and account navigation 
       ["Switch machine", "This computer"],
       ["Expand sidebar", "Expand sidebar"],
       ["Open workspace menu", "Workspaces"],
-      ["Agents", "Agents"],
-      ["Servers", "Servers"],
       ["Account: E2E User", "Account and settings"],
     ]) {
       await hoverControl(page, rail.getByRole("button", { name, exact: true }));
@@ -89,6 +91,8 @@ test("collapsed sidebar keeps workspace, machine, search and account navigation 
     await expect(rail.getByRole("img", { name: "Second machine: Connected" })).toBeVisible();
     await expect(alpha).toHaveCount(0);
     await expect(beta).toHaveCount(0);
+    await expect(rail.getByText("—", { exact: true })).toHaveCount(0);
+    await expect(rail.getByRole("button", { name: "Open workspace menu" })).toBeVisible();
     await rail.getByRole("button", { name: "Switch machine", exact: true }).click();
     await page.getByRole("menuitem", { name: "This computer", exact: true }).click();
     await expect(beta).toHaveAttribute("aria-current", "page");
@@ -101,8 +105,8 @@ test("collapsed sidebar keeps workspace, machine, search and account navigation 
       rail.getByRole("button", { name: "Switch machine", exact: true }),
     ).toBeInViewport();
     await expect(rail.getByRole("button", { name: /^Account:/ })).toBeInViewport();
-    await rail.getByRole("button", { name: "Servers", exact: true }).scrollIntoViewIfNeeded();
-    await expect(rail.getByRole("button", { name: "Servers", exact: true })).toBeInViewport();
+    await beta.scrollIntoViewIfNeeded();
+    await expect(beta).toBeInViewport();
     expect(await rail.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
@@ -113,6 +117,8 @@ test("collapsed sidebar keeps workspace, machine, search and account navigation 
     await expect(shell).toHaveCSS("width", "216px");
     await expect(rail.getByRole("button", { name: "Collapse sidebar", exact: true })).toBeFocused();
     await expect(beta).toHaveText("Beta workspace");
+    await expect(rail.getByText("No agents yet.", { exact: true })).toBeVisible();
+    await expect(rail.getByText("No servers discovered.", { exact: true })).toBeVisible();
     expect(errors).toEqual([]);
   } finally {
     await rm(directory, { recursive: true, force: true });
@@ -135,6 +141,9 @@ test("collapsed agents show provider icons and live status without losing chat d
     await page.getByRole("button", { name: "Collapse sidebar", exact: true }).click();
     const rail = page.getByRole("navigation", { name: "Primary" });
     const agents = rail.getByRole("region", { name: "Agents", exact: true });
+    await expect(rail.getByRole("button", { name: "Agents", exact: true })).toHaveCount(0);
+    await expect(rail.getByRole("button", { name: "Servers", exact: true })).toHaveCount(0);
+    await expect(rail.getByText("—", { exact: true })).toHaveCount(0);
     const codexButton = agents.locator('button[data-agent-id]:has([data-provider="codex"])');
     await expect(codexButton.getByRole("img", { name: "Agent status: Ready" })).toBeVisible();
     await codex.fill("hello from the compact rail");

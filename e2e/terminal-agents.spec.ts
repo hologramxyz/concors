@@ -24,6 +24,7 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
     const agents = page
       .getByRole("navigation", { name: "Primary" })
       .getByRole("region", { name: "Agents", exact: true });
+    await expect(agents).toHaveCount(0);
     await expect(agents.getByRole("button", { name: /Open in terminal/ })).toHaveCount(0);
     // Starting an agent from a normal shell must be discovered without changing its profile.
     const shellPane = page.getByRole("region", { name: "Terminal pane", exact: true });
@@ -82,6 +83,7 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
     await second.keyboard.press("Enter");
     await expect(shellAgent).toHaveCount(0);
     await expect(agents.getByRole("button", { name: /Open in terminal/ })).toHaveCount(0);
+    await expect(agents).toHaveCount(0);
 
     // Claude redraws its screen without a title update. Both sidebars must follow
     // real working / permission / completed UI, including after observer reconnect.
