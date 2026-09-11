@@ -302,7 +302,7 @@ export function AgentComposer({
         {
           id: "model",
           label: nativeProvider
-            ? `${agentProviderName(nativeProvider.id)} · Agent and model`
+            ? `${nativeProvider.label ?? agentProviderName(nativeProvider.id)} · Agent and model`
             : "Choose an agent provider",
           icon:
             nativeProviderIcons[
@@ -335,7 +335,7 @@ export function AgentComposer({
                 .map((provider) => ({
                   id: provider.id,
                   label:
-                    agentProviderName(provider.id) +
+                    (provider.label ?? agentProviderName(provider.id)) +
                     (provider.id === agent.provider ? " · Current chat" : " · Starts a new chat"),
                   selected: provider.id === agent.provider,
                 })),
