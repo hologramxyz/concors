@@ -78,7 +78,7 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
     await first.getByRole("button", { name: "Tab 1", exact: true }).click({ button: "right" });
     await first.getByRole("menuitem", { name: "Rename tab", exact: true }).click();
     await first.getByLabel("Tab name", { exact: true }).fill("Build and review");
-    await first.getByRole("button", { name: "Save", exact: true }).click();
+    await first.keyboard.press("Enter");
     await expect(
       second.getByRole("button", { name: "Build and review", exact: true }),
     ).toBeVisible();
