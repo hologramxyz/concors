@@ -5,10 +5,16 @@ Rose, Sand, and Ocean**. Light / Dark / System controls the mode independently o
 palette. The existing Concors appearance remains the default. Every palette includes
 both modes, and the supplied text and primary-button color pairs have contrast tests.
 
-Colors apply to workspace surfaces, sidebars, agent chats, menus, file-editor surfaces,
-and terminals. Terminal applications retain their own explicit indexed/true-color output;
-custom ANSI colors change the terminal's default 16-color palette. Changing themes never
-restarts a terminal or agent. Built-in themes work offline and with older daemons.
+Colors apply to workspace surfaces, sidebars, agent chats, menus, terminals, and file editors.
+Each named palette also colors terminal ANSI output and syntax in the editor, Markdown code
+blocks, and agent code previews. Desktop and mobile use the same syntax roles. The original
+Concors palette retains its existing terminal and syntax colors in both modes.
+
+Changing themes recolors existing content without restarting a terminal or agent. Live editor
+updates preserve the document, cursor, and undo history. Built-in themes work offline and with
+older daemons. Terminal programs that select extended 256-color indices (16–255), true-color
+output, or their own application theme still control those colors; Concors does not rewrite
+program output or edit shell/editor configuration files.
 
 The selection belongs to the device. Desktop windows share their selection through local
 storage; native mobile persists it in device storage. A selected custom definition is
@@ -68,7 +74,11 @@ popovers, and the terminal background.
 
 Each mode can also contain a `terminal` object with `background`, `foreground`, `cursor`,
 `selection`, `black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, and their
-`bright-` variants. Unspecified ANSI values retain the existing light/dark terminal palette.
+`bright-` variants. Unspecified ANSI colors are derived from the selected palette and mode,
+with a restrained accent tint that preserves recognizable red/green/etc. colors. Explicit
+terminal overrides always win, including alpha values. Custom ANSI colors also inform syntax
+colors; derived syntax colors are adjusted for readability on the editor background. You do
+not need a separate editor theme file or daemon update.
 
 Files are limited to 32 KiB. Up to 64 regular, non-hidden `.json` files are loaded in filename
 order; directories and symlinks are ignored. Duplicate IDs are reported, with the first valid
@@ -87,6 +97,8 @@ The machine reads files through `ThemeRegistry`; the authenticated, workspace-sc
 The mobile protocol relay forwards the same catalog without exposing credentials.
 
 `ColorThemeProvider` applies an explicit allowlist of CSS variables. The original Concors
-palette removes overrides so existing brand styles remain unchanged. Xterm observes palette
-changes without reopening its session. OS chrome and native controls keep their platform
+palette removes UI overrides so existing brand styles remain unchanged. `terminal-palette.ts`
+resolves the terminal colors; `syntax-palette.ts` supplies shared `--syntax-*` variables to
+CodeMirror and highlighted previews. Tokenization stays cached independently of the palette.
+Xterm observes palette changes without reopening its session. OS chrome and native controls keep their platform
 appearance, while the mobile workspace and surrounding background follow the chosen palette.
