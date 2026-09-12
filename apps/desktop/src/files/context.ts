@@ -3,6 +3,7 @@ import type { WorkspaceProject } from "@concors/protocol";
 import type { FileSidebarState } from "./sidebar-state";
 import type { FileDocument } from "./document";
 import type { FileLocation } from "./links";
+import type { DirectoryCache } from "./directory-cache";
 
 export interface OpenFile {
   id: string;
@@ -15,6 +16,7 @@ export interface OpenFile {
   navigation: number;
 }
 interface FilesState {
+  directories: DirectoryCache;
   sidebar: FileSidebarState;
   files: OpenFile[];
   active: Record<string, string | null>;
