@@ -12,14 +12,10 @@ import {
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { bracketMatching, syntaxHighlighting } from "@codemirror/language";
 import { openSearchPanel, searchKeymap } from "@codemirror/search";
-import {
-  createCodeMirrorHighlightStyle,
-  darkHighlightColors,
-  getLanguageForFile,
-  lightHighlightColors,
-} from "@getpaseo/highlight";
+import { createCodeMirrorHighlightStyle, getLanguageForFile } from "@getpaseo/highlight";
 import { getCM, Vim, vim } from "@replit/codemirror-vim";
 import type { FileLocation } from "./links";
+import { SYNTAX_COLORS } from "../theme/syntax-palette";
 
 const diskUpdate = Annotation.define<boolean>();
 const saves = new WeakMap<object, () => void>();
@@ -53,7 +49,7 @@ export default function CodeEditor({
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const settings = useRef(new Compartment());
-  const colors = useRef(new Compartment());
+  const colorMode = useRef(new Compartment());
   const callbacks = useRef({ onChange, onSave });
   useEffect(() => {
     callbacks.current = { onChange, onSave };
@@ -75,8 +71,9 @@ export default function CodeEditor({
           highlightActiveLine(),
           bracketMatching(),
           getLanguageForFile(filename)?.extension ?? [],
+          syntaxHighlighting(createCodeMirrorHighlightStyle(SYNTAX_COLORS)),
           settings.current.of([]),
-          colors.current.of([]),
+          colorMode.current.of([]),
           EditorView.contentAttributes.of({
             "aria-label": `Code editor: ${filename}`,
             spellcheck: "false",
@@ -134,7 +131,7 @@ export default function CodeEditor({
               color: "var(--foreground)",
             },
             "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
-              backgroundColor: "color-mix(in srgb, var(--primary) 25%, transparent)",
+              backgroundColor: "var(--selection)",
             },
           }),
         ],
@@ -143,14 +140,10 @@ export default function CodeEditor({
     view.current = editor;
     const theme = () =>
       editor.dispatch({
-        effects: colors.current.reconfigure(
-          syntaxHighlighting(
-            createCodeMirrorHighlightStyle(
-              document.documentElement.classList.contains("dark")
-                ? darkHighlightColors
-                : lightHighlightColors,
-            ),
-          ),
+        // Syntax colors resolve through CSS without touching the document or history.
+        // Only CodeMirror's built-in light/dark chrome needs reconfiguration.
+        effects: colorMode.current.reconfigure(
+          EditorView.theme({}, { dark: document.documentElement.classList.contains("dark") }),
         ),
       });
     theme();
