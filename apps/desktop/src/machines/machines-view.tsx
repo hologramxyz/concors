@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/dialog";
 
 import { MachineUsage } from "./machine-usage.tsx";
+import { RenameMachineDialog } from "./rename-machine-dialog.tsx";
 import { CreateMachineDialog } from "./create-machine-dialog.tsx";
 import {
   describeEnding,
@@ -46,7 +47,7 @@ interface MachinesViewProps {
   readonly onCreatingChange: (creating: boolean) => void;
 }
 
-/** Cloud machines of the active organization: list, create, cancel, and how to connect. */
+/** Cloud machines of the active organization: list, create, rename, cancel, and how to connect. */
 export function MachinesView({
   auth,
   focusedMachineId,
@@ -148,6 +149,7 @@ export function MachinesView({
             >
               <MachineCard
                 machine={machine}
+                onRename={(name) => state.rename(machine.id, name)}
                 onRetryTools={() => state.retryTools(machine.id)}
                 onCancel={() => setCancelling(machine)}
                 resuming={resuming === machine.id}
@@ -203,12 +205,14 @@ const TONE_CLASS: Record<StatusTone, string> = {
 
 function MachineCard({
   machine,
+  onRename,
   onRetryTools,
   onCancel,
   onResume,
   resuming,
 }: {
   readonly machine: Machine;
+  readonly onRename: (name: string) => Promise<void>;
   readonly onRetryTools: () => Promise<void>;
   readonly onCancel: () => void;
   readonly onResume: () => void;
@@ -232,6 +236,7 @@ function MachineCard({
               aria-hidden="true"
             />
             <h3 className="min-w-0 text-lg font-semibold break-all">{machine.name}</h3>
+            <RenameMachineDialog machine={machine} onRename={onRename} />
             <Badge variant="outline">{describeStatus(machine)}</Badge>
             {ending && <Badge variant="secondary">{ending}</Badge>}
           </div>

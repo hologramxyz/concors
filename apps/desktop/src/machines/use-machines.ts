@@ -27,6 +27,7 @@ export interface MachinesState {
   cancel(id: string): Promise<void>;
   /** Undoes `cancel` while the month is still running. */
   resume(id: string): Promise<void>;
+  rename(id: string, name: string): Promise<void>;
   retryTools(id: string): Promise<void>;
 }
 
@@ -107,6 +108,13 @@ export function useMachines(organizationId: string | undefined): MachinesState {
     );
   const cancel = useCallback(async (id: string) => replace(await api.cancelMachine(id)), []);
   const resume = useCallback(async (id: string) => replace(await api.resumeMachine(id)), []);
+  const rename = useCallback(async (id: string, name: string) => {
+    const machine = await api.renameMachine(id, name);
+    // Discard list requests started before the rename completed, then refresh usage normally.
+    latest.current += 1;
+    replace(machine);
+    setGeneration((n) => n + 1);
+  }, []);
 
   const retryTools = useCallback(
     async (id: string) => replace(await api.retryDevelopmentTools(id)),
@@ -123,6 +131,7 @@ export function useMachines(organizationId: string | undefined): MachinesState {
     create,
     cancel,
     resume,
+    rename,
   };
 }
 

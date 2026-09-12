@@ -372,3 +372,20 @@ it("retries tool setup with authorization and preserves returned setup state", a
     status: 409,
   });
 });
+
+it("renames a machine with authorization and exposes name conflicts", async () => {
+  const renamed = { ...MACHINE, name: "production" };
+  const fetch = vi.fn(async () => json({ machine: renamed }));
+  const api = client(fetch);
+  await expect(api.renameMachine("machine/1", "production")).resolves.toEqual(renamed);
+  const { url, init } = lastCall(fetch);
+  expect(url).toBe("https://api.example/api/v1/machines/machine%2F1");
+  expect(init.method).toBe("PATCH");
+  expect(JSON.parse(String(init.body))).toEqual({ name: "production" });
+  expect(new Headers(init.headers).get("authorization")).toBe("Bearer tok-1");
+  fetch.mockResolvedValueOnce(json({ message: "Name already exists" }, { status: 409 }));
+  await expect(api.renameMachine("machine/1", "production")).rejects.toMatchObject({
+    status: 409,
+    message: "Name already exists",
+  });
+});
