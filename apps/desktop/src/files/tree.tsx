@@ -19,6 +19,7 @@ import { useFiles } from "./context";
 import { CreateEntry } from "./create-entry";
 import { FileTypeIcon } from "./file-type-icon";
 import { CompactLayoutContext } from "@/components/compact-layout";
+import { useDirectory } from "./use-directory";
 
 export function FileTree({
   project,
@@ -33,6 +34,17 @@ export function FileTree({
   const files = useFiles();
   const connection = useContext(TerminalConnectionContext);
   const [generation, setGeneration] = useState(0);
+  const refresh = () => {
+    const workspace = connection?.workspace;
+    if (workspace)
+      files.directories.invalidate({
+        machineId: workspace.machineId,
+        epoch: workspace.epoch,
+        projectId: project.id,
+        directory: project.directory,
+      });
+    setGeneration((value) => value + 1);
+  };
   const [filter, setFilter] = useState("");
   const [creating, setCreating] = useState<"file" | "directory" | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -135,7 +147,7 @@ export function FileTree({
           variant="ghost"
           aria-label="Refresh file tree"
           title="Refresh file tree"
-          onClick={() => setGeneration((value) => value + 1)}
+          onClick={refresh}
         >
           <RefreshCw className="size-4" />
         </Button>
@@ -172,7 +184,7 @@ export function FileTree({
               }
               return next;
             });
-            setGeneration((value) => value + 1);
+            refresh();
             if (entry.kind === "file") {
               files.open(project, { path: entry.path });
               if (!compact && !files.sidebar.docked) onClose();
@@ -227,73 +239,26 @@ function Directory({
   generation: number;
   onOpen(entry: FileEntry): void;
 }) {
-  const connection = useContext(TerminalConnectionContext);
-  const status = connection?.state.status;
-  const epoch = connection?.workspace?.epoch;
-  const [entries, setEntries] = useState<FileEntry[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [truncated, setTruncated] = useState(false);
-  const [retry, setRetry] = useState(0);
-  useEffect(() => {
-    let cancelled = false;
-    const workspace = connection?.workspace;
-    if (!workspace || connection.state.status !== "ready") {
-      queueMicrotask(() => {
-        if (!cancelled) setError("Reconnect to browse files.");
-      });
-      return () => {
-        cancelled = true;
-      };
-    }
-    queueMicrotask(() => {
-      if (!cancelled) setError(null);
-    });
-    void connection
-      .requestFile(
-        {
-          kind: "list",
-          projectId: project.id,
-          directory: project.directory,
-          epoch: workspace.epoch,
-          path,
-        },
-        crypto.randomUUID(),
-      )
-      .then((result) => {
-        if (cancelled) return;
-        if (result.outcome.status !== "listed")
-          throw new Error(
-            "message" in result.outcome ? result.outcome.message : "Could not list this folder.",
-          );
-        setEntries(result.outcome.entries);
-        setTruncated(result.outcome.truncated);
-      })
-      .catch((cause) => {
-        if (!cancelled) setError(cause instanceof Error ? cause.message : "Could not load files.");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [connection, status, epoch, project.id, project.directory, path, retry, generation]);
-  if (error)
-    return (
-      <div role="alert" className="space-y-2 p-3 text-ui text-muted-foreground">
-        {error}
-        <Button size="xs" variant="outline" onClick={() => setRetry((value) => value + 1)}>
-          Retry
-        </Button>
-      </div>
-    );
-  if (!entries)
-    return (
-      <p role="status" className="px-3 py-2 text-ui text-muted-foreground">
-        Loading files…
-      </p>
-    );
+  const { listing, error, pending, retry } = useDirectory(project, path, generation);
+  const entries = listing?.entries;
   return (
-    <ul className="m-0 list-none p-0">
+    <ul
+      aria-label={path || `${project.name} files`}
+      aria-busy={pending}
+      className="m-0 list-none p-0"
+    >
+      {error && (
+        <li>
+          <div role="alert" className="space-y-2 p-3 text-ui text-muted-foreground">
+            {error}
+            <Button size="xs" variant="outline" onClick={retry}>
+              Retry
+            </Button>
+          </div>
+        </li>
+      )}
       {entries
-        .filter((entry) => showHidden || !entry.name.startsWith("."))
+        ?.filter((entry) => showHidden || !entry.name.startsWith("."))
         .filter((entry) => entry.kind === "directory" || entry.name.toLowerCase().includes(filter))
         .map((entry) => {
           const directory = entry.kind === "directory",
@@ -351,16 +316,17 @@ function Directory({
             </li>
           );
         })}
-      {!entries.some(
-        (entry) =>
-          (showHidden || !entry.name.startsWith(".")) &&
-          (entry.kind === "directory" || entry.name.toLowerCase().includes(filter)),
-      ) && (
-        <li className="px-3 py-2 text-ui text-muted-foreground">
-          {filter ? "No matching files" : entries.length ? "No visible files" : "Empty folder"}
-        </li>
-      )}
-      {truncated && (
+      {entries &&
+        !entries.some(
+          (entry) =>
+            (showHidden || !entry.name.startsWith(".")) &&
+            (entry.kind === "directory" || entry.name.toLowerCase().includes(filter)),
+        ) && (
+          <li className="px-3 py-2 text-ui text-muted-foreground">
+            {filter ? "No matching files" : entries.length ? "No visible files" : "Empty folder"}
+          </li>
+        )}
+      {listing?.truncated && (
         <li className="px-3 py-2 text-ui text-muted-foreground">
           Showing the first 2,000 entries. Browse this folder in a terminal to see all entries.
         </li>
