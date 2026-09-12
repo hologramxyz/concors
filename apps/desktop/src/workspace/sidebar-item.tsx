@@ -1,16 +1,15 @@
-import type { WorkspaceOperation, WorkspaceProject } from "@concors/protocol";
+import type { ProjectIcon, WorkspaceOperation, WorkspaceProject } from "@concors/protocol";
 import { cn } from "cn";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ProjectActions } from "./project-actions";
 import { ProjectImage } from "./project-image";
-import { projectInitial } from "./project-initial";
 
 export function WorkspaceSidebarItem({
   project,
   compact,
   selected,
   canEdit,
-  image,
+  icon,
   onSelect,
   execute,
 }: {
@@ -18,7 +17,7 @@ export function WorkspaceSidebarItem({
   compact: boolean;
   selected: boolean;
   canEdit: boolean;
-  image: string | null;
+  icon: ProjectIcon | undefined;
   onSelect: (id: string) => void;
   execute: (operation: WorkspaceOperation) => Promise<void>;
 }) {
@@ -35,16 +34,13 @@ export function WorkspaceSidebarItem({
         compact ? "sidebar-rail-control font-semibold" : "h-8 gap-2 px-2",
       )}
     >
-      {compact ? (
-        <span aria-hidden="true" className="truncate">
-          {projectInitial(project.name)}
-        </span>
-      ) : (
-        <>
-          <ProjectImage key={image ?? "folder"} source={image} />
-          <span className="truncate">{project.name}</span>
-        </>
-      )}
+      <ProjectImage
+        key={icon?.source ?? "fallback"}
+        source={icon?.source ?? null}
+        isGit={icon?.isGit ?? false}
+        name={project.name}
+      />
+      {!compact && <span className="truncate">{project.name}</span>}
     </button>
   );
   return (
@@ -54,19 +50,15 @@ export function WorkspaceSidebarItem({
         selected && "bg-sidebar-accent",
       )}
     >
-      {compact ? (
-        <Tooltip delayDuration={250}>
-          <TooltipTrigger asChild>{button}</TooltipTrigger>
-          <TooltipContent side="right" sideOffset={8}>
-            <div className="min-w-0 break-words">
-              <p className="font-medium">{project.name}</p>
-              <p className="opacity-75">{project.directory}</p>
-            </div>
-          </TooltipContent>
-        </Tooltip>
-      ) : (
-        button
-      )}
+      <Tooltip delayDuration={250}>
+        <TooltipTrigger asChild>{button}</TooltipTrigger>
+        <TooltipContent side="right" sideOffset={8}>
+          <div className="min-w-0 break-words">
+            <p className="font-medium">{project.name}</p>
+            <p className="opacity-75">{project.directory}</p>
+          </div>
+        </TooltipContent>
+      </Tooltip>
       {!compact && <ProjectActions project={project} canEdit={canEdit} execute={execute} />}
     </li>
   );
