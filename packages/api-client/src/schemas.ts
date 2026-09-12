@@ -110,6 +110,9 @@ export type MachineResourceUsage = z.infer<typeof MachineResourceUsageSchema>;
 export const DevelopmentToolsSchema = z.object({
   node: z.enum(["lts", "24", "22"]).nullable(),
   docker: z.boolean(),
+  python: z.boolean().optional(),
+  go: z.boolean().optional(),
+  rust: z.boolean().optional(),
 });
 export type DevelopmentTools = z.infer<typeof DevelopmentToolsSchema>;
 export const DevelopmentToolsSetupSchema = z.object({
@@ -196,7 +199,10 @@ export type MachineSize = z.infer<typeof MachineSizeSchema>;
 /** `GET /api/v1/machines/catalog` */
 export const MachineCatalogSchema = z.object({
   developmentTools: z
-    .object({ nodeVersions: z.array(z.enum(["lts", "24", "22"])) })
+    .object({
+      nodeVersions: z.array(z.enum(["lts", "24", "22"])),
+      additionalTools: z.array(z.enum(["python", "go", "rust"])).optional(),
+    })
     .nullable()
     .optional(),
   regions: z.array(MachineRegionSchema),
