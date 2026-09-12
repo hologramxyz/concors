@@ -60,7 +60,10 @@ async function billingApi(
     let status = 200;
     if (path.endsWith("/machines/catalog"))
       result = {
-        developmentTools: { nodeVersions: ["lts", "24", "22"] },
+        developmentTools: {
+          nodeVersions: ["lts", "24", "22"],
+          additionalTools: ["python", "go", "rust"],
+        },
         regions: [
           { id: "US-EAST-VA", location: "Vint Hill, Virginia", countryCode: "US" },
           { id: "US-WEST-OR", location: "Hillsboro, Oregon", countryCode: "US" },
@@ -397,6 +400,8 @@ test("wizard preserves customization and only deploys on final confirmation", as
   await expect(page.getByRole("checkbox", { name: "Node.js", exact: false })).toBeChecked();
   await page.getByLabel("Node.js version", { exact: true }).selectOption("22");
   await page.getByRole("checkbox", { name: /Docker/ }).check();
+  for (const name of ["Python", "Go", "Rust"])
+    await page.getByRole("checkbox", { name, exact: true }).check();
   await page.getByRole("button", { name: "Back", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Name", exact: true })).toHaveValue("build-agent");
   await page.getByRole("button", { name: "Continue", exact: true }).click();
@@ -416,7 +421,9 @@ test("wizard preserves customization and only deploys on final confirmation", as
   ).toEqual([
     {
       path: "/api/v1/machines",
-      body: expect.objectContaining({ developmentTools: { node: "22", docker: true } }),
+      body: expect.objectContaining({
+        developmentTools: { node: "22", docker: true, python: true, go: true, rust: true },
+      }),
     },
   ]);
 });
@@ -426,8 +433,10 @@ test("saved SSH keys need no extra input and optional tools can be disabled", as
   await openCreation(page);
   await page.getByRole("button", { name: "Edit customization" }).click();
   await expect(page.getByRole("textbox", { name: "SSH public key", exact: true })).toHaveCount(0);
+  await expect(page.getByText(/Your saved SSH/)).toHaveCount(0);
+  await expect(page.getByText(/come preinstalled|build tools are included/)).toHaveCount(0);
   await page.getByRole("checkbox", { name: /Node.js/ }).uncheck();
-  await expect(page.getByLabel("Node.js version", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Node.js version", { exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await page.getByRole("button", { name: "Pay $6.99 & deploy", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -438,3 +447,24 @@ test("saved SSH keys need no extra input and optional tools can be disabled", as
     state.requests.find((r) => r.path.endsWith("/machines") && r.body !== undefined)?.body,
   ).toMatchObject({ developmentTools: { node: null, docker: false } });
 });
+
+for (const width of [390, 1280]) {
+  test(`tool picker is compact and keyboard accessible at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await billingApi(page, { card: true, savedKey: true });
+    await openCreation(page);
+    await page.getByRole("button", { name: "Edit customization" }).click();
+    await expect(page.getByRole("checkbox")).toHaveCount(5);
+    const python = page.getByRole("checkbox", { name: "Python", exact: true });
+    await python.focus();
+    await page.keyboard.press("Space");
+    await expect(python).toBeChecked();
+    await expect(
+      page.getByText(/Your saved SSH|come preinstalled|build tools are included/),
+    ).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Continue", exact: true })).toBeInViewport();
+    const dialog = page.getByRole("dialog", { name: "New VPS" });
+    expect(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await dialog.screenshot({ path: `/tmp/tool-picker-${width}.png` });
+  });
+}
