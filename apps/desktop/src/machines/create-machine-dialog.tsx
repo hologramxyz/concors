@@ -3,6 +3,7 @@ import { ChevronDown, CreditCard, MapPin, Server } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { api } from "@/auth/api";
+import { DevelopmentToolPicker } from "./development-tool-picker";
 import { useBilling } from "@/billing/use-billing";
 import { openExternal } from "@/tauri";
 import { Textarea } from "@/components/ui/textarea";
@@ -184,7 +185,7 @@ export function CreateMachineDialog({
             className="min-h-0 min-w-0 flex-1 space-y-6 overflow-x-hidden overflow-y-auto overscroll-contain p-6"
           >
             <h3 ref={headingRef} tabIndex={-1} className="text-lg font-semibold outline-none">
-              {["Choose your VPS", "Make it yours", "Review & deploy"][step]}
+              {["Choose your VPS", "Choose your tools", "Review & deploy"][step]}
             </h3>
             {step === 0 && (
               <>
@@ -314,70 +315,11 @@ export function CreateMachineDialog({
             {step === 1 && (
               <>
                 {catalog.developmentTools ? (
-                  <>
-                    <div className="space-y-4">
-                      <div className="rounded-lg border p-4">
-                        <label className="flex items-start gap-3">
-                          <input
-                            type="checkbox"
-                            checked={tools.node !== null}
-                            onChange={(event) =>
-                              setTools({ ...tools, node: event.target.checked ? "lts" : null })
-                            }
-                            className="mt-1 accent-primary"
-                          />
-                          <span>
-                            <span className="block text-sm font-medium">Node.js</span>
-                            <span className="mt-1 block text-xs text-muted-foreground">
-                              Includes npm, pnpm, and Yarn for JavaScript projects.
-                            </span>
-                          </span>
-                        </label>
-                        {tools.node && (
-                          <label className="mt-4 block space-y-2 text-xs text-muted-foreground">
-                            <span>Node.js version</span>
-                            <select
-                              aria-label="Node.js version"
-                              value={tools.node}
-                              onChange={(event) =>
-                                setTools({
-                                  ...tools,
-                                  node: event.target.value as DevelopmentTools["node"],
-                                })
-                              }
-                              className="h-10 w-full rounded-lg border bg-background px-3 text-sm text-foreground"
-                            >
-                              {catalog.developmentTools.nodeVersions.map((version) => (
-                                <option key={version} value={version}>
-                                  {version === "lts"
-                                    ? "Latest LTS (recommended)"
-                                    : `Node ${version} · latest patch`}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                        )}
-                      </div>
-                      <label className="flex items-start gap-3 rounded-lg border p-4">
-                        <input
-                          type="checkbox"
-                          checked={tools.docker}
-                          onChange={(event) => setTools({ ...tools, docker: event.target.checked })}
-                          className="mt-1 accent-primary"
-                        />
-                        <span>
-                          <span className="block text-sm font-medium">Docker</span>
-                          <span className="mt-1 block text-xs text-muted-foreground">
-                            Latest stable Docker Engine and Compose for running containers.
-                          </span>
-                        </span>
-                      </label>
-                    </div>
-                    <p className="text-xs leading-relaxed text-muted-foreground">
-                      Git, curl, unzip, and build tools are included. Codex, Claude Code, and
-                      OpenCode come preinstalled.
-                    </p>
-                  </>
+                  <DevelopmentToolPicker
+                    tools={tools}
+                    catalog={catalog.developmentTools}
+                    onChange={setTools}
+                  />
                 ) : (
                   <p className="text-sm text-muted-foreground">
                     Optional development tool setup is unavailable right now. You can install tools
@@ -420,12 +362,6 @@ export function CreateMachineDialog({
                     Retry loading SSH keys
                   </Button>
                 )}
-                {keyCount !== null && keyCount > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    Your saved SSH {keyCount === 1 ? "key will" : "keys will"} be added
-                    automatically.
-                  </p>
-                )}
               </>
             )}
             {step === 2 && (
@@ -460,15 +396,14 @@ export function CreateMachineDialog({
                         {catalog.developmentTools
                           ? [
                               tools.node ? `Node.js (${nodeLabel}), npm, pnpm, Yarn` : null,
+                              tools.python ? "Python & uv" : null,
+                              tools.go ? "Go" : null,
+                              tools.rust ? "Rust & Cargo" : null,
                               tools.docker ? "Docker & Compose" : null,
-                              "Git and basic utilities",
                             ]
                               .filter(Boolean)
-                              .join(" · ")
+                              .join(" · ") || "No optional tools selected"
                           : "No optional tools selected"}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {keyCount === 0 ? "New SSH key" : "Saved SSH keys"}
                       </p>
                     </div>
                     <Button
@@ -616,7 +551,7 @@ export function CreateMachineDialog({
               </p>
             )}
           </div>
-          <DialogFooter className="mx-0 mb-0 min-w-0 items-center rounded-none">
+          <DialogFooter className="mx-0 mb-0 min-w-0 flex-row items-center justify-end rounded-none">
             <Button
               type="button"
               variant="ghost"
