@@ -1,10 +1,9 @@
 import { GitHubIcon } from "./icon";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { openExternal } from "@/tauri";
 import type { useGitHub } from "./use-github";
 export function GitHubConnection({ github }: { readonly github: ReturnType<typeof useGitHub> }) {
-  const { status, error, busy, waiting } = github;
+  const { status, accounts, error, busy, waiting } = github;
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4">
@@ -20,8 +19,10 @@ export function GitHubConnection({ github }: { readonly github: ReturnType<typeo
                 : !status.configured
                   ? "GitHub integration is not available yet."
                   : status.connected
-                    ? "Connected across your VPSs."
-                    : "Connect once to use your repositories on any VPS."}
+                    ? accounts?.length === 0
+                      ? "GitHub connected. Choose an account or organization to access its repositories."
+                      : "Connected across your VPSs."
+                    : "Connect GitHub, then choose your accounts and repositories."}
             </p>
           </div>
         </div>
@@ -43,11 +44,9 @@ export function GitHubConnection({ github }: { readonly github: ReturnType<typeo
                 type="button"
                 size="sm"
                 variant="outline"
-                onClick={() => {
-                  if (status.manageUrl) void openExternal(status.manageUrl);
-                }}
+                onClick={() => void github.manage()}
               >
-                Manage repositories
+                Add account or organization
               </Button>
               <Button
                 type="button"
@@ -71,9 +70,31 @@ export function GitHubConnection({ github }: { readonly github: ReturnType<typeo
           </Button>
         </div>
       </div>
+      {status?.connected && (
+        <div className="space-y-2 px-1">
+          <p className="text-xs font-medium">Repository access</p>
+          {accounts === null ? (
+            <p className="text-xs text-muted-foreground">Loading accounts…</p>
+          ) : accounts.length > 0 ? (
+            <div className="flex flex-wrap gap-2" aria-label="Accounts with repository access">
+              {accounts.map((account) => (
+                <span key={account.id} className="rounded-md border px-2 py-1 text-xs">
+                  {account.login}
+                </span>
+              ))}
+            </div>
+          ) : null}
+          <p className="text-xs text-muted-foreground">
+            Missing an organization or repository? Add it on GitHub and choose all repositories or
+            specific ones. Some organizations require an owner’s approval.
+          </p>
+        </div>
+      )}
       {waiting && (
         <p role="status" className="text-xs text-muted-foreground">
-          Finish connecting in GitHub, then return here.{" "}
+          {status?.connected
+            ? "Choose repository access on GitHub, then return here. "
+            : "Finish connecting in GitHub, then choose repository access. "}
           {github.authorizeUrl && (
             <a
               className="underline underline-offset-4"

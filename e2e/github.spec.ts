@@ -30,6 +30,10 @@ test.beforeEach(async ({ page, baseURL }) => {
 async function githubApi(page: Page, initiallyConnected = true) {
   let connected = initiallyConnected;
   let ready = false;
+  let accounts = [
+    { id: 1, login: "alice" },
+    { id: 2, login: "acme" },
+  ];
   const preparations: unknown[] = [];
   await page.route("**/api/v1/github/**", async (route) => {
     const request = route.request();
@@ -65,11 +69,15 @@ async function githubApi(page: Page, initiallyConnected = true) {
       ? { url: "https://github.com/login/oauth/authorize?state=test-only" }
       : url.pathname.endsWith("/accounts")
         ? {
-            accounts: [
-              { id: 1, login: "alice" },
-              { id: 2, login: "acme" },
-            ],
-            nextPage: null,
+            // Exercise pagination even with a small fixture.
+            accounts: accounts.slice(
+              Number(url.searchParams.get("page") ?? 1) - 1,
+              Number(url.searchParams.get("page") ?? 1),
+            ),
+            nextPage:
+              Number(url.searchParams.get("page") ?? 1) < accounts.length
+                ? Number(url.searchParams.get("page") ?? 1) + 1
+                : null,
           }
         : url.pathname.endsWith("/repositories")
           ? {
@@ -96,6 +104,12 @@ async function githubApi(page: Page, initiallyConnected = true) {
   });
   return {
     preparations,
+    setConnected: () => {
+      connected = true;
+    },
+    setAccounts: (value: { id: number; login: string }[]) => {
+      accounts = value;
+    },
     setReady: () => {
       ready = true;
     },
@@ -130,11 +144,57 @@ test("account settings connects and disconnects GitHub without exposing credenti
   await expect(page.getByRole("button", { name: "Connect GitHub", exact: true })).toBeVisible();
 });
 
+test("GitHub setup discovers newly granted organizations automatically on return", async ({
+  page,
+}) => {
+  await signedIn(page);
+  const github = await githubApi(page, false);
+  github.setAccounts([]);
+  await page.addInitScript(() => {
+    window.open = () => null;
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: /^Account:/ }).click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "Connect GitHub", exact: true }).click();
+  github.setConnected();
+  // OAuth finishes before installation. Keep guiding to repository access rather than
+  // treating the new user token as the end of onboarding (or reusing the spent OAuth URL).
+  await expect(
+    page.getByText(
+      "GitHub connected. Choose an account or organization to access its repositories.",
+    ),
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Continue on GitHub" })).toHaveAttribute(
+    "href",
+    "https://github.com/apps/concors-test/installations/new",
+  );
+  github.setAccounts([
+    { id: 1, login: "alice" },
+    { id: 2, login: "acme" },
+    { id: 3, login: "another-org" },
+  ]);
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  const access = page.getByLabel("Accounts with repository access");
+  await expect(access.getByText("acme", { exact: true })).toBeVisible();
+  await expect(access.getByText("another-org", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Continue on GitHub" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Add account or organization", exact: true }).click();
+  await expect(page.getByRole("link", { name: "Continue on GitHub" })).toBeVisible();
+  github.setAccounts([{ id: 1, login: "alice" }]);
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(access.getByText("acme", { exact: true })).toHaveCount(0);
+  await expect(access.getByText("alice", { exact: true })).toBeVisible();
+});
+
 test("repository picker switches personal and organization repos and prepares the selected VPS", async ({
   page,
 }) => {
   await signedIn(page);
   await managedHost(page);
+  await page.addInitScript(() => {
+    window.open = () => null;
+  });
   const directory = await mkdtemp(join(tmpdir(), "github-clone-browser-"));
   const source = join(directory, "source");
   execFileSync("git", ["init", source], { stdio: "ignore" });
@@ -186,6 +246,18 @@ test("repository picker switches personal and organization repos and prepares th
     await page.getByRole("menuitem", { name: "Clone repository…", exact: true }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByRole("button", { name: /alice\/project/ })).toBeVisible();
+    github.setAccounts([
+      { id: 1, login: "alice" },
+      { id: 2, login: "acme" },
+      { id: 3, login: "another-org" },
+    ]);
+    await dialog.getByRole("button", { name: "Add account or organization", exact: true }).click();
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(
+      dialog
+        .getByRole("combobox", { name: "GitHub account" })
+        .getByRole("option", { name: "another-org" }),
+    ).toHaveCount(1);
     await dialog.getByRole("combobox", { name: "GitHub account" }).selectOption("2");
     await dialog.getByRole("textbox", { name: "Search repositories" }).fill("private");
     await dialog.getByRole("button", { name: /acme\/private-service/ }).click();
