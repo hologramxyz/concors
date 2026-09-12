@@ -82,6 +82,58 @@ async function setup(page: Page, projectName = "Mobile file test", favicon = fal
   };
 }
 
+test("mobile file syntax follows theme changes while retaining its draft", async ({ page }) => {
+  const { ui, cleanup } = await setup(page, "Mobile code themes");
+  try {
+    await ui.getByRole("button", { name: "Project files", exact: true }).click();
+    const files = ui.getByRole("region", { name: "Project files", exact: true });
+    await files.getByRole("button", { name: "src", exact: true }).click();
+    await files.getByRole("button", { name: "main.ts", exact: true }).click();
+    const editor = files.getByRole("textbox", { name: "Code editor: src/main.ts" });
+    await editor.fill("const answer = 43; // mobile draft\n");
+    const keyword = editor
+      .locator("span")
+      .filter({ hasText: /^const$/ })
+      .first();
+    await expect(keyword).toBeVisible();
+    const colors: string[] = [];
+    for (const palette of ["Cobalt", "Dusk", "Concors"]) {
+      await files.getByRole("button", { name: "Back to chat", exact: true }).click();
+      await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+      await ui.getByRole("button", { name: "Account: Your profile", exact: true }).click();
+      await ui
+        .getByRole("dialog", { name: "Account", exact: true })
+        .getByRole("button", { name: "Settings", exact: true })
+        .click();
+      await ui.getByRole("radio", { name: palette, exact: true }).locator("..").click();
+      await ui.getByRole("button", { name: "Theme", exact: true }).click();
+      await ui.getByRole("menuitem", { name: "Dark", exact: true }).click();
+      await expect(ui.locator("html")).toHaveAttribute("data-color-theme", palette.toLowerCase());
+      const color = await ui.locator("html").evaluate((node) => {
+        const hex = getComputedStyle(node).getPropertyValue("--syntax-keyword").trim();
+        return `rgb(${[1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16)).join(", ")})`;
+      });
+      await ui
+        .getByRole("dialog", { name: "Settings", exact: true })
+        .getByRole("button", { name: "Close", exact: true })
+        .click();
+      await ui.getByRole("button", { name: "Project files", exact: true }).click();
+      await files
+        .getByRole("navigation", { name: "Open files" })
+        .getByRole("button", { name: /^main.ts/ })
+        .click();
+      await expect(keyword).toHaveCSS("color", color);
+      await expect(editor).toContainText("43; // mobile draft");
+      colors.push(color);
+    }
+    expect(new Set(colors).size).toBe(3);
+    expect(colors[2]).toBe("rgb(255, 123, 114)");
+    await page.screenshot({ path: test.info().outputPath("mobile-code-themes.png") });
+  } finally {
+    await cleanup();
+  }
+});
+
 test("mobile project sidebar displays the repo favicon through the shared daemon", async ({
   page,
 }) => {
