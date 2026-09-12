@@ -1,5 +1,4 @@
-import { TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { SidebarTooltip } from "@/components/sidebar-tooltip";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { visibleAgentSessions } from "./visible-sessions";
 import { AgentLoadingIcon } from "./activity";
 import { ProviderIcon } from "./provider-icon";
@@ -85,7 +84,7 @@ export function AgentSidebar({
           "Project no longer available";
         return (
           <li key={agent.id}>
-            <SidebarTooltip collapsed={compact} delayDuration={250}>
+            <Tooltip delayDuration={250}>
               <TooltipTrigger asChild>
                 <button
                   type="button"
@@ -99,38 +98,25 @@ export function AgentSidebar({
                   <span
                     role="img"
                     aria-label={`Agent status: ${status}`}
-                    className={`relative flex shrink-0 items-center justify-center ${compact ? "size-5" : "size-4"}`}
+                    className="relative flex size-5 shrink-0 items-center justify-center"
                   >
-                    {compact && (
-                      <span aria-hidden="true" data-provider={agent.provider}>
-                        <ProviderIcon provider={agent.provider} />
-                      </span>
-                    )}
+                    <span aria-hidden="true" data-provider={agent.provider}>
+                      <ProviderIcon provider={agent.provider} />
+                    </span>
                     {unread && (
                       <span
                         aria-label="Unread agent update"
-                        className={
-                          compact
-                            ? "absolute -top-1 -left-1 size-1.5 rounded-full bg-primary ring-2 ring-sidebar"
-                            : "absolute inset-0 rounded-full ring-1 ring-muted-foreground/40"
-                        }
+                        className="absolute -top-1 -left-1 size-1.5 rounded-full bg-primary ring-2 ring-sidebar"
                       />
                     )}
                     <span
-                      className={
-                        compact
-                          ? "absolute -right-1 -bottom-1 flex size-3 items-center justify-center rounded-full bg-sidebar ring-1 ring-sidebar"
-                          : "contents"
-                      }
+                      data-agent-status-badge
+                      className="absolute -right-1 -bottom-1 flex size-3 items-center justify-center rounded-full bg-sidebar ring-1 ring-sidebar"
                     >
                       {running ? (
-                        <AgentLoadingIcon className={compact ? "size-3" : "size-4"} />
-                      ) : compact ? (
-                        <span className={`size-2 rounded-full ${agent.color}`} />
+                        <AgentLoadingIcon className="size-3" />
                       ) : (
-                        <span className="flex size-3.5 items-center justify-center rounded-full border border-current/20 text-muted-foreground">
-                          <span className={`size-1.5 rounded-full ${agent.color}`} />
-                        </span>
+                        <span className={`size-2 rounded-full ${agent.color}`} />
                       )}
                     </span>
                   </span>
@@ -139,11 +125,9 @@ export function AgentSidebar({
               </TooltipTrigger>
               <TooltipContent side="right" sideOffset={6}>
                 <div className="min-w-0">
-                  {compact && (
-                    <p className="font-medium break-words">
-                      {agent.name} · {agent.providerName}
-                    </p>
-                  )}
+                  <p className="font-medium break-words">
+                    {agent.name} · {agent.providerName}
+                  </p>
                   <p className="font-medium break-words">{projectName}</p>
                   <p className="opacity-75">
                     {status}
@@ -151,7 +135,7 @@ export function AgentSidebar({
                   </p>
                 </div>
               </TooltipContent>
-            </SidebarTooltip>
+            </Tooltip>
           </li>
         );
       })}

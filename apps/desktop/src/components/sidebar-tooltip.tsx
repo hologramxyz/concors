@@ -1,7 +1,7 @@
 import type { ComponentProps } from "react";
 import { Tooltip } from "@/components/ui/tooltip";
 
-/** Expanded sidebar labels should not be covered by hover or focus tooltips. */
+/** Utility controls use rail-only tooltips; project and agent rows use Tooltip directly. */
 export function SidebarTooltip({
   collapsed,
   ...props
