@@ -30,7 +30,7 @@ test("tabs are numbered per workspace and keep custom names across pane changes 
     await tabs.getByRole("button", { name: "Tab 1", exact: true }).click({ button: "right" });
     await page.getByRole("menuitem", { name: "Rename tab", exact: true }).click();
     await page.getByLabel("Tab name", { exact: true }).fill("Build and review");
-    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await page.keyboard.press("Enter");
     await tabs.getByRole("button", { name: "Build and review", exact: true }).click();
     await page.getByRole("button", { name: "Pane actions", exact: true }).click();
     await page.getByRole("menuitemradio", { name: "Agent", exact: true }).click();
