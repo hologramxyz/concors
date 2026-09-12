@@ -504,6 +504,7 @@ function AppContent() {
                   )}
                   {addingProject && (
                     <ProjectSetupDialog
+                      machineId={selectedMachineId}
                       mode={addingProject}
                       onClose={cancelProjectDialog}
                       onAdded={() => {

@@ -1,3 +1,5 @@
+import { useGitHub } from "@/github/use-github";
+import { GitHubConnection } from "@/github/connection";
 import { Check, ChevronDown, LogOut } from "lucide-react";
 import { useContext } from "react";
 import { CompactLayoutContext } from "@/components/compact-layout";
@@ -27,6 +29,7 @@ export function AccountSettings({
   onSignOut,
   onSetActiveOrganization,
 }: AccountSettingsProps) {
+  const github = useGitHub();
   const organization = activeOrganization(auth);
   const compact = useContext(CompactLayoutContext);
 
@@ -54,6 +57,10 @@ export function AccountSettings({
             )}
           </span>
         </Row>
+      </Section>
+
+      <Section title="Integrations" description="Connect services to your Concors account.">
+        <GitHubConnection github={github} />
       </Section>
 
       <Section

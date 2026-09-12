@@ -1,3 +1,9 @@
+import {
+  GitHubStatusSchema,
+  GitHubAccountsSchema,
+  GitHubRepositoriesSchema,
+  GitHubPreparedSchema,
+} from "./github.ts";
 import type { DevelopmentTools } from "./schemas.ts";
 import type { z } from "zod";
 
@@ -432,6 +438,40 @@ export class ApiClient {
       schema: AccountDeletionSchema,
     });
     return data.status;
+  }
+  async githubStatus() {
+    return (await this.#request("GET", "/api/v1/github/", { schema: GitHubStatusSchema })).data;
+  }
+  async connectGitHub() {
+    return (await this.#request("POST", "/api/v1/github/connect", { schema: RedirectSchema })).data;
+  }
+  async disconnectGitHub() {
+    await this.#request("DELETE", "/api/v1/github/", { schema: null });
+  }
+  async githubAccounts(page = 1) {
+    return (
+      await this.#request("GET", `/api/v1/github/accounts?page=${page}`, {
+        schema: GitHubAccountsSchema,
+      })
+    ).data;
+  }
+  async githubRepositories(installationId: number, page = 1) {
+    return (
+      await this.#request(
+        "GET",
+        `/api/v1/github/repositories?installationId=${installationId}&page=${page}`,
+        { schema: GitHubRepositoriesSchema },
+      )
+    ).data;
+  }
+  async prepareGitHubMachine(machineId: string, repository: string) {
+    return (
+      await this.#request(
+        "POST",
+        `/api/v1/github/machines/${encodeURIComponent(machineId)}/prepare`,
+        { body: { repository }, schema: GitHubPreparedSchema },
+      )
+    ).data;
   }
   #rememberToken(response: Response, bodyToken: string | null): void {
     const token = response.headers.get(AUTH_TOKEN_HEADER) ?? bodyToken;

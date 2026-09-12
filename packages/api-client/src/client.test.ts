@@ -248,3 +248,45 @@ describe("ApiClient", () => {
     expect(error.name).toBe("ApiError");
   });
 });
+
+describe("account GitHub API", () => {
+  it("uses the Concors session for account discovery and VPS preparation without saving GitHub credentials", async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(
+        json({
+          configured: true,
+          connected: true,
+          login: "alice",
+          updatedAt: null,
+          manageUrl: "https://github.com/apps/concors/installations/new",
+        }),
+      )
+      .mockResolvedValueOnce(json({ accounts: [{ id: 12, login: "acme" }], nextPage: null }))
+      .mockResolvedValueOnce(json({ repositories: [], nextPage: null }))
+      .mockResolvedValueOnce(json({ ready: true }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const { api, tokens } = client(fetch, "concors-session");
+    expect((await api.githubStatus()).login).toBe("alice");
+    expect((await api.githubAccounts()).accounts[0]!.login).toBe("acme");
+    await api.githubRepositories(12, 2);
+    await api.prepareGitHubMachine("machine/1", "acme/private");
+    await api.disconnectGitHub();
+    expect(fetch.mock.calls.map(([url]) => String(url))).toEqual([
+      "https://api.example/api/v1/github/",
+      "https://api.example/api/v1/github/accounts?page=1",
+      "https://api.example/api/v1/github/repositories?installationId=12&page=2",
+      "https://api.example/api/v1/github/machines/machine%2F1/prepare",
+      "https://api.example/api/v1/github/",
+    ]);
+    expect(JSON.parse(String(fetch.mock.calls[3]![1]!.body))).toEqual({
+      repository: "acme/private",
+    });
+    expect(
+      fetch.mock.calls.every(
+        ([, init]) => new Headers(init!.headers).get("authorization") === "Bearer concors-session",
+      ),
+    ).toBe(true);
+    expect(tokens.get()).toBe("concors-session");
+  });
+});
