@@ -1,4 +1,6 @@
 import { mobileThemeBackground, type ColorTheme } from "@concors/protocol";
+import { syntaxPalette } from "./syntax-palette";
+import { terminalPalette } from "./terminal-palette";
 
 /** Explicit token mapping prevents custom files from changing layout or loading external CSS. */
 export function colorThemeTokens(
@@ -6,13 +8,18 @@ export function colorThemeTokens(
   mode: "light" | "dark",
   compact = false,
 ): Record<string, string> {
+  const codeTokens: Record<string, string> = {};
+  for (const [name, color] of Object.entries(terminalPalette(theme, mode, compact)))
+    codeTokens[`terminal-${name}`] = color;
+  for (const [name, color] of Object.entries(syntaxPalette(theme, mode)))
+    codeTokens[`syntax-${name}`] = color;
   if (theme.id === "concors")
     return compact
       ? {
+          ...codeTokens,
           background: mobileThemeBackground(theme, mode),
-          "terminal-background": mobileThemeBackground(theme, mode),
         }
-      : {};
+      : codeTokens;
   const c = theme[mode];
   const tokens: Record<string, string> = {
     background: c.background,
@@ -41,13 +48,8 @@ export function colorThemeTokens(
     "sidebar-border": c.border,
     "sidebar-ring": c.accent,
     selection: c.selection,
-    "terminal-background": compact ? mobileThemeBackground(theme, mode) : c.surface,
-    "terminal-foreground": c.foreground,
-    "terminal-cursor": c.accent,
-    "terminal-selection": c.selection,
+    ...codeTokens,
   };
-  for (const [name, color] of Object.entries(theme.custom?.[mode]?.terminal ?? {}))
-    if (color) tokens[`terminal-${name}`] = color;
   return tokens;
 }
 export function applyColorTheme(theme: ColorTheme, mode: "light" | "dark", compact = false) {
