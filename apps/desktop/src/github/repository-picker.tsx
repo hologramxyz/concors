@@ -19,7 +19,13 @@ export function GitHubRepositoryPicker(props: PickerProps) {
     <div className="space-y-3">
       <GitHubConnection github={github} />
       {github.status?.connected && (
-        <Repositories key={github.status.updatedAt} {...props} generation={github.generation} />
+        <Repositories
+          key={github.status.updatedAt}
+          {...props}
+          generation={github.generation}
+          accounts={github.accounts ?? []}
+          accountsLoading={github.accounts === null}
+        />
       )}
     </div>
   );
@@ -29,11 +35,17 @@ function Repositories({
   selected,
   disabled,
   generation,
-}: PickerProps & { generation: number }) {
-  const [accounts, setAccounts] = useState<{ id: number; login: string }[]>([]);
-  const [accountsLoaded, setAccountsLoaded] = useState(-1);
-  const [accountError, setAccountError] = useState<string | null>(null);
-  const [installation, setInstallation] = useState<number | null>(null);
+  accounts,
+  accountsLoading,
+}: PickerProps & {
+  generation: number;
+  accounts: { id: number; login: string }[];
+  accountsLoading: boolean;
+}) {
+  const [selectedInstallation, setInstallation] = useState<number | null>(null);
+  const installation = accounts.some((account) => account.id === selectedInstallation)
+    ? selectedInstallation
+    : (accounts[0]?.id ?? null);
   const [query, setQuery] = useState("");
   const [pagination, setPagination] = useState({ generation, page: 1 });
   const page = pagination.generation === generation ? pagination.page : 1;
@@ -46,34 +58,6 @@ function Repositories({
     nextPage: number | null;
     error: string | null;
   }>({ key: "", installation: null, generation: -1, repos: [], nextPage: null, error: null });
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      let next: number | null = 1;
-      const result: { id: number; login: string }[] = [];
-      while (next !== null && !cancelled) {
-        const data = await api.githubAccounts(next);
-        result.push(...data.accounts);
-        next = data.nextPage;
-      }
-      if (!cancelled) {
-        setAccounts(result);
-        setInstallation((current) =>
-          result.some((a) => a.id === current) ? current : (result[0]?.id ?? null),
-        );
-        setAccountError(null);
-        setAccountsLoaded(generation);
-      }
-    })().catch((cause: unknown) => {
-      if (!cancelled) {
-        setAccountError(cause instanceof Error ? cause.message : "Could not list GitHub accounts");
-        setAccountsLoaded(generation);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [generation]);
   useEffect(() => {
     if (!installation) return;
     let cancelled = false;
@@ -115,7 +99,7 @@ function Repositories({
   const repos =
     result.installation === installation && result.generation === generation ? result.repos : [];
   const nextPage = loading ? null : result.nextPage;
-  const error = accountError ?? (loading ? null : result.error);
+  const error = loading ? null : result.error;
   const visible = repos.filter((repo) => repo.fullName.toLowerCase().includes(query.toLowerCase()));
   return (
     <div className="space-y-3">
@@ -213,9 +197,9 @@ function Repositories({
           </>
         ) : (
           <p className="text-sm text-muted-foreground">
-            {accountsLoaded !== generation
+            {accountsLoading
               ? "Loading accounts…"
-              : "Choose Manage repositories to give Concors access to your personal or organization repositories, then refresh."}
+              : "Choose Add account or organization to select repositories on GitHub. Access refreshes when you return."}
           </p>
         )}
       </>

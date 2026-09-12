@@ -1,11 +1,19 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { GitHubStatus } from "@concors/api-client";
 import { api } from "@/auth/api";
 import { openExternal } from "@/tauri";
 
 export function useGitHub() {
-  const previousConnection = useRef<string | null>(null);
+  const [previousConnection, setPreviousConnection] = useState<string | null>(null);
   const [status, setStatus] = useState<GitHubStatus | null>(null);
+  const [accountResult, setAccountResult] = useState<{
+    connection: string | null;
+    accounts: { id: number; login: string }[];
+  } | null>(null);
+  const accounts =
+    status?.connected && accountResult?.connection === status.updatedAt
+      ? accountResult.accounts
+      : null;
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [authorizeUrl, setAuthorizeUrl] = useState<string | null>(null);
@@ -16,11 +24,22 @@ export function useGitHub() {
     let cancelled = false;
     void api
       .githubStatus()
-      .then((value) => {
+      .then(async (value) => {
         if (!cancelled) {
           setStatus(value);
-          if (value.connected && value.updatedAt !== previousConnection.current) setWaiting(false);
-          setError(null);
+          if (!value.connected) {
+            setAccountResult(null);
+          } else {
+            let next: number | null = 1;
+            const accounts: { id: number; login: string }[] = [];
+            while (next !== null && !cancelled) {
+              const data = await api.githubAccounts(next);
+              accounts.push(...data.accounts);
+              next = data.nextPage;
+            }
+            if (!cancelled) setAccountResult({ connection: value.updatedAt, accounts });
+          }
+          if (!cancelled) setError(null);
         }
       })
       .catch((cause: unknown) => {
@@ -41,23 +60,39 @@ export function useGitHub() {
     };
   }, [waiting, refresh]);
   useEffect(() => {
-    const focus = () => refresh();
+    const focus = () => {
+      setWaiting(false);
+      refresh();
+    };
     window.addEventListener("focus", focus);
     return () => window.removeEventListener("focus", focus);
   }, [refresh]);
   const connect = async () => {
+    setPreviousConnection(status?.updatedAt ?? null);
     setBusy(true);
     setError(null);
-    previousConnection.current = status?.updatedAt ?? null;
     try {
       const { url } = await api.connectGitHub();
       setAuthorizeUrl(url);
-      await openExternal(url);
       setWaiting(true);
+      await openExternal(url);
     } catch (cause) {
+      setWaiting(false);
       setError(cause instanceof Error ? cause.message : "Could not connect GitHub");
     } finally {
       setBusy(false);
+    }
+  };
+  const manage = async () => {
+    if (!status?.manageUrl) return;
+    setError(null);
+    setAuthorizeUrl(status.manageUrl);
+    setWaiting(true);
+    try {
+      await openExternal(status.manageUrl);
+    } catch (cause) {
+      setWaiting(false);
+      setError(cause instanceof Error ? cause.message : "Could not open GitHub repository access");
     }
   };
   const disconnect = async () => {
@@ -66,6 +101,7 @@ export function useGitHub() {
     try {
       await api.disconnectGitHub();
       setWaiting(false);
+      setAccountResult(null);
       refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not disconnect GitHub");
@@ -73,5 +109,20 @@ export function useGitHub() {
       setBusy(false);
     }
   };
-  return { status, error, busy, waiting, authorizeUrl, generation, refresh, connect, disconnect };
+  return {
+    status,
+    accounts,
+    error,
+    busy,
+    waiting,
+    authorizeUrl:
+      status?.connected && status.updatedAt !== previousConnection
+        ? status.manageUrl
+        : authorizeUrl,
+    generation,
+    refresh,
+    connect,
+    manage,
+    disconnect,
+  };
 }
