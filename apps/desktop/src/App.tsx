@@ -439,6 +439,9 @@ function AppContent() {
                               }}
                               focusRequest={paneFocus}
                               workspace={workspace}
+                              connected={
+                                connection.state.status === "ready" && connection.workspaceReady
+                              }
                               canEdit={canEdit && !newWorkspace.busy}
                               onCommand={command}
                               execute={execute}

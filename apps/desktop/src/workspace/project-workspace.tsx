@@ -13,7 +13,6 @@ import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { FolderOpen, Pencil, Plus, X } from "lucide-react";
 import type { PaneProfile, WorkspaceOperation, WorkspaceSnapshot } from "@concors/protocol";
 import { Button } from "@/components/ui/button";
-import { FormDialog } from "./form-dialog";
 import { PaneLayout } from "./pane-layout";
 import { VisitedTab } from "./visited-tab";
 
@@ -22,6 +21,7 @@ export function ProjectWorkspace({
   sidebarToggle,
   focusRequest,
   onPaneFocus,
+  connected,
   canEdit,
   onCommand,
   execute,
@@ -32,6 +32,8 @@ export function ProjectWorkspace({
   sidebarToggle?: ReactNode;
   focusRequest?: PaneFocusRequest | null;
   onPaneFocus?: (paneId: string) => void;
+  /** The daemon is reachable. Selection and renaming only need this, not a quiet command queue. */
+  connected: boolean;
   canEdit: boolean;
   onCommand: (operation: WorkspaceOperation) => void;
   execute: (operation: WorkspaceOperation) => Promise<void>;
@@ -58,7 +60,14 @@ export function ProjectWorkspace({
   const [launchError, setLaunchError] = useState<string | null>(null);
   const [dragging, setDragging] = useState<{ projectId: string; tabId: string } | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
-  const [renaming, setRenaming] = useState<string | null>(null);
+  // Inline tab rename: double-click, F2 or the context menu turn the label into an input. The ref
+  // mirrors the state so blur after Enter/Escape cannot commit twice or resurrect a cancelled edit.
+  const [renaming, setRenaming] = useState<{ tabId: string; value: string } | null>(null);
+  const renameRef = useRef<{ tabId: string; value: string } | null>(null);
+  const setRename = (next: { tabId: string; value: string } | null) => {
+    renameRef.current = next;
+    setRenaming(next);
+  };
   const project = workspace.projects.find((p) => p.id === workspace.selection?.projectId);
   const selected = project?.tabs.find((tab) => tab.id === workspace.selection?.tabId);
   const tabCount = (project?.tabs.length ?? 0) + projectFiles.length;
@@ -149,7 +158,26 @@ export function ProjectWorkspace({
         setLaunching(false);
       });
   };
-  const renameTab = project.tabs.find((tab) => tab.id === renaming);
+  // Not gated on `canEdit`: a double-click's first click selects the tab, which briefly marks a
+  // command as pending, and the second click must still open the editor.
+  const startRename = (tab: { id: string; name: string }) => {
+    if (connected) setRename({ tabId: tab.id, value: tab.name });
+  };
+  const commitRename = () => {
+    const current = renameRef.current;
+    if (!current) return;
+    setRename(null);
+    const tab = project.tabs.find((item) => item.id === current.tabId);
+    const name = current.value.trim().slice(0, 120);
+    if (!tab || !name || name === tab.name) return;
+    onCommand({
+      kind: "tab.rename",
+      projectId: project.id,
+      expectedVersion: project.version,
+      tabId: tab.id,
+      name,
+    });
+  };
   return (
     <ProjectFileLinks project={project}>
       <div className="flex h-full min-h-0 flex-col">
@@ -165,7 +193,7 @@ export function ProjectWorkspace({
                 <ContextMenu.Trigger asChild>
                   <div
                     data-tab-id={tab.id}
-                    draggable={canEdit}
+                    draggable={canEdit && renaming?.tabId !== tab.id}
                     onDragStart={(event) => {
                       event.dataTransfer.effectAllowed = "move";
                       event.dataTransfer.setData("text/plain", tab.id);
@@ -205,38 +233,76 @@ export function ProjectWorkspace({
                     }}
                     className={`group flex shrink-0 items-center rounded-md border ${!activeFile && selected?.id === tab.id ? "border-border bg-background shadow-xs" : "border-transparent"}`}
                   >
-                    <button
-                      type="button"
-                      aria-pressed={!activeFile && selected?.id === tab.id}
-                      title="Drag to reorder. Alt+Shift+Arrow keys also move this tab."
-                      onKeyDown={(event) => {
-                        if (
-                          !canEdit ||
-                          !event.altKey ||
-                          !event.shiftKey ||
-                          !["ArrowLeft", "ArrowRight"].includes(event.key)
-                        )
-                          return;
-                        event.preventDefault();
-                        const next = index + (event.key === "ArrowLeft" ? -1 : 1);
-                        if (next >= 0 && next < project.tabs.length)
+                    {renaming?.tabId === tab.id ? (
+                      <input
+                        aria-label="Tab name"
+                        autoFocus
+                        value={renaming.value}
+                        maxLength={120}
+                        size={Math.max(4, Math.min(40, renaming.value.length + 1))}
+                        onFocus={(event) => event.currentTarget.select()}
+                        onChange={(event) =>
+                          setRename({ tabId: tab.id, value: event.target.value })
+                        }
+                        onBlur={commitRename}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            commitRename();
+                          } else if (event.key === "Escape") {
+                            event.preventDefault();
+                            setRename(null);
+                          }
+                        }}
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onDoubleClick={(event) => event.stopPropagation()}
+                        className="max-w-44 rounded bg-background px-2 py-0.5 text-ui ring-1 ring-ring outline-none"
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        aria-pressed={!activeFile && selected?.id === tab.id}
+                        title="Drag to reorder. Double-click or F2 to rename. Alt+Shift+Arrow keys move this tab."
+                        onDoubleClick={() => startRename(tab)}
+                        onKeyDown={(event) => {
+                          if (event.key === "F2" && connected) {
+                            event.preventDefault();
+                            startRename(tab);
+                            return;
+                          }
+                          if (
+                            !canEdit ||
+                            !event.altKey ||
+                            !event.shiftKey ||
+                            !["ArrowLeft", "ArrowRight"].includes(event.key)
+                          )
+                            return;
+                          event.preventDefault();
+                          const next = index + (event.key === "ArrowLeft" ? -1 : 1);
+                          if (next >= 0 && next < project.tabs.length)
+                            onCommand({
+                              kind: "tab.move",
+                              projectId: project.id,
+                              expectedVersion: project.version,
+                              tabId: tab.id,
+                              index: next,
+                            });
+                        }}
+                        disabled={!connected}
+                        onClick={() => {
+                          files.select(scope, null);
+                          if (!activeFile && selected?.id === tab.id) return;
                           onCommand({
-                            kind: "tab.move",
+                            kind: "selection.set",
                             projectId: project.id,
-                            expectedVersion: project.version,
                             tabId: tab.id,
-                            index: next,
                           });
-                      }}
-                      disabled={!canEdit}
-                      onClick={() => {
-                        files.select(scope, null);
-                        onCommand({ kind: "selection.set", projectId: project.id, tabId: tab.id });
-                      }}
-                      className="max-w-44 truncate px-2 py-0.5 text-ui"
-                    >
-                      {tab.name}
-                    </button>
+                        }}
+                        className="max-w-44 truncate px-2 py-0.5 text-ui"
+                      >
+                        {tab.name}
+                      </button>
+                    )}
                     <button
                       type="button"
                       aria-label={`Close ${tab.name} tab`}
@@ -256,10 +322,16 @@ export function ProjectWorkspace({
                   </div>
                 </ContextMenu.Trigger>
                 <ContextMenu.Portal>
-                  <ContextMenu.Content className="z-50 min-w-40 rounded-lg border bg-popover p-1 text-ui text-popover-foreground shadow-md">
+                  <ContextMenu.Content
+                    className="z-50 min-w-40 rounded-lg border bg-popover p-1 text-ui text-popover-foreground shadow-md"
+                    onCloseAutoFocus={(event) => {
+                      // Keep focus on the rename input instead of returning it to the tab.
+                      if (renameRef.current?.tabId === tab.id) event.preventDefault();
+                    }}
+                  >
                     <ContextMenu.Item
-                      disabled={!canEdit}
-                      onSelect={() => setRenaming(tab.id)}
+                      disabled={!connected}
+                      onSelect={() => startRename(tab)}
                       className="flex items-center gap-2 rounded px-2 py-1.5 outline-none focus:bg-accent data-disabled:opacity-40"
                     >
                       <Pencil className="size-4" /> Rename tab
@@ -340,23 +412,6 @@ export function ProjectWorkspace({
             )}
           </div>
         </div>
-        {renameTab && (
-          <FormDialog
-            title="Rename tab"
-            description="The name updates on every connected client."
-            fields={[{ name: "name", label: "Tab name", value: renameTab.name }]}
-            onClose={() => setRenaming(null)}
-            onSubmit={(values) =>
-              execute({
-                kind: "tab.rename",
-                projectId: project.id,
-                expectedVersion: project.version,
-                tabId: renameTab.id,
-                name: values["name"] ?? "",
-              })
-            }
-          />
-        )}
       </div>
     </ProjectFileLinks>
   );
