@@ -244,6 +244,15 @@ export class ApiClient {
     return data.machine;
   }
 
+  /** Rename the Concors label without changing the machine's connection details. */
+  async renameMachine(id: string, name: string): Promise<Machine> {
+    const { data } = await this.#request("PATCH", `/api/v1/machines/${encodeURIComponent(id)}`, {
+      body: { name },
+      schema: MachineResponseSchema,
+    });
+    return data.machine;
+  }
+
   /**
    * Cancels a machine: nothing is renewed and it keeps running until `paidUntil`, then ends.
    * No refund for the current month. Undo with `resumeMachine` before then.
@@ -430,7 +439,7 @@ export class ApiClient {
   }
 
   async #request<T>(
-    method: "GET" | "POST" | "DELETE",
+    method: "GET" | "POST" | "PATCH" | "DELETE",
     path: string,
     options: { readonly body?: unknown; readonly schema: z.ZodType<T> | null },
   ): Promise<{ data: T; response: Response }> {
