@@ -452,13 +452,6 @@
     -webkit-text-fill-color: currentColor;
   }
 }
-.syntax-token {
-  color: var(--token-light);
-}
-.dark .syntax-token {
-  color: var(--token-dark);
-}
-
 :root {
   --terminal-background: var(--card);
   --terminal-foreground: #20211f;
