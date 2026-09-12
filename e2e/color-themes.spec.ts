@@ -24,6 +24,17 @@ test("palettes persist and agent-written themes reload without replacing termina
   await page.keyboard.type("printf 'theme-session-%s\\n' stays");
   await page.keyboard.press("Enter");
   await expect(terminal).toContainText("theme-session-stays");
+  await page.keyboard.type("printf '\\033[31mtheme-red\\033[0m\\n'");
+  await page.keyboard.press("Enter");
+  const red = page.locator(".xterm-fg-1").filter({ hasText: "theme-red" }).first();
+  await expect(red).toBeVisible();
+  const originalRed = await red.evaluate((node) => getComputedStyle(node).color);
+  const expectRed = async (color: string) => {
+    await page.getByRole("button", { name: "Back to app", exact: true }).click();
+    await expect(red).toHaveCSS("color", color);
+    await page.keyboard.press("Control+Shift+Comma");
+    await page.getByRole("button", { name: "Appearance", exact: true }).click();
+  };
   await page.keyboard.press("Control+Shift+Comma");
   await page.getByRole("button", { name: "Appearance", exact: true }).click();
   await expect(page.getByRole("radio", { name: "Concors", exact: true })).toBeChecked();
@@ -38,6 +49,8 @@ test("palettes persist and agent-written themes reload without replacing termina
       ),
     )
     .toBe("#171f32");
+  await page.getByRole("button", { name: "Back to app", exact: true }).click();
+  await expect(red).not.toHaveCSS("color", originalRed);
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-color-theme", "cobalt");
   await expect(terminal).toContainText("theme-session-stays");
@@ -68,9 +81,14 @@ test("palettes persist and agent-written themes reload without replacing termina
         getComputedStyle(document.documentElement).getPropertyValue("--primary").trim(),
       );
     await expect.poll(primary).toBe("#ffaa77");
-    await writeFile(temp, JSON.stringify({ ...theme, dark: { ...theme.dark, accent: "#aaccff" } }));
+    await expectRed("rgb(238, 136, 119)");
+    await writeFile(
+      temp,
+      JSON.stringify({ ...theme, dark: { accent: "#aaccff", terminal: { red: "#aabbcc" } } }),
+    );
     await rename(temp, file);
     await expect.poll(primary, { timeout: 10_000 }).toBe("#aaccff");
+    await expectRed("rgb(170, 187, 204)");
     await writeFile(file, "{ incomplete");
     await expect(page.getByRole("status").filter({ hasText: "Invalid JSON" })).toBeVisible({
       timeout: 10_000,
@@ -91,6 +109,7 @@ test("palettes persist and agent-written themes reload without replacing termina
       .toBe("");
     await page.getByRole("button", { name: "Back to app", exact: true }).click();
     await expect(terminal).toContainText("theme-session-stays");
+    await expect(red).toHaveCSS("color", "rgb(180, 35, 50)");
     expect(starts).toHaveLength(1);
   } finally {
     await rm(file, { force: true });
