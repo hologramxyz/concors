@@ -32,6 +32,8 @@ import { ProjectSetupDialog } from "@/workspace/project-setup-dialog";
 import { NewWorkspaceMenu } from "@/workspace/new-workspace-menu";
 import { useNewWorkspace } from "@/workspace/use-new-workspace";
 import { ProjectImage } from "@/workspace/project-image";
+import { useProjectIcons } from "@/workspace/use-project-icons";
+import { projectIconKey } from "@/workspace/project-icons";
 import { SidebarSection } from "@/components/sidebar-section";
 import { NewTabMenu } from "@/workspace/new-tab-menu";
 import { nextWorkspaceTabName } from "@concors/protocol";
@@ -133,6 +135,7 @@ function MobileWorkspaceContent({
   const ready = host.phase === "ready" && connection?.state.status === "ready" && !!workspace;
   const canEdit = !!ready && !pending;
   const draftScope = useMemo(() => ({ machineId: host.machineId }), [host.machineId]);
+  const icons = useProjectIcons(workspace);
   const selected = workspace
     ? resolveMobileSelection(workspace, local.machineId === host.machineId ? local.target : {})
     : null;
@@ -522,22 +525,30 @@ function MobileWorkspaceContent({
                       }
                     >
                       <ul>
-                        {workspace?.projects.map((item) => (
-                          <li
-                            className={`group mobile-project ${project?.id === item.id ? "bg-sidebar-accent" : ""}`}
-                            key={item.id}
-                          >
-                            <button
-                              aria-current={project?.id === item.id ? "page" : undefined}
-                              title={item.directory}
-                              onClick={() => selectProject(item.id)}
+                        {workspace?.projects.map((item) => {
+                          const icon = icons.get(projectIconKey(workspace.epoch, item));
+                          return (
+                            <li
+                              className={`group mobile-project ${project?.id === item.id ? "bg-sidebar-accent" : ""}`}
+                              key={item.id}
                             >
-                              <ProjectImage source={null} />
-                              <span className="truncate">{item.name}</span>
-                            </button>
-                            <ProjectActions project={item} canEdit={canEdit} execute={execute} />
-                          </li>
-                        ))}
+                              <button
+                                aria-current={project?.id === item.id ? "page" : undefined}
+                                title={item.directory}
+                                onClick={() => selectProject(item.id)}
+                              >
+                                <ProjectImage
+                                  key={icon?.source ?? "fallback"}
+                                  source={icon?.source ?? null}
+                                  isGit={icon?.isGit ?? false}
+                                  name={item.name}
+                                />
+                                <span className="truncate">{item.name}</span>
+                              </button>
+                              <ProjectActions project={item} canEdit={canEdit} execute={execute} />
+                            </li>
+                          );
+                        })}
                       </ul>
                       {!workspace?.projects.length && (
                         <p className="px-2 py-3 text-sm text-muted-foreground">
