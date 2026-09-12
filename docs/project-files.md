@@ -11,6 +11,15 @@ Dotfiles are hidden by default; the visibility preference is remembered on this 
 load on expansion, and the filter searches filenames already loaded. Expanded folders stay open
 when the sidebar closes and reopens or refreshes. The drawer omits the absolute project path footer.
 
+Directory listings are cached in memory for the current connection (up to 64 recently used folders),
+isolated by machine, workspace epoch, project, and project root. Reopening a folder within 30 seconds
+reuses its listing; older cached rows remain visible while a new request runs. Collapsing a folder
+during loading does not discard or duplicate its request. First loads leave the listing quiet instead
+of flashing a loading message, with `aria-busy` exposing pending requests to assistive technology.
+Refresh, file/folder creation, and reconnect invalidate listings, including collapsed folders; errors
+still show Retry without hiding the last successful rows. Listings are not persisted to disk, and
+there is no directory watcher: use Refresh for immediate changes made outside this client.
+
 The file tree and open-file tabs share colored file-type icons on desktop and mobile. Icons match
 extensions and familiar filenames such as `Dockerfile`, `package.json`, and `.gitignore`, with a
 neutral fallback for unknown types. They are bundled with the client and adjusted for light and dark
@@ -86,6 +95,9 @@ draft retention, and link resolution.
 `e2e/files.spec.ts` exercises real daemon file reads/writes, Markdown and agent links, switching file
 tabs, discard protection, conflict review, Vim `:w`, full-height sidebar resizing, remembered width,
 reduced motion, text and icon sizes, file/folder creation, hidden-file visibility, refresh preserving
-expanded folders, a delayed editor download, and a narrow viewport. The browser tests mock
+expanded folders, cached folder reopening, a delayed editor download, and a narrow viewport.
+`apps/mobile/e2e-direct/files.spec.ts` also holds directory requests to verify quiet first loads,
+in-flight request reuse, cached rows during refresh, collapsed-folder invalidation, and error/retry.
+The browser tests mock
 control-plane account responses and agent inference, as the existing acceptance suite does; file
 operations use real temporary projects on the daemon.
