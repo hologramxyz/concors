@@ -1,7 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import { lstat, mkdir, open, opendir, realpath, rename, unlink } from "node:fs/promises";
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, join, relative, sep } from "node:path";
+import { projectPath, resolveProjectPath } from "./paths.ts";
+import { readProjectIcon } from "./project-icon.ts";
 import {
   MAX_DIRECTORY_ENTRIES,
   MAX_FILE_BYTES,
@@ -32,6 +34,12 @@ export class ProjectFiles {
       const project = snapshot.projects.find((item) => item.id === operation.projectId);
       if (!project) throw new Error("Project is no longer available.");
       const root = await realpath(this.workspace.fileDirectory(project.id, operation.directory));
+      if (operation.kind === "project-icon")
+        return {
+          type: "file.result",
+          requestId: request.requestId,
+          outcome: { status: "project-icon", icon: await readProjectIcon(root) },
+        };
       if (operation.kind === "create") {
         const entry = await createProjectEntry(root, operation.path, operation.entryKind);
         return {
@@ -106,22 +114,6 @@ export class ProjectFiles {
   }
 }
 
-function projectPath(root: string, path: string): string {
-  if (
-    path.includes("\0") ||
-    isAbsolute(path) ||
-    /^[A-Za-z]:/.test(path) ||
-    path.startsWith("\\") ||
-    path.split(/[\\/]/).includes("..")
-  )
-    throw new Error("Choose a file inside this project.");
-  const candidate = resolve(root, path.replaceAll("\\", "/"));
-  const rel = relative(root, candidate);
-  if (rel.startsWith(`..${sep}`) || rel === ".." || isAbsolute(rel))
-    throw new Error("Choose a file inside this project.");
-  return candidate;
-}
-
 async function createProjectEntry(
   root: string,
   path: string,
@@ -139,26 +131,6 @@ async function createProjectEntry(
     await handle.close();
   }
   return { name: basename(file), path: relative(root, file).split(sep).join("/"), kind };
-}
-
-async function resolveProjectPath(root: string, path: string): Promise<string> {
-  const candidate = projectPath(root, path);
-  const rel = relative(root, candidate);
-  let cursor = root;
-  for (const part of rel.split(sep).filter(Boolean)) {
-    cursor = join(cursor, part);
-    if ((await lstat(cursor)).isSymbolicLink())
-      throw new Error("Symbolic links cannot be opened in the file browser.");
-  }
-  const canonical = await realpath(candidate);
-  const resolvedRelative = relative(root, canonical);
-  if (
-    resolvedRelative.startsWith(`..${sep}`) ||
-    resolvedRelative === ".." ||
-    isAbsolute(resolvedRelative)
-  )
-    throw new Error("Choose a file inside this project.");
-  return candidate;
 }
 
 async function readProjectFile(file: string, path: string): Promise<ProjectFile> {

@@ -1,9 +1,7 @@
 import { NewWorkspaceMenu } from "@/workspace/new-workspace-menu";
-import { useContext, useEffect, useState } from "react";
-import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { WorkspaceSidebarItem } from "@/workspace/sidebar-item";
-import { repositoryImage } from "@/workspace/repository-image";
-import type { ProjectSetup } from "@concors/protocol";
+import { useProjectIcons } from "@/workspace/use-project-icons";
+import { projectIconKey } from "@/workspace/project-icons";
 import { shortcutLabel } from "@/shortcuts/bindings";
 import { AgentSidebar } from "@/agents/list";
 import { SidebarSection } from "./sidebar-section";
@@ -41,19 +39,7 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar(props: AppSidebarProps) {
-  const connection = useContext(TerminalConnectionContext);
-  const [setupState, setSetupState] = useState<{
-    connection: typeof connection;
-    setups: ProjectSetup[];
-  }>({ connection: null, setups: [] });
-  useEffect(() => {
-    return connection?.subscribeProjectSetups((setups) => setSetupState({ connection, setups }));
-  }, [connection]);
-  const images = new Map(
-    (setupState.connection === connection ? setupState.setups : [])
-      .filter((setup) => setup.mode === "clone" && setup.status === "done")
-      .map((setup) => [setup.id, repositoryImage(setup.repository)]),
-  );
+  const icons = useProjectIcons(props.workspace);
 
   return (
     <div className="sidebar-shell" data-collapsed={props.collapsed}>
@@ -158,7 +144,11 @@ export function AppSidebar(props: AppSidebarProps) {
                     props.workspace?.selection?.projectId === project.id
                   }
                   canEdit={props.canEdit}
-                  image={images.get(project.id) ?? null}
+                  icon={
+                    props.workspace
+                      ? icons.get(projectIconKey(props.workspace.epoch, project))
+                      : undefined
+                  }
                   onSelect={props.onSelectProject}
                   execute={props.execute}
                 />

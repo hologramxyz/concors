@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { execFileSync } from "node:child_process";
 import {
   mobileDesktopSocket,
   mobileDirectSocket,
@@ -9,7 +10,7 @@ import { join } from "node:path";
 import { DaemonConnection, describeDaemonEndpoint } from "@concors/daemon-client";
 import { swipe } from "../e2e/support/swipe";
 
-async function setup(page: Page, projectName = "Mobile file test") {
+async function setup(page: Page, projectName = "Mobile file test", favicon = false) {
   const root = await mkdtemp(join(tmpdir(), "concors-mobile-files-"));
   await mkdir(join(root, "src"));
   await writeFile(join(root, "src/main.ts"), "export const answer = 42;\nconsole.log(answer);\n");
@@ -18,6 +19,13 @@ async function setup(page: Page, projectName = "Mobile file test") {
     "# Mobile project files\n\nOpen [the source](src/main.ts#L2).\n",
   );
   await writeFile(join(root, ".hidden"), "private fixture\n");
+  if (favicon) {
+    execFileSync("git", ["-C", root, "init", "--quiet"]);
+    await writeFile(
+      join(root, "favicon.svg"),
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill="blue" d="M0 0h16v16H0z"/></svg>',
+    );
+  }
   const desktop = new DaemonConnection({
     endpoint: describeDaemonEndpoint(mobileDesktopSocket),
     client: { kind: "desktop", name: "mobile-file-control", version: "0.1.0" },
@@ -73,6 +81,25 @@ async function setup(page: Page, projectName = "Mobile file test") {
     },
   };
 }
+
+test("mobile project sidebar displays the repo favicon through the shared daemon", async ({
+  page,
+}) => {
+  const { ui, cleanup } = await setup(page, "Mobile favicon", true);
+  try {
+    await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+    const project = ui
+      .getByRole("navigation", { name: "Primary" })
+      .getByRole("button", { name: "Mobile favicon", exact: true });
+    await expect(project.locator('[data-project-icon="favicon"]')).toBeVisible();
+    await expect(project.locator("img")).toHaveAttribute("src", /^data:image\/svg\+xml;base64,/);
+    await project.click();
+    await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "false");
+    await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
+  } finally {
+    await cleanup();
+  }
+});
 
 test("Files swipes back from directory rows and the editor edge without activating controls or losing drafts", async ({
   page,
