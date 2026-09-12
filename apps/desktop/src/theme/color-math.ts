@@ -1,9 +1,9 @@
 /** Theme colors are schema-validated six/eight-digit hex values. */
 function rgb(color: string): [number, number, number] {
-  return [1, 3, 5].map((offset) => parseInt(color.slice(offset, offset + 2), 16)) as [
-    number,
-    number,
-    number,
+  return [
+    parseInt(color.slice(1, 3), 16),
+    parseInt(color.slice(3, 5), 16),
+    parseInt(color.slice(5, 7), 16),
   ];
 }
 
@@ -11,7 +11,7 @@ export function mixColor(color: string, toward: string, amount: number): string 
   const target = rgb(toward);
   return `#${rgb(color)
     .map((channel, index) =>
-      Math.round(channel + (target[index]! - channel) * amount)
+      Math.round(channel + (target[index as 0 | 1 | 2] - channel) * amount)
         .toString(16)
         .padStart(2, "0"),
     )
@@ -25,11 +25,12 @@ export function opaqueColor(color: string, background: string): string {
 }
 
 function luminance(color: string): number {
-  const [r, g, b] = rgb(color).map((channel) => {
+  const linear = (channel: number) => {
     const value = channel / 255;
     return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
-  });
-  return r! * 0.2126 + g! * 0.7152 + b! * 0.0722;
+  };
+  const [r, g, b] = rgb(color);
+  return linear(r) * 0.2126 + linear(g) * 0.7152 + linear(b) * 0.0722;
 }
 
 export function contrastRatio(color: string, background: string): number {
