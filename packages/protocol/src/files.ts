@@ -2,6 +2,17 @@ import { z } from "zod";
 
 export const MAX_FILE_BYTES = 1024 * 1024;
 export const MAX_DIRECTORY_ENTRIES = 2000;
+export const PROJECT_ICON_CAPABILITY = "project-icons";
+export const MAX_PROJECT_ICON_BYTES = 256 * 1024;
+export const ProjectIconSchema = z.object({
+  isGit: z.boolean(),
+  source: z
+    .string()
+    .max(Math.ceil(MAX_PROJECT_ICON_BYTES / 3) * 4 + 64)
+    .regex(/^data:image\/(?:png|svg\+xml|x-icon|webp);base64,[A-Za-z0-9+/]+=*$/)
+    .nullable(),
+});
+export type ProjectIcon = z.infer<typeof ProjectIconSchema>;
 const Path = z.string().max(4096);
 const Target = {
   directory: z.string().min(1).max(4096).optional(),
@@ -13,6 +24,7 @@ export const FileRequestSchema = z.object({
   type: z.literal("file.request"),
   requestId: z.string().uuid(),
   operation: z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("project-icon"), ...Target, path: z.literal("") }),
     z.object({ kind: z.literal("list"), ...Target }),
     z.object({ kind: z.literal("read"), ...Target }),
     z.object({
@@ -48,6 +60,7 @@ export const FileResultSchema = z.object({
   type: z.literal("file.result"),
   requestId: z.string().uuid(),
   outcome: z.discriminatedUnion("status", [
+    z.object({ status: z.literal("project-icon"), icon: ProjectIconSchema }),
     z.object({
       status: z.literal("listed"),
       entries: z.array(FileEntrySchema).max(MAX_DIRECTORY_ENTRIES),

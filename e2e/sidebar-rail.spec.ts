@@ -16,7 +16,9 @@ async function hoverControl(page: Page, control: Locator) {
 
 async function expectNoSidebarTooltips(page: Page, sidebar: Locator) {
   await page.keyboard.press("Escape");
-  for (const control of await sidebar.getByRole("button").all()) {
+  for (const control of await sidebar
+    .locator("button:not([data-workspace-id]):not([data-agent-id])")
+    .all()) {
     await control.hover();
     await control.focus();
     // Focus would open an enabled tooltip immediately, even when hover is delayed.
@@ -75,8 +77,8 @@ test("collapsed sidebar keeps workspace, machine, search and account navigation 
     }
     const alpha = rail.getByRole("button", { name: "Alpha workspace", exact: true });
     const beta = rail.getByRole("button", { name: "Beta workspace", exact: true });
-    await expect(alpha).toHaveText("A");
-    await expect(beta).toHaveText("B");
+    await expect(alpha.locator('[data-project-icon="folder"]')).toBeVisible();
+    await expect(beta.locator('[data-project-icon="folder"]')).toBeVisible();
     await expect(beta).toHaveAttribute("aria-current", "page");
     await hoverControl(page, alpha);
     await expect(page.getByRole("tooltip")).toContainText("Alpha workspace");
@@ -133,6 +135,8 @@ test("collapsed sidebar keeps workspace, machine, search and account navigation 
     await expect(rail.getByRole("button", { name: "Collapse sidebar", exact: true })).toBeFocused();
     await expect(beta).toHaveText("Beta workspace");
     await expectNoSidebarTooltips(page, rail);
+    await hoverControl(page, beta);
+    await expect(page.getByRole("tooltip")).toContainText(join(directory, "beta"));
     await expect(rail.getByText("No agents yet.", { exact: true })).toBeVisible();
     await expect(rail.getByText("No servers discovered.", { exact: true })).toBeVisible();
     expect(errors).toEqual([]);
@@ -194,6 +198,29 @@ test("collapsed agents show provider icons and live status without losing chat d
     await expect(codex).toHaveValue("Keep this draft");
     await expect(agents.getByRole("img", { name: "Agent status: Done" })).toBeVisible();
     await expectNoSidebarTooltips(page, rail);
+    const expandedCodex = rail.locator('button[data-agent-id]:has([data-provider="codex"])');
+    await expect(expandedCodex.locator('[data-provider="codex"]')).toBeVisible();
+    await hoverControl(page, expandedCodex);
+    await expect(page.getByRole("tooltip")).toContainText("Rail agents");
+    await expect(page.getByRole("tooltip")).toContainText("Codex");
+    await page.keyboard.press("Escape");
+    await codex.fill("hold");
+    await page.getByRole("button", { name: "Send message", exact: true }).click();
+    await expect(expandedCodex.getByRole("img", { name: "Agent status: Working" })).toBeVisible();
+    const badge = expandedCodex.locator("[data-agent-status-badge]");
+    const paneBadge = page.getByTestId("pane-agent-loading");
+    await expect(paneBadge).toBeVisible();
+    for (const indicator of [badge, paneBadge]) {
+      const bounds = await indicator.boundingBox();
+      const parent = await indicator.locator("..").boundingBox();
+      if (!bounds || !parent) throw new Error("Missing status badge bounds");
+      expect(bounds.x + bounds.width / 2).toBeGreaterThan(parent.x + parent.width / 2);
+      expect(bounds.y + bounds.height / 2).toBeGreaterThan(parent.y + parent.height / 2);
+    }
+    await rail.getByRole("button", { name: "Collapse sidebar", exact: true }).click();
+    await expect(expandedCodex.getByRole("img", { name: "Agent status: Working" })).toBeVisible();
+    await page.getByRole("button", { name: "Interrupt agent", exact: true }).click();
+    await expect(paneBadge).toHaveCount(0);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

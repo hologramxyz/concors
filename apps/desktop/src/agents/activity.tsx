@@ -27,11 +27,11 @@ export function AgentPaneIcon({ sessionId }: { sessionId: string | null }) {
       }
       aria-label={agent ? `Agent status: ${AGENT_STATUS[agent.status]}` : "Codex"}
     >
-      <ProviderIcon provider={agent?.provider ?? "codex"} />
+      <ProviderIcon provider={agent?.engine ?? agent?.provider ?? "codex"} />
       {running && (
         <span
           data-testid="pane-agent-loading"
-          className="absolute -top-1 -right-1 rounded-full bg-card p-px"
+          className="absolute -right-1 -bottom-1 rounded-full bg-card p-px"
         >
           <AgentLoadingIcon className="size-3" />
         </span>
