@@ -1,4 +1,12 @@
-import { useContext, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import {
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import type { WorkspaceProject } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { useFileSidebar } from "./sidebar-state";
@@ -7,6 +15,7 @@ import { resolveFileLink, type FileLocation } from "./links";
 import { FilesContext, FileLinkContext, fileScope, useFiles, type OpenFile } from "./context";
 import { useFilePrompts } from "./prompts";
 import { CompactLayoutContext } from "@/components/compact-layout";
+import { DirectoryCache } from "./directory-cache";
 export function FilesProvider({
   children,
   beforeLeaveRef,
@@ -20,6 +29,27 @@ export function FilesProvider({
   const compact = useContext(CompactLayoutContext);
   const sidebar = useFileSidebar();
   const connection = useContext(TerminalConnectionContext);
+  // Never share listings between connections/accounts or persist filenames on disk.
+  const directories = useMemo(
+    () =>
+      new DirectoryCache({
+        requestFile: (...args) => {
+          if (!connection || connection.state.status !== "ready")
+            return Promise.reject(new Error("Reconnect to browse files."));
+          return connection.requestFile(...args);
+        },
+      }),
+    [connection],
+  );
+  useEffect(() => {
+    const off = connection?.subscribe((state) => {
+      if (state.status !== "ready") directories.invalidate();
+    });
+    return () => {
+      off?.();
+      directories.invalidate();
+    };
+  }, [connection, directories]);
   const [files, setFiles] = useState<OpenFile[]>([]);
   const [active, setActive] = useState<Record<string, string | null>>({});
   const currentFiles = useRef(files);
@@ -110,7 +140,9 @@ export function FilesProvider({
     }));
   };
   return (
-    <FilesContext value={{ files, active, open, select, close, sidebar }}>{children}</FilesContext>
+    <FilesContext value={{ files, active, open, select, close, sidebar, directories }}>
+      {children}
+    </FilesContext>
   );
 }
 export function ProjectFileLinks({

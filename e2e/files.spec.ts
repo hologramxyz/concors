@@ -35,6 +35,48 @@ async function openSource(page: Page) {
   return tree;
 }
 
+test("desktop reopens cached folders without another listing request", async ({ page }) => {
+  let sourceRequests = 0;
+  await page.routeWebSocket("ws://127.0.0.1:7429/ws", (socket) => {
+    const server = socket.connectToServer();
+    server.onMessage((raw) => socket.send(raw));
+    socket.onMessage((raw) => {
+      const message = JSON.parse(raw.toString());
+      if (
+        message.type === "file.request" &&
+        message.operation.kind === "list" &&
+        message.operation.path === "src"
+      )
+        sourceRequests++;
+      server.send(raw);
+    });
+  });
+  const root = await project(page);
+  try {
+    await page.getByRole("button", { name: "Toggle project files" }).click();
+    const tree = page.getByRole("complementary", { name: "Project files" });
+    const folder = tree.getByRole("button", { name: "src", exact: true });
+    await folder.click();
+    const main = tree.getByRole("button", { name: "main.ts", exact: true });
+    await expect(main).toBeVisible();
+    await folder.click();
+    await folder.click();
+    await expect(main).toBeVisible();
+    await expect(tree.getByRole("list", { name: "src", exact: true })).toHaveAttribute(
+      "aria-busy",
+      "false",
+    );
+    expect(sourceRequests).toBe(1);
+    await expect(tree.getByText("Loading files", { exact: false })).toHaveCount(0);
+    writeFileSync(join(root, "src", "added.ts"), "export const added = true;\n");
+    await tree.getByRole("button", { name: "Refresh file tree" }).click();
+    await expect(tree.getByRole("button", { name: "added.ts", exact: true })).toBeVisible();
+    expect(sourceRequests).toBe(2);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("copy reports unavailable clipboard access and recovers without page errors", async ({
   page,
 }) => {

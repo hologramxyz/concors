@@ -82,6 +82,122 @@ async function setup(page: Page, projectName = "Mobile file test", favicon = fal
   };
 }
 
+test("folder listings stay quiet while loading, reuse cached rows and refresh collapsed folders", async ({
+  page,
+}) => {
+  const requests = new Map<string, number>();
+  const held: (() => void)[] = [];
+  let delayedPath: string | null = "";
+  let failSource = false;
+  const release = () => held.splice(0).forEach((send) => send());
+  await page.routeWebSocket(mobileDirectSocket, (socket) => {
+    const server = socket.connectToServer();
+    server.onMessage((raw) => socket.send(raw));
+    socket.onMessage((raw) => {
+      const message = JSON.parse(raw.toString());
+      if (message.type === "file.request" && message.operation.kind === "list") {
+        const path = message.operation.path as string;
+        requests.set(path, (requests.get(path) ?? 0) + 1);
+        if (path === "src" && failSource) {
+          socket.send(
+            JSON.stringify({
+              type: "file.result",
+              requestId: message.requestId,
+              outcome: { status: "error", message: "Permission denied while listing" },
+            }),
+          );
+          return;
+        }
+        if (path === delayedPath) {
+          held.push(() => server.send(raw));
+          return;
+        }
+      }
+      server.send(raw);
+    });
+  });
+  const { ui, root, cleanup } = await setup(page, "Cached files");
+  try {
+    await ui.getByRole("button", { name: "Project files", exact: true }).tap();
+    const files = ui.getByRole("region", { name: "Project files", exact: true });
+    const rootList = files.getByRole("list", { name: "Cached files files", exact: true });
+    await expect.poll(() => held.length).toBe(1);
+    await expect(rootList).toHaveAttribute("aria-busy", "true");
+    await expect(files.getByText("Loading files", { exact: false })).toHaveCount(0);
+    await expect(files.getByText("Empty folder", { exact: true })).toHaveCount(0);
+    delayedPath = "src";
+    release();
+    const folder = files.getByRole("button", { name: "src", exact: true });
+    await folder.tap();
+    const sourceList = files.getByRole("list", { name: "src", exact: true });
+    await expect.poll(() => held.length).toBe(1);
+    await expect(sourceList).toHaveAttribute("aria-busy", "true");
+    await expect(files.getByText("Loading files", { exact: false })).toHaveCount(0);
+    await expect(sourceList.getByText("Empty folder", { exact: true })).toHaveCount(0);
+    // Reopening while the first request is in flight must not start another request.
+    await folder.tap();
+    await folder.tap();
+    await expect(sourceList).toHaveAttribute("aria-busy", "true");
+    expect(requests.get("src")).toBe(1);
+    delayedPath = null;
+    release();
+    const main = files.getByRole("button", { name: "main.ts", exact: true });
+    await expect(main).toBeVisible();
+    await folder.tap();
+    await folder.tap();
+    await expect(main).toBeVisible();
+    await expect(sourceList).toHaveAttribute("aria-busy", "false");
+    expect(requests.get("src")).toBe(1);
+
+    // Refresh also invalidates collapsed children, but their old rows remain during reload.
+    await folder.tap();
+    await writeFile(join(root, "src/new.ts"), "export const fresh = true;\n");
+    delayedPath = "src";
+    await files.getByRole("button", { name: "Refresh file tree" }).tap();
+    await expect.poll(() => requests.get("")).toBe(2);
+    await expect(rootList).toHaveAttribute("aria-busy", "false");
+    await folder.tap();
+    await expect.poll(() => held.length).toBe(1);
+    await expect(main).toBeVisible();
+    await expect(sourceList).toHaveAttribute("aria-busy", "true");
+    await expect(files.getByText("Loading files", { exact: false })).toHaveCount(0);
+    expect(requests.get("src")).toBe(2);
+    delayedPath = null;
+    release();
+    await expect(files.getByRole("button", { name: "new.ts", exact: true })).toBeVisible();
+
+    // A failed refresh is actionable without blanking the last successful listing.
+    failSource = true;
+    await files.getByRole("button", { name: "Refresh file tree" }).tap();
+    await expect(sourceList.getByRole("alert")).toContainText("Permission denied while listing");
+    await expect(main).toBeVisible();
+    await expect(sourceList).toHaveAttribute("aria-busy", "false");
+    failSource = false;
+    await sourceList.getByRole("button", { name: "Retry", exact: true }).tap();
+    await expect(sourceList.getByRole("alert")).toHaveCount(0);
+    await expect(sourceList).toHaveAttribute("aria-busy", "false");
+    await expect(main).toBeVisible();
+    expect(requests.get("src")).toBe(4);
+
+    // Only a confirmed empty response should display the empty-folder state.
+    await mkdir(join(root, "empty"));
+    await files.getByRole("button", { name: "Refresh file tree" }).tap();
+    delayedPath = "empty";
+    await files.getByRole("button", { name: "empty", exact: true }).tap();
+    await expect.poll(() => held.length).toBe(1);
+    const empty = files.getByRole("list", { name: "empty", exact: true });
+    await expect(empty).toHaveAttribute("aria-busy", "true");
+    await expect(empty.getByText("Empty folder", { exact: true })).toHaveCount(0);
+    delayedPath = null;
+    release();
+    await expect(empty.getByText("Empty folder", { exact: true })).toBeVisible();
+    await expect(empty).toHaveAttribute("aria-busy", "false");
+  } finally {
+    release();
+    await cleanup();
+  }
+});
+
 test("mobile project sidebar displays the repo favicon through the shared daemon", async ({
   page,
 }) => {
@@ -316,8 +432,9 @@ test("Files explains an older daemon without sending unsupported file requests",
     server.onMessage((raw) => {
       const message = JSON.parse(raw.toString()) as { type: string; capabilities?: string[] };
       if (message.type === "daemon.ready") {
+        // Repository icons also use file.request; an older daemon supports neither capability.
         message.capabilities = message.capabilities?.filter(
-          (item) => !item.startsWith("project-file"),
+          (item) => !item.startsWith("project-file") && item !== "project-icons",
         );
         socket.send(JSON.stringify(message));
       } else socket.send(raw);
