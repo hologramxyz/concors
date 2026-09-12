@@ -1,3 +1,6 @@
+import { prepareClone } from "@/github/prepare-clone";
+import { api } from "@/auth/api";
+import { GitHubRepositoryPicker } from "@/github/repository-picker";
 import { FolderPicker } from "./folder-picker";
 import { useContext, useEffect, useState, useSyncExternalStore } from "react";
 import type { ProjectSetup } from "@concors/protocol";
@@ -17,7 +20,9 @@ export function ProjectSetupDialog({
   onAdded,
   open = true,
   mode,
+  machineId = "local",
 }: {
+  machineId?: string;
   mode: "open" | "clone";
   onClose: () => void;
   onAdded: () => void;
@@ -25,6 +30,7 @@ export function ProjectSetupDialog({
 }) {
   const connection = useContext(TerminalConnectionContext);
   const [repository, setRepository] = useState("");
+  const [source, setSource] = useState<"github" | "url">("github");
   const [customDirectory, setCustomDirectory] = useState<string | null>(null);
   const folderName =
     repository
@@ -72,11 +78,13 @@ export function ProjectSetupDialog({
         if (!open) onClose();
       }}
     >
-      <DialogContent>
+      <DialogContent size={mode === "clone" ? "wide" : "default"}>
         <DialogHeader>
           <DialogTitle>{mode === "open" ? "Open folder" : "Clone repository"}</DialogTitle>
           <DialogDescription>
-            Choose a folder on the selected machine. Its name becomes your workspace name.
+            {mode === "clone"
+              ? "Choose a repository to open on this machine."
+              : "Choose a folder on the selected machine. Its name becomes your workspace name."}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -85,22 +93,26 @@ export function ProjectSetupDialog({
             event.preventDefault();
             if (!connection?.workspace) return;
 
+            const epoch = connection.workspace.epoch;
             const id = crypto.randomUUID();
             setPending(true);
             setError(null);
             setActiveId(id);
-            void connection
-              .requestProject(
+            void (async () => {
+              const cloneUrl =
+                mode === "clone" ? await prepareClone(api, machineId, repository) : repository;
+              return connection.requestProject(
                 {
                   kind: "start",
-                  epoch: connection.workspace.epoch,
+                  epoch,
                   id,
                   mode,
                   directory: customDirectory ?? defaultDirectory,
-                  repository,
+                  repository: cloneUrl,
                 },
                 crypto.randomUUID(),
-              )
+              );
+            })()
               .then((result) => {
                 if (result.outcome.status === "error") throw new Error(result.outcome.message);
               })
@@ -114,8 +126,46 @@ export function ProjectSetupDialog({
             <FolderPicker disabled={busy || !connected} onChange={setCustomDirectory} />
           )}
           {mode === "clone" && (
+            <>
+              <div className="flex gap-2" aria-label="Repository source">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={source === "github" ? "secondary" : "ghost"}
+                  disabled={busy}
+                  onClick={() => setSource("github")}
+                >
+                  GitHub repositories
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={source === "url" ? "secondary" : "ghost"}
+                  disabled={busy}
+                  onClick={() => setSource("url")}
+                >
+                  Paste a URL
+                </Button>
+              </div>
+              {source === "github" && (
+                <GitHubRepositoryPicker
+                  selected={repository}
+                  onSelect={setRepository}
+                  disabled={busy}
+                />
+              )}
+              {machineId === "local" && (
+                <p className="text-xs text-muted-foreground">
+                  Cloning on this computer uses its local Git credentials.
+                </p>
+              )}
+            </>
+          )}
+          {mode === "clone" && (
             <label className="block space-y-2 text-sm">
-              <span>Repository URL or local path</span>
+              <span>
+                {source === "github" ? "Selected repository" : "Repository URL or local path"}
+              </span>
               <Input
                 name="repository"
                 value={repository}
@@ -126,7 +176,7 @@ export function ProjectSetupDialog({
                 disabled={busy}
               />
               <span className="text-xs text-muted-foreground">
-                Uses Git credentials already configured on this machine.
+                Public repositories can be cloned without connecting an account.
               </span>
             </label>
           )}

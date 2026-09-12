@@ -86,3 +86,11 @@ export {
   DevelopmentToolsSetupSchema,
   type DevelopmentTools,
 } from "./schemas.ts";
+
+export {
+  GitHubStatusSchema,
+  GitHubAccountsSchema,
+  GitHubRepositoriesSchema,
+  type GitHubStatus,
+  type GitHubRepository,
+} from "./github.ts";
