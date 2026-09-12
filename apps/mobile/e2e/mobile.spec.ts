@@ -100,7 +100,8 @@ test("chat-first shell reuses desktop approvals, streaming and bottom composer",
 test("mobile header, terminal and host share one background across palettes and modes", async ({
   page,
 }) => {
-  test.setTimeout(90_000);
+  // Five palette/mode checks with settings round trips through the native preference bridge.
+  test.setTimeout(150_000);
   await page.emulateMedia({ colorScheme: "light" });
   const ui = await enter(page);
   const header = ui.locator(".mobile-header");
@@ -115,6 +116,7 @@ test("mobile header, terminal and host share one background across palettes and 
     ["Concors", "light", "rgb(244, 243, 239)"],
     ["Concors", "dark", "rgb(20, 20, 20)"],
     ["Cobalt", "dark", "rgb(16, 22, 37)"],
+    ["Dusk", "dark", "rgb(26, 21, 37)"],
     ["Concors", "light", "rgb(244, 243, 239)"],
   ] as const;
   for (const [index, [palette, colorScheme, color]] of appearances.entries()) {
@@ -141,6 +143,16 @@ test("mobile header, terminal and host share one background across palettes and 
       "background-color",
       color,
     );
+    const cyan = await terminal.evaluate(() => {
+      const hex = getComputedStyle(document.documentElement)
+        .getPropertyValue("--terminal-cyan")
+        .trim();
+      return `rgb(${[1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16)).join(", ")})`;
+    });
+    await expect(
+      terminal.locator(".xterm-fg-6").filter({ hasText: "Concors demo terminal" }),
+    ).toHaveCSS("color", cyan);
+    if (palette !== "Concors") expect(cyan).not.toBe("rgb(121, 199, 212)");
     await expect(ui.locator(".mobile-terminal-controls")).toHaveCSS("background-color", color);
     await expect(page.locator('iframe[title="Concors workspace"]')).toHaveCSS(
       "background-color",
