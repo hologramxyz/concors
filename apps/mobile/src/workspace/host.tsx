@@ -225,9 +225,7 @@ function SignedInWorkspace() {
       case "switch-organization":
         if (!organizations.data?.some((org) => org.id === action.organizationId))
           throw new Error("Organization is unavailable");
-        selectMachine(null);
-        await api.setActiveOrganization(action.organizationId);
-        await auth.refresh();
+        await auth.switchOrganization(action.organizationId);
         return;
       case "push":
         if (!auth.me) throw new Error("Sign in again");
