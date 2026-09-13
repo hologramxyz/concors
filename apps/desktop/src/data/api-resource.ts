@@ -1,6 +1,6 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { ApiError } from "@concors/api-client";
-import { api } from "@/auth/api";
+import { getApiCacheScope } from "@/auth/api";
 import { ResourceCache } from "./resource-cache";
 
 let session: string | null | undefined;
@@ -9,7 +9,7 @@ const createCache = () =>
 let cache = createCache();
 /** Credentials and responses never go into persistent storage. A new session gets a fresh cache. */
 export function apiCache() {
-  const next = api.tokens.get();
+  const next = getApiCacheScope();
   if (session !== next) {
     cache.clear();
     cache = createCache();
