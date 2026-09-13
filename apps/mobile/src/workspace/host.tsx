@@ -45,7 +45,6 @@ import { WorkspaceRenderer } from "./renderer";
 import type { WorkspaceRendererHandle } from "./renderer-types";
 import { dispatchMobileApi } from "./api";
 import { assertWorkspaceActionAllowed } from "./access";
-import { useAIConsent } from "../privacy/provider";
 
 const defaults: MobilePreferences = { theme: "system", corners: "subtle", sound: false };
 export function WorkspaceHost() {
@@ -60,7 +59,6 @@ export function WorkspaceHost() {
 }
 function SignedInWorkspace() {
   const auth = useAuth();
-  const consent = useAIConsent();
   const query = useQueryClient();
   const machines = useMachines();
   const capabilities = useCapabilities();
@@ -193,9 +191,6 @@ function SignedInWorkspace() {
     switch (action.kind) {
       case "open-profile":
         if (auth.direct) auth.openProfile();
-        return;
-      case "withdraw-ai-consent":
-        await consent.withdraw();
         return;
       case "dismiss-keyboard":
         Keyboard.dismiss();
