@@ -3,6 +3,8 @@ import { z } from "zod";
 import { AgentControlsSchema, AgentFeatureValueSchema } from "./agent-controls.ts";
 import { ProviderIdSchema, ProviderEngineSchema } from "./providers.ts";
 import { providerPresets } from "./provider-presets.ts";
+import { NativeSessionSchema } from "./native-sessions.ts";
+export { NativeSessionSchema, type NativeSession } from "./native-sessions.ts";
 const Id = z.string().uuid();
 export const MAX_AGENT_MODELS = 4096;
 export const AgentModelIdSchema = z.string().min(1).max(1024);
@@ -240,14 +242,14 @@ export const AgentMessageIndexSchema = z.object({
   hasMore: z.boolean(),
 });
 export type AgentMessageIndex = z.infer<typeof AgentMessageIndexSchema>;
-export const NativeSessionSchema = z.object({
-  id: z.string().min(1).max(4096),
-  title: z.string().max(4000),
-  directory: z.string(),
-  updatedAt: z.string().datetime(),
-});
-export type NativeSession = z.infer<typeof NativeSessionSchema>;
 export const AgentOperationSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("resume-session"),
+    sessionId: Id,
+    provider: AgentProviderIdSchema,
+    nativeSessionId: z.string().min(1).max(4096),
+    expectedRevision: z.number().int().nonnegative(),
+  }),
   z.object({
     kind: z.literal("read-attachment"),
     sessionId: Id,
