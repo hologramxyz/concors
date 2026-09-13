@@ -1,3 +1,4 @@
+import { AccountAvatar } from "./account-avatar";
 import { ChevronsUpDown, LogOut, Plus, UserRound, Settings } from "lucide-react";
 import { useContext, useState, type ReactNode } from "react";
 import { CompactLayoutContext } from "@/components/compact-layout";
@@ -10,7 +11,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 
-import { initialOf, type SignedInAuth } from "@/auth/auth-state";
+import { type SignedInAuth } from "@/auth/auth-state";
 import { TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import {
@@ -47,9 +48,7 @@ export function AccountMenu({
             className={`flex items-center rounded-md hover:bg-sidebar-accent aria-expanded:bg-sidebar-accent ${collapsed ? "sidebar-rail-control" : "h-9 w-full gap-2 px-2 text-left"}`}
             aria-label={`Account: ${auth.user.name}`}
           >
-            <span className="flex size-7 shrink-0 items-center justify-center rounded-4xl bg-primary text-xs font-semibold text-primary-foreground">
-              {initialOf(auth.user)}
-            </span>
+            <AccountAvatar user={auth.user} githubEnabled />
             {!collapsed && (
               <>
                 <span className="min-w-0 flex-1">
@@ -106,15 +105,10 @@ export function MobileAccountMenu({
   const [open, setOpen] = useState(false);
   const person = auth?.user ?? profile;
   const name = person?.name || person?.email || "Your profile";
-  const avatar = person ? (
-    (person.name.trim() || person.email)[0]?.toUpperCase()
-  ) : (
-    <UserRound className="size-4" aria-hidden="true" />
-  );
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger className="mobile-account-trigger" aria-label={`Account: ${name}`}>
-        <span className="mobile-account-avatar">{avatar}</span>
+        <AccountAvatar user={person} githubEnabled={!!auth} className="mobile-account-avatar" />
         <span className="min-w-0 flex-1 truncate">{name}</span>
         <ChevronsUpDown className="size-4 text-muted-foreground" aria-hidden="true" />
       </DialogTrigger>
@@ -127,7 +121,7 @@ export function MobileAccountMenu({
         </DialogHeader>
         {machinePicker && <div className="mobile-account-machine">{machinePicker}</div>}
         <div className="mobile-account-identity">
-          <span className="mobile-account-avatar">{avatar}</span>
+          <AccountAvatar user={person} githubEnabled={!!auth} className="mobile-account-avatar" />
           <div className="min-w-0">
             <p className="truncate font-medium">{name}</p>
             <p className="truncate text-sm text-muted-foreground">

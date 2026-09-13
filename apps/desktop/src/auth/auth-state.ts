@@ -97,7 +97,7 @@ export function activeOrganization(state: SignedInAuth): Organization | undefine
 }
 
 /** Single letter for the avatar placeholder. */
-export function initialOf(user: ApiUser): string {
+export function initialOf(user: Pick<ApiUser, "name" | "email">): string {
   const source = user.name.trim() || user.email;
   return (source[0] ?? "?").toUpperCase();
 }
