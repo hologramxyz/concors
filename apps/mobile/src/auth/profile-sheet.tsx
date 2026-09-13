@@ -23,8 +23,7 @@ export function useDirectProfile() {
     try {
       if (email !== undefined && password !== undefined) {
         await session.api.signInWithEmail({ email: email.trim(), password });
-        const me = await session.api.getMe();
-        setProfile(me.user);
+        setProfile(await session.getProfile());
         setOpen(false);
       } else {
         await session.api.signOut();

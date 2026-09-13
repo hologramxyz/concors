@@ -2,6 +2,56 @@ import { expect, it } from "vitest";
 import { demoMe } from "../demo/fixtures";
 import { createDirectProfileSession } from "./direct-profile";
 
+it("resolves the same GitHub avatar as desktop using only the profile session", async () => {
+  const urls: string[] = [];
+  const session = createDirectProfileSession("wss://private.example/ws", async (input) => {
+    const url = String(input);
+    urls.push(url);
+    return new Response(
+      JSON.stringify(
+        url.endsWith("/me")
+          ? demoMe
+          : {
+              configured: true,
+              connected: true,
+              login: "test-user",
+              updatedAt: null,
+              manageUrl: null,
+            },
+      ),
+    );
+  });
+  expect(await session.getProfile()).toEqual({
+    ...demoMe.user,
+    image: "https://github.com/test-user.png?size=96",
+  });
+  expect(urls.map((url) => new URL(url).pathname)).toEqual([
+    "/profile-api/api/v1/me",
+    "/profile-api/api/v1/github/",
+  ]);
+});
+
+it.each(["disconnected", "unavailable"])(
+  "preserves the account profile when GitHub is %s",
+  async (status) => {
+    const session = createDirectProfileSession("wss://private.example/ws", async (input) => {
+      if (String(input).endsWith("/me")) return new Response(JSON.stringify(demoMe));
+      return status === "unavailable"
+        ? new Response("Not found", { status: 404 })
+        : new Response(
+            JSON.stringify({
+              configured: true,
+              connected: false,
+              login: null,
+              updatedAt: null,
+              manageUrl: null,
+            }),
+          );
+    });
+    expect(await session.getProfile()).toEqual(demoMe.user);
+  },
+);
+
 it("signs in against the private profile endpoint with isolated memory credentials", async () => {
   const requests: { url: string; init?: RequestInit }[] = [];
   const session = createDirectProfileSession(

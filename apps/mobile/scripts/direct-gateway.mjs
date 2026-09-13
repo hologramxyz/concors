@@ -2,8 +2,8 @@ import { createServer, request } from "node:http";
 
 /** Private development adapter, not a public/cloud gateway. Put Tailscale Serve in front.
  * Trust identity headers only on loopback: https://tailscale.com/docs/features/tailscale-serve#identity-headers
- * No credentials go to the daemon. Optional profile sign-in forwards only three exact
- * account routes to an operator-configured HTTPS API; no generic proxy or origin wildcard.
+ * No credentials go to the daemon. Optional profile sign-in forwards only exact account
+ * and read-only GitHub identity routes to a configured HTTPS API; no generic proxy.
  */
 export function createDirectGateway({
   daemonPort,
@@ -35,6 +35,7 @@ export function createDirectGateway({
     ["/api/auth/sign-in/email", "POST"],
     ["/api/auth/sign-out", "POST"],
     ["/api/v1/me", "GET"],
+    ["/api/v1/github/", "GET"],
   ]);
   const profileRequest = async (req, res, path) => {
     if (!profileOrigin || profileRoutes.get(path) !== req.method) {
