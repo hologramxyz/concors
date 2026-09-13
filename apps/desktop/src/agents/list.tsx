@@ -1,4 +1,6 @@
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { useContext } from "react";
+import { CompactLayoutContext } from "@/components/compact-layout";
 import { visibleAgentSessions } from "./visible-sessions";
 import { AgentLoadingIcon } from "./activity";
 import { ProviderIcon } from "./provider-icon";
@@ -16,6 +18,7 @@ export function AgentSidebar({
   workspace: WorkspaceSnapshot | null;
   compact?: boolean;
 }) {
+  const mobile = useContext(CompactLayoutContext);
   const chats = useAgents();
   const terminals = useTerminalSessions();
   const visible = visibleAgentSessions(workspace, chats, terminals);
@@ -84,7 +87,7 @@ export function AgentSidebar({
           "Project no longer available";
         return (
           <li key={agent.id}>
-            <Tooltip delayDuration={250}>
+            <Tooltip delayDuration={250} open={mobile ? false : undefined}>
               <TooltipTrigger asChild>
                 <button
                   type="button"

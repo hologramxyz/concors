@@ -137,6 +137,20 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await ui.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(ui.getByRole("log")).toContainText("Hello from Codex");
     await expect.poll(() => agents().length).toBe(1);
+    // The mobile row must retain the provider logo while desktop's working badge animates.
+    await input.fill("hold");
+    await ui.getByRole("button", { name: "Send message", exact: true }).click();
+    await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+    const agentRow = ui.locator(`button[data-agent-id="${agents()[0]!.id}"]`);
+    await expect(agentRow.locator('[data-provider="codex"] svg')).toBeVisible();
+    await expect(agentRow.getByRole("img", { name: "Agent status: Working" })).toBeVisible();
+    await expect(agentRow.locator("[data-agent-status-badge] svg .animate-spin")).toBeVisible();
+    await agentRow.focus();
+    await expect(ui.getByRole("tooltip")).toHaveCount(0);
+    await page.screenshot({ path: test.info().outputPath("mobile-agent-status.png") });
+    await agentRow.click();
+    await ui.getByRole("button", { name: "Interrupt agent", exact: true }).click();
+    await expect.poll(() => agents()[0]?.status).not.toBe("working");
     await input.fill("approve command");
     await ui.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(ui.getByRole("region", { name: "Allow command execution?" })).toBeVisible();
