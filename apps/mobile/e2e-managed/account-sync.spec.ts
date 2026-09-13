@@ -207,7 +207,6 @@ async function enter(page: Page) {
   await page.getByRole("textbox", { name: "Email", exact: true }).fill("e2e@example.com");
   await page.getByRole("textbox", { name: "Password", exact: true }).fill("test-password");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await page.getByRole("button", { name: "Allow AI data sharing", exact: true }).click();
   const ui = uiFor(page);
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
   await ui.getByRole("combobox", { name: "Machine", exact: true }).click();
@@ -292,8 +291,8 @@ test("organization drawer preserves a failed switch and isolates machine lists a
   await profile.getByRole("combobox", { name: "Organization", exact: true }).click();
   await ui.getByRole("option", { name: /Hologram team Team · admin/ }).click();
   await expect(sheet(ui, "Account")).toHaveCount(0);
-  // AI-sharing consent is intentionally scoped per organization, not inherited by a team.
-  await page.getByRole("button", { name: "Allow AI data sharing", exact: true }).click();
+  // Switching organizations retains isolation without an extra onboarding prompt.
+  await expect(page.getByRole("button", { name: "Allow AI data sharing" })).toHaveCount(0);
   await expect(ui.getByRole("button", { name: "Open sidebar", exact: true })).toBeVisible();
   await account(ui);
   await expect(profile.getByRole("combobox", { name: "Organization", exact: true })).toContainText(
@@ -308,7 +307,6 @@ test("organization drawer preserves a failed switch and isolates machine lists a
   await settings.getByRole("combobox", { name: "Organization", exact: true }).click();
   await ui.getByRole("option", { name: /Personal Personal · owner/ }).click();
   await expect(settings).toHaveCount(0);
-  await page.getByRole("button", { name: "Allow AI data sharing", exact: true }).click();
   await expect(ui.getByRole("button", { name: "Open sidebar", exact: true })).toBeVisible();
   await account(ui);
   await profile.getByRole("combobox", { name: "Machine", exact: true }).click();
