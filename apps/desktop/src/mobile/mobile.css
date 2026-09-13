@@ -312,7 +312,6 @@ body {
 }
 .mobile-sidebar-footer {
   padding: 8px 12px max(8px, env(safe-area-inset-bottom));
-  border-top: 1px solid var(--sidebar-border);
 }
 .mobile-sidebar-footer > button {
   min-height: 44px;
