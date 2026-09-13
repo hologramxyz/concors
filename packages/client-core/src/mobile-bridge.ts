@@ -84,7 +84,11 @@ export const MobileStateSchema = z.object({
   me: MeSchema.nullable(),
   /** Display-only profile verified by preview sign-in; never grants machine/cloud API access. */
   profile: z
-    .object({ name: z.string().max(500), email: z.string().max(500) })
+    .object({
+      name: z.string().max(500),
+      email: z.string().max(500),
+      image: z.string().max(2048).nullable().optional(),
+    })
     .nullable()
     .optional(),
   direct: z.boolean().default(false),

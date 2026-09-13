@@ -140,7 +140,7 @@ function SignedInWorkspace() {
           me: auth.me,
           profile:
             auth.direct && auth.profile
-              ? { name: auth.profile.name, email: auth.profile.email }
+              ? { name: auth.profile.name, email: auth.profile.email, image: auth.profile.image }
               : null,
           direct: auth.direct,
           organizations: organizations.data ?? [],
