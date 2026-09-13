@@ -1,6 +1,5 @@
-import type { Machine } from "@concors/api-client";
 import { machineStatusLabel } from "@concors/client-core";
-import { api } from "@/auth/api";
+import { useMachineList } from "@/machines/use-machines";
 import { LOCAL_HOST, loadHosts, machineAvailability, machineHost, type Host } from "./machines";
 import { useEffect, useState } from "react";
 import { ChevronDown, Server, Plus } from "lucide-react";
@@ -32,36 +31,14 @@ export function MachineSwitcher({
   compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const [cloudMachines, setCloudMachines] = useState<Machine[] | null>(null);
-  const [loadError, setLoadError] = useState(false);
-  const [generation, setGeneration] = useState(0);
-
-  // The sidebar keys this component by organization. Refresh on every opening so newly
-  // created machines appear immediately, and keep their status current while it stays open.
+  const list = useMachineList(organizationId, open && !!organizationId);
+  const cloudMachines = list.data?.filter((machine) => machine.status !== "deleted") ?? null;
+  const loadError = !!list.error;
   useEffect(() => {
     if (!open || !organizationId) return;
-    const scope = { organizationId };
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    async function refresh() {
-      try {
-        const loaded = await api.listMachines(scope);
-        if (!cancelled) {
-          setCloudMachines(loaded.filter((machine) => machine.status !== "deleted"));
-          setLoadError(false);
-        }
-      } catch {
-        if (!cancelled) setLoadError(true);
-      } finally {
-        if (!cancelled) timer = setTimeout(() => void refresh(), 15_000);
-      }
-    }
-    void refresh();
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [open, organizationId, generation]);
+    const timer = setInterval(() => void list.resource.load(15_000), 15_000);
+    return () => clearInterval(timer);
+  }, [open, organizationId, list.resource]);
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -142,7 +119,7 @@ export function MachineSwitcher({
           <DropdownMenuItem
             onSelect={(event) => {
               event.preventDefault();
-              setGeneration((n) => n + 1);
+              void list.refresh();
             }}
           >
             Retry loading cloud machines

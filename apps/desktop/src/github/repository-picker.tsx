@@ -1,7 +1,8 @@
 import { GitHubIcon } from "./icon";
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState, useSyncExternalStore } from "react";
 import { Check, Lock, Search, RefreshCw, Plus, LoaderCircle } from "lucide-react";
-import type { GitHubRepository } from "@concors/api-client";
+import { ApiError, type GitHubRepository } from "@concors/api-client";
+import { apiCache } from "@/data/api-resource";
 import { api } from "@/auth/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,6 +50,7 @@ export function GitHubRepositoryPicker(props: PickerProps) {
         <Repositories
           key={github.status.updatedAt}
           {...props}
+          connection={github.status.updatedAt}
           generation={github.generation}
           accounts={github.accounts ?? []}
           accountsLoading={github.accounts === null && !github.error}
@@ -61,7 +63,9 @@ export function GitHubRepositoryPicker(props: PickerProps) {
           <p className="text-sm text-muted-foreground">
             {github.status?.configured === false
               ? "GitHub is not available. You can paste a repository URL instead."
-              : "Connect GitHub to browse your private and organization repositories."}
+              : !github.status
+                ? "Could not check your GitHub connection. Use Refresh GitHub to try again."
+                : "Connect GitHub to browse your private and organization repositories."}
           </p>
           {github.status?.configured && (
             <Button type="button" disabled={github.busy} onClick={() => void github.connect()}>
@@ -120,10 +124,12 @@ function Repositories({
   selected,
   disabled,
   generation,
+  connection,
   accounts,
   accountsLoading,
 }: PickerProps & {
   generation: number;
+  connection: string | null;
   accounts: { id: number; login: string }[];
   accountsLoading: boolean;
 }) {
@@ -143,12 +149,23 @@ function Repositories({
     nextPage: number | null;
     error: string | null;
   }>({ key: "", installation: null, generation: -1, repos: [], nextPage: null, error: null });
+  const resource = apiCache().resource(`github:repos:${connection}:${installation}:${page}`, () => {
+    if (installation === null) throw new Error("Choose a GitHub account");
+    return api.githubRepositories(installation, page);
+  });
+  const snapshot = useSyncExternalStore(resource.subscribe, resource.getSnapshot);
+  const cached = snapshot.data;
+  const clearSelection = useEffectEvent(() => onSelect(""));
   useEffect(() => {
     if (!installation) return;
     let cancelled = false;
-    void api
-      .githubRepositories(installation, page)
-      .then((data) => {
+    void resource
+      .load()
+      .then(() => {
+        const snapshot = resource.getSnapshot();
+        if (snapshot.error) throw snapshot.error;
+        const data = snapshot.data;
+        if (!data) return;
         if (!cancelled)
           setResult((current) => ({
             key,
@@ -163,12 +180,19 @@ function Repositories({
           }));
       })
       .catch((cause: unknown) => {
+        if (!cancelled && cause instanceof ApiError && [401, 403].includes(cause.status))
+          clearSelection();
         if (!cancelled)
           setResult((current) => ({
             key,
             installation,
             generation,
-            repos: current.installation === installation ? current.repos : [],
+            repos:
+              cause instanceof ApiError && [401, 403].includes(cause.status)
+                ? []
+                : current.installation === installation
+                  ? current.repos
+                  : [],
             nextPage: null,
             error: cause instanceof Error ? cause.message : "Could not list repositories",
           }));
@@ -176,11 +200,15 @@ function Repositories({
     return () => {
       cancelled = true;
     };
-  }, [installation, page, generation, key]);
-  const loading = result.key !== key;
+  }, [installation, page, generation, key, resource, snapshot.revision]);
+  const loading = result.key !== key && !cached;
   // Keep the current rows (and their scroll container) mounted during background refresh.
-  const repos = result.installation === installation ? result.repos : [];
-  const nextPage = loading ? null : result.nextPage;
+  const repos = result.installation === installation ? result.repos : (cached?.repositories ?? []);
+  const nextPage = loading
+    ? null
+    : result.key === key
+      ? result.nextPage
+      : (cached?.nextPage ?? null);
   const error = loading ? null : result.error;
   const visible = repos.filter((repo) => repo.fullName.toLowerCase().includes(query.toLowerCase()));
   if (accountsLoading) return <RepositorySkeleton />;
@@ -259,7 +287,7 @@ function Repositories({
                   )}
                 </button>
               ))}
-              {!loading && visible.length === 0 && (
+              {!loading && !error && visible.length === 0 && (
                 <p className="p-4 text-sm text-muted-foreground">
                   {query ? "No matches in the loaded repositories." : "No repositories available."}
                 </p>

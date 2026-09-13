@@ -1,6 +1,8 @@
 import type { ApiClient, SignInInput, SignUpInput } from "@concors/api-client";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { clearApiCache } from "@/data/api-resource";
+
 import { interpretProbe, type AuthState, type SessionProbe } from "./auth-state.ts";
 
 export type SignUpResult = "signed-in" | "verify-email";
@@ -32,7 +34,10 @@ export function useAuth(api: ApiClient): Auth {
     const probe = await probeSession(api);
     const { state: next, dropToken } = interpretProbe(probe, hadToken);
     if (ticket !== generation.current) return next;
-    if (dropToken) api.tokens.set(null);
+    if (dropToken) {
+      api.tokens.set(null);
+      clearApiCache();
+    }
     setState(next);
     return next;
   }, [api]);
@@ -66,6 +71,7 @@ export function useAuth(api: ApiClient): Auth {
 
   const signOut = useCallback(async () => {
     generation.current++;
+    clearApiCache();
     setState({ status: "signed-out" });
     try {
       await api.signOut();
