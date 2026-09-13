@@ -47,7 +47,7 @@ export function createDemoServer() {
         session: structuredClone(demoTerminal),
         sequence: 0,
         output:
-          "\x1b[36mConcors demo terminal\x1b[0m\r\nCommands are simulated in this preview.\r\n\r\n~/concors $ ",
+          "\x1b[36mConcourse demo terminal\x1b[0m\r\nCommands are simulated in this preview.\r\n\r\n~/concors $ ",
         owner: null,
       },
     ],

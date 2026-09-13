@@ -68,6 +68,10 @@ async function enter(page: Page) {
   await page.goto("/");
   await page.getByRole("button", { name: "Explore demo" }).click();
   const ui = workspace(page);
+  await expect(ui.locator('meta[name="concourse-source-revision"]')).toHaveAttribute(
+    "content",
+    /^[a-f0-9]{40,64}(-dirty)?$/,
+  );
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
   return ui;
 }
@@ -113,11 +117,11 @@ test("mobile header, terminal and host share one background across palettes and 
   const terminal = ui.getByLabel("Terminal output", { exact: true });
   await expect(terminal).toBeVisible();
   const appearances = [
-    ["Concourse", "light", "rgb(244, 243, 239)"],
-    ["Concourse", "dark", "rgb(20, 20, 20)"],
+    ["Concors", "light", "rgb(244, 243, 239)"],
+    ["Concors", "dark", "rgb(20, 20, 20)"],
     ["Cobalt", "dark", "rgb(16, 22, 37)"],
     ["Dusk", "dark", "rgb(26, 21, 37)"],
-    ["Concourse", "light", "rgb(244, 243, 239)"],
+    ["Concors", "light", "rgb(244, 243, 239)"],
   ] as const;
   for (const [index, [palette, colorScheme, color]] of appearances.entries()) {
     if (index > 0) {
@@ -152,7 +156,7 @@ test("mobile header, terminal and host share one background across palettes and 
     await expect(
       terminal.locator(".xterm-fg-6").filter({ hasText: "Concourse demo terminal" }),
     ).toHaveCSS("color", cyan);
-    if (palette !== "Concourse") expect(cyan).not.toBe("rgb(121, 199, 212)");
+    if (palette !== "Concors") expect(cyan).not.toBe("rgb(121, 199, 212)");
     await expect(ui.locator(".mobile-terminal-controls")).toHaveCSS("background-color", color);
     await expect(page.locator('iframe[title="Concourse workspace"]')).toHaveCSS(
       "background-color",
