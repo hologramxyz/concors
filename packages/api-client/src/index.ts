@@ -94,3 +94,5 @@ export {
   type GitHubStatus,
   type GitHubRepository,
 } from "./github.ts";
+
+export { MachineIconSchema } from "./machine-icon.ts";

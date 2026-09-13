@@ -468,6 +468,8 @@ function AppContent() {
                           <MachinesView
                             key={activeOrganization(account)?.id}
                             auth={account}
+                            onSelectLocal={() => selectMachine(LOCAL_HOST)}
+                            localSelected={selectedHost.machineId === "local"}
                             focusedMachineId={focusedCloudMachineId}
                             creating={creatingMachine}
                             onCreatingChange={setCreatingMachine}

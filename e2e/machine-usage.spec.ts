@@ -90,7 +90,7 @@ test("machine cards display usage, poll, and identify stale or missing reports",
   });
   await page.goto("/");
   await page.getByRole("button", { name: "Switch machine" }).click();
-  await page.getByRole("menuitem", { name: "Add a machine" }).click();
+  await page.getByRole("menuitem", { name: "Manage machines" }).click();
   await expect(page.getByRole("heading", { name: "Machines", level: 2 })).toBeVisible();
   const create = page.getByRole("button", { name: "New machine", exact: true });
   await expect(create).toBeEnabled();

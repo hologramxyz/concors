@@ -1,3 +1,4 @@
+import { MachineIconSchema } from "./machine-icon.ts";
 import { z } from "zod";
 
 /**
@@ -123,6 +124,7 @@ export const DevelopmentToolsSetupSchema = z.object({
 });
 
 export const MachineSchema = z.object({
+  icon: MachineIconSchema.optional(),
   id: z.string(),
   organizationId: z.string(),
   createdByUserId: z.string().nullable(),

@@ -101,7 +101,7 @@ async function setup(page: Page) {
   const navigate = async () => {
     await page.goto("/");
     await page.getByRole("button", { name: "Switch machine" }).click();
-    await page.getByRole("menuitem", { name: "Add a machine" }).click();
+    await page.getByRole("menuitem", { name: "Manage machines" }).click();
     await expect(page.getByRole("heading", { name: "Machines", level: 2 })).toBeVisible();
   };
   await navigate();
