@@ -130,7 +130,7 @@ The host uses the same `DaemonConnection` protocol as desktop and obtains the ac
 machine ID from its workspace snapshot. Cloud login is not needed for the workspace;
 inventory, billing, provisioning and push API calls remain blocked in this mode.
 The footer is a profile entry, not a machine status label. Tap **Your profile → Sign in**
-to verify the same Concourse account used on desktop; its actual name and email then
+to verify the same Concourse account used on desktop; its actual name, email and avatar then
 appear in the footer/drawer. This optional profile session is isolated in memory and
 never grants cloud machine access or changes the desktop connection. Passwords and
 session tokens stay in the outer host, not the embedded workspace renderer. Reloading
@@ -150,7 +150,9 @@ forward cookies, account authorization or Tailscale identity headers to the daem
 For optional profile login, set `CONCORS_DIRECT_PROFILE_API_URL` on the adapter to the
 same exact HTTPS account API origin used by desktop. This is disabled by default.
 The private `/desktop-daemon/profile-api` route only forwards email sign-in, sign-out,
-and `/api/v1/me`, with exact methods, bounded bodies, no redirects and no cookie forwarding.
+`/api/v1/me`, and read-only `/api/v1/github/` identity for the desktop avatar, with exact
+methods, bounded bodies, no redirects and no cookie forwarding. GitHub repositories,
+account management and connection changes are not exposed by this profile-only route.
 The same Tailscale identity/origin check protects these routes. It does not substitute
 a Tailscale profile or copy a desktop session token.
 
