@@ -1,4 +1,5 @@
-import { ArrowLeft, ArrowRight, Check, Folder, GitBranch, LoaderCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Folder, GitBranch, LoaderCircle, Link } from "lucide-react";
+import { GitHubIcon } from "@/github/icon";
 import { prepareClone } from "@/github/prepare-clone";
 import { api } from "@/auth/api";
 import { GitHubRepositoryPicker } from "@/github/repository-picker";
@@ -140,12 +141,12 @@ export function ProjectSetupDialog({
               : "Choose a folder on the selected machine. Its name becomes your workspace name."}
           </DialogDescription>
           {mode === "clone" && (
-            <ol aria-label="Clone steps" className="mt-3 flex items-center gap-3 text-xs">
+            <ol aria-label="Clone steps" className="mt-2 flex items-center gap-3 text-xs">
               <li
                 aria-current={choosing ? "step" : undefined}
                 className={`flex items-center gap-2 ${choosing ? "text-foreground" : "text-muted-foreground"}`}
               >
-                <span className="flex size-5 items-center justify-center rounded-full border">
+                <span className="flex size-5 items-center justify-center rounded-full bg-foreground text-background">
                   {choosing ? "1" : <Check className="size-3" />}
                 </span>
                 Repository
@@ -155,7 +156,9 @@ export function ProjectSetupDialog({
                 aria-current={!choosing ? "step" : undefined}
                 className={`flex items-center gap-2 ${!choosing ? "text-foreground" : "text-muted-foreground"}`}
               >
-                <span className="flex size-5 items-center justify-center rounded-full border">
+                <span
+                  className={`flex size-5 items-center justify-center rounded-full ${choosing ? "border" : "bg-foreground text-background"}`}
+                >
                   2
                 </span>
                 Destination
@@ -215,23 +218,34 @@ export function ProjectSetupDialog({
               {/* Keep the picker mounted while choosing the destination so Back retains rows, search and scroll. */}
               <div className={choosing ? "flex min-h-0 flex-1 flex-col gap-3" : "hidden"}>
                 {githubEnabled && (
-                  <div className="flex shrink-0 gap-1" aria-label="Repository source">
+                  <div
+                    className="flex w-fit max-w-full shrink-0 gap-1 rounded-lg bg-muted/50 p-1"
+                    aria-label="Repository source"
+                  >
                     <Button
                       type="button"
                       size="sm"
-                      variant={source === "github" ? "secondary" : "ghost"}
+                      variant="ghost"
+                      className={
+                        source === "github" ? "bg-background shadow-xs" : "text-muted-foreground"
+                      }
                       aria-pressed={source === "github"}
                       onClick={() => setSource("github")}
                     >
+                      <GitHubIcon className="size-4" aria-hidden="true" />
                       GitHub repositories
                     </Button>
                     <Button
                       type="button"
                       size="sm"
-                      variant={source === "url" ? "secondary" : "ghost"}
+                      variant="ghost"
+                      className={
+                        source === "url" ? "bg-background shadow-xs" : "text-muted-foreground"
+                      }
                       aria-pressed={source === "url"}
                       onClick={() => setSource("url")}
                     >
+                      <Link className="size-4" aria-hidden="true" />
                       Paste a URL
                     </Button>
                   </div>
