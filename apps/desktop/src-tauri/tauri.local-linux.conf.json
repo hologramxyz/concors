@@ -1,0 +1,8 @@
+{
+  "bundle": {
+    "targets": ["deb"],
+    "resources": {
+      "resources/local-daemon/concors-daemon/": "daemon/"
+    }
+  }
+}

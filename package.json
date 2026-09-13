@@ -20,6 +20,7 @@
     "build": "pnpm -r run build",
     "desktop:dev": "pnpm --filter @concors/desktop dev",
     "desktop:build": "pnpm --filter @concors/desktop build",
+    "desktop:package:linux": "node apps/desktop/scripts/package-linux.ts",
     "desktop:web:dev": "pnpm --filter @concors/desktop web:dev",
     "desktop:web:build": "pnpm --filter @concors/desktop web:build",
     "mobile:dev": "pnpm --filter @concors/mobile dev",
