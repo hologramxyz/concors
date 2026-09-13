@@ -39,6 +39,10 @@ previous export for rollback and preserve the daemon proxy and unrelated routes.
 This is desktop feature reuse with mobile navigation, not identical desktop layout.
 Native iOS keyboard, dictation, accessibility, glass and background/resume behavior still
 need installed-device testing. Safari preview testing cannot establish those results.
+The audit also found and fixed a shared telemetry regression: repeated missing samples
+could restart the initial grace period forever. Both clients now stop checking after the
+initial timeout and show unavailable immediately when a real reading is lost.
+
 Production account, push/deletion and store-review evidence remains tracked in the
 release packet; this audit does not mark those gates verified. Removing the AI-sharing
 page is a product change, not a claim of storefront approval.
