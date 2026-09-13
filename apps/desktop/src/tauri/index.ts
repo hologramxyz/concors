@@ -19,3 +19,5 @@ export {
   dismissNativeNotification,
   onNativeNotificationClick,
 } from "./notifications";
+
+export { nativeWindow, type WindowChromeState, type ResizeDirection } from "./window";

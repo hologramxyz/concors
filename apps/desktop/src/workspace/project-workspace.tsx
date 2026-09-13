@@ -1,3 +1,5 @@
+import { WindowControls } from "@/window/controls";
+import { useWindowChrome } from "@/window/context";
 import { FilesToggle } from "@/files/sidebar";
 import { FileTab, FileTabLabel } from "@/files/file-tab";
 import { useFiles, fileScope } from "@/files/context";
@@ -42,6 +44,7 @@ export function ProjectWorkspace({
 }) {
   const connection = useContext(TerminalConnectionContext);
   const files = useFiles();
+  const windowChrome = useWindowChrome();
   const scope = fileScope(
     workspace.machineId,
     workspace.epoch,
@@ -182,10 +185,14 @@ export function ProjectWorkspace({
     <ProjectFileLinks project={project}>
       <div className="flex h-full min-h-0 flex-col">
         <h1 className="sr-only">{project.name}</h1>
-        <div className="flex min-h-9 shrink-0 items-center gap-2 px-2 py-1">
+        <div
+          data-tauri-drag-region={windowChrome.enabled ? "true" : undefined}
+          className="flex min-h-9 shrink-0 items-center gap-2 px-2 py-1 select-none"
+        >
           {sidebarToggle}
           <div
             className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
+            data-tauri-drag-region={windowChrome.enabled ? "true" : undefined}
             aria-label="Project tabs"
           >
             {project.tabs.map((tab, index) => (
@@ -366,7 +373,9 @@ export function ProjectWorkspace({
               onCreate={createTab}
             />
           </div>
+          {windowChrome.enabled && <div data-tauri-drag-region className="h-7 w-8 shrink-0" />}
           <FilesToggle />
+          {!files.sidebar.open && <WindowControls />}
         </div>
         {launchError && (
           <div

@@ -1,3 +1,5 @@
+import { WindowControls, StandaloneWindowBar } from "@/window/controls";
+import { useWindowChrome } from "@/window/context";
 import { isTauri } from "@/tauri";
 import { Button } from "@/components/ui/button";
 import { ColorThemeProvider } from "@/theme/color-theme-provider";
@@ -56,6 +58,7 @@ export function App() {
   ) {
     return (
       <div className="flex h-dvh flex-col items-center justify-center gap-3 bg-background p-8 text-center text-foreground">
+        <StandaloneWindowBar />
         <h1 className="text-xl font-semibold">
           {setup === "success" ? "Card setup submitted" : "Card setup cancelled"}
         </h1>
@@ -76,6 +79,7 @@ export function App() {
   );
 }
 function AppContent() {
+  const windowChrome = useWindowChrome();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const toggleSidebar = (collapsed: boolean) => {
     setSidebarCollapsed(collapsed);
@@ -282,12 +286,15 @@ function AppContent() {
   // Nothing but the sign-in screen exists for a signed-out user. All hooks run above this line.
   if (auth.state.status !== "signed-in") {
     return (
-      <AuthScreen
-        state={auth.state}
-        onSignIn={auth.signIn}
-        onSignUp={auth.signUp}
-        onRetry={() => void auth.refresh()}
-      />
+      <>
+        <StandaloneWindowBar />
+        <AuthScreen
+          state={auth.state}
+          onSignIn={auth.signIn}
+          onSignUp={auth.signUp}
+          onRetry={() => void auth.refresh()}
+        />
+      </>
     );
   }
   const account = auth.state;
@@ -393,12 +400,16 @@ function AppContent() {
                     )}
                     <div className="workspace-surface my-2 mr-2 flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-background shadow-xs">
                       {!(view === "projects" && activeProject) && (
-                        <header className="flex h-11 shrink-0 items-center gap-2 border-b px-4">
-                          <h1 className="truncate text-ui font-medium">
+                        <header
+                          data-tauri-drag-region={windowChrome.enabled ? "deep" : undefined}
+                          className="flex h-11 shrink-0 items-center gap-2 border-b pr-2 pl-4 select-none"
+                        >
+                          <h1 className="min-w-0 flex-1 truncate text-ui font-medium">
                             {view === "settings"
                               ? settingsNavItemFor(settingsPage).label
                               : navItemFor(view).label}
                           </h1>
+                          <WindowControls />
                         </header>
                       )}
                       {(error || localStartupError) && (
