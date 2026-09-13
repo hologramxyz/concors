@@ -29,3 +29,21 @@ it("retains existing-machine access and SSH key management", () => {
       assertCompanionApiAllowed({ method, args: [] } as unknown as MobileApiCall),
     ).not.toThrow();
 });
+it("dispatches only the explicit GitHub and machine metadata methods", async () => {
+  const calls: MobileApiCall[] = [
+    { method: "githubStatus", args: [] },
+    { method: "connectGitHub", args: [] },
+    { method: "disconnectGitHub", args: [] },
+    { method: "githubAccounts", args: [2] },
+    { method: "githubRepositories", args: [123, 3] },
+    { method: "prepareGitHubMachine", args: ["machine", "org/repo"] },
+    { method: "renameMachine", args: ["machine", "new-name"] },
+    { method: "updateMachineIcon", args: ["machine", "🚀"] },
+  ];
+  for (const call of calls) {
+    const method = vi.fn().mockResolvedValue({ ok: true });
+    const api = { [call.method]: method } as unknown as ApiClient;
+    await expect(dispatchMobileApi(api, call)).resolves.toEqual({ ok: true });
+    expect(method).toHaveBeenCalledExactlyOnceWith(...call.args);
+  }
+});
