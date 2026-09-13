@@ -1,5 +1,6 @@
 import { machineAvailability, machineStatusLabel, type MobileState } from "@concors/client-core";
-import { Server } from "lucide-react";
+import { Monitor } from "lucide-react";
+import { MachineIcon } from "@/machines/machine-icon";
 import { MobileSelect } from "./select";
 
 /** The same current-machine status in the sidebar shortcut and account drawer. */
@@ -26,7 +27,7 @@ export function MobileMachinePicker({
                   {
                     value: host.machineId,
                     label: "Desktop daemon",
-                    icon: <Server />,
+                    icon: <Monitor />,
                     description: host.phase === "ready" ? "Connected · real workspace" : host.phase,
                   },
                 ]
@@ -34,7 +35,7 @@ export function MobileMachinePicker({
             : host.machines.map((machine) => ({
                 value: machine.id,
                 label: machine.name,
-                icon: <Server />,
+                icon: <MachineIcon icon={machine.icon} />,
                 description: machineStatusLabel(
                   machineAvailability(machine),
                   host.machineId === machine.id && host.phase === "ready",

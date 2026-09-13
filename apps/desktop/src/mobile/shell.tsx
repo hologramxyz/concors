@@ -27,11 +27,10 @@ import { AgentSidebar } from "@/agents/list";
 import { ChatPane } from "@/agents/chat";
 import { AgentDraftScopeContext } from "@/agents/draft";
 import { TerminalPane } from "@/terminal/terminal-pane";
-import { ProjectActions } from "@/workspace/project-actions";
+import { WorkspaceSidebarItem } from "@/workspace/sidebar-item";
 import { ProjectSetupDialog } from "@/workspace/project-setup-dialog";
 import { NewWorkspaceMenu } from "@/workspace/new-workspace-menu";
 import { useNewWorkspace } from "@/workspace/use-new-workspace";
-import { ProjectImage } from "@/workspace/project-image";
 import { useProjectIcons } from "@/workspace/use-project-icons";
 import { projectIconKey } from "@/workspace/project-icons";
 import { SidebarSection } from "@/components/sidebar-section";
@@ -515,7 +514,7 @@ function MobileWorkspaceContent({
                   </div>
                   <nav aria-label="Primary" className="mobile-sidebar-content">
                     <SidebarSection
-                      title="Projects"
+                      title="Workspaces"
                       action={
                         <NewWorkspaceMenu
                           disabled={!canEdit || newWorkspace.busy}
@@ -525,30 +524,18 @@ function MobileWorkspaceContent({
                       }
                     >
                       <ul>
-                        {workspace?.projects.map((item) => {
-                          const icon = icons.get(projectIconKey(workspace.epoch, item));
-                          return (
-                            <li
-                              className={`group mobile-project ${project?.id === item.id ? "bg-sidebar-accent" : ""}`}
-                              key={item.id}
-                            >
-                              <button
-                                aria-current={project?.id === item.id ? "page" : undefined}
-                                title={item.directory}
-                                onClick={() => selectProject(item.id)}
-                              >
-                                <ProjectImage
-                                  key={icon?.source ?? "fallback"}
-                                  source={icon?.source ?? null}
-                                  isGit={icon?.isGit ?? false}
-                                  name={item.name}
-                                />
-                                <span className="truncate">{item.name}</span>
-                              </button>
-                              <ProjectActions project={item} canEdit={canEdit} execute={execute} />
-                            </li>
-                          );
-                        })}
+                        {workspace?.projects.map((item) => (
+                          <WorkspaceSidebarItem
+                            key={item.id}
+                            project={item}
+                            compact={false}
+                            selected={project?.id === item.id}
+                            canEdit={canEdit}
+                            icon={icons.get(projectIconKey(workspace.epoch, item))}
+                            onSelect={selectProject}
+                            execute={execute}
+                          />
+                        ))}
                       </ul>
                       {!workspace?.projects.length && (
                         <p className="px-2 py-3 text-sm text-muted-foreground">
