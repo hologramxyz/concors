@@ -1,6 +1,6 @@
-import type { MachineSubscription } from "@concors/api-client";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
+import { useApiResource } from "@/data/api-resource";
 import { api } from "@/auth/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,30 +25,18 @@ export function SubscriptionsSection({
   readonly organizationId: string;
   readonly organizationName: string;
 }) {
-  const [subscriptions, setSubscriptions] = useState<MachineSubscription[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [generation, setGeneration] = useState(0);
+  const query = useApiResource(`subscriptions:${organizationId}`, () =>
+    api.listMachineSubscriptions({ organizationId }),
+  );
+  const subscriptions = query.data;
+  const error = query.error ? describeMachinesError(query.error) : null;
   useEffect(() => {
-    let cancelled = false;
-    void api
-      .listMachineSubscriptions({ organizationId })
-      .then((list) => {
-        if (cancelled) return;
-        setSubscriptions(list);
-        setError(null);
-      })
-      .catch((cause: unknown) => {
-        if (!cancelled) setError(describeMachinesError(cause));
-      });
-    return () => {
-      cancelled = true;
+    const refresh = () => {
+      void query.resource.load();
     };
-  }, [organizationId, generation]);
-  useEffect(() => {
-    const refresh = () => setGeneration((n) => n + 1);
     window.addEventListener("focus", refresh);
     return () => window.removeEventListener("focus", refresh);
-  }, []);
+  }, [query.resource]);
 
   return (
     <Section
@@ -106,7 +94,7 @@ export function SubscriptionsSection({
           </li>
         ))}
       </ul>
-      <Button variant="ghost" size="sm" onClick={() => setGeneration((n) => n + 1)}>
+      <Button variant="ghost" size="sm" onClick={() => void query.refresh()}>
         Refresh subscriptions
       </Button>
     </Section>

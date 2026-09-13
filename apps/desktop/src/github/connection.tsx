@@ -15,7 +15,9 @@ export function GitHubConnection({ github }: { readonly github: ReturnType<typeo
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
               {!status
-                ? "Checking connection…"
+                ? error
+                  ? "Could not check connection."
+                  : "Checking connection…"
                 : !status.configured
                   ? "GitHub integration is not available yet."
                   : status.connected
