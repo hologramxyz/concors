@@ -23,6 +23,7 @@ export * from "./terminal-profiles.ts";
 export * from "./projects.ts";
 
 export * from "./agents.ts";
+export * from "./native-sessions.ts";
 export * from "./agent-models.ts";
 export * from "./agent-controls.ts";
 
