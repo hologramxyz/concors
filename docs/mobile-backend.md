@@ -69,7 +69,8 @@ See [direct setup](../apps/mobile/README.md#first-connect-to-the-same-daemon-as-
 Files use the same schema-validated `file.request`/`file.result` protocol. The daemon
 must advertise `project-files`, and `project-file-create` for creation. Chat, tool
 events, approvals, tabs/panes, file guards and terminal ownership remain shared with
-desktop. Real connections require explicit account/direct-endpoint-scoped AI consent.
+desktop. The client has no separate AI-sharing onboarding gate; managed authentication
+and private direct-endpoint authorization remain required.
 
 ## Verification and release gates
 
