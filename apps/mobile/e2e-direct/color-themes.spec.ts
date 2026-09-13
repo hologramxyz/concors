@@ -16,7 +16,8 @@ test("mobile applies built-in and local-file palettes through the native prefere
       "background-color",
       color,
     );
-    await expect(ui.getByTestId("mobile-workspace")).toHaveCSS("background-color", color);
+    // The wrapper stays transparent for the glass swipe rim; the content owns the canvas.
+    await expect(ui.locator(".mobile-main")).toHaveCSS("background-color", color);
   };
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
   await ui.getByRole("button", { name: "Account: Your profile", exact: true }).click();
