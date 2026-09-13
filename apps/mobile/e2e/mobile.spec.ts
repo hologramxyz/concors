@@ -341,7 +341,7 @@ test("sidebar pushes the workspace and settings opens as a drawer over the same 
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
   const sidebar = ui.getByRole("dialog", { name: "Workspace sidebar" });
   await expect(sidebar).toBeVisible();
-  await expect(sidebar.getByText("Projects", { exact: true })).toBeVisible();
+  await expect(sidebar.getByText("Workspaces", { exact: true })).toBeVisible();
   await expect(sidebar.getByText("Agents", { exact: true })).toBeVisible();
   await expect(sidebar.getByText("Servers", { exact: true })).toBeVisible();
   await expect
