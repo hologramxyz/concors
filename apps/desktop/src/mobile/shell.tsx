@@ -37,7 +37,7 @@ import { projectIconKey } from "@/workspace/project-icons";
 import { SidebarSection } from "@/components/sidebar-section";
 import { NewTabMenu } from "@/workspace/new-tab-menu";
 import { nextWorkspaceTabName } from "@concors/protocol";
-import { CommandPalette } from "@/components/command-palette";
+import { WorkspaceSearch } from "@/search/workspace-search";
 import { MobileAccountMenu } from "@/components/account-menu";
 import { Button } from "@/components/ui/button";
 import { embeddedConnection, getHostState, hostAction, subscribeHost } from "./bridge";
@@ -105,7 +105,7 @@ function MobileWorkspaceContent({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [addingMachine, setAddingMachine] = useState(false);
   const [settingsPage, setSettingsPage] = useState<SettingsPage | "machines">("account");
-  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [addingProject, setAddingProject] = useState<"open" | "clone" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -389,7 +389,7 @@ function MobileWorkspaceContent({
     !sidebarOpen &&
     !files.sidebar.open &&
     !settingsOpen &&
-    !paletteOpen &&
+    !searchOpen &&
     !addingProject &&
     !addingMachine;
   const cycleTab = (delta: number) => {
@@ -399,8 +399,8 @@ function MobileWorkspaceContent({
     const next = entries[(index + delta + entries.length) % entries.length];
     if (next) select({ projectId: project.id, tabId: next.tab.id, paneId: next.pane.id });
   };
-  const commandsAvailable = unobscured || paletteOpen;
-  useCommand("search", commandsAvailable, () => setPaletteOpen((open) => !open));
+  const commandsAvailable = unobscured || searchOpen;
+  useCommand("search", commandsAvailable, () => setSearchOpen((open) => !open));
   useCommand("settings", commandsAvailable, () => openSettings());
   useCommand("shortcuts", commandsAvailable, () => openSettings("shortcuts"));
   useCommand("new-project", commandsAvailable && canEdit, newWorkspace.start);
@@ -488,7 +488,7 @@ function MobileWorkspaceContent({
                       icon="search"
                       className="mobile-icon mobile-glass ml-auto"
                       aria-label="Search workspace"
-                      onClick={() => setPaletteOpen(true)}
+                      onClick={() => setSearchOpen(true)}
                     >
                       <Search />
                     </NativeHeaderButton>
@@ -802,12 +802,19 @@ function MobileWorkspaceContent({
                   {newWorkspace.error}
                 </p>
               )}
-              <CommandPalette
+              <WorkspaceSearch
+                key={`${host.machineId}:${workspace?.epoch}`}
+                machine={
+                  host.machines.find((machine) => machine.id === host.machineId)?.name ??
+                  "this machine"
+                }
+                activeProjectId={project?.id}
                 projects={workspace?.projects ?? []}
                 canSelectProject={!!workspace}
                 onSelectProject={selectProject}
-                open={paletteOpen}
-                onOpenChange={setPaletteOpen}
+                onSelectPane={select}
+                open={searchOpen}
+                onOpenChange={setSearchOpen}
                 onNavigate={(view) => {
                   if (view === "settings") openSettings();
                   else if (view === "machines") {

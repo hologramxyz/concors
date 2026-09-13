@@ -1,5 +1,5 @@
 export const BINDINGS = [
-  { id: "search", label: "Search projects and commands", key: "k" },
+  { id: "search", label: "Search workspaces, agents and tabs", key: "k" },
   { id: "new-project", label: "New workspace", key: "n" },
   { id: "new-tab", label: "New tab…", key: "t", then: "Enter" },
   { id: "previous-tab", label: "Previous tab", key: "t", then: "ArrowLeft" },

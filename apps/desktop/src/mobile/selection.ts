@@ -1,23 +1,7 @@
-import type {
-  LayoutNode,
-  WorkspaceProject,
-  WorkspaceSnapshot,
-  WorkspaceTab,
-} from "@concors/protocol";
+import type { WorkspaceProject, WorkspaceSnapshot } from "@concors/protocol";
 import type { MobileTarget } from "@concors/client-core";
-export type PaneNode = Extract<LayoutNode, { kind: "pane" }>;
-/** Traverse the saved split tree, not storage order. Never rewrite the desktop layout. */
-export function tabPanes(tab: WorkspaceTab): PaneNode[] {
-  const nodes = new Map(tab.nodes.map((node) => [node.id, node]));
-  const visited = new Set<string>();
-  const walk = (id: string): PaneNode[] => {
-    if (visited.has(id)) return [];
-    visited.add(id);
-    const node = nodes.get(id);
-    return !node ? [] : node.kind === "pane" ? [node] : [...walk(node.first), ...walk(node.second)];
-  };
-  return walk(tab.root);
-}
+import { tabPanes } from "@/workspace/tab-panes";
+export { tabPanes, type PaneNode } from "@/workspace/tab-panes";
 /** Mobile calls each leaf a tab, but keeps the original IDs and desktop split tree. */
 export function projectPanes(project: WorkspaceProject) {
   return project.tabs.flatMap((tab) => {
