@@ -795,6 +795,9 @@ function MobileWorkspaceContent({
               />
               {addingProject && (
                 <ProjectSetupDialog
+                  key={host.machineId}
+                  machineId={host.direct ? "local" : (host.machineId ?? "local")}
+                  githubEnabled={!host.direct}
                   mode={addingProject}
                   onClose={() => setAddingProject(null)}
                   onAdded={() => {

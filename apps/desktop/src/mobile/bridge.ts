@@ -36,6 +36,8 @@ function receive(raw: unknown) {
   const result = MobileHostMessageSchema.safeParse(raw);
   if (!result.success) return;
   const message = result.data;
+  if (message.type === "foreground" && message.scope === state?.scope)
+    window.dispatchEvent(new Event("concors-foreground"));
   if (message.type === "state") {
     if (state && message.state.scope !== state.scope) {
       for (const request of pending.values()) {
@@ -90,7 +92,9 @@ export function guardMobileLeave(guard: () => boolean | Promise<boolean>) {
 }
 export async function hostAction(action: MobileAction): Promise<unknown> {
   if (
-    ["sign-out", "delete-account", "withdraw-ai-consent"].includes(action.kind) &&
+    ["sign-out", "delete-account", "withdraw-ai-consent", "switch-organization"].includes(
+      action.kind,
+    ) &&
     beforeLeave &&
     !(await beforeLeave())
   )

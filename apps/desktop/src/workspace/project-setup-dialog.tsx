@@ -22,8 +22,10 @@ export function ProjectSetupDialog({
   open = true,
   mode,
   machineId = "local",
+  githubEnabled = true,
 }: {
   machineId?: string;
+  githubEnabled?: boolean;
   mode: "open" | "clone";
   onClose: () => void;
   onAdded: () => void;
@@ -32,7 +34,7 @@ export function ProjectSetupDialog({
   const connection = useContext(TerminalConnectionContext);
   const [step, setStep] = useState<"repository" | "destination">("repository");
   const [repository, setRepository] = useState("");
-  const [source, setSource] = useState<"github" | "url">("github");
+  const [source, setSource] = useState<"github" | "url">(githubEnabled ? "github" : "url");
   const [customDirectory, setCustomDirectory] = useState<string | null>(null);
   const folderName =
     repository
@@ -181,7 +183,9 @@ export function ProjectSetupDialog({
             setActiveId(id);
             void (async () => {
               const cloneUrl =
-                mode === "clone" ? await prepareClone(api, machineId, repository) : repository;
+                mode === "clone" && githubEnabled
+                  ? await prepareClone(api, machineId, repository)
+                  : repository;
               return connection.requestProject(
                 {
                   kind: "start",
@@ -210,33 +214,37 @@ export function ProjectSetupDialog({
             <div className="flex min-h-0 flex-1 flex-col px-6 py-4">
               {/* Keep the picker mounted while choosing the destination so Back retains rows, search and scroll. */}
               <div className={choosing ? "flex min-h-0 flex-1 flex-col gap-3" : "hidden"}>
-                <div className="flex shrink-0 gap-1" aria-label="Repository source">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={source === "github" ? "secondary" : "ghost"}
-                    aria-pressed={source === "github"}
-                    onClick={() => setSource("github")}
-                  >
-                    GitHub repositories
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={source === "url" ? "secondary" : "ghost"}
-                    aria-pressed={source === "url"}
-                    onClick={() => setSource("url")}
-                  >
-                    Paste a URL
-                  </Button>
-                </div>
-                <div className={source === "github" ? "min-h-0 flex-1" : "hidden"}>
-                  <GitHubRepositoryPicker
-                    selected={repository}
-                    onSelect={selectRepository}
-                    disabled={busy || !choosing}
-                  />
-                </div>
+                {githubEnabled && (
+                  <div className="flex shrink-0 gap-1" aria-label="Repository source">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={source === "github" ? "secondary" : "ghost"}
+                      aria-pressed={source === "github"}
+                      onClick={() => setSource("github")}
+                    >
+                      GitHub repositories
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={source === "url" ? "secondary" : "ghost"}
+                      aria-pressed={source === "url"}
+                      onClick={() => setSource("url")}
+                    >
+                      Paste a URL
+                    </Button>
+                  </div>
+                )}
+                {githubEnabled && (
+                  <div className={source === "github" ? "min-h-0 flex-1" : "hidden"}>
+                    <GitHubRepositoryPicker
+                      selected={repository}
+                      onSelect={selectRepository}
+                      disabled={busy || !choosing}
+                    />
+                  </div>
+                )}
                 {source === "url" && (
                   <div className="flex min-h-0 flex-1 flex-col justify-center gap-4 rounded-xl border bg-muted/20 p-6">
                     <GitBranch className="size-7 text-muted-foreground" aria-hidden="true" />
@@ -294,7 +302,9 @@ export function ProjectSetupDialog({
                   </label>
                   {machineId === "local" && (
                     <p className="text-xs text-muted-foreground">
-                      Cloning on this computer uses its local Git credentials.
+                      {githubEnabled
+                        ? "Cloning on this computer uses its local Git credentials."
+                        : "Cloning uses Git credentials on the connected desktop."}
                     </p>
                   )}
                   {progress}
