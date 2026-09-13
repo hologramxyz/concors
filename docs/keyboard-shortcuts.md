@@ -3,6 +3,8 @@
 Open the user menu at the bottom of the sidebar, choose **Settings**, then **Shortcuts**
 under Personal. The dedicated page groups the reference into Workspace, Tabs, and Panes.
 Searching for Shortcuts or pressing Ctrl+Shift+/ opens the same settings page.
+Sidebar [Search](search.md) finds workspaces, agents and tabs on the selected machine, with
+commands available as a secondary category. It searches names and paths, not message/file contents.
 Use **Back to app** to return to your previous view.
 
 Use physical Control on macOS as well as Linux/Windows. `→` between keys denotes a sequence:
@@ -20,7 +22,7 @@ ordinary behavior.
 | Previous/next tab                      | Ctrl+Shift+T, then Left/Right              |
 | New tab profile picker                 | Ctrl+Shift+T, then Enter                   |
 | Close current tab                      | Ctrl+Shift+T, then Backspace               |
-| Find project or command                | Ctrl+Shift+K, type, then Enter             |
+| Search workspaces, agents and tabs     | Ctrl+Shift+K, type, then Enter             |
 | Add project                            | Ctrl+Shift+N                               |
 | Settings                               | Ctrl+Shift+,                               |
 | Shortcut reference                     | Ctrl+Shift+/                               |

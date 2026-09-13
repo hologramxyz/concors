@@ -134,8 +134,11 @@ test("directional pane sequences, tab cycling, project memory and immediate Agen
       page.getByRole("heading", { name: "Other navigation project", exact: true }),
     ).toBeVisible();
     await page.keyboard.press("Control+Shift+k");
-    await page.getByPlaceholder("Type a command or search…").fill("Navigation project");
-    await page.getByRole("option", { name: "Navigation project", exact: true }).click();
+    await page.getByPlaceholder("Search workspaces, agents, tabs…").fill("Navigation project");
+    await page
+      .locator('[data-search-result="workspace"]')
+      .filter({ hasText: /^Navigation project/ })
+      .click();
     await expect.poll(() => focusedPane(page)).toBe(left);
     await expect(page.getByRole("button", { name: "Tab 1", exact: true })).toHaveAttribute(
       "aria-pressed",

@@ -1,10 +1,25 @@
 import { beforeEach, expect, it, vi } from "vitest";
-import { MobileApiCallSchema } from "@concors/client-core";
-import { api } from "./api";
-import { hostAction } from "./bridge";
+import { MobileApiCallSchema, type MobileState } from "@concors/client-core";
+import { api, getApiCacheScope } from "./api";
+import { getHostState, hostAction } from "./bridge";
 
-vi.mock("./bridge", () => ({ hostAction: vi.fn().mockResolvedValue([]) }));
+vi.mock("./bridge", () => ({
+  hostAction: vi.fn().mockResolvedValue([]),
+  getHostState: vi.fn(() => null),
+}));
 beforeEach(() => vi.clearAllMocks());
+
+it("scopes shared data caches to the opaque host session without requesting or exposing tokens", () => {
+  expect(getApiCacheScope()).toBeNull();
+  vi.mocked(getHostState).mockReturnValue({ scope: "first-session" } as MobileState);
+  expect(getApiCacheScope()).toBe("first-session");
+  vi.mocked(getHostState).mockReturnValue({ scope: "second-session" } as MobileState);
+  expect(getApiCacheScope()).toBe("second-session");
+  vi.mocked(getHostState).mockReturnValue(null);
+  expect(getApiCacheScope()).toBeNull();
+  expect(hostAction).not.toHaveBeenCalled();
+  expect(Object.keys(api)).not.toContain("tokens");
+});
 
 it("forwards only explicitly allowlisted and validated calls", async () => {
   await expect(api.listMachines({ organizationId: "org-one" })).resolves.toEqual([]);

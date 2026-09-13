@@ -1,6 +1,11 @@
 import { ApiError, type ApiClient } from "@concors/api-client";
 import { MobileApiCallSchema, type MobileApiCall } from "@concors/client-core";
-import { hostAction } from "./bridge";
+import { getHostState, hostAction } from "./bridge";
+
+/** Cache isolation follows the native account scope; credentials stay in the host. */
+export function getApiCacheScope() {
+  return getHostState()?.scope ?? null;
+}
 
 // The mobile Vite entry aliases the desktop API singleton to this allowlisted native RPC.
 // A validated call never exposes tokens or a generic network primitive to the renderer.

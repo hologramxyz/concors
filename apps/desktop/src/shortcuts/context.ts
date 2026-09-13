@@ -24,6 +24,7 @@ export function createCommands() {
     },
     snapshot: () => available,
     run: (id: CommandId) => handlers.get(id)?.(),
+    getAction: (id: CommandId) => handlers.get(id),
     register: (id: CommandId, handler: () => void) => {
       handlers.set(id, handler);
       update();
@@ -55,5 +56,6 @@ export function useCommands() {
   return {
     items: BINDINGS.map((binding) => ({ ...binding, enabled: available.includes(binding.id) })),
     run: commands.run,
+    getAction: commands.getAction,
   };
 }
