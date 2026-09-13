@@ -66,7 +66,11 @@ export function AccountMenu({
           {auth.user.name} · Account and settings
         </TooltipContent>
       </SidebarTooltip>
-      <DropdownMenuContent align="start" side="top" className="w-56">
+      <DropdownMenuContent
+        align="start"
+        side="top"
+        className="max-w-[calc(100vw-16px)] min-w-(--sidebar-width)"
+      >
         <DropdownMenuLabel className="text-ui font-normal text-muted-foreground">
           <span className="block truncate text-foreground">{auth.user.name}</span>
           <span className="block truncate" title={auth.user.email}>
