@@ -21,6 +21,7 @@ export default [
       "**/coverage/**",
       "**/src-tauri/target/**",
       "**/src-tauri/gen/**",
+      "**/src-tauri/resources/local-daemon/**",
       "pnpm-lock.yaml",
       "apps/mobile/.expo/**",
       "apps/mobile/android/**",
@@ -37,7 +38,13 @@ export default [
 
   // Node.js packages
   {
-    files: ["packages/daemon/**/*.ts", "packages/config/**/*.js", "*.js", "*.ts"],
+    files: [
+      "packages/daemon/**/*.ts",
+      "apps/desktop/scripts/**/*.ts",
+      "packages/config/**/*.js",
+      "*.js",
+      "*.ts",
+    ],
     ...nodeGlobals,
   },
 

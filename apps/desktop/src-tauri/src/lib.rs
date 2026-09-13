@@ -33,7 +33,7 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building Concors")
         .run(|app, event| {
-            // Make sure a daemon we started never outlives the app.
+            // Close our gateway; the detached host preserves terminal sessions for the next launch.
             if let tauri::RunEvent::Exit = event {
                 app.state::<daemon::LocalDaemon>().shutdown();
             }
