@@ -28,6 +28,7 @@ export function MobileSelect({
   selectedLabel,
   hierarchy = false,
   presentation = "popover",
+  disabled = false,
 }: {
   label: string;
   value: string;
@@ -38,6 +39,7 @@ export function MobileSelect({
   selectedLabel?: ReactNode;
   hierarchy?: boolean;
   presentation?: "popover" | "sheet";
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const id = useId();
@@ -93,6 +95,7 @@ export function MobileSelect({
     <button
       ref={trigger}
       type="button"
+      disabled={disabled}
       role="combobox"
       aria-haspopup={presentation === "sheet" ? "dialog" : "listbox"}
       aria-label={label}
@@ -101,6 +104,7 @@ export function MobileSelect({
       data-value={value}
       className={`mobile-select-trigger ${className}`}
       onKeyDown={(event) => {
+        if (disabled) return;
         if (event.key === "ArrowDown" || event.key === "ArrowUp") {
           event.preventDefault();
           setOpen(true);

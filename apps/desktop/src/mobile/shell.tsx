@@ -50,6 +50,7 @@ import { ProjectFileLinks } from "@/files/provider";
 import { preloadCodeEditor } from "@/files/editor-loader";
 import { TabVisibility } from "@/workspace/tab-visibility";
 import { MobileMachinePicker } from "./machine-picker";
+import { MobileOrganizationPicker } from "./organization-picker";
 import { AddMachineDrawer } from "./add-machine-drawer";
 import type { SettingsPage } from "@/settings/navigation";
 import { NativeSurfaces } from "./native-surfaces";
@@ -577,6 +578,29 @@ function MobileWorkspaceContent({
                         />
                       }
                       onAddMachine={() => setAddingMachine(true)}
+                      organizationPicker={
+                        host.me && !host.direct ? (
+                          <MobileOrganizationPicker
+                            auth={{
+                              status: "signed-in",
+                              ...host.me,
+                              organizations: host.organizations,
+                            }}
+                            onSelect={(organizationId) =>
+                              hostAction({ kind: "switch-organization", organizationId })
+                            }
+                          />
+                        ) : undefined
+                      }
+                      onManageMachines={
+                        host.direct
+                          ? undefined
+                          : () => {
+                              setSidebarOpen(false);
+                              setSettingsPage("machines");
+                              setSettingsOpen(true);
+                            }
+                      }
                       onOpenSettings={() => openSettings()}
                       onSignOut={() => runHost({ kind: "sign-out" })}
                     />
