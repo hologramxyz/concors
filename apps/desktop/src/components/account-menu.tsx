@@ -71,18 +71,18 @@ export function AccountMenu({
         side="top"
         className="max-w-[calc(100vw-16px)] min-w-(--sidebar-width)"
       >
-        <DropdownMenuLabel className="text-ui font-normal text-muted-foreground">
+        <DropdownMenuLabel className="p-[8px] text-ui font-normal text-muted-foreground">
           <span className="block truncate text-foreground">{auth.user.name}</span>
           <span className="block truncate" title={auth.user.email}>
             {auth.user.email}
           </span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem className="text-ui" onSelect={onOpenSettings}>
+        <DropdownMenuItem className="p-[8px] text-ui" onSelect={onOpenSettings}>
           <Settings aria-hidden="true" />
           Settings
         </DropdownMenuItem>
-        <DropdownMenuItem className="text-ui" onSelect={onSignOut}>
+        <DropdownMenuItem className="p-[8px] text-ui" onSelect={onSignOut}>
           <LogOut aria-hidden="true" />
           Sign out
         </DropdownMenuItem>
