@@ -45,7 +45,7 @@ export function AccountMenu({
       <SidebarTooltip collapsed={collapsed}>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger
-            className={`flex items-center rounded-md hover:bg-sidebar-accent aria-expanded:bg-sidebar-accent ${collapsed ? "sidebar-rail-control" : "h-9 w-full gap-2 px-2 text-left"}`}
+            className={`flex items-center rounded-md hover:bg-sidebar-accent aria-expanded:bg-sidebar-accent ${collapsed ? "sidebar-rail-control" : "w-full gap-2 p-[8px] text-left"}`}
             aria-label={`Account: ${auth.user.name}`}
           >
             <AccountAvatar user={auth.user} githubEnabled />
