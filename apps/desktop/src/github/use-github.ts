@@ -1,3 +1,4 @@
+import { githubStatusResource } from "./use-github-status";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiCache, useApiResource } from "@/data/api-resource";
 import { api } from "@/auth/api";
@@ -7,7 +8,12 @@ export function useGitHub() {
   const awaitingReturn = useRef(false);
   const [previousConnection, setPreviousConnection] = useState<string | null>(null);
   const query = useApiResource("github:connection", async () => {
-    const status = await api.githubStatus();
+    const identity = githubStatusResource();
+    await identity.load();
+    const snapshot = identity.getSnapshot();
+    if (snapshot.error) throw snapshot.error;
+    const status = snapshot.data;
+    if (!status) throw new Error("Could not load GitHub connection");
     const accounts: { id: number; login: string }[] = [];
     if (status.connected) {
       let next: number | null = 1;
@@ -30,7 +36,9 @@ export function useGitHub() {
     setError(null);
     apiCache().invalidate("github:repos:");
     setGeneration((n) => n + 1);
-    void query.resource.load(30_000, true);
+    void githubStatusResource()
+      .load(30_000, true)
+      .then(() => query.resource.load(30_000, true));
   }, [query.resource]);
   useEffect(() => {
     if (!waiting) return;
@@ -93,16 +101,15 @@ export function useGitHub() {
       await api.disconnectGitHub();
       awaitingReturn.current = false;
       setWaiting(false);
-      query.resource.set({
-        status: {
-          connected: false,
-          configured: status?.configured ?? true,
-          login: null,
-          updatedAt: null,
-          manageUrl: null,
-        },
-        accounts: [],
-      });
+      const disconnected = {
+        connected: false,
+        configured: status?.configured ?? true,
+        login: null,
+        updatedAt: null,
+        manageUrl: null,
+      };
+      githubStatusResource().set(disconnected);
+      query.resource.set({ status: disconnected, accounts: [] });
       apiCache().invalidate("github:repos:", true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not disconnect GitHub");
