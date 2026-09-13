@@ -1,7 +1,8 @@
-import { ApiError, type Invoice, type Organization } from "@concors/api-client";
+import { ApiError, type Organization } from "@concors/api-client";
 import { CreditCard, ExternalLink } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
+import { useApiResource } from "@/data/api-resource";
 import { useBilling } from "@/billing/use-billing";
 import { api } from "@/auth/api";
 import { describeAuthError } from "@/auth/auth-state";
@@ -24,28 +25,25 @@ export function BillingSection({ organization }: BillingSectionProps) {
   const organizationId = organization?.id;
   const scope = organizationId === undefined ? {} : { organizationId };
   const billing = useBilling(organizationId ?? "");
-  const { status } = billing;
-  const [invoices, setInvoices] = useState<readonly Invoice[] | null>(null);
+  const { status, refresh: refreshBilling } = billing;
+  const invoiceQuery = useApiResource(`invoices:${organizationId ?? ""}`, () =>
+    api.listInvoices(scope),
+  );
+  const invoices = invoiceQuery.data;
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<"setup" | "portal" | null>(null);
-  const [generation, setGeneration] = useState(0);
 
+  const portalOpen = useRef(false);
   useEffect(() => {
-    let cancelled = false;
-    void Promise.all([api.listInvoices(scope)])
-      .then(([loadedInvoices]) => {
-        if (cancelled) return;
-        setInvoices(loadedInvoices);
-        setError(null);
-      })
-      .catch((cause: unknown) => {
-        if (!cancelled) setError(describeApiError(cause));
-      });
-    return () => {
-      cancelled = true;
+    const returned = () => {
+      if (!portalOpen.current) return;
+      portalOpen.current = false;
+      refreshBilling();
+      void invoiceQuery.resource.load(30_000, true);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [organizationId, generation]);
+    window.addEventListener("focus", returned);
+    return () => window.removeEventListener("focus", returned);
+  }, [refreshBilling, invoiceQuery.resource]);
 
   function open(kind: "setup" | "portal") {
     setPending(kind);
@@ -56,8 +54,14 @@ export function BillingSection({ organization }: BillingSectionProps) {
     }
     const url = api.createBillingPortalUrl(scope);
     void url
-      .then(openExternal)
-      .catch((cause: unknown) => setError(describeApiError(cause)))
+      .then((url) => {
+        portalOpen.current = true;
+        return openExternal(url);
+      })
+      .catch((cause: unknown) => {
+        portalOpen.current = false;
+        setError(describeApiError(cause));
+      })
       .finally(() => setPending(null));
   }
 
@@ -66,12 +70,16 @@ export function BillingSection({ organization }: BillingSectionProps) {
       title="Billing"
       description="Each machine is a monthly subscription charged in advance to this organization’s card."
     >
-      {(error ?? billing.error) && (
+      {(error ??
+        billing.error ??
+        (invoiceQuery.error ? describeApiError(invoiceQuery.error) : null)) && (
         <p role="alert" className="py-2 text-sm text-destructive">
-          {error ?? billing.error}
+          {error ??
+            billing.error ??
+            (invoiceQuery.error ? describeApiError(invoiceQuery.error) : null)}
         </p>
       )}
-      {status === null && !error ? (
+      {status === null && !billing.error ? (
         <p role="status" className="py-2 text-sm text-muted-foreground">
           Loading billing…
         </p>
@@ -147,7 +155,7 @@ export function BillingSection({ organization }: BillingSectionProps) {
               disabled={pending !== null}
               onClick={() => {
                 billing.refresh();
-                setGeneration((n) => n + 1);
+                void invoiceQuery.refresh();
               }}
             >
               Refresh

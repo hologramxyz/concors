@@ -1,56 +1,37 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { GitHubStatus } from "@concors/api-client";
+import { apiCache, useApiResource } from "@/data/api-resource";
 import { api } from "@/auth/api";
 import { openExternal } from "@/tauri";
 
 export function useGitHub() {
   const awaitingReturn = useRef(false);
   const [previousConnection, setPreviousConnection] = useState<string | null>(null);
-  const [status, setStatus] = useState<GitHubStatus | null>(null);
-  const [accountResult, setAccountResult] = useState<{
-    connection: string | null;
-    accounts: { id: number; login: string }[];
-  } | null>(null);
-  const accounts =
-    status?.connected && accountResult?.connection === status.updatedAt
-      ? accountResult.accounts
-      : null;
+  const query = useApiResource("github:connection", async () => {
+    const status = await api.githubStatus();
+    const accounts: { id: number; login: string }[] = [];
+    if (status.connected) {
+      let next: number | null = 1;
+      while (next !== null) {
+        const data = await api.githubAccounts(next);
+        accounts.push(...data.accounts);
+        next = data.nextPage;
+      }
+    }
+    return { status, accounts };
+  });
+  const status = query.data?.status ?? null;
+  const accounts = query.data?.accounts ?? null;
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [authorizeUrl, setAuthorizeUrl] = useState<string | null>(null);
   const [waiting, setWaiting] = useState(false);
   const [generation, setGeneration] = useState(0);
-  const refresh = useCallback(() => setGeneration((n) => n + 1), []);
-  useEffect(() => {
-    let cancelled = false;
-    void api
-      .githubStatus()
-      .then(async (value) => {
-        if (!cancelled) {
-          setStatus(value);
-          if (!value.connected) {
-            setAccountResult(null);
-          } else {
-            let next: number | null = 1;
-            const accounts: { id: number; login: string }[] = [];
-            while (next !== null && !cancelled) {
-              const data = await api.githubAccounts(next);
-              accounts.push(...data.accounts);
-              next = data.nextPage;
-            }
-            if (!cancelled) setAccountResult({ connection: value.updatedAt, accounts });
-          }
-          if (!cancelled) setError(null);
-        }
-      })
-      .catch((cause: unknown) => {
-        if (!cancelled)
-          setError(cause instanceof Error ? cause.message : "Could not load GitHub connection");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [generation]);
+  const refresh = useCallback(() => {
+    setError(null);
+    apiCache().invalidate("github:repos:");
+    setGeneration((n) => n + 1);
+    void query.resource.load(30_000, true);
+  }, [query.resource]);
   useEffect(() => {
     if (!waiting) return;
     const interval = window.setInterval(refresh, 3000);
@@ -67,11 +48,12 @@ export function useGitHub() {
       if (!awaitingReturn.current) return;
       awaitingReturn.current = false;
       setWaiting(false);
+      query.resource.invalidate();
       refresh();
     };
     window.addEventListener("focus", focus);
     return () => window.removeEventListener("focus", focus);
-  }, [refresh]);
+  }, [refresh, query.resource]);
   const connect = async () => {
     setPreviousConnection(status?.updatedAt ?? null);
     setBusy(true);
@@ -111,8 +93,17 @@ export function useGitHub() {
       await api.disconnectGitHub();
       awaitingReturn.current = false;
       setWaiting(false);
-      setAccountResult(null);
-      refresh();
+      query.resource.set({
+        status: {
+          connected: false,
+          configured: status?.configured ?? true,
+          login: null,
+          updatedAt: null,
+          manageUrl: null,
+        },
+        accounts: [],
+      });
+      apiCache().invalidate("github:repos:", true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not disconnect GitHub");
     } finally {
@@ -122,7 +113,13 @@ export function useGitHub() {
   return {
     status,
     accounts,
-    error,
+    error:
+      error ??
+      (query.error instanceof Error
+        ? query.error.message
+        : query.error
+          ? "Could not load GitHub connection"
+          : null),
     busy,
     waiting,
     authorizeUrl:

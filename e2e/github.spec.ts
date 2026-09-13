@@ -402,3 +402,72 @@ test("clone dialog keeps its layout, rows and selection through focus and slow o
   await expect(dialog.getByRole("button", { name: "Continue", exact: true })).toBeInViewport();
   await page.screenshot({ path: "test-results/clone-narrow.png" });
 });
+
+test("reopening the clone dialog reuses GitHub accounts and repositories", async ({ page }) => {
+  await signedIn(page);
+  await managedHost(page);
+  await githubApi(page);
+  let reads = 0;
+  await page.route("**/api/v1/github/**", async (route) => {
+    if (route.request().method() === "GET") reads++;
+    return route.fallback();
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Switch machine" }).click();
+  await page.getByRole("menuitem", { name: /Second machine/ }).click();
+  const open = async () => {
+    await page.getByRole("button", { name: "Open workspace menu", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Clone repository…", exact: true }).click();
+  };
+  await open();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("button", { name: /alice\/project/ })).toBeVisible();
+  const before = reads;
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await open();
+  await expect(dialog.getByRole("button", { name: /alice\/project/ })).toBeVisible();
+  await expect(
+    dialog.getByRole("status", { name: "Loading repositories", exact: true }),
+  ).toHaveCount(0);
+  expect(reads).toBe(before);
+  // Revisiting an installation is also immediate and does not re-fetch its list.
+  const accounts = dialog.getByRole("combobox", { name: "GitHub account" });
+  await accounts.selectOption("2");
+  await expect(dialog.getByRole("button", { name: /acme\/private-service/ })).toBeVisible();
+  const afterSecond = reads;
+  await accounts.selectOption("1");
+  await expect(dialog.getByRole("button", { name: /alice\/project/ })).toBeVisible();
+  expect(reads).toBe(afterSecond);
+});
+
+test("repository access rejection removes cached rows instead of treating them as available", async ({
+  page,
+}) => {
+  await signedIn(page);
+  await managedHost(page);
+  await githubApi(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: "Switch machine" }).click();
+  await page.getByRole("menuitem", { name: /Second machine/ }).click();
+  await page.getByRole("button", { name: "Open workspace menu", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Clone repository…", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  const repository = dialog.getByRole("button", { name: /alice\/project/ });
+  await expect(repository).toBeVisible();
+  await repository.click();
+  await page.route("**/api/v1/github/**/repositories**", (route) => {
+    if (route.request().method() === "OPTIONS") return route.fallback();
+    return route.fulfill({
+      status: 403,
+      headers: {
+        "access-control-allow-origin": route.request().headers()["origin"] ?? "*",
+        "access-control-allow-credentials": "true",
+      },
+      json: { message: "Repository access revoked", error: "Forbidden", statusCode: 403 },
+    });
+  });
+  await dialog.getByRole("button", { name: "Refresh GitHub" }).click();
+  await expect(dialog.getByRole("alert")).toContainText("Repository access revoked");
+  await expect(repository).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: "Continue", exact: true })).toBeDisabled();
+});
