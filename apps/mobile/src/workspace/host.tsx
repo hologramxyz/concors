@@ -18,7 +18,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, NO_MOBILE_CAPABILITIES } from "@concors/api-client";
+import { ApiError, MachineSchema, NO_MOBILE_CAPABILITIES, type Machine } from "@concors/api-client";
 import {
   createProtocolRelay,
   machineAvailability,
@@ -196,8 +196,28 @@ function SignedInWorkspace() {
       case "file-guard":
         fileGuard.current = action.active;
         return;
-      case "api":
-        return dispatchMobileApi(api, action.call);
+      case "api": {
+        const call = action.call;
+        const editsMachine = call.method === "renameMachine" || call.method === "updateMachineIcon";
+        if (editsMachine || call.method === "prepareGitHubMachine") {
+          if (!machines.data?.some((machine) => machine.id === call.args[0]))
+            throw new Error("Machine is unavailable in this organization");
+        }
+        const machineKey = ["machines", auth.me?.user.id, auth.me?.session.activeOrganizationId];
+        if (editsMachine) await query.cancelQueries({ queryKey: machineKey, exact: true });
+        const result = await dispatchMobileApi(api, call);
+        if (editsMachine && alive.current) {
+          const updated = MachineSchema.parse(result);
+          // The renderer and native pickers share the host list. Do not wait for the poll,
+          // or let an older in-flight list overwrite a successful metadata save.
+          await query.cancelQueries({ queryKey: machineKey, exact: true });
+          if (alive.current)
+            query.setQueryData<Machine[]>(machineKey, (current) =>
+              current?.map((machine) => (machine.id === updated.id ? updated : machine)),
+            );
+        }
+        return result;
+      }
       case "select-machine":
         if (auth.direct) {
           if (action.machineId !== machineId)
