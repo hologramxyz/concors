@@ -4,6 +4,76 @@ import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
 
+for (const result of ["connected", "disconnected", "error"] as const) {
+  test(`initial account check stays quiet until ${result} response`, async ({ page }) => {
+    const directory = await mkdtemp(join(tmpdir(), "concors-account-loading-"));
+    let requestId: string | undefined;
+    let release: (() => void) | undefined;
+    let delivered = false;
+    await page.routeWebSocket("ws://127.0.0.1:7429/ws", (socket) => {
+      const server = socket.connectToServer();
+      socket.onMessage((raw) => {
+        const event = JSON.parse(String(raw));
+        if (
+          !delivered &&
+          event.type === "agent.request" &&
+          event.operation.kind === "account" &&
+          event.operation.action.type === "read"
+        )
+          requestId = event.requestId;
+        server.send(raw);
+      });
+      server.onMessage((raw) => {
+        const event = JSON.parse(String(raw));
+        if (requestId && event.requestId === requestId) {
+          requestId = undefined;
+          release = () => {
+            release = undefined;
+            delivered = true;
+            if (result === "error") {
+              event.outcome = { status: "error", message: "Could not check this account." };
+            } else {
+              event.outcome.account.status = result;
+            }
+            socket.send(JSON.stringify(event));
+          };
+        } else socket.send(raw);
+      });
+    });
+    try {
+      await signedIn(page);
+      await page.goto("/");
+      await seedProject(page, "Account loading", directory);
+      await page.getByRole("button", { name: "New tab", exact: true }).click();
+      await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+      const prompt = page.getByRole("region", { name: "Codex account connection", exact: true });
+      await expect.poll(() => !!release).toBe(true);
+      await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
+      await expect(prompt).toHaveCount(0);
+      release?.();
+      if (result === "connected") {
+        // Synchronize with rendering after delivery, rather than checking before React updates.
+        await page.evaluate(
+          () =>
+            new Promise<void>((resolve) =>
+              requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+            ),
+        );
+        await expect(prompt).toHaveCount(0);
+      } else if (result === "disconnected") {
+        await expect(prompt.getByRole("button", { name: "Sign in with ChatGPT" })).toBeEnabled();
+      } else {
+        await expect(prompt.getByRole("alert")).toContainText("Could not check this account.");
+        await prompt.getByRole("button", { name: "Check account", exact: true }).click();
+        await expect(prompt.getByRole("button", { name: "Sign in with ChatGPT" })).toBeEnabled();
+      }
+    } finally {
+      release?.();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+}
+
 test("the first sign-in click survives a background focus refresh", async ({ page }) => {
   const directory = await mkdtemp(join(tmpdir(), "concors-account-focus-"));
   let holdNextRead = false;
@@ -78,7 +148,7 @@ for (const [provider, label] of [
       if (provider !== "codex") {
         await page.getByRole("button", { name: "Agent and model", exact: true }).click();
         await page.getByRole("button", { name: "Back to providers", exact: true }).click();
-        await page.getByRole("option", { name: `${label} Starts a new chat`, exact: true }).click();
+        await page.getByRole("option", { name: `${label} Use in this pane`, exact: true }).click();
         await page.getByRole("option", { name: `Fixture ${provider} model`, exact: true }).click();
       }
       const prompt = page.getByRole("region", { name: `${label} account connection` });

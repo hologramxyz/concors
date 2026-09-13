@@ -197,7 +197,9 @@ function AccountPrompt({
         Connect account
       </button>
     );
-  if (account?.status === "connected") return null;
+  // An unresolved initial check is not evidence that the user needs to sign in.
+  // Keep failures visible so the account check can still be retried.
+  if ((!account && !error) || account?.status === "connected") return null;
   const methods = account?.methods ?? [];
   const selected = methods.find((m) => m.id === method) ?? methods[0];
   const challenge = account?.challenge;
