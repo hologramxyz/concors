@@ -103,7 +103,7 @@ export function MobileAccountMenu({
   organizationPicker?: ReactNode;
   onManageMachines?: (() => void) | undefined;
   onAddMachine?: () => void;
-  profile?: { name: string; email: string } | null;
+  profile?: { name: string; email: string; image?: string | null } | null;
   onOpenProfile?: () => void;
 }) {
   const [open, setOpen] = useState(false);
