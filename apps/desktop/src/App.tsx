@@ -5,7 +5,7 @@ import { ResourceStatus } from "@/host/resource-status";
 import { FilesProvider } from "@/files/provider";
 import { useCommand } from "@/shortcuts/context";
 import { ShortcutProvider } from "@/shortcuts/provider";
-import { findSessionPane, type PaneFocusRequest } from "@/workspace/session-pane";
+import { findSessionPane, type PaneFocusRequest, type SessionPane } from "@/workspace/session-pane";
 import { NotificationProvider } from "@/notifications/provider";
 import { AgentsProvider } from "@/agents/state";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
@@ -21,7 +21,7 @@ import { AuthScreen } from "@/auth/auth-screen";
 import { activeOrganization, describeAuthError } from "@/auth/auth-state";
 import { useAuth } from "@/auth/use-auth";
 import { AppSidebar } from "@/components/app-sidebar";
-import { CommandPalette } from "@/components/command-palette";
+import { WorkspaceSearch } from "@/search/workspace-search";
 import { MachinesView } from "@/machines/machines-view";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { resolveStartupEndpoint, resolveHostEndpoint } from "@/daemon/resolve-endpoint";
@@ -94,7 +94,7 @@ function AppContent() {
     window.location.pathname === "/settings/billing" ? "billing" : "account",
   );
   const settingsReturnView = useRef<Exclude<View, "settings">>("projects");
-  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [localEndpoint, setLocalEndpoint] = useState<DaemonEndpoint | null>(null);
   const [selectionHost, setSelectionHost] = useState<{ scope: string; host: Host } | null>(null);
   const [addingProject, setAddingProject] = useState<"open" | "clone" | null>(null);
@@ -206,11 +206,15 @@ function AppContent() {
     setView("projects");
     newWorkspace.start();
   };
-  const openAgent = useCallback(
-    (id: string) => {
-      const target = findSessionPane(transport?.workspace ?? null, id);
-      if (!target) {
-        setError("This agent's pane has been closed.");
+  const openPane = useCallback(
+    (target: SessionPane) => {
+      const current = transport?.workspace;
+      const pane = current?.projects
+        .find((p) => p.id === target.projectId)
+        ?.tabs.find((t) => t.id === target.tabId)
+        ?.nodes.find((n) => n.kind === "pane" && n.id === target.paneId);
+      if (!pane) {
+        setError("This pane has been closed.");
         return;
       }
       if (!transport?.workspace) return;
@@ -229,12 +233,20 @@ function AppContent() {
           setPaneFocus({ ...target, requestId: crypto.randomUUID() });
         })
         .catch((cause: unknown) =>
-          setError(cause instanceof Error ? cause.message : "Could not open agent pane"),
+          setError(cause instanceof Error ? cause.message : "Could not open pane"),
         );
     },
     [transport, memoryKey],
   );
-  const openPalette = useCallback(() => setPaletteOpen(true), []);
+  const openAgent = useCallback(
+    (id: string) => {
+      const target = findSessionPane(transport?.workspace ?? null, id);
+      if (target) openPane(target);
+      else setError("This agent's pane has been closed.");
+    },
+    [transport, openPane],
+  );
+  const openSearch = useCallback(() => setSearchOpen(true), []);
   const beforeLeaveFiles = useRef<(() => boolean | Promise<boolean>) | null>(null);
   const signOut = async () => {
     if ((await beforeLeaveFiles.current?.()) !== false) void auth.signOut();
@@ -246,7 +258,7 @@ function AppContent() {
   };
 
   const signedIn = auth.state.status === "signed-in";
-  useCommand("search", signedIn, () => setPaletteOpen((open) => !open));
+  useCommand("search", signedIn, () => setSearchOpen((open) => !open));
   useCommand("new-project", signedIn && canEdit && !newWorkspace.busy, startWorkspace);
   useCommand("settings", signedIn, () => openSettings("account"));
   useCommand("shortcuts", signedIn, () => openSettings("shortcuts"));
@@ -344,7 +356,7 @@ function AppContent() {
                         onSelectAgent={openAgent}
                         view={view}
                         onOpenSettings={() => openSettings("account")}
-                        onOpenCommandPalette={openPalette}
+                        onOpenSearch={openSearch}
                         workspace={workspace}
                         canEdit={canEdit && !newWorkspace.busy}
                         onSelectProject={selectProject}
@@ -513,12 +525,16 @@ function AppContent() {
                       }}
                     />
                   )}
-                  <CommandPalette
+                  <WorkspaceSearch
+                    key={`${hostScope}:${memoryKey}`}
+                    machine={selectedHost.label}
+                    activeProjectId={selection?.projectId}
                     canSelectProject={canEdit}
                     projects={workspace?.projects ?? []}
                     onSelectProject={selectProject}
-                    open={paletteOpen}
-                    onOpenChange={setPaletteOpen}
+                    onSelectPane={openPane}
+                    open={searchOpen}
+                    onOpenChange={setSearchOpen}
                     onNavigate={setView}
                     onReconnect={connection.reconnectNow}
                     canReconnect={
