@@ -82,7 +82,7 @@ test("native surface bridge preserves navigation, drafts, settings, attachments 
   await expect.poll(sidebarSurfaces).toEqual([["Search workspace", "search"]]);
   await expect(ui.getByRole("button", { name: "Close sidebar", exact: true })).toHaveCount(0);
   await event(page, "button", "Search workspace", { kind: "press", control: "activate" });
-  await expect(ui.getByPlaceholder("Type a command or search…")).toBeVisible();
+  await expect(ui.getByPlaceholder("Search workspaces, agents, tabs…")).toBeVisible();
   await expect.poll(async () => (await snapshot(page))?.surfaces).toEqual([]);
   await page.keyboard.press("Escape");
   await expect.poll(sidebarSurfaces).toEqual([["Search workspace", "search"]]);

@@ -5,7 +5,7 @@ import type { Locator, Page } from "@playwright/test";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
 
-async function expectModalLayout(page: Page, dialog: Locator) {
+async function expectModalLayout(page: Page, dialog: Locator, maxWidth = 36) {
   await expect(dialog).toBeVisible();
   const viewport = page.viewportSize();
   if (!viewport) throw new Error("Set a viewport to verify modal bounds");
@@ -19,7 +19,7 @@ async function expectModalLayout(page: Page, dialog: Locator) {
       return (
         Math.abs(rect.x + rect.width / 2 - viewport.width / 2) < 2 &&
         Math.abs(rect.y + rect.height / 2 - viewport.height / 2) < 2 &&
-        Math.abs(rect.width - Math.min(36 * rem, viewport.width - 2 * rem)) < 2 &&
+        Math.abs(rect.width - Math.min(maxWidth * rem, viewport.width - 2 * rem)) < 2 &&
         rect.y >= rem - 1 &&
         rect.y + rect.height <= viewport.height - rem + 1
       );
@@ -87,7 +87,7 @@ test("pane, tab, search and form dialogs share layout and preserve pointer and k
     await expect(originalInput).toBeFocused();
 
     await page.keyboard.press("Control+Shift+k");
-    const search = page.getByRole("dialog", { name: "Command palette", exact: true });
+    const search = page.getByRole("dialog", { name: "Search", exact: true });
     await expectModalLayout(page, search);
     await expect(search.getByRole("combobox")).toBeFocused();
     await page.screenshot({ path: test.info().outputPath("command-search-light.png") });
@@ -98,6 +98,7 @@ test("pane, tab, search and form dialogs share layout and preserve pointer and k
     await expectModalLayout(
       page,
       page.getByRole("dialog", { name: "Clone repository", exact: true }),
+      56,
     );
     // App shortcuts must not escape an ordinary form.
     await page.keyboard.press("Control+Shift+p");

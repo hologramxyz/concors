@@ -91,7 +91,7 @@ test("collapsed sidebar keeps workspace, machine, search and account navigation 
     await expect(page.getByRole("heading", { name: "Beta workspace", exact: true })).toBeVisible();
     const search = rail.getByRole("button", { name: "Search", exact: true });
     await search.click();
-    await expect(page.getByRole("dialog", { name: "Command palette" })).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Search", exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(search).toBeFocused();
     await rail.getByRole("button", { name: "Open workspace menu", exact: true }).click();
