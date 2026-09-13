@@ -24,6 +24,13 @@ body {
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
 }
+/* Shared actions keep the desktop styling with room to tap, including portaled dialogs. */
+[data-slot="button"] {
+  min-height: 44px;
+}
+[data-slot="button"][data-size^="icon"] {
+  min-width: 44px;
+}
 .mobile-files {
   position: absolute;
   inset: 0;
