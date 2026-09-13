@@ -141,7 +141,9 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await input.fill("hold");
     await ui.getByRole("button", { name: "Send message", exact: true }).click();
     await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
-    const agentRow = ui.locator(`button[data-agent-id="${agents()[0]!.id}"]`);
+    const agentId = agents()[0]?.id;
+    if (!agentId) throw new Error("Missing fixture agent");
+    const agentRow = ui.locator(`button[data-agent-id="${agentId}"]`);
     await expect(agentRow.locator('[data-provider="codex"] svg')).toBeVisible();
     await expect(agentRow.getByRole("img", { name: "Agent status: Working" })).toBeVisible();
     await expect(agentRow.locator("[data-agent-status-badge] svg .animate-spin")).toBeVisible();

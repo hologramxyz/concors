@@ -87,7 +87,7 @@ export const MobileStateSchema = z.object({
     .object({
       name: z.string().max(500),
       email: z.string().max(500),
-      image: z.string().max(2048).nullable().optional(),
+      image: z.string().max(2048).nullable().default(null),
     })
     .nullable()
     .optional(),
