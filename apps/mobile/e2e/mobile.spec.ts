@@ -580,7 +580,7 @@ test("search and project sheets animate above the open sidebar and restore focus
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
   const shell = ui.locator(".mobile-shell");
   await ui.getByRole("button", { name: "Search workspace", exact: true }).click();
-  const search = ui.getByRole("dialog", { name: "Search workspace", exact: true });
+  const search = ui.getByRole("dialog", { name: "Search", exact: true });
   await expect(search).toHaveAttribute("data-mobile-drawer", "true");
   await expect(search).toHaveCSS("animation-name", "mobile-drawer-in");
   await expect(search).toHaveCSS("border-bottom-left-radius", "0px");
@@ -596,6 +596,7 @@ test("search and project sheets animate above the open sidebar and restore focus
   await ui.getByRole("button", { name: "Clone repository…", exact: true }).click();
   const project = ui.getByRole("dialog", { name: "Clone repository", exact: true });
   await expect(project).toHaveAttribute("data-mobile-drawer", "true");
+  await project.getByRole("button", { name: "Paste a URL", exact: true }).click();
   await project
     .getByRole("textbox", { name: "Repository URL or local path" })
     .fill("Discard this draft");
@@ -605,6 +606,7 @@ test("search and project sheets animate above the open sidebar and restore focus
   await ui.getByRole("button", { name: "Open workspace menu", exact: true }).click();
   await ui.getByRole("button", { name: "Clone repository…", exact: true }).click();
   await expect(project).toHaveCSS("animation-name", "none");
+  await project.getByRole("button", { name: "Paste a URL", exact: true }).click();
   await expect(project.getByRole("textbox", { name: "Repository URL or local path" })).toHaveValue(
     "",
   );
@@ -982,7 +984,7 @@ test("sidebar has no logo or duplicate menu, with glass search behind the rounde
   await expect(search).toHaveCSS("border-radius", glass.radius);
   await expect(search).toHaveCSS("box-shadow", glass.shadow);
   await ui.getByRole("button", { name: "Search workspace", exact: true }).click();
-  await expect(ui.getByPlaceholder("Type a command or search…")).toBeVisible();
+  await expect(ui.getByPlaceholder("Search workspaces, agents, tabs…")).toBeVisible();
   await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "true");
   await page.keyboard.press("Escape");
   await expect(ui.getByRole("button", { name: "Search workspace", exact: true })).toBeFocused();
@@ -1028,7 +1030,7 @@ test("mobile Shortcuts settings preserve supported commands and all entry points
   );
   await settings.getByRole("button", { name: "Close", exact: true }).click();
   await input.press("Control+Shift+k");
-  await ui.getByPlaceholder("Type a command or search…").fill("Shortcuts");
+  await ui.getByPlaceholder("Search workspaces, agents, tabs…").fill("Shortcuts");
   await ui.getByRole("option", { name: /Shortcuts/ }).click();
   await expect(settings.getByRole("combobox", { name: "Settings section" })).toHaveAttribute(
     "data-value",

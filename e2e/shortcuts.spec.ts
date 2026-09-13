@@ -31,6 +31,7 @@ test("workspace shortcuts create, search, split and close the active pane withou
     await expect(page.locator(".concors-terminal .xterm").filter({ visible: true })).toHaveCount(1);
     await page.getByRole("button", { name: "Open workspace menu", exact: true }).click();
     await page.getByRole("menuitem", { name: "Clone repository…", exact: true }).click();
+    await page.getByRole("button", { name: "Paste a URL", exact: true }).click();
     await page.getByLabel("Repository URL or local path").focus();
     // Workspace actions must not escape a form dialog.
     await page.keyboard.press("Control+Shift+t");
@@ -80,7 +81,7 @@ test("workspace shortcuts create, search, split and close the active pane withou
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await page.keyboard.press("Control+Shift+k");
     await expect(page.getByRole("dialog")).toBeVisible();
-    await page.getByPlaceholder("Type a command or search…").fill("Shortcuts");
+    await page.getByPlaceholder("Search workspaces, agents, tabs…").fill("Shortcuts");
     await page.getByRole("option", { name: /Shortcuts/ }).click();
     await expect(page.getByRole("heading", { name: "Shortcuts", exact: true })).toBeVisible();
     await expect(page.getByRole("main")).toContainText("Ctrl+Shift+P → Backspace");
@@ -158,13 +159,16 @@ test("workspace shortcuts create, search, split and close the active pane withou
     await expect(panes).toHaveCount(0);
     await expect(tab).toHaveCount(0);
     await page.keyboard.press("Control+Shift+k");
-    await page.getByPlaceholder("Type a command or search…").fill(basename(directory));
-    await page.getByRole("option", { name: basename(directory), exact: true }).click();
+    await page.getByPlaceholder("Search workspaces, agents, tabs…").fill(basename(directory));
+    await page
+      .locator('[data-search-result="workspace"]')
+      .filter({ hasText: basename(directory) })
+      .click();
     await expect(
       page.getByRole("heading", { name: basename(directory), exact: true }),
     ).toBeVisible();
     await page.keyboard.press("Control+Shift+k");
-    await page.getByPlaceholder("Type a command or search…").fill("New tab");
+    await page.getByPlaceholder("Search workspaces, agents, tabs…").fill("New tab");
     await page.getByRole("option", { name: /New tab/ }).click();
     await expect(page.getByRole("menuitem", { name: "Terminal", exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
