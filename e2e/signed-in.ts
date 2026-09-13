@@ -58,10 +58,13 @@ const TOKEN_KEY = "concors.auth.session-token.v1";
  * real sign-in flow.
  */
 export async function signedIn(page: Page, name = "E2E User"): Promise<void> {
-  await page.addInitScript(([key, token]: [string, string]) => localStorage.setItem(key, token), [
-    TOKEN_KEY,
-    "e2e-session-token",
-  ] as [string, string]);
+  await page.addInitScript(
+    ([key, token]: [string, string]) => {
+      // Mobile's sandboxed renderer has no storage access and must never receive account tokens.
+      if (window === window.top) localStorage.setItem(key, token);
+    },
+    [TOKEN_KEY, "e2e-session-token"] as [string, string],
+  );
   await page.route("**/api/**", async (route) => {
     const request = route.request();
     const origin = request.headers()["origin"] ?? "*";
