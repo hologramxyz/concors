@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import { ColorThemeProvider } from "@/theme/color-theme-provider";
 import { useColorThemePreference } from "@/theme/use-color-theme";
 import { FilesSidebar } from "@/files/sidebar";
@@ -379,9 +380,9 @@ function AppContent() {
                           className="flex items-center justify-between gap-3 border-b bg-destructive/5 px-4 py-2 text-xs text-destructive"
                         >
                           <span>{error}</span>
-                          <button type="button" onClick={() => setError(null)}>
+                          <Button variant="ghost" type="button" onClick={() => setError(null)}>
                             Dismiss
-                          </button>
+                          </Button>
                         </div>
                       )}
                       {connection.state.status === "error" && (
@@ -390,13 +391,9 @@ function AppContent() {
                           className="flex items-center justify-between gap-3 border-b bg-destructive/5 px-4 py-2 text-xs text-destructive"
                         >
                           <span>{connection.state.error.message}</span>
-                          <button
-                            type="button"
-                            className="shrink-0 underline"
-                            onClick={connection.reconnectNow}
-                          >
+                          <Button type="button" variant="outline" onClick={connection.reconnectNow}>
                             Retry connection
-                          </button>
+                          </Button>
                         </div>
                       )}
                       {workspace && !connection.workspaceReady && (
@@ -455,13 +452,13 @@ function AppContent() {
                                 Your projects and layouts will appear when this machine is
                                 connected.
                               </p>
-                              <button
+                              <Button
                                 type="button"
                                 onClick={connection.reconnectNow}
-                                className="text-sm text-primary"
+                                variant="outline"
                               >
                                 Reconnect
-                              </button>
+                              </Button>
                             </div>
                           )
                         ) : view === "machines" ? (
@@ -499,9 +496,9 @@ function AppContent() {
                       className="fixed bottom-4 left-1/2 z-50 flex max-w-[90vw] -translate-x-1/2 items-center gap-3 rounded-md border bg-popover p-3 text-ui shadow-md"
                     >
                       <span>{newWorkspace.error}</span>
-                      <button type="button" onClick={newWorkspace.dismiss} className="text-primary">
+                      <Button type="button" variant="ghost" onClick={newWorkspace.dismiss}>
                         Dismiss
-                      </button>
+                      </Button>
                     </div>
                   )}
                   {addingProject && (

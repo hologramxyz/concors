@@ -3,6 +3,7 @@ import { useNotificationPreferences, setNotificationPreferences } from "./prefer
 import { notificationPermission, requestNotificationPermission, desktopNotice } from "./platform";
 import { playAgentSound, unlockAudio } from "./sound";
 import { Section } from "@/views/settings-primitives";
+import { Button } from "@/components/ui/button";
 
 export function NotificationSettings({
   native = false,
@@ -50,10 +51,10 @@ export function NotificationSettings({
           }}
         />
       </label>
-      <div className="mb-3 flex gap-4 text-xs">
-        <button
+      <div className="mb-3 flex flex-wrap gap-2">
+        <Button
           disabled={busy}
-          className="text-primary"
+          variant="outline"
           onClick={() =>
             void run(async () => {
               await unlockAudio();
@@ -62,10 +63,10 @@ export function NotificationSettings({
           }
         >
           Test completion sound
-        </button>
-        <button
+        </Button>
+        <Button
           disabled={busy}
-          className="text-primary"
+          variant="outline"
           onClick={() =>
             void run(async () => {
               await unlockAudio();
@@ -74,7 +75,7 @@ export function NotificationSettings({
           }
         >
           Test input sound
-        </button>
+        </Button>
       </div>
       {!native && (
         <>
@@ -102,9 +103,10 @@ export function NotificationSettings({
               }}
             />
           </label>
-          <button
+          <Button
             disabled={busy || permission !== "granted"}
-            className="text-xs text-primary disabled:opacity-40"
+            variant="outline"
+            className="self-start"
             onClick={() =>
               void run(async () => {
                 const close = await desktopNotice(
@@ -122,7 +124,7 @@ export function NotificationSettings({
             }
           >
             Test desktop notification
-          </button>
+          </Button>
           {permission === "unsupported" && (
             <p className="mt-2 text-xs text-muted-foreground">
               Desktop notifications aren’t supported by this browser.

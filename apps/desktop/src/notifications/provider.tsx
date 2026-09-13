@@ -4,6 +4,7 @@ import { NotificationContext } from "./context";
 import { AttentionEngine, type Notice } from "./engine";
 import { claimNotification, getNotificationPreferences } from "./preferences";
 import { desktopNotice } from "./platform";
+import { Button } from "@/components/ui/button";
 import { playAgentSound, unlockAudio } from "./sound";
 
 export function NotificationProvider({
@@ -195,9 +196,9 @@ export function NotificationProvider({
         {problem && (
           <div role="status" className="rounded-lg border bg-card p-3 text-xs shadow-lg">
             {problem}
-            <button className="ml-2 text-primary" onClick={() => setProblem(null)}>
+            <Button variant="ghost" className="ml-2" onClick={() => setProblem(null)}>
               Dismiss
-            </button>
+            </Button>
           </div>
         )}
       </aside>

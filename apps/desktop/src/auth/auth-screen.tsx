@@ -97,7 +97,7 @@ export function AuthScreen({ state, onSignIn, onSignUp, onRetry }: AuthScreenPro
               <span className="font-medium">Your saved session could not be checked.</span>
               <span className="mt-0.5 block text-muted-foreground">{state.message}</span>
             </span>
-            <Button variant="outline" size="xs" onClick={onRetry} className="shrink-0">
+            <Button variant="outline" onClick={onRetry}>
               <RefreshCw data-icon="inline-start" aria-hidden="true" />
               Retry
             </Button>

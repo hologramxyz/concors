@@ -542,7 +542,7 @@ export function CreateMachineDialog({
             </Button>
             <Button
               type="submit"
-              className="h-auto min-h-10 min-w-0 py-2 text-center whitespace-normal"
+              className="min-w-0"
               disabled={busy || (step === 0 ? !serverReady : step === 1 ? !customizeReady : !ready)}
             >
               {step < 2

@@ -251,7 +251,7 @@ function Directory({
         <li>
           <div role="alert" className="space-y-2 p-3 text-ui text-muted-foreground">
             {error}
-            <Button size="xs" variant="outline" onClick={retry}>
+            <Button variant="outline" onClick={retry}>
               Retry
             </Button>
           </div>

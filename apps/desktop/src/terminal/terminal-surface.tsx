@@ -7,6 +7,7 @@ import type { TerminalInfo, TerminalOperation } from "@concors/protocol";
 import { TerminalConnectionContext } from "./connection-context";
 import "@xterm/xterm/css/xterm.css";
 import { CompactLayoutContext } from "@/components/compact-layout";
+import { Button } from "@/components/ui/button";
 import { MobileTerminalControls } from "./mobile-controls";
 
 export function TerminalSurface({
@@ -293,14 +294,14 @@ export function TerminalSurface({
       {session && !isRecovering && !["running", "starting"].includes(session.status) && (
         <div className="flex items-center justify-between border-b px-3 py-2 text-xs text-muted-foreground">
           <span>{session.status === "exited" ? "Session ended" : "Session failed"}</span>
-          <button
+          <Button
             type="button"
             disabled={!canEdit || restartBusy}
             onClick={onRestart}
-            className="text-primary"
+            variant="outline"
           >
             {restartBusy ? "Starting…" : "Start new session"}
-          </button>
+          </Button>
         </div>
       )}
       {(launchError || (!isRecovering && (error || session?.error))) && (
@@ -310,14 +311,14 @@ export function TerminalSurface({
         >
           <span>{launchError ?? error ?? session?.error}</span>
           {isRecovering && (
-            <button
+            <Button
               type="button"
               disabled={!canEdit || restartBusy}
               onClick={onRestart}
-              className="text-primary"
+              variant="outline"
             >
               Retry connection
-            </button>
+            </Button>
           )}
         </div>
       )}

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { AgentPending } from "@concors/protocol";
 import { AgentMarkdown } from "./markdown";
-const button = "rounded-md border px-3 py-2 text-sm hover:bg-muted disabled:opacity-40";
+import { Button } from "@/components/ui/button";
 export function PendingInput({
   pending,
   disabled,
@@ -49,26 +49,26 @@ export function PendingInput({
           <div className="flex flex-wrap gap-2">
             {pending.actions
               ? pending.actions.map((action) => (
-                  <button
+                  <Button
                     key={action.id}
-                    className={button}
+                    variant="outline"
                     disabled={disabled}
                     onClick={() =>
                       void onRespond({ decision: action.decision, actionId: action.id })
                     }
                   >
                     {action.label}
-                  </button>
+                  </Button>
                 ))
               : pending.decisions.map((decision) => (
-                  <button
+                  <Button
                     key={decision}
-                    className={button}
+                    variant="outline"
                     disabled={disabled}
                     onClick={() => void onRespond({ decision })}
                   >
                     {label(decision)}
-                  </button>
+                  </Button>
                 ))}
           </div>
         </>
@@ -177,7 +177,7 @@ export function PendingInput({
                             choices[index]?.click();
                           }}
                           key={option.label}
-                          className={`${button} block w-full min-w-0 text-left ${selected ? "border-foreground bg-muted" : ""}`}
+                          className={`block w-full min-w-0 rounded-md border px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-40 ${selected ? "border-foreground bg-muted" : ""}`}
                           disabled={disabled}
                           onClick={() => {
                             setAnswers((current) => ({
@@ -221,8 +221,9 @@ export function PendingInput({
             );
           })}
           <div className="flex flex-wrap gap-2">
-            <button
-              className={button}
+            <Button
+              type="submit"
+              variant="outline"
               disabled={
                 disabled ||
                 pending.questions.some(
@@ -235,19 +236,19 @@ export function PendingInput({
                 : pending.questions.length
                   ? "Submit answers"
                   : "Continue"}
-            </button>
+            </Button>
             {pending.decisions
               .filter((d) => d !== "accept")
               .map((decision) => (
-                <button
+                <Button
                   key={decision}
                   type="button"
-                  className={button}
+                  variant="outline"
                   disabled={disabled}
                   onClick={() => void onRespond({ decision })}
                 >
                   {label(decision)}
-                </button>
+                </Button>
               ))}
           </div>
         </form>

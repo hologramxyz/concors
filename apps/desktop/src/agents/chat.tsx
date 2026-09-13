@@ -17,8 +17,8 @@ import { useConversationScroll } from "./conversation-scroll";
 import { useTabVisible } from "@/workspace/tab-visibility";
 import { MessageNavigation } from "./message-navigation";
 import { useMessageIndex } from "./message-index";
+import { Button } from "@/components/ui/button";
 
-const button = "rounded-md border px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-40";
 export function ChatPane({
   project,
   tab,
@@ -77,8 +77,8 @@ export function ChatPane({
           {error && (
             <div role="alert" className="flex items-center gap-2 text-xs text-destructive">
               {error}
-              <button
-                className={button}
+              <Button
+                variant="outline"
                 disabled={!canEdit || !available}
                 onClick={() => {
                   attempted.current = false;
@@ -87,7 +87,7 @@ export function ChatPane({
                 }}
               >
                 Retry
-              </button>
+              </Button>
             </div>
           )}
           <div className="rounded-2xl border bg-background p-2">
@@ -255,13 +255,10 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
         />
       </div>
       {!atBottom && (
-        <button
-          className="z-10 mx-auto -mt-9 mb-2 flex items-center gap-1 rounded-xl border bg-background px-3 py-1 text-xs shadow"
-          onClick={latest}
-        >
+        <Button variant="outline" className="z-10 mx-auto -mt-9 mb-2 shadow" onClick={latest}>
           <ArrowDown className="size-3" />
           Latest
-        </button>
+        </Button>
       )}
       <div
         data-chat-footer
@@ -271,8 +268,8 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
           {!compact && feedback}
           {latestPlan && <PlanProgress compact item={latestPlan} />}
           {canImplement && (
-            <button
-              className={button}
+            <Button
+              variant="outline"
               disabled={!connected || busy}
               onClick={() =>
                 void run(() =>
@@ -286,7 +283,7 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
               }
             >
               Implement plan
-            </button>
+            </Button>
           )}
           {agent && <AgentAccountPrompt agent={agent} canEdit={!!connected} />}
           {agent && (
@@ -312,9 +309,9 @@ function HistoryError({ message, onRetry }: { message: string; onRetry: () => vo
   return (
     <div role="alert" className="flex items-center justify-center gap-2 text-xs text-destructive">
       {message}
-      <button className={button} onClick={onRetry}>
+      <Button variant="outline" onClick={onRetry}>
         Retry loading messages
-      </button>
+      </Button>
     </div>
   );
 }
