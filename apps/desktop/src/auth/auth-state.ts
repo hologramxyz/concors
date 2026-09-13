@@ -80,12 +80,12 @@ const CODE_MESSAGES: Record<string, string> = {
 /** Human-readable message for anything thrown by `@concors/api-client`. */
 export function describeAuthError(error: unknown): string {
   if (error instanceof ApiNetworkError) {
-    return "Can't reach the Concors API. Check your connection and try again.";
+    return "Can't reach the Concourse API. Check your connection and try again.";
   }
   if (error instanceof ApiError) {
     const known = error.code === undefined ? undefined : CODE_MESSAGES[error.code];
     if (known !== undefined) return known;
-    if (error.status >= 500) return "The Concors API is having trouble. Try again in a moment.";
+    if (error.status >= 500) return "The Concourse API is having trouble. Try again in a moment.";
     return error.message;
   }
   return error instanceof Error ? error.message : "Something went wrong.";

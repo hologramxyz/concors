@@ -55,7 +55,7 @@ describe("interpretProbe", () => {
     expect(offline.dropToken).toBe(false);
     expect(offline.state).toMatchObject({
       status: "unavailable",
-      message: /reach the Concors API/,
+      message: /reach the Concourse API/,
     });
 
     const broken = interpretProbe({ kind: "failed", error: new ApiError(503, "down") }, true);

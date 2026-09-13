@@ -23,7 +23,7 @@ export function AdvancedSettings({
     <>
       <Section
         title="Daemon"
-        description="The Concors daemon runs your agents locally or on a remote machine."
+        description="The Concourse daemon runs your agents locally or on a remote machine."
       >
         <Row label="Endpoint">
           <span className="flex items-center gap-2">
@@ -51,7 +51,7 @@ export function AdvancedSettings({
           <Mono>{APP_VERSION}</Mono>
         </Row>
         <Row
-          label="Concors API"
+          label="Concourse API"
           hint="Control plane for accounts, organizations, and cloud machines."
         >
           <Mono>{apiUrl}</Mono>
