@@ -10,7 +10,7 @@ import {
   type TerminalInfo,
   type ProjectSetup,
 } from "@concors/protocol";
-import type { Machine, SshKey } from "@concors/api-client";
+import { MachineIconSchema, type Machine, type SshKey } from "@concors/api-client";
 import type { WebSocketLike } from "@concors/daemon-client";
 import { newRequestId } from "@concors/client-core";
 import {
@@ -629,6 +629,14 @@ export function createDemoServer() {
       if (path === "/api/auth/sign-in/email")
         return response({ user: demoMe.user, token: "demo-session-token" });
       if (path === "/api/v1/me") return response(demoMe);
+      if (path === "/api/v1/github/")
+        return response({
+          configured: false,
+          connected: false,
+          login: null,
+          updatedAt: null,
+          manageUrl: null,
+        });
       if (path === "/api/v1/organizations")
         return response({
           organizations: [
@@ -690,7 +698,7 @@ export function createDemoServer() {
           })),
         });
       }
-      const machineId = path.match(/^\/api\/v1\/machines\/([^/]+)(\/resume)?$/);
+      const machineId = path.match(/^\/api\/v1\/machines\/([^/]+)(\/resume|\/icon)?$/);
       if (machineId) {
         const machine = machines.find((item) => item.id === machineId[1]);
         if (!machine) return response({ message: "Demo machine not found" }, 404);
@@ -698,7 +706,11 @@ export function createDemoServer() {
           machine.cancelledAt = new Date().toISOString();
           machine.paidUntil = "2099-01-01T00:00:00.000Z";
         }
-        if (machineId[2]) machine.cancelledAt = null;
+        if (machineId[2] === "/resume") machine.cancelledAt = null;
+        if (method === "PATCH") {
+          if (machineId[2] === "/icon") machine.icon = MachineIconSchema.parse(body.icon);
+          else machine.name = String(body.name);
+        }
         return response({ machine });
       }
       if (path === "/api/v1/billing")
