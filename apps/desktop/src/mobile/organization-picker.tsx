@@ -9,7 +9,7 @@ export function MobileOrganizationPicker({
   onSelect,
 }: {
   auth: SignedInAuth;
-  onSelect(id: string): void | Promise<unknown>;
+  onSelect(id: string): unknown;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -29,7 +29,7 @@ interface SettingsViewProps {
   readonly onSetCornerStyle: (style: CornerStyle) => void;
   readonly auth: SignedInAuth;
   readonly onSignOut: () => void;
-  readonly onSetActiveOrganization: (organizationId: string) => void;
+  readonly onSetActiveOrganization: (organizationId: string) => unknown;
 }
 
 export function SettingsView({

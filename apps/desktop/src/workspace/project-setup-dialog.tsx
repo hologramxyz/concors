@@ -70,7 +70,7 @@ export function ProjectSetupDialog({
     if (!open) {
       setActiveId(null);
       setStep("repository");
-      setSource("github");
+      setSource(githubEnabled ? "github" : "url");
       setRepository("");
       setCustomDirectory(null);
       setError(null);
