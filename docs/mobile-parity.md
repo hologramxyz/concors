@@ -37,6 +37,8 @@ Phone-specific behavior:
 - Tabs, Machine, Search, Settings, Add Project and New Tab use the shared Radix dialog with animated
   bottom-sheet presentation, focus restoration and reduced-motion support.
   Opening Search or choosing a machine leaves the sidebar visible behind it.
+- [Search](search.md) is a shared machine-scoped workspace/agent/tab finder, with exact pane
+  destinations, name/path context and secondary commands. It does not search message/file contents.
 - Separate glass controls contain the sidebar toggle, sidebar Search, picker and Files button (native SwiftUI
   glass on supported iOS builds; CSS backdrop blur in the web/Android renderer),
   with matching rounded pressed states and opaque fallbacks for reduced transparency.
