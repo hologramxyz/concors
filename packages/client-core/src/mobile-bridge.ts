@@ -153,6 +153,7 @@ export const MobileRendererMessageSchema = z.discriminatedUnion("type", [
 export type MobileRendererMessage = z.infer<typeof MobileRendererMessageSchema>;
 export const MobileHostMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("state"), state: MobileStateSchema }),
+  z.object({ type: z.literal("foreground"), scope: id }),
   z.object({
     type: z.literal("native-event"),
     scope: id,

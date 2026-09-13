@@ -7,6 +7,7 @@ import {
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import {
   Alert,
+  AppState,
   Keyboard,
   KeyboardAvoidingView,
   Linking,
@@ -181,6 +182,12 @@ function SignedInWorkspace() {
     state,
     action: async (_action: MobileAction): Promise<unknown> => undefined,
   });
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (next) => {
+      if (next === "active" && ready.current) renderer.current?.send({ type: "foreground", scope });
+    });
+    return () => subscription.remove();
+  }, [scope]);
   const action = async (action: MobileAction): Promise<unknown> => {
     assertWorkspaceActionAllowed(auth.direct, !!auth.me, action);
     switch (action.kind) {

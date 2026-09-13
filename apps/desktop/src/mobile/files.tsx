@@ -68,7 +68,10 @@ export function MobileFilesProvider({
   };
   return (
     <FilePromptsContext value={prompts}>
-      <FilesProvider beforeLeaveRef={beforeLeave} leaveLabel={direct ? "disconnect" : "sign out"}>
+      <FilesProvider
+        beforeLeaveRef={beforeLeave}
+        leaveLabel={direct ? "disconnect" : "leave this account"}
+      >
         <FileDraftGuard />
         {children}
       </FilesProvider>
