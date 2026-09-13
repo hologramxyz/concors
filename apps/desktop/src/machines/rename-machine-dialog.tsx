@@ -49,7 +49,7 @@ export function RenameMachineDialog({
         <Button
           variant="ghost"
           size="icon"
-          className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
+            className="text-muted-foreground hover:text-foreground"
           aria-label={`Rename ${machine.name}`}
           title="Rename machine"
         >
