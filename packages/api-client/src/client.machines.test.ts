@@ -389,3 +389,19 @@ it("renames a machine with authorization and exposes name conflicts", async () =
     message: "Name already exists",
   });
 });
+
+it("saves or resets a machine icon with authorization", async () => {
+  const machine = { ...MACHINE, icon: "🚀" };
+  const fetch = vi.fn(async () => json({ machine }));
+  const api = client(fetch);
+  await expect(api.updateMachineIcon("machine/1", "🚀")).resolves.toEqual(machine);
+  const { url, init } = lastCall(fetch);
+  expect(url).toBe("https://api.example/api/v1/machines/machine%2F1/icon");
+  expect(init.method).toBe("PATCH");
+  expect(JSON.parse(String(init.body))).toEqual({ icon: "🚀" });
+  expect(new Headers(init.headers).get("authorization")).toBe("Bearer tok-1");
+  fetch.mockResolvedValueOnce(json({ machine: { ...machine, icon: null } }));
+  await expect(api.updateMachineIcon("machine/1", null)).resolves.toMatchObject({ icon: null });
+  await expect(api.updateMachineIcon("machine/1", "not an emoji")).rejects.toThrow();
+  expect(fetch).toHaveBeenCalledTimes(2);
+});

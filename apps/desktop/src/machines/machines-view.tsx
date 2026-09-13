@@ -1,17 +1,9 @@
+import { MachineIcon } from "./machine-icon";
+import { MachineIconPicker } from "./machine-icon-picker";
 import { DevelopmentToolsStatus } from "./development-tools-status";
 import type { Machine } from "@concors/api-client";
 import { cn } from "cn";
-import {
-  CalendarX,
-  Check,
-  Cloud,
-  Copy,
-  LoaderCircle,
-  Plus,
-  RefreshCw,
-  Server,
-  Undo2,
-} from "lucide-react";
+import { CalendarX, Check, Cloud, Copy, LoaderCircle, Plus, RefreshCw, Undo2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { activeOrganization, type SignedInAuth } from "@/auth/auth-state";
@@ -42,6 +34,8 @@ import { describeMachinesError, useMachines } from "./use-machines.ts";
 
 interface MachinesViewProps {
   readonly auth: SignedInAuth;
+  readonly onSelectLocal?: () => void;
+  readonly localSelected?: boolean;
   readonly focusedMachineId: string | null;
   readonly creating: boolean;
   readonly onCreatingChange: (creating: boolean) => void;
@@ -50,6 +44,8 @@ interface MachinesViewProps {
 /** Cloud machines of the active organization: list, create, rename, cancel, and how to connect. */
 export function MachinesView({
   auth,
+  onSelectLocal,
+  localSelected = false,
   focusedMachineId,
   creating,
   onCreatingChange: setCreating,
@@ -79,7 +75,7 @@ export function MachinesView({
         <div className="min-w-0">
           <h2 className="text-2xl font-semibold tracking-tight">Machines</h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Your cloud development machines, managed by Concors.
+            Your computers and cloud development machines.
           </p>
           <p className="mt-1 text-xs break-words text-muted-foreground">
             {organization?.name ?? "Your organization"} · Billed monthly
@@ -119,6 +115,29 @@ export function MachinesView({
         </div>
       )}
 
+      {onSelectLocal && (
+        <div
+          className="mb-5 flex flex-col items-start justify-between gap-4 rounded-xl border bg-card/40 p-5 sm:flex-row sm:items-center sm:p-6"
+          aria-label="Local machine"
+        >
+          <div className="flex min-w-0 items-center gap-3">
+            <MachineIcon local className="size-6 text-muted-foreground" />
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h3 className="text-lg font-semibold">This computer</h3>
+                <Badge variant="outline">Local</Badge>
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Your local files, terminals, and agents.
+              </p>
+            </div>
+          </div>
+          <Button variant="outline" size="sm" className="shrink-0" onClick={onSelectLocal}>
+            {localSelected ? "Open workspace" : "Use this computer"}
+          </Button>
+        </div>
+      )}
+
       {state.machines === null && !state.error ? (
         <p role="status" className="text-sm text-muted-foreground">
           Loading machines…
@@ -126,7 +145,7 @@ export function MachinesView({
       ) : empty ? (
         <div className="flex min-h-80 flex-col items-center justify-center gap-4 rounded-xl border border-dashed bg-card/40 p-8 text-center">
           <Cloud className="size-10 text-muted-foreground/50" aria-hidden="true" />
-          <h3 className="text-lg font-medium">No machines yet</h3>
+          <h3 className="text-lg font-medium">No cloud machines yet</h3>
           <p className="max-w-sm text-sm text-muted-foreground">
             Create a machine to run agents, clone repositories, and keep your work in one place.
           </p>
@@ -150,6 +169,7 @@ export function MachinesView({
               <MachineCard
                 machine={machine}
                 onRename={(name) => state.rename(machine.id, name)}
+                onIconChange={(icon) => state.setIcon(machine.id, icon)}
                 onRetryTools={() => state.retryTools(machine.id)}
                 onCancel={() => setCancelling(machine)}
                 resuming={resuming === machine.id}
@@ -206,6 +226,7 @@ const TONE_CLASS: Record<StatusTone, string> = {
 function MachineCard({
   machine,
   onRename,
+  onIconChange,
   onRetryTools,
   onCancel,
   onResume,
@@ -213,6 +234,7 @@ function MachineCard({
 }: {
   readonly machine: Machine;
   readonly onRename: (name: string) => Promise<void>;
+  readonly onIconChange: (icon: string | null) => Promise<void>;
   readonly onRetryTools: () => Promise<void>;
   readonly onCancel: () => void;
   readonly onResume: () => void;
@@ -226,7 +248,7 @@ function MachineCard({
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2.5">
-            <Server className="mr-1 size-5 text-muted-foreground" aria-hidden="true" />
+            <MachineIconPicker machine={machine} onSave={onIconChange} />
             <span
               className={cn(
                 "size-2 shrink-0 rounded-full",

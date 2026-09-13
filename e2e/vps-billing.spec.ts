@@ -195,7 +195,7 @@ async function billingApi(
 async function openCreation(page: Page) {
   await page.goto("/");
   await page.getByRole("button", { name: "Switch machine", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Add a machine", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Manage machines", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Machines", exact: true }).first()).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.getByRole("button", { name: "New machine", exact: true }).first().click();
@@ -256,7 +256,7 @@ test("missing Stripe prices cannot be mistaken for a free VPS", async ({ page })
   const state = await billingApi(page, { card: true, unpriced: true });
   await page.goto("/");
   await page.getByRole("button", { name: "Switch machine", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Add a machine", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Manage machines", exact: true }).click();
   await page.getByRole("button", { name: "New machine", exact: true }).first().click();
   await expect(page.getByText("Unavailable", { exact: true }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Continue", exact: true })).toBeDisabled();
@@ -316,7 +316,7 @@ test("machine views reuse fresh data and explicit refresh updates the switcher",
   expect(reads()).toBe(before);
   state.created = false;
   await page.getByRole("button", { name: "Refresh", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "No machines yet" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "No cloud machines yet" })).toBeVisible();
   await page.getByRole("button", { name: "Switch machine", exact: true }).click();
   await expect(page.getByRole("menuitem", { name: /build-agent provisioning/i })).toHaveCount(0);
   expect(reads()).toBe(before + 1);

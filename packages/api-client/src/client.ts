@@ -1,3 +1,4 @@
+import { MachineIconSchema } from "./machine-icon.ts";
 import {
   GitHubStatusSchema,
   GitHubAccountsSchema,
@@ -256,6 +257,19 @@ export class ApiClient {
       body: { name },
       schema: MachineResponseSchema,
     });
+    return data.machine;
+  }
+
+  /** Save an account-wide machine emoji; null restores the default server icon. */
+  async updateMachineIcon(id: string, icon: string | null): Promise<Machine> {
+    const { data } = await this.#request(
+      "PATCH",
+      `/api/v1/machines/${encodeURIComponent(id)}/icon`,
+      {
+        body: { icon: MachineIconSchema.parse(icon) },
+        schema: MachineResponseSchema,
+      },
+    );
     return data.machine;
   }
 

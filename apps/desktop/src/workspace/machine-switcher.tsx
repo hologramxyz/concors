@@ -1,8 +1,9 @@
+import { MachineIcon } from "@/machines/machine-icon";
 import { machineStatusLabel } from "@concors/client-core";
 import { useMachineList } from "@/machines/use-machines";
 import { LOCAL_HOST, loadHosts, machineAvailability, machineHost, type Host } from "./machines";
 import { useEffect, useState } from "react";
-import { ChevronDown, Server, Plus } from "lucide-react";
+import { ChevronDown, Check, Settings2 } from "lucide-react";
 import { TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import {
@@ -31,7 +32,10 @@ export function MachineSwitcher({
   compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const list = useMachineList(organizationId, open && !!organizationId);
+  const list = useMachineList(
+    organizationId,
+    (open || selected.machineId !== "local") && !!organizationId,
+  );
   const cloudMachines = list.data?.filter((machine) => machine.status !== "deleted") ?? null;
   const loadError = !!list.error;
   useEffect(() => {
@@ -45,10 +49,18 @@ export function MachineSwitcher({
       <SidebarTooltip collapsed={compact}>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger
-            className={`relative flex min-w-0 items-center rounded-md hover:bg-sidebar-accent ${compact ? "sidebar-rail-control" : "h-9 w-fit gap-1.5 px-1.5 text-left"}`}
+            className={`relative flex min-w-0 items-center rounded-md hover:bg-sidebar-accent ${compact ? "sidebar-rail-control" : "h-9 w-[192px] max-w-full gap-1.5 px-1.5 text-left"}`}
             aria-label="Switch machine"
           >
-            <Server className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            {selected.machineId !== "local" && cloudMachines === null ? (
+              <span className="size-4 shrink-0 rounded bg-muted" aria-hidden="true" />
+            ) : (
+              <MachineIcon
+                local={selected.machineId === "local"}
+                icon={cloudMachines?.find((machine) => machine.id === selected.machineId)?.icon}
+                className="size-4 text-muted-foreground"
+              />
+            )}
             {compact ? (
               <span
                 role="img"
@@ -57,7 +69,9 @@ export function MachineSwitcher({
               />
             ) : (
               <>
-                <span className="min-w-0 truncate text-ui font-medium">{selected.label}</span>
+                <span className="min-w-0 flex-1 truncate text-ui font-medium">
+                  {selected.label}
+                </span>
                 <ChevronDown className="size-3 shrink-0" />
               </>
             )}
@@ -67,26 +81,38 @@ export function MachineSwitcher({
           {selected.label} · {connected ? "Connected" : "Disconnected"} · Switch machine
         </TooltipContent>
       </SidebarTooltip>
-      <DropdownMenuContent align="start" className="w-64">
-        <DropdownMenuItem onSelect={() => onSelect(LOCAL_HOST)}>
-          <Server className={selected.machineId === "local" ? "text-primary" : undefined} />
-          <span
-            className={`min-w-0 flex-1 truncate ${selected.machineId === "local" ? "font-medium text-primary" : ""}`}
-          >
-            This computer
+      <DropdownMenuContent
+        align="start"
+        style={{ width: 320, maxWidth: "calc(100vw - 24px)" }}
+        className="p-1.5"
+      >
+        <DropdownMenuItem
+          className="min-h-10 gap-3 px-2.5"
+          onSelect={() => onSelect(LOCAL_HOST)}
+          aria-label={`This computer${selected.machineId === "local" ? (connected ? " Connected" : " Selected") : ""}`}
+          title={`This computer${selected.machineId === "local" ? (connected ? " · Connected" : " · Selected") : ""}`}
+        >
+          <MachineIcon local />
+          <span className="min-w-0 flex-1 truncate">This computer</span>
+          <span className="flex w-9 shrink-0 items-center justify-end gap-2" aria-hidden="true">
+            {selected.machineId === "local" && (
+              <>
+                {connected && <span className="size-1.5 shrink-0 rounded-full bg-emerald-500" />}
+                <Check className="size-4 text-primary" />
+              </>
+            )}
           </span>
-          {selected.machineId === "local" && (
-            <span className="ml-auto shrink-0 text-xs text-primary">
-              {connected ? "Connected" : "Selected"}
-            </span>
-          )}
         </DropdownMenuItem>
         {cloudMachines?.map((machine) => {
           const availability = machineAvailability(machine);
           const isSelected = selected.machineId === machine.id;
+          const status = machineStatusLabel(availability, isSelected && connected);
           return (
             <DropdownMenuItem
               key={machine.id}
+              className="min-h-10 gap-3 px-2.5"
+              aria-label={`${machine.name} ${status}${isSelected ? " Selected" : ""}`}
+              title={`${machine.name} · ${status}${isSelected ? " · Selected" : ""}`}
               onSelect={() => {
                 if (machineAvailability(machine) !== "connectable") return onViewCloud(machine.id);
                 onSelect(
@@ -97,17 +123,25 @@ export function MachineSwitcher({
                 );
               }}
             >
-              <Server className={isSelected ? "text-primary" : undefined} />
+              <MachineIcon
+                icon={machine.icon}
+                className={`size-4 ${isSelected ? "text-primary" : "text-muted-foreground"}`}
+              />
               <span
                 className={`min-w-0 flex-1 truncate ${isSelected ? "font-medium text-primary" : ""}`}
                 title={machine.name}
               >
                 {machine.name}
               </span>
-              <span
-                className={`ml-auto shrink-0 text-xs capitalize ${isSelected ? "text-primary" : "text-muted-foreground"}`}
-              >
-                {machineStatusLabel(availability, isSelected && connected)}
+              <span className="flex w-9 shrink-0 items-center justify-end gap-2" aria-hidden="true">
+                <span
+                  className={`size-1.5 shrink-0 rounded-full ${(isSelected && connected) || availability === "connectable" ? "bg-emerald-500" : availability === "provisioning" ? "bg-amber-500" : "bg-muted-foreground/50"}`}
+                />
+                {isSelected ? (
+                  <Check className="size-4 text-primary" />
+                ) : (
+                  <span className="size-4" />
+                )}
               </span>
             </DropdownMenuItem>
           );
@@ -126,9 +160,9 @@ export function MachineSwitcher({
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => onViewCloud()}>
-          <Plus />
-          Add a machine
+        <DropdownMenuItem className="min-h-10 gap-3 px-2.5" onSelect={() => onViewCloud()}>
+          <Settings2 />
+          Manage machines
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
