@@ -3,6 +3,7 @@ import type { McpServer } from "@concors/protocol";
 import { openCodeHistory } from "./history.ts";
 import { Agent } from "undici";
 import { randomBytes } from "node:crypto";
+import { sessionOffset } from "./session-page.ts";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import { readFile } from "node:fs/promises";
@@ -169,18 +170,23 @@ export class OpenCodeProvider extends EventProvider {
           ),
         },
       };
-    if (method === "session/list")
+    if (method === "session/list") {
+      const offset = sessionOffset(p["cursor"]);
+      const sessions = array(await this.call(`/session?limit=${offset + 101}`));
       return {
-        sessions: array(await this.call("/session?limit=100"))
+        nextCursor: sessions.length > offset + 100 ? String(offset + 100) : null,
+        sessions: sessions
+          .slice(offset, offset + 100)
           .map(object)
           .filter((s) => s["directory"] === this.cwd)
           .map((s) => ({
             id: string(s["id"]),
-            title: string(s["title"]),
+            title: string(s["title"]).slice(0, 4000),
             directory: this.cwd,
             updatedAt: new Date(Number(object(s["time"])["updated"])).toISOString(),
           })),
       };
+    }
     if (method === "session/fork") {
       const fork = object(
         await this.call(`/session/${encodeURIComponent(this.threadId)}/fork`, {}),

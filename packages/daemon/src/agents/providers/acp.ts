@@ -529,14 +529,20 @@ export class AcpProvider extends EventProvider {
     if (!connection || this.closed)
       throw new Error("Agent is disconnected. Reopen this session to reconnect.");
     if (method === "session/list") {
-      const response = await connection.listSessions({ cwd: this.cwd });
+      if (!this.capabilities.loadSession || !this.capabilities.sessionCapabilities?.list)
+        throw new Error("This provider does not support listing and resuming saved sessions.");
+      const response = await connection.listSessions({
+        cwd: this.cwd,
+        cursor: string(p["cursor"]) || undefined,
+      });
       return {
+        nextCursor: response.nextCursor ?? null,
         sessions: array(object(response)["sessions"])
           .slice(0, 100)
           .map(object)
           .map((s) => ({
             id: string(s["sessionId"]),
-            title: string(s["title"]) || "Agent session",
+            title: string(s["title"]).slice(0, 4000) || "Agent session",
             directory: string(s["cwd"]),
             updatedAt: string(s["updatedAt"]) || new Date().toISOString(),
           })),
