@@ -52,7 +52,7 @@ test("phone and desktop discover a managed machine and share one real terminal",
     await phone.getByRole("textbox", { name: "Email", exact: true }).fill("e2e@example.com");
     await phone.getByRole("textbox", { name: "Password", exact: true }).fill("test-password");
     await phone.getByRole("button", { name: "Sign in", exact: true }).click();
-    const ui = phone.frameLocator('iframe[title="Concors workspace"]');
+    const ui = phone.frameLocator('iframe[title="Concourse workspace"]');
     await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
     await ui.getByRole("combobox", { name: "Machine", exact: true }).click();
     await expect(

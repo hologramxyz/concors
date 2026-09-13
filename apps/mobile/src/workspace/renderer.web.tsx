@@ -49,7 +49,7 @@ export const WorkspaceRenderer = forwardRef<WorkspaceRendererHandle, WorkspaceRe
     return (
       <iframe
         ref={frame}
-        title="Concors workspace"
+        title="Concourse workspace"
         srcDoc={workspaceHtml}
         sandbox="allow-scripts allow-forms"
         onError={onError}

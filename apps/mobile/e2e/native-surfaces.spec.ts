@@ -55,7 +55,7 @@ test("native surface bridge preserves navigation, drafts, settings, attachments 
   });
   await page.goto("/");
   await page.getByRole("button", { name: "Explore demo" }).click();
-  const ui = page.frameLocator('iframe[title="Concors workspace"]');
+  const ui = page.frameLocator('iframe[title="Concourse workspace"]');
   await expect
     .poll(async () =>
       (await snapshot(page))?.surfaces.some((item) => item.content.kind === "composer"),

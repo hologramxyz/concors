@@ -19,12 +19,12 @@ export default function SignInScreen() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
-        <Screen title="Concors" subtitle="Your workspace, wherever you are.">
+        <Screen title="Concourse" subtitle="Your workspace, wherever you are.">
           <View style={{ paddingVertical: 28, gap: 20 }}>
             <Image
               source={require("../assets/icon.png")}
               style={{ width: 76, height: 76, borderRadius: 16 }}
-              accessibilityLabel="Concors"
+              accessibilityLabel="Concourse"
             />
             <Copy size={32} weight="600">
               Keep your work{`\n`}moving.
@@ -66,7 +66,7 @@ export default function SignInScreen() {
             </Button>
           ) : (
             <>
-              <Copy muted>Sign in with your existing Concors account to access your machines.</Copy>
+              <Copy muted>Sign in with your existing Concourse account to access your machines.</Copy>
               <Field
                 label="Email"
                 value={email}

@@ -9,7 +9,7 @@ test("direct desktop cloning uses a URL and never requests cloud GitHub access",
   });
   await page.goto("/");
   await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
-  const ui = page.frameLocator('iframe[title="Concors workspace"]');
+  const ui = page.frameLocator('iframe[title="Concourse workspace"]');
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
   const open = async () => {
     await ui.getByRole("button", { name: "Open workspace menu", exact: true }).click();

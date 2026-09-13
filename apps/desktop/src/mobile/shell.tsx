@@ -739,7 +739,7 @@ function MobileWorkspaceContent({
                               </h1>
                               <p>
                                 {!host.capabilities.remoteAccess
-                                  ? "Remote access is not available on this Concors server yet."
+                                  ? "Remote access is not available on this Concourse server yet."
                                   : host.machineId && !workspace
                                     ? "Connecting to your projects and agents…"
                                     : "Open a project from the sidebar or add one to get started."}

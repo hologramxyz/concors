@@ -18,7 +18,7 @@ test("mobile Search is a sidebar-preserving drawer with real pane navigation and
       `/session?machineId=${fixture.snapshot().machineId}&projectId=${fixture.projectId}&tabId=${fixture.otherTabId}&paneId=${fixture.otherPaneId}`,
     );
     await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
-    const ui = page.frameLocator('iframe[title="Concors workspace"]');
+    const ui = page.frameLocator('iframe[title="Concourse workspace"]');
     const shell = ui.locator(".mobile-shell");
     const open = async () => {
       await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();

@@ -136,7 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await disablePush(api);
     } catch {
       error =
-        "Signed out locally, but notification cleanup needs a connection. Disable Concors notifications in device settings if necessary.";
+        "Signed out locally, but notification cleanup needs a connection. Disable Concourse notifications in device settings if necessary.";
     }
     try {
       await api.signOut();
