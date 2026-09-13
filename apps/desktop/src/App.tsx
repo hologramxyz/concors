@@ -1,3 +1,4 @@
+import { isTauri } from "@/tauri";
 import { Button } from "@/components/ui/button";
 import { ColorThemeProvider } from "@/theme/color-theme-provider";
 import { useColorThemePreference } from "@/theme/use-color-theme";
@@ -114,6 +115,7 @@ function AppContent() {
     });
   };
   const [error, setError] = useState<string | null>(null);
+  const [localStartupError, setLocalStartupError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const theme = useTheme();
   const colorTheme = useColorThemePreference();
@@ -158,18 +160,31 @@ function AppContent() {
 
   useEffect(() => {
     let cancelled = false;
-    void resolveStartupEndpoint()
-      .then((resolved) => {
+    let starting = false;
+    const start = async () => {
+      if (starting) return;
+      starting = true;
+      try {
+        const resolved = await resolveStartupEndpoint();
         if (!cancelled) {
-          setLocalEndpoint(resolved);
+          setLocalEndpoint((current) => (current?.url === resolved.url ? current : resolved));
+          setLocalStartupError(null);
         }
-      })
-      .catch((cause: unknown) => {
+      } catch (cause) {
         if (!cancelled)
-          setError(cause instanceof Error ? cause.message : "Could not connect to this computer");
-      });
+          setLocalStartupError(
+            cause instanceof Error ? cause.message : "Could not connect to this computer",
+          );
+      } finally {
+        starting = false;
+      }
+    };
+    void start();
+    // A crashed gateway can restart on a new free port without losing its persistent sessions.
+    const timer = isTauri() ? window.setInterval(() => void start(), 5000) : undefined;
     return () => {
       cancelled = true;
+      if (timer !== undefined) window.clearInterval(timer);
     };
   }, []);
 
@@ -386,13 +401,20 @@ function AppContent() {
                           </h1>
                         </header>
                       )}
-                      {error && (
+                      {(error || localStartupError) && (
                         <div
                           role="alert"
                           className="flex items-center justify-between gap-3 border-b bg-destructive/5 px-4 py-2 text-xs text-destructive"
                         >
-                          <span>{error}</span>
-                          <Button variant="ghost" type="button" onClick={() => setError(null)}>
+                          <span>{error ?? localStartupError}</span>
+                          <Button
+                            variant="ghost"
+                            type="button"
+                            onClick={() => {
+                              setError(null);
+                              setLocalStartupError(null);
+                            }}
+                          >
                             Dismiss
                           </Button>
                         </div>

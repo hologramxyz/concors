@@ -138,10 +138,10 @@ copy outside the repository, including version, health, workspace subscription a
 input/output, resize and stop. This catches accidental dependencies on the repository's
 `node_modules` and missing native helper files. Native platform CI runs the same check.
 
-The desktop's local daemon API and lifecycle are unchanged. The built directory must stay
-alongside its native files. Tauri's future standalone sidecar packaging still needs to arrange
-that directory and its launcher; this change does not enable `bundle.externalBin` or introduce
-an incomplete single-executable build.
+The native Linux desktop package embeds this complete runtime directory, including Node and
+terminal helpers. See [local desktop packaging](../../docs/local-desktop.md) for the build command
+and automatic gateway lifecycle. The directory must remain intact; the daemon is not a single
+standalone JavaScript executable.
 
 ## Linux release tarball (contract 4.4)
 
