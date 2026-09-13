@@ -105,7 +105,6 @@ for (const native of [false, true]) {
       await page.goto("/");
       await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
       await expect(page.getByText(/OpenCode, Pi and custom agents/)).toBeVisible();
-      await page.getByRole("button", { name: "Allow AI data sharing", exact: true }).click();
       const ui = page.frameLocator('iframe[title="Concors workspace"]');
       let sequence = 0;
       const send = async (label: string, text: string) => {

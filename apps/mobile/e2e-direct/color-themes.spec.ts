@@ -9,7 +9,6 @@ test("mobile applies built-in and local-file palettes through the native prefere
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
   await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
-  await page.getByRole("button", { name: "Allow AI data sharing", exact: true }).click();
   const ui = page.frameLocator('iframe[title="Concors workspace"]');
   const expectCanvas = async (color: string) => {
     await expect(page.getByTestId("workspace-safe-area")).toHaveCSS("background-color", color);
