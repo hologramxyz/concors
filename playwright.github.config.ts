@@ -8,7 +8,11 @@ export default defineConfig({
   testMatch: "github.spec.ts",
   workers: 1,
   timeout: 30000,
-  use: { baseURL: "http://localhost:15399", viewport: { width: 1360, height: 950 } },
+  use: {
+    baseURL: "http://localhost:15399",
+    permissions: ["local-network-access"],
+    viewport: { width: 1360, height: 950 },
+  },
   webServer: [
     {
       command: "node e2e/support/daemon.ts",

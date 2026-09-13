@@ -6,6 +6,19 @@ import { resolve, extname, join } from "node:path";
 import { signedIn } from "./signed-in.ts";
 import { managedHost } from "./support/managed-host.ts";
 
+// Keep avatar loads deterministic and avoid contacting GitHub in browser acceptance.
+test.beforeEach(async ({ page }) => {
+  await page.route("https://github.com/*.png*", (route) =>
+    route.fulfill({
+      contentType: "image/png",
+      body: Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=",
+        "base64",
+      ),
+    }),
+  );
+});
+
 // The focused config serves built assets through Playwright; the general suite uses its normal Vite fixture.
 test.beforeEach(async ({ page, baseURL }) => {
   if (baseURL !== "http://localhost:15399") return;
@@ -470,4 +483,88 @@ test("repository access rejection removes cached rows instead of treating them a
   await expect(dialog.getByRole("alert")).toContainText("Repository access revoked");
   await expect(repository).toHaveCount(0);
   await expect(dialog.getByRole("button", { name: "Continue", exact: true })).toBeDisabled();
+});
+
+test("GitHub avatar is shared by the sidebar, rail and settings without loading repositories", async ({
+  page,
+}) => {
+  await signedIn(page);
+  await githubApi(page);
+  const reads: string[] = [];
+  await page.route("**/api/v1/github/**", (route) => {
+    if (route.request().method() === "GET") reads.push(new URL(route.request().url()).pathname);
+    return route.fallback();
+  });
+  await page.goto("/");
+  const account = page.getByRole("button", { name: /^Account:/ });
+  const avatar = account.locator("[data-account-avatar] img");
+  await expect(avatar).toHaveAttribute("src", "https://github.com/alice.png?size=96");
+  await expect
+    .poll(() => avatar.evaluate((img: HTMLImageElement) => img.naturalWidth))
+    .toBeGreaterThan(0);
+  expect(reads).toEqual(["/api/v1/github/"]);
+  await page.getByRole("button", { name: "Collapse sidebar" }).click();
+  await expect(avatar).toBeVisible();
+  await account.click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
+  const profile = page.locator("[data-account-avatar] img");
+  await expect(profile).toHaveAttribute("src", "https://github.com/alice.png?size=96");
+  await expect(page.getByText("Connected across your VPSs.")).toBeVisible();
+  expect(reads.filter((path) => path === "/api/v1/github/")).toHaveLength(1);
+  await page.getByRole("button", { name: "Disconnect", exact: true }).click();
+  await expect(page.locator("[data-account-avatar]")).toHaveText("E");
+  await expect(profile).toHaveCount(0);
+  await page.getByRole("button", { name: "Back to app" }).click();
+  await expect(account.locator("[data-account-avatar]")).toHaveText("E");
+  await expect(avatar).toHaveCount(0);
+});
+
+test("connecting GitHub updates the profile and sidebar avatar without a reload", async ({
+  page,
+}) => {
+  await signedIn(page);
+  const github = await githubApi(page, false);
+  await page.goto("/");
+  const account = page.getByRole("button", { name: /^Account:/ });
+  await expect(account.locator("[data-account-avatar]")).toHaveText("E");
+  await account.click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Connect GitHub", exact: true })).toBeVisible();
+  github.setConnected();
+  await page.getByRole("button", { name: "Refresh GitHub" }).click();
+  await expect(page.locator("[data-account-avatar] img")).toHaveAttribute(
+    "src",
+    "https://github.com/alice.png?size=96",
+  );
+  await page.getByRole("button", { name: "Back to app" }).click();
+  await expect(account.locator("[data-account-avatar] img")).toHaveAttribute(
+    "src",
+    "https://github.com/alice.png?size=96",
+  );
+  await page.screenshot({ path: test.info().outputPath("github-avatar.png") });
+});
+
+test("slow identity checks reserve avatar space and failed images fall back to initials", async ({
+  page,
+}) => {
+  await signedIn(page);
+  await githubApi(page);
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/v1/github/", async (route) => {
+    if (route.request().method() === "GET") await gate;
+    return route.fallback();
+  });
+  await page.route("https://github.com/*.png*", (route) => route.abort());
+  await page.goto("/");
+  const avatar = page.getByRole("button", { name: /^Account:/ }).locator("[data-account-avatar]");
+  await expect(avatar).toHaveAttribute("data-loading", "true");
+  await expect(avatar).toHaveText("");
+  const bounds = await avatar.boundingBox();
+  release();
+  await expect(avatar).toHaveText("E");
+  expect(await avatar.boundingBox()).toEqual(bounds);
+  await expect(avatar.locator("img")).toHaveCount(0);
 });
