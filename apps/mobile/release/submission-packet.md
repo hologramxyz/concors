@@ -47,7 +47,7 @@ and Play Console. CI screenshots are engineering evidence, not finalized store a
 
 ## Review notes draft
 
-Concors is a coding-workspace client. Its app UI, fonts and renderer ship inside the binary.
+Concourse is a coding-workspace client. Its app UI, fonts and renderer ship inside the binary.
 Agent commands and terminals execute on the connected machine; the app does not download
 or execute a new native app on the phone. Chat, files and terminal data arrive through an
 authenticated workspace protocol, not screen mirroring.

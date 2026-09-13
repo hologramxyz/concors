@@ -44,7 +44,7 @@ export const demoWorkspace = WorkspaceSnapshotSchema.parse({
   projects: [
     {
       id: ids.project,
-      name: "Concors",
+      name: "Concourse",
       directory: "/home/alex/concors",
       version: 1,
       tabs: [
@@ -149,7 +149,7 @@ demoItems.push(
     {
       kind: "tool",
       title: "Thinking",
-      text: "Reuse the existing **Concors UI** and adapt navigation for a phone.",
+      text: "Reuse the existing **Concourse UI** and adapt navigation for a phone.",
       detail: "",
       presentation: { type: "thinking" },
     },
@@ -196,7 +196,7 @@ demoItems.push(
       detail: "Two panes found",
       presentation: {
         type: "mcp",
-        input: '{"project":"Concors"}',
+        input: '{"project":"Concourse"}',
         output: '{"panes":2,"connected":true}',
       },
     },
