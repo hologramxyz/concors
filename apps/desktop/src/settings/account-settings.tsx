@@ -1,10 +1,11 @@
+import { AccountAvatar } from "@/components/account-avatar";
 import { useGitHub } from "@/github/use-github";
 import { GitHubConnection } from "@/github/connection";
 import { Check, ChevronDown, LogOut } from "lucide-react";
 import { useContext } from "react";
 import { CompactLayoutContext } from "@/components/compact-layout";
 
-import { activeOrganization, initialOf, type SignedInAuth } from "@/auth/auth-state";
+import { activeOrganization, type SignedInAuth } from "@/auth/auth-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -41,9 +42,7 @@ export function AccountSettings({
       >
         <Row label="Signed in as">
           <span className="flex items-center gap-2">
-            <span className="flex size-6 shrink-0 items-center justify-center rounded-4xl bg-primary text-xs font-semibold text-primary-foreground">
-              {initialOf(auth.user)}
-            </span>
+            <AccountAvatar user={auth.user} githubEnabled className="size-6" />
             <span className="text-foreground">{auth.user.name}</span>
           </span>
         </Row>

@@ -26,7 +26,7 @@
         "default-src": "'self'",
         "script-src": "'self'",
         "style-src": "'self' 'unsafe-inline'",
-        "img-src": "'self' data: https://opengraph.githubassets.com",
+        "img-src": "'self' data: https://opengraph.githubassets.com https://github.com https://avatars.githubusercontent.com",
         "connect-src": "'self' ipc: http://ipc.localhost ws://127.0.0.1:* ws://localhost:* wss://* https://*"
       }
     }
