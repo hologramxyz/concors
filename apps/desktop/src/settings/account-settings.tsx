@@ -39,7 +39,7 @@ export function AccountSettings({
     <>
       <Section
         title="Profile"
-        description="The personal details associated with your Concors account."
+        description="The personal details associated with your Concourse account."
       >
         <Row label="Signed in as">
           <span className="flex items-center gap-2">
@@ -59,7 +59,7 @@ export function AccountSettings({
         </Row>
       </Section>
 
-      <Section title="Integrations" description="Connect services to your Concors account.">
+      <Section title="Integrations" description="Connect services to your Concourse account.">
         <GitHubConnection github={github} />
       </Section>
 
@@ -113,7 +113,7 @@ export function AccountSettings({
         />
       )}
 
-      <Section title="Session" description="Sessions last 30 days and renew while you use Concors.">
+      <Section title="Session" description="Sessions last 30 days and renew while you use Concourse.">
         <Row label="Expires">
           <span>{formatDate(auth.session.expiresAt)}</span>
         </Row>

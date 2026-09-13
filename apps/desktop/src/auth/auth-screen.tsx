@@ -22,14 +22,14 @@ interface AuthScreenProps {
 const COPY: Record<AuthMode, { title: string; description: string; submit: string; busy: string }> =
   {
     "sign-in": {
-      title: "Sign in to Concors",
+      title: "Sign in to Concourse",
       description: "Your projects, machines and agents are waiting behind this door.",
       submit: "Sign in",
       busy: "Signing in…",
     },
     "sign-up": {
-      title: "Create your Concors account",
-      description: "Free while Concors is in preview. It takes ten seconds.",
+      title: "Create your Concourse account",
+      description: "Free while Concourse is in preview. It takes ten seconds.",
       submit: "Create account",
       busy: "Creating account…",
     },
@@ -177,7 +177,7 @@ export function AuthScreen({ state, onSignIn, onSignUp, onRetry }: AuthScreenPro
         </form>
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
-          {mode === "sign-in" ? "New to Concors? " : "Already have an account? "}
+          {mode === "sign-in" ? "New to Concourse? " : "Already have an account? "}
           <button
             type="button"
             className="text-foreground underline underline-offset-3 hover:text-primary disabled:opacity-50"
