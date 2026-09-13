@@ -1,5 +1,9 @@
 # Mobile / desktop parity
 
+For the current surface-by-surface audit and stale-preview finding, see
+[September mobile parity audit](mobile-parity-audit.md). Dated sections below retain
+historical implementation notes; the current onboarding has no AI-sharing gate.
+
 The mobile client uses a bundled, offline rendering of the actual Concors React UI,
 inside the Expo native host. Chat, composer business logic, markdown, tool calls, plans, terminal,
 project setup/actions, and account/appearance/SSH/Shortcuts/Terminals views are source-shared.
