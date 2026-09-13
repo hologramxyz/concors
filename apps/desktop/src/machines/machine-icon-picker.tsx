@@ -1,9 +1,17 @@
-import { useId, useState } from "react";
+import { useContext, useId, useState } from "react";
 import { Popover } from "radix-ui";
 import { MachineIconSchema, type Machine } from "@concors/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MachineIcon } from "./machine-icon";
+import { CompactLayoutContext } from "@/components/compact-layout";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 const EMOJI = [
   ["🚀", "Rocket"],
@@ -41,23 +49,51 @@ export function MachineIconPicker({
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  return (
-    <Popover.Root
-      open={open}
-      onOpenChange={(next) => {
-        if (!busy) setOpen(next);
-      }}
+  const compact = useContext(CompactLayoutContext);
+  const onOpenChange = (next: boolean) => {
+    if (!busy) setOpen(next);
+  };
+  const trigger = (
+    <button
+      type="button"
+      aria-label={`Change icon for ${machine.name}`}
+      title="Change icon"
+      className="-ml-1 inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-transparent text-muted-foreground transition-colors hover:border-border hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     >
-      <Popover.Trigger asChild>
-        <button
-          type="button"
-          aria-label={`Change icon for ${machine.name}`}
-          title="Change icon"
-          className="-ml-1 inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-transparent text-muted-foreground transition-colors hover:border-border hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-        >
-          <MachineIcon icon={machine.icon} className="size-5 text-xl" />
-        </button>
-      </Popover.Trigger>
+      <MachineIcon icon={machine.icon} className="size-5 text-xl" />
+    </button>
+  );
+  const editor = open && (
+    <IconEditor
+      icon={machine.icon ?? null}
+      busy={busy}
+      showTitle={!compact}
+      onSave={async (icon) => {
+        setBusy(true);
+        try {
+          await onSave(icon);
+          setOpen(false);
+        } finally {
+          setBusy(false);
+        }
+      }}
+    />
+  );
+  if (compact)
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogTrigger asChild>{trigger}</DialogTrigger>
+        <DialogContent aria-describedby={undefined} showCloseButton={!busy}>
+          <DialogHeader>
+            <DialogTitle>Machine icon</DialogTitle>
+          </DialogHeader>
+          {editor}
+        </DialogContent>
+      </Dialog>
+    );
+  return (
+    <Popover.Root open={open} onOpenChange={onOpenChange}>
+      <Popover.Trigger asChild>{trigger}</Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
           align="start"
@@ -66,21 +102,7 @@ export function MachineIconPicker({
           aria-label="Customize machine icon"
           className="z-50 w-[320px] max-w-[calc(100vw-24px)] rounded-xl border bg-popover p-4 text-popover-foreground shadow-xl outline-none"
         >
-          {open && (
-            <IconEditor
-              icon={machine.icon ?? null}
-              busy={busy}
-              onSave={async (icon) => {
-                setBusy(true);
-                try {
-                  await onSave(icon);
-                  setOpen(false);
-                } finally {
-                  setBusy(false);
-                }
-              }}
-            />
-          )}
+          {editor}
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
@@ -91,9 +113,11 @@ function IconEditor({
   icon,
   busy,
   onSave,
+  showTitle,
 }: {
   icon: string | null;
   busy: boolean;
+  showTitle: boolean;
   onSave: (icon: string | null) => Promise<void>;
 }) {
   const [draft, setDraft] = useState(icon);
@@ -112,7 +136,7 @@ function IconEditor({
       }}
       className="space-y-4"
     >
-      <p className="text-sm font-medium">Machine icon</p>
+      {showTitle && <p className="text-sm font-medium">Machine icon</p>}
       <div className="grid grid-cols-6 gap-1" role="group" aria-label="Suggested icons">
         {EMOJI.map(([value, label]) => (
           <button

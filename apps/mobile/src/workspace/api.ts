@@ -11,6 +11,22 @@ export function dispatchMobileApi(api: ApiClient, call: MobileApiCall) {
       return api.listMachines(...call.args);
     case "getMachine":
       return api.getMachine(...call.args);
+    case "renameMachine":
+      return api.renameMachine(...call.args);
+    case "updateMachineIcon":
+      return api.updateMachineIcon(...call.args);
+    case "githubStatus":
+      return api.githubStatus();
+    case "connectGitHub":
+      return api.connectGitHub();
+    case "disconnectGitHub":
+      return api.disconnectGitHub();
+    case "githubAccounts":
+      return api.githubAccounts(...call.args);
+    case "githubRepositories":
+      return api.githubRepositories(...call.args);
+    case "prepareGitHubMachine":
+      return api.prepareGitHubMachine(...call.args);
     case "createMachine":
       return api.createMachine(...call.args);
     case "cancelMachine":
@@ -39,9 +55,21 @@ export function dispatchMobileApi(api: ApiClient, call: MobileApiCall) {
 /** Product boundary applies to every mobile build, including renderer-originated RPCs. */
 export function assertCompanionApiAllowed(call: MobileApiCall) {
   if (
-    !["listMachines", "getMachine", "listSshKeys", "addSshKey", "removeSshKey"].includes(
-      call.method,
-    )
+    ![
+      "listMachines",
+      "getMachine",
+      "renameMachine",
+      "updateMachineIcon",
+      "githubStatus",
+      "connectGitHub",
+      "disconnectGitHub",
+      "githubAccounts",
+      "githubRepositories",
+      "prepareGitHubMachine",
+      "listSshKeys",
+      "addSshKey",
+      "removeSshKey",
+    ].includes(call.method)
   )
     throw new Error(
       "Purchasing, subscriptions and billing are unavailable in the mobile companion.",

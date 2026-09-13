@@ -3,6 +3,9 @@ import { machineAvailability, machineStatusLabel, type MobileState } from "@conc
 import { Button } from "@/components/ui/button";
 import { Section } from "@/views/settings-primitives";
 import { hostAction } from "./bridge";
+import { api } from "@/auth/api";
+import { MachineIconPicker } from "@/machines/machine-icon-picker";
+import { RenameMachineDialog } from "@/machines/rename-machine-dialog";
 
 /** Companion v1: access existing machines; no commerce or provisioning entry points. */
 export function ExistingMachines({
@@ -42,7 +45,17 @@ export function ExistingMachines({
         )}
         <ul className="divide-y">
           {host.machines.map((machine) => (
-            <li key={machine.id} className="flex items-center gap-3 py-4">
+            <li
+              key={machine.id}
+              className="flex items-center gap-2 py-4"
+              data-machine-id={machine.id}
+            >
+              <MachineIconPicker
+                machine={machine}
+                onSave={async (icon) => {
+                  await api.updateMachineIcon(machine.id, icon);
+                }}
+              />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">{machine.name}</p>
                 <p className="text-sm text-muted-foreground">
@@ -52,6 +65,12 @@ export function ExistingMachines({
                   )}
                 </p>
               </div>
+              <RenameMachineDialog
+                machine={machine}
+                onRename={async (name) => {
+                  await api.renameMachine(machine.id, name);
+                }}
+              />
               <Button
                 variant="outline"
                 disabled={

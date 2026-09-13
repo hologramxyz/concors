@@ -92,12 +92,16 @@ export function MobileAccountMenu({
   onSignOut,
   onOpenSettings,
   machinePicker,
+  organizationPicker,
+  onManageMachines,
   onAddMachine,
   profile,
   onOpenProfile,
 }: Omit<AccountMenuProps, "auth"> & {
   auth: SignedInAuth | null;
   machinePicker?: ReactNode;
+  organizationPicker?: ReactNode;
+  onManageMachines?: (() => void) | undefined;
   onAddMachine?: () => void;
   profile?: { name: string; email: string } | null;
   onOpenProfile?: () => void;
@@ -116,7 +120,7 @@ export function MobileAccountMenu({
         <DialogHeader>
           <DialogTitle>Account</DialogTitle>
           <DialogDescription className="sr-only">
-            Choose a machine, manage settings or disconnect.
+            Choose an organization or machine, manage settings or disconnect.
           </DialogDescription>
         </DialogHeader>
         {machinePicker && <div className="mobile-account-machine">{machinePicker}</div>}
@@ -129,6 +133,7 @@ export function MobileAccountMenu({
             </p>
           </div>
         </div>
+        {organizationPicker}
         <div className="mobile-account-actions">
           {onOpenProfile && (
             <button
@@ -152,6 +157,18 @@ export function MobileAccountMenu({
             >
               <Plus aria-hidden="true" />
               Add machine
+            </button>
+          )}
+          {onManageMachines && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onManageMachines();
+              }}
+            >
+              <Settings aria-hidden="true" />
+              Manage machines
             </button>
           )}
           <button

@@ -55,4 +55,30 @@ describe("mobile host boundary", () => {
       type: "ready",
     });
   });
+  it("bounds GitHub and machine metadata calls without exposing credentials", () => {
+    for (const call of [
+      { method: "githubStatus", args: [] },
+      { method: "connectGitHub", args: [] },
+      { method: "disconnectGitHub", args: [] },
+      { method: "githubAccounts", args: [] },
+      { method: "githubAccounts", args: [2] },
+      { method: "githubRepositories", args: [123, 2] },
+      { method: "prepareGitHubMachine", args: ["machine", "org/repo"] },
+      { method: "renameMachine", args: ["machine", "build-server"] },
+      { method: "updateMachineIcon", args: ["machine", "🚀"] },
+      { method: "updateMachineIcon", args: ["machine", null] },
+    ])
+      expect(MobileApiCallSchema.safeParse(call).success, JSON.stringify(call)).toBe(true);
+    for (const call of [
+      { method: "githubAccounts", args: [0] },
+      { method: "githubRepositories", args: [-1] },
+      { method: "githubRepositories", args: [123, 1.5] },
+      { method: "prepareGitHubMachine", args: ["machine", "https://other.example/repo"] },
+      { method: "prepareGitHubMachine", args: ["machine", "org/.."] },
+      { method: "renameMachine", args: ["machine", "invalid name"] },
+      { method: "updateMachineIcon", args: ["machine", "text"] },
+      { method: "githubToken", args: [] },
+    ])
+      expect(MobileApiCallSchema.safeParse(call).success, JSON.stringify(call)).toBe(false);
+  });
 });

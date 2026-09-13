@@ -60,7 +60,11 @@ export function useGitHub() {
       refresh();
     };
     window.addEventListener("focus", focus);
-    return () => window.removeEventListener("focus", focus);
+    window.addEventListener("concors-foreground", focus);
+    return () => {
+      window.removeEventListener("focus", focus);
+      window.removeEventListener("concors-foreground", focus);
+    };
   }, [refresh, query.resource]);
   const connect = async () => {
     setPreviousConnection(status?.updatedAt ?? null);

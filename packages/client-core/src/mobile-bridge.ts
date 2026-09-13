@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   MachineSchema,
+  MachineIconSchema,
   MeSchema,
   MobileCapabilitiesSchema,
   OrganizationSchema,
@@ -12,11 +13,36 @@ const id = z.string().min(1).max(200);
 const scope = z.object({ organizationId: id.optional() });
 const scoped = z.tuple([scope.optional()]);
 const empty = z.tuple([]);
+const page = z.number().int().positive().max(10000);
 /** Deliberately no generic fetch, token access, sign-in, or connection-ticket RPC. */
 export const MobileApiCallSchema = z.discriminatedUnion("method", [
   z.object({ method: z.literal("getMachineCatalog"), args: empty }),
   z.object({ method: z.literal("listMachines"), args: scoped }),
   z.object({ method: z.literal("getMachine"), args: z.tuple([id]) }),
+  z.object({
+    method: z.literal("renameMachine"),
+    args: z.tuple([id, z.string().regex(/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/)]),
+  }),
+  z.object({ method: z.literal("updateMachineIcon"), args: z.tuple([id, MachineIconSchema]) }),
+  z.object({ method: z.literal("githubStatus"), args: empty }),
+  z.object({ method: z.literal("connectGitHub"), args: empty }),
+  z.object({ method: z.literal("disconnectGitHub"), args: empty }),
+  z.object({ method: z.literal("githubAccounts"), args: z.tuple([page.optional()]) }),
+  z.object({
+    method: z.literal("githubRepositories"),
+    args: z.tuple([z.number().int().positive().max(Number.MAX_SAFE_INTEGER), page.optional()]),
+  }),
+  z.object({
+    method: z.literal("prepareGitHubMachine"),
+    args: z.tuple([
+      id,
+      z
+        .string()
+        .max(300)
+        .regex(/^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9_.-]+$/)
+        .refine((value) => ![".", ".."].includes(value.split("/")[1] ?? "")),
+    ]),
+  }),
   z.object({
     method: z.literal("createMachine"),
     args: z.tuple([scope.extend({ name: z.string().min(1).max(63), region: id, size: id })]),
@@ -127,6 +153,7 @@ export const MobileRendererMessageSchema = z.discriminatedUnion("type", [
 export type MobileRendererMessage = z.infer<typeof MobileRendererMessageSchema>;
 export const MobileHostMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("state"), state: MobileStateSchema }),
+  z.object({ type: z.literal("foreground"), scope: id }),
   z.object({
     type: z.literal("native-event"),
     scope: id,

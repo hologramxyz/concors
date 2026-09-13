@@ -21,6 +21,7 @@ interface AuthContextValue extends AuthState {
   signIn(email: string, password: string): Promise<void>;
   signOut(): Promise<void>;
   refresh(): Promise<void>;
+  switchOrganization(organizationId: string): Promise<void>;
 }
 const AuthContext = createContext<AuthContextValue | null>(null);
 export function useAuth() {
@@ -151,6 +152,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ me: null, loading: false, error });
     changingSession.current = false;
   };
+  const switchOrganization = async (organizationId: string) => {
+    if (direct || !state.me) throw new Error("Sign in to switch organizations");
+    if (changingSession.current) throw new Error("Another account change is still in progress");
+    if (organizationId === state.me.session.activeOrganizationId) return;
+    changingSession.current = true;
+    const attempt = ++generation.current;
+    try {
+      await api.setActiveOrganization(organizationId);
+      if (attempt !== generation.current) return;
+      // Only change local scope after the server accepts the switch. Updating it directly
+      // avoids a failed follow-up /me leaving old UI attached to a new server organization.
+      // MachineProvider and WorkspaceHost remount on this scope, disposing old transports.
+      setState((current) =>
+        current.me
+          ? {
+              ...current,
+              me: {
+                ...current.me,
+                session: { ...current.me.session, activeOrganizationId: organizationId },
+              },
+              error: null,
+            }
+          : current,
+      );
+    } finally {
+      changingSession.current = false;
+    }
+  };
   return (
     <AuthContext
       value={{
@@ -167,6 +196,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signIn,
         signOut,
         refresh,
+        switchOrganization,
       }}
     >
       {children}

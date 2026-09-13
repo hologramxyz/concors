@@ -10,6 +10,11 @@ describe("mobile demo protocol fixture", () => {
     expect(await api.listOrganizations()).toHaveLength(1);
     expect((await api.getMachineCatalog()).sizes[0]?.ramGb).toBe(8);
     expect(await api.listMachines()).toHaveLength(1);
+    expect((await api.renameMachine(ids.machine, "demo-renamed")).name).toBe("demo-renamed");
+    expect((await api.updateMachineIcon(ids.machine, "🚀")).icon).toBe("🚀");
+    expect((await api.listMachines())[0]?.icon).toBe("🚀");
+    expect((await api.updateMachineIcon(ids.machine, null)).icon).toBeNull();
+    expect(await api.githubStatus()).toMatchObject({ configured: false, connected: false });
     expect((await api.getBillingStatus()).configured).toBe(false);
     const key = await api.addSshKey({ name: "Phone", publicKey: "ssh-ed25519 AAAAdemo" });
     expect((await api.listSshKeys())[0]?.id).toBe(key.id);
