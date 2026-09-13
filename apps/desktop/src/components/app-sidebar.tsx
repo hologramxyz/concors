@@ -175,7 +175,7 @@ export function AppSidebar(props: AppSidebarProps) {
             </SidebarSection>
           )}
         </div>
-        <div className={cn("border-t border-sidebar-border", props.collapsed ? "p-[6px]" : "p-2")}>
+        <div className={props.collapsed ? "p-[6px]" : "p-2"}>
           <AccountMenu
             collapsed={props.collapsed}
             auth={props.auth}
