@@ -92,9 +92,7 @@ export function guardMobileLeave(guard: () => boolean | Promise<boolean>) {
 }
 export async function hostAction(action: MobileAction): Promise<unknown> {
   if (
-    ["sign-out", "delete-account", "withdraw-ai-consent", "switch-organization"].includes(
-      action.kind,
-    ) &&
+    ["sign-out", "delete-account", "switch-organization"].includes(action.kind) &&
     beforeLeave &&
     !(await beforeLeave())
   )
