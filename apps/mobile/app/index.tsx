@@ -66,7 +66,9 @@ export default function SignInScreen() {
             </Button>
           ) : (
             <>
-              <Copy muted>Sign in with your existing Concourse account to access your machines.</Copy>
+              <Copy muted>
+                Sign in with your existing Concourse account to access your machines.
+              </Copy>
               <Field
                 label="Email"
                 value={email}
