@@ -4,9 +4,10 @@
 
 Start with the [submission packet](../apps/mobile/release/submission-packet.md): draft
 store copy, data inventory, public URL audit, and ownership for each blocker. The first
-release's existing-account companion scope is approved and enforced in the client. Client-side AI disclosure
-and explicit account-scoped consent are implemented; provider/privacy review and a
-functioning content-reporting service are separate requirements.
+release's existing-account companion scope is approved and enforced in the client. The AI
+data-sharing onboarding page and withdrawal controls have been removed by product direction,
+without a replacement prompt. Provider/privacy review and content-reporting readiness remain
+unverified release gates; removing the page does not establish store compliance.
 
 Client/demo/shared lifecycle/protocol integration/build profiles are implemented.
 No signed IPA/AAB, store release or production validation is implied by bundle export.

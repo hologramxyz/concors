@@ -54,7 +54,7 @@ authenticated workspace protocol, not screen mirroring.
 
 Provide reviewers a dedicated account and functioning machine throughout review. Enter
 credentials privately in the store console, never in a PR or this file. Explain sign-in,
-the AI-sharing disclosure, machine selection, a conversation, a harmless tool request,
+machine selection, a conversation, a harmless tool request,
 Files and a harmless terminal command. State account/provider requirements. Do not require
 reviewers to join a private developer tailnet to exercise the production app.
 
@@ -72,7 +72,7 @@ collection, purposes, processors, retention, deletion and regional terms before 
 | Session credential                                              | SecureStore; bearer header to API; never renderer state                                                             | Production revocation, backups/reinstall                          |
 | Machine access credential                                       | Short-lived JWT in device-only SecureStore; WebSocket subprotocol; cleared on disconnect/background/sign-out        | Native clearing, bounded revocation and expiry                    |
 | Prompts, replies, tool data, attachments, code, terminal output | Phone ↔ daemon; configured AI provider receives agent input/tool-read content                                       | Provider settings, logs, subprocessors, exact retention           |
-| AI consent                                                      | Version 2 names Codex/OpenAI, Claude/Anthropic, OpenCode, Pi and configured providers; scoped record in SecureStore | Provider/privacy approval; upgrade reconfirmation and withdrawal  |
+| AI data-sharing UI                                              | No separate onboarding or withdrawal gate, per product direction; ordinary privacy-policy link retained         | Provider/privacy and storefront assessment remain pending         |
 | Preferences/drafts                                              | Device theme/corners/sound; chat/file drafts in memory                                                              | Data-loss warnings, reinstall                                     |
 | Push registration                                               | Optional installation ID/Expo token; generic ID-only event routing                                                  | Backend, APNs/FCM/Expo retention, revocation                      |
 | Attachments                                                     | System document selection; bounded cache read/cleanup                                                               | Physical picker cancellation/denial, provider retention           |

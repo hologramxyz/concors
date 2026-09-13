@@ -43,8 +43,8 @@ Phone-specific behavior:
 - The account drawer and Account settings share an Organization bottom drawer, including personal
   versus team membership and role. Failed switches preserve the current connection. Successful
   switches replace the renderer/session scope and use organization-specific machine requests,
-  caches and saved selection. Unsaved files are checked first. AI-sharing consent must match the
-  selected organization. This does not add team creation, invitations or membership management;
+  caches and saved selection. Unsaved files are checked first. No additional AI-sharing
+  onboarding prompt is shown. This does not add team creation, invitations or membership management;
   those are not desktop features on the synced main revision either.
 - Tabs, Machine, Organization, Search, Settings, Open workspace and New Tab use the shared Radix dialog with animated
   bottom-sheet presentation, focus restoration and reduced-motion support.
