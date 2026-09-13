@@ -17,7 +17,7 @@ describe("mobile host boundary", () => {
     ).toEqual(profile);
     expect(
       MobileStateSchema.shape.profile.parse({ name: "User", email: "user@example.com" }),
-    ).toEqual({ name: "User", email: "user@example.com" });
+    ).toEqual({ name: "User", email: "user@example.com", image: null });
   });
   it("does not expose credentials, connection tickets, arbitrary URLs or method invocation", () => {
     for (const method of [

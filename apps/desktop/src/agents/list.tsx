@@ -87,7 +87,7 @@ export function AgentSidebar({
           "Project no longer available";
         return (
           <li key={agent.id}>
-            <Tooltip delayDuration={250} open={mobile ? false : undefined}>
+            <Tooltip delayDuration={250} {...(mobile ? { open: false } : {})}>
               <TooltipTrigger asChild>
                 <button
                   type="button"
