@@ -77,8 +77,8 @@ export function ChatPane({
           {error && (
             <div role="alert" className="flex items-center gap-2 text-xs text-destructive">
               {error}
-              <button
-                className={button}
+              <Button
+                variant="outline"
                 disabled={!canEdit || !available}
                 onClick={() => {
                   attempted.current = false;
@@ -87,7 +87,7 @@ export function ChatPane({
                 }}
               >
                 Retry
-              </button>
+              </Button>
             </div>
           )}
           <div className="rounded-2xl border bg-background p-2">

@@ -111,9 +111,9 @@ export function MachinesView({
           className="mb-4 flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
         >
           <span>{actionError ?? state.error}</span>
-          <button type="button" className="text-xs" onClick={() => setActionError(null)}>
+          <Button type="button" variant="ghost" onClick={() => setActionError(null)}>
             Dismiss
-          </button>
+          </Button>
         </div>
       )}
 

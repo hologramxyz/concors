@@ -374,9 +374,9 @@ export function ProjectWorkspace({
             className="flex items-center justify-between gap-3 border-b px-3 py-2 text-xs text-destructive"
           >
             <span>{launchError}</span>
-            <button type="button" onClick={() => setLaunchError(null)}>
+            <Button variant="ghost" type="button" onClick={() => setLaunchError(null)}>
               Dismiss
-            </button>
+            </Button>
           </div>
         )}
         <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
