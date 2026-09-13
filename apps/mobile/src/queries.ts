@@ -4,9 +4,12 @@ import { api } from "./auth/runtime";
 
 export function useMachines() {
   const { me } = useAuth();
+  const organizationId = me?.session.activeOrganizationId;
   return useQuery({
-    queryKey: ["machines", me?.user.id, me?.session.activeOrganizationId],
-    queryFn: () => api.listMachines(),
+    queryKey: ["machines", me?.user.id, organizationId],
+    // Bind the request as well as its cache key; a concurrent organization switch
+    // must not put the server's new active-organization list under the old key.
+    queryFn: () => api.listMachines(organizationId ? { organizationId } : undefined),
     enabled: !!me,
     refetchInterval: 15_000,
   });

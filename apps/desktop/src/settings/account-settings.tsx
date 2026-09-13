@@ -23,7 +23,7 @@ import { MobileOrganizationPicker } from "@/mobile/organization-picker";
 interface AccountSettingsProps {
   readonly auth: SignedInAuth;
   readonly onSignOut: () => void;
-  readonly onSetActiveOrganization: (organizationId: string) => void | Promise<unknown>;
+  readonly onSetActiveOrganization: (organizationId: string) => unknown;
 }
 
 export function AccountSettings({
