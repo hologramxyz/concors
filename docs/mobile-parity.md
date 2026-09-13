@@ -28,13 +28,25 @@ Phone-specific behavior:
 
 - No bottom navigation. The existing chat composer occupies the bottom of the workspace;
   tapping its text field opens the platform keyboard.
-- A swipeable Projects / Agents / Servers sidebar pushes the workspace to the right.
+- A swipeable Workspaces / Agents / Servers sidebar pushes the workspace to the right.
   Swipe back, press the mobile menu icon, or tap the workspace scrim to close it.
 - A compact name/avatar trigger opens an animated Account bottom drawer with the current machine,
-  Add machine setup guidance, Settings and Sign out. Direct previews use the same drawer with an
-  honest Desktop connection identity and Disconnect desktop. Existing-machine management remains
-  in Settings; no purchasing or provisioning is exposed. The sidebar has no redundant product title.
-- Tabs, Machine, Search, Settings, Add Project and New Tab use the shared Radix dialog with animated
+  organization chooser, Add machine setup guidance, Manage machines, Settings and Sign out.
+  GitHub profile photos use the shared lightweight identity cache; opening the account drawer
+  does not fetch repository lists. Direct previews show the verified display profile (or Your profile),
+  with Disconnect desktop and no cloud organization controls. Machine management remains in
+  Settings; no purchasing or provisioning is exposed. The sidebar has no redundant product title.
+- Workspace rows, repository icons and actions are shared with desktop; mobile keeps 44px touch
+  targets and does not show desktop hover tooltips. Machine selectors display saved emoji and
+  availability. Settings reuses desktop rename controls and the icon editor, presented as drawers;
+  successful edits update the host-owned machine list immediately, including both selectors.
+- The account drawer and Account settings share an Organization bottom drawer, including personal
+  versus team membership and role. Failed switches preserve the current connection. Successful
+  switches replace the renderer/session scope and use organization-specific machine requests,
+  caches and saved selection. Unsaved files are checked first. AI-sharing consent must match the
+  selected organization. This does not add team creation, invitations or membership management;
+  those are not desktop features on the synced main revision either.
+- Tabs, Machine, Organization, Search, Settings, Open workspace and New Tab use the shared Radix dialog with animated
   bottom-sheet presentation, focus restoration and reduced-motion support.
   Opening Search or choosing a machine leaves the sidebar visible behind it.
 - [Search](search.md) is a shared machine-scoped workspace/agent/tab finder, with exact pane
