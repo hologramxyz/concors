@@ -21,7 +21,9 @@ test("browse and clone folders on the machine, derive names, and focus an existi
     await expect(second.getByRole("heading", { name: "my-project", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Open workspace menu", exact: true }).click();
     await page.getByRole("menuitem", { name: "Clone repository…", exact: true }).click();
+    await page.getByRole("button", { name: "Paste a URL", exact: true }).click();
     await page.getByLabel("Repository URL or local path").fill(process.cwd());
+    await page.getByRole("button", { name: "Continue", exact: true }).click();
     await expect(page.getByLabel("Destination folder")).toHaveValue(
       `~/repos/${basename(process.cwd())}`,
     );

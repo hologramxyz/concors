@@ -251,7 +251,7 @@ test("repository picker switches personal and organization repos and prepares th
       { id: 2, login: "acme" },
       { id: 3, login: "another-org" },
     ]);
-    await dialog.getByRole("button", { name: "Add account or organization", exact: true }).click();
+    await dialog.getByRole("button", { name: "Add account", exact: true }).click();
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await expect(
       dialog
@@ -261,13 +261,14 @@ test("repository picker switches personal and organization repos and prepares th
     await dialog.getByRole("combobox", { name: "GitHub account" }).selectOption("2");
     await dialog.getByRole("textbox", { name: "Search repositories" }).fill("private");
     await dialog.getByRole("button", { name: /acme\/private-service/ }).click();
-    await expect(dialog.getByRole("textbox", { name: "Selected repository" })).toHaveValue(
-      "https://github.com/acme/private-service.git",
-    );
+    await expect(dialog.getByRole("textbox", { name: "Selected repository" })).toHaveCount(0);
+    await expect(dialog.getByRole("textbox", { name: "Destination folder" })).toHaveCount(0);
+    await page.screenshot({ path: "test-results/github-repository-picker.png" });
+    await dialog.getByRole("button", { name: "Continue", exact: true }).click();
     await expect(dialog.getByRole("textbox", { name: "Destination folder" })).toHaveValue(
       "~/repos/private-service",
     );
-    await page.screenshot({ path: "test-results/github-repository-picker.png" });
+    await page.screenshot({ path: "test-results/github-clone-destination.png" });
     await dialog.getByRole("button", { name: "Clone repository", exact: true }).click();
     await expect(dialog.getByRole("alert")).toContainText("still being configured");
     expect(github.preparations).toEqual([
@@ -276,6 +277,10 @@ test("repository picker switches personal and organization repos and prepares th
         body: { repository: "acme/private-service" },
       },
     ]);
+    await dialog.getByRole("button", { name: "Back", exact: true }).click();
+    await expect(dialog.getByRole("textbox", { name: "Search repositories" })).toHaveValue(
+      "private",
+    );
     await dialog.getByRole("button", { name: "Paste a URL" }).click();
     await expect(
       dialog.getByRole("textbox", { name: "Repository URL or local path" }),
@@ -284,6 +289,7 @@ test("repository picker switches personal and organization repos and prepares th
     expect(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
     await page.screenshot({ path: "test-results/github-repository-narrow.png" });
     github.setReady();
+    await dialog.getByRole("button", { name: "Continue", exact: true }).click();
     await dialog
       .getByRole("textbox", { name: "Destination folder" })
       .fill(join(directory, "cloned"));
@@ -296,4 +302,103 @@ test("repository picker switches personal and organization repos and prepares th
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("clone dialog keeps its layout, rows and selection through focus and slow or failed refreshes", async ({
+  page,
+}) => {
+  await signedIn(page);
+  await managedHost(page);
+  await githubApi(page);
+  await page.emulateMedia({ reducedMotion: "reduce", colorScheme: "dark" });
+  let release!: () => void;
+  let gate: Promise<void> | null = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let fail = false;
+  let requests = 0;
+  await page.route("**/api/v1/github/**", async (route) => {
+    requests++;
+    if (gate) await gate;
+    if (fail && new URL(route.request().url()).pathname.endsWith("/repositories")) {
+      return route.fulfill({
+        status: 503,
+        headers: {
+          "access-control-allow-origin": route.request().headers()["origin"] ?? "*",
+          "access-control-allow-credentials": "true",
+        },
+        json: {
+          message: "GitHub is temporarily unavailable.",
+          error: "Service Unavailable",
+          statusCode: 503,
+        },
+      });
+    }
+    return route.fallback();
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Switch machine" }).click();
+  await page.getByRole("menuitem", { name: /Second machine/ }).click();
+  await page.getByRole("button", { name: "Open workspace menu", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Clone repository…", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(
+    dialog.getByRole("status", { name: "Loading repositories", exact: true }),
+  ).toBeVisible();
+  await dialog.evaluate(async (element) => {
+    await Promise.all(
+      element.getAnimations().map((animation) => animation.finished.catch(() => undefined)),
+    );
+  });
+  const bounds = await dialog.boundingBox();
+  const footer = await dialog.getByRole("button", { name: "Continue", exact: true }).boundingBox();
+  await page.screenshot({ path: "test-results/clone-loading.png" });
+  release();
+  gate = null;
+  const repository = dialog.getByRole("button", { name: /alice\/project/ });
+  await expect(repository).toBeVisible();
+  expect(await dialog.boundingBox()).toEqual(bounds);
+  expect(await dialog.getByRole("button", { name: "Continue", exact: true }).boundingBox()).toEqual(
+    footer,
+  );
+  await repository.click();
+  const beforeFocus = requests;
+  await page.evaluate(async () => {
+    for (let i = 0; i < 3; i++) window.dispatchEvent(new Event("focus"));
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+  });
+  expect(requests).toBe(beforeFocus);
+  await expect(repository).toHaveAttribute("aria-pressed", "true");
+  gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  fail = true;
+  await dialog.getByRole("button", { name: "Refresh GitHub" }).click();
+  await expect(repository).toBeVisible();
+  expect(await dialog.boundingBox()).toEqual(bounds);
+  release();
+  gate = null;
+  await expect(dialog.getByRole("alert")).toContainText("temporarily unavailable");
+  await expect(repository).toBeVisible();
+  await expect(repository).toHaveAttribute("aria-pressed", "true");
+  expect(await dialog.boundingBox()).toEqual(bounds);
+  fail = false;
+  await dialog.getByRole("button", { name: "Refresh GitHub" }).click();
+  await expect(dialog.getByRole("alert")).toHaveCount(0);
+  await page.screenshot({ path: "test-results/clone-repositories.png" });
+  await dialog.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(dialog.getByRole("textbox", { name: "Destination folder" })).toHaveValue(
+    "~/repos/project",
+  );
+  await expect(dialog.getByRole("textbox", { name: "Destination folder" })).toBeFocused();
+  const beforeBack = requests;
+  await dialog.getByRole("button", { name: "Back", exact: true }).click();
+  await expect(repository).toHaveAttribute("aria-pressed", "true");
+  expect(requests).toBe(beforeBack);
+  await page.setViewportSize({ width: 390, height: 700 });
+  expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await expect(dialog.getByRole("button", { name: "Continue", exact: true })).toBeInViewport();
+  await page.screenshot({ path: "test-results/clone-narrow.png" });
 });
