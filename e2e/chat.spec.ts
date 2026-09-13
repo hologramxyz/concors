@@ -86,7 +86,7 @@ test("shared chat streams, handles approvals and removes detached sidebar entrie
     await expect(page.getByText(/^Worked for /)).toBeVisible();
     await expect(page.getByText(/^Completed ·/)).toHaveCount(0);
     await expect(page.getByLabel("Elapsed time", { exact: true })).toHaveCount(0);
-    await expect(agentList.getByRole("img").locator("svg")).toHaveCount(0);
+    await expect(agentList.locator("[data-agent-status-badge] svg")).toHaveCount(0);
 
     await expect(page.getByRole("button", { name: "Allow once", exact: true })).toHaveCount(0);
     await page.getByRole("textbox", { name: "Message Codex" }).fill("question");

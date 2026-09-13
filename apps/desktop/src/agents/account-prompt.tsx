@@ -14,7 +14,7 @@ import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { openExternal } from "@/tauri/open-external";
 import { invalidateModelCatalogs } from "./model-catalog";
 
-const button = "rounded-md border px-2.5 py-1.5 text-xs hover:bg-muted disabled:opacity-40";
+import { Button } from "@/components/ui/button";
 function dismissed(key: string) {
   try {
     return sessionStorage.getItem(key) === "dismissed";
@@ -182,8 +182,9 @@ function AccountPrompt({
   if (!canEdit) return null;
   if (hidden)
     return (
-      <button
-        className="text-xs text-muted-foreground hover:text-foreground"
+      <Button
+        variant="ghost"
+        className="text-muted-foreground"
         onClick={() => {
           isDismissed.current = false;
           setHidden(false);
@@ -195,7 +196,7 @@ function AccountPrompt({
         }}
       >
         Connect account
-      </button>
+      </Button>
     );
   // An unresolved initial check is not evidence that the user needs to sign in.
   // Keep failures visible so the account check can still be retried.
@@ -224,13 +225,15 @@ function AccountPrompt({
             setup.
           </p>
         </div>
-        <button
-          className="rounded p-1 text-muted-foreground hover:bg-muted disabled:opacity-40"
+        <Button
+          variant="ghost"
+          size="icon"
+          className="text-muted-foreground"
           aria-label="Dismiss account connection"
           onClick={hide}
         >
           <X className="size-4" />
-        </button>
+        </Button>
       </div>
       {(error || account?.message) && (
         <p role="alert" className="mt-2 text-xs text-destructive">
@@ -247,8 +250,9 @@ function AccountPrompt({
               <code className="rounded border bg-background px-3 py-2 text-base tracking-wider">
                 {challenge.code}
               </code>
-              <button
-                className={button}
+              <Button
+                variant="outline"
+                size="icon"
                 aria-label="Copy sign-in code"
                 onClick={() => {
                   if (challenge.code)
@@ -265,12 +269,12 @@ function AccountPrompt({
                 }}
               >
                 {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-              </button>
+              </Button>
             </div>
           )}
           {challenge.url && (
-            <button
-              className={`${button} inline-flex items-center gap-1.5`}
+            <Button
+              variant="outline"
               onClick={() => {
                 if (challenge.url)
                   void openExternal(challenge.url).catch(() =>
@@ -280,7 +284,7 @@ function AccountPrompt({
             >
               Open sign-in page
               <ExternalLink className="size-3" />
-            </button>
+            </Button>
           )}
           {challenge.input && (
             <form
@@ -307,9 +311,9 @@ function AccountPrompt({
                 disabled={busy}
                 maxLength={8192}
               />
-              <button className={button} type="submit" disabled={busy || !value.trim()}>
+              <Button variant="outline" type="submit" disabled={busy || !value.trim()}>
                 Connect
-              </button>
+              </Button>
             </form>
           )}
           <div className="flex items-center justify-between gap-2">
@@ -317,8 +321,8 @@ function AccountPrompt({
               <LoaderCircle className="size-3 animate-spin" />
               Waiting for sign-in…
             </span>
-            <button
-              className={button}
+            <Button
+              variant="outline"
               disabled={busy}
               onClick={() => {
                 setValue("");
@@ -326,7 +330,7 @@ function AccountPrompt({
               }}
             >
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       ) : (
@@ -347,8 +351,8 @@ function AccountPrompt({
             </select>
           )}
           {selected && (
-            <button
-              className={`${button} bg-background`}
+            <Button
+              variant="outline"
               disabled={busy}
               onClick={() => {
                 setCopied(false);
@@ -362,16 +366,16 @@ function AccountPrompt({
                   : methods.length === 1
                     ? selected.label
                     : "Connect account"}
-            </button>
+            </Button>
           )}
           {!selected && (
-            <button
-              className={button}
+            <Button
+              variant="outline"
               disabled={busy}
               onClick={() => void request({ type: "read" })}
             >
               {busy ? "Checking account…" : "Check account"}
-            </button>
+            </Button>
           )}
         </div>
       )}

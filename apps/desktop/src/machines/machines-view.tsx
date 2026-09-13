@@ -84,7 +84,6 @@ export function MachinesView({
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
-            className="size-[40px]"
             size="icon"
             onClick={state.reload}
             disabled={state.loading}
@@ -93,7 +92,6 @@ export function MachinesView({
             <RefreshCw className={cn(state.loading && "animate-spin")} aria-hidden="true" />
           </Button>
           <Button
-            className="h-[40px] gap-2 px-5"
             onClick={() => setCreating(true)}
             disabled={state.catalog === null || !organization}
           >
@@ -109,9 +107,9 @@ export function MachinesView({
           className="mb-4 flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
         >
           <span>{actionError ?? state.error}</span>
-          <button type="button" className="text-xs" onClick={() => setActionError(null)}>
+          <Button type="button" variant="ghost" onClick={() => setActionError(null)}>
             Dismiss
-          </button>
+          </Button>
         </div>
       )}
 
@@ -150,7 +148,6 @@ export function MachinesView({
             Create a machine to run agents, clone repositories, and keep your work in one place.
           </p>
           <Button
-            className="h-[40px] gap-2 px-5"
             onClick={() => setCreating(true)}
             disabled={state.catalog === null || !organization}
           >
