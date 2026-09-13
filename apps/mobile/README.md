@@ -1,6 +1,6 @@
-# Concors mobile
+# Concourse mobile
 
-Expo SDK 57 / React Native hosts the **actual Concors desktop React workspace** in a
+Expo SDK 57 / React Native hosts the **actual Concourse desktop React workspace** in a
 bundled, offline WebView. The phone shell is chat-first: bottom composer, swipeable
 push sidebar, flat top Tabs picker, and modal settings. There is no bottom navigation
 and no second implementation of chat/tool rendering.

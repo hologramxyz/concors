@@ -250,7 +250,7 @@ export function createDemoServer() {
       };
       state(conversation);
       const text =
-        "This is a simulated response. Your message traveled through the shared Concors protocol. Connect a real machine to run coding agents and see their actual output here.";
+        "This is a simulated response. Your message traveled through the shared Concourse protocol. Connect a real machine to run coding agents and see their actual output here.";
       let offset = 0;
       conversation.timer = setInterval(() => {
         offset += 16;
@@ -434,7 +434,7 @@ export function createDemoServer() {
                       startedAt: new Date().toISOString(),
                     },
                     sequence: 0,
-                    output: "Concors demo · Commands are simulated.\r\n$ ",
+                    output: "Concourse demo · Commands are simulated.\r\n$ ",
                     owner: null,
                   };
                   terminals.set(id, terminal);
