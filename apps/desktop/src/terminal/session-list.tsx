@@ -7,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { TerminalConnectionContext } from "./connection-context";
 
 /** Keeps detached sessions discoverable and stoppable, including after a project is removed. */
@@ -28,16 +29,17 @@ export function SessionList() {
   };
   return (
     <>
-      <button
+      <Button
         type="button"
-        className="text-xs text-muted-foreground hover:text-foreground"
+        variant="ghost"
+        className="text-muted-foreground"
         onClick={() => {
           setOpen(true);
           void refresh();
         }}
       >
         Sessions
-      </button>
+      </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
@@ -47,15 +49,16 @@ export function SessionList() {
               in its project and choose “Attach an existing session”.
             </DialogDescription>
           </DialogHeader>
-          <button
+          <Button
             type="button"
             onClick={() => {
               void refresh();
             }}
-            className="text-left text-xs text-primary"
+            variant="outline"
+            className="justify-self-start"
           >
             Refresh sessions
-          </button>
+          </Button>
           {error && (
             <p role="alert" className="text-xs text-destructive">
               {error}
@@ -73,9 +76,9 @@ export function SessionList() {
                   {session.profile} · {session.status} · {session.id.slice(0, 8)}
                 </span>
                 {session.status === "running" && (
-                  <button
+                  <Button
                     type="button"
-                    className="text-destructive"
+                    variant="destructive"
                     onClick={() => {
                       if (!connection) return;
                       void connection
@@ -96,7 +99,7 @@ export function SessionList() {
                     }}
                   >
                     Stop
-                  </button>
+                  </Button>
                 )}
               </div>
               <p className="mt-1 truncate text-muted-foreground" title={session.directory}>
