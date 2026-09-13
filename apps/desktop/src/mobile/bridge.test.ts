@@ -53,10 +53,45 @@ it("still fails when the native bridge never answers", async () => {
   connection.disconnect();
 });
 
-it("does not forward foreground events from an unknown account scope", async () => {
+it("only forwards foreground events from the current account scope", async () => {
   const { connection, nativeWindow, result } = await setup();
   nativeWindow.concorsMobileReceive?.({ type: "foreground", scope: "old-account" });
   expect(nativeWindow.dispatchEvent).not.toHaveBeenCalled();
+  nativeWindow.concorsMobileReceive?.({
+    type: "state",
+    state: {
+      scope: "current-account",
+      me: null,
+      organizations: [],
+      machines: [],
+      machineId: null,
+      connectionId: null,
+      phase: "idle",
+      message: null,
+      capabilities: {
+        version: 1,
+        remoteAccess: false,
+        pushNotifications: false,
+        accountDeletion: false,
+      },
+      demo: false,
+      native: true,
+      systemDark: false,
+      preferences: { theme: "system", corners: "subtle", sound: false },
+      pushEnabled: false,
+      target: {},
+      supportUrl: "https://example.test/support",
+      privacyUrl: "https://example.test/privacy",
+      apiUrl: "https://example.test",
+      endpointLabel: "Not connected",
+    },
+  });
+  nativeWindow.concorsMobileReceive?.({ type: "foreground", scope: "old-account" });
+  expect(nativeWindow.dispatchEvent).not.toHaveBeenCalled();
+  nativeWindow.concorsMobileReceive?.({ type: "foreground", scope: "current-account" });
+  expect(nativeWindow.dispatchEvent).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ type: "concors-foreground" }),
+  );
   connection.disconnect();
   await result;
 });
