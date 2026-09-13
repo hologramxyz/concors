@@ -1,6 +1,8 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
+import { WindowChromeProvider } from "./window/provider";
+
 import { App } from "./App.tsx";
 import "./styles.css";
 
@@ -11,6 +13,8 @@ if (container === null) {
 
 createRoot(container).render(
   <StrictMode>
-    <App />
+    <WindowChromeProvider>
+      <App />
+    </WindowChromeProvider>
   </StrictMode>,
 );
