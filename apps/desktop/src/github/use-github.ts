@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { GitHubStatus } from "@concors/api-client";
 import { api } from "@/auth/api";
 import { openExternal } from "@/tauri";
 
 export function useGitHub() {
+  const awaitingReturn = useRef(false);
   const [previousConnection, setPreviousConnection] = useState<string | null>(null);
   const [status, setStatus] = useState<GitHubStatus | null>(null);
   const [accountResult, setAccountResult] = useState<{
@@ -60,7 +61,11 @@ export function useGitHub() {
     };
   }, [waiting, refresh]);
   useEffect(() => {
+    // Ordinary tab/window switching must not invalidate the repository picker.
+    // Only a return from the external GitHub flow can have changed installation access.
     const focus = () => {
+      if (!awaitingReturn.current) return;
+      awaitingReturn.current = false;
       setWaiting(false);
       refresh();
     };
@@ -74,9 +79,11 @@ export function useGitHub() {
     try {
       const { url } = await api.connectGitHub();
       setAuthorizeUrl(url);
+      awaitingReturn.current = true;
       setWaiting(true);
       await openExternal(url);
     } catch (cause) {
+      awaitingReturn.current = false;
       setWaiting(false);
       setError(cause instanceof Error ? cause.message : "Could not connect GitHub");
     } finally {
@@ -87,10 +94,12 @@ export function useGitHub() {
     if (!status?.manageUrl) return;
     setError(null);
     setAuthorizeUrl(status.manageUrl);
+    awaitingReturn.current = true;
     setWaiting(true);
     try {
       await openExternal(status.manageUrl);
     } catch (cause) {
+      awaitingReturn.current = false;
       setWaiting(false);
       setError(cause instanceof Error ? cause.message : "Could not open GitHub repository access");
     }
@@ -100,6 +109,7 @@ export function useGitHub() {
     setError(null);
     try {
       await api.disconnectGitHub();
+      awaitingReturn.current = false;
       setWaiting(false);
       setAccountResult(null);
       refresh();

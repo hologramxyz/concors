@@ -1,12 +1,11 @@
 import { GitHubIcon } from "./icon";
 import { useEffect, useState } from "react";
-import { Lock, Search } from "lucide-react";
+import { Check, Lock, Search, RefreshCw, Plus, LoaderCircle } from "lucide-react";
 import type { GitHubRepository } from "@concors/api-client";
 import { api } from "@/auth/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useGitHub } from "./use-github";
-import { GitHubConnection } from "./connection";
 
 interface PickerProps {
   readonly onSelect: (url: string) => void;
@@ -16,20 +15,106 @@ interface PickerProps {
 export function GitHubRepositoryPicker(props: PickerProps) {
   const github = useGitHub();
   return (
-    <div className="space-y-3">
-      <GitHubConnection github={github} />
-      {github.status?.connected && (
+    <div className="flex h-full min-h-0 flex-col gap-3">
+      <div className="flex h-9 shrink-0 items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2 text-sm">
+          <GitHubIcon className="size-4 shrink-0" aria-hidden="true" />
+          <span className="truncate">{github.status?.login ?? "GitHub"}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          {github.status?.connected && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={props.disabled}
+              onClick={() => void github.manage()}
+            >
+              <Plus className="size-4" /> Add account
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="Refresh GitHub"
+            disabled={props.disabled}
+            onClick={github.refresh}
+          >
+            <RefreshCw className="size-4" />
+          </Button>
+        </div>
+      </div>
+      {github.status?.connected ? (
         <Repositories
           key={github.status.updatedAt}
           {...props}
           generation={github.generation}
           accounts={github.accounts ?? []}
-          accountsLoading={github.accounts === null}
+          accountsLoading={github.accounts === null && !github.error}
         />
+      ) : !github.status && !github.error ? (
+        <RepositorySkeleton />
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 rounded-xl border bg-muted/20 p-6 text-center">
+          <GitHubIcon className="size-8 text-muted-foreground" aria-hidden="true" />
+          <p className="text-sm text-muted-foreground">
+            {github.status?.configured === false
+              ? "GitHub is not available. You can paste a repository URL instead."
+              : "Connect GitHub to browse your private and organization repositories."}
+          </p>
+          {github.status?.configured && (
+            <Button type="button" disabled={github.busy} onClick={() => void github.connect()}>
+              Connect GitHub
+            </Button>
+          )}
+        </div>
       )}
+      <div className="h-10 shrink-0 overflow-y-auto text-xs text-muted-foreground">
+        {github.error ? (
+          <p role="alert" className="text-destructive">
+            {github.error}
+          </p>
+        ) : github.waiting ? (
+          <p role="status">
+            Finish setup on GitHub, then return here.{" "}
+            {github.authorizeUrl && (
+              <a href={github.authorizeUrl} target="_blank" rel="noreferrer" className="underline">
+                Continue on GitHub
+              </a>
+            )}
+          </p>
+        ) : (
+          <p>Missing a repository? Use Add account to manage access on GitHub.</p>
+        )}
+      </div>
     </div>
   );
 }
+function RepositorySkeleton() {
+  return (
+    <div
+      className="flex min-h-0 flex-1 flex-col gap-3"
+      role="status"
+      aria-label="Loading repositories"
+    >
+      <div className="h-9 shrink-0 rounded-lg bg-muted/60 motion-safe:animate-pulse" />
+      <div className="min-h-0 flex-1 overflow-hidden rounded-xl border" aria-hidden="true">
+        {Array.from({ length: 6 }, (_, index) => (
+          <div
+            key={index}
+            className="flex h-16 items-center gap-3 border-b px-4 motion-safe:animate-pulse"
+          >
+            <span className="size-5 rounded bg-muted" />
+            <span className="h-3 w-2/5 rounded bg-muted" />
+          </div>
+        ))}
+      </div>
+      <div className="h-8 shrink-0" />
+    </div>
+  );
+}
+
 function Repositories({
   onSelect,
   selected,
@@ -83,10 +168,7 @@ function Repositories({
             key,
             installation,
             generation,
-            repos:
-              page > 1 && current.installation === installation && current.generation === generation
-                ? current.repos
-                : [],
+            repos: current.installation === installation ? current.repos : [],
             nextPage: null,
             error: cause instanceof Error ? cause.message : "Could not list repositories",
           }));
@@ -96,17 +178,18 @@ function Repositories({
     };
   }, [installation, page, generation, key]);
   const loading = result.key !== key;
-  const repos =
-    result.installation === installation && result.generation === generation ? result.repos : [];
+  // Keep the current rows (and their scroll container) mounted during background refresh.
+  const repos = result.installation === installation ? result.repos : [];
   const nextPage = loading ? null : result.nextPage;
   const error = loading ? null : result.error;
   const visible = repos.filter((repo) => repo.fullName.toLowerCase().includes(query.toLowerCase()));
+  if (accountsLoading) return <RepositorySkeleton />;
   return (
-    <div className="space-y-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       <>
         {accounts.length > 0 ? (
           <>
-            <div className="flex gap-2">
+            <div className="flex h-9 shrink-0 gap-2">
               <select
                 aria-label="GitHub account"
                 className="h-9 max-w-[45%] min-w-0 rounded-md border bg-background px-2 text-sm"
@@ -133,7 +216,7 @@ function Repositories({
                 <Input
                   aria-label="Search repositories"
                   placeholder="Search repositories…"
-                  className="pl-9"
+                  className="h-9 pl-9"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                 />
@@ -141,7 +224,8 @@ function Repositories({
             </div>
             <div
               aria-label="GitHub repositories"
-              className="max-h-52 overflow-y-auto rounded-lg border"
+              aria-busy={loading}
+              className="min-h-0 flex-1 [scrollbar-gutter:stable] overflow-y-auto rounded-xl border"
             >
               {visible.map((repo) => (
                 <button
@@ -150,7 +234,7 @@ function Repositories({
                   aria-pressed={selected === repo.url}
                   disabled={disabled}
                   onClick={() => onSelect(repo.url)}
-                  className={`flex w-full items-start gap-3 border-b px-3 py-3 text-left last:border-0 hover:bg-muted/50 ${selected === repo.url ? "bg-muted" : ""}`}
+                  className={`flex min-h-16 w-full items-center gap-3 border-b px-4 py-3 text-left outline-none last:border-0 hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset ${selected === repo.url ? "bg-primary/10" : ""}`}
                 >
                   <GitHubIcon
                     aria-hidden="true"
@@ -164,6 +248,9 @@ function Repositories({
                       </span>
                     )}
                   </span>
+                  {selected === repo.url && (
+                    <Check className="size-4 shrink-0 text-primary" aria-label="Selected" />
+                  )}
                   {repo.private && (
                     <Lock
                       aria-label="Private repository"
@@ -177,37 +264,60 @@ function Repositories({
                   {query ? "No matches in the loaded repositories." : "No repositories available."}
                 </p>
               )}
-              {loading && (
-                <p role="status" className="p-4 text-sm text-muted-foreground">
-                  Loading repositories…
-                </p>
+              {loading && repos.length === 0 && (
+                <div role="status" aria-label="Loading repositories">
+                  {Array.from({ length: 6 }, (_, index) => (
+                    <div
+                      key={index}
+                      className="flex h-16 items-center gap-3 border-b px-4 motion-safe:animate-pulse"
+                      aria-hidden="true"
+                    >
+                      <span className="size-4 rounded bg-muted" />
+                      <span className="h-3 w-2/5 rounded bg-muted" />
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
-            {nextPage !== null && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                disabled={loading}
-                onClick={() => setPagination({ generation, page: nextPage })}
-              >
-                Load more repositories
-              </Button>
-            )}
+            <div
+              className="flex h-8 shrink-0 items-center justify-between gap-2 text-xs text-muted-foreground"
+              role="status"
+            >
+              <span>
+                {error ? (
+                  <span role="alert" className="text-destructive">
+                    {error}
+                  </span>
+                ) : loading ? (
+                  <span className="inline-flex items-center gap-2">
+                    <LoaderCircle className="size-3 animate-spin" />
+                    {repos.length ? "Refreshing repositories…" : "Loading repositories…"}
+                  </span>
+                ) : (
+                  `${repos.length} ${repos.length === 1 ? "repository" : "repositories"} loaded`
+                )}
+              </span>
+              {nextPage !== null && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={loading}
+                  onClick={() => setPagination({ generation, page: nextPage })}
+                >
+                  Load more repositories
+                </Button>
+              )}
+            </div>
           </>
         ) : (
-          <p className="text-sm text-muted-foreground">
+          <p className="flex flex-1 items-center justify-center rounded-xl border p-6 text-center text-sm text-muted-foreground">
             {accountsLoading
               ? "Loading accounts…"
-              : "Choose Add account or organization to select repositories on GitHub. Access refreshes when you return."}
+              : "Choose Add account to select repositories on GitHub. Access refreshes when you return."}
           </p>
         )}
       </>
-      {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
     </div>
   );
 }
