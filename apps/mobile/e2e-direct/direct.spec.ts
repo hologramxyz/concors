@@ -10,7 +10,7 @@ import { demoMe } from "../src/demo/fixtures";
 test("mobile connects without cloud login and shares real daemon chat, panes and terminal sessions", async ({
   page,
 }) => {
-  // This scenario exercises the full connection, chat, navigation, terminal and consent flow.
+  // Exercise connection, chat, navigation, terminal and independent profile sign-in.
   test.setTimeout(180_000);
   const directory = await mkdtemp(join(tmpdir(), "concors-mobile-direct-project-"));
   const desktop = new DaemonConnection({
@@ -102,12 +102,9 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await expect(page.getByRole("textbox", { name: "Email", exact: true })).toHaveCount(0);
     await expect(page.getByText(/Live desktop connection/)).toBeVisible();
     await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
-    await expect(page.getByText("Before you connect", { exact: true })).toBeVisible();
-    await expect(page.getByText(/Codex uses OpenAI/)).toBeVisible();
-    expect(workspaceSockets).toEqual([]);
-    await page.getByRole("button", { name: "Not now", exact: true }).click();
-    await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
-    const ui = page.frameLocator('iframe[title="Concors workspace"]');
+    await expect(page.getByText("Before you connect", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Allow AI data sharing" })).toHaveCount(0);
+    const ui = page.frameLocator('iframe[title="Concourse workspace"]');
     const input = ui.getByRole("textbox", { name: "Message Codex" });
     await expect(input).toBeEnabled();
     // Main's provider account flow must also cross the mobile relay without a real OAuth login.
@@ -308,7 +305,7 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await expect(page.getByRole("button", { name: "Allow AI data sharing" })).toHaveCount(0);
     await settings.getByRole("button", { name: "Disconnect desktop", exact: true }).click();
     await expect(page.getByRole("button", { name: "Connect to desktop", exact: true })).toBeVisible();
-    await expect(page.locator('iframe[title="Concors workspace"]')).toHaveCount(0);
+    await expect(page.locator('iframe[title="Concourse workspace"]')).toHaveCount(0);
     expect(desktop.terminals[0]?.status).toBe("running");
     expect(cloudRequests).toEqual([]);
     expect(errors).toEqual([]);

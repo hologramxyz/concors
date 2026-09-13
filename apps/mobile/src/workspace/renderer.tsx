@@ -64,7 +64,7 @@ export const WorkspaceRenderer = forwardRef<WorkspaceRendererHandle, WorkspaceRe
           onError={onError}
           onContentProcessDidTerminate={onError}
           onRenderProcessGone={onError}
-          accessibilityLabel="Concors workspace"
+          accessibilityLabel="Concourse workspace"
         />
         <NativeChrome host={host} snapshot={snapshot} send={send} />
       </View>

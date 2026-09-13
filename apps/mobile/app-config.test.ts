@@ -25,7 +25,7 @@ it("uses the production identity for candidates without a development launcher s
   vi.stubEnv("EAS_BUILD_PROFILE", "candidate");
   const { default: config } = await import("./app.config");
   expect(config.version).toBe(version);
-  expect(config.name).toBe("Concors");
+  expect(config.name).toBe("Concourse");
   expect(config.ios?.bundleIdentifier).toBe("dev.concors.mobile");
   expect(config.android?.package).toBe("dev.concors.mobile");
   expect(config.scheme).toBe("concors");

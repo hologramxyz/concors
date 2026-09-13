@@ -2,7 +2,7 @@ import { expect, test, type Page, type FrameLocator } from "@playwright/test";
 import { ids } from "../src/demo/fixtures";
 import { swipe as touchSwipe } from "./support/swipe";
 import { BINDINGS, isCompactCommand, shortcutLabel } from "../../desktop/src/shortcuts/bindings";
-const workspace = (page: Page) => page.frameLocator('iframe[title="Concors workspace"]');
+const workspace = (page: Page) => page.frameLocator('iframe[title="Concourse workspace"]');
 const activeChat = `${ids.tab}:${ids.pane}`;
 const activeTerminal = `${ids.tab}:${ids.terminalPane}`;
 async function choose(ui: FrameLocator, label: string, value: string) {
@@ -113,11 +113,11 @@ test("mobile header, terminal and host share one background across palettes and 
   const terminal = ui.getByLabel("Terminal output", { exact: true });
   await expect(terminal).toBeVisible();
   const appearances = [
-    ["Concors", "light", "rgb(244, 243, 239)"],
-    ["Concors", "dark", "rgb(20, 20, 20)"],
+    ["Concourse", "light", "rgb(244, 243, 239)"],
+    ["Concourse", "dark", "rgb(20, 20, 20)"],
     ["Cobalt", "dark", "rgb(16, 22, 37)"],
     ["Dusk", "dark", "rgb(26, 21, 37)"],
-    ["Concors", "light", "rgb(244, 243, 239)"],
+    ["Concourse", "light", "rgb(244, 243, 239)"],
   ] as const;
   for (const [index, [palette, colorScheme, color]] of appearances.entries()) {
     if (index > 0) {
@@ -150,11 +150,11 @@ test("mobile header, terminal and host share one background across palettes and 
       return `rgb(${[1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16)).join(", ")})`;
     });
     await expect(
-      terminal.locator(".xterm-fg-6").filter({ hasText: "Concors demo terminal" }),
+      terminal.locator(".xterm-fg-6").filter({ hasText: "Concourse demo terminal" }),
     ).toHaveCSS("color", cyan);
-    if (palette !== "Concors") expect(cyan).not.toBe("rgb(121, 199, 212)");
+    if (palette !== "Concourse") expect(cyan).not.toBe("rgb(121, 199, 212)");
     await expect(ui.locator(".mobile-terminal-controls")).toHaveCSS("background-color", color);
-    await expect(page.locator('iframe[title="Concors workspace"]')).toHaveCSS(
+    await expect(page.locator('iframe[title="Concourse workspace"]')).toHaveCSS(
       "background-color",
       color,
     );
@@ -305,7 +305,7 @@ test("Files responds in the demo and terminal swipes keep both panels reachable"
   );
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
   const popup = await ui
-    .getByRole("button", { name: "Actions for Concors", exact: true })
+    .getByRole("button", { name: "Actions for Concourse", exact: true })
     .boundingBox();
   if (!popup) throw new Error("Project menu trigger is missing");
   const y = popup.y + popup.height / 2;
@@ -454,7 +454,7 @@ test("new workspace completion opens its own project and closes the sidebar", as
     "New workspace",
   );
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
-  await ui.getByRole("button", { name: "Concors", exact: true }).click();
+  await ui.getByRole("button", { name: "Concourse", exact: true }).click();
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toHaveValue(
     "Keep my original draft",
   );
@@ -515,7 +515,7 @@ test("compact toolbar keeps icon controls and send on one row at phone widths", 
       await expect(ui.getByRole("button", { name: label, exact: true })).toHaveText("");
     }
     const header = ui.locator(".mobile-header");
-    await expect(header).not.toContainText("Concors");
+    await expect(header).not.toContainText("Concourse");
     const chevronInside = await ui.getByRole("combobox", { name: "Tabs" }).evaluate((picker) => {
       const bounds = picker.getBoundingClientRect();
       const chevron = picker.querySelector(".mobile-select-chevron")?.getBoundingClientRect();
@@ -862,7 +862,7 @@ test("account opens a bottom drawer with settings, sign out and focus restoratio
 }) => {
   const ui = await enter(page);
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
-  await expect(ui.locator(".mobile-sidebar-head")).not.toContainText("Concors");
+  await expect(ui.locator(".mobile-sidebar-head")).not.toContainText("Concourse");
   const account = ui.getByRole("button", { name: /^Account:/ });
   await account.click();
   const drawer = ui.getByRole("dialog", { name: "Account", exact: true });

@@ -3,7 +3,7 @@ appId: dev.concors.mobile.preview
 - launchApp:
     clearState: true
 # A cold emulator can briefly put its own ANR dialog over the welcome screen.
-# Recover only System UI; Concors crashes/ANRs and all app interactions still fail.
+# Recover only System UI; Concourse crashes/ANRs and all app interactions still fail.
 - retry:
     maxRetries: 2
     commands:
