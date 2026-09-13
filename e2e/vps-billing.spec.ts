@@ -106,6 +106,7 @@ async function billingApi(
       result = { status: state.complete ? "complete" : "open" };
     } else if (path.endsWith("/billing/setup"))
       result = { url: "https://checkout.stripe.test/setup", sessionId: "cs_test_1" };
+    else if (path.endsWith("/billing/invoices")) result = { invoices: [] };
     else if (path.endsWith("/billing/subscriptions"))
       result = {
         subscriptions: state.created
@@ -291,7 +292,7 @@ test("returning from card setup can be abandoned without paying or losing the VP
   expect(state.created).toBe(false);
 });
 
-test("existing cloud machines appear directly in the switcher and refresh when reopened", async ({
+test("machine views reuse fresh data and explicit refresh updates the switcher", async ({
   page,
 }) => {
   const state = await billingApi(page);
@@ -304,10 +305,21 @@ test("existing cloud machines appear directly in the switcher and refresh when r
     page.getByRole("menuitem", { name: /^This computer (Selected|Connected)$/ }),
   ).toBeVisible();
   await page.keyboard.press("Escape");
+  const reads = () =>
+    state.requests.filter((request) => request.path.endsWith("/machines") && !request.body).length;
+  const before = reads();
+  await page.getByRole("button", { name: "Switch machine", exact: true }).click();
+  await expect(page.getByRole("menuitem", { name: /build-agent provisioning/i })).toBeVisible();
+  expect(reads()).toBe(before);
+  await page.getByRole("menuitem", { name: /build-agent provisioning/i }).click();
+  await expect(page.getByRole("heading", { name: "build-agent", exact: true })).toBeVisible();
+  expect(reads()).toBe(before);
   state.created = false;
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "No machines yet" })).toBeVisible();
   await page.getByRole("button", { name: "Switch machine", exact: true }).click();
   await expect(page.getByRole("menuitem", { name: /build-agent provisioning/i })).toHaveCount(0);
-  await expect(page.getByRole("menuitem", { name: "Add a machine", exact: true })).toBeVisible();
+  expect(reads()).toBe(before + 1);
 });
 
 for (const viewport of [
@@ -468,3 +480,23 @@ for (const width of [390, 1280]) {
     await dialog.screenshot({ path: `/tmp/tool-picker-${width}.png` });
   });
 }
+
+test("billing and SSH keys stay visible when revisiting settings", async ({ page }) => {
+  const state = await billingApi(page, { card: true, savedKey: true });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Account: E2E User" }).click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
+  const navigation = page.getByRole("navigation", { name: "Settings" });
+  await navigation.getByRole("button", { name: "Billing", exact: true }).click();
+  await expect(page.getByText("4242", { exact: false })).toBeVisible();
+  await navigation.getByRole("button", { name: "SSH keys", exact: true }).click();
+  await expect(page.getByText("build-agent access", { exact: true })).toBeVisible();
+  const reads = state.requests.length;
+  await navigation.getByRole("button", { name: "Billing", exact: true }).click();
+  await expect(page.getByText("4242", { exact: false })).toBeVisible();
+  await expect(page.getByText("Loading billing…", { exact: true })).toHaveCount(0);
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await navigation.getByRole("button", { name: "SSH keys", exact: true }).click();
+  await expect(page.getByText("build-agent access", { exact: true })).toBeVisible();
+  expect(state.requests.length).toBe(reads);
+});

@@ -2,6 +2,7 @@ import type { MachineCatalog, CreateMachineInput, DevelopmentTools } from "@conc
 import { ChevronDown, CreditCard, MapPin, Server } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { useSshKeys } from "@/data/ssh-keys";
 import { api } from "@/auth/api";
 import { DevelopmentToolPicker } from "./development-tool-picker";
 import { useBilling } from "@/billing/use-billing";
@@ -49,27 +50,10 @@ export function CreateMachineDialog({
   onClose,
 }: CreateMachineDialogProps) {
   const billing = useBilling(organizationId);
-  const [keyCount, setKeyCount] = useState<number | null>(null);
+  const keys = useSshKeys(organizationId);
+  const keyCount = keys.data?.length ?? null;
   const [publicKey, setPublicKey] = useState("");
-  const [keyError, setKeyError] = useState<string | null>(null);
-  const [keyGeneration, setKeyGeneration] = useState(0);
-  useEffect(() => {
-    let cancelled = false;
-    void api
-      .listSshKeys({ organizationId })
-      .then((keys) => {
-        if (!cancelled) {
-          setKeyCount(keys.length);
-          setKeyError(null);
-        }
-      })
-      .catch((cause: unknown) => {
-        if (!cancelled) setKeyError(describeMachinesError(cause));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [organizationId, keyGeneration]);
+  const keyError = keys.error ? describeMachinesError(keys.error) : null;
   const [step, setStep] = useState(0);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const previousStep = useRef(step);
@@ -158,12 +142,12 @@ export function CreateMachineDialog({
             setError(null);
             void (async () => {
               if (keyCount === 0) {
-                await api.addSshKey({
+                const key = await api.addSshKey({
                   organizationId,
                   name: `${name} access`,
                   publicKey: publicKey.trim(),
                 });
-                setKeyCount(1);
+                keys.resource.set((current) => [...(current ?? []), key]);
               }
               await onCreate({
                 name,
@@ -354,11 +338,7 @@ export function CreateMachineDialog({
                   </p>
                 )}
                 {keyCount === null && keyError && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => setKeyGeneration((n) => n + 1)}
-                  >
+                  <Button type="button" variant="ghost" onClick={() => void keys.refresh()}>
                     Retry loading SSH keys
                   </Button>
                 )}

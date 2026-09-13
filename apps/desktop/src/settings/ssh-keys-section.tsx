@@ -1,7 +1,8 @@
-import { ApiError, type Organization, type SshKey } from "@concors/api-client";
+import { ApiError, type Organization } from "@concors/api-client";
 import { KeyRound, Plus, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
+import { useSshKeys } from "@/data/ssh-keys";
 import { api } from "@/auth/api";
 import { describeAuthError } from "@/auth/auth-state";
 import { Button } from "@/components/ui/button";
@@ -25,29 +26,13 @@ interface SshKeysSectionProps {
 /** SSH public keys installed on every machine the organization creates from now on. */
 export function SshKeysSection({ organization }: SshKeysSectionProps) {
   const organizationId = organization?.id;
-  const [keys, setKeys] = useState<readonly SshKey[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const query = useSshKeys(organizationId);
+  const keys = query.data;
+  const setKeys = query.resource.set;
+  const [actionError, setError] = useState<string | null>(null);
+  const error = actionError ?? (query.error ? describeApiError(query.error) : null);
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
-
-  // The parent keys this component by organization, so a switch starts from a blank state.
-  useEffect(() => {
-    let cancelled = false;
-    void api
-      .listSshKeys(organizationId === undefined ? {} : { organizationId })
-      .then((list) => {
-        if (!cancelled) {
-          setKeys(list);
-          setError(null);
-        }
-      })
-      .catch((cause: unknown) => {
-        if (!cancelled) setError(describeApiError(cause));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [organizationId]);
 
   return (
     <Section

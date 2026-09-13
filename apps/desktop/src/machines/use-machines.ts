@@ -4,10 +4,12 @@ import {
   type Machine,
   type MachineCatalog,
 } from "@concors/api-client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect } from "react";
 
 import { api } from "@/auth/api";
 import { describeAuthError } from "@/auth/auth-state";
+
+import { apiCache, useApiResource } from "@/data/api-resource";
 
 import { isSettling } from "./format.ts";
 
@@ -36,43 +38,16 @@ export interface MachinesState {
  * more often during provisioning or deletion. Failed refreshes keep retrying.
  */
 export function useMachines(organizationId: string | undefined): MachinesState {
-  const [machines, setMachines] = useState<readonly Machine[] | null>(null);
-  const [catalog, setCatalog] = useState<MachineCatalog | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [generation, setGeneration] = useState(0);
-  const latest = useRef(0);
-
   const scope = organizationId === undefined ? {} : { organizationId };
-
-  useEffect(() => {
-    const ticket = ++latest.current;
-    void Promise.all([
-      api.listMachines(scope),
-      catalog === null ? api.getMachineCatalog() : Promise.resolve(catalog),
-    ])
-      .then(([list, loadedCatalog]) => {
-        if (ticket !== latest.current) return;
-        setMachines(list);
-        setCatalog(loadedCatalog);
-        setError(null);
-      })
-      .catch((cause: unknown) => {
-        if (ticket === latest.current) setError(describeMachinesError(cause));
-      })
-      .finally(() => {
-        if (ticket === latest.current) setLoading(false);
-      });
-    return () => {
-      latest.current += 1;
-    };
-    // `catalog` is only read to avoid re-fetching it; changes to it must not trigger a reload.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [organizationId, generation]);
-
+  const list = useMachineList(organizationId);
+  const catalog = useApiResource("machine-catalog", () => api.getMachineCatalog(), {
+    staleTime: 300_000,
+  });
+  const machines = list.data;
   useEffect(() => {
     const refresh = () => {
-      if (document.visibilityState === "visible") setGeneration((n) => n + 1);
+      if (document.visibilityState === "visible")
+        void list.resource.load(machines?.some(isSettling) ? SETTLING_POLL_MS : RESOURCE_POLL_MS);
     };
     const timer = setInterval(
       refresh,
@@ -83,55 +58,42 @@ export function useMachines(organizationId: string | undefined): MachinesState {
       clearInterval(timer);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, [machines]);
+  }, [machines, list.resource]);
 
-  const reload = useCallback(() => {
-    setLoading(true);
-    setGeneration((n) => n + 1);
-  }, []);
-
-  const create = useCallback(
-    async (input: Omit<CreateMachineInput, "organizationId">) => {
-      const machine = await api.createMachine({ ...input, ...scope });
-      setMachines((current) => [machine, ...(current ?? [])]);
-      return machine;
+  const replace = useCallback(
+    (machine: Machine) => {
+      list.resource.set((current) =>
+        (current ?? [])
+          .map((candidate) => (candidate.id === machine.id ? machine : candidate))
+          .filter((candidate) => candidate.status !== "deleted"),
+      );
+      apiCache().invalidate("subscriptions:");
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [organizationId],
-  );
-
-  const replace = (machine: Machine) =>
-    setMachines((current) =>
-      (current ?? [])
-        .map((candidate) => (candidate.id === machine.id ? machine : candidate))
-        .filter((candidate) => candidate.status !== "deleted"),
-    );
-  const cancel = useCallback(async (id: string) => replace(await api.cancelMachine(id)), []);
-  const resume = useCallback(async (id: string) => replace(await api.resumeMachine(id)), []);
-  const rename = useCallback(async (id: string, name: string) => {
-    const machine = await api.renameMachine(id, name);
-    // Discard list requests started before the rename completed, then refresh usage normally.
-    latest.current += 1;
-    replace(machine);
-    setGeneration((n) => n + 1);
-  }, []);
-
-  const retryTools = useCallback(
-    async (id: string) => replace(await api.retryDevelopmentTools(id)),
-    [],
+    [list.resource],
   );
 
   return {
-    retryTools,
     machines,
-    catalog,
-    error,
-    loading: loading || (machines === null && error === null),
-    reload,
-    create,
-    cancel,
-    resume,
-    rename,
+    catalog: catalog.data,
+    error: list.error || catalog.error ? describeMachinesError(list.error ?? catalog.error) : null,
+    loading: list.pending || catalog.pending || (machines === null && !list.error),
+    reload: () => {
+      void list.refresh();
+      void catalog.refresh();
+    },
+    create: async (input) => {
+      const machine = await api.createMachine({ ...input, ...scope });
+      list.resource.set((current) => [
+        machine,
+        ...(current ?? []).filter((item) => item.id !== machine.id),
+      ]);
+      apiCache().invalidate("subscriptions:");
+      return machine;
+    },
+    cancel: async (id) => replace(await api.cancelMachine(id)),
+    resume: async (id) => replace(await api.resumeMachine(id)),
+    rename: async (id, name) => replace(await api.renameMachine(id, name)),
+    retryTools: async (id) => replace(await api.retryDevelopmentTools(id)),
   };
 }
 
@@ -142,4 +104,13 @@ export function describeMachinesError(cause: unknown): string {
   }
   if (cause instanceof ApiError && cause.status < 500) return cause.message;
   return describeAuthError(cause);
+}
+
+/** Shared by the Machines page and switcher, including successful mutations. */
+export function useMachineList(organizationId: string | undefined, enabled = true) {
+  return useApiResource(
+    `machines:${organizationId ?? ""}`,
+    () => api.listMachines(organizationId === undefined ? {} : { organizationId }),
+    { enabled, staleTime: SETTLING_POLL_MS },
+  );
 }

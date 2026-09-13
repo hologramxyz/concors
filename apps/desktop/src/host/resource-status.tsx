@@ -48,7 +48,9 @@ export function ResourceStatus({
         : stale
           ? "Usage stale"
           : !current?.usage
-            ? "Usage unavailable"
+            ? !current || now - current.receivedAt < HOST_USAGE_STALE_MS
+              ? "Checking usage…"
+              : "Usage unavailable"
             : null;
   const usage = status ? null : current?.usage;
   const summary = usage ? usageSummary(usage) : null;
