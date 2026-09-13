@@ -8,6 +8,7 @@ export async function rpcSessions(
   cwd: string,
   managed: string,
   env = process.env,
+  limit = 100,
 ) {
   const base =
     env[engine === "pi" ? "PI_CODING_AGENT_DIR" : "OMP_AGENT_DIR"] ??
@@ -29,14 +30,12 @@ export async function rpcSessions(
     resolve(cwd, path.startsWith("~/") ? join(homedir(), path.slice(2)) : path);
   const files: { path: string; mtime: number }[] = [];
   const scan = async (dir: string, depth: number) => {
-    if (files.length >= 2000) return;
     try {
       for (const entry of await readdir(dir, { withFileTypes: true })) {
         const path = join(dir, entry.name);
         if (entry.isDirectory() && depth > 0) await scan(path, depth - 1);
         else if (entry.isFile() && entry.name.endsWith(".jsonl"))
           files.push({ path, mtime: (await stat(path)).mtimeMs });
-        if (files.length >= 2000) break;
       }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
@@ -78,7 +77,7 @@ export async function rpcSessions(
         directory: cwd,
         updatedAt: new Date(file.mtime).toISOString(),
       });
-      if (result.length >= 100) break;
+      if (result.length >= limit) break;
     } finally {
       await handle.close();
     }
