@@ -5,6 +5,7 @@ async function setup() {
   vi.resetModules();
   const nativeWindow = {
     addEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
     ReactNativeWebView: { postMessage: vi.fn() },
     concorsMobileReceive: undefined as undefined | ((message: unknown) => void),
   };
@@ -50,4 +51,61 @@ it("still fails when the native bridge never answers", async () => {
   expect(await result).toMatchObject({ error: { code: "HANDSHAKE_TIMEOUT" } });
   expect(connection.state.status).toBe("error");
   connection.disconnect();
+});
+
+it("only forwards foreground events from the current account scope", async () => {
+  const { connection, nativeWindow, result } = await setup();
+  nativeWindow.concorsMobileReceive?.({ type: "foreground", scope: "old-account" });
+  expect(nativeWindow.dispatchEvent).not.toHaveBeenCalled();
+  nativeWindow.concorsMobileReceive?.({
+    type: "state",
+    state: {
+      scope: "current-account",
+      me: null,
+      organizations: [],
+      machines: [],
+      machineId: null,
+      connectionId: null,
+      phase: "idle",
+      message: null,
+      capabilities: {
+        version: 1,
+        remoteAccess: false,
+        pushNotifications: false,
+        accountDeletion: false,
+      },
+      demo: false,
+      native: true,
+      systemDark: false,
+      preferences: { theme: "system", corners: "subtle", sound: false },
+      pushEnabled: false,
+      target: {},
+      supportUrl: "https://example.test/support",
+      privacyUrl: "https://example.test/privacy",
+      apiUrl: "https://example.test",
+      endpointLabel: "Not connected",
+    },
+  });
+  nativeWindow.concorsMobileReceive?.({ type: "foreground", scope: "old-account" });
+  expect(nativeWindow.dispatchEvent).not.toHaveBeenCalled();
+  nativeWindow.concorsMobileReceive?.({ type: "foreground", scope: "current-account" });
+  expect(nativeWindow.dispatchEvent).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ type: "concors-foreground" }),
+  );
+  connection.disconnect();
+  await result;
+});
+
+it("allows cancelling an organization change before any host request is sent", async () => {
+  const { connection, nativeWindow, result } = await setup();
+  const { guardMobileLeave, hostAction } = await import("./bridge");
+  const guard = vi.fn().mockResolvedValue(false);
+  const off = guardMobileLeave(guard);
+  nativeWindow.ReactNativeWebView.postMessage.mockClear();
+  await hostAction({ kind: "switch-organization", organizationId: "another-org" });
+  expect(guard).toHaveBeenCalledOnce();
+  expect(nativeWindow.ReactNativeWebView.postMessage).not.toHaveBeenCalled();
+  off();
+  connection.disconnect();
+  await result;
 });

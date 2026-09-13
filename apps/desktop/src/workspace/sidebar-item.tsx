@@ -3,6 +3,8 @@ import { cn } from "cn";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ProjectActions } from "./project-actions";
 import { ProjectImage } from "./project-image";
+import { useContext } from "react";
+import { CompactLayoutContext } from "@/components/compact-layout";
 
 export function WorkspaceSidebarItem({
   project,
@@ -21,6 +23,7 @@ export function WorkspaceSidebarItem({
   onSelect: (id: string) => void;
   execute: (operation: WorkspaceOperation) => Promise<void>;
 }) {
+  const mobile = useContext(CompactLayoutContext);
   const button = (
     <button
       type="button"
@@ -48,17 +51,22 @@ export function WorkspaceSidebarItem({
       className={cn(
         "group flex items-center rounded-md focus-within:bg-sidebar-accent hover:bg-sidebar-accent has-[[data-state=open]]:bg-sidebar-accent",
         selected && "bg-sidebar-accent",
+        mobile && "mobile-project",
       )}
     >
-      <Tooltip delayDuration={250}>
-        <TooltipTrigger asChild>{button}</TooltipTrigger>
-        <TooltipContent side="right" sideOffset={8}>
-          <div className="min-w-0 break-words">
-            <p className="font-medium">{project.name}</p>
-            <p className="opacity-75">{project.directory}</p>
-          </div>
-        </TooltipContent>
-      </Tooltip>
+      {mobile ? (
+        button
+      ) : (
+        <Tooltip delayDuration={250}>
+          <TooltipTrigger asChild>{button}</TooltipTrigger>
+          <TooltipContent side="right" sideOffset={8}>
+            <div className="min-w-0 break-words">
+              <p className="font-medium">{project.name}</p>
+              <p className="opacity-75">{project.directory}</p>
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      )}
       {!compact && <ProjectActions project={project} canEdit={canEdit} execute={execute} />}
     </li>
   );

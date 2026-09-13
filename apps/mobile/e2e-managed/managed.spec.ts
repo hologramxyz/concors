@@ -67,7 +67,7 @@ test("phone and desktop discover a managed machine and share one real terminal",
       "true",
     );
     await ui.getByRole("dialog", { name: "Machine", exact: true }).press("Escape");
-    await ui.getByRole("button", { name: "Close sidebar", exact: true }).click();
+    await ui.getByRole("button", { name: "Return to workspace", exact: true }).click();
     const phoneTerminal = ui.getByLabel("Terminal output", { exact: true });
     await expect(phoneTerminal).toBeVisible();
     await phoneTerminal.click();

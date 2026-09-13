@@ -18,11 +18,12 @@ import { formatDate } from "@/lib/format-date";
 import { Row, Section } from "@/views/settings-primitives";
 
 import { SubscriptionsSection } from "./subscriptions-section";
+import { MobileOrganizationPicker } from "@/mobile/organization-picker";
 
 interface AccountSettingsProps {
   readonly auth: SignedInAuth;
   readonly onSignOut: () => void;
-  readonly onSetActiveOrganization: (organizationId: string) => void;
+  readonly onSetActiveOrganization: (organizationId: string) => unknown;
 }
 
 export function AccountSettings({
@@ -71,7 +72,9 @@ export function AccountSettings({
         }
       >
         <Row label="Active organization">
-          {auth.organizations.length > 1 ? (
+          {compact ? (
+            <MobileOrganizationPicker auth={auth} onSelect={onSetActiveOrganization} />
+          ) : auth.organizations.length > 1 ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="max-w-56 justify-between">
