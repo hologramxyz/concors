@@ -22,7 +22,7 @@ interface AppSidebarProps {
   onSelectAgent: (id: string) => void;
   view: View;
   onOpenSettings: () => void;
-  onOpenCommandPalette: () => void;
+  onOpenSearch: () => void;
   workspace: WorkspaceSnapshot | null;
   canEdit: boolean;
   onSelectProject: (id: string) => void;
@@ -75,7 +75,7 @@ export function AppSidebar(props: AppSidebarProps) {
                 <button
                   type="button"
                   aria-label="Search"
-                  onClick={props.onOpenCommandPalette}
+                  onClick={props.onOpenSearch}
                   className={cn(
                     "flex shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground",
                     props.collapsed ? "sidebar-rail-control" : "p-1.5",
