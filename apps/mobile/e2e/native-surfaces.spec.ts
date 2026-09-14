@@ -80,6 +80,14 @@ test("native surface bridge preserves navigation, drafts, settings, attachments 
       item.content.kind === "button" ? [item.content.label, item.content.icon] : "composer",
     );
   await expect.poll(sidebarSurfaces).toEqual([["Search workspace", "search"]]);
+  const menu = initial.surfaces.find(
+    (item) => item.content.kind === "button" && item.content.label === "Open sidebar",
+  );
+  const search = (await snapshot(page))?.surfaces.find(
+    (item) => item.content.kind === "button" && item.content.label === "Search workspace",
+  );
+  expect(search?.frame.y).toBe(menu?.frame.y);
+  expect(search?.frame.height).toBe(menu?.frame.height);
   await expect(ui.getByRole("button", { name: "Close sidebar", exact: true })).toHaveCount(0);
   await event(page, "button", "Search workspace", { kind: "press", control: "activate" });
   await expect(ui.getByPlaceholder("Search workspaces, agents, tabs…")).toBeVisible();
