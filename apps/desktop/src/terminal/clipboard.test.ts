@@ -41,6 +41,13 @@ describe("terminal clipboard shortcuts", () => {
     expect(clipboardAction(key({ key: letter, ctrlKey: true, shiftKey: true }))).toBe(expected);
   });
 
+  it("accepts Omarchy's Ctrl+Insert and Shift+Insert translation", () => {
+    expect(clipboardAction(key({ key: "Insert", ctrlKey: true }))).toBe("copy");
+    expect(clipboardAction(key({ key: "Insert", shiftKey: true }))).toBe("paste");
+    expect(clipboardAction(key({ key: "Insert" }))).toBeUndefined();
+    expect(clipboardAction(key({ key: "Insert", ctrlKey: true, shiftKey: true }))).toBeUndefined();
+  });
+
   it("leaves shell controls, other shortcuts, AltGr and composition alone", () => {
     const f = fixture();
     for (const event of [
