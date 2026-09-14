@@ -11,6 +11,7 @@ import { useTheme } from "../src/ui";
 import { api } from "../src/auth/runtime";
 import { useCapabilities } from "../src/queries";
 import { usePushNavigation } from "../src/platform/notifications";
+import { AppearanceProvider } from "../src/appearance-provider";
 
 configureRequestIds(randomUUID);
 export default function RootLayout() {
@@ -29,9 +30,11 @@ export default function RootLayout() {
   );
   return (
     <QueryClientProvider client={query}>
-      <AuthProvider>
-        <Navigation />
-      </AuthProvider>
+      <AppearanceProvider>
+        <AuthProvider>
+          <Navigation />
+        </AuthProvider>
+      </AppearanceProvider>
     </QueryClientProvider>
   );
 }
