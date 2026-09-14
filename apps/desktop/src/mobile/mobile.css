@@ -257,6 +257,13 @@ body {
   min-height: 60px;
   padding: 4px 10px;
 }
+.mobile-sidebar-machine {
+  flex: 1;
+  min-width: 0;
+}
+.mobile-sidebar-machine .mobile-select-trigger {
+  height: 48px;
+}
 .mobile-icon {
   display: inline-flex;
   align-items: center;

@@ -484,24 +484,26 @@ function MobileWorkspaceContent({
                   style={{ width }}
                 >
                   <div className="mobile-sidebar-head">
+                    <div className="mobile-sidebar-machine">
+                      <MobileMachinePicker
+                        host={host}
+                        onSelect={(machineId) => {
+                          setLocal({ machineId, target: {} });
+                          runHost({ kind: "select-machine", machineId });
+                        }}
+                      />
+                    </div>
                     <NativeHeaderButton
                       icon="search"
-                      className="mobile-icon mobile-glass ml-auto"
+                      className="mobile-icon mobile-glass"
                       aria-label="Search workspace"
                       onClick={() => setSearchOpen(true)}
                     >
                       <Search />
                     </NativeHeaderButton>
                   </div>
-                  <div className="px-3 pb-3">
-                    <MobileMachinePicker
-                      host={host}
-                      onSelect={(machineId) => {
-                        setLocal({ machineId, target: {} });
-                        runHost({ kind: "select-machine", machineId });
-                      }}
-                    />
-                    {sidebarOpen && (
+                  {sidebarOpen && (
+                    <div className="px-3 pb-3">
                       <ResourceStatus
                         compact
                         connection={connection}
@@ -511,8 +513,8 @@ function MobileWorkspaceContent({
                           "Desktop daemon"
                         }
                       />
-                    )}
-                  </div>
+                    </div>
+                  )}
                   <nav aria-label="Primary" className="mobile-sidebar-content">
                     <SidebarSection
                       title="Workspaces"
