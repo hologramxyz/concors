@@ -1,0 +1,44 @@
+.dictation-recording {
+  min-width: 0;
+  padding: 8px 4px 2px;
+  outline: none;
+}
+.dictation-waveform {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  height: 48px;
+  fill: var(--primary);
+}
+.dictation-volume {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 16px;
+}
+.dictation-volume span {
+  width: 2px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--muted-foreground);
+  opacity: 0.25;
+}
+.dictation-volume span:nth-child(2) {
+  height: 8px;
+}
+.dictation-volume span:nth-child(3) {
+  height: 12px;
+}
+.dictation-volume span:nth-child(4) {
+  height: 16px;
+}
+.dictation-volume span[data-lit="true"] {
+  background: var(--primary);
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Keep the current level readable without moving a history of bars across the composer. */
+  .dictation-waveform {
+    visibility: hidden;
+  }
+}
