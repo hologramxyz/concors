@@ -3,7 +3,7 @@ import { test, expect, signedIn } from "../../../e2e/signed-in";
 import { managedHost } from "../../../e2e/support/managed-host";
 import { demoMachine, demoMe } from "../src/demo/fixtures";
 
-const uiFor = (page: Page) => page.frameLocator('iframe[title="Concourse workspace"]');
+const uiFor = (page: Page) => page.frameLocator('iframe[title="Concors workspace"]');
 const sheet = (ui: FrameLocator, name: string) => ui.getByRole("dialog", { name, exact: true });
 async function close(ui: FrameLocator, name: string) {
   await sheet(ui, name).getByRole("button", { name: "Close", exact: true }).click();

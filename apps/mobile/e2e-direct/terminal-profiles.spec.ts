@@ -34,7 +34,7 @@ test("mobile saves and launches machine terminal profiles", async ({ page }) => 
     await execute({ kind: "selection.set", projectId, tabId: null });
     await page.goto("/");
     await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
-    const ui = page.frameLocator('iframe[title="Concourse workspace"]');
+    const ui = page.frameLocator('iframe[title="Concors workspace"]');
     await ui.getByRole("button", { name: "Create a tab", exact: true }).click();
     await ui.getByRole("button", { name: "Edit pane profiles", exact: true }).click();
     await ui.getByRole("button", { name: "Add terminal profile", exact: true }).click();

@@ -129,7 +129,7 @@ export function MobileAccountMenu({
           <div className="min-w-0">
             <p className="truncate font-medium">{name}</p>
             <p className="truncate text-sm text-muted-foreground">
-              {person ? person.email : "Sign in to your Concourse account"}
+              {person ? person.email : "Sign in to your Concors account"}
             </p>
           </div>
         </div>

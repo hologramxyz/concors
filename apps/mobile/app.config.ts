@@ -16,7 +16,7 @@ const identifier = "dev.concors.mobile";
 const projectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
 
 const config: ExpoConfig = {
-  name: production ? "Concourse" : "Concourse Preview",
+  name: production ? "Concors" : "Concors Preview",
   slug: "concors-mobile",
   version,
   scheme: production ? "concors" : "concors-preview",

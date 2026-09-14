@@ -35,7 +35,7 @@ export function useDirectProfile() {
       setError(
         cause instanceof ApiError && [400, 401].includes(cause.status)
           ? "Email or password is incorrect."
-          : "Could not verify your Concourse profile. Check your connection and retry.",
+          : "Could not verify your Concors profile. Check your connection and retry.",
       );
     } finally {
       busyRef.current = false;
@@ -102,7 +102,7 @@ function ProfileSheet({
             overflow: "hidden",
           }}
         >
-          <Screen title={profile ? "Your profile" : "Sign in to Concourse"}>
+          <Screen title={profile ? "Your profile" : "Sign in to Concors"}>
             {open && (
               <ProfileForm
                 profile={profile}

@@ -259,7 +259,7 @@ export function SettingsDrawer({
           ) : null}
           {page === "account" && !host.direct && (
             <div className="px-4 pb-4">
-              <Section title="Help and privacy" description="Concourse support and data practices.">
+              <Section title="Help and privacy" description="Concors support and data practices.">
                 <div className="flex gap-3 py-3">
                   <Button
                     variant="outline"

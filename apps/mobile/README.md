@@ -1,6 +1,6 @@
-# Concourse mobile
+# Concors mobile
 
-Expo SDK 57 / React Native hosts the **actual Concourse desktop React workspace** in a
+Expo SDK 57 / React Native hosts the **actual Concors desktop React workspace** in a
 bundled, offline WebView. The phone shell is chat-first: bottom composer, swipeable
 push sidebar, flat top Tabs picker, and modal settings. There is no bottom navigation
 and no second implementation of chat/tool rendering.
@@ -130,7 +130,7 @@ The host uses the same `DaemonConnection` protocol as desktop and obtains the ac
 machine ID from its workspace snapshot. Cloud login is not needed for the workspace;
 inventory, billing, provisioning and push API calls remain blocked in this mode.
 The footer is a profile entry, not a machine status label. Tap **Your profile → Sign in**
-to verify the same Concourse account used on desktop; its actual name, email and avatar then
+to verify the same Concors account used on desktop; its actual name, email and avatar then
 appear in the footer/drawer. This optional profile session is isolated in memory and
 never grants cloud machine access or changes the desktop connection. Passwords and
 session tokens stay in the outer host, not the embedded workspace renderer. Reloading
@@ -223,7 +223,7 @@ the in-memory demo cannot prove real provider switching or saved profile launch.
    sidebar controls must never show through the main view. Tap your name/avatar to open Account, not Settings. The drawer starts
    with the machine selector, followed by Add machine, Settings and Sign out.
    Direct previews offer **Your profile → Sign in** until you authenticate your real
-   Concourse account, with **Disconnect desktop** kept separate from profile sign-out. Add machine
+   Concors account, with **Disconnect desktop** kept separate from profile sign-out. Add machine
    explains setup and refreshes existing cloud machines; it does not provision or
    purchase one. Closing nested machine sheets restores focus to the account drawer.
    CPU/RAM sits just below the sidebar machine selector, using the selected daemon's

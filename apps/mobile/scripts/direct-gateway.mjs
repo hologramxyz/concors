@@ -81,7 +81,7 @@ export function createDirectGateway({
         .end(data);
     } catch {
       if (!res.headersSent) res.writeHead(502, { "content-type": "application/json" });
-      res.end(JSON.stringify({ message: "Concourse profile service unavailable." }));
+      res.end(JSON.stringify({ message: "Concors profile service unavailable." }));
     }
   };
   const sockets = new Set();
