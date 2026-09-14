@@ -540,7 +540,7 @@ test("message history uses the shared mobile drawer and returns focus to its tri
   await trigger.click();
   const dialog = ui.getByRole("dialog", { name: "Your messages", exact: true });
   await expect(dialog).toHaveAttribute("data-mobile-drawer", "true");
-  await expect(dialog.getByRole("heading")).toHaveCSS("font-size", "20px");
+  await expect(dialog.getByRole("heading")).toHaveCSS("font-size", "16px");
   const close = dialog.getByRole("button", { name: "Close messages", exact: true });
   await expect(close).toHaveCSS("width", "44px");
   await expect

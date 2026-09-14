@@ -207,12 +207,14 @@ export function Screen({
   children,
   action,
   scroll = true,
+  presentation = "page",
 }: {
   title: string;
   subtitle?: string;
   children: ReactNode;
   action?: ReactNode;
   scroll?: boolean;
+  presentation?: "page" | "dialog";
 }) {
   const theme = useTheme();
   const content = (
@@ -228,7 +230,7 @@ export function Screen({
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
         <View style={{ flex: 1, gap: 4 }}>
-          <Copy size={28} weight="600" accessibilityRole="header">
+          <Copy size={presentation === "dialog" ? 16 : 28} weight="600" accessibilityRole="header">
             {title}
           </Copy>
           {subtitle && (
