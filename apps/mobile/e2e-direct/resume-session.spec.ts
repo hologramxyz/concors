@@ -80,13 +80,16 @@ for (const native of [false, true]) {
       await expect(actions.getByRole("button", { name: "Refresh sessions" })).toBeVisible();
       await expect(actions.getByRole("button", { name: "Close", exact: true })).toBeVisible();
       await page.screenshot({ path: test.info().outputPath("resume-all-mobile.png") });
-      await filters.getByRole("button", { name: "Claude Code", exact: true }).click();
-      await expect(dialog.locator('[data-session-provider="codex"]')).toHaveCount(0);
+      if (!native) {
+        await filters.getByRole("button", { name: "Claude Code", exact: true }).click();
+        await expect(dialog.locator('[data-session-provider="codex"]')).toHaveCount(0);
+      }
       // The shared test daemon uses deterministic native IDs across fixture directories.
       const nativeIndex = native ? 124 : 125;
-      const row = dialog.getByRole("button", {
-        name: new RegExp(`^Older CLI session ${nativeIndex} `),
-      });
+      // A row selected from All must resume its own provider, not the blank chat's Codex default.
+      const row = dialog
+        .locator('[data-session-provider="claude"]')
+        .filter({ hasText: `Older CLI session ${nativeIndex}` });
       await dialog.getByRole("textbox", { name: "Search sessions" }).fill(String(nativeIndex));
       await expect(row).toBeVisible();
       await page.screenshot({ path: test.info().outputPath("resume-picker-mobile.png") });
