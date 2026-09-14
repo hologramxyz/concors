@@ -212,8 +212,11 @@ export function registerProtocolEndpoint(
             requestId: message.requestId,
             catalog: themes.catalog(),
           });
-        else if (message.type === "provider.request") send(socket, providers.request(message));
-        else if (message.type === "file.request")
+        else if (message.type === "provider.request") {
+          if (message.operation.kind === "sessions-list")
+            void agents.discoverSessions(message).then((result) => send(socket, result));
+          else send(socket, providers.request(message));
+        } else if (message.type === "file.request")
           void files.request(message).then((result) => send(socket, result));
         else if (message.type === "agent.request")
           void agents.request(message, viewer.id).then((result) => send(socket, result));
