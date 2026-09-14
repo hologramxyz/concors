@@ -103,7 +103,7 @@ function ProfileSheet({
             overflow: "hidden",
           }}
         >
-          <Screen title={profile ? "Your profile" : "Sign in to Concourse"}>
+          <Screen presentation="dialog" title={profile ? "Your profile" : "Sign in to Concourse"}>
             {open && (
               <ProfileForm
                 profile={profile}
@@ -144,7 +144,7 @@ function ProfileForm({
       {error && <Notice>{error}</Notice>}
       {profile ? (
         <>
-          <Copy size={22} weight="600">
+          <Copy size={16} weight="600">
             {profile.name || profile.email}
           </Copy>
           <Copy muted>{profile.email}</Copy>
