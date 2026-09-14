@@ -2,11 +2,11 @@
 
 An empty agent chat offers **Resume session** on desktop and mobile. New chats still prepare the default provider automatically. The picker initially combines saved conversations from all enabled, installed providers for the pane's workspace directory on the connected machine. Each row has its provider logo and name, title, and last-active time. Provider filter chips also pair logos with their names and narrow the list without discarding loaded pages; title/ID search starts empty, and older results load automatically while scrolling. Refresh sits beside Close in the header. It does not restore the removed account/session toolbar.
 
-Drafts, attachments, queued messages, pending requests, and active/non-empty conversations cannot be replaced. A selected session reuses the empty pane; a session already open in that workspace is focused instead. Detached, idle Concourse sessions are rebound with their existing settings. Newly imported sessions start with no unrelated model override and hydrate the provider's native history without sending a prompt. Permission defaults remain conservative.
+Drafts, attachments, queued messages, pending requests, and active/non-empty conversations cannot be replaced. A selected session reuses the empty pane; a session already open in that workspace is focused instead. Detached, idle Concors sessions are rebound with their existing settings. Newly imported sessions start with no unrelated model override and hydrate the provider's native history without sending a prompt. Permission defaults remain conservative.
 
 ## Protocol and discovery
 
-The additive `agent-resume-sessions` capability gates the UI. `provider.request/sessions-list` takes a project, pane directory, provider profile, optional cursor/query, and explicit refresh. It does not require a Concourse conversation. Results are bounded to 100 rows per page. Search scans subsequent pages automatically, including when an intermediate page has no matches.
+The additive `agent-resume-sessions` capability gates the UI. `provider.request/sessions-list` takes a project, pane directory, provider profile, optional cursor/query, and explicit refresh. It does not require a Concors conversation. Results are bounded to 100 rows per page. Search scans subsequent pages automatically, including when an intermediate page has no matches.
 
 Discovery uses independent, prompt-free transports; Claude and Pi/OMP read transcript files without starting a CLI. Codex and ACP forward native cursors, Claude uses its SDK offset, and OpenCode/Pi use progressively larger native catalogs. ACP must advertise both listing and loading. Cache entries are scoped by connection/epoch on the client and provider-configuration revision/directory on the daemon. They expire after 30 seconds; Refresh bypasses cached results. Each probe has a 15-second deadline and is closed after use.
 
@@ -16,6 +16,6 @@ The daemon only permits `agent.request/resume-session` for IDs offered by scoped
 
 ## Limits
 
-This resumes saved conversation state, not ownership of a running terminal process. Stop the native CLI first. Known busy sessions and active detached Concourse agents are rejected, but providers do not offer a universal cross-process lock or reliable external-busy signal. There is no claim of safe simultaneous writes from two native clients.
+This resumes saved conversation state, not ownership of a running terminal process. Stop the native CLI first. Known busy sessions and active detached Concors agents are rejected, but providers do not offer a universal cross-process lock or reliable external-busy signal. There is no claim of safe simultaneous writes from two native clients.
 
 Listings remain in the current directory (not sibling worktrees or other workspaces). Native offset-based catalogs can move while another client updates them; duplicate rows are collapsed, and Refresh starts a fresh listing. Provider availability, authentication, native retention, and native history/model support still apply. No copied prompt, automatic tool approval, live CLI termination, or provider installation is performed by the picker.
