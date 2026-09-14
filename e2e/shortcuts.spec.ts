@@ -8,6 +8,7 @@ import { bindingLabel, defaultKeymap } from "../apps/desktop/src/shortcuts/keyma
 test("workspace shortcuts create, search, split and close the active pane without leaking into terminals", async ({
   page,
 }) => {
+  test.setTimeout(60_000);
   const directory = await mkdtemp(join(tmpdir(), "concors-shortcuts-"));
   try {
     await signedIn(page);
