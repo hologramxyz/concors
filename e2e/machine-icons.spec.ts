@@ -79,8 +79,8 @@ test("machine icons persist, update the selected switcher, and reset", async ({ 
   await expect(trigger.locator('[data-machine-icon="local"]')).toBeVisible();
   await trigger.click();
   const menu = page.getByRole("menu");
-  await expect.poll(async () => (await menu.boundingBox())?.width).toBe(320);
-  const width = 320;
+  await expect.poll(async () => (await menu.boundingBox())?.width).toBe(200);
+  const width = 200;
   const server = page.getByRole("menuitem", { name: new RegExp(LONG_NAME) });
   await expect(server).toBeVisible();
   expect(
@@ -99,6 +99,7 @@ test("machine icons persist, update the selected switcher, and reset", async ({ 
   await picker.getByRole("button", { name: "Save icon", exact: true }).click();
   await expect(picker).toHaveCount(0);
   expect(state.icon()).toBe("🚀");
+  await page.getByRole("button", { name: "Back to app", exact: true }).click();
   await expect(trigger.locator('[data-machine-icon="custom"]')).toHaveText("🚀");
   await trigger.click();
   await expect(server.locator('[data-machine-icon="custom"]')).toHaveText("🚀");
