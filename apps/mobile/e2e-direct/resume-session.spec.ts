@@ -63,17 +63,25 @@ for (const native of [false, true]) {
       await ui.getByRole("button", { name: "Resume session", exact: true }).click();
       const dialog = ui.getByRole("dialog", { name: "Resume session", exact: true });
       await expect(dialog).toHaveAttribute("data-mobile-drawer", "true");
-      await dialog.getByRole("combobox", { name: "Session provider" }).selectOption("claude");
-      const field = await dialog.getByRole("combobox", { name: "Session provider" }).boundingBox();
-      const icon = await dialog.locator("[data-session-provider-icon]").boundingBox();
-      expect(field).not.toBeNull();
-      expect(icon).not.toBeNull();
-      if (field && icon) {
-        expect(icon.x).toBeGreaterThan(field.x);
-        expect(icon.x + icon.width).toBeLessThan(field.x + field.width);
-        expect(icon.y).toBeGreaterThanOrEqual(field.y);
-        expect(icon.y + icon.height).toBeLessThanOrEqual(field.y + field.height);
+      await expect(dialog.getByRole("heading")).toHaveCSS("font-size", "16px");
+      await expect(dialog.getByRole("textbox", { name: "Search sessions" })).toHaveValue("");
+      await expect(dialog.getByRole("combobox")).toHaveCount(0);
+      const filters = dialog.getByRole("group", { name: "Filter sessions by provider" });
+      await expect(filters.getByRole("button", { name: "All", exact: true })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+      for (const provider of ["codex", "claude", "opencode", "pi"]) {
+        const row = dialog.locator(`[data-session-provider="${provider}"]`).first();
+        await expect(row).toBeVisible();
+        await expect(row.locator("[data-session-provider-icon]")).toBeVisible();
       }
+      const actions = dialog.locator('[data-slot="dialog-actions"]');
+      await expect(actions.getByRole("button", { name: "Refresh sessions" })).toBeVisible();
+      await expect(actions.getByRole("button", { name: "Close", exact: true })).toBeVisible();
+      await page.screenshot({ path: test.info().outputPath("resume-all-mobile.png") });
+      await filters.getByRole("button", { name: "Claude Code", exact: true }).click();
+      await expect(dialog.locator('[data-session-provider="codex"]')).toHaveCount(0);
       // The shared test daemon uses deterministic native IDs across fixture directories.
       const nativeIndex = native ? 124 : 125;
       const row = dialog.getByRole("button", {
