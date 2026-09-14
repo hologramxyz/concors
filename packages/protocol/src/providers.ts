@@ -74,6 +74,7 @@ export const ProviderRequestSchema = z.object({
       provider: ProviderIdSchema,
       cursor: z.string().min(1).max(4096).optional(),
       query: z.string().max(200).optional(),
+      refresh: z.boolean().optional(),
     }),
     z.object({ kind: z.literal("list") }),
     z.object({

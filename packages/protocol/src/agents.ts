@@ -183,6 +183,8 @@ export const AgentInfoSchema = z.object({
     .nullable()
     .optional(),
   threadId: z.string().nullable(),
+  // An explicitly selected native session must never fall back to a new empty thread.
+  nativeImport: z.boolean().optional(),
   turnId: z.string().nullable(),
   status: z.enum(["idle", "starting", "working", "needs_input", "done", "failed", "interrupted"]),
   error: z.string().nullable(),
