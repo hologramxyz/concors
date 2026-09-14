@@ -3,7 +3,7 @@ import { Monitor } from "lucide-react";
 import { MachineIcon } from "@/machines/machine-icon";
 import { MobileSelect } from "./select";
 
-/** The same current-machine status in the sidebar shortcut and account drawer. */
+/** Sidebar switching uses the same current-machine status as machine settings. */
 export function MobileMachinePicker({
   host,
   onSelect,
