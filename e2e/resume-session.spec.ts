@@ -44,6 +44,12 @@ test("resume finds older native sessions, protects drafts, and keeps the same pa
     await page.screenshot({ path: test.info().outputPath("resume-all-desktop.png") });
     await filters.getByRole("button", { name: "Codex", exact: true }).click();
     await expect(dialog.locator('[data-session-provider="claude"]')).toHaveCount(0);
+    await filters.getByRole("button", { name: "All", exact: true }).click();
+    await expect(dialog.locator('[data-session-provider="claude"]').first()).toBeVisible();
+    await actions.getByRole("button", { name: "Refresh sessions" }).click();
+    await expect(dialog.locator('[data-session-provider="claude"]').first()).toBeVisible();
+    await expect(dialog.getByRole("textbox", { name: "Search sessions" })).toHaveValue("");
+    await filters.getByRole("button", { name: "Codex", exact: true }).click();
     await expect
       .poll(async () => {
         await dialog.getByLabel("Saved sessions").evaluate((element) => {
