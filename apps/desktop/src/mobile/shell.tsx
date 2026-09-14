@@ -616,7 +616,6 @@ function MobileWorkspaceContent({
                     {
                       "--mobile-workspace-reveal": Math.min(1, gesture.offset / 32),
                       transform: `translateX(${gesture.offset}px)`,
-                      borderRadius: Math.min(32, gesture.offset),
                       transition: gesture.dragging ? "none" : undefined,
                     } as CSSProperties
                   }

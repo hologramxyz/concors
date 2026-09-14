@@ -371,9 +371,9 @@ test("sidebar pushes the workspace and settings opens as a drawer over the same 
     "0px",
   );
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toHaveValue("Keep this draft");
-  // The moving workspace is a navigation surface, independent of control-corner preferences.
+  // The moving workspace rim follows the same corner preference as its content.
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
-  await expect(ui.getByTestId("mobile-workspace")).toHaveCSS("border-top-left-radius", "32px");
+  await expect(ui.getByTestId("mobile-workspace")).toHaveCSS("border-top-left-radius", "0px");
 });
 test("top select switches split panes and cold session links survive sign-in", async ({ page }) => {
   await page.goto(
@@ -955,13 +955,13 @@ test("sidebar has no logo or duplicate menu, with glass search behind the rounde
   await expect(sidebar.getByRole("img", { name: "Concors", exact: true })).toHaveCount(0);
   await expect(sidebar.locator(".mobile-sidebar-head button")).toHaveCount(2);
   await expect(sidebar.locator('button[aria-label*="sidebar"]')).toHaveCount(0);
-  await expect(workspace).toHaveCSS("border-top-left-radius", "32px");
-  await expect(workspace).toHaveCSS("border-bottom-left-radius", "32px");
+  await expect(workspace).toHaveCSS("border-top-left-radius", "24px");
+  await expect(workspace).toHaveCSS("border-bottom-left-radius", "24px");
   await expect(workspace).toHaveCSS("overflow", "hidden");
   await expect
     .poll(rim)
     .toEqual({ opacity: "1", blur: "blur(18px) saturate(1.5)", pointerEvents: "none" });
-  await expect(main).toHaveCSS("clip-path", "inset(3px round 29px)");
+  await expect(main).toHaveCSS("clip-path", "inset(3px round 21px)");
   expect(await main.evaluate((element) => [element.clientWidth, element.clientHeight])).toEqual(
     closedSize,
   );
