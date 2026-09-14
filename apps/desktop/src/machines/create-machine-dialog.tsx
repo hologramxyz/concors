@@ -202,7 +202,7 @@ export function CreateMachineDialog({
                           variant="outline"
                           aria-label="Region"
                           disabled={pending}
-                className="w-full min-w-0 justify-start font-normal"
+                          className="w-full min-w-0 justify-start font-normal"
                         >
                           <MapPin className="shrink-0 text-muted-foreground" aria-hidden="true" />
                           <span className="min-w-0 flex-1 truncate text-left">
