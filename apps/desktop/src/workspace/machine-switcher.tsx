@@ -83,11 +83,10 @@ export function MachineSwitcher({
       </SidebarTooltip>
       <DropdownMenuContent
         align="start"
-        style={{ width: 320, maxWidth: "calc(100vw - 24px)" }}
-        className="p-1.5"
+        className="w-(--sidebar-width) max-w-[calc(100vw-24px)] p-1"
       >
         <DropdownMenuItem
-          className="min-h-10 gap-3 px-2.5"
+          className="min-h-[32px] gap-2 px-[8px]"
           onSelect={() => onSelect(LOCAL_HOST)}
           aria-label={`This computer${selected.machineId === "local" ? (connected ? " Connected" : " Selected") : ""}`}
           title={`This computer${selected.machineId === "local" ? (connected ? " · Connected" : " · Selected") : ""}`}
@@ -110,7 +109,7 @@ export function MachineSwitcher({
           return (
             <DropdownMenuItem
               key={machine.id}
-              className="min-h-10 gap-3 px-2.5"
+              className="min-h-[32px] gap-2 px-[8px]"
               aria-label={`${machine.name} ${status}${isSelected ? " Selected" : ""}`}
               title={`${machine.name} · ${status}${isSelected ? " · Selected" : ""}`}
               onSelect={() => {
@@ -160,7 +159,7 @@ export function MachineSwitcher({
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuItem className="min-h-10 gap-3 px-2.5" onSelect={() => onViewCloud()}>
+        <DropdownMenuItem className="min-h-[32px] gap-2 px-[8px]" onSelect={() => onViewCloud()}>
           <Settings2 />
           Manage machines
         </DropdownMenuItem>
