@@ -48,3 +48,15 @@ Outside terminals, Ctrl+K (Command+K on Mac) remains a search alias.
 New left/above splits require a daemon advertising `directional-pane-split`; these actions are
 disabled with older daemons. New panes inherit the current pane's profile. Closing a pane/tab
 leaves its sessions running, as when using the corresponding UI controls.
+
+## Terminal clipboard
+
+Select terminal output, then press Super+C (Command+C on macOS) to copy.
+Super+V / Command+V pastes. Ctrl+Shift+C and Ctrl+Shift+V also work.
+These shortcuts are consumed locally and never sent as control characters to the shell.
+Copying with no selection leaves the clipboard alone; plain Ctrl+C still interrupts the
+running command and plain Ctrl+V retains its shell behavior.
+
+The desktop app uses the system clipboard; browser clients use the browser's clipboard
+permissions. Paste goes through xterm so multiline text respects bracketed paste mode.
+Clipboard failures are shown in the terminal instead of silently dropping the shortcut.
