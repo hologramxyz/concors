@@ -77,6 +77,7 @@ export const MobilePreferencesSchema = z.object({
   colorTheme: ThemeSelectionSchema.optional(),
   corners: z.enum(["square", "subtle", "rounded"]),
   sound: z.boolean().default(false),
+  shortcuts: ShortcutOverridesSchema.optional(),
 });
 export type MobilePreferences = z.infer<typeof MobilePreferencesSchema>;
 export const MobileStateSchema = z.object({
@@ -185,3 +186,4 @@ export function parseMobileRendererMessage(raw: unknown): MobileRendererMessage 
     return null;
   }
 }
+import { ShortcutOverridesSchema } from "./shortcuts.ts";
