@@ -33,6 +33,9 @@ import { AgentModelPicker } from "./model-picker";
 import { findAgentModel } from "@concors/protocol";
 import { useAgentModelSelection } from "./use-model-selection";
 import { useDictation } from "./dictation";
+import { appendDictation } from "./dictation-session";
+import { DictationRecording } from "./dictation-recording";
+import { TabVisibility } from "@/workspace/tab-visibility";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import { ComposerSurfaceContext, useComposerExpansion } from "./composer-expansion";
 import { useComposerMotion } from "./composer-motion";
@@ -55,6 +58,7 @@ export function AgentComposer({
 }) {
   const connection = useContext(TerminalConnectionContext);
   const compact = useContext(CompactLayoutContext);
+  const visible = useContext(TabVisibility);
   const nativeHost = useContext(NativeSurfaceContext);
   const native = compact && !!nativeHost;
   const { owner, expanded: webExpanded, expand } = useComposerExpansion(compact && !native);
@@ -116,16 +120,33 @@ export function AgentComposer({
   const active = ["starting", "working", "needs_input"].includes(agent.status);
   const showStop = active && (!compact || (!draft.trim() && !attachments.length));
   const settings = agent.settings ?? defaults;
-  const dictation = useDictation((text) =>
-    setDraft((value) => (value + (value ? " " : "") + text).slice(0, 16000)),
+  const dictationBase = useRef("");
+  const wasDictating = useRef(false);
+  const dictation = useDictation(
+    {
+      onTranscript: (text) => setDraft(appendDictation(dictationBase.current, text)),
+      onFinish: (text, action) => {
+        const message = appendDictation(dictationBase.current, text);
+        setDraft(message);
+        if (action === "send" && connected && visible && !uncertain && !document.hidden)
+          void submit({ message, attachments });
+      },
+      onCancel: () => setDraft(dictationBase.current),
+    },
+    connected && visible,
   );
+  useLayoutEffect(() => {
+    if (wasDictating.current && !dictation.active && visible && !document.hidden)
+      textarea.current?.focus();
+    wasDictating.current = dictation.active;
+  }, [dictation.active, visible]);
   useLayoutEffect(() => {
     const el = textarea.current;
     if (el) {
       el.style.height = "auto";
       el.style.height = Math.min(el.scrollHeight, 192) + "px";
     }
-  }, [draft, expanded]);
+  }, [draft, expanded, dictation.active]);
   useComposerMotion(form, compact && !native, expanded);
   const configure = async (next: AgentSettings) => {
     if (!connection || !advanced) return;
@@ -557,22 +578,34 @@ export function AgentComposer({
       <ContextMeter context={agent.context} />
       <button
         type="button"
-        aria-label={dictation.listening ? "Stop dictation" : "Start dictation"}
+        aria-label="Start dictation"
         title={
           compact
             ? "Use dictation on your phone's keyboard."
             : dictation.supported
-              ? "Dictation uses your browser's speech service. Review the transcript before sending."
+              ? "Dictate a message. Stop to review, edit, or press Enter to send. Uses your browser's speech service."
               : "Dictation is not supported by this browser."
         }
-        disabled={(!compact && !dictation.supported) || !connected || busy || uncertain}
+        disabled={
+          (!compact && !dictation.supported) ||
+          !connected ||
+          busy ||
+          uncertain ||
+          uploading ||
+          configuring ||
+          !agent.threadId ||
+          draft.length >= 16000
+        }
         onClick={() => {
           if (compact) {
             textarea.current?.focus();
             setKeyboardHelp((value) => !value);
-          } else dictation.toggle();
+          } else {
+            dictationBase.current = draft;
+            dictation.start();
+          }
         }}
-        className={`agent-control ${dictation.listening ? "bg-red-500/10 text-red-500" : "text-muted-foreground hover:bg-muted"}`}
+        className="agent-control text-muted-foreground hover:bg-muted"
       >
         <Mic className="size-4" />
       </button>
@@ -581,23 +614,27 @@ export function AgentComposer({
   return (
     <ComposerSurfaceContext value={owner}>
       <div className="space-y-2">
-        {active && agent.controls?.steer && !!draft.trim() && !attachments.length && (
-          <button
-            type="button"
-            className="rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted disabled:opacity-40"
-            disabled={
-              !connected ||
-              busy ||
-              uncertain ||
-              !agent.turnId ||
-              agent.turnId.startsWith("pending:") ||
-              draft.trim().startsWith("/")
-            }
-            onClick={() => void submit({ message: draft, attachments: [] }, false, true)}
-          >
-            Steer the current turn
-          </button>
-        )}
+        {!dictation.active &&
+          active &&
+          agent.controls?.steer &&
+          !!draft.trim() &&
+          !attachments.length && (
+            <button
+              type="button"
+              className="rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted disabled:opacity-40"
+              disabled={
+                !connected ||
+                busy ||
+                uncertain ||
+                !agent.turnId ||
+                agent.turnId.startsWith("pending:") ||
+                draft.trim().startsWith("/")
+              }
+              onClick={() => void submit({ message: draft, attachments: [] }, false, true)}
+            >
+              Steer the current turn
+            </button>
+          )}
         {durableQueue && !!agent.queue?.length && (
           <div data-composer-queue className="max-h-28 space-y-2 overflow-y-auto">
             <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -702,14 +739,17 @@ export function AgentComposer({
           data-expanded={compact ? expanded : undefined}
           onSubmit={(e) => {
             e.preventDefault();
-            if (!uncertain) void submit();
+            if (!uncertain) {
+              if (dictation.active) dictation.stop("send");
+              else void submit();
+            }
           }}
           onDragOver={(e) => {
             if (e.dataTransfer.types.includes("Files")) e.preventDefault();
           }}
           onDrop={(e) => {
             e.preventDefault();
-            if (!busy && !uncertain) void addFiles(e.dataTransfer.files);
+            if (!busy && !uncertain && !dictation.active) void addFiles(e.dataTransfer.files);
           }}
           className={`rounded-2xl border bg-background p-2 shadow-sm focus-within:border-primary/40 ${compact ? "mobile-composer" : ""}`}
         >
@@ -743,7 +783,17 @@ export function AgentComposer({
               ))}
             </div>
           )}
-          {native ? (
+          {dictation.active ? (
+            <DictationRecording
+              state={dictation}
+              onStop={dictation.stop}
+              onCancel={dictation.cancel}
+              canSend={
+                connected && !busy && !uncertain && !uploading && !configuring && !!agent.threadId
+              }
+              queued={active}
+            />
+          ) : native ? (
             <div ref={nativeField} aria-hidden="true" style={{ height: nativeHeight }} />
           ) : (
             <>
@@ -803,11 +853,6 @@ export function AgentComposer({
                 }}
                 className="agent-composer-input max-h-48 min-h-16 w-full resize-none bg-transparent px-3 py-3 outline-none disabled:opacity-50"
               />
-              {dictation.listening && (
-                <p role="status" className="px-3 pb-2 text-xs text-primary">
-                  {dictation.interim || "Listening… Click the microphone to finish."}
-                </p>
-              )}
               <div
                 className={`flex items-center gap-1 px-1 ${compact ? "mobile-composer-toolbar" : "flex-wrap"}`}
               >
