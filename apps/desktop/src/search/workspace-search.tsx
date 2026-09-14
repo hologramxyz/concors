@@ -3,7 +3,8 @@ import { useContext, useMemo, useRef, useState, type ReactNode } from "react";
 import type { WorkspaceProject } from "@concors/protocol";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import { useCommands } from "@/shortcuts/context";
-import { isCompactCommand, shortcutLabel } from "@/shortcuts/bindings";
+import { isCompactCommand } from "@/shortcuts/bindings";
+import { useShortcutLabels } from "@/shortcuts/preferences-context";
 import { useAgents } from "@/agents/context";
 import { ProviderIcon } from "@/agents/provider-icon";
 import { PaneProfileIcon } from "@/workspace/profile-icon";
@@ -113,6 +114,7 @@ function SearchContent({
 }: WorkspaceSearchProps & { run(action: () => void, ownsFocus?: boolean): void }) {
   const compact = useContext(CompactLayoutContext);
   const commands = useCommands();
+  const shortcutLabel = useShortcutLabels();
   const agents = useAgents();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<SearchCategory>("all");

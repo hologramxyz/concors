@@ -2,7 +2,7 @@ import { NewWorkspaceMenu } from "@/workspace/new-workspace-menu";
 import { WorkspaceSidebarItem } from "@/workspace/sidebar-item";
 import { useProjectIcons } from "@/workspace/use-project-icons";
 import { projectIconKey } from "@/workspace/project-icons";
-import { shortcutLabel } from "@/shortcuts/bindings";
+import { useShortcutLabels } from "@/shortcuts/preferences-context";
 import { AgentSidebar } from "@/agents/list";
 import { SidebarSection } from "./sidebar-section";
 import { PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
@@ -39,6 +39,7 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar(props: AppSidebarProps) {
+  const shortcutLabel = useShortcutLabels();
   const icons = useProjectIcons(props.workspace);
 
   return (
