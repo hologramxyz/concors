@@ -1,4 +1,4 @@
-import { Folder, LogOut, Monitor, Moon, RefreshCw, Sun } from "lucide-react";
+import { Cloud, Folder, LogOut, Monitor, Moon, RefreshCw, Sun } from "lucide-react";
 import { useContext, useMemo, useRef, useState, type ReactNode } from "react";
 import type { WorkspaceProject } from "@concors/protocol";
 import { CompactLayoutContext } from "@/components/compact-layout";
@@ -31,6 +31,7 @@ interface WorkspaceSearchProps {
   open: boolean;
   onOpenChange(open: boolean): void;
   onNavigate(view: View): void;
+  onManageMachines(): void;
   onReconnect(): void;
   canReconnect: boolean;
   onSetTheme(theme: ThemePreference): void;
@@ -123,6 +124,13 @@ function SearchContent({
     [entries, query, category, props.activeProjectId],
   );
   const actions: Action[] = [
+    {
+      id: "settings:machines",
+      title: "Go to Machines",
+      keywords: "manage computers cloud settings",
+      icon: <Cloud aria-hidden="true" />,
+      run: () => run(props.onManageMachines),
+    },
     ...commands.items
       .filter(
         (item) => item.id !== "search" && item.enabled && (!compact || isCompactCommand(item.id)),

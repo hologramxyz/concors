@@ -26,7 +26,6 @@ import { activeOrganization, describeAuthError } from "@/auth/auth-state";
 import { useAuth } from "@/auth/use-auth";
 import { AppSidebar } from "@/components/app-sidebar";
 import { WorkspaceSearch } from "@/search/workspace-search";
-import { MachinesView } from "@/machines/machines-view";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { resolveStartupEndpoint, resolveHostEndpoint } from "@/daemon/resolve-endpoint";
 import { useDaemonConnection } from "@/daemon/use-daemon-connection";
@@ -93,7 +92,6 @@ function AppContent() {
   const [view, setView] = useState<View>(() =>
     window.location.pathname === "/settings/billing" ? "settings" : "projects",
   );
-  const [creatingMachine, setCreatingMachine] = useState(false);
   const [focusedCloudMachineId, setFocusedCloudMachineId] = useState<string | null>(null);
   const [creatingTerminalProfile, setCreatingTerminalProfile] = useState(false);
   const [settingsPage, setSettingsPage] = useState<SettingsPage>(() =>
@@ -276,6 +274,10 @@ function AppContent() {
     setSettingsPage(page);
     setView("settings");
   };
+  const manageMachines = (machineId?: string) => {
+    setFocusedCloudMachineId(machineId ?? null);
+    openSettings("machines");
+  };
 
   const signedIn = auth.state.status === "signed-in";
   useCommand("search", signedIn, () => setSearchOpen((open) => !open));
@@ -389,11 +391,7 @@ function AppContent() {
                         selectedHost={selectedHost}
                         machineConnected={connection.state.status === "ready"}
                         onSelectMachine={selectMachine}
-                        onViewCloud={(machineId) => {
-                          setFocusedCloudMachineId(machineId ?? null);
-                          setCreatingMachine(false);
-                          setView("machines");
-                        }}
+                        onViewCloud={manageMachines}
                         auth={account}
                         onSignOut={signOut}
                       />
@@ -457,6 +455,11 @@ function AppContent() {
                             creatingTerminalProfile={creatingTerminalProfile}
                             onCreatingTerminalProfileChange={setCreatingTerminalProfile}
                             page={settingsPage}
+                            machines={{
+                              onSelectLocal: () => selectMachine(LOCAL_HOST),
+                              localSelected: selectedHost.machineId === "local",
+                              focusedMachineId: focusedCloudMachineId,
+                            }}
                             endpoint={endpoint}
                             state={connection.state}
                             theme={theme.preference}
@@ -506,16 +509,6 @@ function AppContent() {
                               </Button>
                             </div>
                           )
-                        ) : view === "machines" ? (
-                          <MachinesView
-                            key={activeOrganization(account)?.id}
-                            auth={account}
-                            onSelectLocal={() => selectMachine(LOCAL_HOST)}
-                            localSelected={selectedHost.machineId === "local"}
-                            focusedMachineId={focusedCloudMachineId}
-                            creating={creatingMachine}
-                            onCreatingChange={setCreatingMachine}
-                          />
                         ) : (
                           <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
                             <Server className="size-10 text-muted-foreground/50" />
@@ -568,6 +561,7 @@ function AppContent() {
                     open={searchOpen}
                     onOpenChange={setSearchOpen}
                     onNavigate={setView}
+                    onManageMachines={manageMachines}
                     onReconnect={connection.reconnectNow}
                     canReconnect={
                       connection.state.status === "disconnected" ||

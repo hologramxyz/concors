@@ -39,7 +39,7 @@ export function ConnectionStatus({ state, endpoint, onReconnect }: ConnectionSta
         <Button
           variant="ghost"
           size="sm"
-          className="gap-2 px-2 font-normal text-muted-foreground"
+          className="font-normal text-muted-foreground"
           aria-label={`Daemon connection: ${label}`}
         >
           <span

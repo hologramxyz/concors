@@ -104,6 +104,18 @@ test("collapsed sidebar keeps workspace, machine, search and account navigation 
     await page.getByRole("button", { name: "Back to app", exact: true }).click();
     await expect(shell).toHaveCSS("width", "44px");
     await rail.getByRole("button", { name: "Switch machine", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Manage machines", exact: true }).click();
+    await expect(
+      page
+        .getByRole("navigation", { name: "Settings" })
+        .getByRole("button", { name: "Machines", exact: true }),
+    ).toHaveAttribute("aria-current", "page");
+    await expect(rail).toHaveCount(0);
+    await page.getByRole("button", { name: "Back to app", exact: true }).click();
+    await expect(shell).toHaveCSS("width", "44px");
+    await expect(beta).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("heading", { name: "Beta workspace", exact: true })).toBeVisible();
+    await rail.getByRole("button", { name: "Switch machine", exact: true }).click();
     await page.getByRole("menuitem", { name: /Second machine Online/ }).click();
     await expect(rail.getByRole("img", { name: "Second machine: Connected" })).toBeVisible();
     await expect(alpha).toHaveCount(0);
