@@ -10,6 +10,8 @@
 //! over the Concors protocol. No product or agent-orchestration logic belongs here.
 
 mod daemon;
+#[cfg(target_os = "linux")]
+mod hyprland;
 mod notifications;
 
 use tauri::Manager;
@@ -24,6 +26,12 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .manage(daemon::LocalDaemon::default())
         .manage(notifications::Notifications::default())
+        .setup(|_app| {
+            // Omarchy sends terminal-safe clipboard keys only to windows tagged as terminals.
+            #[cfg(target_os = "linux")]
+            hyprland::mark_windows_as_terminal();
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             notifications::show_agent_notification,
             notifications::dismiss_agent_notification,
