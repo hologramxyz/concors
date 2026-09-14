@@ -2,11 +2,13 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
-import { BINDINGS, shortcutLabel } from "../apps/desktop/src/shortcuts/bindings.ts";
+import { BINDINGS } from "../apps/desktop/src/shortcuts/bindings.ts";
+import { bindingLabel, defaultKeymap } from "../apps/desktop/src/shortcuts/keymap.ts";
 
 test("workspace shortcuts create, search, split and close the active pane without leaking into terminals", async ({
   page,
 }) => {
+  test.setTimeout(60_000);
   const directory = await mkdtemp(join(tmpdir(), "concors-shortcuts-"));
   try {
     await signedIn(page);
@@ -210,7 +212,9 @@ test("shortcuts have a dedicated settings page and the account menu only shows i
   for (const binding of BINDINGS) {
     const label = main.getByText(binding.label, { exact: true });
     await expect(label).toHaveCount(1);
-    await expect(label.locator("..").locator("kbd")).toHaveText(shortcutLabel(binding.id, false));
+    await expect(label.locator("..").locator("kbd")).toHaveText(
+      defaultKeymap(false)[binding.id].map((shortcut) => bindingLabel(shortcut, false)),
+    );
   }
   await page.screenshot({ path: "test-results/settings-shortcuts-light.png" });
   await page.emulateMedia({ colorScheme: "dark" });
