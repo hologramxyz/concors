@@ -238,8 +238,9 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await ui.getByRole("button", { name: "Account: Your profile", exact: true }).click();
     const account = ui.getByRole("dialog", { name: "Account", exact: true });
     await expect(ui.getByRole("dialog", { name: "Settings", exact: true })).toHaveCount(0);
-    await expect(account.getByRole("combobox", { name: "Machine", exact: true })).toContainText(
-      "Desktop daemon",
+    await expect(account.getByRole("combobox", { name: "Machine", exact: true })).toHaveCount(0);
+    await expect(account.getByRole("button", { name: /Add machine|Manage machines/ })).toHaveCount(
+      0,
     );
     await expect(account).toContainText("Sign in to your Concors account");
     expect(profileRequests).toEqual([]);
@@ -257,9 +258,7 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
       "https://github.com/mobile-profile-fixture.png?size=96",
     );
     await expect(account).toContainText("demo@concors.dev");
-    await expect(account.getByRole("combobox", { name: "Machine", exact: true })).toContainText(
-      "Desktop daemon",
-    );
+    await expect(account.getByRole("combobox", { name: "Machine", exact: true })).toHaveCount(0);
     await account.getByRole("button", { name: "Your profile", exact: true }).click();
     await page.getByRole("button", { name: "Sign out of profile", exact: true }).click();
     await page.getByRole("button", { name: "Back to workspace", exact: true }).click();
@@ -277,14 +276,17 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
       ),
     ).toBeUndefined();
     await ui.getByRole("button", { name: "Account: Your profile", exact: true }).click();
-    await account.getByRole("button", { name: "Add machine", exact: true }).click();
+    await account.getByRole("button", { name: "Settings", exact: true }).click();
+    const settings = ui.getByRole("dialog", { name: "Settings", exact: true });
+    await expect(settings.getByRole("button", { name: "Reconnect", exact: true })).toHaveCount(0);
+    await settings.getByRole("combobox", { name: "Settings section" }).click();
+    await ui.getByRole("option", { name: "Machines", exact: true }).click();
+    await expect(settings).toContainText(snapshot().machineId);
+    await settings.getByRole("button", { name: "Add machine", exact: true }).click();
     const addMachine = ui.getByRole("dialog", { name: "Add machine", exact: true });
     await expect(addMachine).toContainText("paired with one desktop daemon");
     await addMachine.getByRole("button", { name: "Close", exact: true }).click();
-    await ui.getByRole("button", { name: "Account: Your profile", exact: true }).click();
-    await account.getByRole("button", { name: "Settings", exact: true }).click();
-    const settings = ui.getByRole("dialog", { name: "Settings", exact: true });
-    await expect(settings).toContainText(snapshot().machineId);
+    await expect(settings.getByRole("button", { name: "Add machine", exact: true })).toBeFocused();
     await settings.getByRole("combobox", { name: "Settings section" }).click();
     await ui.getByRole("option", { name: "Providers", exact: true }).click();
     await expect(settings.getByRole("heading", { name: "Agent providers" })).toBeVisible();
@@ -312,7 +314,7 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await expect(settings).toContainText("With an external keyboard");
     await expect(settings.getByText("New pane beside current", { exact: true })).toHaveCount(0);
     await settings.getByRole("combobox", { name: "Settings section" }).click();
-    await ui.getByRole("option", { name: "Appearance", exact: true }).click();
+    await ui.getByRole("option", { name: "Machines", exact: true }).click();
     await settings.getByRole("button", { name: "Reconnect", exact: true }).click();
     await settings.getByRole("button", { name: "Close", exact: true }).click();
     await expect(input).toBeEnabled();
@@ -323,6 +325,8 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
     await ui.getByRole("button", { name: "Account: Your profile", exact: true }).click();
     await account.getByRole("button", { name: "Settings", exact: true }).click();
+    await settings.getByRole("combobox", { name: "Settings section" }).click();
+    await ui.getByRole("option", { name: "Machines", exact: true }).click();
     await settings.getByRole("button", { name: "Disconnect desktop", exact: true }).click();
     await expect(
       page.getByRole("button", { name: "Connect to desktop", exact: true }),
@@ -342,6 +346,8 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await expect(settings.getByText("AI data sharing", { exact: true })).toHaveCount(0);
     await expect(settings.getByRole("button", { name: "Review AI data sharing" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Allow AI data sharing" })).toHaveCount(0);
+    await settings.getByRole("combobox", { name: "Settings section" }).click();
+    await ui.getByRole("option", { name: "Machines", exact: true }).click();
     await settings.getByRole("button", { name: "Disconnect desktop", exact: true }).click();
     await expect(
       page.getByRole("button", { name: "Connect to desktop", exact: true }),
