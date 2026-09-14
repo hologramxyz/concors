@@ -96,15 +96,18 @@ Clipboard failures are shown in the terminal instead of silently dropping the sh
 
 ### Omarchy / Hyprland
 
-Omarchy can intercept Super+C/V and send different keys to the application. Concors accepts
-Ctrl+Insert/Shift+Insert and Ctrl+Shift+C/V, as well as Super+C/V delivered directly.
+Omarchy binds Super+C/V as universal copy/paste. Windows tagged `terminal` receive
+Ctrl+Insert/Shift+Insert; every other window receives plain Ctrl+C/V, which a terminal cannot
+tell apart from a physical interrupt. On Hyprland the Linux desktop app therefore tags its own
+window as `terminal` at startup through `hyprctl` (Lua-configured builds first, then the older
+`tagwindow` syntax) and verifies the tag in the client list. The result is logged in the desktop
+log as "Hyprland window tagged as terminal". WebKitGTK already treats Ctrl+Insert/Shift+Insert as
+copy/paste in text fields, so the tag does not change copy and paste elsewhere in the app.
 
-If Super+C interrupts a command, inspect the active Hyprland clipboard bindings and the
-Concors window class/app ID. A binding that translates Super+C to plain Ctrl+C makes it
-indistinguishable from a physical Ctrl+C inside the application. Configure the compositor
-to send Ctrl+Insert/Shift+Insert for Concors instead, preserving the existing behavior for
-other applications. Do not change plain Ctrl+C to copy globally.
+If Super+C still interrupts a command, check that `hyprctl` is on the app's PATH, that
+`hyprctl -j clients` lists the Concors window with the `terminal` tag, and that no user binding
+replaces Omarchy's universal clipboard shortcut. Do not change plain Ctrl+C to copy globally.
 
-Omarchy releases use different configuration formats and terminal detection rules; use
-the installed configuration as the source of truth. Also check that the launcher actually
-runs the newly built Concors executable.
+Omarchy releases use different configuration formats and terminal detection rules; use the
+installed configuration as the source of truth. Also check that the launcher actually runs the
+newly built Concors executable.
