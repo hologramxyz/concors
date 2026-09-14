@@ -158,8 +158,7 @@ export function ResumeSession({
             <RefreshCw className="size-4" />
           </Button>
         </div>
-        <label className="flex min-w-0 items-center gap-2 text-sm">
-          <ProviderIcon provider={provider} />
+        <label className="relative block min-w-0 text-sm">
           <span className="sr-only">Session provider</span>
           <select
             aria-label="Session provider"
@@ -169,7 +168,7 @@ export function ResumeSession({
               setProvider(event.target.value);
               setError(null);
             }}
-            className="min-w-0 flex-1 rounded-md border bg-background px-2 py-2 text-foreground"
+            className="w-full min-w-0 rounded-md border bg-background py-2 pr-8 pl-10 text-foreground"
           >
             {!providers.some((p) => p.id === agent.provider) && (
               <option value={agent.provider}>{agent.providerLabel ?? agent.provider}</option>
@@ -180,6 +179,13 @@ export function ResumeSession({
               </option>
             ))}
           </select>
+          <span
+            data-session-provider-icon
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 left-3 flex items-center"
+          >
+            <ProviderIcon provider={provider} />
+          </span>
         </label>
         {catalogError && (
           <p role="alert" className="text-xs text-destructive">
