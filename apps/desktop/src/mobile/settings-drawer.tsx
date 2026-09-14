@@ -1,6 +1,5 @@
 import { ProvidersSettings } from "@/settings/providers-settings";
 import { useState } from "react";
-import { Server } from "lucide-react";
 import type { ConnectionState } from "@concors/daemon-client";
 import type { MobileState } from "@concors/client-core";
 import {
@@ -40,8 +39,8 @@ export function SettingsDrawer({
   onOpenChange(open: boolean): void;
   host: MobileState;
   connectionState: ConnectionState;
-  page: SettingsPage | "machines";
-  onPageChange(page: SettingsPage | "machines"): void;
+  page: SettingsPage;
+  onPageChange(page: SettingsPage): void;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -84,7 +83,7 @@ export function SettingsDrawer({
         <MobileSelect
           label="Settings section"
           value={page}
-          onValueChange={(value) => onPageChange(value as SettingsPage | "machines")}
+          onValueChange={(value) => onPageChange(value as SettingsPage)}
           groups={SETTINGS_NAV_GROUPS.map((group) => ({
             label: group.label,
             options: [
@@ -102,9 +101,6 @@ export function SettingsDrawer({
                   label,
                   icon: <Icon />,
                 })),
-              ...(group.label === "Workspace" && !host.direct
-                ? [{ value: "machines", label: "Machines", icon: <Server /> }]
-                : []),
             ],
           })).filter((group) => group.options.length)}
         />

@@ -113,8 +113,8 @@ export function Button({
       style={({ pressed }) => [
         {
           minHeight: 46,
-          paddingHorizontal: 18,
-          paddingVertical: 11,
+          paddingHorizontal: 8,
+          paddingVertical: 4,
           borderRadius: theme.radius * 1.6,
           alignItems: "center",
           justifyContent: "center",

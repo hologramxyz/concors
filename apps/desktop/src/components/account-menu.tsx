@@ -45,7 +45,7 @@ export function AccountMenu({
       <SidebarTooltip collapsed={collapsed}>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger
-            className={`flex items-center rounded-md hover:bg-sidebar-accent aria-expanded:bg-sidebar-accent ${collapsed ? "sidebar-rail-control" : "h-9 w-full gap-2 px-2 text-left"}`}
+            className={`flex items-center rounded-md hover:bg-sidebar-accent aria-expanded:bg-sidebar-accent ${collapsed ? "sidebar-rail-control" : "w-full gap-2 p-[8px] text-left"}`}
             aria-label={`Account: ${auth.user.name}`}
           >
             <AccountAvatar user={auth.user} githubEnabled />
@@ -66,19 +66,23 @@ export function AccountMenu({
           {auth.user.name} · Account and settings
         </TooltipContent>
       </SidebarTooltip>
-      <DropdownMenuContent align="start" side="top" className="w-56">
-        <DropdownMenuLabel className="text-ui font-normal text-muted-foreground">
+      <DropdownMenuContent
+        align="start"
+        side="top"
+        className="w-[calc(var(--sidebar-width)-16px)] max-w-[calc(100vw-16px)]"
+      >
+        <DropdownMenuLabel className="p-[8px] text-ui font-normal text-muted-foreground">
           <span className="block truncate text-foreground">{auth.user.name}</span>
           <span className="block truncate" title={auth.user.email}>
             {auth.user.email}
           </span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem className="text-ui" onSelect={onOpenSettings}>
+        <DropdownMenuItem className="p-[8px] text-ui" onSelect={onOpenSettings}>
           <Settings aria-hidden="true" />
           Settings
         </DropdownMenuItem>
-        <DropdownMenuItem className="text-ui" onSelect={onSignOut}>
+        <DropdownMenuItem className="p-[8px] text-ui" onSelect={onSignOut}>
           <LogOut aria-hidden="true" />
           Sign out
         </DropdownMenuItem>
