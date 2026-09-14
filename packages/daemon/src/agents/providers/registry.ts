@@ -168,6 +168,7 @@ export class ProviderRegistry {
     let result: ProviderResult;
     const savedBefore = structuredClone(this.saved);
     try {
+      if (op.kind === "sessions-list") throw new Error("Use the session discovery service");
       if (op.kind === "save" || op.kind === "remove") {
         if (op.expectedRevision !== this.saved.revision)
           throw new Error("Provider settings changed on another client. Reload before saving.");

@@ -121,6 +121,7 @@ export class CodexAppServer {
         cwd: (params as { cwd: string }).cwd,
         limit: 100,
         archived: false,
+        cursor: (params as { cursor?: string }).cursor,
       }).then((raw) => {
         const response = z
           .object({
@@ -132,6 +133,7 @@ export class CodexAppServer {
                 updatedAt: z.number(),
               }),
             ),
+            nextCursor: z.string().nullable().optional(),
           })
           .parse(raw);
         return {
@@ -141,6 +143,7 @@ export class CodexAppServer {
             directory: s.cwd,
             updatedAt: new Date(s.updatedAt * 1000).toISOString(),
           })),
+          nextCursor: response.nextCursor ?? null,
         };
       });
     if (method === "session/fork") return this.rpc("thread/fork", params);

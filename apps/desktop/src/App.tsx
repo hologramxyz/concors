@@ -364,7 +364,7 @@ function AppContent() {
         >
           <FilesProvider beforeLeaveRef={beforeLeaveFiles}>
             <NotificationProvider connection={connection.transport} onOpen={openAgent}>
-              <AgentsProvider connection={connection.transport}>
+              <AgentsProvider connection={connection.transport} onStarted={openAgent}>
                 <TooltipProvider>
                   <div className="flex h-dvh w-full overflow-hidden bg-sidebar">
                     {view === "settings" ? (

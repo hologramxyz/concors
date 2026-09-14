@@ -1,6 +1,7 @@
 import { rpcSessions } from "./rpc-sessions.ts";
 import { piHistory, messageIdentity } from "./history.ts";
 import { randomUUID } from "node:crypto";
+import { sessionOffset } from "./session-page.ts";
 import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -169,11 +170,21 @@ export class PiProvider extends EventProvider {
   async request(method: string, raw: unknown = {}) {
     const p = object(raw);
     let rpc = this.rpc;
-    if (!rpc) throw new Error("Pi is disconnected");
-    if (method === "session/list")
+    if (method === "session/list") {
+      const offset = sessionOffset(p["cursor"]);
+      const sessions = await rpcSessions(
+        this.engine,
+        this.cwd,
+        this.directory,
+        this.environment,
+        offset + 101,
+      );
       return {
-        sessions: await rpcSessions(this.engine, this.cwd, this.directory, this.environment),
+        sessions: sessions.slice(offset, offset + 100),
+        nextCursor: sessions.length > offset + 100 ? String(offset + 100) : null,
       };
+    }
+    if (!rpc) throw new Error("Pi is disconnected");
     if (method === "session/steer") return rpc.request("steer", { message: string(p["text"]) });
     if (method === "session/controls") return this.controls;
     if (method === "model/list") {

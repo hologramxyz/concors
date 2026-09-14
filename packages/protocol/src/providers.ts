@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { NativeSessionPageSchema } from "./native-sessions.ts";
 
 export const ProviderIdSchema = z
   .string()
@@ -66,6 +67,15 @@ export const ProviderRequestSchema = z.object({
   type: z.literal("provider.request"),
   requestId: z.string().uuid(),
   operation: z.discriminatedUnion("kind", [
+    z.object({
+      kind: z.literal("sessions-list"),
+      projectId: z.string().uuid(),
+      directory: z.string().min(1).max(4096),
+      provider: ProviderIdSchema,
+      cursor: z.string().min(1).max(4096).optional(),
+      query: z.string().max(200).optional(),
+      refresh: z.boolean().optional(),
+    }),
     z.object({ kind: z.literal("list") }),
     z.object({
       kind: z.literal("save"),
@@ -91,6 +101,7 @@ export const ProviderResultSchema = z.object({
       status: z.literal("ok"),
       revision: z.number().int().nonnegative(),
       providers: z.array(ProviderStatusSchema).max(128),
+      sessions: NativeSessionPageSchema.optional(),
     }),
     z.object({ status: z.literal("error"), message: z.string() }),
   ]),
