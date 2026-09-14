@@ -178,6 +178,7 @@ export function ResumeSession({
           {[{ id: "all", label: "All" }, ...(providers ?? [])].map((provider) => (
             <button
               key={provider.id}
+              data-session-filter={provider.id}
               type="button"
               aria-pressed={selected === provider.id}
               disabled={busy || uncertain}
@@ -185,8 +186,13 @@ export function ResumeSession({
                 setFilter(provider.id);
                 setError(null);
               }}
-              className="shrink-0 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50 aria-pressed:bg-accent aria-pressed:text-accent-foreground"
+              className="inline-flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm whitespace-nowrap text-muted-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50 aria-pressed:bg-accent aria-pressed:text-accent-foreground"
             >
+              {provider.id !== "all" && (
+                <span data-session-filter-icon aria-hidden="true" className="shrink-0">
+                  <ProviderIcon provider={provider.id} />
+                </span>
+              )}
               {provider.label}
             </button>
           ))}
