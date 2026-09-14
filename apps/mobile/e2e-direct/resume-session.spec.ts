@@ -64,6 +64,16 @@ for (const native of [false, true]) {
       const dialog = ui.getByRole("dialog", { name: "Resume session", exact: true });
       await expect(dialog).toHaveAttribute("data-mobile-drawer", "true");
       await dialog.getByRole("combobox", { name: "Session provider" }).selectOption("claude");
+      const field = await dialog.getByRole("combobox", { name: "Session provider" }).boundingBox();
+      const icon = await dialog.locator("[data-session-provider-icon]").boundingBox();
+      expect(field).not.toBeNull();
+      expect(icon).not.toBeNull();
+      if (field && icon) {
+        expect(icon.x).toBeGreaterThan(field.x);
+        expect(icon.x + icon.width).toBeLessThan(field.x + field.width);
+        expect(icon.y).toBeGreaterThanOrEqual(field.y);
+        expect(icon.y + icon.height).toBeLessThanOrEqual(field.y + field.height);
+      }
       // The shared test daemon uses deterministic native IDs across fixture directories.
       const nativeIndex = native ? 124 : 125;
       const row = dialog.getByRole("button", {
