@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { sessionOffset } from "./session-page.ts";
 import { readFile } from "node:fs/promises";
 import {
   query,
@@ -306,8 +307,7 @@ export class ClaudeProvider extends EventProvider {
   async request(method: string, raw: unknown = {}) {
     const p = object(raw),
       session = this.session;
-    if (!session) throw new Error("Claude Code is disconnected");
-    if (method === "mcp/status")
+    if (method === "mcp/status" && session)
       return {
         servers: (await session.mcpServerStatus()).map((s) => ({ name: s.name, status: s.status })),
       };
@@ -323,22 +323,26 @@ export class ClaudeProvider extends EventProvider {
           ),
         },
       };
-    if (method === "session/list")
+    if (method === "session/list") {
+      const offset = sessionOffset(p["cursor"]);
+      const sessions = await listSessions({
+        dir: this.cwd,
+        limit: 101,
+        offset,
+        includeWorktrees: false,
+        ...(this.transcriptStore ? { sessionStore: this.transcriptStore } : {}),
+      });
       return {
-        sessions: (
-          await listSessions({
-            dir: this.cwd,
-            limit: 100,
-            includeWorktrees: false,
-            ...(this.transcriptStore ? { sessionStore: this.transcriptStore } : {}),
-          })
-        ).map((s) => ({
+        nextCursor: sessions.length > 100 ? String(offset + 100) : null,
+        sessions: sessions.slice(0, 100).map((s) => ({
           id: s.sessionId,
-          title: s.customTitle ?? s.summary,
+          title: (s.customTitle ?? s.summary).slice(0, 4000),
           directory: s.cwd ?? this.cwd,
           updatedAt: new Date(s.lastModified).toISOString(),
         })),
       };
+    }
+    if (!session) throw new Error("Claude Code is disconnected");
     if (method === "session/fork") {
       const result = await forkSession(this.threadId, {
         dir: this.cwd,

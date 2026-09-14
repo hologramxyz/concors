@@ -44,6 +44,7 @@ function DialogContent({
   size = "default",
   showCloseButton = true,
   closeLabel = "Close",
+  headerActions,
   onOpenAutoFocus,
   onCloseAutoFocus,
   ...props
@@ -51,6 +52,7 @@ function DialogContent({
   size?: "default" | "wide";
   showCloseButton?: boolean;
   closeLabel?: string;
+  headerActions?: React.ReactNode;
 }) {
   const compact = React.useContext(CompactLayoutContext);
   const returnFocus = React.useRef<HTMLElement | null>(null);
@@ -93,13 +95,21 @@ function DialogContent({
       >
         {compact && <div className="mobile-drawer-handle" aria-hidden="true" />}
         {children}
-        {showCloseButton && (
-          <DialogPrimitive.Close data-slot="dialog-close" asChild>
-            <Button variant="ghost" className="absolute top-3 right-3" size="icon">
-              <XIcon className="size-4.5" />
-              <span className="sr-only">{closeLabel}</span>
-            </Button>
-          </DialogPrimitive.Close>
+        {(showCloseButton || headerActions) && (
+          <div
+            data-slot="dialog-actions"
+            className="absolute top-3 right-3 flex items-center gap-1"
+          >
+            {headerActions}
+            {showCloseButton && (
+              <DialogPrimitive.Close data-slot="dialog-close" asChild>
+                <Button variant="ghost" size="icon">
+                  <XIcon className="size-4.5" />
+                  <span className="sr-only">{closeLabel}</span>
+                </Button>
+              </DialogPrimitive.Close>
+            )}
+          </div>
         )}
       </DialogPrimitive.Content>
     </DialogPortal>
@@ -157,7 +167,7 @@ function DialogTitle({ className, ...props }: React.ComponentProps<typeof Dialog
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn("font-heading text-xl leading-snug font-medium break-words", className)}
+      className={cn("font-heading text-base leading-snug font-medium break-words", className)}
       {...props}
     />
   );
