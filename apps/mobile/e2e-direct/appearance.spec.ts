@@ -28,6 +28,10 @@ test("direct profile sheet follows workspace shape preferences without a cloud l
     await expect(
       page.getByRole("heading", { name: "Sign in to Concors", exact: true }),
     ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Sign in to Concors", exact: true })).toHaveCSS(
+      "font-size",
+      "16px",
+    );
     await expect(page.getByTestId("profile-sheet")).toHaveCSS(
       "border-top-left-radius",
       `${radius}px`,
