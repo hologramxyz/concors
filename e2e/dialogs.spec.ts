@@ -25,11 +25,11 @@ async function expectModalLayout(page: Page, dialog: Locator, maxWidth = 36) {
       );
     })
     .toBe(true);
-  await expect(dialog.getByRole("heading")).toHaveCSS("font-size", "20px");
+  await expect(dialog.getByRole("heading")).toHaveCSS("font-size", "16px");
   await expect(dialog.locator('[data-slot="dialog-description"]')).toHaveCSS("font-size", "15px");
   await expect(dialog.getByRole("button", { name: "Close", exact: true })).toHaveCSS(
     "width",
-    `${2 * rem}px`,
+    `${1.75 * rem}px`,
   );
   expect(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
 }

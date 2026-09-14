@@ -168,7 +168,7 @@ export function CreateMachineDialog({
             data-slot="vps-form-body"
             className="min-h-0 min-w-0 flex-1 space-y-6 overflow-x-hidden overflow-y-auto overscroll-contain p-6"
           >
-            <h3 ref={headingRef} tabIndex={-1} className="text-lg font-semibold outline-none">
+            <h3 ref={headingRef} tabIndex={-1} className="text-sm font-medium outline-none">
               {["Choose your VPS", "Choose your tools", "Review & deploy"][step]}
             </h3>
             {step === 0 && (
