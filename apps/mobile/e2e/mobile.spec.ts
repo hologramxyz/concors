@@ -1,7 +1,8 @@
 import { expect, test, type Page, type FrameLocator } from "@playwright/test";
 import { ids } from "../src/demo/fixtures";
 import { swipe as touchSwipe } from "./support/swipe";
-import { BINDINGS, isCompactCommand, shortcutLabel } from "../../desktop/src/shortcuts/bindings";
+import { BINDINGS, isCompactCommand } from "../../desktop/src/shortcuts/bindings";
+import { bindingLabel, defaultKeymap } from "../../desktop/src/shortcuts/keymap";
 const workspace = (page: Page) => page.frameLocator('iframe[title="Concors workspace"]');
 const activeChat = `${ids.tab}:${ids.pane}`;
 const activeTerminal = `${ids.tab}:${ids.terminalPane}`;
@@ -1009,13 +1010,15 @@ test("mobile Shortcuts settings preserve supported commands and all entry points
     "Workspace",
     "Tabs",
   ]);
-  await expect(settings).toContainText("With an external keyboard");
+  await expect(settings).toContainText("An external keyboard");
   await expect(settings).toContainText("Move through the flat Tabs list.");
   const bindings = BINDINGS.filter((binding) => isCompactCommand(binding.id));
   await expect(settings.locator("dt")).toHaveCount(bindings.length);
   for (const binding of bindings) {
     const row = settings.locator("dt").filter({ hasText: binding.label }).locator("..");
-    await expect(row.locator("kbd")).toHaveText(shortcutLabel(binding.id, false));
+    await expect(row.locator("kbd")).toHaveText(
+      defaultKeymap(false)[binding.id].map((shortcut) => bindingLabel(shortcut, false)),
+    );
   }
   await expect(settings.getByText("New pane beside current", { exact: true })).toHaveCount(0);
   expect(await settings.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
@@ -1103,4 +1106,47 @@ test("machine sheet preserves the sidebar, selected status, and focus", async ({
   await picker.click();
   await expect(sheet).toHaveCSS("animation-name", "none");
   await closePickerSheet(ui, "Machine");
+});
+
+test("custom shortcuts persist through the mobile preference bridge and renderer reload", async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  let ui = await enter(page);
+  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  await openSettings(ui);
+  await choose(ui, "Settings section", "shortcuts");
+  await ui
+    .getByRole("button", { name: "Edit Search workspaces, agents and tabs shortcuts", exact: true })
+    .click();
+  const editor = ui.getByRole("dialog", {
+    name: "Edit shortcut: Search workspaces, agents and tabs",
+    exact: true,
+  });
+  await editor.getByRole("button", { name: "Type combinations instead" }).click();
+  await editor.getByRole("textbox", { name: "Shortcut 1, first key" }).fill("Ctrl+Alt+S");
+  await editor.getByRole("button", { name: "Remove shortcut 2" }).click();
+  const bounds = await editor.boundingBox();
+  expect(bounds?.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+  expect(bounds?.x).toBeGreaterThanOrEqual(0);
+  await page.screenshot({ path: test.info().outputPath("mobile-shortcut-editor.png") });
+  await editor.getByRole("button", { name: "Save shortcuts" }).click();
+  await expect(editor).toHaveCount(0);
+  const settings = ui.getByRole("dialog", { name: "Settings", exact: true });
+  await expect(settings).toContainText("Ctrl+Alt+S");
+  await settings.getByRole("button", { name: "Close", exact: true }).click();
+  await ui.getByRole("textbox", { name: "Message Codex" }).press("Control+Alt+s");
+  await expect(ui.getByRole("dialog", { name: "Search", exact: true })).toBeVisible();
+  ui = await enter(page);
+  await ui.getByRole("textbox", { name: "Message Codex" }).press("Control+Alt+s");
+  await expect(ui.getByRole("dialog", { name: "Search", exact: true })).toBeVisible();
+  await ui
+    .getByRole("dialog", { name: "Search", exact: true })
+    .getByRole("combobox")
+    .press("Escape");
+  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  await openSettings(ui);
+  await choose(ui, "Settings section", "shortcuts");
+  await ui.getByRole("button", { name: "Restore all defaults" }).click();
+  await expect(ui.getByRole("button", { name: "Restore all defaults" })).toBeDisabled();
 });
