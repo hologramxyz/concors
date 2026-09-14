@@ -246,6 +246,9 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     expect(profileRequests).toEqual([]);
     const socketsBeforeProfile = workspaceSockets.length;
     await account.getByRole("button", { name: "Sign in", exact: true }).click();
+    await expect(
+      page.getByRole("heading", { name: "Sign in to Concourse", exact: true }),
+    ).toHaveCSS("font-size", "16px");
     await page.getByRole("textbox", { name: "Email", exact: true }).fill("demo@concors.dev");
     await page.getByLabel("Password", { exact: true }).fill("profile-fixture-password");
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -260,6 +263,10 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await expect(account).toContainText("demo@concors.dev");
     await expect(account.getByRole("combobox", { name: "Machine", exact: true })).toHaveCount(0);
     await account.getByRole("button", { name: "Your profile", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Your profile", exact: true })).toHaveCSS(
+      "font-size",
+      "16px",
+    );
     await page.getByRole("button", { name: "Sign out of profile", exact: true }).click();
     await page.getByRole("button", { name: "Back to workspace", exact: true }).click();
     expect(workspaceSockets).toHaveLength(socketsBeforeProfile);

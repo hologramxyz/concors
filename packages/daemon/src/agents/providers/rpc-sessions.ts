@@ -1,6 +1,7 @@
 import { open, readdir, stat, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
+import { canonicalDirectory } from "./session-directory.ts";
 
 /** Read bounded native Pi/OMP headers; importing never sends a prompt. */
 export async function rpcSessions(
@@ -8,6 +9,7 @@ export async function rpcSessions(
   cwd: string,
   managed: string,
   env = process.env,
+  limit = 100,
 ) {
   const base =
     env[engine === "pi" ? "PI_CODING_AGENT_DIR" : "OMP_AGENT_DIR"] ??
@@ -29,14 +31,12 @@ export async function rpcSessions(
     resolve(cwd, path.startsWith("~/") ? join(homedir(), path.slice(2)) : path);
   const files: { path: string; mtime: number }[] = [];
   const scan = async (dir: string, depth: number) => {
-    if (files.length >= 2000) return;
     try {
       for (const entry of await readdir(dir, { withFileTypes: true })) {
         const path = join(dir, entry.name);
         if (entry.isDirectory() && depth > 0) await scan(path, depth - 1);
         else if (entry.isFile() && entry.name.endsWith(".jsonl"))
           files.push({ path, mtime: (await stat(path)).mtimeMs });
-        if (files.length >= 2000) break;
       }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
@@ -45,8 +45,14 @@ export async function rpcSessions(
   await scan(expand(root ?? join(base, "sessions")), 2);
   await scan(managed, 0);
   const result: { id: string; title: string; directory: string; updatedAt: string }[] = [];
-  for (const file of files.sort((a, b) => b.mtime - a.mtime)) {
-    const handle = await open(file.path, "r");
+  const canonical = await canonicalDirectory(cwd);
+  const unique = [...new Map(files.map((file) => [file.path, file])).values()];
+  for (const file of unique.sort((a, b) => b.mtime - a.mtime || a.path.localeCompare(b.path))) {
+    const handle = await open(file.path, "r").catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return null; // Native cleanup may remove a file during discovery.
+      throw error;
+    });
+    if (!handle) continue;
     try {
       const buffer = Buffer.alloc(64 * 1024),
         { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
@@ -62,7 +68,9 @@ export async function rpcSessions(
           }
         });
       const header = rows.find((r) => r["type"] === "session");
-      if (header?.["cwd"] !== cwd) continue;
+      const directory = header?.["cwd"];
+      if (typeof directory !== "string" || (await canonicalDirectory(directory)) !== canonical)
+        continue;
       const first = rows
         .map((r) => r["message"] as { role?: string; content?: unknown } | undefined)
         .find((m) => m?.role === "user");
@@ -78,7 +86,7 @@ export async function rpcSessions(
         directory: cwd,
         updatedAt: new Date(file.mtime).toISOString(),
       });
-      if (result.length >= 100) break;
+      if (result.length >= limit) break;
     } finally {
       await handle.close();
     }

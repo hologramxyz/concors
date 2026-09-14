@@ -9,6 +9,7 @@ import { createDaemonServer, type DaemonServer } from "../server.ts";
 import { loadDaemonConfig } from "../config.ts";
 import { TestAgentProvider } from "./testing/provider.ts";
 import { TestAccountBackend } from "./testing/account.ts";
+import { ProviderRegistry } from "./providers/registry.ts";
 
 // Every test here spawns a daemon plus a fake provider; Windows CI runners need well over the
 // 5 s default before the first turn streams.
@@ -23,6 +24,7 @@ afterEach(async () => {
   await server?.close();
   if (directory) await rm(directory, { recursive: true, force: true });
   providers.length = 0;
+  vi.restoreAllMocks();
 });
 async function boot(resumeError?: string) {
   server = createDaemonServer(loadDaemonConfig({ port: 0, logLevel: "silent" }, {}), {
@@ -675,6 +677,138 @@ it("imports and forks native sessions into separate tabs without replaying a pro
   expect(providers[0]?.requests.filter((r) => r.method === "session/fork")).toHaveLength(1);
   expect(a.workspace?.projects[0]?.tabs).toHaveLength(3);
   expect(a.workspace?.projects[0]?.tabs.map((tab) => tab.name)).toEqual(["Chat", "Tab 2", "Tab 3"]);
+});
+
+it("discovers native sessions without creating a conversation, pages past 100, and scopes search", async () => {
+  vi.spyOn(ProviderRegistry.prototype, "installed").mockReturnValue(true);
+  const { a } = await setup();
+  const project = a.workspace!.projects[0]!;
+  const op = {
+    kind: "sessions-list" as const,
+    projectId: project.id,
+    directory,
+    provider: "codex",
+  };
+  const first = await a.requestProvider(op, randomUUID());
+  expect(first.outcome).toMatchObject({ status: "ok", sessions: { nextCursor: "100" } });
+  if (first.outcome.status !== "ok") return;
+  expect(first.outcome.sessions?.sessions).toHaveLength(100);
+  expect(a.agents).toHaveLength(1);
+  expect(providers[1]?.requests.map((r) => r.method)).toEqual(["session/list"]);
+  expect(providers[1]?.closed).toBe(true);
+  await a.requestProvider(op, randomUUID());
+  expect(providers).toHaveLength(2);
+  const second = await a.requestProvider({ ...op, cursor: "100", query: "125" }, randomUUID());
+  expect(second.outcome).toMatchObject({
+    status: "ok",
+    sessions: {
+      sessions: [{ id: "external-thread-125" }],
+      nextCursor: null,
+    },
+  });
+  expect(
+    (await a.requestProvider({ ...op, directory: tmpdir() }, randomUUID())).outcome.status,
+  ).toBe("error");
+});
+
+it("resumes once into an empty pane with native history and settings, without replaying a prompt", async () => {
+  vi.spyOn(ProviderRegistry.prototype, "installed").mockReturnValue(true);
+  const { a, b, id } = await setup();
+  const project = a.workspace!.projects[0]!;
+  await a.requestProvider(
+    { kind: "sessions-list", projectId: project.id, directory, provider: "codex" },
+    randomUUID(),
+  );
+  const requestId = randomUUID();
+  const op = {
+    kind: "resume-session" as const,
+    sessionId: id,
+    nativeSessionId: "external-thread",
+    provider: "codex",
+    expectedRevision: a.agents[0]!.revision,
+  };
+  const result = await action(a, op, requestId);
+  expect(result.outcome.status).toBe("ok");
+  if (result.outcome.status !== "ok") return;
+  const resumed = result.outcome.conversation.agent.id;
+  expect((await action(b, op, requestId)).outcome).toMatchObject({
+    status: "ok",
+    conversation: { agent: { id: resumed } },
+  });
+  await expect.poll(() => a.agents.find((agent) => agent.id === resumed)?.status).toBe("idle");
+  expect(a.workspace!.projects[0]!.tabs).toHaveLength(1);
+  expect(a.workspace!.projects[0]!.tabs[0]!.nodes[0]).toMatchObject({ sessionId: resumed });
+  const read = await action(a, { kind: "read", sessionId: resumed });
+  expect(read.outcome).toMatchObject({
+    status: "ok",
+    conversation: { items: [{ text: "Saved CLI prompt" }, { text: "Saved CLI response" }] },
+  });
+  const native = providers.find((provider) =>
+    provider.requests.some((r) => r.method === "thread/resume"),
+  )!;
+  expect(native.requests.find((r) => r.method === "thread/resume")?.params).not.toHaveProperty(
+    "model",
+  );
+  expect(
+    providers.flatMap((p) => p.requests).filter((r) => r.method === "turn/start"),
+  ).toHaveLength(0);
+});
+
+it("rejects unlisted native IDs and protects conversations when a stale picker is submitted", async () => {
+  vi.spyOn(ProviderRegistry.prototype, "installed").mockReturnValue(true);
+  const { a, id } = await setup();
+  const project = a.workspace!.projects[0]!;
+  const op = {
+    kind: "resume-session" as const,
+    sessionId: id,
+    nativeSessionId: "external-thread",
+    provider: "codex",
+    expectedRevision: a.agents[0]!.revision,
+  };
+  expect((await action(a, op)).outcome.status).toBe("error");
+  await a.requestProvider(
+    { kind: "sessions-list", projectId: project.id, directory, provider: "codex" },
+    randomUUID(),
+  );
+  await action(a, { kind: "send", sessionId: id, text: "Keep this conversation" });
+  await expect.poll(() => a.agents[0]!.status).toBe("done");
+  expect((await action(a, op)).outcome.status).toBe("error");
+  expect((await action(a, { ...op, expectedRevision: a.agents[0]!.revision })).outcome.status).toBe(
+    "error",
+  );
+  expect(a.workspace!.projects[0]!.tabs[0]!.nodes[0]).toMatchObject({ sessionId: id });
+  expect(a.agents).toHaveLength(1);
+});
+
+it("never silently replaces a missing imported session with a fresh empty thread", async () => {
+  vi.spyOn(ProviderRegistry.prototype, "installed").mockReturnValue(true);
+  const { a, id } = await setup("missing");
+  await a.requestProvider(
+    {
+      kind: "sessions-list",
+      projectId: a.workspace!.projects[0]!.id,
+      directory,
+      provider: "codex",
+    },
+    randomUUID(),
+  );
+  const result = await action(a, {
+    kind: "resume-session",
+    sessionId: id,
+    provider: "codex",
+    nativeSessionId: "external-thread",
+    expectedRevision: a.agents[0]!.revision,
+  });
+  expect(result.outcome.status).toBe("ok");
+  if (result.outcome.status !== "ok") return;
+  const resumed = result.outcome.conversation.agent.id;
+  await expect.poll(() => a.agents.find((agent) => agent.id === resumed)?.status).toBe("failed");
+  expect(a.agents.find((agent) => agent.id === resumed)?.threadId).toBe("external-thread");
+  const native = providers.find((provider) =>
+    provider.requests.some((r) => r.method === "thread/resume"),
+  )!;
+  expect(native.requests.some((r) => r.method === "thread/start")).toBe(false);
+  expect(providers[0]?.closed).toBe(true);
 });
 
 it("rewinds the selected turn only and publishes a history revision to all clients", async () => {
