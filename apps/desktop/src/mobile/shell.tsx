@@ -65,7 +65,16 @@ export function MobileApp() {
   const host = useSyncExternalStore(subscribeState, getHostState);
   return host ? (
     <CompactLayoutContext value={true}>
-      <ShortcutProvider>
+      <ShortcutProvider
+        preferences={{
+          overrides: host.preferences.shortcuts ?? {},
+          save: (shortcuts) =>
+            hostAction({
+              kind: "preferences",
+              preferences: { ...(getHostState()?.preferences ?? host.preferences), shortcuts },
+            }),
+        }}
+      >
         <TooltipProvider>
           <NativeSurfaces key={host.scope} host={host}>
             <MobileWorkspace host={host} />
