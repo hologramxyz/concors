@@ -32,13 +32,11 @@ import {
 } from "./format.ts";
 import { describeMachinesError, useMachines } from "./use-machines.ts";
 
-interface MachinesViewProps {
+export interface MachinesViewProps {
   readonly auth: SignedInAuth;
   readonly onSelectLocal?: () => void;
   readonly localSelected?: boolean;
-  readonly focusedMachineId: string | null;
-  readonly creating: boolean;
-  readonly onCreatingChange: (creating: boolean) => void;
+  readonly focusedMachineId?: string | null;
 }
 
 /** Cloud machines of the active organization: list, create, rename, cancel, and how to connect. */
@@ -47,11 +45,10 @@ export function MachinesView({
   onSelectLocal,
   localSelected = false,
   focusedMachineId,
-  creating,
-  onCreatingChange: setCreating,
 }: MachinesViewProps) {
   const organization = activeOrganization(auth);
   const state = useMachines(organization?.id);
+  const [creating, setCreating] = useState(false);
   const [cancelling, setCancelling] = useState<Machine | null>(null);
   const [resuming, setResuming] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -67,14 +64,11 @@ export function MachinesView({
   const empty = state.machines !== null && machines.length === 0;
 
   return (
-    <div
-      data-machines-view
-      className="mx-auto flex min-h-full w-full max-w-[1200px] flex-col px-5 py-8 sm:px-10 sm:py-12"
-    >
-      <div className="mb-8 flex flex-wrap items-start justify-between gap-5">
+    <div data-machines-view className="flex w-full min-w-0 flex-col">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <h2 className="text-2xl font-semibold tracking-tight">Machines</h2>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <h2 className="text-[15px] font-semibold">Machines</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
             Your computers and cloud development machines.
           </p>
           <p className="mt-1 text-xs break-words text-muted-foreground">
