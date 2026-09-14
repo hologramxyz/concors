@@ -953,7 +953,7 @@ test("sidebar has no logo or duplicate menu, with glass search behind the rounde
     .toEqual({ opacity: "0", blur: "blur(18px) saturate(1.5)", pointerEvents: "none" });
   await header.click();
   await expect(sidebar.getByRole("img", { name: "Concors", exact: true })).toHaveCount(0);
-  await expect(sidebar.locator(".mobile-sidebar-head button")).toHaveCount(1);
+  await expect(sidebar.locator(".mobile-sidebar-head button")).toHaveCount(2);
   await expect(sidebar.locator('button[aria-label*="sidebar"]')).toHaveCount(0);
   await expect(workspace).toHaveCSS("border-top-left-radius", "32px");
   await expect(workspace).toHaveCSS("border-bottom-left-radius", "32px");
@@ -1107,4 +1107,32 @@ test("machine sheet preserves the sidebar, selected status, and focus", async ({
   await picker.click();
   await expect(sheet).toHaveCSS("animation-name", "none");
   await closePickerSheet(ui, "Machine");
+});
+
+test("machine and search share a compact sidebar row at narrow phone widths", async ({ page }) => {
+  const ui = await enter(page);
+  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    const head = ui.locator(".mobile-sidebar-head");
+    const machine = head.getByRole("combobox", { name: "Machine", exact: true });
+    const search = head.getByRole("button", { name: "Search workspace", exact: true });
+    await expect(machine).toBeVisible();
+    await expect(search).toBeVisible();
+    const left = await machine.boundingBox();
+    const right = await search.boundingBox();
+    if (!left || !right) throw new Error("Missing sidebar controls");
+    expect(Math.abs(left.y - right.y)).toBeLessThan(1);
+    expect(Math.abs(left.height - right.height)).toBeLessThan(1);
+    expect(left.x + left.width).toBeLessThanOrEqual(right.x);
+    expect(left.width).toBeGreaterThan(140);
+    expect(right.width).toBeGreaterThanOrEqual(44);
+    expect(await head.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  }
+  await ui.getByRole("combobox", { name: "Machine", exact: true }).click();
+  await expect(ui.getByRole("dialog", { name: "Machine", exact: true })).toBeVisible();
+  await closePickerSheet(ui, "Machine");
+  await ui.getByRole("button", { name: "Search workspace", exact: true }).click();
+  await expect(ui.getByPlaceholder("Search workspaces, agents, tabs…")).toBeVisible();
+  await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "true");
 });
