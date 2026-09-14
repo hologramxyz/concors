@@ -259,6 +259,16 @@ test("repository picker switches personal and organization repos and prepares th
     await page.getByRole("menuitem", { name: "Clone repository…", exact: true }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByRole("button", { name: /alice\/project/ })).toBeVisible();
+    const avatar = dialog.locator("[data-account-avatar]");
+    const photo = avatar.locator("img");
+    await expect(photo).toHaveAttribute("src", "https://github.com/alice.png?size=96");
+    await expect
+      .poll(() => photo.evaluate((img: HTMLImageElement) => img.naturalWidth))
+      .toBeGreaterThan(0);
+    const avatarBounds = await avatar.boundingBox();
+    await photo.dispatchEvent("error");
+    await expect(avatar).toHaveText("A");
+    expect(await avatar.boundingBox()).toEqual(avatarBounds);
     github.setAccounts([
       { id: 1, login: "alice" },
       { id: 2, login: "acme" },
