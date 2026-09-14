@@ -10,21 +10,39 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { type CommandId } from "./bindings";
 import {
-  isMac,
-  keyLabel,
-  matchShortcut,
-  matchSequence,
-  sequenceBindings,
-  type Sequence,
-  type CommandId,
-} from "./bindings";
-export function ShortcutProvider({ children }: { children: ReactNode }) {
+  bindingLabel,
+  eventStroke,
+  matchContinuation,
+  matchKeymap,
+  strokeId,
+  strokeLabel,
+  type KeymapEntry,
+} from "./keymap";
+import { ShortcutPreferencesProvider } from "./preferences";
+import { useShortcutPreferences, type ExternalShortcutPreferences } from "./preferences-context";
+export function ShortcutProvider({
+  children,
+  preferences,
+}: {
+  children: ReactNode;
+  preferences?: ExternalShortcutPreferences;
+}) {
+  return (
+    <ShortcutPreferencesProvider {...(preferences ? { external: preferences } : {})}>
+      <ShortcutHandler>{children}</ShortcutHandler>
+    </ShortcutPreferencesProvider>
+  );
+}
+function ShortcutHandler({ children }: { children: ReactNode }) {
+  const { keymap, mac } = useShortcutPreferences();
   const [commands] = useState(createCommands);
   const available = useSyncExternalStore(commands.subscribe, commands.snapshot);
-  const [sequence, setSequence] = useState<Sequence | null>(null);
-  const armed = useRef<Sequence | null>(null);
-  const [lastSequence, setLastSequence] = useState<Sequence>("p");
+  const [sequenceKeymap, setSequenceKeymap] = useState(keymap);
+  const [sequence, setSequence] = useState<readonly KeymapEntry[] | null>(null);
+  const armed = useRef<readonly KeymapEntry[] | null>(null);
+  const [lastSequence, setLastSequence] = useState<readonly KeymapEntry[]>([]);
   const returnFocus = useRef<HTMLElement | null>(null);
   const action = useRef<CommandId | null>(null);
   const dialog = useRef<HTMLDivElement | null>(null);
@@ -39,6 +57,10 @@ export function ShortcutProvider({ children }: { children: ReactNode }) {
         return;
       }
       const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest("[data-shortcut-recorder]")) {
+        cancel();
+        return;
+      }
       const terminal = !!target?.closest(".xterm");
       const editing =
         !!target?.closest('input, textarea, select, [contenteditable="true"]') && !terminal;
@@ -51,12 +73,9 @@ export function ShortcutProvider({ children }: { children: ReactNode }) {
         event.stopImmediatePropagation();
       };
       if (armed.current) {
-        if (
-          event.repeat &&
-          event.ctrlKey &&
-          event.shiftKey &&
-          event.key.toLowerCase() === armed.current
-        ) {
+        const stroke = eventStroke(event);
+        const prefix = armed.current[0]?.binding.keys[0];
+        if (event.repeat && stroke && prefix && strokeId(stroke) === strokeId(prefix)) {
           consume();
           return;
         }
@@ -65,9 +84,10 @@ export function ShortcutProvider({ children }: { children: ReactNode }) {
           return;
         }
         if (["Control", "Shift", "Alt", "Meta"].includes(event.key)) return;
-        // Tab can reach every action and the close button. Enter/Space activate that button.
+        const id = matchContinuation(event, armed.current)?.id;
+        // Unassigned Tab reaches every action. Enter/Space activate the focused button.
         if (
-          event.key === "Tab" ||
+          (event.key === "Tab" && !id) ||
           (target?.closest("button") && ["Enter", " "].includes(event.key))
         )
           return;
@@ -76,8 +96,6 @@ export function ShortcutProvider({ children }: { children: ReactNode }) {
           cancel();
           return;
         }
-        const id =
-          !event.altKey && !event.metaKey ? matchSequence(armed.current, event.key) : undefined;
         if (id) {
           consume();
           if (!event.repeat) {
@@ -86,11 +104,21 @@ export function ShortcutProvider({ children }: { children: ReactNode }) {
           }
           return;
         }
+        consume();
         cancel();
+        return;
       }
       if (commands.snapshot().length === 0) return;
-      const id = matchShortcut(event, isMac(), terminal, isTauri());
-      if (!id) return;
+      const matches = matchKeymap(
+        event,
+        keymap,
+        terminal,
+        isTauri(),
+        !!target?.closest("[data-shortcut-tab-id]"),
+      );
+      const first = matches[0];
+      if (!first) return;
+      const id = first.id;
       // Agent inputs participate in workspace navigation; ordinary form fields retain editing keys.
       if (editing && id !== "search" && !composer) {
         if (!id.startsWith("focus-")) event.preventDefault();
@@ -102,15 +130,15 @@ export function ShortcutProvider({ children }: { children: ReactNode }) {
       }
       consume();
       if (event.repeat && !id.startsWith("focus-")) return;
-      if (id === "p" || id === "t") {
-        if (!sequenceBindings(id).some((binding) => commands.snapshot().includes(binding.id)))
-          return;
-        armed.current = id;
+      if (first.binding.keys.length === 2) {
+        if (!matches.some((binding) => commands.snapshot().includes(binding.id))) return;
+        armed.current = matches;
         action.current = null;
         returnFocus.current =
           document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        setLastSequence(id);
-        setSequence(id);
+        setSequenceKeymap(keymap);
+        setLastSequence(matches);
+        setSequence(matches);
       } else commands.run(id);
     };
     window.addEventListener("keydown", keydown, true);
@@ -119,11 +147,18 @@ export function ShortcutProvider({ children }: { children: ReactNode }) {
       window.removeEventListener("keydown", keydown, true);
       window.removeEventListener("blur", cancel);
     };
-  }, [commands]);
+  }, [commands, keymap]);
+  useEffect(() => {
+    armed.current = null;
+    action.current = null;
+  }, [keymap]);
   return (
     <Context value={commands}>
       {children}
-      <Dialog open={sequence !== null} onOpenChange={(open) => !open && cancel()}>
+      <Dialog
+        open={sequence !== null && sequenceKeymap === keymap}
+        onOpenChange={(open) => !open && cancel()}
+      >
         <DialogContent
           ref={dialog}
           data-shortcut-dialog
@@ -144,15 +179,20 @@ export function ShortcutProvider({ children }: { children: ReactNode }) {
           }}
         >
           <DialogHeader>
-            <DialogTitle>{lastSequence === "p" ? "Pane shortcuts" : "Tab shortcuts"}</DialogTitle>
+            <DialogTitle>Shortcut actions</DialogTitle>
             <DialogDescription>
-              Release the shortcut keys, then choose an action. Esc cancels.
+              {lastSequence[0] &&
+                bindingLabel(
+                  { ...lastSequence[0].binding, keys: lastSequence[0].binding.keys.slice(0, 1) },
+                  mac,
+                )}
+              : release the keys, then choose an action. Esc cancels.
             </DialogDescription>
           </DialogHeader>
           <DialogBody>
-            {sequenceBindings(lastSequence).map((binding) => (
+            {lastSequence.map((binding) => (
               <Button
-                key={binding.id}
+                key={`${binding.id}:${binding.index}`}
                 type="button"
                 variant="ghost"
                 disabled={!available.includes(binding.id)}
@@ -164,7 +204,7 @@ export function ShortcutProvider({ children }: { children: ReactNode }) {
               >
                 <span>{binding.label}</span>
                 <kbd className="min-w-9 shrink-0 rounded border bg-muted px-2 py-1 text-center font-mono text-sm">
-                  {"then" in binding ? keyLabel(binding.then) : ""}
+                  {binding.binding.keys[1] ? strokeLabel(binding.binding.keys[1], mac) : ""}
                 </kbd>
               </Button>
             ))}
