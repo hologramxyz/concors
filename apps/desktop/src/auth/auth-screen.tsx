@@ -78,7 +78,7 @@ export function AuthScreen({ state, onSignIn, onSignUp, onRetry }: AuthScreenPro
   };
 
   return (
-    <main className="flex h-dvh items-start justify-center overflow-y-auto bg-background p-6">
+    <main className="flex h-dvh scroll-py-6 items-start justify-center overflow-y-auto bg-background p-6">
       <div className="my-auto w-full max-w-sm">
         <div className="mb-8 flex items-center gap-2.5">
           <BrandMark className="size-8 text-primary" />
