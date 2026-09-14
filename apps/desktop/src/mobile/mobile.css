@@ -268,13 +268,6 @@ body {
   color: var(--sidebar-foreground);
   background: var(--sidebar);
 }
-.mobile-sidebar-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 60px;
-  padding: 4px 10px;
-}
 .mobile-sidebar-machine {
   flex: 1;
   min-width: 0;
@@ -377,10 +370,6 @@ body {
   height: 44px;
   font-size: 18px;
 }
-.mobile-account-machine {
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--border);
-}
 .mobile-account-actions {
   display: flex;
   flex-direction: column;
@@ -457,15 +446,19 @@ body {
   transition: none;
 }
 .mobile-header,
-.mobile-files-header {
-  position: relative;
+.mobile-files-header,
+.mobile-sidebar-head {
   display: flex;
   align-items: center;
   flex-shrink: 0;
   gap: 10px;
   height: 76px;
-  margin-bottom: -76px;
   padding: 10px 12px 14px;
+}
+.mobile-header,
+.mobile-files-header {
+  position: relative;
+  margin-bottom: -76px;
   pointer-events: none;
 }
 .mobile-files-header {
@@ -1105,7 +1098,8 @@ aside[aria-label="Agent notifications"] {
 }
 @media (max-width: 360px) {
   .mobile-header,
-  .mobile-files-header {
+  .mobile-files-header,
+  .mobile-sidebar-head {
     gap: 6px;
     padding-inline: 8px;
   }
