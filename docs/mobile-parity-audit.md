@@ -12,7 +12,7 @@ not rebuild an already-exported Expo preview.
 | Workspace sidebar             | Uses desktop `WorkspaceSidebarItem`, `useProjectIcons` and `ProjectImage`. Repository favicons travel through the daemon; repositories without an icon use their initial, non-repositories use a folder. Covered by the direct-daemon favicon scenario.                                  |
 | Agents                        | Uses desktop `AgentSidebar`, `ProviderIcon` and `AgentLoadingIcon`. Working/starting overlays a small spinner on the provider mark. Mobile suppresses hover-only tooltips; provider-switching and live working-state browser checks cover the shared rows.                               |
 | Profile                       | Uses shared `AccountAvatar` and account-menu components with a mobile drawer. Fixed the direct-preview bridge dropping the image and added the same read-only GitHub identity lookup as desktop. Tests ensure no profile tokens/passwords reach the renderer or daemon.                  |
-| Sign-in                       | Corrected visible Concourse branding, including shared account/auth copy. Existing bundle IDs, URL scheme, package names and API domains are unchanged. No invented user identity: a direct preview shows Your profile until optional account sign-in.                                   |
+| Sign-in                       | Corrected visible Concors branding, including shared account/auth copy. Existing bundle IDs, URL scheme, package names and API domains are unchanged. No invented user identity: a direct preview shows Your profile until optional account sign-in.                                     |
 | Agent conversation            | Imports desktop `ChatPane`, timeline, Markdown, tool presentations, approval/question forms and history navigation. No obsolete connected/import/fork/rewind/MCP toolbar. Both DOM and native-bridge provider/history scenarios exercise the current renderer.                           |
 | Composer                      | Shares agent/model/effort/permission and send/interrupt behavior. Supported iOS uses Expo UI/GlassEffect over the WebView; web/Android use the shared DOM controls. Browser contract tests do not prove physical keyboard or glass rendering.                                            |
 | Files                         | Uses desktop `FilesProvider`, `FileTree`, `FileTypeIcon`, file tabs, Markdown and editor. Existing scenarios cover colored extension icons, cached folder listing, editing, save conflicts, draft guards and touch navigation.                                                           |
@@ -25,7 +25,7 @@ not rebuild an already-exported Expo preview.
 ## Preview verification
 
 `pnpm --filter @concors/mobile assets` recompiles the desktop renderer. The offline
-document now includes a `concourse-source-revision` meta tag containing the checkout
+document now includes a `concors-source-revision` meta tag containing the checkout
 commit (`-dirty` for tracked uncommitted changes). EAS archives use their supplied
 commit if Git metadata is unavailable; otherwise the stamp explicitly says `unknown`.
 

@@ -4,7 +4,7 @@ import { mobileDirectSocket } from "../../../e2e/support/mobile-direct-ports.cjs
 async function connect(page: Page) {
   await page.goto("/");
   await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
-  const ui = page.frameLocator('iframe[title="Concourse workspace"]');
+  const ui = page.frameLocator('iframe[title="Concors workspace"]');
   await expect(ui.getByRole("button", { name: "Open sidebar", exact: true })).toBeVisible();
   return ui;
 }

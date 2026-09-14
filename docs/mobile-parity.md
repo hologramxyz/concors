@@ -314,7 +314,7 @@ The file tree, Markdown preview and editor gutter declare vertical touch handlin
 their scroll containers, so the browser does not cancel horizontal navigation before
 pointer-up (see [touch-action](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/touch-action)).
 
-The footer is now a real profile entry. Normal signed-in sessions show the Concourse
+The footer is now a real profile entry. Normal signed-in sessions show the Concors
 account as before. Direct previews offer **Your profile → Sign in**, using an optional,
 private, profile-only route to the same account API as desktop. Only verified name/email
 enter the renderer; passwords and tokens stay in the outer host's isolated memory session.

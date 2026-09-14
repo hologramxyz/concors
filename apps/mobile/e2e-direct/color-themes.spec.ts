@@ -9,10 +9,10 @@ test("mobile applies built-in and local-file palettes through the native prefere
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
   await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
-  const ui = page.frameLocator('iframe[title="Concourse workspace"]');
+  const ui = page.frameLocator('iframe[title="Concors workspace"]');
   const expectCanvas = async (color: string) => {
     await expect(page.getByTestId("workspace-safe-area")).toHaveCSS("background-color", color);
-    await expect(page.locator('iframe[title="Concourse workspace"]')).toHaveCSS(
+    await expect(page.locator('iframe[title="Concors workspace"]')).toHaveCSS(
       "background-color",
       color,
     );

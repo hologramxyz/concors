@@ -122,7 +122,7 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
     await expect(page.getByText("Before you connect", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Allow AI data sharing" })).toHaveCount(0);
-    const ui = page.frameLocator('iframe[title="Concourse workspace"]');
+    const ui = page.frameLocator('iframe[title="Concors workspace"]');
     const input = ui.getByRole("textbox", { name: "Message Codex" });
     await expect(input).toBeEnabled();
     // Main's provider account flow must also cross the mobile relay without a real OAuth login.
@@ -241,7 +241,7 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await expect(account.getByRole("combobox", { name: "Machine", exact: true })).toContainText(
       "Desktop daemon",
     );
-    await expect(account).toContainText("Sign in to your Concourse account");
+    await expect(account).toContainText("Sign in to your Concors account");
     expect(profileRequests).toEqual([]);
     const socketsBeforeProfile = workspaceSockets.length;
     await account.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -346,7 +346,7 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await expect(
       page.getByRole("button", { name: "Connect to desktop", exact: true }),
     ).toBeVisible();
-    await expect(page.locator('iframe[title="Concourse workspace"]')).toHaveCount(0);
+    await expect(page.locator('iframe[title="Concors workspace"]')).toHaveCount(0);
     expect(desktop.terminals[0]?.status).toBe("running");
     expect(cloudRequests).toEqual([]);
     expect(errors).toEqual([]);

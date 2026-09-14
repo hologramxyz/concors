@@ -89,13 +89,13 @@ test("authentication forms remain scrollable in short windows", async ({ page })
   await mockApi(page);
   await page.setViewportSize({ width: 640, height: 320 });
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Sign in to Concourse" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sign in to Concors" })).toBeVisible();
   const main = page.getByRole("main");
   for (const mode of ["sign-in", "sign-up"] as const) {
     if (mode === "sign-up") {
       await page.getByRole("button", { name: "Create an account", exact: true }).click();
       await expect(
-        page.getByRole("heading", { name: "Create your Concourse account" }),
+        page.getByRole("heading", { name: "Create your Concors account" }),
       ).toBeVisible();
     }
     await main.evaluate((element) => {
@@ -125,7 +125,7 @@ test("the app is gated behind sign-in: sign in, restore on reload, sign out, cre
 }) => {
   const api = await mockApi(page);
   const sidebar = page.getByRole("navigation", { name: "Primary" });
-  const signInHeading = page.getByRole("heading", { name: "Sign in to Concourse" });
+  const signInHeading = page.getByRole("heading", { name: "Sign in to Concors" });
 
   // Signed out: only the sign-in screen exists. A stale saved token is rejected and dropped.
   await page.goto("/");
@@ -193,7 +193,7 @@ test("the app is gated behind sign-in: sign in, restore on reload, sign out, cre
 
   // Create an account from the same screen.
   await page.getByRole("button", { name: "Create an account" }).click();
-  await expect(page.getByRole("heading", { name: "Create your Concourse account" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Create your Concors account" })).toBeVisible();
   await page.getByLabel("Name").fill("Grace Hopper");
   await page.getByLabel("Email").fill("grace@example.com");
   await page.getByLabel("Password").fill(PASSWORD);

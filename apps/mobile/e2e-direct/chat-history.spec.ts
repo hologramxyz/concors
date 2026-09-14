@@ -61,7 +61,7 @@ for (const native of [false, true]) {
         });
       await page.goto("/");
       await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
-      const ui = page.frameLocator('iframe[title="Concourse workspace"]');
+      const ui = page.frameLocator('iframe[title="Concors workspace"]');
       const timeline = ui.getByRole("log", { name: "Chat timeline" });
       await expect(timeline.getByText("History 0 message 639", { exact: true })).toBeVisible();
       await expect(ui.getByRole("heading", { name: "Choose an agent" })).toHaveCount(0);

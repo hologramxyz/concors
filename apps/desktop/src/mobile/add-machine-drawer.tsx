@@ -26,7 +26,7 @@ export function AddMachineDrawer({
           <DialogDescription>
             {host.direct
               ? "This private preview is paired with one desktop daemon."
-              : "Connect a machine already set up in your Concourse organization."}
+              : "Connect a machine already set up in your Concors organization."}
           </DialogDescription>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
