@@ -41,6 +41,11 @@ test("direct profile sheet follows workspace shape preferences without a cloud l
       "border-radius",
       `${fieldRadius}px`,
     );
+    for (const label of ["Sign in", "Back to workspace"]) {
+      const button = page.getByRole("button", { name: label, exact: true });
+      await expect(button).toHaveCSS("padding", "4px 8px");
+      await expect(button).toHaveCSS("min-height", "46px");
+    }
     await page.getByRole("button", { name: "Back to workspace", exact: true }).click();
     await ui.getByRole("button", { name: "Return to workspace", exact: true }).click();
   }
