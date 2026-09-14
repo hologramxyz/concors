@@ -108,8 +108,8 @@ export function Button({
       style={({ pressed }) => [
         {
           minHeight: 46,
-          paddingHorizontal: secondary ? 18 : 28,
-          paddingVertical: secondary ? 11 : 8,
+          paddingHorizontal: 8,
+          paddingVertical: 4,
           borderRadius: 10,
           alignItems: "center",
           justifyContent: "center",
