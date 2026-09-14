@@ -28,6 +28,14 @@ The machine picker and glass search button share the sidebar's first row (machin
 left, search right), including at 320px. Both still open their existing drawers
 without dismissing the sidebar.
 
+After syncing desktop #97, all three glass headers (sidebar, workspace and files)
+share their height, top/bottom padding and responsive horizontal padding/gaps.
+They retain 48px controls; text actions use desktop's 8px/4px padding with 44px web
+and 46px native-host minimum touch heights. The main merge preserves theme-aware
+native button corners. Machine management and setup guidance now live under
+Settings → Machines in both managed and direct-preview modes; Search opens that
+same section. The profile drawer no longer duplicates machine controls.
+
 Mobile no longer hard-codes circular buttons or fixed rounded panel corners.
 Square uses zero-radius glass controls, drawer corners/close buttons, avatars,
 pane rows, composer actions, badges and the sliding workspace rim. Rounded uses

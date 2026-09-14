@@ -34,16 +34,18 @@ Phone-specific behavior:
   tapping its text field opens the platform keyboard.
 - A swipeable Workspaces / Agents / Servers sidebar pushes the workspace to the right.
   Swipe back, press the mobile menu icon, or tap the workspace scrim to close it.
-- A compact name/avatar trigger opens an animated Account bottom drawer with the current machine,
-  organization chooser, Add machine setup guidance, Manage machines, Settings and Sign out.
+- A compact name/avatar trigger opens an animated Account bottom drawer with the
+  organization chooser, Settings and Sign out, matching desktop's account menu.
   GitHub profile photos use the shared lightweight identity cache; opening the account drawer
   does not fetch repository lists. Direct previews show the verified display profile (or Your profile),
   with Disconnect desktop and no cloud organization controls. Machine management remains in
-  Settings; no purchasing or provisioning is exposed. The sidebar has no redundant product title.
+  Settings → Machines, including setup guidance and direct-preview reconnect/disconnect;
+  no purchasing or provisioning is exposed. Search's Go to Machines opens that same section.
+  Machine switching stays beside Search in the sidebar. The sidebar has no redundant product title.
 - Workspace rows, repository icons and actions are shared with desktop; mobile keeps 44px touch
   targets and does not show desktop hover tooltips. Machine selectors display saved emoji and
   availability. Settings reuses desktop rename controls and the icon editor, presented as drawers;
-  successful edits update the host-owned machine list immediately, including both selectors.
+  successful edits update the host-owned machine list and sidebar selector immediately.
 - The account drawer and Account settings share an Organization bottom drawer, including personal
   versus team membership and role. Failed switches preserve the current connection. Successful
   switches replace the renderer/session scope and use organization-specific machine requests,
@@ -260,6 +262,9 @@ matrix, live CLI evidence, and remaining scope boundaries. No store build/upload
 or production daemon restart was performed by this follow-up.
 
 ## Sidebar and main merge follow-up (2026-09-11)
+
+Historical verification: the 2026-09-14 #97 sync moves the machine controls described
+in this section into Settings → Machines and removes their duplicate Account entries.
 
 This separate follow-up starts from main through `8f494ee`, after #53 (including
 #52) merged. It retains main's provider account sign-in (#54), saved machine
