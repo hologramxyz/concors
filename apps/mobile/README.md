@@ -121,19 +121,16 @@ daemon**, `EXPO_PUBLIC_DEMO=false`, and use a development/preview build. Restart
 with `--clear` after switching modes. The welcome screen offers **Connect to desktop**.
 This is a real workspace connection, not a demo account or a simulated machine.
 
-Before any real workspace connection, review the AI-sharing disclosure and explicitly
-choose **Allow AI data sharing**. Consent is versioned and scoped to the account and
-organization (or private endpoint), stored on the device, and required before the socket
-opens. **Not now** returns without connecting. In Settings, **Review AI data sharing →
-Withdraw and disconnect** removes that choice and closes the phone connection after
-confirmation. Save files first; unsent drafts are discarded, while remote sessions continue.
-The in-memory demo does not share data with AI providers and skips this gate.
+Connecting opens the workspace directly; there is no AI data-sharing onboarding page
+or replacement prompt. Managed access still requires authentication, and direct access
+still requires the private endpoint. Settings retains the ordinary privacy-policy link.
+Disconnecting closes this viewer, not the remote sessions.
 
 The host uses the same `DaemonConnection` protocol as desktop and obtains the actual
 machine ID from its workspace snapshot. Cloud login is not needed for the workspace;
 inventory, billing, provisioning and push API calls remain blocked in this mode.
 The footer is a profile entry, not a machine status label. Tap **Your profile → Sign in**
-to verify the same Concourse account used on desktop; its actual name and email then
+to verify the same Concors account used on desktop; its actual name, email and avatar then
 appear in the footer/drawer. This optional profile session is isolated in memory and
 never grants cloud machine access or changes the desktop connection. Passwords and
 session tokens stay in the outer host, not the embedded workspace renderer. Reloading
@@ -153,7 +150,9 @@ forward cookies, account authorization or Tailscale identity headers to the daem
 For optional profile login, set `CONCORS_DIRECT_PROFILE_API_URL` on the adapter to the
 same exact HTTPS account API origin used by desktop. This is disabled by default.
 The private `/desktop-daemon/profile-api` route only forwards email sign-in, sign-out,
-and `/api/v1/me`, with exact methods, bounded bodies, no redirects and no cookie forwarding.
+`/api/v1/me`, and read-only `/api/v1/github/` identity for the desktop avatar, with exact
+methods, bounded bodies, no redirects and no cookie forwarding. GitHub repositories,
+account management and connection changes are not exposed by this profile-only route.
 The same Tailscale identity/origin check protects these routes. It does not substitute
 a Tailscale profile or copy a desktop session token.
 
@@ -212,21 +211,19 @@ the in-memory demo cannot prove real provider switching or saved profile launch.
    from New tab. The same saved profile should appear on desktop.
 3. In Settings → Shortcuts, inspect external-keyboard commands. Mobile should not
    expose desktop-only split/arrangement commands.
-4. Upgrading this build asks once more for AI-sharing consent. Decline to stay
-   disconnected, or accept after reviewing the provider disclosure. Native iOS model
-   controls use the same provider marks as desktop.
+4. Connecting and switching organizations should open the workspace without an
+   AI data-sharing prompt. Native iOS model controls use the same provider marks as desktop.
 5. Run `/compact` when the selected CLI exposes it. Check its running/result state.
    Queue a follow-up, disconnect the phone, and verify delivery from desktop. Stop
    pauses queued work; use Resume queue before expecting further delivery.
-6. Where available, import a native session or fork an idle conversation. The phone
-   should open the new chat while the original remains in Tabs. Rewind
-   names its exact scope; file checkpoints and conversation rollback differ.
+6. Agent chats use the desktop timeline and composer. There must be no legacy connected
+   toolbar or Import session, Fork session, Rewind or MCP servers buttons above the chat.
 7. Open the sidebar: it has glass Search, with no logo or extra menu
    button. The workspace slides above it with a visible 32px rounded glass-style rim; hidden
    sidebar controls must never show through the main view. Tap your name/avatar to open Account, not Settings. The drawer starts
    with the machine selector, followed by Add machine, Settings and Sign out.
    Direct previews offer **Your profile → Sign in** until you authenticate your real
-   Concourse account, with **Disconnect desktop** kept separate from profile sign-out. Add machine
+   Concors account, with **Disconnect desktop** kept separate from profile sign-out. Add machine
    explains setup and refreshes existing cloud machines; it does not provision or
    purchase one. Closing nested machine sheets restores focus to the account drawer.
    CPU/RAM sits just below the sidebar machine selector, using the selected daemon's

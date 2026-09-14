@@ -1,5 +1,9 @@
 # Mobile / desktop parity
 
+For the current surface-by-surface audit and stale-preview finding, see
+[September mobile parity audit](mobile-parity-audit.md). Dated sections below retain
+historical implementation notes; the current onboarding has no AI-sharing gate.
+
 The mobile client uses a bundled, offline rendering of the actual Concors React UI,
 inside the Expo native host. Chat, composer business logic, markdown, tool calls, plans, terminal,
 project setup/actions, and account/appearance/SSH/Shortcuts/Terminals views are source-shared.
@@ -30,21 +34,23 @@ Phone-specific behavior:
   tapping its text field opens the platform keyboard.
 - A swipeable Workspaces / Agents / Servers sidebar pushes the workspace to the right.
   Swipe back, press the mobile menu icon, or tap the workspace scrim to close it.
-- A compact name/avatar trigger opens an animated Account bottom drawer with the current machine,
-  organization chooser, Add machine setup guidance, Manage machines, Settings and Sign out.
+- A compact name/avatar trigger opens an animated Account bottom drawer with the
+  organization chooser, Settings and Sign out, matching desktop's account menu.
   GitHub profile photos use the shared lightweight identity cache; opening the account drawer
   does not fetch repository lists. Direct previews show the verified display profile (or Your profile),
   with Disconnect desktop and no cloud organization controls. Machine management remains in
-  Settings; no purchasing or provisioning is exposed. The sidebar has no redundant product title.
+  Settings → Machines, including setup guidance and direct-preview reconnect/disconnect;
+  no purchasing or provisioning is exposed. Search's Go to Machines opens that same section.
+  Machine switching stays beside Search in the sidebar. The sidebar has no redundant product title.
 - Workspace rows, repository icons and actions are shared with desktop; mobile keeps 44px touch
   targets and does not show desktop hover tooltips. Machine selectors display saved emoji and
   availability. Settings reuses desktop rename controls and the icon editor, presented as drawers;
-  successful edits update the host-owned machine list immediately, including both selectors.
+  successful edits update the host-owned machine list and sidebar selector immediately.
 - The account drawer and Account settings share an Organization bottom drawer, including personal
   versus team membership and role. Failed switches preserve the current connection. Successful
   switches replace the renderer/session scope and use organization-specific machine requests,
-  caches and saved selection. Unsaved files are checked first. AI-sharing consent must match the
-  selected organization. This does not add team creation, invitations or membership management;
+  caches and saved selection. Unsaved files are checked first. No additional AI-sharing
+  onboarding prompt is shown. This does not add team creation, invitations or membership management;
   those are not desktop features on the synced main revision either.
 - Tabs, Machine, Organization, Search, Settings, Open workspace and New Tab use the shared Radix dialog with animated
   bottom-sheet presentation, focus restoration and reduced-motion support.
@@ -257,6 +263,9 @@ or production daemon restart was performed by this follow-up.
 
 ## Sidebar and main merge follow-up (2026-09-11)
 
+Historical verification: the 2026-09-14 #97 sync moves the machine controls described
+in this section into Settings → Machines and removes their duplicate Account entries.
+
 This separate follow-up starts from main through `8f494ee`, after #53 (including
 #52) merged. It retains main's provider account sign-in (#54), saved machine
 selection (#55), empty Codex thread recovery (#56), and unified chat primitives.
@@ -310,7 +319,7 @@ The file tree, Markdown preview and editor gutter declare vertical touch handlin
 their scroll containers, so the browser does not cancel horizontal navigation before
 pointer-up (see [touch-action](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/touch-action)).
 
-The footer is now a real profile entry. Normal signed-in sessions show the Concourse
+The footer is now a real profile entry. Normal signed-in sessions show the Concors
 account as before. Direct previews offer **Your profile → Sign in**, using an optional,
 private, profile-only route to the same account API as desktop. Only verified name/email
 enter the renderer; passwords and tokens stay in the outer host's isolated memory session.

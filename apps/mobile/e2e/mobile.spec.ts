@@ -69,6 +69,10 @@ async function enter(page: Page) {
   await page.goto("/");
   await page.getByRole("button", { name: "Explore demo" }).click();
   const ui = workspace(page);
+  await expect(ui.locator('meta[name="concors-source-revision"]')).toHaveAttribute(
+    "content",
+    /^[a-f0-9]{40,64}(-dirty)?$/,
+  );
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
   return ui;
 }
@@ -368,9 +372,9 @@ test("sidebar pushes the workspace and settings opens as a drawer over the same 
     "0px",
   );
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toHaveValue("Keep this draft");
-  // The moving workspace is a navigation surface, independent of control-corner preferences.
+  // The moving workspace rim follows the same corner preference as its content.
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
-  await expect(ui.getByTestId("mobile-workspace")).toHaveCSS("border-top-left-radius", "32px");
+  await expect(ui.getByTestId("mobile-workspace")).toHaveCSS("border-top-left-radius", "0px");
 });
 test("top select switches split panes and cold session links survive sign-in", async ({ page }) => {
   await page.goto(
@@ -876,23 +880,8 @@ test("account opens a bottom drawer with settings, sign out and focus restoratio
   await expect(drawer.locator('[data-slot="dialog-description"]')).toHaveClass(/sr-only/);
   await expect(drawer.getByText("Alex Morgan", { exact: true })).toBeVisible();
   await expect(drawer.getByText("demo@concors.dev", { exact: true })).toBeVisible();
-  const machine = drawer.getByRole("combobox", { name: "Machine", exact: true });
-  await expect(machine).toContainText("Development");
-  await machine.click();
-  const machines = ui.getByRole("dialog", { name: "Machine", exact: true });
-  await expect(machines.getByRole("option", { name: /Development/ })).toContainText("Connected");
-  await machines.press("Escape");
-  await expect(machine).toBeFocused();
-  await drawer.getByRole("button", { name: "Add machine", exact: true }).click();
-  const addMachine = ui.getByRole("dialog", { name: "Add machine", exact: true });
-  await expect(drawer).toHaveCount(0);
-  await expect(addMachine).toContainText("Creating machines is not available in mobile yet.");
-  await expect(
-    addMachine.getByRole("button", { name: "Refresh machines", exact: true }),
-  ).toBeVisible();
-  await addMachine.getByRole("button", { name: "Close", exact: true }).click();
-  await expect(account).toBeFocused();
-  await account.click();
+  await expect(drawer.getByRole("combobox", { name: "Machine", exact: true })).toHaveCount(0);
+  await expect(drawer.getByRole("button", { name: /Add machine|Manage machines/ })).toHaveCount(0);
   const bounds = await drawer.evaluate((el) => ({
     width: el.getBoundingClientRect().width,
     bottom: el.getBoundingClientRect().bottom,
@@ -949,16 +938,16 @@ test("sidebar has no logo or duplicate menu, with glass search behind the rounde
     .poll(rim)
     .toEqual({ opacity: "0", blur: "blur(18px) saturate(1.5)", pointerEvents: "none" });
   await header.click();
-  await expect(sidebar.getByRole("img", { name: "Concourse", exact: true })).toHaveCount(0);
-  await expect(sidebar.locator(".mobile-sidebar-head button")).toHaveCount(1);
+  await expect(sidebar.getByRole("img", { name: "Concors", exact: true })).toHaveCount(0);
+  await expect(sidebar.locator(".mobile-sidebar-head button")).toHaveCount(2);
   await expect(sidebar.locator('button[aria-label*="sidebar"]')).toHaveCount(0);
-  await expect(workspace).toHaveCSS("border-top-left-radius", "32px");
-  await expect(workspace).toHaveCSS("border-bottom-left-radius", "32px");
+  await expect(workspace).toHaveCSS("border-top-left-radius", "24px");
+  await expect(workspace).toHaveCSS("border-bottom-left-radius", "24px");
   await expect(workspace).toHaveCSS("overflow", "hidden");
   await expect
     .poll(rim)
     .toEqual({ opacity: "1", blur: "blur(18px) saturate(1.5)", pointerEvents: "none" });
-  await expect(main).toHaveCSS("clip-path", "inset(3px round 29px)");
+  await expect(main).toHaveCSS("clip-path", "inset(3px round 21px)");
   expect(await main.evaluate((element) => [element.clientWidth, element.clientHeight])).toEqual(
     closedSize,
   );
@@ -1073,13 +1062,45 @@ test("compact account footer and machine management live in settings", async ({ 
   ).toHaveCount(0);
   await choose(ui, "Settings section", "machines");
   await expect(
-    ui.getByRole("button", { name: /Create machine|Add machine|Cancel machine|Resume machine/ }),
+    ui.getByRole("button", { name: /Create machine|Cancel machine|Resume machine/ }),
   ).toHaveCount(0);
   await expect(ui.getByRole("button", { name: "Refresh machines", exact: true })).toBeVisible();
   await expect(
     ui
       .getByRole("dialog", { name: "Settings", exact: true })
       .getByText("Development", { exact: true }),
+  ).toBeVisible();
+  const settings = ui.getByRole("dialog", { name: "Settings", exact: true });
+  const add = settings.getByRole("button", { name: "Add machine", exact: true });
+  // Text actions share desktop spacing, with mobile's minimum touch height retained.
+  for (const button of [
+    add,
+    settings.getByRole("button", { name: "Refresh machines", exact: true }),
+  ]) {
+    await expect(button).toHaveCSS("padding", "4px 8px");
+    await expect(button).toHaveCSS("min-height", "44px");
+    await expect(button).toHaveCSS("line-height", "18px");
+  }
+  await add.click();
+  const setup = ui.getByRole("dialog", { name: "Add machine", exact: true });
+  await expect(setup).toContainText("Creating machines is not available in mobile yet.");
+  await setup.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(add).toBeFocused();
+  await expect(settings).toBeVisible();
+  await settings.getByRole("combobox", { name: "Settings section" }).click();
+  await expect(ui.getByRole("option", { name: "Machines", exact: true })).toHaveCount(1);
+  await ui.getByRole("option", { name: "Machines", exact: true }).click();
+  await settings.getByRole("button", { name: "Close", exact: true }).click();
+  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  await ui.getByRole("button", { name: "Search workspace", exact: true }).click();
+  await ui.getByPlaceholder("Search workspaces, agents, tabs…").fill("Go to Machines");
+  await ui.getByRole("option", { name: "Go to Machines", exact: true }).click();
+  await expect(settings.getByRole("combobox", { name: "Settings section" })).toHaveAttribute(
+    "data-value",
+    "machines",
+  );
+  await expect(
+    settings.getByRole("button", { name: "Refresh machines", exact: true }),
   ).toBeVisible();
 });
 
@@ -1106,6 +1127,72 @@ test("machine sheet preserves the sidebar, selected status, and focus", async ({
   await picker.click();
   await expect(sheet).toHaveCSS("animation-name", "none");
   await closePickerSheet(ui, "Machine");
+});
+
+test("sidebar, chat and files share header spacing at narrow phone widths", async ({ page }) => {
+  const ui = await enter(page);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  for (const width of [320, 360, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    const geometry = async (selector: string) =>
+      ui.locator(selector).evaluate((el) => {
+        const style = getComputedStyle(el);
+        const box = el.getBoundingClientRect();
+        const controls = [...el.querySelectorAll<HTMLButtonElement>("button")];
+        const firstControl = controls[0];
+        const lastControl = controls.at(-1);
+        if (!firstControl || !lastControl) throw new Error("Missing glass header controls");
+        const first = firstControl.getBoundingClientRect();
+        const last = lastControl.getBoundingClientRect();
+        return {
+          padding: style.padding,
+          gap: style.gap,
+          height: box.height,
+          top: first.top - box.top,
+          bottom: box.bottom - first.bottom,
+          left: first.left - box.left,
+          right: box.right - last.right,
+        };
+      });
+    const main = await geometry(".mobile-header");
+    expect(main).toEqual({
+      padding: width <= 360 ? "10px 8px 14px" : "10px 12px 14px",
+      gap: width <= 360 ? "6px" : "10px",
+      height: 76,
+      top: 12,
+      bottom: 16,
+      left: width <= 360 ? 8 : 12,
+      right: width <= 360 ? 8 : 12,
+    });
+    await ui.getByRole("button", { name: "Project files", exact: true }).click();
+    expect(await geometry(".mobile-files-header")).toEqual(main);
+    await ui.getByRole("button", { name: "Back to chat", exact: true }).click();
+    await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+    expect(await geometry(".mobile-sidebar-head")).toEqual(main);
+    const head = ui.locator(".mobile-sidebar-head");
+    const machine = head.getByRole("combobox", { name: "Machine", exact: true });
+    const search = head.getByRole("button", { name: "Search workspace", exact: true });
+    await expect(machine).toBeVisible();
+    await expect(search).toBeVisible();
+    const left = await machine.boundingBox();
+    const right = await search.boundingBox();
+    if (!left || !right) throw new Error("Missing sidebar controls");
+    expect(Math.abs(left.y - right.y)).toBeLessThan(1);
+    expect(Math.abs(left.height - right.height)).toBeLessThan(1);
+    expect(left.x + left.width).toBeLessThanOrEqual(right.x);
+    expect(left.width).toBeGreaterThan(140);
+    expect(right.width).toBeGreaterThanOrEqual(44);
+    expect(await head.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await page.screenshot({ path: test.info().outputPath(`sidebar-spacing-${width}.png`) });
+    await ui.getByRole("button", { name: "Return to workspace", exact: true }).click();
+  }
+  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  await ui.getByRole("combobox", { name: "Machine", exact: true }).click();
+  await expect(ui.getByRole("dialog", { name: "Machine", exact: true })).toBeVisible();
+  await closePickerSheet(ui, "Machine");
+  await ui.getByRole("button", { name: "Search workspace", exact: true }).click();
+  await expect(ui.getByPlaceholder("Search workspaces, agents, tabs…")).toBeVisible();
+  await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "true");
 });
 
 test("custom shortcuts persist through the mobile preference bridge and renderer reload", async ({

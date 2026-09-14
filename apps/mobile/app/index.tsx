@@ -23,7 +23,7 @@ export default function SignInScreen() {
           <View style={{ paddingVertical: 28, gap: 20 }}>
             <Image
               source={require("../assets/icon.png")}
-              style={{ width: 76, height: 76, borderRadius: 16 }}
+              style={{ width: 76, height: 76, borderRadius: theme.radius * 2.6 }}
               accessibilityLabel="Concors"
             />
             <Copy size={32} weight="600">

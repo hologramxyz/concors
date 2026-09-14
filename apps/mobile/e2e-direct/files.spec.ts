@@ -65,7 +65,6 @@ async function setup(page: Page, projectName = "Mobile file test", favicon = fal
     `/session?machineId=${snapshot.machineId}&projectId=${projectId}&tabId=${tabId}&paneId=${paneId}`,
   );
   await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
-  await page.getByRole("button", { name: "Allow AI data sharing", exact: true }).click();
   const ui = page.frameLocator('iframe[title="Concors workspace"]');
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
   return {

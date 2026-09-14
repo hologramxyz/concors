@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { hostAction } from "./bridge";
 import { NotificationSettings } from "@/notifications/settings";
-import { ExistingMachines } from "./existing-machines";
+import { MachinesSettings } from "./machines-settings";
 import { MobileSelect } from "./select";
 import { AppearanceSettings } from "@/settings/appearance-settings";
 import { ShortcutSettings } from "@/settings/shortcut-settings";
@@ -47,7 +47,6 @@ export function SettingsDrawer({
   const [deleting, setDeleting] = useState(false);
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
-  const [withdrawingConsent, setWithdrawingConsent] = useState(false);
   const run = async (work: () => Promise<unknown>) => {
     if (busy) return;
     setBusy(true);
@@ -93,9 +92,14 @@ export function SettingsDrawer({
                 .filter(
                   (item) =>
                     !host.direct ||
-                    ["appearance", "shortcuts", "advanced", "terminals", "providers"].includes(
-                      item.page,
-                    ),
+                    [
+                      "appearance",
+                      "shortcuts",
+                      "advanced",
+                      "terminals",
+                      "providers",
+                      "machines",
+                    ].includes(item.page),
                 )
                 .map(({ page, label, icon: Icon }) => ({
                   value: page,
@@ -116,7 +120,9 @@ export function SettingsDrawer({
               Demo · Account actions are simulated.
             </p>
           )}
-          {page === "providers" ? (
+          {page === "machines" ? (
+            <MachinesSettings host={host} onConnected={() => onOpenChange(false)} />
+          ) : page === "providers" ? (
             <div className="p-4">
               <ProvidersSettings />
             </div>
@@ -161,34 +167,7 @@ export function SettingsDrawer({
                   state={connectionState}
                 />
               )}
-              <Section
-                title="Direct desktop connection"
-                description="Real sessions on your connected computer. Cloud account, billing and push settings are not part of this private test."
-              >
-                <p className="py-3 text-xs break-all text-muted-foreground">
-                  Machine ID: {host.machineId ?? "Waiting for daemon…"}
-                </p>
-                <div className="flex gap-3">
-                  <Button
-                    variant="outline"
-                    onClick={() => void run(() => hostAction({ kind: "retry" }))}
-                  >
-                    Reconnect
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => void run(() => hostAction({ kind: "sign-out" }))}
-                  >
-                    Disconnect desktop
-                  </Button>
-                </div>
-                <p className="pt-3 text-sm text-muted-foreground">
-                  Disconnecting does not stop agents or terminals.
-                </p>
-              </Section>
             </div>
-          ) : page === "machines" && host.me ? (
-            <ExistingMachines host={host} onConnected={() => onOpenChange(false)} />
           ) : page === "notifications" ? (
             <div className="p-4">
               <NotificationSettings
@@ -223,7 +202,7 @@ export function SettingsDrawer({
                 )}
               </Section>
             </div>
-          ) : host.me && page !== "machines" ? (
+          ) : host.me ? (
             <SettingsView
               creatingTerminalProfile={creatingTerminalProfile}
               onCreatingTerminalProfileChange={onCreatingTerminalProfileChange}
@@ -254,47 +233,6 @@ export function SettingsDrawer({
               }
             />
           ) : null}
-          {!host.demo && ((host.direct && page !== "shortcuts") || page === "account") && (
-            <div className="px-4 pb-4">
-              <Section
-                title="AI data sharing"
-                description="Your messages, attachments and agent-read workspace content are shared with the AI provider configured on your machine."
-              >
-                {withdrawingConsent ? (
-                  <div className="space-y-3 py-3">
-                    <p className="text-sm text-muted-foreground">
-                      This disconnects the phone and discards unsent chat drafts. Save open files
-                      first. Agents already running continue; previously shared data is not deleted.
-                    </p>
-                    <div className="flex flex-wrap gap-3">
-                      <Button
-                        variant="outline"
-                        disabled={busy}
-                        onClick={() => setWithdrawingConsent(false)}
-                      >
-                        Keep my choice
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        disabled={busy}
-                        onClick={() => void run(() => hostAction({ kind: "withdraw-ai-consent" }))}
-                      >
-                        Withdraw and disconnect
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <Button
-                    className="my-3"
-                    variant="outline"
-                    onClick={() => setWithdrawingConsent(true)}
-                  >
-                    Review AI data sharing
-                  </Button>
-                )}
-              </Section>
-            </div>
-          )}
           {page === "account" && !host.direct && (
             <div className="px-4 pb-4">
               <Section title="Help and privacy" description="Concors support and data practices.">

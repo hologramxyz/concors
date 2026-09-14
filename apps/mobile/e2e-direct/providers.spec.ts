@@ -104,8 +104,7 @@ for (const native of [false, true]) {
         });
       await page.goto("/");
       await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
-      await expect(page.getByText(/OpenCode, Pi and custom agents/)).toBeVisible();
-      await page.getByRole("button", { name: "Allow AI data sharing", exact: true }).click();
+      await expect(page.getByRole("button", { name: "Allow AI data sharing" })).toHaveCount(0);
       const ui = page.frameLocator('iframe[title="Concors workspace"]');
       let sequence = 0;
       const send = async (label: string, text: string) => {
@@ -183,6 +182,14 @@ for (const native of [false, true]) {
         await expect(ui.locator(".mobile-pane")).toHaveAttribute("data-pane-id", paneId);
         expect(desktop.workspace?.projects.find((p) => p.id === projectId)?.tabs).toHaveLength(1);
         await send(label, `Continue with ${label}`);
+        if (!native) {
+          await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+          const row = ui.locator(`button[data-agent-id]:has([data-provider="${provider}"])`);
+          await expect(row).toHaveCount(1);
+          await expect(row.locator(`[data-provider="${provider}"]`)).toBeVisible();
+          await expect(row.getByRole("img", { name: "Agent status: Done" })).toBeVisible();
+          await row.click();
+        }
         if (native) {
           const content = (await surface("composer"))?.content;
           expect(

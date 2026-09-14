@@ -2,9 +2,23 @@ import { describe, expect, it } from "vitest";
 import {
   MobileApiCallSchema,
   MobilePreferencesSchema,
+  MobileStateSchema,
   parseMobileRendererMessage,
 } from "./mobile-bridge.ts";
 describe("mobile host boundary", () => {
+  it("preserves display-only profile avatars without forwarding account credentials", () => {
+    const profile = {
+      name: "Test User",
+      email: "test@example.com",
+      image: "https://github.com/test-user.png?size=96",
+    };
+    expect(
+      MobileStateSchema.shape.profile.parse({ ...profile, token: "secret", password: "secret" }),
+    ).toEqual(profile);
+    expect(
+      MobileStateSchema.shape.profile.parse({ name: "User", email: "user@example.com" }),
+    ).toEqual({ name: "User", email: "user@example.com", image: null });
+  });
   it("does not expose credentials, connection tickets, arbitrary URLs or method invocation", () => {
     for (const method of [
       "fetch",

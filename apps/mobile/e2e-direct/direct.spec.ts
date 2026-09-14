@@ -10,7 +10,7 @@ import { demoMe } from "../src/demo/fixtures";
 test("mobile connects without cloud login and shares real daemon chat, panes and terminal sessions", async ({
   page,
 }) => {
-  // This scenario exercises the full connection, chat, navigation, terminal and consent flow.
+  // Exercise connection, chat, navigation, terminal and independent profile sign-in.
   test.setTimeout(180_000);
   const directory = await mkdtemp(join(tmpdir(), "concors-mobile-direct-project-"));
   const desktop = new DaemonConnection({
@@ -19,6 +19,12 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
   });
   const cloudRequests: string[] = [];
   const profileRequests: string[] = [];
+  await page.route("https://github.com/mobile-profile-fixture.png?size=96", (route) =>
+    route.fulfill({
+      contentType: "image/svg+xml",
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="blue"/></svg>',
+    }),
+  );
   await page.route("**/profile-api/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -31,7 +37,19 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
       await route.fulfill({ json: { user: demoMe.user, token: "profile-fixture-token" } });
     } else {
       expect(request.headers()["authorization"]).toBe("Bearer profile-fixture-token");
-      await route.fulfill({ json: path.endsWith("/me") ? demoMe : { success: true } });
+      await route.fulfill({
+        json: path.endsWith("/me")
+          ? demoMe
+          : path.endsWith("/github/")
+            ? {
+                configured: true,
+                connected: true,
+                login: "mobile-profile-fixture",
+                updatedAt: null,
+                manageUrl: null,
+              }
+            : { success: true },
+      });
     }
   });
   await page.addInitScript(() => {
@@ -102,12 +120,8 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await expect(page.getByRole("textbox", { name: "Email", exact: true })).toHaveCount(0);
     await expect(page.getByText(/Live desktop connection/)).toBeVisible();
     await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
-    await expect(page.getByText("Before you connect", { exact: true })).toBeVisible();
-    await expect(page.getByText(/Codex uses OpenAI/)).toBeVisible();
-    expect(workspaceSockets).toEqual([]);
-    await page.getByRole("button", { name: "Not now", exact: true }).click();
-    await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
-    await page.getByRole("button", { name: "Allow AI data sharing", exact: true }).click();
+    await expect(page.getByText("Before you connect", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Allow AI data sharing" })).toHaveCount(0);
     const ui = page.frameLocator('iframe[title="Concors workspace"]');
     const input = ui.getByRole("textbox", { name: "Message Codex" });
     await expect(input).toBeEnabled();
@@ -123,6 +137,22 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await ui.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(ui.getByRole("log")).toContainText("Hello from Codex");
     await expect.poll(() => agents().length).toBe(1);
+    // The mobile row must retain the provider logo while desktop's working badge animates.
+    await input.fill("hold");
+    await ui.getByRole("button", { name: "Send message", exact: true }).click();
+    await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+    const agentId = agents()[0]?.id;
+    if (!agentId) throw new Error("Missing fixture agent");
+    const agentRow = ui.locator(`button[data-agent-id="${agentId}"]`);
+    await expect(agentRow.locator('[data-provider="codex"] svg')).toBeVisible();
+    await expect(agentRow.getByRole("img", { name: "Agent status: Working" })).toBeVisible();
+    await expect(agentRow.locator("[data-agent-status-badge] svg .animate-spin")).toBeVisible();
+    await agentRow.focus();
+    await expect(ui.getByRole("tooltip")).toHaveCount(0);
+    await page.screenshot({ path: test.info().outputPath("mobile-agent-status.png") });
+    await agentRow.click();
+    await ui.getByRole("button", { name: "Interrupt agent", exact: true }).click();
+    await expect.poll(() => agents()[0]?.status).not.toBe("working");
     await input.fill("approve command");
     await ui.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(ui.getByRole("region", { name: "Allow command execution?" })).toBeVisible();
@@ -208,16 +238,18 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await ui.getByRole("button", { name: "Account: Your profile", exact: true }).click();
     const account = ui.getByRole("dialog", { name: "Account", exact: true });
     await expect(ui.getByRole("dialog", { name: "Settings", exact: true })).toHaveCount(0);
-    await expect(account.getByRole("combobox", { name: "Machine", exact: true })).toContainText(
-      "Desktop daemon",
+    await expect(account.getByRole("combobox", { name: "Machine", exact: true })).toHaveCount(0);
+    await expect(account.getByRole("button", { name: /Add machine|Manage machines/ })).toHaveCount(
+      0,
     );
-    await expect(account).toContainText("Sign in to your Concourse account");
+    await expect(account).toContainText("Sign in to your Concors account");
     expect(profileRequests).toEqual([]);
     const socketsBeforeProfile = workspaceSockets.length;
     await account.getByRole("button", { name: "Sign in", exact: true }).click();
-    await expect(
-      page.getByRole("heading", { name: "Sign in to Concourse", exact: true }),
-    ).toHaveCSS("font-size", "16px");
+    await expect(page.getByRole("heading", { name: "Sign in to Concors", exact: true })).toHaveCSS(
+      "font-size",
+      "16px",
+    );
     await page.getByRole("textbox", { name: "Email", exact: true }).fill("demo@concors.dev");
     await page.getByLabel("Password", { exact: true }).fill("profile-fixture-password");
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -225,10 +257,12 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
       ui.getByRole("button", { name: "Account: Alex Morgan", exact: true }),
     ).toBeVisible();
     await ui.getByRole("button", { name: "Account: Alex Morgan", exact: true }).click();
-    await expect(account).toContainText("demo@concors.dev");
-    await expect(account.getByRole("combobox", { name: "Machine", exact: true })).toContainText(
-      "Desktop daemon",
+    await expect(account.locator("[data-account-avatar] img")).toHaveAttribute(
+      "src",
+      "https://github.com/mobile-profile-fixture.png?size=96",
     );
+    await expect(account).toContainText("demo@concors.dev");
+    await expect(account.getByRole("combobox", { name: "Machine", exact: true })).toHaveCount(0);
     await account.getByRole("button", { name: "Your profile", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Your profile", exact: true })).toHaveCSS(
       "font-size",
@@ -241,6 +275,7 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     expect(profileRequests).toEqual([
       "/profile-api/api/auth/sign-in/email",
       "/profile-api/api/v1/me",
+      "/profile-api/api/v1/github/",
       "/profile-api/api/auth/sign-out",
     ]);
     expect(
@@ -249,14 +284,17 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
       ),
     ).toBeUndefined();
     await ui.getByRole("button", { name: "Account: Your profile", exact: true }).click();
-    await account.getByRole("button", { name: "Add machine", exact: true }).click();
+    await account.getByRole("button", { name: "Settings", exact: true }).click();
+    const settings = ui.getByRole("dialog", { name: "Settings", exact: true });
+    await expect(settings.getByRole("button", { name: "Reconnect", exact: true })).toHaveCount(0);
+    await settings.getByRole("combobox", { name: "Settings section" }).click();
+    await ui.getByRole("option", { name: "Machines", exact: true }).click();
+    await expect(settings).toContainText(snapshot().machineId);
+    await settings.getByRole("button", { name: "Add machine", exact: true }).click();
     const addMachine = ui.getByRole("dialog", { name: "Add machine", exact: true });
     await expect(addMachine).toContainText("paired with one desktop daemon");
     await addMachine.getByRole("button", { name: "Close", exact: true }).click();
-    await ui.getByRole("button", { name: "Account: Your profile", exact: true }).click();
-    await account.getByRole("button", { name: "Settings", exact: true }).click();
-    const settings = ui.getByRole("dialog", { name: "Settings", exact: true });
-    await expect(settings).toContainText(snapshot().machineId);
+    await expect(settings.getByRole("button", { name: "Add machine", exact: true })).toBeFocused();
     await settings.getByRole("combobox", { name: "Settings section" }).click();
     await ui.getByRole("option", { name: "Providers", exact: true }).click();
     await expect(settings.getByRole("heading", { name: "Agent providers" })).toBeVisible();
@@ -281,10 +319,10 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await ui.getByRole("option", { name: "Shortcuts", exact: true }).click();
     await expect(settings.getByRole("heading", { name: "Tabs", exact: true })).toBeVisible();
     await expect(settings.getByRole("heading", { name: "Panes", exact: true })).toHaveCount(0);
-    await expect(settings).toContainText("With an external keyboard");
+    await expect(settings).toContainText("An external keyboard");
     await expect(settings.getByText("New pane beside current", { exact: true })).toHaveCount(0);
     await settings.getByRole("combobox", { name: "Settings section" }).click();
-    await ui.getByRole("option", { name: "Appearance", exact: true }).click();
+    await ui.getByRole("option", { name: "Machines", exact: true }).click();
     await settings.getByRole("button", { name: "Reconnect", exact: true }).click();
     await settings.getByRole("button", { name: "Close", exact: true }).click();
     await expect(input).toBeEnabled();
@@ -295,6 +333,8 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
     await ui.getByRole("button", { name: "Account: Your profile", exact: true }).click();
     await account.getByRole("button", { name: "Settings", exact: true }).click();
+    await settings.getByRole("combobox", { name: "Settings section" }).click();
+    await ui.getByRole("option", { name: "Machines", exact: true }).click();
     await settings.getByRole("button", { name: "Disconnect desktop", exact: true }).click();
     await expect(
       page.getByRole("button", { name: "Connect to desktop", exact: true }),
@@ -304,18 +344,21 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
       `/session?machineId=${snapshot().machineId}&projectId=${projectId}&tabId=${tabId}&paneId=${paneId}`,
     );
     await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
-    // Browser preview storage is memory-only; a full navigation asks again.
-    await page.getByRole("button", { name: "Allow AI data sharing", exact: true }).click();
+    // Reconnect goes straight to the workspace, without a second onboarding gate.
     await expect(input).toBeEnabled();
     await expect(ui.getByRole("log")).toContainText("Hello from Codex");
     await expect(input).toHaveValue("");
     await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
     await ui.getByRole("button", { name: "Account: Your profile", exact: true }).click();
     await account.getByRole("button", { name: "Settings", exact: true }).click();
-    await settings.getByRole("button", { name: "Review AI data sharing", exact: true }).click();
-    await settings.getByRole("button", { name: "Withdraw and disconnect", exact: true }).click();
+    await expect(settings.getByText("AI data sharing", { exact: true })).toHaveCount(0);
+    await expect(settings.getByRole("button", { name: "Review AI data sharing" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Allow AI data sharing" })).toHaveCount(0);
+    await settings.getByRole("combobox", { name: "Settings section" }).click();
+    await ui.getByRole("option", { name: "Machines", exact: true }).click();
+    await settings.getByRole("button", { name: "Disconnect desktop", exact: true }).click();
     await expect(
-      page.getByRole("button", { name: "Allow AI data sharing", exact: true }),
+      page.getByRole("button", { name: "Connect to desktop", exact: true }),
     ).toBeVisible();
     await expect(page.locator('iframe[title="Concors workspace"]')).toHaveCount(0);
     expect(desktop.terminals[0]?.status).toBe("running");

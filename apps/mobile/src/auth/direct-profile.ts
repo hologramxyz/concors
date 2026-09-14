@@ -31,5 +31,17 @@ export function createDirectProfileSession(daemon: string, request: typeof fetch
       }
     },
   });
-  return { api, clear: () => tokens.set(null) };
+  return {
+    api,
+    clear: () => tokens.set(null),
+    async getProfile() {
+      const { user } = await api.getMe();
+      // Match desktop's account avatar without exposing this profile-only token to the renderer.
+      // Older private gateways may not support the optional GitHub identity route yet.
+      const github = await api.githubStatus().catch(() => null);
+      return github?.connected && github.login
+        ? { ...user, image: `https://github.com/${encodeURIComponent(github.login)}.png?size=96` }
+        : user;
+    },
+  };
 }

@@ -23,8 +23,7 @@ export function useDirectProfile() {
     try {
       if (email !== undefined && password !== undefined) {
         await session.api.signInWithEmail({ email: email.trim(), password });
-        const me = await session.api.getMe();
-        setProfile(me.user);
+        setProfile(await session.getProfile());
         setOpen(false);
       } else {
         await session.api.signOut();
@@ -36,7 +35,7 @@ export function useDirectProfile() {
       setError(
         cause instanceof ApiError && [400, 401].includes(cause.status)
           ? "Email or password is incorrect."
-          : "Could not verify your Concourse profile. Check your connection and retry.",
+          : "Could not verify your Concors profile. Check your connection and retry.",
       );
     } finally {
       busyRef.current = false;
@@ -94,16 +93,17 @@ function ProfileSheet({
           style={{ flex: 1 }}
         />
         <SafeAreaView
+          testID="profile-sheet"
           edges={["bottom"]}
           style={{
             maxHeight: "90%",
             backgroundColor: theme.background,
-            borderTopLeftRadius: 28,
-            borderTopRightRadius: 28,
+            borderTopLeftRadius: theme.radius * 4,
+            borderTopRightRadius: theme.radius * 4,
             overflow: "hidden",
           }}
         >
-          <Screen presentation="dialog" title={profile ? "Your profile" : "Sign in to Concourse"}>
+          <Screen presentation="dialog" title={profile ? "Your profile" : "Sign in to Concors"}>
             {open && (
               <ProfileForm
                 profile={profile}

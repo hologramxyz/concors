@@ -18,7 +18,6 @@ test("mobile Search is a sidebar-preserving drawer with real pane navigation and
       `/session?machineId=${fixture.snapshot().machineId}&projectId=${fixture.projectId}&tabId=${fixture.otherTabId}&paneId=${fixture.otherPaneId}`,
     );
     await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
-    await page.getByRole("button", { name: "Allow AI data sharing", exact: true }).click();
     const ui = page.frameLocator('iframe[title="Concors workspace"]');
     const shell = ui.locator(".mobile-shell");
     const open = async () => {
@@ -102,6 +101,16 @@ test("mobile Search is a sidebar-preserving drawer with real pane navigation and
       "shortcuts",
     );
     await expect(dialog).toHaveCount(0);
+    await settings.getByRole("button", { name: "Close", exact: true }).click();
+    await open();
+    await input.fill("Go to Machines");
+    await dialog.getByRole("option", { name: "Go to Machines", exact: true }).click();
+    await expect(settings.getByRole("combobox", { name: "Settings section" })).toHaveAttribute(
+      "data-value",
+      "machines",
+    );
+    await expect(settings.getByRole("heading", { name: "Machines", exact: true })).toBeVisible();
+    await expect(settings.getByRole("button", { name: "Reconnect", exact: true })).toBeVisible();
     expect(errors).toEqual([]);
   } finally {
     await fixture.cleanup();

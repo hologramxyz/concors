@@ -8,9 +8,27 @@
   /* Match the native host independently of the desktop dark surface. */
   --background: #141414;
 }
+/* Mobile points stay in sync with the native host, independently of desktop rem scaling. */
+:root {
+  --corner-radius: 6px;
+}
+:root[data-corner-style="square"] {
+  --corner-radius: 0px;
+}
 :root,
 :root.dark {
   --terminal-background: var(--background);
+  --mobile-round-radius: var(--radius-lg);
+  --mobile-workspace-radius: min(32px, calc(var(--corner-radius) * 4));
+}
+:root[data-corner-style="rounded"] {
+  --corner-radius: 12px;
+  --mobile-round-radius: 9999px;
+}
+/* Shared desktop badges, avatars and progress bars also follow the mobile shape theme.
+   The option samples in Appearance keep their explicit preview shapes. */
+.rounded-full {
+  border-radius: var(--mobile-round-radius);
 }
 html,
 body,
@@ -164,7 +182,7 @@ body {
   display: flex;
   align-items: center;
   gap: 2px;
-  border-radius: 12px;
+  border-radius: var(--radius-3xl);
 }
 .mobile-pane-row:has([aria-pressed="true"]) {
   background: var(--accent);
@@ -178,7 +196,7 @@ body {
   gap: 10px;
   padding: 7px 10px;
   text-align: left;
-  border-radius: 12px;
+  border-radius: var(--radius-3xl);
 }
 .mobile-pane-choice > svg {
   width: 20px;
@@ -213,7 +231,7 @@ body {
   justify-content: center;
   gap: 10px;
   min-height: 48px;
-  border-radius: 14px;
+  border-radius: var(--radius-4xl);
   background: var(--foreground);
   color: var(--background);
   font-size: 15px;
@@ -250,12 +268,12 @@ body {
   color: var(--sidebar-foreground);
   background: var(--sidebar);
 }
-.mobile-sidebar-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 60px;
-  padding: 4px 10px;
+.mobile-sidebar-machine {
+  flex: 1;
+  min-width: 0;
+}
+.mobile-sidebar-machine .mobile-select-trigger {
+  height: 48px;
 }
 .mobile-icon {
   display: inline-flex;
@@ -336,7 +354,7 @@ body {
   flex-shrink: 0;
   width: 30px;
   height: 30px;
-  border-radius: 50%;
+  border-radius: var(--mobile-round-radius);
   background: var(--primary);
   color: var(--primary-foreground);
   font-size: 13px;
@@ -351,10 +369,6 @@ body {
   width: 44px;
   height: 44px;
   font-size: 18px;
-}
-.mobile-account-machine {
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--border);
 }
 .mobile-account-actions {
   display: flex;
@@ -385,6 +399,7 @@ body {
   inset: 0;
   overflow: hidden;
   background: transparent;
+  border-radius: calc(var(--mobile-workspace-radius) * var(--mobile-workspace-reveal, 0));
   transition:
     transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
     border-radius 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -422,7 +437,7 @@ body {
   background: var(--background);
   clip-path: inset(
     calc(3px * var(--mobile-workspace-reveal, 0)) round
-      calc(29px * var(--mobile-workspace-reveal, 0))
+      calc(max(0px, var(--mobile-workspace-radius) - 3px) * var(--mobile-workspace-reveal, 0))
   );
   transition: clip-path 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -431,15 +446,19 @@ body {
   transition: none;
 }
 .mobile-header,
-.mobile-files-header {
-  position: relative;
+.mobile-files-header,
+.mobile-sidebar-head {
   display: flex;
   align-items: center;
   flex-shrink: 0;
   gap: 10px;
   height: 76px;
-  margin-bottom: -76px;
   padding: 10px 12px 14px;
+}
+.mobile-header,
+.mobile-files-header {
+  position: relative;
+  margin-bottom: -76px;
   pointer-events: none;
 }
 .mobile-files-header {
@@ -450,7 +469,7 @@ body {
   z-index: 30;
   pointer-events: auto;
   border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
-  border-radius: calc(var(--corner-radius) * 3.5);
+  border-radius: var(--mobile-round-radius);
   background: var(--background);
   box-shadow:
     inset 0 1px 0 #ffffff38,
@@ -467,7 +486,7 @@ body {
 :is(.mobile-header, .mobile-files-header, .mobile-sidebar-head) .mobile-icon {
   width: 48px;
   height: 48px;
-  border-radius: 50%;
+  border-radius: var(--mobile-round-radius);
   color: var(--foreground);
 }
 .mobile-header h1 {
@@ -559,7 +578,7 @@ body {
   font-size: 13px;
 }
 .mobile-header .mobile-picker {
-  border-radius: calc(var(--corner-radius) * 3.5);
+  border-radius: var(--mobile-round-radius);
 }
 /* Tint lives on the same rounded surface in every state, never an opaque inset pill. */
 :is(.mobile-header, .mobile-files-header, .mobile-sidebar-head)
@@ -664,7 +683,7 @@ body {
   color: var(--muted-foreground);
   font-size: 11px;
   font-weight: 400;
-  border-radius: 8px;
+  border-radius: var(--radius-xl);
   padding: 2px 6px;
   background: var(--muted);
 }
@@ -789,7 +808,7 @@ aside[aria-label="Agent notifications"] {
 .mobile-scrim {
   position: absolute;
   inset: 0;
-  clip-path: inset(3px round 29px);
+  clip-path: inset(3px round max(0px, var(--mobile-workspace-radius) - 3px));
   background: #00000030;
   border: 0;
   touch-action: pan-y;
@@ -876,7 +895,7 @@ aside[aria-label="Agent notifications"] {
   left: calc(50% - 18px);
   height: 4px;
   width: 36px;
-  border-radius: 8px;
+  border-radius: var(--mobile-round-radius);
   background: var(--border);
   pointer-events: none;
 }
@@ -895,7 +914,7 @@ aside[aria-label="Agent notifications"] {
   right: 12px;
 }
 [data-mobile-drawer] [data-slot="dialog-close"] {
-  border-radius: 50%;
+  border-radius: var(--mobile-round-radius);
   background: var(--muted);
   width: 44px;
   height: 44px;
@@ -1034,7 +1053,7 @@ aside[aria-label="Agent notifications"] {
 .mobile-composer-primary > button {
   width: 36px;
   height: 36px;
-  border-radius: 50%;
+  border-radius: var(--mobile-round-radius);
 }
 .mobile-composer-primary > button svg {
   display: block;
@@ -1081,7 +1100,8 @@ aside[aria-label="Agent notifications"] {
 }
 @media (max-width: 360px) {
   .mobile-header,
-  .mobile-files-header {
+  .mobile-files-header,
+  .mobile-sidebar-head {
     gap: 6px;
     padding-inline: 8px;
   }
@@ -1152,7 +1172,7 @@ aside[aria-label="Agent notifications"] {
     [role="alert"]
   ) {
   background: var(--background);
-  border-radius: 12px;
+  border-radius: var(--radius-3xl);
 }
 .mobile-pane
   [aria-label="Agent conversation"]:has([data-native-composer="true"])
@@ -1308,7 +1328,7 @@ aside[aria-label="Agent notifications"] {
   right: 16px;
   width: 44px;
   height: 44px;
-  border-radius: 12px;
+  border-radius: var(--radius-3xl);
 }
 .mobile-pane .chat-timeline-shell [aria-label="Chat timeline"] {
   padding-top: 128px;

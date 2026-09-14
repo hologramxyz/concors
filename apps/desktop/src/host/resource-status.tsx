@@ -20,13 +20,25 @@ export function ResourceStatus({
     connection: DaemonConnection;
     usage: HostUsage | null;
     receivedAt: number;
+    checkingSince: number | null;
   } | null>(null);
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
     if (!connection) return;
     const unsubscribe = connection.subscribeHostUsage((usage) => {
       const receivedAt = Date.now();
-      setReading({ connection, usage, receivedAt });
+      setReading((previous) => ({
+        connection,
+        usage,
+        receivedAt,
+        // Only the initial subscription needs a grace period. Repeated null samples
+        // must not restart it, and losing a real reading is immediately unavailable.
+        checkingSince: usage
+          ? null
+          : previous?.connection === connection
+            ? previous.checkingSince
+            : receivedAt,
+      }));
       setNow(receivedAt);
     });
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -48,7 +60,8 @@ export function ResourceStatus({
         : stale
           ? "Usage stale"
           : !current?.usage
-            ? !current || now - current.receivedAt < HOST_USAGE_STALE_MS
+            ? !current ||
+              (current.checkingSince !== null && now - current.checkingSince < HOST_USAGE_STALE_MS)
               ? "Checking usage…"
               : "Usage unavailable"
             : null;

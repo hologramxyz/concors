@@ -157,9 +157,29 @@ it("proxies only profile authentication to the configured API after private auth
   });
   expect(requests[0].init.redirect).toBe("error");
   expect(requests[1].init.headers.authorization).toBe("Bearer fixture");
+  expect(
+    (
+      await fetch(`${base}/profile-api/api/v1/github/`, {
+        headers: { ...identity, authorization: "Bearer fixture" },
+      })
+    ).status,
+  ).toBe(200);
+  expect(requests[2].url).toBe("https://accounts.example/api/v1/github/");
+  expect(requests[2].init.headers.authorization).toBe("Bearer fixture");
+  expect(
+    (
+      await fetch(`${base}/profile-api/api/v1/github/`, {
+        method: "DELETE",
+        headers: identity,
+      })
+    ).status,
+  ).toBe(404);
   expect(calls).toEqual([]);
   for (const path of [
     "/api/v1/machines",
+    "/api/v1/github/accounts",
+    "/api/v1/github/connect",
+    "/api/v1/github/?page=1",
     "/api/auth/sign-up/email",
     "/api/v1/me?token=x",
     "/api/v1/me/",
@@ -169,7 +189,7 @@ it("proxies only profile authentication to the configured API after private auth
   expect(
     (await fetch(`${base}/profile-api/api/auth/sign-in/email`, { headers: identity })).status,
   ).toBe(404);
-  expect(requests).toHaveLength(2);
+  expect(requests).toHaveLength(3);
 });
 
 it("profile proxy stays disabled by default and rejects unsafe origins and oversized credentials", async () => {
