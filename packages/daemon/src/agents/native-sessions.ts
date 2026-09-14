@@ -1,5 +1,4 @@
-import { realpath } from "node:fs/promises";
-import { resolve } from "node:path";
+import { canonicalDirectory } from "./providers/session-directory.ts";
 import {
   NativeSessionPageSchema,
   type NativeSession,
@@ -8,9 +7,6 @@ import {
 import type { AgentProviderFactory } from "./providers/index.ts";
 import type { ConversationProvider } from "./providers/contract.ts";
 import type { ProviderRegistry } from "./providers/registry.ts";
-
-export const canonicalDirectory = async (directory: string) =>
-  realpath(directory).catch(() => resolve(directory));
 
 /** Short-lived, machine-local discovery. Never starts a thread or sends/approves a prompt. */
 export class NativeSessions {

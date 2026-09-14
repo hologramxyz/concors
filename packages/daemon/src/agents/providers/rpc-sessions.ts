@@ -1,6 +1,7 @@
 import { open, readdir, stat, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
+import { canonicalDirectory } from "./session-directory.ts";
 
 /** Read bounded native Pi/OMP headers; importing never sends a prompt. */
 export async function rpcSessions(
@@ -44,8 +45,14 @@ export async function rpcSessions(
   await scan(expand(root ?? join(base, "sessions")), 2);
   await scan(managed, 0);
   const result: { id: string; title: string; directory: string; updatedAt: string }[] = [];
-  for (const file of files.sort((a, b) => b.mtime - a.mtime)) {
-    const handle = await open(file.path, "r");
+  const canonical = await canonicalDirectory(cwd);
+  const unique = [...new Map(files.map((file) => [file.path, file])).values()];
+  for (const file of unique.sort((a, b) => b.mtime - a.mtime || a.path.localeCompare(b.path))) {
+    const handle = await open(file.path, "r").catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return null; // Native cleanup may remove a file during discovery.
+      throw error;
+    });
+    if (!handle) continue;
     try {
       const buffer = Buffer.alloc(64 * 1024),
         { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
@@ -61,7 +68,9 @@ export async function rpcSessions(
           }
         });
       const header = rows.find((r) => r["type"] === "session");
-      if (header?.["cwd"] !== cwd) continue;
+      const directory = header?.["cwd"];
+      if (typeof directory !== "string" || (await canonicalDirectory(directory)) !== canonical)
+        continue;
       const first = rows
         .map((r) => r["message"] as { role?: string; content?: unknown } | undefined)
         .find((m) => m?.role === "user");
