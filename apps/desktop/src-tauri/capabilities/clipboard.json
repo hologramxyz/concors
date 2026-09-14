@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "clipboard",
+  "description": "Text copy and paste in the local desktop window.",
+  "local": true,
+  "windows": ["main"],
+  "permissions": ["clipboard-manager:allow-read-text", "clipboard-manager:allow-write-text"]
+}
