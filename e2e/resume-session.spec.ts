@@ -26,6 +26,16 @@ test("resume finds older native sessions, protects drafts, and keeps the same pa
     await resume.click();
     const dialog = page.getByRole("dialog", { name: "Resume session", exact: true });
     await expect(dialog.getByRole("button", { name: /^CLI session / })).toBeVisible();
+    const field = await dialog.getByRole("combobox", { name: "Session provider" }).boundingBox();
+    const icon = await dialog.locator("[data-session-provider-icon]").boundingBox();
+    expect(field).not.toBeNull();
+    expect(icon).not.toBeNull();
+    if (field && icon) {
+      expect(icon.x).toBeGreaterThan(field.x);
+      expect(icon.x + icon.width).toBeLessThan(field.x + field.width);
+      expect(icon.y).toBeGreaterThanOrEqual(field.y);
+      expect(icon.y + icon.height).toBeLessThanOrEqual(field.y + field.height);
+    }
     await dialog.getByLabel("Saved sessions").evaluate((element) => {
       element.scrollTop = element.scrollHeight;
     });
