@@ -173,8 +173,16 @@ function ShortcutHandler({ children }: { children: ReactNode }) {
             // Wait for the focus trap to release before opening a menu or focusing another pane.
             requestAnimationFrame(() => {
               if (document.querySelector('[role="dialog"][data-state="open"]')) return;
-              if (next && commands.snapshot().includes(next)) commands.run(next);
-              else if (returnFocus.current?.isConnected) returnFocus.current.focus();
+              if (next && commands.snapshot().includes(next)) {
+                // Tab-scoped sequences must act on the original focused tab, which can
+                // differ from the selected tab while keyboard-navigating the tab strip.
+                if (
+                  returnFocus.current?.isConnected &&
+                  returnFocus.current.closest("[data-shortcut-tab-id]")
+                )
+                  returnFocus.current.focus({ preventScroll: true });
+                commands.run(next);
+              } else if (returnFocus.current?.isConnected) returnFocus.current.focus();
             });
           }}
         >

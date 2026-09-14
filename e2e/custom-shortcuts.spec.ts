@@ -114,6 +114,7 @@ test("conflicts require deliberate reassignment and defaults can be restored per
   await record(page, "Shortcut 1, first key", "Control+Shift+k");
   await expect(editor).toContainText(`Already assigned:`);
   await expect(editor.getByRole("button", { name: "Save shortcuts" })).toBeDisabled();
+  await page.screenshot({ path: test.info().outputPath("shortcut-conflict-editor.png") });
   await editor.getByRole("checkbox", { name: /Reassign these shortcuts/ }).check();
   await editor.getByRole("button", { name: "Save shortcuts" }).click();
   await expect
@@ -183,4 +184,52 @@ test("a failed preference save keeps the previous bindings and the draft availab
   );
   await editor.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(page.getByRole("main")).toContainText("Ctrl+Shift+,");
+});
+
+test("a configured Tab continuation runs its command instead of moving popup focus", async ({
+  page,
+}) => {
+  await openSettings(page);
+  const editor = await edit(page, search);
+  await editor.getByRole("button", { name: "Type combinations instead" }).click();
+  await editor.getByRole("textbox", { name: "Shortcut 1, first key" }).fill("Ctrl+Alt+S");
+  await editor.getByRole("button", { name: "Remove shortcut 2" }).click();
+  await editor.getByRole("button", { name: "Add second step" }).click();
+  await editor.getByRole("textbox", { name: "Shortcut 1, second key" }).fill("Tab");
+  await editor.getByRole("button", { name: "Save shortcuts" }).click();
+  await page.getByRole("button", { name: "Back to app" }).click();
+  await page.keyboard.press("Control+Alt+s");
+  await expect(page.getByRole("dialog", { name: "Shortcut actions" })).toBeVisible();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("dialog", { name: "Search", exact: true })).toBeVisible();
+});
+
+test("tab-scoped sequences rename the focused tab even when another tab is selected", async ({
+  page,
+}) => {
+  await openSettings(page);
+  const editor = await edit(page, "Rename tab");
+  await editor.getByRole("button", { name: "Type combinations instead" }).click();
+  await editor.getByRole("textbox", { name: "Shortcut 1, first key" }).fill("F6");
+  await editor.getByRole("button", { name: "Add second step" }).click();
+  await editor.getByRole("textbox", { name: "Shortcut 1, second key" }).fill("R");
+  await editor.getByRole("button", { name: "Save shortcuts" }).click();
+  await page.getByRole("button", { name: "Back to app" }).click();
+  await page.keyboard.press("Control+Shift+n");
+  const first = page.getByRole("button", { name: "Tab 1", exact: true });
+  await expect(first).toBeVisible();
+  await page.getByRole("button", { name: "New tab", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
+  const second = page.getByRole("button", { name: "Tab 2", exact: true });
+  await expect(second).toHaveAttribute("aria-pressed", "true");
+  await first.focus();
+  await page.keyboard.press("F6");
+  await page.keyboard.press("r");
+  const name = page.getByRole("textbox", { name: "Tab name", exact: true });
+  await expect(name).toBeFocused();
+  await expect(name).toHaveValue("Tab 1");
+  await name.fill("Focused tab");
+  await name.press("Enter");
+  await expect(page.getByRole("button", { name: "Focused tab", exact: true })).toBeVisible();
+  await expect(second).toHaveAttribute("aria-pressed", "true");
 });
