@@ -69,7 +69,7 @@ export function AccountMenu({
       <DropdownMenuContent
         align="start"
         side="top"
-        className="max-w-[calc(100vw-16px)] min-w-(--sidebar-width)"
+        className="w-[calc(var(--sidebar-width)-16px)] max-w-[calc(100vw-16px)]"
       >
         <DropdownMenuLabel className="p-[8px] text-ui font-normal text-muted-foreground">
           <span className="block truncate text-foreground">{auth.user.name}</span>
