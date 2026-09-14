@@ -33,6 +33,50 @@ resource directory intact when moving the application.
 This first packaging command supports Linux x86_64. macOS/Windows installers, signing,
 and automatic desktop/runtime updates need their own packaging and validation.
 
+## Repeatable local preview
+
+After the initial Linux setup, update and relaunch the native app with one command from
+the checkout in an external terminal (such as your normal Omarchy terminal):
+
+```sh
+pnpm desktop:reload
+```
+
+The first time you acquire this command, run `git pull --ff-only` on main first.
+Subsequent reloads fetch and fast-forward `origin/main`, install the locked dependencies,
+build the desktop and bundled daemon in debug mode, and launch that exact executable.
+Nothing is pushed. Existing Cargo output is reused; no Vite server or system package installation
+is started.
+
+**Reload stops local terminal and agent processes to load the updated daemon.** Finish active
+work first. Running reload inside a Concors terminal is refused because restarting that
+terminal's host would interrupt the reload itself. Files, workspace records, account login and settings are preserved. Remote VPSs
+are not updated or restarted.
+
+The command requires a clean main checkout and a graphical Linux x86_64 session with Node 24+,
+pnpm, Rust, the Linux build prerequisites, and `flock` (from util-linux on Arch). It refuses to
+discard edits, overwrite unpublished commits, or interrupt another Concors installation.
+If you previously installed a different binary, close that app before the first reload.
+Keep any desktop launcher pointed at the executable printed by the command.
+
+By default the build uses the development API. An existing desktop production-mode `.env`
+configuration is respected. To select an API or an existing custom runtime directory explicitly:
+
+```sh
+VITE_CONCORS_API_URL=https://concors-server-dev.up.railway.app \
+CONCORS_DATA_DIR="$HOME/.concors" pnpm desktop:reload
+```
+
+The API, data directory and Cargo target directory are remembered in the checkout's private
+Git directory as `desktop-preview.json`. Shell overrides take precedence; Vite's existing API
+configuration takes precedence over the remembered API. On the first run, a running app's
+custom `CONCORS_DATA_DIR` is reused when no explicit or saved value exists. Reload refuses to
+switch data directories while a different one is open.
+
+The command prints the running commit, executable, and log path. Build errors stop the
+workflow; if the app has already closed, fix the reported build error and run the command again.
+A second concurrent reload is refused. Use `pnpm desktop:reload --help` for a short reference.
+
 ## Lifecycle and troubleshooting
 
 The native app owns its gateway and checks it every five seconds. If it exits, the app starts
