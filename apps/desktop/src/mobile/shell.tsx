@@ -51,7 +51,6 @@ import { preloadCodeEditor } from "@/files/editor-loader";
 import { TabVisibility } from "@/workspace/tab-visibility";
 import { MobileMachinePicker } from "./machine-picker";
 import { MobileOrganizationPicker } from "./organization-picker";
-import { AddMachineDrawer } from "./add-machine-drawer";
 import type { SettingsPage } from "@/settings/navigation";
 import { NativeSurfaces } from "./native-surfaces";
 import { NativeHeaderButton } from "./native-header-button";
@@ -103,7 +102,6 @@ function MobileWorkspaceContent({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [creatingTerminalProfile, setCreatingTerminalProfile] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [addingMachine, setAddingMachine] = useState(false);
   const [settingsPage, setSettingsPage] = useState<SettingsPage>("account");
   const [searchOpen, setSearchOpen] = useState(false);
   const [addingProject, setAddingProject] = useState<"open" | "clone" | null>(null);
@@ -386,12 +384,7 @@ function MobileWorkspaceContent({
     setSettingsOpen(true);
   };
   const unobscured =
-    !sidebarOpen &&
-    !files.sidebar.open &&
-    !settingsOpen &&
-    !searchOpen &&
-    !addingProject &&
-    !addingMachine;
+    !sidebarOpen && !files.sidebar.open && !settingsOpen && !searchOpen && !addingProject;
   const cycleTab = (delta: number) => {
     if (!project || !tab || !pane) return;
     const entries = projectPanes(project);
@@ -570,16 +563,6 @@ function MobileWorkspaceContent({
                             }
                           : null
                       }
-                      machinePicker={
-                        <MobileMachinePicker
-                          host={host}
-                          onSelect={(machineId) => {
-                            setLocal({ machineId, target: {} });
-                            runHost({ kind: "select-machine", machineId });
-                          }}
-                        />
-                      }
-                      onAddMachine={() => setAddingMachine(true)}
                       organizationPicker={
                         host.me && !host.direct ? (
                           <MobileOrganizationPicker
@@ -593,15 +576,6 @@ function MobileWorkspaceContent({
                             }
                           />
                         ) : undefined
-                      }
-                      onManageMachines={
-                        host.direct
-                          ? undefined
-                          : () => {
-                              setSidebarOpen(false);
-                              setSettingsPage("machines");
-                              setSettingsOpen(true);
-                            }
                       }
                       onOpenSettings={() => openSettings()}
                       onSignOut={() => runHost({ kind: "sign-out" })}
@@ -782,7 +756,6 @@ function MobileWorkspaceContent({
                   dragging={filesGesture.dragging}
                 />
               </div>
-              <AddMachineDrawer host={host} open={addingMachine} onOpenChange={setAddingMachine} />
               <SettingsDrawer
                 key={host.machineId}
                 creatingTerminalProfile={creatingTerminalProfile}
@@ -834,11 +807,7 @@ function MobileWorkspaceContent({
                   if (view === "settings") openSettings();
                   else setSidebarOpen(true);
                 }}
-                onManageMachines={() => {
-                  setSidebarOpen(false);
-                  setSettingsPage(host.direct ? "advanced" : "machines");
-                  setSettingsOpen(true);
-                }}
+                onManageMachines={() => openSettings("machines")}
                 onReconnect={() => runHost({ kind: "retry" })}
                 canReconnect={!ready}
                 onSetTheme={(theme) =>
