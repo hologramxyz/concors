@@ -1,3 +1,4 @@
+import { StartupScreen } from "@/startup/startup-screen";
 import { BrandMark } from "@/components/brand-mark";
 import type { SignInInput, SignUpInput } from "@concors/api-client";
 import { RefreshCw } from "lucide-react";
@@ -46,15 +47,7 @@ export function AuthScreen({ state, onSignIn, onSignUp, onRetry }: AuthScreenPro
   const [notice, setNotice] = useState<string | null>(null);
   const copy = COPY[mode];
 
-  if (state.status === "restoring") {
-    return (
-      <main className="flex h-dvh items-center justify-center bg-background">
-        <p role="status" className="text-sm text-muted-foreground" aria-live="polite">
-          Restoring your session…
-        </p>
-      </main>
-    );
-  }
+  if (state.status === "restoring") return <StartupScreen />;
 
   const switchMode = (next: AuthMode) => {
     setError(null);
