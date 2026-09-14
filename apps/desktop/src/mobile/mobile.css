@@ -8,6 +8,13 @@
   /* Match the native host independently of the desktop dark surface. */
   --background: #141414;
 }
+/* Mobile points stay in sync with the native host, independently of desktop rem scaling. */
+:root {
+  --corner-radius: 6px;
+}
+:root[data-corner-style="square"] {
+  --corner-radius: 0px;
+}
 :root,
 :root.dark {
   --terminal-background: var(--background);
@@ -15,6 +22,7 @@
   --mobile-workspace-radius: min(32px, calc(var(--corner-radius) * 4));
 }
 :root[data-corner-style="rounded"] {
+  --corner-radius: 12px;
   --mobile-round-radius: 9999px;
 }
 /* Shared desktop badges, avatars and progress bars also follow the mobile shape theme.
