@@ -471,6 +471,81 @@ export class WorkspaceStore {
       throw error;
     }
   }
+  /** Atomically reuse only a genuinely empty pane; an already bound session is just focused. */
+  reserveResumedAgent(request: AgentRequest, info: AgentInfo): AgentInfo {
+    const op = request.operation;
+    if (op.kind !== "resume-session") throw new Error("Expected session resume");
+    this.#db.exec("BEGIN IMMEDIATE");
+    try {
+      const previous = this.agent(op.sessionId);
+      const state = this.snapshot();
+      const project = state.projects.find((p) => p.id === previous.projectId);
+      const bound = project?.tabs
+        .flatMap((tab) => tab.nodes)
+        .find(
+          (pane) =>
+            pane.kind === "pane" && pane.profile === "chat" && pane.sessionId === previous.id,
+        );
+      if (!project || !bound || bound.kind !== "pane" || previous.revision !== op.expectedRevision)
+        throw new Error("The chat pane changed. Reopen Resume session and try again.");
+      if (
+        ["starting", "working", "needs_input"].includes(previous.status) ||
+        previous.pending.length ||
+        previous.queue?.length ||
+        this.agentConversation(previous.id).items.length
+      )
+        throw new Error(
+          "Resume sessions from an empty chat. Your current conversation has been kept.",
+        );
+      const existing = this.agents().find(
+        (agent) => agent.provider === info.provider && agent.threadId === info.threadId,
+      );
+      const existingBound =
+        existing &&
+        state.projects.some((p) =>
+          p.tabs.some((tab) =>
+            tab.nodes.some((pane) => pane.kind === "pane" && pane.sessionId === existing.id),
+          ),
+        );
+      if (
+        existing &&
+        (existing.projectId !== project.id || existing.directory !== previous.directory)
+      )
+        throw new Error("This session belongs to another workspace. Open it there.");
+      if (
+        existing &&
+        !existingBound &&
+        (["starting", "working", "needs_input"].includes(existing.status) ||
+          existing.pending.length ||
+          existing.queue?.length)
+      )
+        throw new Error("That session is still active. Finish it before resuming here.");
+      if (existing) info = existing;
+      if (!existingBound) {
+        if (!existing && this.agents().length >= 128)
+          throw new Error("Agent session limit reached (128)");
+        bound.sessionId = info.id;
+        this.saveAgent({ ...previous, revision: previous.revision + 1 });
+        if (!existing)
+          this.#db
+            .prepare("INSERT INTO agents (id, info) VALUES (?, ?)")
+            .run(info.id, JSON.stringify(info));
+        project.version++;
+        state.revision++;
+        this.#db
+          .prepare("UPDATE workspace SET snapshot = ? WHERE id = 1")
+          .run(JSON.stringify(state));
+      }
+      this.#db
+        .prepare("INSERT INTO agent_requests (id, request, session_id) VALUES (?, ?, ?)")
+        .run(request.requestId, JSON.stringify(request), info.id);
+      this.#db.exec("COMMIT");
+      return info;
+    } catch (error) {
+      this.#db.exec("ROLLBACK");
+      throw error;
+    }
+  }
   reserveAgent(request: AgentRequest, info: AgentInfo): AgentInfo {
     const op = request.operation;
     if (
