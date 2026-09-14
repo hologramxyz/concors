@@ -2,6 +2,11 @@ import type { Terminal } from "@xterm/xterm";
 
 export function clipboardAction(event: KeyboardEvent): "copy" | "paste" | undefined {
   if (event.isComposing || event.altKey || event.getModifierState("AltGraph")) return;
+  // Omarchy's universal clipboard bindings can arrive as these standard terminal chords.
+  if (event.key === "Insert" && !event.metaKey) {
+    if (event.ctrlKey && !event.shiftKey) return "copy";
+    if (event.shiftKey && !event.ctrlKey) return "paste";
+  }
   const superKey = event.metaKey && !event.ctrlKey;
   const controlShift = event.ctrlKey && event.shiftKey && !event.metaKey;
   if (!superKey && !controlShift) return;
