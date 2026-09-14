@@ -23,7 +23,7 @@ export default function SignInScreen() {
           <View style={{ paddingVertical: 28, gap: 20 }}>
             <Image
               source={require("../assets/icon.png")}
-              style={{ width: 76, height: 76, borderRadius: 16 }}
+              style={{ width: 76, height: 76, borderRadius: theme.radius * 2.6 }}
               accessibilityLabel="Concors"
             />
             <Copy size={32} weight="600">
@@ -66,9 +66,7 @@ export default function SignInScreen() {
             </Button>
           ) : (
             <>
-              <Copy muted>
-                Sign in with your existing Concors account to access your machines.
-              </Copy>
+              <Copy muted>Sign in with your existing Concors account to access your machines.</Copy>
               <Field
                 label="Email"
                 value={email}

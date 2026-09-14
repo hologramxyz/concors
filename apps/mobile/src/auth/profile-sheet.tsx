@@ -93,12 +93,13 @@ function ProfileSheet({
           style={{ flex: 1 }}
         />
         <SafeAreaView
+          testID="profile-sheet"
           edges={["bottom"]}
           style={{
             maxHeight: "90%",
             backgroundColor: theme.background,
-            borderTopLeftRadius: 28,
-            borderTopRightRadius: 28,
+            borderTopLeftRadius: theme.radius * 4,
+            borderTopRightRadius: theme.radius * 4,
             overflow: "hidden",
           }}
         >

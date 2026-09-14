@@ -14,6 +14,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { ReactNode } from "react";
+import { useAppearance } from "./appearance-provider";
+import { cornerRadius } from "./appearance";
 
 const light = {
   background: "#f4f3ef",
@@ -44,7 +46,10 @@ const dark: typeof light = {
   warning: "#e5c37a",
 };
 export function useTheme() {
-  return useColorScheme() === "dark" ? dark : light;
+  const { preferences } = useAppearance();
+  const systemDark = useColorScheme() === "dark";
+  const isDark = preferences.theme === "dark" || (preferences.theme === "system" && systemDark);
+  return { ...(isDark ? dark : light), radius: cornerRadius(preferences.corners) };
 }
 export function Copy({
   children,
@@ -110,7 +115,7 @@ export function Button({
           minHeight: 46,
           paddingHorizontal: 18,
           paddingVertical: 11,
-          borderRadius: 10,
+          borderRadius: theme.radius * 1.6,
           alignItems: "center",
           justifyContent: "center",
           opacity: disabled ? 0.45 : pressed ? 0.7 : 1,
@@ -148,7 +153,7 @@ export function Field({ label, ...props }: TextInputProps & { label: string }) {
             borderWidth: 1,
             borderColor: theme.border,
             outlineColor: theme.accent,
-            borderRadius: 10,
+            borderRadius: theme.radius * 1.6,
             paddingHorizontal: 13,
             paddingVertical: 11,
             color: theme.text,
@@ -170,7 +175,7 @@ export function Card({ children, style }: { children: ReactNode; style?: ViewSty
           backgroundColor: theme.surface,
           borderWidth: 1,
           borderColor: theme.border,
-          borderRadius: 14,
+          borderRadius: theme.radius * 2.4,
           padding: 18,
           gap: 12,
         },
@@ -186,7 +191,12 @@ export function Notice({ children }: { children: ReactNode }) {
   return (
     <View
       accessibilityRole="alert"
-      style={{ padding: 12, gap: 10, backgroundColor: theme.tint, borderRadius: 9 }}
+      style={{
+        padding: 12,
+        gap: 10,
+        backgroundColor: theme.tint,
+        borderRadius: theme.radius * 1.5,
+      }}
     >
       {typeof children === "string" ? <Copy size={14}>{children}</Copy> : children}
     </View>
@@ -283,7 +293,7 @@ export function Row({
         backgroundColor: pressed ? theme.tint : theme.surface,
         borderWidth: 1,
         borderColor: theme.border,
-        borderRadius: 12,
+        borderRadius: theme.radius * 2,
         padding: 16,
         minHeight: 72,
         flexDirection: "row",
