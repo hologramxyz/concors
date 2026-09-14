@@ -102,6 +102,7 @@ export function AppearanceSettings({
                 {/* These samples retain each option's shape so the choices stay recognizable. */}
                 <span
                   aria-hidden="true"
+                  data-corner-preview={style}
                   className="h-8 w-12 border-2 border-current text-muted-foreground"
                   style={{ borderRadius: CORNER_OPTIONS[style].radius }}
                 />
