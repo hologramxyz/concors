@@ -110,6 +110,14 @@ describe("dictation completion", () => {
     speech.onend?.();
     expect(callbacks.finish).toHaveBeenCalledExactlyOnceWith("", "edit");
   });
+  it("ignores queued result callbacks after permission denial", () => {
+    const { speech, session, callbacks } = recording();
+    const result = speech.onresult;
+    speech.onerror?.({ error: "not-allowed" });
+    result?.({ resultIndex: 0, results: [{ isFinal: true, 0: { transcript: "late words" } }] });
+    expect(session.state.phase).toBe("idle");
+    expect(callbacks.transcript).not.toHaveBeenCalled();
+  });
   it("appends to the original draft without breaking whitespace or the message limit", () => {
     expect(appendDictation("Original draft", "spoken words")).toBe("Original draft spoken words");
     expect(appendDictation("Original draft\n", "spoken words")).toBe(

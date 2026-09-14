@@ -54,7 +54,7 @@ export class DictationSession {
     this.speech.interimResults = true;
     this.speech.lang = language;
     this.speech.onresult = (event) => {
-      if (this.#closed || this.state.phase === "review") return;
+      if (this.#closed || !["recording", "stopping"].includes(this.state.phase)) return;
       // Rebuild the whole result list so revised interim words are replaced, not duplicated.
       const transcript = Array.from(event.results, (result) => result[0].transcript.trim())
         .filter(Boolean)
@@ -64,7 +64,7 @@ export class DictationSession {
       this.#update({ transcript });
     };
     this.speech.onerror = ({ error }) => {
-      if (this.#closed) return;
+      if (this.#closed || !["recording", "stopping"].includes(this.state.phase)) return;
       const message =
         error === "not-allowed" || error === "service-not-allowed"
           ? "Allow microphone access to use dictation."
@@ -74,7 +74,7 @@ export class DictationSession {
       this.#fail(message);
     };
     this.speech.onend = () => {
-      if (this.#closed) return;
+      if (this.#closed || !["recording", "stopping"].includes(this.state.phase)) return;
       clearTimeout(this.#timer);
       if (this.#action === "review") this.#review();
       else this.#finish(this.#action);
@@ -127,7 +127,7 @@ export class DictationSession {
   #finish(action: "edit" | "send"): void {
     const text = this.state.transcript;
     this.dispose();
-    this.#update({ phase: "idle" });
+    this.#update({ phase: "idle", error: null });
     this.callbacks.finish(text, text.trim() ? action : "edit");
   }
   #review(): void {
