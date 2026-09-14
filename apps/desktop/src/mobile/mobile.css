@@ -903,15 +903,17 @@ aside[aria-label="Agent notifications"] {
   padding-right: 28px;
 }
 [data-mobile-drawer] [data-slot="dialog-title"] {
-  font-size: 20px;
-  line-height: 1.2;
+  font-size: 16px;
+  line-height: 1.375;
 }
 [data-mobile-drawer] [data-slot="dialog-description"] {
   font-size: 14px;
 }
-[data-mobile-drawer] [data-slot="dialog-close"] {
+[data-mobile-drawer] [data-slot="dialog-actions"] {
   top: 12px;
   right: 12px;
+}
+[data-mobile-drawer] [data-slot="dialog-close"] {
   border-radius: var(--mobile-round-radius);
   background: var(--muted);
   width: 44px;
@@ -1275,7 +1277,7 @@ aside[aria-label="Agent notifications"] {
   padding-inline: 10px;
   gap: 10px;
 }
-[data-mobile-drawer] > [data-slot="dialog-close"] {
+[data-mobile-drawer] [data-slot="dialog-close"] {
   min-height: 44px;
 }
 @media (prefers-reduced-motion: reduce) {

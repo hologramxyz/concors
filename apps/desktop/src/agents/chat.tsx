@@ -18,6 +18,9 @@ import { useTabVisible } from "@/workspace/tab-visibility";
 import { MessageNavigation } from "./message-navigation";
 import { useMessageIndex } from "./message-index";
 import { Button } from "@/components/ui/button";
+import { NATIVE_SESSIONS_CAPABILITY } from "@concors/protocol";
+import { AgentDraftScopeContext, useAgentDraft } from "./draft";
+import { ResumeSession } from "./resume-session";
 
 export function ChatPane({
   project,
@@ -114,6 +117,12 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
   const agent = useAgents().find((a) => a.id === sessionId);
   const conversation = useConversation(sessionId);
   const [busy, setBusy] = useState(false);
+  const [resuming, setResuming] = useState(false);
+  const draft = useAgentDraft(
+    useContext(AgentDraftScopeContext) ?? connection,
+    sessionId,
+    connection?.workspace?.machineId,
+  );
   const [error, setError] = useState<string | null>(null);
   const { scroll, onScroll, atBottom, latest, jumpToMessage } = useConversationScroll(
     conversation,
@@ -141,6 +150,24 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
     connection.state.daemon.capabilities?.includes("agent-plan-implementation");
   const active = agent && ["working", "needs_input"].includes(agent.status);
   const connected = canEdit && connection?.state.status === "ready";
+  const canResume =
+    agent &&
+    conversation.ready &&
+    !conversation.error &&
+    !conversation.loading &&
+    !conversation.items.length &&
+    !conversation.hasEarlier &&
+    !conversation.hasNewer &&
+    !["starting", "working", "needs_input"].includes(agent.status) &&
+    !agent.queue?.length &&
+    !agent.pending.length;
+  const hasDraft = !!(
+    draft.draft ||
+    draft.attachments.length ||
+    draft.queue.length ||
+    draft.busy ||
+    draft.uncertain
+  );
   const perform = async (operation: AgentOperation, id = crypto.randomUUID()) => {
     if (!connection) throw new Error("Machine is disconnected");
     const result = await connection.requestAgent(operation, id);
@@ -190,6 +217,17 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
           onScroll={onScroll}
         >
           <div className="mx-auto max-w-5xl space-y-5">
+            {canResume &&
+              connection?.state.status === "ready" &&
+              connection.state.daemon.capabilities?.includes(NATIVE_SESSIONS_CAPABILITY) && (
+                <div className="flex justify-center py-6">
+                  <ResumeSession
+                    agent={agent}
+                    disabled={!connected || busy || hasDraft}
+                    onOpenChange={setResuming}
+                  />
+                </div>
+              )}
             {(conversation.hasEarlier || conversation.loading === "latest") && (
               <div className="h-5 text-center text-xs text-muted-foreground" role="status">
                 {conversation.loading === "earlier"
@@ -290,7 +328,7 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
             <AgentComposer
               key={agent.id}
               agent={agent}
-              connected={!!connected && !busy}
+              connected={!!connected && !busy && !resuming}
               onInterrupt={() => {
                 if (agent.turnId)
                   void run(() =>

@@ -1,4 +1,6 @@
 import { questionAnswers } from "./questions.ts";
+import { NativeSessions } from "./native-sessions.ts";
+import type { ProviderRequest, ProviderResult } from "@concors/protocol";
 import { approvalActions } from "./approval-actions.ts";
 import {
   AgentAccounts,
@@ -77,6 +79,7 @@ export class AgentManager {
   private deliveries = new Map<string, string>();
   private registry: ProviderRegistry;
   readonly accounts: AgentAccounts;
+  private nativeSessions: NativeSessions;
   private catalogGeneration = 0;
   private catalogs = new Map<
     string,
@@ -99,6 +102,7 @@ export class AgentManager {
     this.#emit = emit;
     this.#workspaceChanged = workspaceChanged;
     this.#factory = factory;
+    this.nativeSessions = new NativeSessions(factory, registry);
     this.accounts = new AgentAccounts(accountFactory ?? accountBackendFactory(registry), (info) => {
       this.catalogs.clear();
       this.catalogGeneration++;
@@ -289,6 +293,7 @@ export class AgentManager {
         if (
           this.registry.config(info.provider).engine !== "codex" ||
           !info.threadId ||
+          info.nativeImport ||
           !(error instanceof Error) ||
           error.message !== `no rollout found for thread id ${info.threadId}` ||
           this.#store.hasAgentProviderHistory(id) ||
@@ -360,6 +365,49 @@ export class AgentManager {
       return provider;
     })();
     return runtime.ready;
+  }
+  async discoverSessions(request: ProviderRequest): Promise<ProviderResult> {
+    try {
+      const op = request.operation;
+      if (op.kind !== "sessions-list") throw new Error("Expected session discovery");
+      const project = this.#store.snapshot().projects.find((p) => p.id === op.projectId);
+      if (
+        !project ||
+        !(
+          project.directory === op.directory ||
+          project.tabs.some((tab) =>
+            tab.nodes.some((pane) => pane.kind === "pane" && pane.directory === op.directory),
+          )
+        )
+      )
+        throw new Error("Choose a folder in the current workspace.");
+      const sessions = await this.nativeSessions.list(
+        op.provider,
+        op.directory,
+        op.cursor,
+        op.query,
+        op.refresh,
+      );
+      return {
+        type: "provider.result",
+        requestId: request.requestId,
+        outcome: {
+          status: "ok",
+          revision: this.registry.revision,
+          providers: this.registry.statuses(),
+          sessions,
+        },
+      };
+    } catch (error) {
+      return {
+        type: "provider.result",
+        requestId: request.requestId,
+        outcome: {
+          status: "error",
+          message: error instanceof Error ? error.message : "Could not load sessions",
+        },
+      };
+    }
   }
   async request(request: AgentRequest, owner = "local"): Promise<AgentResult> {
     let mutation: string | undefined;
@@ -572,6 +620,67 @@ export class AgentManager {
         if (op.model && !catalog.models.some((m) => m.id === op.model))
           throw new Error("That model is not available");
       }
+      if (op.kind === "resume-session") {
+        const previous = this.#store.agent(op.sessionId);
+        if (this.mutations.has(previous.id))
+          throw new Error("This session is being changed. Try again.");
+        const selected = this.nativeSessions.selected(
+          op.provider,
+          previous.directory,
+          op.nativeSessionId,
+        );
+        const config = this.registry.config(op.provider);
+        if (!config.enabled || !this.registry.installed(config))
+          throw new Error("Provider is unavailable");
+        const now = new Date().toISOString();
+        const next: AgentInfo = {
+          id: randomUUID(),
+          projectId: previous.projectId,
+          directory: previous.directory,
+          provider: op.provider,
+          engine: config.engine,
+          providerLabel: config.label,
+          name: selected.title.trim().slice(0, 100) || "Resumed session",
+          model: null,
+          settings: { ...defaultSettings },
+          threadId: selected.id,
+          nativeImport: true,
+          turnId: null,
+          status: "starting",
+          pending: [],
+          attention: null,
+          error: null,
+          startedAt: now,
+          updatedAt: now,
+          turnStartedAt: null,
+          revision: 0,
+        };
+        const reserved = this.#store.reserveResumedAgent(request, next);
+        // The old empty transport is no longer visible. Do not leave an extra CLI process idle.
+        if (
+          !this.#store
+            .snapshot()
+            .projects.some((project) =>
+              project.tabs.some((tab) =>
+                tab.nodes.some((pane) => pane.kind === "pane" && pane.sessionId === previous.id),
+              ),
+            )
+        ) {
+          const old = this.#runtimes.get(previous.id);
+          if (old) {
+            old.closed = true;
+            this.#runtimes.delete(previous.id);
+            void old.provider.close().catch(() => undefined);
+          }
+        }
+        this.#workspaceChanged();
+        this.#emit({ type: "agent.state", agent: reserved });
+        if (reserved.id === next.id)
+          void this.provider(next.id)
+            .then(() => this.update(next.id, { status: "idle" }))
+            .catch((error) => this.fail(next.id, error));
+        return this.result(request, reserved.id);
+      }
       if (op.kind === "import-session" || op.kind === "fork-session") {
         const previous = this.#store.agent(op.sessionId);
         if (this.mutations.has(previous.id))
@@ -602,6 +711,7 @@ export class AgentManager {
               ? `${previous.name.slice(0, 70)} (fork)`
               : "Imported session",
           threadId: op.kind === "import-session" ? op.nativeSessionId : null,
+          nativeImport: op.kind === "import-session" || previous.nativeImport,
           turnId: null,
           status: "starting",
           queue: [],
@@ -1728,6 +1838,7 @@ export class AgentManager {
   async close(): Promise<void> {
     if (this.#closed) return;
     this.#closed = true;
+    await this.nativeSessions.close();
     await this.accounts.close();
     await Promise.all(
       [...this.#runtimes.values()].map(async (runtime) => {
