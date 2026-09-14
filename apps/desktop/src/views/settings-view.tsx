@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 
 import { activeOrganization, type SignedInAuth } from "@/auth/auth-state";
 import { AccountSettings } from "@/settings/account-settings";
+import { MachinesView, type MachinesViewProps } from "@/machines/machines-view";
 import { AdvancedSettings } from "@/settings/advanced-settings";
 import { AppearanceSettings } from "@/settings/appearance-settings";
 import { BillingSection } from "@/settings/billing-section";
@@ -19,6 +20,7 @@ interface SettingsViewProps {
   readonly creatingTerminalProfile: boolean;
   readonly onCreatingTerminalProfileChange: (creating: boolean) => void;
   readonly page: SettingsPage;
+  readonly machines?: Omit<MachinesViewProps, "auth">;
   readonly endpoint: DaemonEndpoint | null;
   readonly state: ConnectionState;
   readonly apiUrl?: string;
@@ -36,6 +38,7 @@ export function SettingsView({
   creatingTerminalProfile,
   onCreatingTerminalProfileChange,
   page,
+  machines,
   endpoint,
   state,
   apiUrl,
@@ -52,6 +55,9 @@ export function SettingsView({
   let content: ReactNode;
 
   switch (page) {
+    case "machines":
+      content = <MachinesView key={organization?.id} auth={auth} {...machines} />;
+      break;
     case "providers":
       content = <ProvidersSettings />;
       break;

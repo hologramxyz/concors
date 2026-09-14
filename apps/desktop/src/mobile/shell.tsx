@@ -104,7 +104,7 @@ function MobileWorkspaceContent({
   const [creatingTerminalProfile, setCreatingTerminalProfile] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [addingMachine, setAddingMachine] = useState(false);
-  const [settingsPage, setSettingsPage] = useState<SettingsPage | "machines">("account");
+  const [settingsPage, setSettingsPage] = useState<SettingsPage>("account");
   const [searchOpen, setSearchOpen] = useState(false);
   const [addingProject, setAddingProject] = useState<"open" | "clone" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -831,11 +831,12 @@ function MobileWorkspaceContent({
                 onOpenChange={setSearchOpen}
                 onNavigate={(view) => {
                   if (view === "settings") openSettings();
-                  else if (view === "machines") {
-                    setSidebarOpen(false);
-                    setSettingsPage(host.direct ? "advanced" : "machines");
-                    setSettingsOpen(true);
-                  } else setSidebarOpen(true);
+                  else setSidebarOpen(true);
+                }}
+                onManageMachines={() => {
+                  setSidebarOpen(false);
+                  setSettingsPage(host.direct ? "advanced" : "machines");
+                  setSettingsOpen(true);
                 }}
                 onReconnect={() => runHost({ kind: "retry" })}
                 canReconnect={!ready}
