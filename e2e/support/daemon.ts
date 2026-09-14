@@ -30,7 +30,11 @@ if (![7429, 7430].includes(port)) throw new Error("Invalid fixture daemon port")
 const server = createDaemonServer(loadDaemonConfig({ port, logLevel: "warn" }, {}), {
   workspacePath: join(directory, "workspace.sqlite"),
   accountBackendFactory: (info) => new TestAccountBackend(info),
-  agentProviderFactory: (_cwd, handler, provider) => new TestAgentProvider(handler, provider),
+  agentProviderFactory: (cwd, handler, provider) => {
+    const agent = new TestAgentProvider(handler, provider);
+    agent.cwd = cwd;
+    return agent;
+  },
 });
 // Test-only origin adaptation for a second local checkout. Production retains its
 // fixed allowlist; only this exact localhost acceptance origin is adapted here.

@@ -37,17 +37,18 @@ export class TestAgentProvider implements AgentProvider {
     this.requests.push({ method, params });
     if (method === "session/controls")
       return { importSessions: true, fork: true, rewind: ["conversation"], steer: true };
-    if (method === "session/list")
+    if (method === "session/list") {
+      const offset = Number((params as { cursor?: string }).cursor ?? 0);
       return {
-        sessions: [
-          {
-            id: "external-thread",
-            title: "CLI session",
-            directory: this.cwd,
-            updatedAt: new Date().toISOString(),
-          },
-        ],
+        sessions: Array.from({ length: 125 }, (_, index) => ({
+          id: index ? `external-thread-${index + 1}` : "external-thread",
+          title: index ? `Older CLI session ${index + 1}` : "CLI session",
+          directory: this.cwd,
+          updatedAt: new Date(Date.UTC(2026, 8, 12) - index * 60_000).toISOString(),
+        })).slice(offset, offset + 100),
+        nextCursor: offset + 100 < 125 ? String(offset + 100) : null,
       };
+    }
     if (method === "session/fork") return { thread: { id: "forked-thread", turns: [] } };
     if (method === "session/rewind" || method === "session/steer") return {};
     if (method === "collaborationMode/list")
@@ -76,7 +77,25 @@ export class TestAgentProvider implements AgentProvider {
       this.threadId = input["threadId"];
     if (method === "thread/start" || method === "thread/resume")
       return {
-        thread: { id: this.threadId, turns: [] },
+        thread: {
+          id: this.threadId,
+          turns: this.threadId.startsWith("external-thread")
+            ? [
+                {
+                  id: "native-turn",
+                  status: "completed",
+                  items: [
+                    {
+                      id: "native-user",
+                      type: "userMessage",
+                      content: [{ type: "text", text: "Saved CLI prompt" }],
+                    },
+                    { id: "native-assistant", type: "agentMessage", text: "Saved CLI response" },
+                  ],
+                },
+              ]
+            : [],
+        },
         model: this.provider === "codex" ? "fixture" : `fixture-${this.provider}`,
       };
     if (method === "turn/interrupt") {
