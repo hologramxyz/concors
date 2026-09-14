@@ -57,8 +57,26 @@ export function applyColorTheme(theme: ColorTheme, mode: "light" | "dark", compa
   const tokens = colorThemeTokens(theme, mode, compact);
   for (const [key, color] of Object.entries(tokens)) root.style.setProperty(`--${key}`, color);
   root.dataset["colorTheme"] = theme.id;
+  if (!compact) {
+    const background = tokens["background"] ?? (mode === "dark" ? "#111111" : "#eeede8");
+    const foreground = tokens["foreground"] ?? (mode === "dark" ? "#ededed" : "#20211f");
+    root.style.setProperty("--startup-background", background);
+    root.style.setProperty("--startup-foreground", foreground);
+    try {
+      localStorage.setItem(
+        "concors.startup-appearance.v1",
+        JSON.stringify({ id: theme.id, mode, background, foreground }),
+      );
+    } catch {
+      /* The current window still uses its selected appearance. */
+    }
+  }
   return () => {
     for (const key of Object.keys(tokens)) root.style.removeProperty(`--${key}`);
     delete root.dataset["colorTheme"];
+    if (!compact) {
+      root.style.removeProperty("--startup-background");
+      root.style.removeProperty("--startup-foreground");
+    }
   };
 }

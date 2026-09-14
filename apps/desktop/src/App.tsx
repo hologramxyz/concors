@@ -1,3 +1,4 @@
+import { StartupScreen } from "@/startup/startup-screen";
 import { WindowControls, StandaloneWindowBar } from "@/window/controls";
 import { useWindowChrome } from "@/window/context";
 import { isTauri } from "@/tauri";
@@ -133,7 +134,12 @@ function AppContent() {
     () => resolveHostEndpoint(selectedHost, localEndpoint),
     [selectedHost, localEndpoint],
   );
-  const connection = useDaemonConnection(hostScope ? endpoint : null, selectedMachineId, hostScope);
+  const hostRestored = selectionHost?.scope === hostScope;
+  const connection = useDaemonConnection(
+    hostScope && hostRestored ? endpoint : null,
+    selectedMachineId,
+    hostScope,
+  );
   const workspace = connection.workspace;
   const canEdit = connection.state.status === "ready" && connection.workspaceReady && !pending;
   const selection = workspace?.selection;
@@ -192,27 +198,27 @@ function AppContent() {
 
   // Restore the machine picked before the last reload once the account scope is known.
   useEffect(() => {
-    if (!hostScope || !organizationId || selectionHost?.scope === hostScope) return;
+    if (!hostScope || selectionHost?.scope === hostScope) return;
     const machineId = loadSelectedMachineId(hostScope);
-    if (!machineId || machineId === "local") return;
     let cancelled = false;
-    api
-      .listMachines({ organizationId })
-      .then((machines) => {
-        if (cancelled) return;
-        const machine = machines.find((m) => m.id === machineId);
-        if (!machine || machineAvailability(machine) !== "connectable") return;
-        setSelectionHost({
-          scope: hostScope,
-          host: machineHost(
-            machine,
-            loadHosts(hostScope).find((h) => h.machineId === machineId),
-          ),
-        });
-      })
-      .catch(() => {
-        /* Stay on this computer when the saved machine cannot be restored. */
-      });
+    const restore = async () => {
+      let host = LOCAL_HOST;
+      if (organizationId && machineId && machineId !== "local") {
+        try {
+          const machines = await api.listMachines({ organizationId });
+          const machine = machines.find((m) => m.id === machineId);
+          if (machine && machineAvailability(machine) === "connectable")
+            host = machineHost(
+              machine,
+              loadHosts(hostScope).find((h) => h.machineId === machineId),
+            );
+        } catch {
+          /* Fall back to this computer when the saved machine cannot be restored. */
+        }
+      }
+      if (!cancelled) setSelectionHost({ scope: hostScope, host });
+    };
+    void restore();
     return () => {
       cancelled = true;
     };
@@ -280,23 +286,44 @@ function AppContent() {
   };
 
   const signedIn = auth.state.status === "signed-in";
-  useCommand("search", signedIn, () => setSearchOpen((open) => !open));
+  const [openedScope, setOpenedScope] = useState<string | null>(null);
+  if (!signedIn && openedScope !== null) setOpenedScope(null);
+  else if (workspace && connection.workspaceReady && openedScope !== hostScope)
+    setOpenedScope(hostScope);
+  const starting =
+    auth.state.status === "restoring" ||
+    (signedIn && view !== "settings" && openedScope !== hostScope && !workspace);
+  const connectionSettings = () => {
+    setOpenedScope(hostScope);
+    openSettings("machines");
+  };
+  useCommand("search", signedIn && !starting, () => setSearchOpen((open) => !open));
   useCommand("new-project", signedIn && canEdit && !newWorkspace.busy, startWorkspace);
-  useCommand("settings", signedIn, () => openSettings("account"));
-  useCommand("shortcuts", signedIn, () => openSettings("shortcuts"));
+  useCommand("settings", signedIn && !starting, () => openSettings("account"));
+  useCommand("shortcuts", signedIn && !starting, () => openSettings("shortcuts"));
 
-  // Nothing but the sign-in screen exists for a signed-out user. All hooks run above this line.
-  if (auth.state.status !== "signed-in") {
+  // The same splash remains mounted through auth, machine restoration, and the first snapshot.
+  // All hooks run above this line, so the connection can finish while the shell stays hidden.
+  if (starting || auth.state.status !== "signed-in") {
     return (
-      <>
+      <ColorThemeProvider
+        connection={connection.transport}
+        mode={theme.resolved}
+        selection={colorTheme.selection}
+        onSelect={colorTheme.select}
+      >
         <StandaloneWindowBar />
-        <AuthScreen
-          state={auth.state}
-          onSignIn={auth.signIn}
-          onSignUp={auth.signUp}
-          onRetry={() => void auth.refresh()}
-        />
-      </>
+        {starting ? (
+          <StartupScreen {...(signedIn ? { onOpenSettings: connectionSettings } : {})} />
+        ) : auth.state.status !== "signed-in" ? (
+          <AuthScreen
+            state={auth.state}
+            onSignIn={auth.signIn}
+            onSignUp={auth.signUp}
+            onRetry={() => void auth.refresh()}
+          />
+        ) : null}
+      </ColorThemeProvider>
     );
   }
   const account = auth.state;
@@ -494,20 +521,7 @@ function AppContent() {
                               onOpenFolder={openProjectDialog}
                             />
                           ) : (
-                            <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
-                              <h2 className="text-lg font-medium">Connect to your workspace</h2>
-                              <p className="max-w-sm text-sm text-muted-foreground">
-                                Your projects and layouts will appear when this machine is
-                                connected.
-                              </p>
-                              <Button
-                                type="button"
-                                onClick={connection.reconnectNow}
-                                variant="outline"
-                              >
-                                Reconnect
-                              </Button>
-                            </div>
+                            <StartupScreen embedded onOpenSettings={connectionSettings} />
                           )
                         ) : (
                           <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
