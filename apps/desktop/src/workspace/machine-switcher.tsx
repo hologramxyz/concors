@@ -83,7 +83,7 @@ export function MachineSwitcher({
       </SidebarTooltip>
       <DropdownMenuContent
         align="start"
-        className="w-(--sidebar-width) max-w-[calc(100vw-24px)] p-1"
+        className="w-[calc(var(--sidebar-width)-16px)] max-w-[calc(100vw-24px)] p-1"
       >
         <DropdownMenuItem
           className="min-h-[32px] gap-2 px-[8px]"
