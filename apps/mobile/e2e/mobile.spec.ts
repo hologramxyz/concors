@@ -1127,8 +1127,10 @@ test("custom shortcuts persist through the mobile preference bridge and renderer
   await editor.getByRole("textbox", { name: "Shortcut 1, first key" }).fill("Ctrl+Alt+S");
   await editor.getByRole("button", { name: "Remove shortcut 2" }).click();
   const bounds = await editor.boundingBox();
-  expect(bounds?.width).toBeLessThanOrEqual(page.viewportSize()!.width);
-  expect(bounds?.x).toBeGreaterThanOrEqual(0);
+  const viewport = page.viewportSize();
+  if (!bounds || !viewport) throw new Error("Shortcut editor has no visible bounds");
+  expect(bounds.width).toBeLessThanOrEqual(viewport.width);
+  expect(bounds.x).toBeGreaterThanOrEqual(0);
   await page.screenshot({ path: test.info().outputPath("mobile-shortcut-editor.png") });
   await editor.getByRole("button", { name: "Save shortcuts" }).click();
   await expect(editor).toHaveCount(0);
