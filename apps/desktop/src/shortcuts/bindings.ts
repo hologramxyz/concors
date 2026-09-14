@@ -17,12 +17,31 @@ export const BINDINGS = [
   { id: "close-tab", label: "Close tab", key: "t", then: "Backspace" },
   { id: "settings", label: "Settings", key: "," },
   { id: "shortcuts", label: "Shortcuts", key: "/" },
+  { id: "rename-tab", label: "Rename tab", key: "F2", modifiers: [], context: "tab" },
+  {
+    id: "move-tab-left",
+    label: "Move tab left",
+    key: "ArrowLeft",
+    modifiers: ["Alt", "Shift"],
+    context: "tab",
+  },
+  {
+    id: "move-tab-right",
+    label: "Move tab right",
+    key: "ArrowRight",
+    modifiers: ["Alt", "Shift"],
+    context: "tab",
+  },
 ] as const;
 export type CommandId = (typeof BINDINGS)[number]["id"];
 /** Mobile exposes a flat tab list; pane shortcuts remain keyboard aliases, not extra UI. */
 export const isCompactCommand = (id: CommandId) =>
-  id !== "new-pane" && id !== "close-pane" && !id.startsWith("split-") && !id.startsWith("focus-");
-export type Sequence = "p" | "t";
+  id !== "new-pane" &&
+  id !== "close-pane" &&
+  id !== "rename-tab" &&
+  !id.startsWith("move-tab-") &&
+  !id.startsWith("split-") &&
+  !id.startsWith("focus-");
 export const isMac = () => /Mac|iPhone|iPad/.test(navigator.platform);
 export function keyLabel(key: string): string {
   return (
@@ -34,39 +53,9 @@ export function keyLabel(key: string): string {
 export function shortcutLabel(id: CommandId, mac = isMac()): string {
   const binding = BINDINGS.find((item) => item.id === id);
   if (!binding) return "";
-  return `${mac ? "Control" : "Ctrl"}+Shift+${keyLabel(binding.key)}${"then" in binding ? ` → ${keyLabel(binding.then)}` : ""}`;
-}
-export function sequenceBindings(sequence: Sequence) {
-  return BINDINGS.filter((binding) => binding.key === sequence && "then" in binding);
-}
-export function matchSequence(sequence: Sequence, key: string): CommandId | undefined {
-  return sequenceBindings(sequence).find((binding) => "then" in binding && binding.then === key)
-    ?.id;
-}
-export function matchShortcut(
-  event: Pick<
-    KeyboardEvent,
-    "key" | "code" | "metaKey" | "ctrlKey" | "shiftKey" | "altKey" | "isComposing"
-  >,
-  mac: boolean,
-  terminal: boolean,
-  native = false,
-): CommandId | Sequence | undefined {
-  if (event.isComposing || event.altKey) return;
-  if (native && event.key === "Tab" && event.ctrlKey && !event.metaKey)
-    return event.shiftKey ? "previous-tab" : "next-tab";
-  if (!event.shiftKey) {
-    const primaryOnly = mac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
-    return primaryOnly && !terminal && event.key.toLowerCase() === "k" ? "search" : undefined;
-  }
-  if (!event.ctrlKey || event.metaKey) return;
-  const key = event.key.toLowerCase();
-  if (key === "p" || key === "t") return key;
-  return BINDINGS.find(
-    (binding) =>
-      !("then" in binding) &&
-      (key === binding.key.toLowerCase() ||
-        (binding.key === "," && event.code === "Comma") ||
-        (binding.key === "/" && event.code === "Slash")),
-  )?.id;
+  const modifiers = "modifiers" in binding ? binding.modifiers : ["Control", "Shift"];
+  const prefix = modifiers
+    .map((modifier) => (modifier === "Control" ? (mac ? "Control" : "Ctrl") : modifier))
+    .join("+");
+  return `${prefix ? `${prefix}+` : ""}${keyLabel(binding.key)}${"then" in binding ? ` → ${keyLabel(binding.then)}` : ""}`;
 }
