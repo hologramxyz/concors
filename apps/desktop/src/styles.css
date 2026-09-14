@@ -71,6 +71,7 @@
 }
 
 :root {
+  --sidebar-width: 216px;
   --corner-radius: 0.375rem;
   color-scheme: light;
   --selection: #deded9;
@@ -341,7 +342,7 @@
 
 /* Collapsing keeps a navigable icon rail; only its footprint changes. */
 .sidebar-shell {
-  width: 216px;
+  width: var(--sidebar-width);
   flex-shrink: 0;
   overflow: hidden;
   transition: width 240ms cubic-bezier(0.22, 1, 0.36, 1);

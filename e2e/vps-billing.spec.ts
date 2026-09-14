@@ -197,6 +197,11 @@ async function openCreation(page: Page) {
   await page.getByRole("button", { name: "Switch machine", exact: true }).click();
   await page.getByRole("menuitem", { name: "Manage machines", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Machines", exact: true }).first()).toBeVisible();
+  await expect(
+    page
+      .getByRole("navigation", { name: "Settings" })
+      .getByRole("button", { name: "Machines", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.getByRole("button", { name: "New machine", exact: true }).first().click();
   await expect(page.getByRole("dialog", { name: "New VPS" })).toBeVisible();
@@ -228,13 +233,16 @@ test("create a workspace VPS with a test card, then view its subscription in Pro
   await pay.click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "build-agent" })).toBeVisible();
+  await page.getByRole("button", { name: "Back to app", exact: true }).click();
   await page.getByRole("button", { name: "Switch machine", exact: true }).click();
   await expect(page.getByRole("menuitem", { name: /build-agent provisioning/i })).toBeVisible();
   await page.getByRole("menuitem", { name: /build-agent provisioning/i }).click();
   await expect(page.locator("#cloud-machine-vps-1")).toBeVisible();
 
-  await page.getByRole("button", { name: "Account: E2E User" }).click();
-  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
+  await page
+    .getByRole("navigation", { name: "Settings" })
+    .getByRole("button", { name: "Account", exact: true })
+    .click();
   await expect(page.getByRole("heading", { name: "VPS subscriptions" })).toBeVisible();
   await expect(page.getByText("Active", { exact: true })).toBeVisible();
   await expect(page.getByText("$6.99/month", { exact: true })).toBeVisible();
@@ -317,6 +325,7 @@ test("machine views reuse fresh data and explicit refresh updates the switcher",
   state.created = false;
   await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await expect(page.getByRole("heading", { name: "No cloud machines yet" })).toBeVisible();
+  await page.getByRole("button", { name: "Back to app", exact: true }).click();
   await page.getByRole("button", { name: "Switch machine", exact: true }).click();
   await expect(page.getByRole("menuitem", { name: /build-agent provisioning/i })).toHaveCount(0);
   expect(reads()).toBe(before + 1);

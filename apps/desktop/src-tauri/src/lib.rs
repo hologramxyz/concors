@@ -21,6 +21,7 @@ pub fn run() {
     tauri::Builder::default()
         // Opens links (Stripe Checkout, invoices) in the system browser instead of the webview.
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .manage(daemon::LocalDaemon::default())
         .manage(notifications::Notifications::default())
         .invoke_handler(tauri::generate_handler![

@@ -12,3 +12,5 @@ export async function dismissNativeNotification() {
 export async function onNativeNotificationClick() {
   return () => undefined;
 }
+
+export { readText as readClipboardText, copyText as writeClipboardText } from "@/lib/clipboard";

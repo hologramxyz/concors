@@ -1,3 +1,5 @@
+import { terminalClipboardHandler } from "./clipboard";
+import { readClipboardText, writeClipboardText } from "@/tauri";
 import { terminalTheme } from "./theme";
 import { useContext, useLayoutEffect, useRef, useState } from "react";
 import { useTabVisible } from "@/workspace/tab-visibility";
@@ -86,6 +88,20 @@ export function TerminalSurface({
       if (!disposed && connection.state.status === "ready")
         setError(cause instanceof Error ? cause.message : "Terminal request failed");
     };
+    terminal.attachCustomKeyEventHandler(
+      terminalClipboardHandler({
+        terminal,
+        read: readClipboardText,
+        write: writeClipboardText,
+        canPaste: () =>
+          !disposed &&
+          running &&
+          connection.state.status === "ready" &&
+          isVisible() &&
+          document.activeElement === terminal.textarea,
+        report,
+      }),
+    );
     const request = async (operation: TerminalOperation) => {
       const result = await connection.requestTerminal(operation, crypto.randomUUID());
       if (result.outcome.status === "error") throw new Error(result.outcome.message);
