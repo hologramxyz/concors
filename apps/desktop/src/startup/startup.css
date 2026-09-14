@@ -1,0 +1,67 @@
+/* Also loaded by index.html, before React, so the first paint matches the app splash. */
+:root {
+  --startup-background: #eeede8;
+  --startup-foreground: #20211f;
+}
+:root.dark {
+  --startup-background: #111111;
+  --startup-foreground: #ededed;
+}
+body {
+  margin: 0;
+}
+.concors-startup {
+  position: relative;
+  display: grid;
+  min-height: 100dvh;
+  width: 100%;
+  place-items: center;
+  overflow: hidden;
+  background: var(--startup-background);
+  color: var(--startup-foreground);
+}
+.concors-startup--embedded {
+  height: 100%;
+  min-height: 100%;
+}
+.concors-startup-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+.concors-startup-mark {
+  display: block;
+  width: 80px;
+  height: 80px;
+}
+.concors-startup-shimmer {
+  position: relative;
+  width: 72px;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 9%, transparent);
+}
+.concors-startup-shimmer::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: linear-gradient(90deg, transparent, currentColor, transparent);
+  opacity: 0.35;
+  animation: concors-startup-shimmer 1.6s ease-in-out infinite;
+}
+@keyframes concors-startup-shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .concors-startup-shimmer::after {
+    animation: none;
+    opacity: 0.2;
+  }
+}
