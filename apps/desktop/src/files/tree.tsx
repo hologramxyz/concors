@@ -1,3 +1,5 @@
+import { WindowControls } from "@/window/controls";
+import { useWindowChrome } from "@/window/context";
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import {
   ChevronRight,
@@ -32,6 +34,7 @@ export function FileTree({
 }) {
   const compact = useContext(CompactLayoutContext);
   const files = useFiles();
+  const windowChrome = useWindowChrome();
   const connection = useContext(TerminalConnectionContext);
   const [generation, setGeneration] = useState(0);
   const refresh = () => {
@@ -92,9 +95,12 @@ export function FileTree({
       className="flex h-full min-h-0 flex-col"
     >
       {!compact && (
-        <div className="m-2 flex h-9 shrink-0 items-center gap-2 px-1">
+        <div
+          data-tauri-drag-region={windowChrome.enabled ? "deep" : undefined}
+          className="m-2 flex h-9 shrink-0 items-center gap-2 px-1 select-none"
+        >
           <FolderOpen className="size-4" />
-          <h2 className="flex-1 text-ui font-medium">Files</h2>
+          <h2 className="min-w-0 flex-1 truncate text-ui font-medium">Files</h2>
           <Button
             size="icon-sm"
             variant="ghost"
@@ -104,6 +110,7 @@ export function FileTree({
           >
             <X className="size-4" />
           </Button>
+          <WindowControls />
         </div>
       )}
       <div

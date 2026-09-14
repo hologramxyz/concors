@@ -68,3 +68,24 @@ Do not stop the persistent host during this reconnect check.
 WebKitWebDriver can automate this built application with `TAURI_WEBVIEW_AUTOMATION=true`
 and `webkitgtk:browserOptions.binary` pointing at the native executable. Account API fixtures
 must remain isolated test services; the daemon, filesystem and PTYs should be real.
+
+## Linux window controls
+
+Linux builds use the existing tab/header row for minimize, maximize/restore and close.
+When the Files panel is open, the controls move to its header. Sign-in and settings also
+retain window controls. The browser and other native platforms keep their existing window chrome.
+
+Drag empty space in the top row to move the window, or double-click it to maximize/restore.
+Tabs, menus and file controls remain clickable. Thin edge/corner handles invoke native resizing;
+they are hidden while maximized or fullscreen. Linux-only Tauri capabilities grant the necessary
+window actions without enabling them for remote web content.
+
+Run the focused UI acceptance suite against built assets (no Vite server):
+
+```sh
+pnpm desktop:web:build
+pnpm exec playwright test --config playwright.window.config.ts
+```
+
+These tests mock native window actions and use a real isolated daemon for the workspace.
+Actual movement, resizing and window-manager behavior also need native Linux checks.

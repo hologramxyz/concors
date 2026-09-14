@@ -1,10 +1,11 @@
 import { GitHubIcon } from "./icon";
 import { useEffect, useEffectEvent, useState, useSyncExternalStore } from "react";
-import { Check, Lock, Search, RefreshCw, Plus, LoaderCircle } from "lucide-react";
+import { Check, Lock, Search, RefreshCw, Plus, LoaderCircle, BookMarked } from "lucide-react";
 import { ApiError, type GitHubRepository } from "@concors/api-client";
 import { apiCache } from "@/data/api-resource";
 import { api } from "@/auth/api";
 import { Button } from "@/components/ui/button";
+import { AccountAvatar } from "@/components/account-avatar";
 import { Input } from "@/components/ui/input";
 import { useGitHub } from "./use-github";
 
@@ -17,10 +18,36 @@ export function GitHubRepositoryPicker(props: PickerProps) {
   const github = useGitHub();
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
-      <div className="flex h-9 shrink-0 items-center justify-between gap-2">
+      <div className="flex h-14 shrink-0 items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2 text-sm">
-          <GitHubIcon className="size-4 shrink-0" aria-hidden="true" />
-          <span className="truncate">{github.status?.login ?? "GitHub"}</span>
+          {github.status?.connected && github.status.login ? (
+            <AccountAvatar
+              className="size-9 ring-1 ring-border"
+              user={{
+                name: github.status.login,
+                email: "",
+                image: `https://github.com/${encodeURIComponent(github.status.login)}.png?size=96`,
+              }}
+            />
+          ) : (
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted">
+              <GitHubIcon className="size-4" aria-hidden="true" />
+            </span>
+          )}
+          <div className="min-w-0">
+            <p className="truncate font-medium">{github.status?.login ?? "GitHub"}</p>
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              {github.status?.connected ? (
+                <>
+                  <GitHubIcon className="size-3" aria-hidden="true" /> GitHub account
+                </>
+              ) : !github.status && !github.error ? (
+                "Checking connection…"
+              ) : (
+                "Repository access"
+              )}
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-1">
           {github.status?.connected && (
@@ -74,7 +101,7 @@ export function GitHubRepositoryPicker(props: PickerProps) {
           )}
         </div>
       )}
-      <div className="h-10 shrink-0 overflow-y-auto text-xs text-muted-foreground">
+      <div className="h-8 shrink-0 overflow-y-auto text-xs leading-relaxed text-muted-foreground">
         {github.error ? (
           <p role="alert" className="text-destructive">
             {github.error}
@@ -89,7 +116,7 @@ export function GitHubRepositoryPicker(props: PickerProps) {
             )}
           </p>
         ) : (
-          <p>Missing a repository? Use Add account to manage access on GitHub.</p>
+          <p>Missing a repository? Add an account or organization on GitHub.</p>
         )}
       </div>
     </div>
@@ -103,12 +130,12 @@ function RepositorySkeleton() {
       aria-label="Loading repositories"
     >
       <div className="h-9 shrink-0 rounded-lg bg-muted/60 motion-safe:animate-pulse" />
-      <div className="min-h-0 flex-1 overflow-hidden rounded-xl border" aria-hidden="true">
+      <div
+        className="min-h-0 flex-1 overflow-hidden rounded-xl border bg-background/30 p-1.5"
+        aria-hidden="true"
+      >
         {Array.from({ length: 6 }, (_, index) => (
-          <div
-            key={index}
-            className="flex h-16 items-center gap-3 border-b px-4 motion-safe:animate-pulse"
-          >
+          <div key={index} className="flex h-16 items-center gap-3 px-3 motion-safe:animate-pulse">
             <span className="size-5 rounded bg-muted" />
             <span className="h-3 w-2/5 rounded bg-muted" />
           </div>
@@ -220,7 +247,7 @@ function Repositories({
             <div className="flex h-9 shrink-0 gap-2">
               <select
                 aria-label="GitHub account"
-                className="h-9 max-w-[45%] min-w-0 rounded-md border bg-background px-2 text-sm"
+                className="h-9 w-40 max-w-[45%] min-w-0 rounded-lg border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 disabled={disabled}
                 value={installation ?? ""}
                 onChange={(event) => {
@@ -253,7 +280,7 @@ function Repositories({
             <div
               aria-label="GitHub repositories"
               aria-busy={loading}
-              className="min-h-0 flex-1 [scrollbar-gutter:stable] overflow-y-auto rounded-xl border"
+              className="min-h-0 flex-1 [scrollbar-gutter:stable] overflow-y-auto rounded-xl border bg-background/30 p-1.5"
             >
               {visible.map((repo) => (
                 <button
@@ -262,23 +289,29 @@ function Repositories({
                   aria-pressed={selected === repo.url}
                   disabled={disabled}
                   onClick={() => onSelect(repo.url)}
-                  className={`flex min-h-16 w-full items-center gap-3 border-b px-4 py-3 text-left outline-none last:border-0 hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset ${selected === repo.url ? "bg-primary/10" : ""}`}
+                  className={`group flex min-h-16 w-full items-center gap-3 rounded-lg px-3 py-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset disabled:opacity-50 ${selected === repo.url ? "bg-primary/10" : "hover:bg-muted/60"}`}
                 >
-                  <GitHubIcon
-                    aria-hidden="true"
-                    className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-                  />
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border bg-background/50 text-muted-foreground">
+                    <BookMarked aria-hidden="true" className="size-4" />
+                  </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">{repo.fullName}</span>
+                    <span className="block truncate text-sm" title={repo.fullName}>
+                      <span className="text-muted-foreground">
+                        {repo.fullName.split("/").slice(0, -1).join("/")}/
+                      </span>
+                      <span className="font-medium">{repo.fullName.split("/").at(-1)}</span>
+                    </span>
                     {repo.description && (
                       <span className="mt-1 block truncate text-xs text-muted-foreground">
                         {repo.description}
                       </span>
                     )}
                   </span>
-                  {selected === repo.url && (
-                    <Check className="size-4 shrink-0 text-primary" aria-label="Selected" />
-                  )}
+                  <span className="flex size-5 shrink-0 items-center justify-center">
+                    {selected === repo.url && (
+                      <Check className="size-4 text-primary" aria-label="Selected" />
+                    )}
+                  </span>
                   {repo.private && (
                     <Lock
                       aria-label="Private repository"
@@ -297,7 +330,7 @@ function Repositories({
                   {Array.from({ length: 6 }, (_, index) => (
                     <div
                       key={index}
-                      className="flex h-16 items-center gap-3 border-b px-4 motion-safe:animate-pulse"
+                      className="flex h-16 items-center gap-3 px-3 motion-safe:animate-pulse"
                       aria-hidden="true"
                     >
                       <span className="size-4 rounded bg-muted" />
