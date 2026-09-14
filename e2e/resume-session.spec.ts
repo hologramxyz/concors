@@ -25,25 +25,38 @@ test("resume finds older native sessions, protects drafts, and keeps the same pa
     await composer.fill("");
     await resume.click();
     const dialog = page.getByRole("dialog", { name: "Resume session", exact: true });
-    await expect(dialog.getByRole("button", { name: /^CLI session / })).toBeVisible();
-    const field = await dialog.getByRole("combobox", { name: "Session provider" }).boundingBox();
-    const icon = await dialog.locator("[data-session-provider-icon]").boundingBox();
-    expect(field).not.toBeNull();
-    expect(icon).not.toBeNull();
-    if (field && icon) {
-      expect(icon.x).toBeGreaterThan(field.x);
-      expect(icon.x + icon.width).toBeLessThan(field.x + field.width);
-      expect(icon.y).toBeGreaterThanOrEqual(field.y);
-      expect(icon.y + icon.height).toBeLessThanOrEqual(field.y + field.height);
+    await expect(dialog.getByRole("textbox", { name: "Search sessions" })).toHaveValue("");
+    await expect(dialog.getByRole("combobox")).toHaveCount(0);
+    await expect(dialog.getByRole("heading")).toHaveCSS("font-size", "16px");
+    const filters = dialog.getByRole("group", { name: "Filter sessions by provider" });
+    await expect(filters.getByRole("button", { name: "All", exact: true })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    for (const provider of ["codex", "claude", "opencode", "pi"]) {
+      const row = dialog.locator(`[data-session-provider="${provider}"]`).first();
+      await expect(row).toBeVisible();
+      await expect(row.locator("[data-session-provider-icon]")).toBeVisible();
     }
-    await dialog.getByLabel("Saved sessions").evaluate((element) => {
-      element.scrollTop = element.scrollHeight;
-    });
-    await expect(dialog.getByRole("button", { name: /^Older CLI session 125 / })).toBeAttached();
+    const actions = dialog.locator('[data-slot="dialog-actions"]');
+    await expect(actions.getByRole("button", { name: "Refresh sessions" })).toBeVisible();
+    await expect(actions.getByRole("button", { name: "Close", exact: true })).toBeVisible();
+    await page.screenshot({ path: test.info().outputPath("resume-all-desktop.png") });
+    await filters.getByRole("button", { name: "Codex", exact: true }).click();
+    await expect(dialog.locator('[data-session-provider="claude"]')).toHaveCount(0);
+    await expect
+      .poll(async () => {
+        await dialog.getByLabel("Saved sessions").evaluate((element) => {
+          element.scrollTop = element.scrollHeight;
+        });
+        return dialog.getByRole("button", { name: /^Older CLI session 125 / }).count();
+      })
+      .toBe(1);
     await expect(
       page.getByRole("textbox", { name: "Message Codex", exact: true, includeHidden: true }),
     ).toBeDisabled();
     await dialog.getByRole("textbox", { name: "Search sessions" }).fill("125");
+    await expect(dialog.locator("[data-session-provider]")).toHaveCount(1);
     await expect(dialog.getByRole("button", { name: /^Older CLI session 125 / })).toBeVisible();
     await page.screenshot({ path: test.info().outputPath("resume-picker-desktop.png") });
     await dialog.getByRole("button", { name: /^Older CLI session 125 / }).click();
@@ -75,6 +88,11 @@ test("resume focuses an already open session instead of making a duplicate", asy
     };
     const pick = async () => {
       await page.getByRole("button", { name: "Resume session", exact: true }).click();
+      await page
+        .getByRole("dialog")
+        .getByRole("group", { name: "Filter sessions by provider" })
+        .getByRole("button", { name: "Codex", exact: true })
+        .click();
       await page
         .getByRole("dialog")
         .getByRole("button", { name: /^CLI session / })
