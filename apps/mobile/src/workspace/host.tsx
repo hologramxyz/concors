@@ -25,11 +25,9 @@ import {
   machineAvailability,
   newRequestId,
   parseMobileRendererMessage,
-  MobilePreferencesSchema,
   MobileTargetSchema,
   type MobileAction,
   type MobileHostMessage,
-  type MobilePreferences,
   type MobileState,
 } from "@concors/client-core";
 import { createProtocolError } from "@concors/protocol";
@@ -38,16 +36,14 @@ import { api } from "../auth/runtime";
 import { useMachine } from "../connection/provider";
 import { useCapabilities, useMachines } from "../queries";
 import { config } from "../config";
-import { deviceStorage } from "../platform/storage";
+import { useAppearance } from "../appearance-provider";
 import { disablePush, enablePush, pushEnabled } from "../platform/notifications";
 import { Button, Copy } from "../ui";
 import { WorkspaceRenderer } from "./renderer";
 import type { WorkspaceRendererHandle } from "./renderer-types";
 import { dispatchMobileApi } from "./api";
 import { assertWorkspaceActionAllowed } from "./access";
-import { useAIConsent } from "../privacy/provider";
 
-const defaults: MobilePreferences = { theme: "system", corners: "subtle", sound: false };
 export function WorkspaceHost() {
   const auth = useAuth();
   // A fresh renderer/session nonce on account or organization change rejects stale bridge actions.
@@ -60,7 +56,6 @@ export function WorkspaceHost() {
 }
 function SignedInWorkspace() {
   const auth = useAuth();
-  const consent = useAIConsent();
   const query = useQueryClient();
   const machines = useMachines();
   const capabilities = useCapabilities();
@@ -68,7 +63,7 @@ function SignedInWorkspace() {
   const params = useLocalSearchParams();
   const systemDark = useColorScheme() === "dark";
   const [scope] = useState(newRequestId);
-  const [preferences, setPreferences] = useState(defaults);
+  const { preferences, setPreferences } = useAppearance();
   const [push, setPush] = useState(false);
   const [failed, setFailed] = useState(false);
   const [rendererKey, setRendererKey] = useState(0);
@@ -115,15 +110,6 @@ function SignedInWorkspace() {
   const userId = auth.me?.user.id;
   useEffect(() => {
     alive.current = true;
-    void deviceStorage.get("appearance.v1").then((raw) => {
-      if (!alive.current || !raw) return;
-      try {
-        const result = MobilePreferencesSchema.safeParse(JSON.parse(raw));
-        if (result.success) setPreferences(result.data);
-      } catch {
-        /* Keep defaults for corrupt preferences. */
-      }
-    });
     if (userId)
       void pushEnabled(userId)
         .then((value) => {
@@ -142,7 +128,7 @@ function SignedInWorkspace() {
           me: auth.me,
           profile:
             auth.direct && auth.profile
-              ? { name: auth.profile.name, email: auth.profile.email }
+              ? { name: auth.profile.name, email: auth.profile.email, image: auth.profile.image }
               : null,
           direct: auth.direct,
           organizations: organizations.data ?? [],
@@ -193,9 +179,6 @@ function SignedInWorkspace() {
     switch (action.kind) {
       case "open-profile":
         if (auth.direct) auth.openProfile();
-        return;
-      case "withdraw-ai-consent":
-        await consent.withdraw();
         return;
       case "dismiss-keyboard":
         Keyboard.dismiss();
@@ -272,8 +255,7 @@ function SignedInWorkspace() {
         await Clipboard.setStringAsync(action.text);
         return;
       case "preferences":
-        await deviceStorage.set("appearance.v1", JSON.stringify(action.preferences));
-        if (alive.current) setPreferences(action.preferences);
+        await setPreferences(action.preferences);
         return;
       case "open-url": {
         const url = new URL(action.url);

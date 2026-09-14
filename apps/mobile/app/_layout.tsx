@@ -11,7 +11,7 @@ import { useTheme } from "../src/ui";
 import { api } from "../src/auth/runtime";
 import { useCapabilities } from "../src/queries";
 import { usePushNavigation } from "../src/platform/notifications";
-import { AIConsentProvider, useAIConsent } from "../src/privacy/provider";
+import { AppearanceProvider } from "../src/appearance-provider";
 
 configureRequestIds(randomUUID);
 export default function RootLayout() {
@@ -30,23 +30,22 @@ export default function RootLayout() {
   );
   return (
     <QueryClientProvider client={query}>
-      <AuthProvider>
-        <AIConsentProvider>
+      <AppearanceProvider>
+        <AuthProvider>
           <Navigation />
-        </AIConsentProvider>
-      </AuthProvider>
+        </AuthProvider>
+      </AppearanceProvider>
     </QueryClientProvider>
   );
 }
 function Navigation() {
-  const { me, direct } = useAuth();
-  const consent = useAIConsent();
+  const { me, direct, loading } = useAuth();
   const capabilities = useCapabilities();
   usePushNavigation(api, me?.user.id, capabilities.data?.pushNotifications ?? false);
   return (
     <MachineProvider
       direct={direct}
-      enabled={consent.allowed}
+      enabled={!loading && (!!me || direct)}
       scope={`${me?.user.id ?? "signed-out"}:${me?.session.activeOrganizationId ?? "none"}`}
     >
       <AppStack />

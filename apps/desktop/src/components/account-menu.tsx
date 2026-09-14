@@ -1,5 +1,5 @@
 import { AccountAvatar } from "./account-avatar";
-import { ChevronsUpDown, LogOut, Plus, UserRound, Settings } from "lucide-react";
+import { ChevronsUpDown, LogOut, UserRound, Settings } from "lucide-react";
 import { useContext, useState, type ReactNode } from "react";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import {
@@ -95,19 +95,13 @@ export function MobileAccountMenu({
   auth,
   onSignOut,
   onOpenSettings,
-  machinePicker,
   organizationPicker,
-  onManageMachines,
-  onAddMachine,
   profile,
   onOpenProfile,
 }: Omit<AccountMenuProps, "auth"> & {
   auth: SignedInAuth | null;
-  machinePicker?: ReactNode;
   organizationPicker?: ReactNode;
-  onManageMachines?: (() => void) | undefined;
-  onAddMachine?: () => void;
-  profile?: { name: string; email: string } | null;
+  profile?: { name: string; email: string; image?: string | null } | null;
   onOpenProfile?: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -124,16 +118,15 @@ export function MobileAccountMenu({
         <DialogHeader>
           <DialogTitle>Account</DialogTitle>
           <DialogDescription className="sr-only">
-            Choose an organization or machine, manage settings or disconnect.
+            Choose an organization, manage settings or disconnect.
           </DialogDescription>
         </DialogHeader>
-        {machinePicker && <div className="mobile-account-machine">{machinePicker}</div>}
         <div className="mobile-account-identity">
           <AccountAvatar user={person} githubEnabled={!!auth} className="mobile-account-avatar" />
           <div className="min-w-0">
             <p className="truncate font-medium">{name}</p>
             <p className="truncate text-sm text-muted-foreground">
-              {person ? person.email : "Sign in to your Concourse account"}
+              {person ? person.email : "Sign in to your Concors account"}
             </p>
           </div>
         </div>
@@ -149,30 +142,6 @@ export function MobileAccountMenu({
             >
               <UserRound aria-hidden="true" />
               {person ? "Your profile" : "Sign in"}
-            </button>
-          )}
-          {onAddMachine && (
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                onAddMachine();
-              }}
-            >
-              <Plus aria-hidden="true" />
-              Add machine
-            </button>
-          )}
-          {onManageMachines && (
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                onManageMachines();
-              }}
-            >
-              <Settings aria-hidden="true" />
-              Manage machines
             </button>
           )}
           <button

@@ -580,12 +580,12 @@
   width: 34px;
   height: 100%;
   padding-left: 4px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   outline-offset: 1px;
 }
 .message-rail-tick {
   flex-shrink: 0;
-  border-radius: 999px;
+  border-radius: calc(var(--corner-radius) * 3);
   background: color-mix(in srgb, var(--muted-foreground) 35%, transparent);
   transition:
     width 140ms ease-out,
@@ -606,7 +606,7 @@
   width: 260px;
   padding: 10px 12px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-xl);
   background: var(--popover);
   color: var(--popover-foreground);
   box-shadow: 0 4px 14px #0002;
@@ -626,7 +626,7 @@
   width: 36px;
   height: 36px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-xl);
   background: var(--background);
   color: var(--muted-foreground);
 }

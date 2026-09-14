@@ -4,7 +4,6 @@ import { mobileDirectSocket } from "../../../e2e/support/mobile-direct-ports.cjs
 async function connect(page: Page) {
   await page.goto("/");
   await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
-  await page.getByRole("button", { name: "Allow AI data sharing", exact: true }).click();
   const ui = page.frameLocator('iframe[title="Concors workspace"]');
   await expect(ui.getByRole("button", { name: "Open sidebar", exact: true })).toBeVisible();
   return ui;
@@ -108,6 +107,35 @@ test("mobile usage clears stale, unavailable and disconnected readings while ret
   await expect(usage).not.toContainText("High usage");
   client.close();
   await expect(usage).not.toContainText("CPU 12%");
+});
+
+test("repeated unavailable samples cannot keep mobile telemetry checking forever", async ({
+  page,
+}) => {
+  let client: WebSocketRoute | undefined;
+  await page.routeWebSocket(mobileDirectSocket, (socket) => {
+    client = socket;
+    const server = socket.connectToServer();
+    server.onMessage((raw) => {
+      if (JSON.parse(String(raw)).type !== "host.usage") socket.send(raw);
+    });
+  });
+  const ui = await connect(page);
+  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  const usage = ui.getByRole("group", { name: "Machine resource usage", exact: true });
+  await expect(usage).toContainText("Checking usage…");
+  await page.clock.install();
+  if (!client) throw new Error("Telemetry socket is missing");
+  const unavailable = JSON.stringify({ type: "host.usage", usage: null });
+  client.send(unavailable);
+  await page.clock.runFor(6000);
+  client.send(unavailable);
+  await expect(usage).toContainText("Checking usage…");
+  await page.clock.runFor(6000);
+  await expect(usage).toContainText("Usage unavailable");
+  client.send(unavailable);
+  await page.clock.runFor(1000);
+  await expect(usage).toContainText("Usage unavailable");
 });
 
 test("older mobile daemons keep working without unsupported resource subscriptions", async ({

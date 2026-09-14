@@ -4,6 +4,7 @@ import path from "node:path";
 import sharp from "sharp";
 import { build } from "../../desktop/node_modules/vite/dist/node/index.js";
 import { providerSvg } from "./provider-assets.mjs";
+import { sourceRevision } from "./source-revision.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const assets = path.join(root, "assets");
@@ -47,7 +48,7 @@ const desktop = fileURLToPath(new URL("../../desktop/", import.meta.url));
 await build({ root: desktop, configFile: path.join(desktop, "vite.mobile.config.ts") });
 const workspaceJs = await readFile(path.join(desktop, "dist/mobile-ui/workspace.js"), "utf8");
 const workspaceCss = await readFile(path.join(desktop, "dist/mobile-ui/workspace.css"), "utf8");
-const workspaceHtml = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; img-src data: blob: https://github.com https://avatars.githubusercontent.com; font-src data:; media-src data: blob:; form-action 'none'; base-uri 'none'"><style>${workspaceCss.replaceAll("</style", "<\\/style")}</style></head><body><div id="root"></div><script>${workspaceJs.replaceAll("</script", "<\\/script")}</script></body></html>`;
+const workspaceHtml = `<!doctype html><html><head><meta charset="utf-8"><meta name="concors-source-revision" content="${sourceRevision()}"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; img-src data: blob: https://github.com https://avatars.githubusercontent.com; font-src data:; media-src data: blob:; form-action 'none'; base-uri 'none'"><style>${workspaceCss.replaceAll("</style", "<\\/style")}</style></head><body><div id="root"></div><script>${workspaceJs.replaceAll("</script", "<\\/script")}</script></body></html>`;
 await writeFile(
   path.join(assets, "workspace-html.ts"),
   `// Generated from the desktop UI by scripts/assets.mjs.\nexport const workspaceHtml = ${JSON.stringify(workspaceHtml)};\n`,

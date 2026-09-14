@@ -85,7 +85,11 @@ export const MobileStateSchema = z.object({
   me: MeSchema.nullable(),
   /** Display-only profile verified by preview sign-in; never grants machine/cloud API access. */
   profile: z
-    .object({ name: z.string().max(500), email: z.string().max(500) })
+    .object({
+      name: z.string().max(500),
+      email: z.string().max(500),
+      image: z.string().max(2048).nullable().default(null),
+    })
     .nullable()
     .optional(),
   direct: z.boolean().default(false),
@@ -128,7 +132,6 @@ export const MobileActionSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("preferences"), preferences: MobilePreferencesSchema }),
   z.object({ kind: z.literal("file-guard"), active: z.boolean() }),
   z.object({ kind: z.literal("dismiss-keyboard") }),
-  z.object({ kind: z.literal("withdraw-ai-consent") }),
 ]);
 export type MobileAction = z.infer<typeof MobileActionSchema>;
 export const MobileRendererMessageSchema = z.discriminatedUnion("type", [

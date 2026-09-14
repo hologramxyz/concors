@@ -207,7 +207,6 @@ async function enter(page: Page) {
   await page.getByRole("textbox", { name: "Email", exact: true }).fill("e2e@example.com");
   await page.getByRole("textbox", { name: "Password", exact: true }).fill("test-password");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await page.getByRole("button", { name: "Allow AI data sharing", exact: true }).click();
   const ui = uiFor(page);
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
   await ui.getByRole("combobox", { name: "Machine", exact: true }).click();
@@ -239,7 +238,11 @@ test("mobile sidebar reuses account avatars and edits machine names and icons th
     "https://github.com/mobile-tester.png?size=96",
   );
   expect(mock.counts()).toEqual({ githubReads: 1, accountsReads: 0, reposReads: 0 });
-  await profile.getByRole("button", { name: "Manage machines", exact: true }).click();
+  await expect(profile.getByRole("button", { name: /Manage machines|Add machine/ })).toHaveCount(0);
+  await profile.getByRole("button", { name: "Settings", exact: true }).click();
+  await sheet(ui, "Settings").getByRole("combobox", { name: "Settings section" }).click();
+  await expect(ui.getByRole("option", { name: "Machines", exact: true })).toHaveCount(1);
+  await ui.getByRole("option", { name: "Machines", exact: true }).click();
   const row = ui.locator('[data-machine-id="second-machine"]');
   await row.getByRole("button", { name: "Rename build-server", exact: true }).click();
   await expect(sheet(ui, "Rename machine")).toHaveAttribute("data-mobile-drawer", "true");
@@ -292,8 +295,8 @@ test("organization drawer preserves a failed switch and isolates machine lists a
   await profile.getByRole("combobox", { name: "Organization", exact: true }).click();
   await ui.getByRole("option", { name: /Hologram team Team · admin/ }).click();
   await expect(sheet(ui, "Account")).toHaveCount(0);
-  // AI-sharing consent is intentionally scoped per organization, not inherited by a team.
-  await page.getByRole("button", { name: "Allow AI data sharing", exact: true }).click();
+  // Switching organizations retains isolation without an extra onboarding prompt.
+  await expect(page.getByRole("button", { name: "Allow AI data sharing" })).toHaveCount(0);
   await expect(ui.getByRole("button", { name: "Open sidebar", exact: true })).toBeVisible();
   await account(ui);
   await expect(profile.getByRole("combobox", { name: "Organization", exact: true })).toContainText(
@@ -308,7 +311,6 @@ test("organization drawer preserves a failed switch and isolates machine lists a
   await settings.getByRole("combobox", { name: "Organization", exact: true }).click();
   await ui.getByRole("option", { name: /Personal Personal · owner/ }).click();
   await expect(settings).toHaveCount(0);
-  await page.getByRole("button", { name: "Allow AI data sharing", exact: true }).click();
   await expect(ui.getByRole("button", { name: "Open sidebar", exact: true })).toBeVisible();
   await account(ui);
   await profile.getByRole("combobox", { name: "Machine", exact: true }).click();

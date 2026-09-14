@@ -102,7 +102,6 @@ test("flat mobile tabs stay synced with desktop nested splits without flattening
     await execute({ kind: "selection.set", projectId, tabId });
     await page.goto("/");
     await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
-    await page.getByRole("button", { name: "Allow AI data sharing", exact: true }).click();
     const ui = page.frameLocator('iframe[title="Concors workspace"]');
     await expect(ui.getByRole("heading", { name: "Choose an agent" })).toHaveCount(0);
     const input = ui.getByRole("textbox", { name: "Message Codex" });
