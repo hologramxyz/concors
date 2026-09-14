@@ -5,7 +5,7 @@ import { FileTab, FileTabLabel } from "@/files/file-tab";
 import { useFiles, fileScope } from "@/files/context";
 import { ProjectFileLinks } from "@/files/provider";
 import { useCommand } from "@/shortcuts/context";
-import { shortcutLabel } from "@/shortcuts/bindings";
+import { useShortcutLabels } from "@/shortcuts/preferences-context";
 import type { PaneFocusRequest } from "./session-pane";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { NewTabMenu } from "./new-tab-menu";
@@ -42,6 +42,7 @@ export function ProjectWorkspace({
   onAddProject: () => void;
   onOpenFolder: (mode: "open" | "clone", trigger?: HTMLElement | null) => void;
 }) {
+  const shortcutLabel = useShortcutLabels();
   const connection = useContext(TerminalConnectionContext);
   const files = useFiles();
   const windowChrome = useWindowChrome();
@@ -105,6 +106,31 @@ export function ProjectWorkspace({
         });
     },
   );
+  const shortcutTab = () => {
+    const focused = document.activeElement
+      ?.closest("[data-shortcut-tab-id]")
+      ?.getAttribute("data-shortcut-tab-id");
+    return project?.tabs.find((tab) => tab.id === focused) ?? selected;
+  };
+  const moveTab = (delta: number) => {
+    const tab = shortcutTab();
+    if (!project || !tab) return;
+    const index = project.tabs.findIndex((item) => item.id === tab.id) + delta;
+    if (index >= 0 && index < project.tabs.length)
+      onCommand({
+        kind: "tab.move",
+        projectId: project.id,
+        expectedVersion: project.version,
+        tabId: tab.id,
+        index,
+      });
+  };
+  useCommand("rename-tab", !!project && connected && !activeFile, () => {
+    const tab = shortcutTab();
+    if (tab) setRename({ tabId: tab.id, value: tab.name });
+  });
+  useCommand("move-tab-left", !!project && canEdit && !activeFile, () => moveTab(-1));
+  useCommand("move-tab-right", !!project && canEdit && !activeFile, () => moveTab(1));
   if (!project)
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
@@ -269,32 +295,9 @@ export function ProjectWorkspace({
                       <button
                         type="button"
                         aria-pressed={!activeFile && selected?.id === tab.id}
-                        title="Drag to reorder. Double-click or F2 to rename. Alt+Shift+Arrow keys move this tab."
+                        data-shortcut-tab-id={tab.id}
+                        title={`Drag to reorder. Double-click to rename. Rename: ${shortcutLabel("rename-tab")}. Move left: ${shortcutLabel("move-tab-left")}. Move right: ${shortcutLabel("move-tab-right")}.`}
                         onDoubleClick={() => startRename(tab)}
-                        onKeyDown={(event) => {
-                          if (event.key === "F2" && connected) {
-                            event.preventDefault();
-                            startRename(tab);
-                            return;
-                          }
-                          if (
-                            !canEdit ||
-                            !event.altKey ||
-                            !event.shiftKey ||
-                            !["ArrowLeft", "ArrowRight"].includes(event.key)
-                          )
-                            return;
-                          event.preventDefault();
-                          const next = index + (event.key === "ArrowLeft" ? -1 : 1);
-                          if (next >= 0 && next < project.tabs.length)
-                            onCommand({
-                              kind: "tab.move",
-                              projectId: project.id,
-                              expectedVersion: project.version,
-                              tabId: tab.id,
-                              index: next,
-                            });
-                        }}
                         disabled={!connected}
                         onClick={() => {
                           files.select(scope, null);
