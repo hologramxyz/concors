@@ -238,7 +238,11 @@ test("mobile sidebar reuses account avatars and edits machine names and icons th
     "https://github.com/mobile-tester.png?size=96",
   );
   expect(mock.counts()).toEqual({ githubReads: 1, accountsReads: 0, reposReads: 0 });
-  await profile.getByRole("button", { name: "Manage machines", exact: true }).click();
+  await expect(profile.getByRole("button", { name: /Manage machines|Add machine/ })).toHaveCount(0);
+  await profile.getByRole("button", { name: "Settings", exact: true }).click();
+  await sheet(ui, "Settings").getByRole("combobox", { name: "Settings section" }).click();
+  await expect(ui.getByRole("option", { name: "Machines", exact: true })).toHaveCount(1);
+  await ui.getByRole("option", { name: "Machines", exact: true }).click();
   const row = ui.locator('[data-machine-id="second-machine"]');
   await row.getByRole("button", { name: "Rename build-server", exact: true }).click();
   await expect(sheet(ui, "Rename machine")).toHaveAttribute("data-mobile-drawer", "true");
