@@ -28,6 +28,7 @@ import {
 import { GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from "expo-glass-effect";
 import * as DocumentPicker from "expo-document-picker";
 import { File, Paths } from "expo-file-system";
+import { cornerRadius, nativeButtonShape, type CornerStyle } from "../appearance";
 import type {
   NativeComposerContent,
   NativeControl,
@@ -139,12 +140,19 @@ export function NativeChrome({ host, snapshot, send }: NativeChromeProps) {
             {surface.content.kind === "button" ? (
               <HeaderButton
                 content={surface.content}
+                corners={host.preferences.corners}
                 dark={dark}
                 glass={availability.glass}
                 emit={emit}
               />
             ) : (
-              <Composer content={surface.content} dark={dark} {...availability} emit={emit} />
+              <Composer
+                content={surface.content}
+                corners={host.preferences.corners}
+                dark={dark}
+                {...availability}
+                emit={emit}
+              />
             )}
           </View>
         );
@@ -156,11 +164,13 @@ export function NativeChrome({ host, snapshot, send }: NativeChromeProps) {
 type Emit = (event: NativeSurfaceEvent) => void;
 function HeaderButton({
   content,
+  corners,
   dark,
   glass,
   emit,
 }: {
   content: Extract<NativeSurface["content"], { kind: "button" }>;
+  corners: CornerStyle;
   dark: boolean;
   glass: boolean;
   emit: Emit;
@@ -218,7 +228,7 @@ function HeaderButton({
           }}
           modifiers={[
             buttonStyle(glass ? "glass" : "bordered"),
-            buttonBorderShape(pill ? "capsule" : "circle"),
+            buttonBorderShape(...nativeButtonShape(corners, pill)),
             controlSize("large"),
             disabled(content.disabled),
             accessibilityLabel(
@@ -268,6 +278,7 @@ function HeaderButton({
 
 function Control({
   icon,
+  corners,
   label,
   dark,
   primary,
@@ -279,6 +290,7 @@ function Control({
   width = 40,
 }: {
   icon: NativeIcon;
+  corners: CornerStyle;
   label: string;
   dark: boolean;
   primary?: boolean;
@@ -292,7 +304,7 @@ function Control({
   const modifiers = [
     buttonStyle(primary ? "borderedProminent" : "plain"),
     ...(primary ? [foregroundStyle(dark ? "#141414" : "#ffffff")] : []),
-    buttonBorderShape("circle"),
+    buttonBorderShape(...nativeButtonShape(corners)),
     controlSize("regular"),
     disabled(!!blocked),
     accessibilityLabel(label),
@@ -358,12 +370,14 @@ function Control({
 
 function Composer({
   content,
+  corners,
   dark,
   glass,
   reduceMotion,
   emit,
 }: {
   content: NativeComposerContent;
+  corners: CornerStyle;
   dark: boolean;
   glass: boolean;
   reduceMotion: boolean;
@@ -475,9 +489,11 @@ function Composer({
   };
   const stop = content.active && !draft.trim() && !content.hasAttachments;
   const controlWidth = Math.min(40, (width - 12) / 8);
+  const glassShape = { borderRadius: cornerRadius(corners) * 3.6 };
   const sendButton = (
     <Control
       icon={stop ? "stop" : "send"}
+      corners={corners}
       label={stop ? "Interrupt agent" : content.active ? "Queue message" : "Send message"}
       dark={dark}
       width={controlWidth}
@@ -491,6 +507,7 @@ function Composer({
   const attachButton = (
     <Control
       icon="plus"
+      corners={corners}
       label="Attach files"
       dark={dark}
       width={controlWidth}
@@ -544,6 +561,7 @@ function Composer({
             <Control
               key={control.id}
               {...control}
+              corners={corners}
               dark={dark}
               width={controlWidth}
               onPresent={onPresent}
@@ -554,6 +572,7 @@ function Composer({
           <View style={styles.spacer} />
           <Control
             icon="context"
+            corners={corners}
             label="Context window"
             dark={dark}
             width={controlWidth}
@@ -566,6 +585,7 @@ function Composer({
           />
           <Control
             icon="mic"
+            corners={corners}
             label="Start dictation"
             dark={dark}
             width={controlWidth}
@@ -592,7 +612,7 @@ function Composer({
         <GlassView
           testID="native-liquid-glass-composer"
           pointerEvents="none"
-          style={[StyleSheet.absoluteFill, styles.glass]}
+          style={[StyleSheet.absoluteFill, glassShape]}
           glassEffectStyle="regular"
           colorScheme={dark ? "dark" : "light"}
         />
@@ -600,7 +620,7 @@ function Composer({
         <View
           style={[
             StyleSheet.absoluteFill,
-            styles.glass,
+            glassShape,
             {
               backgroundColor: dark ? "#242424" : "#faf9f5",
               borderColor: dark ? "#494949" : "#d2d1cc",
@@ -619,7 +639,6 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   control: { width: 40, height: 44, flexShrink: 1 },
   composerFrame: { position: "absolute", bottom: 0, left: 0, right: 0 },
-  glass: { flex: 1, borderRadius: 28 },
   composer: { flex: 1, padding: 6 },
   collapsed: { flexDirection: "row", alignItems: "center" },
   input: { fontSize: 15, lineHeight: 21, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 6 },
