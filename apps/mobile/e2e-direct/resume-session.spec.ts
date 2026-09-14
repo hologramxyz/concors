@@ -20,10 +20,12 @@ for (const native of [false, true]) {
       tabId = crypto.randomUUID(),
       paneId = crypto.randomUUID();
     const execute = async (operation: WorkspaceOperation) => {
+      const workspace = desktop.workspace;
+      if (!workspace) throw new Error("Missing desktop workspace");
       const result = await desktop.executeWorkspace({
         type: "workspace.command",
         commandId: crypto.randomUUID(),
-        epoch: desktop.workspace!.epoch,
+        epoch: workspace.epoch,
         operation,
       });
       expect(result.outcome.status).toBe("accepted");
