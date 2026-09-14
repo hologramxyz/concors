@@ -120,6 +120,11 @@ for (const mode of ["light", "dark"] as const) {
         await expect(ui.locator(".mobile-main")).toHaveCSS("clip-path", "inset(3px)");
         await assertSquare(ui.locator("body"));
       }
+      if (shape !== "Slightly rounded") {
+        await page.screenshot({
+          path: test.info().outputPath(`sidebar-${shape.toLowerCase()}.png`),
+        });
+      }
       await ui.getByRole("button", { name: "Search workspace", exact: true }).click();
       if (square) await assertSquare(ui.locator("body"));
       await page.keyboard.press("Escape");
@@ -148,7 +153,8 @@ for (const mode of ["light", "dark"] as const) {
       "border-radius",
       "0px",
     );
-    await expect(page.getByRole("textbox", { name: "Email", exact: true })).toHaveCSS(
+    // The demo entry has no login fields; the direct-profile scenario checks native host fields.
+    await expect(page.getByRole("img", { name: "Concors", exact: true })).toHaveCSS(
       "border-radius",
       "0px",
     );
