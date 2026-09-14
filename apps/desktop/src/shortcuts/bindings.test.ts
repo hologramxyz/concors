@@ -1,50 +1,91 @@
 import { describe, expect, it } from "vitest";
-import { BINDINGS, matchShortcut, matchSequence, shortcutLabel } from "./bindings";
-const key = {
-  key: "t",
-  code: "KeyT",
+import { BINDINGS, shortcutLabel } from "./bindings";
+import {
+  bindingLabel,
+  defaultKeymap,
+  matchContinuation,
+  matchKeymap,
+  type ShortcutEvent,
+} from "./keymap";
+const key = (overrides: Partial<ShortcutEvent> = {}): ShortcutEvent => ({
+  key: "k",
+  code: "KeyK",
   ctrlKey: true,
   metaKey: false,
   shiftKey: true,
   altKey: false,
   isComposing: false,
-};
-describe("workspace key mappings", () => {
-  it("uses P/T prefixes on both platforms and keeps shell Ctrl+K", () => {
-    for (const mac of [false, true]) {
-      expect(matchShortcut(key, mac, true)).toBe("t");
-      expect(matchShortcut({ ...key, key: "p" }, mac, true)).toBe("p");
-      expect(matchShortcut({ ...key, key: "k", shiftKey: false }, mac, true)).toBeUndefined();
-      expect(matchShortcut({ ...key, key: "ArrowLeft" }, mac, true)).toBe("focus-left");
+  ...overrides,
+});
+
+describe("default workspace shortcuts", () => {
+  it.each([false, true])("preserves every default command on mac=%s", (mac) => {
+    const map = defaultKeymap(mac);
+    for (const command of BINDINGS) {
+      const binding = map[command.id][0]!;
+      const stroke = binding.keys[0]!;
+      const event = key({
+        key: stroke.key,
+        code: "",
+        ctrlKey: stroke.modifiers.includes("Control"),
+        altKey: stroke.modifiers.includes("Alt"),
+        shiftKey: stroke.modifiers.includes("Shift"),
+      });
+      const entries = matchKeymap(event, map, false, true, true);
+      if (binding.keys[1])
+        expect(matchContinuation(key({ key: binding.keys[1].key, code: "" }), entries)?.id).toBe(
+          command.id,
+        );
+      else expect(entries[0]?.id).toBe(command.id);
+      expect(bindingLabel(binding, mac)).toBe(shortcutLabel(command.id, mac));
     }
-    expect(matchShortcut({ ...key, key: "k", shiftKey: false }, false, false)).toBe("search");
   });
-  it("uses directional sequences and no browser-window close mapping", () => {
-    for (const binding of BINDINGS) {
-      expect(shortcutLabel(binding.id, true)).toMatch(/^Control\+Shift\+/);
-      if ("then" in binding) expect(matchSequence(binding.key, binding.then)).toBe(binding.id);
-      else expect(matchShortcut({ ...key, key: binding.key }, true, true)).toBe(binding.id);
-    }
-    expect(matchSequence("p", "Backspace")).toBe("close-pane");
-    expect(matchSequence("t", "Backspace")).toBe("close-tab");
-    expect(matchSequence("t", "ArrowUp")).toBeUndefined();
-    for (const value of ["w", "x", "d", "e"])
-      expect(matchShortcut({ ...key, key: value }, false, true)).toBeUndefined();
-  });
-  it("reserves Ctrl+Tab aliases for the native app", () => {
-    expect(matchShortcut({ ...key, key: "Tab", shiftKey: false }, false, true, true)).toBe(
-      "next-tab",
+  it("leaves shell Ctrl+K alone while keeping the outside-terminal search alias", () => {
+    expect(matchKeymap(key({ shiftKey: false }), defaultKeymap(), true, false)).toEqual([]);
+    expect(matchKeymap(key({ shiftKey: false }), defaultKeymap(), false, false)[0]?.id).toBe(
+      "search",
     );
-    expect(matchShortcut({ ...key, key: "Tab" }, true, true, true)).toBe("previous-tab");
-    expect(matchShortcut({ ...key, key: "Tab" }, true, true, false)).toBeUndefined();
+    expect(
+      matchKeymap(
+        key({ shiftKey: false, ctrlKey: false, metaKey: true }),
+        defaultKeymap(true),
+        false,
+        false,
+      )[0]?.id,
+    ).toBe("search");
   });
-  it("rejects composition and extra modifiers and recognizes shifted punctuation", () => {
-    expect(matchShortcut({ ...key, isComposing: true }, false, true)).toBeUndefined();
-    expect(matchShortcut({ ...key, altKey: true }, false, true)).toBeUndefined();
-    expect(matchShortcut({ ...key, metaKey: true }, true, true)).toBeUndefined();
-    expect(matchShortcut({ ...key, ctrlKey: false, metaKey: true }, true, true)).toBeUndefined();
-    expect(matchShortcut({ ...key, key: "?", code: "Slash" }, false, false)).toBe("shortcuts");
-    expect(matchShortcut({ ...key, key: "<", code: "Comma" }, false, false)).toBe("settings");
-    expect(shortcutLabel("close-pane", false)).toBe("Ctrl+Shift+P → Backspace");
+  it("reserves Ctrl+Tab for the native app and F2 for a focused tab", () => {
+    expect(matchKeymap(key({ key: "Tab", shiftKey: false }), defaultKeymap(), true, false)).toEqual(
+      [],
+    );
+    expect(
+      matchKeymap(key({ key: "Tab", shiftKey: false }), defaultKeymap(), true, true)[0]?.id,
+    ).toBe("next-tab");
+    expect(
+      matchKeymap(
+        key({ key: "F2", ctrlKey: false, shiftKey: false }),
+        defaultKeymap(),
+        false,
+        false,
+      ),
+    ).toEqual([]);
+    expect(
+      matchKeymap(
+        key({ key: "F2", ctrlKey: false, shiftKey: false }),
+        defaultKeymap(),
+        false,
+        false,
+        true,
+      )[0]?.id,
+    ).toBe("rename-tab");
+  });
+  it("recognizes shifted punctuation without claiming browser window close", () => {
+    expect(
+      matchKeymap(key({ key: "?", code: "Slash" }), defaultKeymap(), false, false)[0]?.id,
+    ).toBe("shortcuts");
+    expect(
+      matchKeymap(key({ key: "<", code: "Comma" }), defaultKeymap(), false, false)[0]?.id,
+    ).toBe("settings");
+    expect(matchKeymap(key({ key: "w" }), defaultKeymap(), false, false)).toEqual([]);
   });
 });

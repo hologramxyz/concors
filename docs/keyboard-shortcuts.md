@@ -2,16 +2,46 @@
 
 Open the user menu at the bottom of the sidebar, choose **Settings**, then **Shortcuts**
 under Personal. The dedicated page groups the reference into Workspace, Tabs, and Panes.
-Searching for Shortcuts or pressing Ctrl+Shift+/ opens the same settings page.
+Searching for Shortcuts or pressing the default Ctrl+Shift+/ opens the same settings page.
 Sidebar [Search](search.md) finds workspaces, agents and tabs on the selected machine, with
 commands available as a secondary category. It searches names and paths, not message/file contents.
 Use **Back to app** to return to your previous view.
 
-Use physical Control on macOS as well as Linux/Windows. `→` between keys denotes a sequence:
+Default shortcuts use physical Control on macOS as well as Linux/Windows. `→` between keys denotes a sequence:
 press and release the first chord, then press the next key. A small action picker shows choices
 and disabled actions; Escape, clicking outside, or leaving the window cancels. Holding a key
-does not repeat a creation or close action; directional focus keys can repeat. Unknown keys cancel the sequence and retain their
-ordinary behavior.
+does not repeat a creation or close action; directional focus keys can repeat. An unrecognized
+second key cancels the sequence without sending it to the underlying terminal or chat.
+
+## Customize shortcuts
+
+Choose **Edit** beside any app command to replace its bindings. Record a key combination or
+choose **Type combinations instead** and enter a value such as `Ctrl+Alt+S`, `Command+K`,
+or `F6`. Add a second step for a sequence, and add up to four alternative bindings per command.
+The first step needs Control, Command/Win, or Alt, or a function key; the second can be a bare
+key. Escape remains reserved for cancellation. An assigned Tab second step takes priority over
+navigation in the action picker; otherwise Tab reaches the picker buttons.
+
+Each binding can apply throughout the app, outside terminals, only in the native desktop app,
+or while a tab title is focused. Ordinary form fields and open dialogs keep their editing and
+navigation behavior. Terminal programs and standard text-editing shortcuts remain owned by
+their respective inputs; this page customizes Concors workspace commands.
+
+Conflicting bindings, including a single combination that is also a sequence prefix, require
+explicit reassignment. Saving then removes just the conflicting alternatives from the other
+commands. Remove all bindings to disable a command's shortcuts. **Use defaults**, followed by
+**Save shortcuts**, restores one command; **Restore all defaults** restores every command.
+Menu and search hints update as soon as the change is saved. If a browser or operating system
+reserves a combination, it may intercept it before Concors receives it.
+
+Preferences are per device, independent of the machine and workspace. Desktop/browser clients
+save them locally and update other open windows on the same origin. Mobile saves through its
+native preference bridge and exposes the same editor for supported commands and external
+keyboards; its browser preview also persists these preferences. Existing installations retain
+the defaults until a command is customized. The settings page remains reachable through the
+account menu even if its shortcut is changed or disabled.
+
+## Default bindings
 
 | Action                                 | Shortcut                                   |
 | -------------------------------------- | ------------------------------------------ |
@@ -26,6 +56,8 @@ ordinary behavior.
 | Add project                            | Ctrl+Shift+N                               |
 | Settings                               | Ctrl+Shift+,                               |
 | Shortcut reference                     | Ctrl+Shift+/                               |
+| Rename focused tab                     | F2                                         |
+| Reorder focused tab                    | Alt+Shift+Left/Right                       |
 
 The desktop app additionally supports Ctrl+Tab and Ctrl+Shift+Tab. Browser clients leave these
 to the browser's own tab navigation. Ctrl+Shift+W is not an app shortcut: it can close the browser

@@ -1,5 +1,5 @@
 import { useCommand } from "@/shortcuts/context";
-import { shortcutLabel } from "@/shortcuts/bindings";
+import { useShortcutLabels } from "@/shortcuts/preferences-context";
 import { PaneProfileIcon } from "./profile-icon";
 import { paneProfiles } from "./tab-profiles";
 import { useTerminalProfiles } from "@/terminal/profiles-context";
@@ -38,6 +38,7 @@ export function NewTabMenu({
   renderTrigger?: (open: () => void) => ReactNode;
 }) {
   const compact = useContext(CompactLayoutContext);
+  const shortcutLabel = useShortcutLabels();
   const profiles = useTerminalProfiles();
   const triggerContainer = useRef<HTMLSpanElement>(null);
   const menuTransfersFocus = useRef(false);

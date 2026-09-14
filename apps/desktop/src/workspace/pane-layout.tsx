@@ -5,7 +5,7 @@ import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { useTerminalProfiles } from "@/terminal/profiles-context";
 import { paneProfiles, TAB_PROFILES } from "./tab-profiles";
 import { useCommand } from "@/shortcuts/context";
-import { shortcutLabel } from "@/shortcuts/bindings";
+import { useShortcutLabels } from "@/shortcuts/preferences-context";
 import type { PaneFocusRequest } from "./session-pane";
 import {
   DropdownMenu,
@@ -90,9 +90,44 @@ export function PaneLayout(props: Props) {
           ? activePane?.id
           : null;
     if (!targetId) return;
-    pendingFocus.current = null;
     const pane = container.current?.querySelector<HTMLElement>(`[data-pane-id="${targetId}"]`);
-    (pane?.querySelector<HTMLTextAreaElement>("textarea:not(:disabled)") ?? pane)?.focus();
+    if (!pane) return;
+    let initial = true;
+    const focus = () => {
+      const focused = document.activeElement;
+      if (
+        focused?.closest(
+          '[role="dialog"][data-state="open"], [role="alertdialog"], [role="menu"][data-state="open"]',
+        )
+      )
+        return;
+      const focusedPane = focused?.closest<HTMLElement>("[data-pane-id]");
+      if (!initial && focusedPane && focusedPane !== pane && focusedPane.getClientRects().length) {
+        pendingFocus.current = null;
+        observer.disconnect();
+        return;
+      }
+      const input = pane.querySelector<HTMLTextAreaElement>("textarea:not(:disabled)");
+      (input ?? pane).focus({ preventScroll: true });
+      initial = false;
+      if (input) {
+        pendingFocus.current = null;
+        observer.disconnect();
+      }
+    };
+    // A newly split Agent pane receives its usable composer after the workspace update.
+    const observer = new MutationObserver(focus);
+    observer.observe(pane, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["disabled"],
+    });
+    const frame = requestAnimationFrame(focus);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
   }, [props.tab.nodes, activePaneId, activePane?.id, visible]);
   const connection = useContext(TerminalConnectionContext);
   const canSplitBefore = !!(
@@ -291,6 +326,7 @@ function Pane({
   node: Extract<LayoutNode, { kind: "pane" }>;
   onDrag: (drag: PaneDrag | null) => void;
 }) {
+  const shortcutLabel = useShortcutLabels();
   const connection = useContext(TerminalConnectionContext);
   const canDrag =
     canEdit &&
