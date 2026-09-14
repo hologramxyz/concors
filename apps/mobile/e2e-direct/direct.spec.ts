@@ -246,9 +246,10 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     expect(profileRequests).toEqual([]);
     const socketsBeforeProfile = workspaceSockets.length;
     await account.getByRole("button", { name: "Sign in", exact: true }).click();
-    await expect(
-      page.getByRole("heading", { name: "Sign in to Concourse", exact: true }),
-    ).toHaveCSS("font-size", "16px");
+    await expect(page.getByRole("heading", { name: "Sign in to Concors", exact: true })).toHaveCSS(
+      "font-size",
+      "16px",
+    );
     await page.getByRole("textbox", { name: "Email", exact: true }).fill("demo@concors.dev");
     await page.getByLabel("Password", { exact: true }).fill("profile-fixture-password");
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
