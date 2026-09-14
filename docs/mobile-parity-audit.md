@@ -22,6 +22,33 @@ not rebuild an already-exported Expo preview.
 | Navigation and resource usage | Retains mobile sidebar/files swipe arbitration, rounded glass rim, bottom drawers, and sidebar CPU/RAM. Browser tests cover gestures, hidden controls, themes and telemetry fallback.                                                                                                    |
 | Onboarding                    | Removed AI-sharing screen, stored-consent dependency and withdrawal controls with no replacement page. Authentication, private-endpoint checks, organization isolation and ordinary privacy links remain.                                                                                |
 
+## Sidebar and corner-theme follow-up
+
+The machine picker and glass search button share the sidebar's first row (machine
+left, search right), including at 320px. Both still open their existing drawers
+without dismissing the sidebar.
+
+Mobile no longer hard-codes circular buttons or fixed rounded panel corners.
+Square uses zero-radius glass controls, drawer corners/close buttons, avatars,
+pane rows, composer actions, badges and the sliding workspace rim. Rounded uses
+fully round icon buttons/avatars and capsule header selectors; Slightly rounded
+uses the shared small-radius tokens. Hover/pressed overlays inherit their shape.
+Appearance's three sample shapes deliberately retain the shape they illustrate.
+
+One persisted appearance store now feeds the renderer, native chrome, profile
+sheet and signed-out screens. Native iOS uses Expo UI's
+[`buttonBorderShape`](https://docs.expo.dev/versions/latest/sdk/ui/swift-ui/modifiers/#buttonbordershapeshape-cornerradius)
+with a zero-radius rounded rectangle for Square and circle/capsule for Rounded.
+The native GlassView composer and its reduced-transparency fallback use the same
+preference. OS-owned keyboard, alerts and system sheets keep the operating system's
+appearance; application preferences do not override system UI.
+
+Regression checks cover light/dark rendered surfaces, narrow sidebar layout,
+square → rounded → subtle → square transitions, profile fields outside the
+renderer, and preference hydration/write ordering. Native modifier geometry is
+unit-tested, but actual SwiftUI glass rendering still requires an installed iOS
+build, as noted below.
+
 ## Preview verification
 
 `pnpm --filter @concors/mobile assets` recompiles the desktop renderer. The offline
