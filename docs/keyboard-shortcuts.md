@@ -52,7 +52,8 @@ leaves its sessions running, as when using the corresponding UI controls.
 ## Terminal clipboard
 
 Select terminal output, then press Super+C (Command+C on macOS) to copy.
-Super+V / Command+V pastes. Ctrl+Shift+C and Ctrl+Shift+V also work.
+Super+V / Command+V pastes. Ctrl+Shift+C and Ctrl+Shift+V also work, as do
+Ctrl+Insert for copy and Shift+Insert for paste.
 These shortcuts are consumed locally and never sent as control characters to the shell.
 Copying with no selection leaves the clipboard alone; plain Ctrl+C still interrupts the
 running command and plain Ctrl+V retains its shell behavior.
@@ -60,3 +61,18 @@ running command and plain Ctrl+V retains its shell behavior.
 The desktop app uses the system clipboard; browser clients use the browser's clipboard
 permissions. Paste goes through xterm so multiline text respects bracketed paste mode.
 Clipboard failures are shown in the terminal instead of silently dropping the shortcut.
+
+### Omarchy / Hyprland
+
+Omarchy can intercept Super+C/V and send different keys to the application. Concors accepts
+Ctrl+Insert/Shift+Insert and Ctrl+Shift+C/V, as well as Super+C/V delivered directly.
+
+If Super+C interrupts a command, inspect the active Hyprland clipboard bindings and the
+Concors window class/app ID. A binding that translates Super+C to plain Ctrl+C makes it
+indistinguishable from a physical Ctrl+C inside the application. Configure the compositor
+to send Ctrl+Insert/Shift+Insert for Concors instead, preserving the existing behavior for
+other applications. Do not change plain Ctrl+C to copy globally.
+
+Omarchy releases use different configuration formats and terminal detection rules; use
+the installed configuration as the source of truth. Also check that the launcher actually
+runs the newly built Concors executable.

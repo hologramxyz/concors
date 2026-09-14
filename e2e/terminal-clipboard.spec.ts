@@ -25,7 +25,7 @@ test.beforeEach(async ({ page, baseURL }) => {
   });
 });
 
-test("terminal copies with Super and Ctrl+Shift, pastes once, and preserves Ctrl+C", async ({
+test("terminal copies with Super, Ctrl+Shift and Insert shortcuts, pastes once, and preserves Ctrl+C", async ({
   page,
   context,
 }) => {
@@ -57,6 +57,10 @@ test("terminal copies with Super and Ctrl+Shift, pastes once, and preserves Ctrl
     await page.keyboard.press("Control+Shift+c");
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("COPY_ME");
 
+    await page.evaluate(() => navigator.clipboard.writeText("old clipboard"));
+    await page.keyboard.press("Control+Insert");
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("COPY_ME");
+
     await terminal.click();
     await page.evaluate(() => navigator.clipboard.writeText("printf 'PASTE_%s\\n' OK"));
     await page.keyboard.press("Meta+v");
@@ -70,6 +74,13 @@ test("terminal copies with Super and Ctrl+Shift, pastes once, and preserves Ctrl
     await page.keyboard.press("Enter");
     await expect(output.getByText("SHIFT_OK", { exact: true })).toBeVisible();
     await expect(output.getByText("SHIFT_OK", { exact: true })).toHaveCount(1);
+
+    await page.evaluate(() => navigator.clipboard.writeText("printf 'INSERT_%s\\n' OK"));
+    await page.keyboard.press("Shift+Insert");
+    await expect(output).toContainText("printf 'INSERT_%s");
+    await page.keyboard.press("Enter");
+    await expect(output.getByText("INSERT_OK", { exact: true })).toBeVisible();
+    await expect(output.getByText("INSERT_OK", { exact: true })).toHaveCount(1);
 
     await page.keyboard.type("sleep 1; printf 'STILL_%s\\n' RUNNING");
     await page.keyboard.press("Enter");
