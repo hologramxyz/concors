@@ -6,9 +6,33 @@
     <meta name="color-scheme" content="dark light" />
     <link rel="icon" type="image/svg+xml" href="%BASE_URL%favicon.svg" />
     <title>Concors</title>
+    <script src="%BASE_URL%assets/startup-appearance.js"></script>
+    <link rel="stylesheet" href="/src/startup/startup.css" />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Mirrors StartupScreen so React can take over without an empty first frame. -->
+      <div
+        class="concors-startup"
+        data-startup-screen
+        role="status"
+        aria-label="Opening Concors"
+        aria-busy="true"
+      >
+        <div class="concors-startup-brand" aria-hidden="true">
+          <svg class="concors-startup-mark" viewBox="0 0 96 96" fill="currentColor">
+            <path
+              fill-rule="evenodd"
+              d="M12 24L48 10L84 24V33H12ZM19.5 27H76.5L48 16.5Z
+      M18 35H30L28 39.5H20ZM42 35H54L52 39.5H44ZM66 35H78L76 39.5H68Z
+      M20 41.5H28L29.25 72.5H18.75ZM44 41.5H52L53.25 72.5H42.75ZM68 41.5H76L77.25 72.5H66.75Z
+      M17 75H79V77.5H17ZM12 79H84V81.5H12ZM7 83H89V85.5H7Z"
+            />
+          </svg>
+          <div class="concors-startup-shimmer"></div>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
