@@ -37,7 +37,29 @@ test("resume finds older native sessions, protects drafts, and keeps the same pa
       const row = dialog.locator(`[data-session-provider="${provider}"]`).first();
       await expect(row).toBeVisible();
       await expect(row.locator("[data-session-provider-icon]")).toBeVisible();
+      const filter = filters.locator(`[data-session-filter="${provider}"]`);
+      await filter.scrollIntoViewIfNeeded();
+      await expect(filter.locator("[data-session-filter-icon]")).toBeVisible();
+      expect(
+        await filter.evaluate((element) => {
+          const button = element.getBoundingClientRect();
+          const icon = element.querySelector("[data-session-filter-icon]")?.getBoundingClientRect();
+          return (
+            !!icon &&
+            icon.left >= button.left &&
+            icon.right <= button.right &&
+            icon.top >= button.top &&
+            icon.bottom <= button.bottom
+          );
+        }),
+      ).toBe(true);
     }
+    await filters.evaluate((element) => {
+      element.scrollLeft = 0;
+    });
+    expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+      true,
+    );
     const actions = dialog.locator('[data-slot="dialog-actions"]');
     await expect(actions.getByRole("button", { name: "Refresh sessions" })).toBeVisible();
     await expect(actions.getByRole("button", { name: "Close", exact: true })).toBeVisible();
