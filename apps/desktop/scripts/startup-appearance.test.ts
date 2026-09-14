@@ -3,7 +3,7 @@ import { runInNewContext } from "node:vm";
 import { expect, it } from "vitest";
 
 const source = readFileSync(
-  new URL("../../public/assets/startup-appearance.js", import.meta.url),
+  new URL("../public/assets/startup-appearance.js", import.meta.url),
   "utf8",
 );
 function boot(values: Record<string, string>, systemDark = false, blocked = false) {
