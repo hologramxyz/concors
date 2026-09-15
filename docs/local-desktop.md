@@ -33,6 +33,41 @@ resource directory intact when moving the application.
 This first packaging command supports Linux x86_64. macOS/Windows installers, signing,
 and automatic desktop/runtime updates need their own packaging and validation.
 
+## Distributable tarball and Arch package
+
+The `.deb` above installs on Debian-family systems. For a relocatable tree — and for the
+Arch/Omarchy package built from it — build without the bundler and assemble the release
+directory instead:
+
+```sh
+VITE_CONCORS_API_URL=https://api.concors.dev pnpm desktop:package:linux --no-bundle
+pnpm desktop:release:linux
+```
+
+That writes `apps/desktop/dist/release/Concors-<version>-x64.tar.gz` and its `.sha256`.
+The layout is deliberate: Tauri resolves resources as `<exe dir>/../lib/<productName>` before
+falling back to `/usr/lib/<productName>`, so `bin/concors-desktop` alongside
+`lib/Concors/daemon/` works unpacked in a home directory, installed under `/opt`, or restaged
+by a distribution package. Keep `bin/` and `lib/` siblings when moving the tree.
+
+`packaging/linux/` holds the Arch packaging that consumes that tarball. Copy the tarball next
+to the `PKGBUILD` and build:
+
+```sh
+cp apps/desktop/dist/release/Concors-0.1.0-x64.tar.gz packaging/linux/
+cd packaging/linux && makepkg -si
+```
+
+The package installs the runtime under `/opt/Concors`, a `/usr/bin/concors` wrapper, a desktop
+entry and hicolor icons; `pacman -R concors-bin` removes it. It sets `!strip` because the
+bundled Node binary and the daemon's native terminal module must not be stripped. The
+`sha256sums` are `SKIP` while the tarball is built locally — pin them with `updpkgsums` when
+the source moves to a published release URL.
+
+A package built on Arch links against the build host's glibc and WebKitGTK, so it runs only on
+comparably recent systems. Artifacts intended for other distributions must be built on the
+oldest supported base (a Linux x86_64 container) rather than on a rolling-release host.
+
 ## Repeatable local preview
 
 After the initial Linux setup, update and relaunch the native app with one command from
