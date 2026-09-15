@@ -5,6 +5,26 @@ const variant = process.env.APP_VARIANT ?? "development";
 if (!["development", "preview", "production"].includes(variant))
   throw new Error("APP_VARIANT must be development, preview or production.");
 const production = variant === "production";
+const personalTeam = process.env.CONCORS_IOS_PERSONAL_TEAM === "true";
+if (
+  personalTeam &&
+  (variant !== "development" || process.env.EAS_BUILD_PROFILE || process.env.EAS_BUILD)
+)
+  throw new Error(
+    "Personal Team builds are local development only; do not use EAS or a store profile.",
+  );
+const localIdentifier = process.env.CONCORS_IOS_BUNDLE_IDENTIFIER ?? "dev.concors.mobile.local";
+if (
+  personalTeam &&
+  (!/^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/.test(localIdentifier) ||
+    ["dev.concors.mobile", "dev.concors.mobile.preview"].includes(localIdentifier))
+)
+  throw new Error(
+    "Use a unique reverse-domain CONCORS_IOS_BUNDLE_IDENTIFIER, separate from store/preview IDs.",
+  );
+const localTeam = personalTeam ? process.env.CONCORS_IOS_TEAM_ID : undefined;
+if (localTeam && !/^[A-Z0-9]{10}$/.test(localTeam))
+  throw new Error("CONCORS_IOS_TEAM_ID must be the 10-character signing team ID shown by Xcode.");
 // Static web previews may share standard HTTPS with other apps under a dedicated path.
 // Do not change production/native release routing or accept an external asset origin here.
 const webBasePath = process.env.CONCORS_MOBILE_WEB_BASE_PATH;
@@ -16,16 +36,21 @@ const identifier = "dev.concors.mobile";
 const projectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
 
 const config: ExpoConfig = {
-  name: production ? "Concors" : "Concors Preview",
+  name: personalTeam ? "Concors Dev" : production ? "Concors" : "Concors Preview",
   slug: "concors-mobile",
   version,
-  scheme: production ? "concors" : "concors-preview",
+  scheme: personalTeam ? "concors-local" : production ? "concors" : "concors-preview",
   platforms: ["ios", "android", "web"],
   orientation: "default",
   userInterfaceStyle: "automatic",
   icon: "./assets/icon.png",
   ios: {
-    bundleIdentifier: production ? identifier : `${identifier}.preview`,
+    bundleIdentifier: personalTeam
+      ? localIdentifier
+      : production
+        ? identifier
+        : `${identifier}.preview`,
+    ...(localTeam ? { appleTeamId: localTeam } : {}),
     supportsTablet: false,
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false,
@@ -83,17 +108,21 @@ const config: ExpoConfig = {
         dark: { image: "./assets/splash-dark.png", backgroundColor: "#141414" },
       },
     ],
-    [
-      "expo-notifications",
-      {
-        icon: "./assets/notification-icon.png",
-        color: "#202020",
-        defaultChannel: "agent-attention",
-      },
-    ],
+    ...(personalTeam
+      ? ["./plugins/with-personal-team.cjs"]
+      : ([
+          [
+            "expo-notifications",
+            {
+              icon: "./assets/notification-icon.png",
+              color: "#202020",
+              defaultChannel: "agent-attention",
+            },
+          ],
+        ] satisfies NonNullable<ExpoConfig["plugins"]>)),
   ],
   ...(process.env.EXPO_OWNER ? { owner: process.env.EXPO_OWNER } : {}),
-  extra: { variant, ...(projectId ? { eas: { projectId } } : {}) },
+  extra: { variant, personalTeam, ...(projectId ? { eas: { projectId } } : {}) },
 };
 
 export default config;
