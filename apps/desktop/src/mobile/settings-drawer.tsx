@@ -201,7 +201,9 @@ export function SettingsDrawer({
                 </label>
                 {!host.capabilities.pushNotifications && (
                   <p className="text-sm text-muted-foreground">
-                    Push delivery is not available on this server yet.
+                    {host.app?.personalTeam
+                      ? "Push notifications are disabled in this free Personal Team build."
+                      : "Push delivery is not available on this server yet."}
                   </p>
                 )}
               </Section>

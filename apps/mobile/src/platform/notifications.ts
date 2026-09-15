@@ -22,6 +22,8 @@ Notifications.setNotificationHandler({
 });
 export function enablePush(api: ApiClient, userId: string): Promise<void> {
   return ordered(async () => {
+    if (config.personalTeam)
+      throw new Error("Push notifications are disabled in the free Personal Team build.");
     if (!Device.isDevice || !config.projectId)
       throw new Error("Notifications need a physical device and a configured Expo project.");
     if (Platform.OS === "android")
@@ -60,6 +62,7 @@ async function unregister(api: ApiClient): Promise<void> {
   if (enabled && installationId) await api.unregisterPushDevice(installationId);
 }
 export async function pushEnabled(userId: string): Promise<boolean> {
+  if (config.personalTeam) return false;
   return (await deviceStorage.get("push-user")) === userId;
 }
 export function usePushNavigation(
@@ -68,7 +71,7 @@ export function usePushNavigation(
   supported: boolean,
 ): void {
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || config.personalTeam) return;
     let disposed = false;
     const seen = new NotificationDeduplicator();
     const navigate = (response: Notifications.NotificationResponse | null) => {
