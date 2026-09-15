@@ -12,6 +12,10 @@ still require backend services. See the [server contract](../../docs/mobile-back
 Signed builds and physical device checks require team-owned accounts/devices.
 See the [parity matrix](../../docs/mobile-parity.md) and [release runbook](../../docs/mobile-release.md).
 
+For an installed iPhone beta (no Metro/Expo Go), follow the
+[TestFlight runbook](../../docs/mobile-testflight.md). `pnpm testflight:check` validates the
+candidate and probes the selected API without credentials; it does not build or upload.
+
 ## Try it now — no daemon or account needed
 
 From the repository root, with Node 24 and pnpm 11.1.1:
