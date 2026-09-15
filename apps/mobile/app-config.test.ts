@@ -31,6 +31,7 @@ it("uses the production identity for candidates without a development launcher s
   expect(config.android?.package).toBe("dev.concors.mobile");
   expect(config.scheme).toBe("concors");
   expect(config.plugins).toContainEqual(["expo-dev-client", { addGeneratedScheme: false }]);
+  expect(config.plugins).toContainEqual(["expo-secure-store", { faceIDPermission: false }]);
   expect(config.android?.blockedPermissions).toContain("android.permission.SYSTEM_ALERT_WINDOW");
   expect(config.ios?.associatedDomains).toEqual(["applinks:concors.dev"]);
   expect(config.plugins).toContainEqual([

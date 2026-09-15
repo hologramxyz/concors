@@ -71,7 +71,7 @@ const config: ExpoConfig = {
   ...(webBasePath ? { experiments: { baseUrl: webBasePath } } : {}),
   plugins: [
     "expo-router",
-    "expo-secure-store",
+    ["expo-secure-store", { faceIDPermission: false }],
     "expo-font",
     ["expo-dev-client", { addGeneratedScheme: variant === "development" }],
     [
