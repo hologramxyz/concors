@@ -1,0 +1,54 @@
+# Maintainer: Pierlorenzo Peruzzo <pierlorenzo.peruzzo@gmail.com>
+
+pkgname=concors-bin
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="A client and runtime for orchestrating coding agents locally and in the cloud"
+arch=('x86_64')
+url="https://concors.dev"
+license=('MIT')
+# Tauri borrows the system webview instead of bundling one; the daemon's Node runtime is
+# shipped inside the package, so nothing here is needed for the agent host itself except git.
+depends=(
+    'webkit2gtk-4.1'
+    'gtk3'
+    'glibc'
+    'gcc-libs'
+    'dbus'
+    'git'
+    'hicolor-icon-theme'
+)
+provides=("concors=${pkgver}")
+conflicts=('concors')
+# The bundled Node binary and the daemon's native terminal module must not be stripped.
+options=('!strip' '!debug')
+source=(
+    "Concors-${pkgver}-x64.tar.gz"
+    'concors.sh'
+    'concors.desktop'
+)
+# SKIP while the tarball is built locally. When this moves to a GitHub release URL, pin the
+# digest with `updpkgsums`.
+sha256sums=('SKIP'
+            'SKIP'
+            'SKIP')
+
+package() {
+    local _src="${srcdir}/Concors-${pkgver}-x64"
+
+    # bin/ and lib/ must stay siblings: Tauri looks for resources at `<exe dir>/../lib/Concors`.
+    install -d "${pkgdir}/opt/Concors"
+    cp -a --no-preserve=ownership "${_src}/bin" "${_src}/lib" "${pkgdir}/opt/Concors/"
+
+    install -Dm755 "${srcdir}/concors.sh" "${pkgdir}/usr/bin/concors"
+    install -Dm644 "${srcdir}/concors.desktop" \
+        "${pkgdir}/usr/share/applications/concors.desktop"
+
+    for _size in 32x32 128x128 256x256 512x512; do
+        install -Dm644 "${_src}/icons/${_size}.png" \
+            "${pkgdir}/usr/share/icons/hicolor/${_size}/apps/concors.png"
+    done
+
+    install -Dm644 "${_src}/LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+    install -Dm644 "${_src}/NODE_LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/NODE_LICENSE"
+}
