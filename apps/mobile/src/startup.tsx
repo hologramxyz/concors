@@ -19,7 +19,8 @@ export function StartupScreen() {
       <Image
         source={require("../assets/splash.png")}
         accessible={false}
-        style={{ width: 160, height: 160, tintColor: theme.text }}
+        tintColor={theme.text}
+        style={{ width: 160, height: 160 }}
       />
     </View>
   );

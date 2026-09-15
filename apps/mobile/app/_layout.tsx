@@ -13,7 +13,6 @@ import { api } from "../src/auth/runtime";
 import { useCapabilities } from "../src/queries";
 import { usePushNavigation } from "../src/platform/notifications";
 import { AppearanceProvider, useAppearance } from "../src/appearance-provider";
-import { StartupScreen } from "../src/startup";
 
 configureRequestIds(randomUUID);
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
@@ -42,7 +41,7 @@ export default function RootLayout() {
   );
 }
 function Navigation() {
-  const { me, direct, loading, initializing } = useAuth();
+  const { me, direct, loading } = useAuth();
   const { ready } = useAppearance();
   const capabilities = useCapabilities();
   usePushNavigation(api, me?.user.id, capabilities.data?.pushNotifications ?? false);
@@ -51,7 +50,6 @@ function Navigation() {
     // Do not hold the unresponsive OS splash over a slow network request.
     if (ready) void SplashScreen.hideAsync().catch(() => undefined);
   }, [ready]);
-  if (!ready || initializing) return <StartupScreen />;
   return (
     <MachineProvider
       direct={direct}
