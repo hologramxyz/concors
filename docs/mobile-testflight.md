@@ -1,5 +1,9 @@
 # iPhone beta through TestFlight
 
+Apple enrollment still pending? Use the [local Mac → iPhone development path](mobile-local-iphone.md)
+with a free Personal Team first. The approved development API is
+`https://concors-server-dev.up.railway.app`; this does not change the production default.
+
 This is the **internal beta** path, not a public App Store release. Use `candidate`: production
 identity, store distribution, no demo/private-daemon override, automatic build-number increments.
 Do not use `preview`: EAS `distribution: internal` means ad hoc, not TestFlight internal testing.
