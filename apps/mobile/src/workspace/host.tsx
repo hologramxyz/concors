@@ -145,6 +145,8 @@ function SignedInWorkspace() {
           capabilities: {
             ...(capabilities.data ?? NO_MOBILE_CAPABILITIES),
             remoteAccess: !!auth.me || auth.direct,
+            pushNotifications:
+              !config.personalTeam && (capabilities.data?.pushNotifications ?? false),
           },
           demo: config.demo,
           native: Platform.OS !== "web",
@@ -159,6 +161,7 @@ function SignedInWorkspace() {
           app: {
             version: Constants.nativeAppVersion ?? Constants.expoConfig?.version ?? "unknown",
             build: Constants.nativeBuildVersion ?? null,
+            personalTeam: config.personalTeam,
           },
           endpointLabel: auth.direct
             ? `Direct desktop daemon${config.developmentDaemon ? ` · ${new URL(config.developmentDaemon).host}` : ""}`
