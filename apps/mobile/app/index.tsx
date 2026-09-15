@@ -5,13 +5,17 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../src/auth/provider";
 import { config } from "../src/config";
 import { Button, Copy, Field, Notice, Screen, useTheme } from "../src/ui";
+import { useAppearance } from "../src/appearance-provider";
+import { StartupScreen } from "../src/startup";
 
 export default function SignInScreen() {
   const auth = useAuth();
   const theme = useTheme();
+  const { ready } = useAppearance();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const submit = () => auth.signIn(email, password);
+  if (!ready || auth.initializing) return <StartupScreen />;
   if (auth.me || auth.direct) return <Redirect href="/(app)" />;
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
