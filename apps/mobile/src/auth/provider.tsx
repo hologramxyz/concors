@@ -14,6 +14,7 @@ interface AuthState {
   error: string | null;
 }
 interface AuthContextValue extends AuthState {
+  initializing: boolean;
   profile: ReturnType<typeof useDirectProfile>["profile"];
   openProfile(): void;
   direct: boolean;
@@ -35,6 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const generation = useRef(0);
   const changingSession = useRef(false);
   const [direct, setDirect] = useState(false);
+  const [initializing, setInitializing] = useState(true);
   const [state, setState] = useState<AuthState>({ me: null, loading: true, error: null });
   const refresh = async () => {
     // A private-daemon test session is not a cloud login. Do not hydrate or send account tokens.
@@ -75,7 +77,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           loading: false,
           error: "Could not clear saved machine access. Retry sign-out.",
         });
-      });
+      })
+      .finally(() => setInitializing(false));
     const subscription = AppState.addEventListener("change", (next) => {
       if (next === "active") void refresh();
     });
@@ -184,6 +187,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext
       value={{
         ...state,
+        initializing,
         profile: profile.profile,
         openProfile: profile.openProfile,
         direct,

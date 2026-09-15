@@ -29,6 +29,10 @@ await sharp(Buffer.from(mark.replace('color="#20211f"', 'color="#ffffff"')))
   .png()
   .toFile(path.join(assets, "notification-icon.png"));
 await sharp(Buffer.from(mark)).resize(512, 512).png().toFile(path.join(assets, "splash.png"));
+await sharp(Buffer.from(mark.replace('color="#20211f"', 'color="#ededed"')))
+  .resize(512, 512)
+  .png()
+  .toFile(path.join(assets, "splash-dark.png"));
 
 // Reuse the licensed desktop marks in the native composer; no duplicated logo geometry.
 for (const provider of ["codex", "claude", "opencode"]) {

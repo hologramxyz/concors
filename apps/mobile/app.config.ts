@@ -80,7 +80,7 @@ const config: ExpoConfig = {
         image: "./assets/splash.png",
         imageWidth: 160,
         backgroundColor: "#f4f3ef",
-        dark: { backgroundColor: "#141414" },
+        dark: { image: "./assets/splash-dark.png", backgroundColor: "#141414" },
       },
     ],
     [
