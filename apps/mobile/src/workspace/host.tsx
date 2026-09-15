@@ -18,6 +18,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams } from "expo-router";
 import * as Clipboard from "expo-clipboard";
+import Constants from "expo-constants";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, MachineSchema, NO_MOBILE_CAPABILITIES, type Machine } from "@concors/api-client";
 import {
@@ -155,6 +156,10 @@ function SignedInWorkspace() {
           supportUrl: config.supportUrl,
           privacyUrl: config.privacyUrl,
           apiUrl: config.apiUrl,
+          app: {
+            version: Constants.nativeAppVersion ?? Constants.expoConfig?.version ?? "unknown",
+            build: Constants.nativeBuildVersion ?? null,
+          },
           endpointLabel: auth.direct
             ? `Direct desktop daemon${config.developmentDaemon ? ` · ${new URL(config.developmentDaemon).host}` : ""}`
             : config.demo

@@ -164,6 +164,10 @@ export function SettingsDrawer({
                 <AdvancedSettings
                   endpoint={null}
                   endpointLabel={host.endpointLabel}
+                  apiUrl={host.apiUrl}
+                  {...(host.app
+                    ? { clientVersion: host.app.version, buildVersion: host.app.build }
+                    : {})}
                   state={connectionState}
                 />
               )}
