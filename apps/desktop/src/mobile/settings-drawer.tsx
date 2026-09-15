@@ -214,6 +214,9 @@ export function SettingsDrawer({
               endpoint={null}
               apiUrl={host.apiUrl}
               endpointLabel={host.endpointLabel}
+              {...(host.app
+                ? { clientVersion: host.app.version, buildVersion: host.app.build }
+                : {})}
               state={connectionState}
               theme={host.preferences.theme}
               cornerStyle={host.preferences.corners}
