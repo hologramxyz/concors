@@ -47,6 +47,7 @@ it("allows internal beta preparation without claiming release or live acceptance
 it.each([
   { EXPO_PUBLIC_DEMO: "true" },
   { APP_VARIANT: "preview" },
+  { CONCORS_IOS_PERSONAL_TEAM: "true" },
   { EXPO_PUBLIC_API_URL: "http://localhost:3000" },
   { EXPO_PUBLIC_API_URL: "https://private.tailnet.ts.net" },
   { EXPO_PUBLIC_API_URL: "https://secret@api.concors.dev" },
