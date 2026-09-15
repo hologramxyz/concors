@@ -10,18 +10,31 @@ import { createAppearanceStore } from "./appearance";
 import { deviceStorage } from "./platform/storage";
 
 const AppearanceContext = createContext<ReturnType<typeof createAppearanceStore> | null>(null);
+const AppearanceReadyContext = createContext(false);
 
 export function AppearanceProvider({ children }: { children: ReactNode }) {
   const [store] = useState(() => createAppearanceStore(deviceStorage));
+  const [ready, setReady] = useState(false);
   useEffect(() => {
-    void store.hydrate();
+    let mounted = true;
+    void store.hydrate().then(() => {
+      if (mounted) setReady(true);
+    });
+    return () => {
+      mounted = false;
+    };
   }, [store]);
-  return <AppearanceContext value={store}>{children}</AppearanceContext>;
+  return (
+    <AppearanceContext value={store}>
+      <AppearanceReadyContext value={ready}>{children}</AppearanceReadyContext>
+    </AppearanceContext>
+  );
 }
 
 export function useAppearance() {
   const store = useContext(AppearanceContext);
   if (!store) throw new Error("Missing AppearanceProvider");
   const preferences = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
-  return { preferences, setPreferences: store.setPreferences };
+  const ready = useContext(AppearanceReadyContext);
+  return { preferences, setPreferences: store.setPreferences, ready };
 }

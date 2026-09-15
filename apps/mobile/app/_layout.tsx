@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AppState } from "react-native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import * as SplashScreen from "expo-splash-screen";
 import { focusManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { configureRequestIds } from "@concors/client-core";
 import { randomUUID } from "expo-crypto";
@@ -11,9 +12,11 @@ import { useTheme } from "../src/ui";
 import { api } from "../src/auth/runtime";
 import { useCapabilities } from "../src/queries";
 import { usePushNavigation } from "../src/platform/notifications";
-import { AppearanceProvider } from "../src/appearance-provider";
+import { AppearanceProvider, useAppearance } from "../src/appearance-provider";
+import { StartupScreen } from "../src/startup";
 
 configureRequestIds(randomUUID);
+void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 export default function RootLayout() {
   useEffect(() => {
     focusManager.setFocused(AppState.currentState === "active");
@@ -39,9 +42,16 @@ export default function RootLayout() {
   );
 }
 function Navigation() {
-  const { me, direct, loading } = useAuth();
+  const { me, direct, loading, initializing } = useAuth();
+  const { ready } = useAppearance();
   const capabilities = useCapabilities();
   usePushNavigation(api, me?.user.id, capabilities.data?.pushNotifications ?? false);
+  useEffect(() => {
+    // Hand off the OS splash to the matching React screen after appearance is restored.
+    // Do not hold the unresponsive OS splash over a slow network request.
+    if (ready) void SplashScreen.hideAsync().catch(() => undefined);
+  }, [ready]);
+  if (!ready || initializing) return <StartupScreen />;
   return (
     <MachineProvider
       direct={direct}

@@ -33,6 +33,12 @@ it("uses the production identity for candidates without a development launcher s
   expect(config.plugins).toContainEqual(["expo-dev-client", { addGeneratedScheme: false }]);
   expect(config.android?.blockedPermissions).toContain("android.permission.SYSTEM_ALERT_WINDOW");
   expect(config.ios?.associatedDomains).toEqual(["applinks:concors.dev"]);
+  expect(config.plugins).toContainEqual([
+    "expo-splash-screen",
+    expect.objectContaining({
+      dark: { image: "./assets/splash-dark.png", backgroundColor: "#141414" },
+    }),
+  ]);
 });
 
 it("keeps preview identity separate and rejects misspelled variants", async () => {
