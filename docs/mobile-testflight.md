@@ -26,6 +26,8 @@ are now linked in the app/build configuration. Build 0.1.0 (3) was signed, uploa
 and installed by the owner, but still targeted the previously approved Railway development API.
 The owner subsequently requested `https://api.concors.dev`; new candidate/production builds pin
 that API explicitly. Accounts on the old development server are not automatically migrated.
+The update requires a fresh sign-in: native sessions are now bound to their issuing API and
+unscoped legacy tokens are not reused when changing backends.
 Native sign-in must send an Origin accepted by the configured API, without disabling the server's
 CSRF checks. Full account/workspace and physical-device acceptance remains pending in the
 [release checklist](mobile-release.md); installation alone does not verify those gates.
