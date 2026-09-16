@@ -64,15 +64,20 @@ export const NativeSurfaceContentSchema = z.discriminatedUnion("kind", [
 ]);
 export type NativeSurfaceContent = z.infer<typeof NativeSurfaceContentSchema>;
 export type NativeComposerContent = Extract<NativeSurfaceContent, { kind: "composer" }>;
+const rectangle = z.object({
+  x: z.number().finite().min(-10000).max(10000),
+  y: z.number().finite().min(-10000).max(10000),
+  width: z.number().positive().max(10000),
+  height: z.number().positive().max(10000),
+});
 export const NativeSurfaceSchema = z.object({
   id: z.string().min(1).max(200),
   content: NativeSurfaceContentSchema,
-  frame: z.object({
-    x: z.number().finite().min(-10000).max(10000),
-    y: z.number().finite().min(-10000).max(10000),
-    width: z.number().positive().max(10000),
-    height: z.number().positive().max(10000),
-  }),
+  frame: rectangle,
+  /** Visible viewport intersection; native glass must not draw over a covering panel. */
+  clip: rectangle.optional(),
+  /** Inactive panels remain visible during navigation, but cannot receive actions. */
+  interactive: z.boolean().optional(),
 });
 export type NativeSurface = z.infer<typeof NativeSurfaceSchema>;
 /** UI-only events, never arbitrary JS, selectors, daemon operations, or URLs. */

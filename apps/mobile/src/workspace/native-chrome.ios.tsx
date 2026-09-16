@@ -41,6 +41,7 @@ import type {
 } from "@concors/client-core";
 import {
   currentNativeSnapshot,
+  nativeSurfaceLayout,
   reconcileNativeDraft,
   type NativeChromeProps,
 } from "./native-chrome-types";
@@ -116,11 +117,8 @@ export function NativeChrome({ host, snapshot, send }: NativeChromeProps) {
       onLayout={(event) => setSize(event.nativeEvent.layout)}
     >
       {snapshot.surfaces.map((surface) => {
-        const scale = size.width ? size.width / snapshot.viewport.width : 1;
-        const top =
-          surface.content.kind === "composer" && size.height
-            ? size.height - (snapshot.viewport.height - surface.frame.y)
-            : surface.frame.y;
+        const layout = nativeSurfaceLayout(surface, snapshot.viewport, size);
+        const interactive = surface.interactive !== false;
         const emit = (event: NativeSurfaceEvent) =>
           send({
             type: "native-event",
@@ -132,33 +130,35 @@ export function NativeChrome({ host, snapshot, send }: NativeChromeProps) {
         return (
           <View
             key={surface.id}
+            pointerEvents={interactive ? "auto" : "none"}
+            accessibilityElementsHidden={!interactive}
             style={{
               position: "absolute",
-              left: surface.frame.x * scale,
-              top,
-              width: surface.frame.width * scale,
-              height: surface.frame.height,
+              overflow: "hidden",
+              ...layout.clip,
             }}
           >
-            {surface.content.kind === "button" ? (
-              <HeaderButton
-                content={surface.content}
-                width={surface.frame.width * scale}
-                height={surface.frame.height}
-                corners={host.preferences.corners}
-                dark={dark}
-                glass={availability.glass}
-                emit={emit}
-              />
-            ) : (
-              <Composer
-                content={surface.content}
-                corners={host.preferences.corners}
-                dark={dark}
-                {...availability}
-                emit={emit}
-              />
-            )}
+            <View style={{ position: "absolute", ...layout.content }}>
+              {surface.content.kind === "button" ? (
+                <HeaderButton
+                  content={surface.content}
+                  width={layout.content.width}
+                  height={layout.content.height}
+                  corners={host.preferences.corners}
+                  dark={dark}
+                  glass={availability.glass}
+                  emit={emit}
+                />
+              ) : (
+                <Composer
+                  content={surface.content}
+                  corners={host.preferences.corners}
+                  dark={dark}
+                  {...availability}
+                  emit={emit}
+                />
+              )}
+            </View>
           </View>
         );
       })}
