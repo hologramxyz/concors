@@ -89,7 +89,8 @@ it("keeps candidate builds production-configured and candidate uploads internal-
   });
   expect(eas.build.production).toEqual({ extends: "candidate" });
   expect(eas.submit.candidate.android).toEqual({ track: "internal", releaseStatus: "draft" });
-  expect(eas.submit.candidate.ios).toEqual({});
+  expect(eas.submit.candidate.ios).toEqual({ ascAppId: "6812901549" });
+  expect(eas.submit.production.ios).toEqual(eas.submit.candidate.ios);
 });
 
 it("uses the production identity for candidates without a development launcher scheme", async () => {
