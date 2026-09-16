@@ -409,6 +409,58 @@ export class AgentManager {
       };
     }
   }
+  /** Schedules keep a reusable saved session without changing anyone's pane layout. */
+  async startScheduled(
+    id: string,
+    projectId: string,
+    providerId: string,
+    model: string | null,
+  ): Promise<AgentInfo> {
+    let info = this.#store.agents().find((agent) => agent.id === id);
+    if (!info) {
+      const project = this.#store.snapshot().projects.find((project) => project.id === projectId);
+      if (!project?.directory || !(await stat(project.directory)).isDirectory())
+        throw new Error("Project folder is unavailable");
+      if (this.#store.agents().length >= 128) throw new Error("Agent session limit reached (128)");
+      if (this.#closed) throw new Error("Daemon is shutting down");
+      const config = this.registry.config(providerId),
+        now = new Date().toISOString();
+      info = {
+        id,
+        projectId,
+        name: config.label,
+        engine: config.engine,
+        providerLabel: config.label,
+        directory: project.directory,
+        provider: providerId,
+        model,
+        settings: { ...defaultSettings, model },
+        context: null,
+        threadId: null,
+        turnId: null,
+        status: "starting",
+        pending: [],
+        attention: null,
+        error: null,
+        startedAt: now,
+        updatedAt: now,
+        turnStartedAt: null,
+        revision: 0,
+      };
+      this.#store.saveAgent(info);
+      this.#emit({ type: "agent.state", agent: info });
+    }
+    try {
+      await this.provider(info.id);
+      if (this.#store.agent(info.id).status === "starting")
+        this.update(info.id, { status: "idle" });
+      return this.#store.agent(info.id);
+    } catch (error) {
+      this.fail(info.id, error);
+      throw error;
+    }
+  }
+
   async request(request: AgentRequest, owner = "local"): Promise<AgentResult> {
     let mutation: string | undefined;
     try {
