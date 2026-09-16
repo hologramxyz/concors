@@ -5,8 +5,9 @@ six discovered processes, prioritizing listening ports and then resident RAM.
 Protected daemon/connection infrastructure stays in the full list, not the sidebar.
 Collapsed rows remain square, with tooltips only in the collapsed rail.
 
-Choose the sliders icon beside Processes, use workspace search to open Resources,
-or click the CPU/RAM status bar. Desktop uses a centered Resources page. Mobile
+With multiple processes, a subtle View all link below the sidebar list opens
+Resources. The section heading has no management control. With zero or one process,
+use workspace search or the CPU/RAM status bar. Desktop uses a centered Resources page. Mobile
 opens the same view in a drawer from the usage row or Processes section.
 All actions target the selected machine;
 switching connections discards confirmations, storage scans, and preview mappings.
@@ -18,6 +19,11 @@ outside Concors. The view includes executable/script labels, PID, working folder
 state, resident RAM, whole-machine-normalized CPU, and TCP listening ports. Filter
 by name, PID, or folder and sort by RAM, CPU, or name. Known workspace association
 is based on the process working directory; it is not authoritative launch ownership.
+
+The full list uses compact, borderless rows like the sidebar, with usage and preview
+links visible. Expand a row for its PID, working folder, protection reason, and Stop
+or Change preview link actions. Stopping processes and deleting files still require
+confirmation.
 
 One serialized daemon sample is reused for two seconds across clients. Each client
 shares a three-second polling loop across the sidebar and page. Mobile polls only
