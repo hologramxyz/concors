@@ -29,6 +29,7 @@ export class DaemonState {
       daemonVersion: DAEMON_VERSION,
       status: this.#status,
       capabilities: [
+        "agent-schedules-v1",
         HOST_USAGE_CAPABILITY,
         "terminal-profiles",
         "color-themes",
