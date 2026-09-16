@@ -2,7 +2,7 @@ import { test, expect, signedIn } from "./signed-in.ts";
 import type { Page } from "@playwright/test";
 import type { MachineProcess, ResourceOperation, StorageEntry } from "@concors/protocol";
 
-async function resources(page: Page, supported = true) {
+async function resources(page: Page, supported = true, processCount?: number) {
   await signedIn(page);
   const operations: ResourceOperation[] = [];
   let processes: MachineProcess[] = [
@@ -46,6 +46,16 @@ async function resources(page: Page, supported = true) {
       stopBlocked: "Machine connection or daemon infrastructure is protected.",
     },
   ];
+  if (processCount !== undefined) {
+    const template = processes[0];
+    if (!template) throw new Error("Missing process fixture");
+    processes = Array.from({ length: processCount }, (_, index) => ({
+      ...template,
+      id: `${index + 100}:100`,
+      pid: index + 100,
+      name: `Worker ${index + 1}`,
+    }));
+  }
   let entries: StorageEntry[] = [
     {
       id: "11111111-1111-4111-8111-111111111111",
@@ -123,23 +133,27 @@ test("Resources is available through usage and processes, with explicit stop and
   const operations = await resources(page);
   const sidebar = page.getByRole("navigation", { name: "Primary" });
   await expect(sidebar.getByRole("button", { name: "Processes", exact: true })).toBeVisible();
-  const manage = sidebar.getByRole("button", { name: "Manage processes", exact: true });
-  await expect(manage).toBeVisible();
-  await expect(manage).toHaveText("");
-  await expect(manage.locator("svg")).toHaveAttribute("aria-hidden", "true");
-  const workspaceAction = await sidebar
-    .getByRole("button", { name: "Open workspace menu" })
-    .boundingBox();
-  const processAction = await manage.boundingBox();
-  expect(processAction?.width).toBe(workspaceAction?.width);
-  expect(processAction?.height).toBe(workspaceAction?.height);
-  await manage.hover();
+  await expect(sidebar.getByRole("button", { name: "Manage processes" })).toHaveCount(0);
+  const viewAll = sidebar.getByRole("button", { name: "View all processes", exact: true });
+  await expect(viewAll).toHaveText("View all");
+  await expect(viewAll.locator("svg")).toHaveCount(0);
+  await expect(sidebar.locator('section[aria-label="Processes"] ul + button')).toHaveText(
+    "View all",
+  );
+  await viewAll.hover();
   await expect(page.getByRole("tooltip")).toHaveCount(0);
-  await manage.focus();
+  await viewAll.focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("heading", { name: "Resources", level: 2 })).toBeVisible();
   await expect(page.getByRole("main")).toContainText("512.0 MiB RAM");
+  const rows = page.getByRole("list", { name: "Running processes" });
+  await expect(rows.locator("details[open]")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Stop Test worker (PID 10)" })).toBeHidden();
+  await rows.getByLabel("Details for Concors daemon (PID 12)", { exact: true }).click();
   await expect(page.getByRole("button", { name: "Stop Concors daemon (PID 12)" })).toBeDisabled();
+  await rows.getByLabel("Details for Test worker (PID 10)", { exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect(rows).toContainText("/repo/feature");
   await page.getByRole("button", { name: "Stop Test worker (PID 10)" }).click();
   const stop = page.getByRole("dialog", { name: "Stop process?" });
   await expect(stop).toContainText("Child processes can remain");
@@ -203,7 +217,40 @@ test("preview links reject unsafe URLs and remain available in the sidebar", asy
   await expect(next).toHaveURL("https://preview.example/");
   await next.close();
   await page.screenshot({ path: "test-results/resources-running.png" });
+  const row = page
+    .getByRole("list", { name: "Running processes" })
+    .getByRole("listitem")
+    .filter({ hasText: "Vite preview" });
+  await row.getByLabel("Details for Vite preview (PID 11)", { exact: true }).click();
+  await row.getByRole("button", { name: "Change preview link" }).click();
+  await expect(dialog.getByRole("textbox", { name: "Preview URL" })).toHaveValue(
+    "https://preview.example/",
+  );
 });
+
+for (const count of [0, 1, 8]) {
+  test(`sidebar keeps ${count} processes compact and offers View all only for multiple processes`, async ({
+    page,
+  }) => {
+    await resources(page, true, count);
+    const section = page.getByRole("region", { name: "Processes", exact: true });
+    if (count) await expect(section.getByRole("listitem")).toHaveCount(Math.min(count, 6));
+    else await expect(section).toContainText("No workspace processes discovered.");
+    const viewAll = section.getByRole("button", { name: "View all processes" });
+    if (count > 1) {
+      await viewAll.click();
+      await expect(
+        page.getByRole("list", { name: "Running processes" }).getByRole("listitem"),
+      ).toHaveCount(count);
+      await page.getByRole("button", { name: "Collapse sidebar", exact: true }).click();
+      await expect(viewAll).toHaveCount(0);
+    } else {
+      await expect(viewAll).toHaveCount(0);
+      await page.getByRole("button", { name: "Open resources" }).click();
+      await expect(page.getByRole("heading", { name: "Resources", level: 2 })).toBeVisible();
+    }
+  });
+}
 
 test("older daemons show an upgrade state without unsupported requests", async ({ page }) => {
   const operations = await resources(page, false);
