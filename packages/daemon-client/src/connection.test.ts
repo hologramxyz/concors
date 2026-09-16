@@ -392,3 +392,53 @@ describe("workspace replica lifecycle", () => {
     connection.disconnect();
   });
 });
+
+describe("schedule replica lifecycle", () => {
+  const snapshot = {
+    schemaVersion: 1 as const,
+    machineId: "00000000-0000-4000-8000-000000000001",
+    epoch: "00000000-0000-4000-8000-000000000002",
+    revision: 0,
+    projects: [],
+    selection: null,
+  };
+  it("settles actions and clears the machine's schedule replica on disconnect", async () => {
+    const { connection, socket, ready } = startConnection(),
+      listener = vi.fn();
+    connection.subscribeWorkspace(() => undefined);
+    connection.onSchedules(listener);
+    socket.serverOpen();
+    socket.serverSend({ ...READY, capabilities: ["agent-schedules-v1"] });
+    await ready;
+    socket.serverSend({ type: "workspace.snapshot", snapshot });
+    socket.serverSend({ type: "schedule.list", schedules: [] });
+    expect(listener).toHaveBeenLastCalledWith([]);
+    const id = "00000000-0000-4000-8000-000000000003";
+    const pending = connection.requestSchedule({ kind: "list" }, id);
+    socket.serverSend({
+      type: "schedule.result",
+      requestId: id,
+      outcome: { status: "ok", schedules: [] },
+    });
+    await expect(pending).resolves.toMatchObject({ outcome: { status: "ok" } });
+    const interrupted = connection.requestSchedule({ kind: "list" }, id);
+    socket.serverClose();
+    await expect(interrupted).rejects.toThrow("disconnected");
+    expect(connection.schedules).toBeNull();
+    expect(listener).toHaveBeenLastCalledWith(null);
+  });
+  it("does not send schedule requests to an older daemon", async () => {
+    const { connection, socket, ready } = startConnection();
+    connection.subscribeWorkspace(() => undefined);
+    socket.serverOpen();
+    socket.serverSend(READY);
+    await ready;
+    socket.serverSend({ type: "workspace.snapshot", snapshot });
+    const count = socket.sent.length;
+    await expect(
+      connection.requestSchedule({ kind: "list" }, "00000000-0000-4000-8000-000000000003"),
+    ).rejects.toThrow("Update the daemon");
+    expect(socket.sent).toHaveLength(count);
+    connection.disconnect();
+  });
+});

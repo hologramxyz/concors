@@ -69,6 +69,7 @@ describe("WebSocket handshake", () => {
         daemonVersion: DAEMON_VERSION,
         status: "ready",
         capabilities: [
+          "agent-schedules-v1",
           "host-usage",
           "terminal-profiles",
           "color-themes",

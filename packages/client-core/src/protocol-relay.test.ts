@@ -146,7 +146,7 @@ describe("offline UI protocol relay", () => {
     expect(connection.sendTerminalInput).toHaveBeenCalledOnce();
     relay.dispose();
     relay.dispose();
-    expect(off).toHaveBeenCalledTimes(4);
+    expect(off).toHaveBeenCalledTimes(5);
     expect(connection.requestTerminal).toHaveBeenLastCalledWith(
       { kind: "detach", sessionId: id },
       expect.any(String),
@@ -187,4 +187,23 @@ describe("offline UI protocol relay", () => {
     expect(messages).toHaveLength(count);
     expect(connection.requestFile).toHaveBeenCalledTimes(2);
   });
+});
+
+it("relays schedule updates and mutations through the native connection", async () => {
+  const { connection, relay, messages } = setup();
+  await relay.receive(hello);
+  const listener = vi.mocked(connection.onSchedules).mock.calls[0]![0];
+  listener([]);
+  expect(messages.at(-1)).toEqual({ type: "schedule.list", schedules: [] });
+  await relay.receive({ type: "schedule.request", requestId: id, operation: { kind: "list" } });
+  expect(connection.requestSchedule).toHaveBeenCalledWith({ kind: "list" }, id);
+  expect(messages.at(-1)).toEqual({
+    type: "schedule.result",
+    requestId: id,
+    outcome: { status: "ok", schedules: [] },
+  });
+  relay.dispose();
+  const count = messages.length;
+  listener([]);
+  expect(messages).toHaveLength(count);
 });
