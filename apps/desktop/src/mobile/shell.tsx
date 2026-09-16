@@ -856,7 +856,10 @@ function MobileWorkspaceContent({
                 onOpenChange={setSearchOpen}
                 onNavigate={(view) => {
                   if (view === "settings") openSettings();
-                  else setSidebarOpen(true);
+                  else if (view === "schedules") {
+                    setSchedulesOpen(true);
+                    setSidebarOpen(false);
+                  } else setSidebarOpen(true);
                 }}
                 onManageMachines={() => openSettings("machines")}
                 onReconnect={() => runHost({ kind: "retry" })}

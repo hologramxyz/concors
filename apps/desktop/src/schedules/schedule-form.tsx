@@ -69,10 +69,7 @@ export function ScheduleForm({
     [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let current = true;
-    if (!connection) {
-      setLoading(false);
-      return;
-    }
+    if (!connection) return;
     void connection
       .requestProvider({ kind: "list" }, crypto.randomUUID())
       .then((result) => {
