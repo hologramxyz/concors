@@ -84,7 +84,11 @@ it("keeps candidate builds production-configured and candidate uploads internal-
     distribution: "store",
     autoIncrement: true,
     environment: "production",
-    env: { APP_VARIANT: "production", EXPO_PUBLIC_DEMO: "false" },
+    env: {
+      APP_VARIANT: "production",
+      EXPO_PUBLIC_DEMO: "false",
+      EXPO_PUBLIC_API_URL: "https://api.concors.dev",
+    },
     android: { buildType: "app-bundle" },
   });
   expect(eas.build.production).toEqual({ extends: "candidate" });
