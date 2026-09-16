@@ -1,13 +1,13 @@
 import { ProviderRegistry } from "./registry.ts";
 import { AcpProvider } from "./acp.ts";
-import type { AgentProviderId } from "@concors/protocol";
+import type { AgentProviderId, McpServer } from "@concors/protocol";
 import { CodexAppServer } from "../codex/app-server.ts";
 import { ClaudeProvider } from "./claude.ts";
 import { OpenCodeProvider } from "./opencode.ts";
 import { PiProvider } from "./pi.ts";
 import type { ConversationProvider, InputHandler } from "./contract.ts";
 export interface AgentToolContext {
-  mcp?: import("@concors/protocol").McpServer;
+  mcp?: McpServer;
   env?: NodeJS.ProcessEnv;
   instructions?: string;
 }
@@ -25,7 +25,9 @@ export function providerFactory(registry: ProviderRegistry): AgentProviderFactor
       params: {
         ...original.params,
         mcpServers: [
-          ...(original.params?.mcpServers ?? []).filter((s) => s.name !== "concors-schedules"),
+          ...(original.params?.mcpServers ?? []).filter(
+            (s) => !tools.mcp || s.name !== "concors-schedules",
+          ),
           ...(tools.mcp ? [tools.mcp] : []),
         ],
       },
