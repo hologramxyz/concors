@@ -5,9 +5,10 @@ six discovered processes, prioritizing listening ports and then resident RAM.
 Protected daemon/connection infrastructure stays in the full list, not the sidebar.
 Collapsed rows remain square, with tooltips only in the collapsed rail.
 
-Choose Manage, use workspace search to open Resources, or click the CPU/RAM status
-bar. Desktop uses a centered Resources page. Mobile opens the same view in a drawer
-from the usage row or Processes section. All actions target the selected machine;
+Choose the sliders icon beside Processes, use workspace search to open Resources,
+or click the CPU/RAM status bar. Desktop uses a centered Resources page. Mobile
+opens the same view in a drawer from the usage row or Processes section.
+All actions target the selected machine;
 switching connections discards confirmations, storage scans, and preview mappings.
 
 ## Running

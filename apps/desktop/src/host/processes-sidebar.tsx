@@ -1,4 +1,6 @@
-import { Activity, ExternalLink } from "lucide-react";
+import { Activity, ExternalLink, SlidersHorizontal } from "lucide-react";
+import { useContext } from "react";
+import { CompactLayoutContext } from "@/components/compact-layout";
 import { SidebarSection } from "@/components/sidebar-section";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -16,6 +18,7 @@ export function ProcessesSidebar({
   enabled?: boolean;
   onOpen: () => void;
 }) {
+  const touchLayout = useContext(CompactLayoutContext);
   const { snapshot, error, loading, connection } = useProcesses(enabled);
   const { links } = usePreviewLinks(connection);
   const items = [...(snapshot?.processes ?? [])]
@@ -88,9 +91,14 @@ export function ProcessesSidebar({
         <button
           type="button"
           onClick={onOpen}
-          className="rounded px-2 py-1 text-xs text-muted-foreground hover:text-sidebar-foreground"
+          aria-label="Manage processes"
+          className={
+            touchLayout
+              ? "mobile-icon"
+              : "rounded-md p-1 text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+          }
         >
-          Manage
+          <SlidersHorizontal className="size-4" aria-hidden="true" />
         </button>
       }
     >
