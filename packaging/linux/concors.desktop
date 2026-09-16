@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Concors
+Comment=Orchestrate coding agents locally and in the cloud
+Exec=concors %U
+Terminal=false
+Type=Application
+Icon=concors
+StartupWMClass=concors-desktop
+Categories=Development;
