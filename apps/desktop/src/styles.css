@@ -392,6 +392,45 @@
   -webkit-text-fill-color: transparent;
   animation: tool-activity-shimmer 2s linear infinite;
 }
+.pane-resize-handle {
+  position: relative;
+  outline: none;
+}
+/* Keep the full grab area while highlighting only a fine line at its center. */
+.pane-resize-handle::after {
+  content: "";
+  position: absolute;
+  border-radius: 999px;
+  background: var(--muted-foreground);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+.pane-resize-handle[aria-orientation="vertical"]::after {
+  inset-block: 8px;
+  left: calc(50% - 0.5px);
+  width: 1px;
+}
+.pane-resize-handle[aria-orientation="horizontal"]::after {
+  inset-inline: 8px;
+  top: calc(50% - 0.5px);
+  height: 1px;
+}
+.pane-resize-handle[aria-disabled="false"]:hover::after {
+  opacity: 0.35;
+}
+.pane-resize-handle[aria-disabled="false"]:is(:focus-visible, [data-resizing="true"])::after {
+  background: var(--primary);
+  opacity: 0.7;
+}
+.pane-resize-handle[aria-disabled="true"] {
+  cursor: default;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pane-resize-handle::after {
+    transition: none;
+  }
+}
 .agent-control {
   display: inline-flex;
   align-items: center;
