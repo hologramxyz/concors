@@ -169,8 +169,8 @@ Inspect the artifacts first. With release-owner approval, upload the **explicit 
 build ID** using the candidate submit profile for TestFlight/Play internal testing:
 
 ```bash
-pnpm dlx eas-cli@latest submit --platform ios --profile candidate --id IOS_BUILD_ID
-pnpm dlx eas-cli@latest submit --platform android --profile candidate --id ANDROID_BUILD_ID
+APP_VARIANT=production pnpm dlx eas-cli@latest submit --platform ios --profile candidate --id IOS_BUILD_ID
+APP_VARIANT=production pnpm dlx eas-cli@latest submit --platform android --profile candidate --id ANDROID_BUILD_ID
 ```
 
 Replace those IDs with reviewed builds, not preview/demo artifacts. Internal testing is

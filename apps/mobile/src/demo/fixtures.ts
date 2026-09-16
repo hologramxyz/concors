@@ -212,7 +212,7 @@ demoItems.push(
             id: "demo-reviewer",
             status: "completed",
             message:
-              "The composer stays at the bottom and the **sidebar** reveals projects, agents and servers.",
+              "The composer stays at the bottom and the **sidebar** reveals projects, agents and processes.",
           },
         ],
       },

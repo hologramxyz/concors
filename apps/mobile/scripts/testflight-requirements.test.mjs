@@ -3,6 +3,9 @@ import { inspectTestFlight } from "./testflight-requirements.mjs";
 import { readFileSync } from "node:fs";
 
 const eas = JSON.parse(readFileSync(new URL("../eas.json", import.meta.url), "utf8"));
+const registeredAppId = eas.submit.candidate.ios.ascAppId;
+// Exercise the environment fallback independently of the checked-in app registration.
+eas.submit.candidate.ios = {};
 const environment = {
   APP_VARIANT: "production",
   EXPO_PUBLIC_DEMO: "false",
@@ -98,6 +101,44 @@ it("checks the configured Apple ID when present", async () => {
     },
   });
   expect(result.failures).toContain("CONCORS_ASC_APP_ID must match submit.candidate.ios.ascAppId");
+});
+
+it("rejects a stale backend before probing an API different from the actual build", async () => {
+  const request = vi.fn();
+  const result = await inspectTestFlight({
+    ...input,
+    environment: { ...environment, EXPO_PUBLIC_API_URL: "https://old-dev.example.com" },
+    request,
+  });
+  expect(result.failures).toContain(
+    "EXPO_PUBLIC_API_URL must match the candidate build profile's API",
+  );
+  expect(result.configurationValid).toBe(false);
+  expect(request).not.toHaveBeenCalled();
+});
+
+it("accepts the same approved backend with a trailing slash", async () => {
+  const result = await inspectTestFlight({
+    ...input,
+    environment: { ...environment, EXPO_PUBLIC_API_URL: `${environment.EXPO_PUBLIC_API_URL}/` },
+    offline: true,
+  });
+  expect(result.configurationValid).toBe(true);
+});
+
+it("uses the registered Apple app without requiring an environment override", async () => {
+  const { CONCORS_ASC_APP_ID: _appId, ...withoutAppId } = environment;
+  const result = await inspectTestFlight({
+    ...input,
+    environment: withoutAppId,
+    offline: true,
+    eas: {
+      ...eas,
+      submit: { candidate: { ios: { ascAppId: registeredAppId } } },
+    },
+  });
+  expect(result.configurationValid).toBe(true);
+  expect(result.failures).toEqual([]);
 });
 
 it.each([

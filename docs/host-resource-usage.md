@@ -42,3 +42,12 @@ The UI hides readings after ten seconds without a new sample and on disconnect.
 Freshness uses client receipt time to tolerate different machine clocks. Older
 daemons show **Update daemon for usage** and receive no unsupported messages.
 Deploy the updated daemon to each machine to enable the indicator there.
+
+## Inspecting resource consumers
+
+Click the usage indicator or choose Resources in the computer menu to open
+[process-level monitoring](machine-resources.md). Preview links live separately
+in the sidebar; directory scanning and cleanup are not included. This is a
+separate capability from whole-machine telemetry. The broader
+[resource-management initiative](resource-management-initiative.md) records future
+ownership, automation, and V2 isolated-execution work.

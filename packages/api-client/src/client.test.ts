@@ -39,6 +39,50 @@ function client(fetch: typeof globalThis.fetch, token: string | null = null) {
   };
 }
 
+describe("native sign-in", () => {
+  it("builds the start URL for the desktop loopback port", () => {
+    const { api } = client(vi.fn());
+    const url = new URL(api.nativeGitHubSignInUrl({ port: 49152 }, "c".repeat(43)));
+    expect(url.origin + url.pathname).toBe("https://api.example/api/v1/native-auth/github/start");
+    expect(url.searchParams.get("port")).toBe("49152");
+    expect(url.searchParams.has("app")).toBe(false);
+    expect(url.searchParams.get("challenge")).toBe("c".repeat(43));
+  });
+
+  it("builds the start URL for the mobile app scheme", () => {
+    const { api } = client(vi.fn());
+    const url = new URL(api.nativeGitHubSignInUrl({ app: "concors" }, "c".repeat(43)));
+    expect(url.searchParams.get("app")).toBe("concors");
+    expect(url.searchParams.has("port")).toBe(false);
+  });
+
+  it("redeems the code with the verifier and stores the returned token", async () => {
+    const fetch = vi.fn(async () => json({ token: "tok-github" }));
+    const { api, tokens } = client(fetch);
+    await api.completeNativeSignIn({ code: "k".repeat(43), verifier: "v".repeat(64) });
+
+    expect(tokens.get()).toBe("tok-github");
+    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("https://api.example/api/v1/native-auth/exchange");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({
+      code: "k".repeat(43),
+      verifier: "v".repeat(64),
+    });
+  });
+
+  it("keeps no token when the code is rejected", async () => {
+    const fetch = vi.fn(async () =>
+      json({ statusCode: 400, error: "Bad Request", message: "Start again." }, { status: 400 }),
+    );
+    const { api, tokens } = client(fetch);
+    await expect(
+      api.completeNativeSignIn({ code: "k".repeat(43), verifier: "v".repeat(64) }),
+    ).rejects.toBeInstanceOf(ApiError);
+    expect(tokens.get()).toBeNull();
+  });
+});
+
 describe("ApiClient", () => {
   it("strips a trailing slash from the base URL", () => {
     expect(new ApiClient({ baseUrl: "https://api.example///" }).baseUrl).toBe(

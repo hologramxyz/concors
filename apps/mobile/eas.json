@@ -4,7 +4,10 @@
     "base": {
       "node": "24.14.0",
       "pnpm": "11.1.1",
-      "ios": { "image": "macos-tahoe-26.5-xcode-26.6" }
+      "ios": {
+        "image": "macos-tahoe-26.5-xcode-26.6",
+        "env": { "SHARP_IGNORE_GLOBAL_LIBVIPS": "1" }
+      }
     },
     "development": {
       "extends": "base",
@@ -26,7 +29,11 @@
       "autoIncrement": true,
       "distribution": "store",
       "environment": "production",
-      "env": { "APP_VARIANT": "production", "EXPO_PUBLIC_DEMO": "false" },
+      "env": {
+        "APP_VARIANT": "production",
+        "EXPO_PUBLIC_DEMO": "false",
+        "EXPO_PUBLIC_API_URL": "https://api.concors.dev"
+      },
       "android": { "buildType": "app-bundle" }
     },
     "production": {
@@ -34,7 +41,13 @@
     }
   },
   "submit": {
-    "candidate": { "ios": {}, "android": { "track": "internal", "releaseStatus": "draft" } },
-    "production": { "ios": {}, "android": { "track": "internal", "releaseStatus": "draft" } }
+    "candidate": {
+      "ios": { "ascAppId": "6812901549" },
+      "android": { "track": "internal", "releaseStatus": "draft" }
+    },
+    "production": {
+      "ios": { "ascAppId": "6812901549" },
+      "android": { "track": "internal", "releaseStatus": "draft" }
+    }
   }
 }

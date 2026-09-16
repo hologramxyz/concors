@@ -48,6 +48,13 @@ export const AuthResponseSchema = z.object({
 });
 export type AuthResponse = z.infer<typeof AuthResponseSchema>;
 
+/** `POST /api/v1/native-auth/exchange`: the session token a native client uses as its bearer token. */
+export const NativeSignInResponseSchema = z.object({ token: z.string().min(1) });
+
+/** `GET /api/v1/native-auth/providers`: sign-in methods this environment has configured. */
+export const SignInProvidersSchema = z.object({ github: z.boolean() });
+export type SignInProviders = z.infer<typeof SignInProvidersSchema>;
+
 export const OrganizationSchema = z.object({
   id: z.string(),
   name: z.string(),

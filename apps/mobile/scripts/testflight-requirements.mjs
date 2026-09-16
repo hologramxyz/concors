@@ -41,6 +41,11 @@ export async function inspectTestFlight({
     candidate?.ios?.simulator === true
   )
     failures.push("Use the store-distribution candidate profile for a physical-device beta");
+  if (
+    candidate?.env?.EXPO_PUBLIC_API_URL &&
+    candidate.env.EXPO_PUBLIC_API_URL !== environment.EXPO_PUBLIC_API_URL?.replace(/\/$/, "")
+  )
+    failures.push("EXPO_PUBLIC_API_URL must match the candidate build profile's API");
   if (environment.CONCORS_MOBILE_WEB_BASE_PATH) failures.push("Remove the web preview base path");
   const configuredId = eas?.submit?.candidate?.ios?.ascAppId;
   const appId = configuredId ?? environment.CONCORS_ASC_APP_ID;

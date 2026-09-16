@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { clearApiCache } from "@/data/api-resource";
 
 import { interpretProbe, type AuthState, type SessionProbe } from "./auth-state.ts";
+import { signInWithGitHub as runGitHubSignIn } from "./github-sign-in.ts";
 
 export type SignUpResult = "signed-in" | "verify-email";
 
@@ -12,6 +13,8 @@ export interface Auth {
   /** Re-checks the session with the API. Resolves to the resulting state. */
   refresh(): Promise<AuthState>;
   signIn(input: SignInInput): Promise<void>;
+  /** Signs in (or creates an account) through GitHub in the system browser. Native app only. */
+  signInWithGitHub(signal?: AbortSignal): Promise<void>;
   signUp(input: SignUpInput): Promise<SignUpResult>;
   signOut(): Promise<void>;
   setActiveOrganization(organizationId: string): Promise<void>;
@@ -55,6 +58,15 @@ export function useAuth(api: ApiClient): Auth {
     [api, refresh],
   );
 
+  const signInWithGitHub = useCallback(
+    async (signal?: AbortSignal) => {
+      await runGitHubSignIn(api, signal);
+      const next = await refresh();
+      if (next.status !== "signed-in") throw new Error(sessionNotAccepted(next));
+    },
+    [api, refresh],
+  );
+
   const signUp = useCallback(
     async (input: SignUpInput): Promise<SignUpResult> => {
       await api.signUpWithEmail(input);
@@ -88,7 +100,7 @@ export function useAuth(api: ApiClient): Auth {
     [api, refresh],
   );
 
-  return { state, refresh, signIn, signUp, signOut, setActiveOrganization };
+  return { state, refresh, signIn, signInWithGitHub, signUp, signOut, setActiveOrganization };
 }
 
 async function probeSession(api: ApiClient): Promise<SessionProbe> {

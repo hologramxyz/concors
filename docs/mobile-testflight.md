@@ -1,8 +1,8 @@
 # iPhone beta through TestFlight
 
 Apple enrollment still pending? Use the [local Mac → iPhone development path](mobile-local-iphone.md)
-with a free Personal Team first. The approved development API is
-`https://concors-server-dev.up.railway.app`; this does not change the production default.
+with a free Personal Team first. The approved API for the mobile app is
+`https://api.concors.dev`, including the TestFlight candidate.
 
 This is the **internal beta** path, not a public App Store release. Use `candidate`: production
 identity, store distribution, no demo/private-daemon override, automatic build-number increments.
@@ -16,22 +16,30 @@ test account/machine. iPhone dictation uses the keyboard microphone, not desktop
 
 ## Current state
 
-Based on desktop main `16fbab0` (PRs #102–104). Shared chat/dictation changes are bundled
-automatically; native startup now uses the brand mark during session restoration. Settings →
-Diagnostics shows the phone's version/build and actual API instead of desktop's default URL.
+Updated from desktop main `a807962` (including PRs #111, #114 and #115). Shared desktop UI
+changes are bundled automatically; native startup uses the brand mark during session restoration.
+Settings → Diagnostics shows the phone's version/build and actual API instead of desktop's default URL.
 
-On 2026-09-15, this environment had no Expo login, owner/project ID or Apple app ID.
-`api.concors.dev` failed DNS resolution here. The existing desktop development backend returned
-JSON HTTP 401 for an unauthenticated account request. **The owner must confirm the beta backend**
-and verify a real account/machine on it. No automatic fallback to a development server was added.
-No signed IPA, TestFlight upload or physical-device acceptance is claimed. Full release gates
-remain pending in the [release checklist](mobile-release.md).
+On 2026-09-16, the owner confirmed active developer accounts, the Expo project `@opser/concors`
+(`cbfccc75-202c-461c-a19d-46419a248dcd`), and Apple app ID `6812901549`. These public identifiers
+are now linked in the app/build configuration. Build 0.1.0 (3) was signed, uploaded to TestFlight,
+and installed by the owner, but still targeted the previously approved Railway development API.
+The owner subsequently requested `https://api.concors.dev`; new candidate/production builds pin
+that API explicitly. Accounts on the old development server are not automatically migrated.
+The update requires a fresh sign-in: native sessions are now bound to their issuing API and
+unscoped legacy tokens are not reused when changing backends.
+Native sign-in must send an Origin accepted by the configured API, without disabling the server's
+CSRF checks. Full account/workspace and physical-device acceptance remains pending in the
+[release checklist](mobile-release.md); installation alone does not verify those gates.
 
 ## 1. Account setup
 
-- Confirm active Apple Developer membership/agreements. Create identifier `dev.concors.mobile`
-  and a **Concors** iOS app in App Store Connect using that bundle ID. Save its **numeric Apple ID**.
-- Create/link the team's Expo project, slug `concors-mobile`. Save the owner and project UUID.
+- Use the registered identifier `dev.concors.mobile` and App Store Connect app `6812901549`.
+  The App Store listing name may include a tagline; the installed app remains **Concors**.
+- Use the team's existing [Expo project `@opser/concors`](https://expo.dev/accounts/opser/projects/concors),
+  slug `concors`, project ID `cbfccc75-202c-461c-a19d-46419a248dcd`. Do not create a duplicate project.
+  App config defaults to this project; explicit environment overrides remain supported, including
+  the empty values used to keep Personal Team builds unlinked.
 - Create an internal TestFlight group and give the tester eligible App Store Connect access to
   this app. The account holder can test their own app. Other testers require external testing and
   potentially Beta App Review. See [Apple's internal tester instructions](https://developer.apple.com/help/app-store-connect/test-a-beta-version/add-internal-testers).
@@ -46,10 +54,10 @@ With Node 24 / pnpm 11.1.1, create gitignored `apps/mobile/.env.local` using rea
 ```dotenv
 APP_VARIANT=production
 EXPO_PUBLIC_DEMO=false
-EXPO_PUBLIC_API_URL=https://YOUR-CONFIRMED-BACKEND
-EXPO_PUBLIC_EAS_PROJECT_ID=YOUR-EXPO-PROJECT-UUID
-EXPO_OWNER=YOUR-EXPO-OWNER
-CONCORS_ASC_APP_ID=YOUR-NUMERIC-APPLE-APP-ID
+EXPO_PUBLIC_API_URL=https://api.concors.dev
+EXPO_PUBLIC_EAS_PROJECT_ID=cbfccc75-202c-461c-a19d-46419a248dcd
+EXPO_OWNER=opser
+CONCORS_ASC_APP_ID=6812901549
 ```
 
 Do not include `EXPO_PUBLIC_DEV_DAEMON_URL` or `CONCORS_MOBILE_WEB_BASE_PATH`. The checker reads
@@ -74,28 +82,41 @@ Do not paste tokens into command arguments or a PR. This still does not prove ph
 From `apps/mobile`:
 
 ```bash
-pnpm dlx eas-cli@24.4.0 login
-pnpm dlx eas-cli@24.4.0 project:info
+pnpm dlx eas-cli@24.4.1 login
+pnpm dlx eas-cli@24.4.1 project:info
 ```
 
 Confirm the owner/project. In its **production EAS environment**, configure the same
 `EXPO_OWNER`, `EXPO_PUBLIC_EAS_PROJECT_ID` and `EXPO_PUBLIC_API_URL` as plain-text variables.
-The candidate profile already sets the production variant and disables demo. Local `.env.local`
-is gitignored and does not replace cloud variables. Never put credentials in `EXPO_PUBLIC_*`.
+The candidate profile explicitly pins `EXPO_PUBLIC_API_URL=https://api.concors.dev`, sets the
+production variant, and disables demo. Keep the cloud API variable aligned; preflight rejects a
+local API that differs from the candidate. Local `.env.local` is gitignored and does not replace
+cloud variables. Never put credentials in `EXPO_PUBLIC_*`.
 
-Set `submit.candidate.ios.ascAppId` in `apps/mobile/eas.json` to the real numeric Apple app ID
-as a string. This public identifier may be committed once known; until then EAS Submit asks
-interactively. Preflight rejects disagreement with `CONCORS_ASC_APP_ID`.
+`submit.candidate.ios.ascAppId` and `submit.production.ios.ascAppId` in `apps/mobile/eas.json`
+already target Apple app `6812901549`. This is a public identifier, not an Apple login.
+Preflight rejects disagreement with `CONCORS_ASC_APP_ID`.
 
 ```bash
 pnpm testflight:check
-pnpm dlx eas-cli@24.4.0 build --platform ios --profile candidate
+pnpm dlx eas-cli@24.4.1 build --platform ios --profile candidate
 ```
 
 Follow Apple's signing prompts privately. EAS uses cloud macOS workers; this path does not need
 a local Mac. Do not auto-submit or mark pending gates verified to get a build through. `candidate`
 allows device evidence to be collected before public release approval. Its bundle ID is
 `dev.concors.mobile`, not `.preview`.
+
+Use EAS CLI 24.4.1 or newer: 24.4.0 can fail Apple authentication with
+`iTunes service key is empty` ([upstream fix](https://github.com/expo/eas-cli/issues/4392)).
+If signing needs to be configured separately, run
+`pnpm dlx eas-cli@24.4.1 credentials:configure-build --platform ios --profile candidate`
+in an interactive terminal. Enter Apple credentials and 2FA there, not in chat.
+
+The shared iOS build profile sets `SHARP_IGNORE_GLOBAL_LIBVIPS=1` before dependency installation.
+This keeps Sharp on its packaged binaries instead of compiling against the Mac builder's global
+libvips. Leave dependency lifecycle scripts and release checks enabled; this is a build-tool
+setting, not an app permission or signing change.
 
 Record build URL/ID, source commit, version/build, API and signing team; inspect logs and artifact
 metadata. A JS export or unsigned prebuild is not an installable IPA. GitHub native CI was billing
@@ -105,8 +126,16 @@ blocked; resolve that before rerunning those jobs. Check EAS account/build avail
 
 ```bash
 # Replace the UUID; avoid --latest when multiple builds may exist.
-pnpm dlx eas-cli@24.4.0 submit --platform ios --profile candidate --id YOUR-EAS-BUILD-UUID
+APP_VARIANT=production pnpm dlx eas-cli@24.4.1 submit --platform ios --profile candidate --id YOUR-EAS-BUILD-UUID
 ```
+
+Set `APP_VARIANT=production` explicitly for standalone submission: unlike build, submit does not
+load the build profile's environment. Otherwise credential lookup can use the preview bundle ID.
+If upload credentials need setup, run
+`APP_VARIANT=production pnpm dlx eas-cli@24.4.1 credentials --platform ios`, choose `candidate`,
+then **App Store Connect: Manage your API Key → Set up your project to use an API Key for EAS Submit**.
+Enter Apple credentials privately. Standard uploads need no automated release notes: if Expo
+rejects `--what-to-test` as Enterprise-only, omit it and add notes/groups directly in App Store Connect.
 
 [EAS Submit](https://docs.expo.dev/submit/ios/) uploads to the selected Apple app, not to a public
 release. After processing, answer compliance questions accurately, add the build to the internal

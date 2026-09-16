@@ -93,6 +93,8 @@ to save the client one request.
 | POST   | `/api/auth/sign-up/email`           | `{ name, email, password }` → `{ token, user }`   |
 | POST   | `/api/auth/sign-in/email`           | `{ email, password }` → `{ token, user }`         |
 | POST   | `/api/auth/sign-out`                | Revoke the session                                |
+| GET    | `/api/v1/native-auth/providers`     | `{ github }`: sign-in methods beyond email        |
+| POST   | `/api/v1/native-auth/exchange`      | `{ code, verifier }` → `{ token }`                |
 | GET    | `/api/v1/me`                        | Current user + session (active organization)      |
 | GET    | `/api/v1/organizations`             | Organizations of the user, personal first         |
 | POST   | `/api/auth/organization/set-active` | `{ organizationId }`                              |
@@ -115,10 +117,52 @@ Error bodies come in two shapes and are both mapped to `ApiError`: Fastify's
 `{ statusCode, error, message }` and Better Auth's `{ message, code }` (for example
 `INVALID_EMAIL_OR_PASSWORD`, `USER_ALREADY_EXISTS`).
 
+## Sign in with GitHub
+
+The desktop and mobile apps offer **Continue with GitHub** — for new and existing accounts alike —
+when the API reports the provider configured (`GET /api/v1/native-auth/providers`). An environment
+without GitHub credentials never shows the button. Browser builds (the desktop web preview and the
+mobile web export) do not offer it: the result can only return to a native app.
+
+Both apps follow RFC 8252 — a browser for the OAuth flow, the result returned only to the app that
+started it, and PKCE — and share parsing, error messages and PKCE encoding from
+`packages/client-core/src/github-sign-in.ts`:
+
+|                   | Desktop                                                                     | Mobile                                                                                                           |
+| ----------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Browser           | System browser                                                              | In-app authentication session: `ASWebAuthenticationSession` (iOS), Custom Tabs (Android), via `expo-web-browser` |
+| Result returns to | One-shot listener on `127.0.0.1:<random port>` (`src-tauri/src/sign_in.rs`) | The build's URL scheme, `<scheme>://native-auth/callback`                                                        |
+| Flow              | `apps/desktop/src/auth/github-sign-in.ts`                                   | `apps/mobile/src/auth/github-sign-in.ts`                                                                         |
+
+In both, the app creates a PKCE verifier, opens `/api/v1/native-auth/github/start` with `port=…` or
+`app=<scheme>`, receives a one-time code, and redeems it with `ApiClient.completeNativeSignIn` for the
+session token, stored exactly like an email sign-in's.
+
+Why this shape:
+
+- **Not phishable like polling.** With polling, an attacker could start sign-in and send someone the
+  browser link. Here the code only reaches the machine or app that started the attempt.
+- **A captured or injected code is useless.** Redeeming one needs the verifier that never left the
+  app. That covers a page requesting the desktop loopback port and another mobile app claiming the
+  same URL scheme; the API also only returns to its allowlist of Concors schemes.
+- **No OS registration on desktop.** A deep link needs a URL scheme registered per platform (on
+  Linux, a `MimeType` in the desktop entry) and does not work in development builds.
+- **Credentials stay with GitHub.** People authenticate on GitHub's own page, with their password
+  manager and passkeys, and an existing browser login is reused. The apps never see GitHub
+  credentials, and the API does not store GitHub's token.
+
+Declining on GitHub or closing the mobile sheet returns quietly to the sign-in screen. If the GitHub
+email already belongs to a password account whose email is unverified, the API refuses to link them
+(`account_not_linked`) and the app asks the person to sign in with their password; linking would let
+someone register a victim's address first and inherit the victim's session.
+
+`expo-web-browser` is a native module: mobile needs a new development client or store build before
+the button works on a device. Android also delivers the callback as a deep link, which
+`apps/mobile/app/native-auth/callback.tsx` absorbs. Server setup — including reusing the repository
+GitHub App — is documented in concors-server `docs/github-sign-in.md`.
+
 ## Out of scope for now
 
-- OAuth / social sign-in. The server has no providers registered yet; once it does, the desktop
-  flow needs a system-browser round trip with a deep link back into the app.
 - Password reset and e-mail verification screens (the server has no e-mail provider wired up).
 - Connecting the workspace to a **cloud machine's daemon**. Machines can be created and destroyed
   from the Machines view and reached over SSH, but the machine switcher still only knows manually
