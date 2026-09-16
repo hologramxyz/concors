@@ -1,6 +1,4 @@
-import { Activity, ExternalLink, SlidersHorizontal } from "lucide-react";
-import { useContext } from "react";
-import { CompactLayoutContext } from "@/components/compact-layout";
+import { Activity, ExternalLink } from "lucide-react";
 import { SidebarSection } from "@/components/sidebar-section";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -18,7 +16,6 @@ export function ProcessesSidebar({
   enabled?: boolean;
   onOpen: () => void;
 }) {
-  const touchLayout = useContext(CompactLayoutContext);
   const { snapshot, error, loading, connection } = useProcesses(enabled);
   const { links } = usePreviewLinks(connection);
   const items = [...(snapshot?.processes ?? [])]
@@ -85,23 +82,7 @@ export function ProcessesSidebar({
   );
   if (compact) return items.length ? <section aria-label="Processes">{list}</section> : null;
   return (
-    <SidebarSection
-      title="Processes"
-      action={
-        <button
-          type="button"
-          onClick={onOpen}
-          aria-label="Manage processes"
-          className={
-            touchLayout
-              ? "mobile-icon"
-              : "rounded-md p-1 text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
-          }
-        >
-          <SlidersHorizontal className="size-4" aria-hidden="true" />
-        </button>
-      }
-    >
+    <SidebarSection title="Processes">
       {list}
       {!items.length && (
         <p className="px-2 py-2 text-ui leading-relaxed text-muted-foreground">
@@ -111,6 +92,16 @@ export function ProcessesSidebar({
               ? "Open Resources to inspect this machine."
               : "No workspace processes discovered."}
         </p>
+      )}
+      {(snapshot?.processes.length ?? 0) > 1 && (
+        <button
+          type="button"
+          onClick={onOpen}
+          aria-label="View all processes"
+          className="mt-1 rounded-md px-2 py-1.5 text-ui text-muted-foreground hover:text-sidebar-foreground hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+        >
+          View all
+        </button>
       )}
     </SidebarSection>
   );
