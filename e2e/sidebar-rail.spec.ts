@@ -48,7 +48,7 @@ test("collapsed sidebar keeps workspace, machine, search and account navigation 
     const rail = page.getByRole("navigation", { name: "Primary" });
     const shell = page.locator(".sidebar-shell");
     await expect(rail.getByText("No agents yet.", { exact: true })).toBeVisible();
-    await expect(rail.getByRole("button", { name: "Processes", exact: true })).toBeVisible();
+    await expect(rail.getByRole("button", { name: "Previews", exact: true })).toBeVisible();
     await expectNoSidebarTooltips(page, rail);
     await rail.getByRole("button", { name: "Collapse sidebar", exact: true }).click();
     await expect(shell).toHaveCSS("width", "44px");
@@ -59,7 +59,7 @@ test("collapsed sidebar keeps workspace, machine, search and account navigation 
     await expect(expand).toHaveAttribute("aria-expanded", "false");
     await expect(rail.getByRole("button", { name: "Workspaces", exact: true })).toHaveCount(0);
     await expect(rail.getByRole("region", { name: "Agents", exact: true })).toHaveCount(0);
-    await expect(rail.getByRole("button", { name: "Processes", exact: true })).toHaveCount(0);
+    await expect(rail.getByRole("button", { name: "Previews", exact: true })).toHaveCount(0);
     for (const button of await rail.locator(".sidebar-rail-control").all()) {
       const bounds = await button.boundingBox();
       expect(bounds?.width).toBe(32);
@@ -150,7 +150,7 @@ test("collapsed sidebar keeps workspace, machine, search and account navigation 
     await hoverControl(page, beta);
     await expect(page.getByRole("tooltip")).toContainText(join(directory, "beta"));
     await expect(rail.getByText("No agents yet.", { exact: true })).toBeVisible();
-    await expect(rail.getByRole("button", { name: "Processes", exact: true })).toBeVisible();
+    await expect(rail.getByRole("button", { name: "Previews", exact: true })).toBeVisible();
     expect(errors).toEqual([]);
   } finally {
     await rm(directory, { recursive: true, force: true });
@@ -174,7 +174,7 @@ test("collapsed agents show provider icons and live status without losing chat d
     const rail = page.getByRole("navigation", { name: "Primary" });
     const agents = rail.getByRole("region", { name: "Agents", exact: true });
     await expect(rail.getByRole("button", { name: "Agents", exact: true })).toHaveCount(0);
-    await expect(rail.getByRole("button", { name: "Processes", exact: true })).toHaveCount(0);
+    await expect(rail.getByRole("button", { name: "Previews", exact: true })).toHaveCount(0);
     await expect(rail.getByText("—", { exact: true })).toHaveCount(0);
     const codexButton = agents.locator('button[data-agent-id]:has([data-provider="codex"])');
     await expect(codexButton.getByRole("img", { name: "Agent status: Ready" })).toBeVisible();
