@@ -49,7 +49,7 @@ export function createProcessStore(
       update({
         snapshot: null,
         loading: false,
-        error: "Update the machine daemon to inspect processes and storage.",
+        error: "Update the machine daemon to inspect processes.",
       });
       return;
     }
