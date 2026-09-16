@@ -1,6 +1,6 @@
-import { FolderKanban, Server, Settings, type LucideIcon } from "lucide-react";
+import { CalendarClock, FolderKanban, Server, Settings, type LucideIcon } from "lucide-react";
 
-export type View = "projects" | "servers" | "settings";
+export type View = "projects" | "servers" | "schedules" | "settings";
 
 export interface NavItem {
   readonly view: View;
@@ -11,6 +11,7 @@ export interface NavItem {
 }
 
 export const PRIMARY_NAV: readonly NavItem[] = [
+  { view: "schedules", label: "Schedules", icon: CalendarClock },
   { view: "projects", label: "Projects", icon: FolderKanban },
   { view: "servers", label: "Servers", icon: Server },
 ];
