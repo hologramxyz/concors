@@ -7,6 +7,8 @@ import { tokenStore, machineCredentials } from "../platform/storage";
 import { disablePush } from "../platform/notifications";
 import { config } from "../config";
 import { useDirectProfile } from "./profile-sheet";
+import { nativeGitHubPlatform } from "./github-platform";
+import { GitHubSignInError, signInWithGitHub as runGitHubSignIn } from "./github-sign-in";
 
 interface AuthState {
   me: Me | null;
@@ -20,6 +22,10 @@ interface AuthContextValue extends AuthState {
   direct: boolean;
   connectDirect(): void;
   signIn(email: string, password: string): Promise<void>;
+  /** `true` once this build and the API both support GitHub sign-in. */
+  githubSignIn: boolean;
+  /** Signs in, or creates an account, through GitHub in an in-app browser sheet. */
+  signInWithGitHub(): Promise<void>;
   signOut(): Promise<void>;
   refresh(): Promise<void>;
   switchOrganization(organizationId: string): Promise<void>;
@@ -38,6 +44,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [direct, setDirect] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const [state, setState] = useState<AuthState>({ me: null, loading: true, error: null });
+  const [github] = useState(() =>
+    config.demo || config.developmentDaemon ? null : nativeGitHubPlatform(),
+  );
+  const [githubSignIn, setGitHubSignIn] = useState(false);
+  useEffect(() => {
+    // Offer GitHub only where the API has it configured, never a button that leads to an error.
+    if (!github) return;
+    let current = true;
+    api
+      .getSignInProviders()
+      .then((providers) => {
+        if (current) setGitHubSignIn(providers.github);
+      })
+      .catch(() => undefined);
+    return () => {
+      current = false;
+    };
+  }, [github]);
   const refresh = async () => {
     // A private-daemon test session is not a cloud login. Do not hydrate or send account tokens.
     if (config.developmentDaemon) {
@@ -115,6 +139,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           error instanceof ApiError && [400, 401].includes(error.status)
             ? "Email or password is incorrect."
             : "Could not sign in. Check your connection and try again.",
+      });
+    } finally {
+      changingSession.current = false;
+    }
+  };
+  const signInWithGitHub = async () => {
+    if (!github) throw new Error("GitHub sign-in is not available in this build.");
+    if (changingSession.current) return;
+    changingSession.current = true;
+    const attempt = ++generation.current;
+    setState({ me: null, loading: true, error: null });
+    try {
+      await tokenStore.hydrate();
+      const outcome = await runGitHubSignIn(api, github);
+      if (outcome === "cancelled") {
+        if (attempt === generation.current) setState({ me: null, loading: false, error: null });
+        return;
+      }
+      await tokenStore.flush();
+      const me = await api.getMe();
+      if (attempt === generation.current) {
+        query.clear();
+        setState({ me, loading: false, error: null });
+      }
+    } catch (error) {
+      if (attempt !== generation.current) return;
+      setState({
+        me: null,
+        loading: false,
+        error:
+          error instanceof GitHubSignInError
+            ? error.message
+            : "Could not sign in with GitHub. Check your connection and try again.",
       });
     } finally {
       changingSession.current = false;
@@ -198,6 +255,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setDirect(true);
         },
         signIn,
+        githubSignIn,
+        signInWithGitHub,
         signOut,
         refresh,
         switchOrganization,

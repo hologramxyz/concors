@@ -9,6 +9,11 @@ import { isTauri as tauriIsTauri } from "@tauri-apps/api/core";
 
 export { localDaemon, type DaemonIdentity, type LocalDaemonStatus } from "./local-daemon.ts";
 export { openExternal } from "./open-external.ts";
+export {
+  startSignInListener,
+  type SignInCallback,
+  type SignInListener,
+} from "./sign-in-listener.ts";
 
 /** `true` when running inside the Tauri webview, `false` in a plain browser (`pnpm desktop:web:dev`). */
 export function isTauri(): boolean {

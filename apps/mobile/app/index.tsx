@@ -70,7 +70,25 @@ export default function SignInScreen() {
             </Button>
           ) : (
             <>
-              <Copy muted>Sign in with your existing Concors account to access your machines.</Copy>
+              {auth.githubSignIn ? (
+                <>
+                  <Button
+                    secondary
+                    testID="github-sign-in"
+                    disabled={auth.loading}
+                    onPress={() => {
+                      void auth.signInWithGitHub();
+                    }}
+                  >
+                    Continue with GitHub
+                  </Button>
+                  <Copy muted>Or sign in with your Concors email and password.</Copy>
+                </>
+              ) : (
+                <Copy muted>
+                  Sign in with your existing Concors account to access your machines.
+                </Copy>
+              )}
               <Field
                 label="Email"
                 value={email}
