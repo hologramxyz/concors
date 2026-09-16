@@ -121,9 +121,7 @@ export class DaemonConnection {
     if (this.#state.status !== "ready" || !this.#workspace)
       return Promise.reject(new Error("Workspace is disconnected"));
     if (!this.#state.daemon.capabilities?.includes(RESOURCES_CAPABILITY))
-      return Promise.reject(
-        new Error("Update the machine daemon to inspect processes and storage."),
-      );
+      return Promise.reject(new Error("Update the machine daemon to inspect processes."));
     if (this.#resourceRequests.has(requestId))
       return Promise.reject(new Error("Request is already pending"));
     const request = ResourceRequestSchema.parse({ type: "resource.request", requestId, operation });
@@ -133,7 +131,7 @@ export class DaemonConnection {
           this.#resourceRequests.delete(requestId);
           reject(
             new Error(
-              "Resource request timed out. Refresh before retrying; cleanup may have completed.",
+              "Resource request timed out. Refresh before retrying; a stop request may have completed.",
             ),
           );
         },

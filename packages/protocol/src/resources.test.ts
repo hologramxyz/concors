@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { ResourceRequestSchema, ProcessSnapshotSchema } from "./resources.ts";
 
-it("accepts explicit resource operations but never a raw cleanup path", () => {
+it("accepts process inspection but rejects removed storage and cleanup operations", () => {
   const requestId = "11111111-1111-4111-8111-111111111111";
   expect(
     ResourceRequestSchema.safeParse({
@@ -24,6 +24,13 @@ it("accepts explicit resource operations but never a raw cleanup path", () => {
       operation: { kind: "cleanup", id: requestId },
     }).success,
   ).toBe(false);
+  for (const operation of [
+    { kind: "storage" },
+    { kind: "cleanup", id: requestId, confirmation: "/tmp" },
+  ])
+    expect(
+      ResourceRequestSchema.safeParse({ type: "resource.request", requestId, operation }).success,
+    ).toBe(false);
 });
 
 it("bounds process inventories and treats unknown measurements as null", () => {
