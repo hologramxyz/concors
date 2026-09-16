@@ -1,15 +1,6 @@
 import { useContext, useEffect, useRef, useState } from "react";
 import { newRequestId } from "@concors/client-core";
-import {
-  Activity,
-  ExternalLink,
-  FolderGit2,
-  HardDrive,
-  Link2,
-  RefreshCw,
-  Square,
-  Trash2,
-} from "lucide-react";
+import { FolderGit2, HardDrive, RefreshCw, Trash2 } from "lucide-react";
 import {
   RESOURCES_CAPABILITY,
   type MachineProcess,
@@ -34,6 +25,7 @@ import { useProcesses } from "./use-processes";
 import { validPreviewUrl, usePreviewLinks } from "./preview-links";
 import { processStore } from "./process-store";
 import { CompactLayoutContext } from "@/components/compact-layout";
+import { ResourceProcessRow } from "./process-row";
 
 type Action = { kind: "stop"; item: MachineProcess } | { kind: "cleanup"; item: StorageEntry };
 
@@ -137,14 +129,7 @@ function ResourceContent() {
         compact ? "space-y-4 py-2" : "mx-auto w-full max-w-4xl space-y-5 px-4 py-6 sm:px-6"
       }
     >
-      {!compact && (
-        <div>
-          <h2 className="text-base font-medium">Resources</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            See what is running and review what is taking up space on this machine.
-          </p>
-        </div>
-      )}
+      {!compact && <h2 className="text-base font-medium">Resources</h2>}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex gap-1" aria-label="Resource sections">
           <Button
@@ -155,8 +140,7 @@ function ResourceContent() {
               setQuery("");
             }}
           >
-            <Activity />
-            Running
+            Processes
           </Button>
           <Button
             variant={section === "storage" ? "secondary" : "ghost"}
@@ -166,17 +150,18 @@ function ResourceContent() {
               setQuery("");
             }}
           >
-            <HardDrive />
             Storage & cleanup
           </Button>
         </div>
         <Button
-          variant="outline"
+          variant="ghost"
+          size={section === "running" ? "icon" : "sm"}
+          aria-label={section === "running" ? "Refresh" : undefined}
           disabled={!supported || busy || loading}
           onClick={() => (section === "running" ? void refresh() : void run({ kind: "storage" }))}
         >
           <RefreshCw className={busy || loading ? "animate-spin" : ""} />
-          {section === "storage" ? (busy ? "Scanning…" : "Scan storage") : "Refresh"}
+          {section === "storage" && (busy ? "Scanning…" : "Scan storage")}
         </Button>
       </div>
       {(error || processError) && (
@@ -216,115 +201,80 @@ function ResourceContent() {
       </div>
       {section === "running" ? (
         <>
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            Processes visible to the daemon’s OS user. CPU is a share of the whole machine; RAM is
-            resident memory and may include shared pages. Sleeping does not mean safe to stop.
-            Container and other-user usage may not be fully attributed.
-          </p>
           {snapshot?.warnings.map((warning) => (
             <p key={warning} className="text-xs text-muted-foreground">
               {warning}
             </p>
           ))}
-          <div className="divide-y rounded-lg border">
+          <ul className="space-y-0.5" aria-label="Running processes">
             {filtered.slice(0, processLimit).map((item) => (
-              <div key={item.id} className="flex min-w-0 flex-wrap items-center gap-3 p-3">
-                <div className="min-w-0 flex-1 basis-40">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`size-1.5 shrink-0 rounded-full ${item.state === "running" ? "bg-emerald-500" : "bg-muted-foreground/50"}`}
-                    />
-                    <span className="truncate text-sm font-medium">{item.name}</span>
-                  </div>
-                  <div className="mt-1 truncate text-xs text-muted-foreground">
-                    PID {item.pid} · {item.state}
-                    {item.directory ? ` · ${item.directory}` : ""}
-                  </div>
-                  {item.stopBlocked && (
-                    <p className="mt-1 text-xs text-muted-foreground">{item.stopBlocked}</p>
-                  )}
-                </div>
-                <div className="text-right text-xs tabular-nums">
-                  <div>{item.memoryBytes === null ? "—" : formatMemory(item.memoryBytes)} RAM</div>
-                  <div className="text-muted-foreground">
-                    {item.cpuPercent === null ? "—" : `${item.cpuPercent.toFixed(1)}%`} CPU
-                  </div>
-                </div>
-                {item.ports.length > 0 && (
-                  <Button variant="outline" onClick={() => openPreview(item)}>
-                    <ExternalLink />
-                    {links[item.id] ? "Preview" : `:${item.ports[0]}`}
-                  </Button>
-                )}
-                {links[item.id] && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Change preview link for ${item.name}`}
-                    onClick={() => {
-                      setPreview(item);
-                      setPreviewUrl(links[item.id] ?? "");
-                    }}
-                  >
-                    <Link2 />
-                  </Button>
-                )}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  aria-label={`Stop ${item.name} (PID ${item.pid})`}
-                  disabled={!!item.stopBlocked || !supported || busy}
-                  onClick={() => {
-                    setAction({ kind: "stop", item });
-                    setError(null);
-                  }}
-                >
-                  <Square className="size-3.5" />
-                  Stop
-                </Button>
-              </div>
+              <ResourceProcessRow
+                key={item.id}
+                item={item}
+                hasPreview={!!links[item.id]}
+                canStop={!!supported && !busy}
+                onPreview={() => openPreview(item)}
+                onChangePreview={() => {
+                  setPreview(item);
+                  setPreviewUrl(links[item.id] ?? "");
+                }}
+                onStop={() => {
+                  setAction({ kind: "stop", item });
+                  setError(null);
+                }}
+              />
             ))}
             {!filtered.length && (
-              <p className="p-6 text-center text-sm text-muted-foreground">
+              <li className="p-6 text-center text-sm text-muted-foreground">
                 {loading
                   ? "Discovering processes…"
                   : query
                     ? "No matching processes."
                     : "No processes to show."}
-              </p>
+              </li>
             )}
-          </div>
+          </ul>
           {filtered.length > processLimit && (
-            <Button variant="outline" onClick={() => setProcessLimit((limit) => limit + 100)}>
+            <Button variant="ghost" onClick={() => setProcessLimit((limit) => limit + 100)}>
               Show more processes ({processLimit} of {filtered.length})
             </Button>
           )}
+          <details className="text-xs leading-relaxed text-muted-foreground">
+            <summary className="cursor-pointer">About resource usage</summary>
+            <p className="mt-2">
+              Processes visible to the daemon’s OS user. CPU is a share of the whole machine; RAM is
+              resident memory and may include shared pages. Sleeping does not mean safe to stop.
+              Container and other-user usage may not be fully attributed.
+            </p>
+          </details>
         </>
       ) : (
         <>
           <p className="text-xs leading-relaxed text-muted-foreground">
-            Scan linked worktrees from open projects, user-owned temporary entries, and cache
-            folders. No automatic cleanup. Deleting files is permanent; processes and Docker volumes
-            are never pruned in bulk.
+            Review worktrees, temporary files, and caches. Removal is permanent and always
+            confirmed.
           </p>
           {!storage && (
-            <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+            <div className="py-6 text-center text-sm text-muted-foreground">
               Choose Scan storage to inspect disk and RAM-backed temporary files. Scans run only
               when requested.
             </div>
           )}
           {storage && (
             <>
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="space-y-2">
                 {storage.volumes.map((volume) => (
-                  <div key={volume.path} className="rounded-md border p-3 text-sm">
-                    <div className="truncate font-medium">
+                  <div
+                    key={volume.path}
+                    className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 px-2 text-sm"
+                  >
+                    <div className="min-w-0 truncate">
                       {volume.path}{" "}
                       {volume.memoryBacked && (
                         <span className="font-normal text-muted-foreground">· RAM-backed</span>
                       )}
                     </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       {formatMemory(volume.availableBytes)} available /{" "}
                       {formatMemory(volume.totalBytes)} · filesystem capacity
                     </p>
@@ -340,29 +290,32 @@ function ResourceContent() {
                 Scanned {new Date(storage.scannedAt).toLocaleTimeString()}. Sizes use allocated
                 blocks; cleanup rechecks for changes.
               </p>
-              <div className="divide-y rounded-lg border">
+              <ul className="space-y-0.5" aria-label="Storage entries">
                 {entries.map((item) => (
-                  <div key={item.id} className="flex min-w-0 items-start gap-3 p-3">
+                  <li
+                    key={item.id}
+                    className="flex min-w-0 items-start gap-2 rounded-md px-2 py-3 hover:bg-muted/40"
+                  >
                     {item.kind === "worktree" ? (
                       <FolderGit2 className="mt-1 size-4 shrink-0 text-muted-foreground" />
                     ) : (
                       <HardDrive className="mt-1 size-4 shrink-0 text-muted-foreground" />
                     )}
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium break-all">{item.path}</p>
+                      <p className="text-sm break-all">{item.path}</p>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {item.kind}
                         {item.branch ? ` · ${item.branch}` : ""} ·{" "}
                         {item.memoryBacked ? "RAM-backed" : "Disk"} ·{" "}
                         {item.bytes === null ? "Size unavailable" : formatMemory(item.bytes)}
                       </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {item.cleanupBlocked ??
-                          "Review contents before removal. A clean scan does not mean these files are unwanted."}
-                      </p>
+                      {item.cleanupBlocked && (
+                        <p className="mt-1 text-xs text-muted-foreground">{item.cleanupBlocked}</p>
+                      )}
                     </div>
                     <Button
-                      variant="outline"
+                      variant="ghost"
+                      size="sm"
                       disabled={!!item.cleanupBlocked || !supported || busy}
                       onClick={() => {
                         setAction({ kind: "cleanup", item });
@@ -373,14 +326,24 @@ function ResourceContent() {
                       <Trash2 />
                       Review
                     </Button>
-                  </div>
+                  </li>
                 ))}
                 {!entries.length && (
-                  <p className="p-6 text-sm text-muted-foreground">No matching storage entries.</p>
+                  <li className="py-6 text-sm text-muted-foreground">
+                    No matching storage entries.
+                  </li>
                 )}
-              </div>
+              </ul>
             </>
           )}
+          <details className="text-xs leading-relaxed text-muted-foreground">
+            <summary className="cursor-pointer">About storage cleanup</summary>
+            <p className="mt-2">
+              Scans cover linked worktrees from open projects, user-owned temporary entries, and
+              cache folders. A clean scan does not mean files are unwanted. Review contents before
+              removal. No automatic cleanup; processes and Docker volumes are never pruned in bulk.
+            </p>
+          </details>
         </>
       )}
       <Dialog
