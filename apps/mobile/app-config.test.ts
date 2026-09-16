@@ -8,6 +8,34 @@ afterEach(() => {
   vi.resetModules();
 });
 
+it("links the registered Expo project by default without changing the app identity", async () => {
+  vi.stubEnv("APP_VARIANT", "production");
+  vi.stubEnv("EXPO_OWNER", undefined);
+  vi.stubEnv("EXPO_PUBLIC_EAS_PROJECT_ID", undefined);
+  const { default: config } = await import("./app.config");
+  expect(config.slug).toBe("concors");
+  expect(config.owner).toBe("opser");
+  expect(config.extra?.eas?.projectId).toBe("cbfccc75-202c-461c-a19d-46419a248dcd");
+  expect(config.name).toBe("Concors");
+  expect(config.ios?.bundleIdentifier).toBe("dev.concors.mobile");
+});
+
+it("allows explicit Expo project overrides", async () => {
+  vi.stubEnv("EXPO_OWNER", "test-team");
+  vi.stubEnv("EXPO_PUBLIC_EAS_PROJECT_ID", "12345678-1234-4123-8123-123456789abc");
+  const { default: config } = await import("./app.config");
+  expect(config.owner).toBe("test-team");
+  expect(config.extra?.eas?.projectId).toBe("12345678-1234-4123-8123-123456789abc");
+});
+
+it("keeps explicitly unlinked local builds independent of the registered Expo project", async () => {
+  vi.stubEnv("EXPO_OWNER", "");
+  vi.stubEnv("EXPO_PUBLIC_EAS_PROJECT_ID", "");
+  const { default: config } = await import("./app.config");
+  expect(config.owner).toBeUndefined();
+  expect(config.extra?.eas).toBeUndefined();
+});
+
 it("uses a separate local Personal Team identity without push or associated domains", async () => {
   vi.stubEnv("APP_VARIANT", "development");
   vi.stubEnv("EAS_BUILD_PROFILE", "");
