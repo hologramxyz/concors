@@ -13,6 +13,7 @@ import {
 import { MachineIconSchema, type Machine, type SshKey } from "@concors/api-client";
 import type { WebSocketLike } from "@concors/daemon-client";
 import { newRequestId } from "@concors/client-core";
+import { demoResources } from "./resources";
 import {
   demoAgent,
   demoItems,
@@ -36,6 +37,7 @@ interface TerminalState {
 }
 /** In-memory fixture: all actions are simulated, including files, processes, machines and billing. */
 export function createDemoServer() {
+  const resources = demoResources();
   let workspace = structuredClone(demoWorkspace);
   const conversations = new Map<string, Conversation>([
     [ids.agent, { agent: structuredClone(demoAgent), items: structuredClone(demoItems) }],
@@ -333,6 +335,7 @@ export function createDemoServer() {
                 daemonVersion: "0.1.0",
                 status: "ready",
                 capabilities: [
+                  "machine-resources",
                   "workspace",
                   "terminal",
                   "agents",
@@ -355,6 +358,9 @@ export function createDemoServer() {
               this.emit({ type: "project.setups", setups: [...setups.values()] });
               for (const terminal of terminals.values())
                 this.emit({ type: "terminal.state", session: terminal.session });
+              break;
+            case "resource.request":
+              reply(resources(message));
               break;
             case "workspace.command":
               if (message.epoch !== workspace.epoch)
