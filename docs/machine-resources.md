@@ -1,115 +1,72 @@
-# Processes and Resources
+# Previews and Resources
 
-The sidebar's Processes section replaces the Servers placeholder. It shows up to
-six discovered processes, prioritizing listening ports and then resident RAM.
-Protected daemon/connection infrastructure stays in the full list, not the sidebar.
-Collapsed rows remain square, with tooltips only in the collapsed rail.
+The sidebar's Previews section contains named, explicitly supplied HTTP(S) links.
+It is not a process inventory: agents, daemons, background workers, RAM/CPU values,
+and arbitrary listening ports never appear there automatically. Clicking a preview
+opens its URL. The collapsed rail uses square link buttons and rail-only tooltips.
 
-With multiple processes, a subtle View all link below the sidebar list opens
-Resources. The section heading has no management control. With zero or one process,
-use workspace search or the CPU/RAM status bar. Desktop uses a centered Resources page. Mobile
-opens the same view in a drawer from the usage row or Processes section.
-All actions target the selected machine;
-switching connections discards confirmations, storage scans, and preview mappings.
+Use the plus beside Previews to add a name and an existing preview/tunnel URL.
+Right-click a preview (long-press on mobile) to edit or remove the link. Removing
+a preview removes only its link; it never stops a process or deletes files. URLs
+with embedded credentials or non-HTTP schemes are rejected. Mobile requires HTTPS
+and uses the host's existing external-link confirmation flow.
 
-## Running
+Links are scoped to the selected daemon connection and currently session-local:
+reloading the client clears them. No tunnels are created, ports published, or
+remote localhost addresses guessed. A saved URL is not a health check. Durable
+cross-device preview registration and automatic URL discovery are future work.
 
-Linux daemons inspect processes visible to their OS user, including work launched
-outside Concors. The view includes executable/script labels, PID, working folder,
-state, resident RAM, whole-machine-normalized CPU, and TCP listening ports. Filter
-by name, PID, or folder and sort by RAM, CPU, or name. Known workspace association
-is based on the process working directory; it is not authoritative launch ownership.
+## On-demand process monitoring
 
-The full list uses compact, borderless rows like the sidebar, with usage and preview
-links visible. Expand a row for its PID, working folder, protection reason, and Stop
-or Change preview link actions. Stopping processes and deleting files still require
-confirmation.
+Open Resources from the computer menu, CPU/RAM indicator, or workspace search.
+Desktop uses a centered page; mobile uses the same view in a drawer. The sidebar
+does not request or poll process inventories.
 
-One serialized daemon sample is reused for two seconds across clients. Each client
-shares a three-second polling loop across the sidebar and page. Mobile polls only
-while the sidebar or Resources view is mounted/visible. Polling stops after the last
-observer, and disconnected/failed readings are cleared. The first CPU sample is
-unknown, not zero. Raw command arguments and environment variables are not sent to
-clients. `ss -H -ltnp` supplies ports when available; failure does not hide processes.
+Linux daemons inspect processes visible to their OS user. The full Resources list
+intentionally includes infrastructure and agents when diagnosing machine usage.
+Rows show CPU, resident RAM, state, and listening ports. Expand a row for its PID,
+working directory, protection reason, and explicit Stop action. Filter by name,
+PID, or folder and sort by RAM, CPU, or name. Workspace association is based on
+working directories, not authoritative workload ownership.
 
-Sleeping means waiting, not unwanted. Stop always requires confirmation, checks the
-PID/start-time/OS-user identity again immediately before SIGTERM, and protects the
-daemon, its ancestors, and recognized connection infrastructure. It signals only
-the selected PID, never a process group; children may remain and a process can ignore
-SIGTERM. No force kill, idle timeout, or automatic stop is implemented. Identity
-checks reduce stale-PID risk but are not a pidfd-based atomic signal guarantee.
+A process port button can attach a named preview URL to Previews. A listening port
+alone is not evidence of an HTTP application; databases and daemon ports are not
+automatically promoted to previews.
 
-RAM is RSS, which can double-count shared pages. CPU is a percentage of the whole
-machine, not of one core. Other-user, container, kernel, filesystem cache, and
-memory-backed file usage are not fully attributable to this list. Its totals are
-not expected to sum to the machine status indicator. Docker workload grouping,
-durable ownership, pinning, and process-tree lifecycle management remain future work.
+Process inspection polls every three seconds only while Resources is mounted.
+The daemon coalesces readings for two seconds. Closing Resources unsubscribes;
+disconnects and failures clear stale readings. Machine switches discard pending
+confirmations. First-sample CPU is unknown rather than zero. Raw command arguments
+and environment variables are not sent to clients.
 
-## Preview links
+CPU is a share of the whole machine. RAM is RSS and may double-count shared pages;
+other-user processes, containers, kernel memory, and filesystem cache may not be
+fully attributable. Process totals need not equal the existing machine indicator.
 
-A listening port is not necessarily an HTTP server or a publicly reachable URL.
-Use its port button to attach an existing HTTP(S) preview/tunnel URL. That mapping
-is shared with the sidebar for the current connection, so subsequent clicks open
-the preview directly. Links reject non-HTTP schemes and embedded credentials.
+Stop requires confirmation, rechecks PID/start-time/OS-user identity, protects
+daemon/connection infrastructure, and sends SIGTERM to one PID only. Children may
+remain and a process may ignore SIGTERM. There is no force-kill, automatic stop,
+or idle-timeout policy. Revalidation is not a pidfd-based atomic signal guarantee.
+Sleeping or low CPU usage does not establish that a process is unwanted.
 
-Mappings are session-local and process-identity-specific. This increment does not
-create tunnels, publish ports, guess a remote localhost URL, or claim every TCP
-listener is previewable. Desktop uses the external browser opener. Mobile routes
-links through its host's existing confirmation flow and requires HTTPS; the form
-enforces that restriction.
+## Cleanup is deferred
 
-## Storage and cleanup
-
-Storage scans run only when requested. They inspect:
-
-- Git worktrees registered with repositories in open workspaces, including linked
-  worktrees outside those workspace folders.
-- Same-user entries immediately under the OS temporary directory and `/var/tmp`.
-- Same-user cache directories immediately under `~/.cache`.
-
-The scan shows paths, branch names where known, allocated file blocks, filesystem
-capacity, RAM-backed/tmpfs status, and why cleanup is blocked. Shared/hard-linked
-files may be counted more than once; displayed sizes are not guaranteed reclaimable
-bytes. There is no blanket scan or cleanup of the whole home directory, Docker
-volumes, container images, or arbitrary disk paths. Scan work is bounded (128
-entries, per-tree entry/time limits and an overall inspection time budget); unknown
-sizes and incomplete checks are shown rather than assumed safe.
-
-Cleanup requires the exact full path typed into a confirmation. The request uses a
-daemon-issued candidate ID, not an arbitrary client-supplied deletion path. Before
-acting it rechecks ownership, path resolution, metadata fingerprint, same-user
-process working directories/open files, and local Docker-compatible bind mounts
-(default, rootless, and explicitly configured Unix sockets). If
-Docker inspection or process inspection is uncertain, cleanup is refused. It does
-not detect every possible external writer or container runtime; this is explicit
-manual cleanup, not a sandbox or an automatic disposability guarantee.
-
-Open workspace paths, primary checkouts, locked worktrees, nested Git checkouts in
-temporary entries, other-user files, mounted filesystems, sockets, and changed
-entries are protected. A linked worktree must have no modified, untracked, or
-ignored files and no commits absent from fetched remote refs. `git worktree remove`
-is used without force; branches are retained. Remote refs are not fetched by a scan.
-
-Temporary/cache entries are renamed to a unique sibling, verified again, and then
-removed. If removal fails, the error identifies the remaining path. Deletion is
-permanent, not a trash operation; history and recovery are not implemented. Freeing
-disk storage does not necessarily release RAM, and stopping a process is separate
-from deleting its files. No cleanup runs simply because an entry is old.
+Storage & cleanup, Scan storage, directory candidate lists, and file-deletion
+operations have been removed from this increment, including the daemon/protocol
+API. No automatic cleanup runs. Agent-led cleanup, with manual execution or an
+explicitly configured schedule, is a separate proposed initiative—not a feature
+or daily job installed by this PR. See [the initiative](resource-management-initiative.md).
 
 ## Compatibility and validation
 
-The additive `machine-resources` capability gates `resource.request` / `resource.result`.
-Requests require the existing handshake and workspace subscription. Older daemons
-receive no unsupported calls. Non-Linux daemons explain the platform limitation;
-the pre-existing whole-machine CPU/RAM indicator is unchanged. The mobile protocol
-relay forwards the same operations and confirmations, with no second cleanup path.
+The additive machine-resources capability gates process inspection and stopping.
+Older daemons receive no unsupported calls; unsupported platforms explain their
+limits. Named preview links do not require the resource-inspection capability.
+The pre-existing whole-machine usage indicator is unchanged.
 
-Unit/integration tests cover schemas, parsing, PID protection, changed files,
-worktree guards, symlinks, container-use guards, transport compatibility, shared
-polling and preview URL validation. Browser tests use intercepted resource actions;
-the mobile demo simulates process and cleanup operations without touching real
-machine resources. Tests never terminate arbitrary processes or clean live files.
-
-See the [initiative](resource-management-initiative.md) for future ownership and
-automation work. Agent-driven isolated execution and temporary VMs are parked for
-V2 and are not provisioned or implemented here.
+Protocol tests reject the withdrawn storage and cleanup requests. Unit/integration
+tests cover process parsing, PID protection, transport compatibility, polling, and
+preview URL validation. Browser tests verify previews never become a process list,
+computer-menu navigation, safe stopping, mobile behavior, and preview editing.
+Tests intercept mutations or use isolated fixtures; they do not stop user processes
+or remove real machine data. Isolated execution and ephemeral VMs remain parked for V2.

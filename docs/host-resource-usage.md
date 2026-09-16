@@ -45,8 +45,9 @@ Deploy the updated daemon to each machine to enable the indicator there.
 
 ## Inspecting resource consumers
 
-Click the usage indicator to open [Processes and Resources](machine-resources.md):
-process-level usage, preview links, and explicit storage/cleanup review. This is a
+Click the usage indicator or choose Resources in the computer menu to open
+[process-level monitoring](machine-resources.md). Preview links live separately
+in the sidebar; directory scanning and cleanup are not included. This is a
 separate capability from whole-machine telemetry. The broader
 [resource-management initiative](resource-management-initiative.md) records future
 ownership, automation, and V2 isolated-execution work.
