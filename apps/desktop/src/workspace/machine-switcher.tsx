@@ -49,7 +49,7 @@ export function MachineSwitcher({
       <SidebarTooltip collapsed={compact}>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger
-            className={`group/machine relative flex min-w-0 items-center rounded-md hover:bg-sidebar-accent focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-sidebar-ring data-[state=open]:bg-sidebar-accent ${compact ? "sidebar-rail-control" : "h-8 max-w-full gap-2 px-2 text-left"}`}
+            className={`group/machine relative flex min-w-0 items-center rounded-md hover:bg-sidebar-accent focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-sidebar-ring aria-expanded:bg-sidebar-accent ${compact ? "sidebar-rail-control" : "h-8 max-w-full gap-2 px-2 text-left"}`}
             aria-label="Switch machine"
           >
             {selected.machineId !== "local" && cloudMachines === null ? (
@@ -72,7 +72,7 @@ export function MachineSwitcher({
                 <span className="truncate text-ui font-medium">{selected.label}</span>
                 <ChevronDown
                   aria-hidden="true"
-                  className="size-3 shrink-0 text-muted-foreground transition-transform group-data-[state=open]/machine:rotate-180 motion-reduce:transition-none"
+                  className="size-3 shrink-0 text-muted-foreground transition-transform group-aria-expanded/machine:rotate-180 motion-reduce:transition-none"
                 />
               </span>
             )}
