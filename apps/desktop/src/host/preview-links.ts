@@ -1,8 +1,12 @@
 import { useSyncExternalStore } from "react";
 import type { DaemonConnection } from "@concors/daemon-client";
 
-const EMPTY: Readonly<Record<string, string>> = {};
-function createStore() {
+export interface PreviewLink {
+  name: string;
+  url: string;
+}
+const EMPTY: Readonly<Record<string, PreviewLink>> = {};
+export function createPreviewStore() {
   let links = EMPTY;
   const listeners = new Set<() => void>();
   return {
@@ -13,21 +17,26 @@ function createStore() {
         listeners.delete(listener);
       };
     },
-    setLink(id: string, value: string) {
+    setLink(id: string, value: string, name = "") {
       const url = validPreviewUrl(value);
       if (!url) return;
-      links = { ...links, [id]: url };
+      links = { ...links, [id]: { url, name: name.trim().slice(0, 80) || new URL(url).hostname } };
+      for (const notify of listeners) notify();
+    },
+    removeLink(id: string) {
+      const { [id]: _removed, ...next } = links;
+      links = next;
       for (const notify of listeners) notify();
     },
   };
 }
-const emptyStore = createStore();
-const stores = new WeakMap<DaemonConnection, ReturnType<typeof createStore>>();
+const emptyStore = createPreviewStore();
+const stores = new WeakMap<DaemonConnection, ReturnType<typeof createPreviewStore>>();
 export function usePreviewLinks(connection: DaemonConnection | null) {
-  const store = connection ? (stores.get(connection) ?? createStore()) : emptyStore;
+  const store = connection ? (stores.get(connection) ?? createPreviewStore()) : emptyStore;
   if (connection) stores.set(connection, store);
   const links = useSyncExternalStore(store.subscribe, store.getSnapshot);
-  return { links, setLink: store.setLink };
+  return { links, setLink: store.setLink, removeLink: store.removeLink };
 }
 
 export function validPreviewUrl(value: string, secureOnly = false): string | null {

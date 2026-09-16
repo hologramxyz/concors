@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { validPreviewUrl } from "./preview-links";
+import { createPreviewStore, validPreviewUrl } from "./preview-links";
 
 it("accepts only explicitly supplied HTTP(S) links without embedded credentials", () => {
   expect(validPreviewUrl("https://preview.example/test")).toBe("https://preview.example/test");
@@ -13,4 +13,18 @@ it("accepts only explicitly supplied HTTP(S) links without embedded credentials"
     "/relative",
   ])
     expect(validPreviewUrl(value)).toBeNull();
+});
+
+it("keeps named preview links separate from machine processes and supports edits and removal", () => {
+  const first = createPreviewStore();
+  const second = createPreviewStore();
+  first.setLink("web", "https://web.example", " Web app ");
+  expect(first.getSnapshot()).toEqual({ web: { name: "Web app", url: "https://web.example/" } });
+  expect(second.getSnapshot()).toEqual({});
+  first.setLink("web", "javascript:alert(1)", "Unsafe");
+  expect(first.getSnapshot().web?.name).toBe("Web app");
+  first.setLink("web", "https://branch.example", "Feature preview");
+  expect(first.getSnapshot().web?.url).toBe("https://branch.example/");
+  first.removeLink("web");
+  expect(first.getSnapshot()).toEqual({});
 });
