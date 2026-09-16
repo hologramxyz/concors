@@ -1,6 +1,7 @@
 import type { DaemonInfo, DaemonStatus } from "@concors/protocol";
 import {
   HOST_USAGE_CAPABILITY,
+  RESOURCES_CAPABILITY,
   PROJECT_ICON_CAPABILITY,
   PROTOCOL_VERSION,
 } from "@concors/protocol";
@@ -30,6 +31,7 @@ export class DaemonState {
       status: this.#status,
       capabilities: [
         HOST_USAGE_CAPABILITY,
+        RESOURCES_CAPABILITY,
         "terminal-profiles",
         "color-themes",
         "project-files",

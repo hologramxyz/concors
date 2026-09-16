@@ -55,6 +55,15 @@ import type { SettingsPage } from "@/settings/navigation";
 import { NativeSurfaces } from "./native-surfaces";
 import { NativeHeaderButton } from "./native-header-button";
 import { ResourceStatus } from "@/host/resource-status";
+import { ResourcesView } from "@/host/resources-view";
+import { PreviewsSidebar } from "@/host/previews-sidebar";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 const subscribeState = (listener: () => void) =>
   subscribeHost((message) => {
@@ -111,6 +120,7 @@ function MobileWorkspaceContent({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [creatingTerminalProfile, setCreatingTerminalProfile] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [resourcesOpen, setResourcesOpen] = useState(false);
   const [settingsPage, setSettingsPage] = useState<SettingsPage>("account");
   const [searchOpen, setSearchOpen] = useState(false);
   const [addingProject, setAddingProject] = useState<"open" | "clone" | null>(null);
@@ -489,6 +499,10 @@ function MobileWorkspaceContent({
                     <div className="mobile-sidebar-machine">
                       <MobileMachinePicker
                         host={host}
+                        onOpenResources={() => {
+                          setSidebarOpen(false);
+                          setResourcesOpen(true);
+                        }}
                         onSelect={(machineId) => {
                           setLocal({ machineId, target: {} });
                           runHost({ kind: "select-machine", machineId });
@@ -508,6 +522,10 @@ function MobileWorkspaceContent({
                     <div className="px-3 pb-3">
                       <ResourceStatus
                         compact
+                        onOpenResources={() => {
+                          setSidebarOpen(false);
+                          setResourcesOpen(true);
+                        }}
                         connection={connection}
                         state={connection?.state ?? { status: "disconnected" }}
                         machine={
@@ -551,11 +569,7 @@ function MobileWorkspaceContent({
                     <SidebarSection title="Agents">
                       <AgentSidebar onSelect={openAgent} workspace={workspace} />
                     </SidebarSection>
-                    <SidebarSection title="Servers">
-                      <p className="px-2 py-3 text-sm text-muted-foreground">
-                        No servers discovered.
-                      </p>
-                    </SidebarSection>
+                    <PreviewsSidebar />
                   </nav>
                   <div className="mobile-sidebar-footer">
                     <MobileAccountMenu
@@ -765,6 +779,17 @@ function MobileWorkspaceContent({
                   dragging={filesGesture.dragging}
                 />
               </div>
+              <Dialog open={resourcesOpen} onOpenChange={setResourcesOpen}>
+                <DialogContent size="wide" className="mobile-settings-drawer">
+                  <DialogHeader>
+                    <DialogTitle>Resources</DialogTitle>
+                    <DialogDescription>
+                      Process CPU and RAM usage on the selected machine.
+                    </DialogDescription>
+                  </DialogHeader>
+                  {resourcesOpen && <ResourcesView />}
+                </DialogContent>
+              </Dialog>
               <SettingsDrawer
                 key={host.machineId}
                 creatingTerminalProfile={creatingTerminalProfile}
@@ -814,7 +839,10 @@ function MobileWorkspaceContent({
                 onOpenChange={setSearchOpen}
                 onNavigate={(view) => {
                   if (view === "settings") openSettings();
-                  else setSidebarOpen(true);
+                  else if (view === "resources") {
+                    setSidebarOpen(false);
+                    setResourcesOpen(true);
+                  } else setSidebarOpen(true);
                 }}
                 onManageMachines={() => openSettings("machines")}
                 onReconnect={() => runHost({ kind: "retry" })}

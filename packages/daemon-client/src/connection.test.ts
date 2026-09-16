@@ -362,6 +362,43 @@ describe("workspace replica lifecycle", () => {
     selection: null,
   };
 
+  it("gates resource requests and rejects uncertain mutations on disconnect", async () => {
+    const { connection, socket, ready } = startConnection();
+    connection.subscribeWorkspace(() => undefined);
+    socket.serverOpen();
+    socket.serverSend({ ...READY, capabilities: ["machine-resources"] });
+    await ready;
+    socket.serverSend({ type: "workspace.snapshot", snapshot });
+    const id = "00000000-0000-4000-8000-000000000003";
+    const pending = connection.requestResource({ kind: "processes" }, id);
+    await expect(connection.requestResource({ kind: "processes" }, id)).rejects.toThrow(
+      "already pending",
+    );
+    socket.serverSend({
+      type: "resource.result",
+      requestId: id,
+      outcome: { status: "processes", snapshot: { sampledAt: 1, processes: [], warnings: [] } },
+    });
+    await expect(pending).resolves.toMatchObject({ outcome: { status: "processes" } });
+    const stop = connection.requestResource({ kind: "stop", id: "42:100" }, id);
+    const rejected = expect(stop).rejects.toThrow("may have completed");
+    socket.serverClose();
+    await rejected;
+  });
+  it("never sends resource requests to an older daemon", async () => {
+    const { connection, socket, ready } = startConnection();
+    connection.subscribeWorkspace(() => undefined);
+    socket.serverOpen();
+    socket.serverSend(READY);
+    await ready;
+    socket.serverSend({ type: "workspace.snapshot", snapshot });
+    await expect(
+      connection.requestResource({ kind: "processes" }, "00000000-0000-4000-8000-000000000003"),
+    ).rejects.toThrow("Update");
+    expect(socket.sent.some((raw) => JSON.parse(raw).type === "resource.request")).toBe(false);
+    connection.disconnect();
+  });
+
   it("ignores stale snapshots and rejects pending commands on disconnect", async () => {
     const { connection, socket, ready } = startConnection();
     const listener = vi.fn();

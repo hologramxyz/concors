@@ -70,6 +70,7 @@ describe("WebSocket handshake", () => {
         status: "ready",
         capabilities: [
           "host-usage",
+          "machine-resources",
           "terminal-profiles",
           "color-themes",
           "project-files",

@@ -1,5 +1,11 @@
 import { ThemeRequestSchema, type ThemeResult } from "@concors/protocol";
 import {
+  RESOURCES_CAPABILITY,
+  ResourceRequestSchema,
+  type ResourceOperation,
+  type ResourceResult,
+} from "@concors/protocol";
+import {
   ProviderRequestSchema,
   type ProviderOperation,
   type ProviderResult,
@@ -102,6 +108,45 @@ const DEFAULT_HANDSHAKE_TIMEOUT_MS = 5_000;
  * (backoff, UI prompts) belongs to the host application.
  */
 export class DaemonConnection {
+  readonly #resourceRequests = new Map<
+    string,
+    {
+      resolve: (result: ResourceResult) => void;
+      reject: (error: Error) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
+  >();
+
+  requestResource(operation: ResourceOperation, requestId: string): Promise<ResourceResult> {
+    if (this.#state.status !== "ready" || !this.#workspace)
+      return Promise.reject(new Error("Workspace is disconnected"));
+    if (!this.#state.daemon.capabilities?.includes(RESOURCES_CAPABILITY))
+      return Promise.reject(new Error("Update the machine daemon to inspect processes."));
+    if (this.#resourceRequests.has(requestId))
+      return Promise.reject(new Error("Request is already pending"));
+    const request = ResourceRequestSchema.parse({ type: "resource.request", requestId, operation });
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(
+        () => {
+          this.#resourceRequests.delete(requestId);
+          reject(
+            new Error(
+              "Resource request timed out. Refresh before retrying; a stop request may have completed.",
+            ),
+          );
+        },
+        operation.kind === "processes" ? 10_000 : 60_000,
+      );
+      this.#resourceRequests.set(requestId, { resolve, reject, timer });
+      try {
+        this.#socket?.send(JSON.stringify(request));
+      } catch (error) {
+        clearTimeout(timer);
+        this.#resourceRequests.delete(requestId);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
+  }
   #hostUsage: HostUsage | null = null;
   readonly #hostUsageListeners = new Set<(usage: HostUsage | null) => void>();
 
@@ -600,6 +645,15 @@ export class DaemonConnection {
               for (const listener of this.#projectListeners) listener(message.setups);
             }
             break;
+          case "resource.result": {
+            const pending = this.#resourceRequests.get(message.requestId);
+            if (pending) {
+              clearTimeout(pending.timer);
+              this.#resourceRequests.delete(message.requestId);
+              pending.resolve(message);
+            }
+            break;
+          }
           case "file.result": {
             const pending = this.#fileRequests.get(message.requestId);
             if (pending) {
@@ -800,6 +854,15 @@ export class DaemonConnection {
         pending.reject(new Error("Connection lost. Reload theme settings before retrying."));
       }
       this.#themeRequests.clear();
+      for (const pending of this.#resourceRequests.values()) {
+        clearTimeout(pending.timer);
+        pending.reject(
+          new Error(
+            "Connection lost. Refresh resources before retrying; the operation may have completed.",
+          ),
+        );
+      }
+      this.#resourceRequests.clear();
     }
     for (const listener of this.#listeners) {
       listener(state);

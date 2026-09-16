@@ -7,6 +7,7 @@ import { ColorThemeProvider } from "@/theme/color-theme-provider";
 import { useColorThemePreference } from "@/theme/use-color-theme";
 import { FilesSidebar } from "@/files/sidebar";
 import { ResourceStatus } from "@/host/resource-status";
+import { ResourcesView } from "@/host/resources-view";
 import { FilesProvider } from "@/files/provider";
 import { useCommand } from "@/shortcuts/context";
 import { ShortcutProvider } from "@/shortcuts/provider";
@@ -18,7 +19,6 @@ import { TerminalProfilesContext } from "@/terminal/profiles-context";
 import { DEFAULT_TERMINAL_PROFILES } from "@concors/protocol";
 import type { DaemonEndpoint } from "@concors/daemon-client";
 import type { WorkspaceOperation } from "@concors/protocol";
-import { Server } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 
 import { api } from "@/auth/api";
@@ -434,6 +434,7 @@ function AppContent() {
                         view={view}
                         onOpenSettings={() => openSettings("account")}
                         onOpenSearch={openSearch}
+                        onOpenResources={() => setView("resources")}
                         workspace={workspace}
                         canEdit={canEdit && !newWorkspace.busy}
                         onSelectProject={selectProject}
@@ -549,20 +550,14 @@ function AppContent() {
                             <StartupScreen embedded onOpenSettings={connectionSettings} />
                           )
                         ) : (
-                          <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
-                            <Server className="size-10 text-muted-foreground/50" />
-                            <h2 className="text-lg font-medium">Your development servers</h2>
-                            <p className="max-w-sm text-sm text-muted-foreground">
-                              Automatic server discovery and preview links will be available in a
-                              later milestone.
-                            </p>
-                          </div>
+                          <ResourcesView />
                         )}
                       </main>
                       <ResourceStatus
                         connection={connection.transport}
                         state={connection.state}
                         machine={selectedHost.label}
+                        onOpenResources={() => setView("resources")}
                       />
                     </div>
                     <FilesSidebar project={view === "projects" ? activeProject : undefined} />

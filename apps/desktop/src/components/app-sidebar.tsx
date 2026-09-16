@@ -4,6 +4,7 @@ import { useProjectIcons } from "@/workspace/use-project-icons";
 import { projectIconKey } from "@/workspace/project-icons";
 import { useShortcutLabels } from "@/shortcuts/preferences-context";
 import { AgentSidebar } from "@/agents/list";
+import { PreviewsSidebar } from "@/host/previews-sidebar";
 import { SidebarSection } from "./sidebar-section";
 import { PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
 import { TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -23,6 +24,7 @@ interface AppSidebarProps {
   view: View;
   onOpenSettings: () => void;
   onOpenSearch: () => void;
+  onOpenResources: () => void;
   workspace: WorkspaceSnapshot | null;
   canEdit: boolean;
   onSelectProject: (id: string) => void;
@@ -64,6 +66,7 @@ export function AppSidebar(props: AppSidebarProps) {
             selected={props.selectedHost}
             connected={props.machineConnected}
             onSelect={props.onSelectMachine}
+            onOpenResources={props.onOpenResources}
           />
           <div
             className={cn(
@@ -168,13 +171,7 @@ export function AppSidebar(props: AppSidebarProps) {
               <AgentSidebar onSelect={props.onSelectAgent} workspace={props.workspace} />
             </SidebarSection>
           )}
-          {!props.collapsed && (
-            <SidebarSection title="Servers">
-              <p className="px-2 py-2 leading-relaxed text-muted-foreground">
-                No servers discovered.
-              </p>
-            </SidebarSection>
-          )}
+          <PreviewsSidebar compact={props.collapsed} />
         </div>
         <div className={props.collapsed ? "p-[6px]" : "p-2"}>
           <AccountMenu
