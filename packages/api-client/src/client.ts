@@ -11,6 +11,9 @@ import type { z } from "zod";
 import { ApiError, ApiNetworkError } from "./errors.ts";
 import {
   AuthResponseSchema,
+  NativeSignInResponseSchema,
+  SignInProvidersSchema,
+  type SignInProviders,
   BillingStatusSchema,
   SetupCheckoutSchema,
   SetupConfirmationSchema,
@@ -100,6 +103,9 @@ export interface AddSshKeyInput extends OrganizationScope {
   readonly publicKey: string;
 }
 
+/** Where a native GitHub sign-in returns: the desktop loopback port or the mobile URL scheme. */
+export type NativeSignInTarget = { readonly port: number } | { readonly app: string };
+
 /** Response header the API uses to hand out a bearer token alongside the session cookie. */
 const AUTH_TOKEN_HEADER = "set-auth-token";
 
@@ -148,6 +154,39 @@ export class ApiClient {
     });
     this.#rememberToken(response, data.token);
     return data.user;
+  }
+
+  /** Sign-in methods beyond email this API offers; an environment without credentials hides them. */
+  async getSignInProviders(): Promise<SignInProviders> {
+    const { data } = await this.#request("GET", "/api/v1/native-auth/providers", {
+      schema: SignInProvidersSchema,
+    });
+    return data;
+  }
+
+  /**
+   * Browser URL that starts GitHub sign-in for a native client. The result returns only to `target`:
+   * a loopback port the desktop app listens on, or the mobile app's URL scheme (one of the builds the
+   * API allowlists). `challenge` is the base64url SHA-256 of a PKCE verifier the client keeps.
+   */
+  nativeGitHubSignInUrl(target: NativeSignInTarget, challenge: string): string {
+    const url = new URL(`${this.baseUrl}/api/v1/native-auth/github/start`);
+    if ("port" in target) url.searchParams.set("port", String(target.port));
+    else url.searchParams.set("app", target.app);
+    url.searchParams.set("challenge", challenge);
+    return url.toString();
+  }
+
+  /**
+   * Redeems the one-time code delivered to the loopback port and keeps the session token, exactly
+   * as email sign-in does. The code is single-use: a failed attempt means starting over.
+   */
+  async completeNativeSignIn(input: { readonly code: string; readonly verifier: string }) {
+    const { data } = await this.#request("POST", "/api/v1/native-auth/exchange", {
+      body: input,
+      schema: NativeSignInResponseSchema,
+    });
+    this.tokens.set(data.token);
   }
 
   /**
