@@ -49,7 +49,7 @@ export function MachineSwitcher({
       <SidebarTooltip collapsed={compact}>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger
-            className={`relative flex min-w-0 items-center rounded-md hover:bg-sidebar-accent ${compact ? "sidebar-rail-control" : "h-9 w-[192px] max-w-full gap-1.5 px-1.5 text-left"}`}
+            className={`group/machine relative flex min-w-0 items-center rounded-md hover:bg-sidebar-accent focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-sidebar-ring aria-expanded:bg-sidebar-accent ${compact ? "sidebar-rail-control" : "h-8 max-w-full gap-2 px-2 text-left"}`}
             aria-label="Switch machine"
           >
             {selected.machineId !== "local" && cloudMachines === null ? (
@@ -68,12 +68,13 @@ export function MachineSwitcher({
                 className={`absolute right-1 bottom-1 size-1.5 rounded-full ring-2 ring-sidebar ${connected ? "bg-emerald-500" : "bg-muted-foreground/60"}`}
               />
             ) : (
-              <>
-                <span className="min-w-0 flex-1 truncate text-ui font-medium">
-                  {selected.label}
-                </span>
-                <ChevronDown className="size-3 shrink-0" />
-              </>
+              <span className="flex min-w-0 items-center gap-1">
+                <span className="truncate text-ui font-medium">{selected.label}</span>
+                <ChevronDown
+                  aria-hidden="true"
+                  className="size-3 shrink-0 text-muted-foreground transition-transform group-aria-expanded/machine:rotate-180 motion-reduce:transition-none"
+                />
+              </span>
             )}
           </DropdownMenuTrigger>
         </TooltipTrigger>
