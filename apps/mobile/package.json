@@ -9,6 +9,7 @@
     "web": "pnpm assets && expo start --web",
     "android": "pnpm assets && expo run:android",
     "ios": "pnpm assets && expo run:ios",
+    "ios:local": "node scripts/ios-local.mjs",
     "assets": "node scripts/production-guard.mjs && node scripts/assets.mjs",
     "build": "pnpm assets && expo export --platform all",
     "typecheck": "pnpm assets && tsc --noEmit",
@@ -16,6 +17,7 @@
     "live:preflight": "node scripts/live-preflight.mts",
     "release:check": "node scripts/release-check.mjs",
     "candidate:check": "node scripts/release-check.mjs --candidate",
+    "testflight:check": "node --env-file-if-exists=.env.local scripts/testflight-check.mjs",
     "eas-build-post-install": "pnpm assets",
     "eas-build-pre-install": "node scripts/production-guard.mjs"
   },

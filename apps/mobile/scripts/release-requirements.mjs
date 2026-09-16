@@ -64,6 +64,8 @@ export function candidateFailures(readiness, environment, appVersion) {
   if (appVersion && readiness?.appVersion !== appVersion)
     failures.push("Release evidence must match the mobile package version");
   if (environment.APP_VARIANT !== "production") failures.push("Set APP_VARIANT=production");
+  if (environment.CONCORS_IOS_PERSONAL_TEAM === "true")
+    failures.push("Remove Personal Team mode before building for TestFlight or the stores");
   if (environment.EXPO_PUBLIC_DEMO !== "false")
     failures.push("Explicitly set EXPO_PUBLIC_DEMO=false");
   if (environment.EXPO_PUBLIC_DEV_DAEMON_URL)
