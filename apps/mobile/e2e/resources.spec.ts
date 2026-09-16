@@ -8,19 +8,26 @@ test("mobile resources show processes and require confirmation before simulated 
   const ui = page.frameLocator('iframe[title="Concors workspace"]');
   await ui.locator("#mobile-sidebar-toggle").click();
   await expect(ui.getByRole("button", { name: "Processes", exact: true })).toBeVisible();
-  const manage = ui.getByRole("button", { name: "Manage processes", exact: true });
-  await expect(manage).toHaveText("");
-  await expect(manage.locator("svg")).toHaveAttribute("aria-hidden", "true");
-  const workspaceAction = await ui
-    .getByRole("button", { name: "Open workspace menu" })
-    .boundingBox();
-  const processAction = await manage.boundingBox();
-  expect(processAction?.width).toBe(workspaceAction?.width);
-  expect(processAction?.height).toBe(workspaceAction?.height);
-  await manage.click();
+  await expect(ui.getByRole("button", { name: "Manage processes" })).toHaveCount(0);
+  const viewAll = ui.getByRole("button", { name: "View all processes", exact: true });
+  await expect(viewAll).toHaveText("View all");
+  await expect(viewAll.locator("svg")).toHaveCount(0);
+  expect((await viewAll.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+  await page.screenshot({ path: "test-results/mobile-processes-sidebar.png" });
+  await viewAll.click();
   const drawer = ui.getByRole("dialog", { name: "Resources", exact: true });
   await expect(drawer).toContainText("Test runner");
   await expect(drawer).toContainText("512.0 MiB RAM");
+  const rows = drawer.getByRole("list", { name: "Running processes" });
+  await expect(rows.locator("details[open]")).toHaveCount(0);
+  expect(await drawer.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await page.screenshot({ path: "test-results/mobile-processes-list.png" });
+  await rows.locator("summary").filter({ hasText: "Test runner" }).click();
+  await expect(rows.getByRole("button", { name: /^Stop Test runner/ })).toBeVisible();
+  await rows.getByRole("button", { name: /^Stop Test runner/ }).click();
+  const stop = ui.getByRole("dialog", { name: "Stop process?" });
+  await expect(stop).toContainText("Child processes can remain");
+  await stop.getByRole("button", { name: "Cancel" }).click();
   await drawer.getByRole("button", { name: "Storage & cleanup" }).click();
   await drawer.getByRole("button", { name: "Scan storage" }).click();
   await expect(drawer).toContainText("No real files are scanned or removed");
