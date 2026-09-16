@@ -3,6 +3,9 @@ import { inspectTestFlight } from "./testflight-requirements.mjs";
 import { readFileSync } from "node:fs";
 
 const eas = JSON.parse(readFileSync(new URL("../eas.json", import.meta.url), "utf8"));
+const registeredAppId = eas.submit.candidate.ios.ascAppId;
+// Exercise the environment fallback independently of the checked-in app registration.
+eas.submit.candidate.ios = {};
 const environment = {
   APP_VARIANT: "production",
   EXPO_PUBLIC_DEMO: "false",
@@ -98,6 +101,21 @@ it("checks the configured Apple ID when present", async () => {
     },
   });
   expect(result.failures).toContain("CONCORS_ASC_APP_ID must match submit.candidate.ios.ascAppId");
+});
+
+it("uses the registered Apple app without requiring an environment override", async () => {
+  const { CONCORS_ASC_APP_ID: _appId, ...withoutAppId } = environment;
+  const result = await inspectTestFlight({
+    ...input,
+    environment: withoutAppId,
+    offline: true,
+    eas: {
+      ...eas,
+      submit: { candidate: { ios: { ascAppId: registeredAppId } } },
+    },
+  });
+  expect(result.configurationValid).toBe(true);
+  expect(result.failures).toEqual([]);
 });
 
 it.each([
