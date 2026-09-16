@@ -3,6 +3,7 @@ import { machineAvailability } from "@concors/client-core";
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -71,6 +72,13 @@ const subscribeState = (listener: () => void) =>
   });
 export function MobileApp() {
   const host = useSyncExternalStore(subscribeState, getHostState);
+  useLayoutEffect(() => {
+    const style = document.documentElement.style;
+    for (const edge of ["top", "bottom", "left", "right"] as const) {
+      if (host?.safeArea) style.setProperty(`--mobile-safe-${edge}`, `${host.safeArea[edge]}px`);
+      else style.removeProperty(`--mobile-safe-${edge}`);
+    }
+  }, [host?.safeArea]);
   return host ? (
     <CompactLayoutContext value={true}>
       <ShortcutProvider
