@@ -7,12 +7,15 @@ import {
 import { preferredConnection, type Host } from "../workspace/machines.ts";
 
 import { env } from "../config/env.ts";
-import { isTauri, localDaemon } from "../tauri/index.ts";
+import { isTauri, localDaemon, type DaemonIdentity } from "../tauri/index.ts";
 
-/** Native builds own their bundled runtime; browser/dev overrides never redirect a packaged app. */
-export async function resolveStartupEndpoint(): Promise<DaemonEndpoint> {
+/**
+ * Native builds own their bundled runtime; browser/dev overrides never redirect a packaged app.
+ * The identity selects the runtime's data partition, so it is only resolvable once signed in.
+ */
+export async function resolveStartupEndpoint(identity: DaemonIdentity): Promise<DaemonEndpoint> {
   if (isTauri()) {
-    const status = await localDaemon.start();
+    const status = await localDaemon.start(identity);
     if (status.state === "running") return localDaemonEndpoint(status.port);
     if (import.meta.env.DEV) return localDaemonEndpoint();
     throw new Error(

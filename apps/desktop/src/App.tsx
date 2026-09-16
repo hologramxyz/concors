@@ -29,6 +29,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { WorkspaceSearch } from "@/search/workspace-search";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { resolveStartupEndpoint, resolveHostEndpoint } from "@/daemon/resolve-endpoint";
+import { env } from "@/config/env";
 import { useDaemonConnection } from "@/daemon/use-daemon-connection";
 import { navItemFor, type View } from "@/navigation";
 import { settingsNavItemFor, type SettingsPage } from "@/settings/navigation";
@@ -100,7 +101,10 @@ function AppContent() {
   );
   const settingsReturnView = useRef<Exclude<View, "settings">>("projects");
   const [searchOpen, setSearchOpen] = useState(false);
-  const [localEndpoint, setLocalEndpoint] = useState<DaemonEndpoint | null>(null);
+  const [startedEndpoint, setLocalEndpoint] = useState<{
+    readonly user: string;
+    readonly endpoint: DaemonEndpoint;
+  } | null>(null);
   const [selectionHost, setSelectionHost] = useState<{ scope: string; host: Host } | null>(null);
   const [addingProject, setAddingProject] = useState<"open" | "clone" | null>(null);
   const projectDialogTrigger = useRef<HTMLElement | null>(null);
@@ -118,7 +122,10 @@ function AppContent() {
     });
   };
   const [error, setError] = useState<string | null>(null);
-  const [localStartupError, setLocalStartupError] = useState<string | null>(null);
+  const [startupFailure, setLocalStartupError] = useState<{
+    readonly user: string;
+    readonly message: string;
+  } | null>(null);
   const [pending, setPending] = useState(false);
   const theme = useTheme();
   const colorTheme = useColorThemePreference();
@@ -128,6 +135,14 @@ function AppContent() {
     auth.state.status === "signed-in" ? activeOrganization(auth.state)?.id : undefined;
   const hostScope =
     auth.state.status === "signed-in" ? `${auth.state.user.id}:${organizationId ?? ""}` : "";
+  // The bundled runtime partitions its data by account, so it cannot start before sign-in.
+  const runtimeUser = auth.state.status === "signed-in" ? auth.state.user.id : "";
+  // Tagged with the account it was started for, so a newly signed-in user can never read the
+  // previous account's gateway during the gap before its own runtime resolves.
+  const localEndpoint =
+    runtimeUser && startedEndpoint?.user === runtimeUser ? startedEndpoint.endpoint : null;
+  const localStartupError =
+    runtimeUser && startupFailure?.user === runtimeUser ? startupFailure.message : null;
   const selectedHost = selectionHost?.scope === hostScope ? selectionHost.host : LOCAL_HOST;
   const selectedMachineId = selectedHost.machineId;
   const endpoint = useMemo(
@@ -167,22 +182,29 @@ function AppContent() {
   }, [memoryKey, selection?.projectId, selection?.tabId, view]);
 
   useEffect(() => {
+    // Signed out there is no partition to start; `localEndpoint` already reads as null.
+    if (!runtimeUser) return;
     let cancelled = false;
     let starting = false;
     const start = async () => {
       if (starting) return;
       starting = true;
       try {
-        const resolved = await resolveStartupEndpoint();
+        const resolved = await resolveStartupEndpoint({ origin: env.apiUrl, user: runtimeUser });
         if (!cancelled) {
-          setLocalEndpoint((current) => (current?.url === resolved.url ? current : resolved));
+          setLocalEndpoint((current) =>
+            current?.user === runtimeUser && current.endpoint.url === resolved.url
+              ? current
+              : { user: runtimeUser, endpoint: resolved },
+          );
           setLocalStartupError(null);
         }
       } catch (cause) {
         if (!cancelled)
-          setLocalStartupError(
-            cause instanceof Error ? cause.message : "Could not connect to this computer",
-          );
+          setLocalStartupError({
+            user: runtimeUser,
+            message: cause instanceof Error ? cause.message : "Could not connect to this computer",
+          });
       } finally {
         starting = false;
       }
@@ -194,7 +216,7 @@ function AppContent() {
       cancelled = true;
       if (timer !== undefined) window.clearInterval(timer);
     };
-  }, []);
+  }, [runtimeUser]);
 
   // Restore the machine picked before the last reload once the account scope is known.
   useEffect(() => {
