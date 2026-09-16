@@ -1,7 +1,9 @@
 # Resource visibility and safe cleanup
 
-Status: product initiative captured on 2026-09-16. The manual first increment is
-implemented in [Processes and Resources](machine-resources.md). The broader
+Status: product initiative captured and revised on 2026-09-16. The current increment is
+implemented in [Previews and Resources](machine-resources.md). The directory-by-directory
+cleanup UI was tried and withdrawn. Agent-led cleanup, run manually or on an explicitly
+configured schedule, is a separate future initiative; no daily job is installed. The broader
 ownership, automation, and isolated-execution directions below remain proposals,
 not delivery commitments. Whole-machine reporting is documented in
 [Machine CPU and RAM](host-resource-usage.md).
@@ -20,9 +22,10 @@ and temporary files. These are the starting problems for this initiative.
 
 ## Proposed experience
 
-Evolve the sidebar's Servers section into Processes, showing meaningful workloads
-rather than every operating-system PID. A dev server still has a preview link;
-other workloads have usage, status, and useful actions without needing a URL.
+Keep Previews in the sidebar: named links to things the user can open. Do not put
+an operating-system process analyzer beside the workspaces or duplicate the Agents
+list. Open Resources from the computer menu or CPU/RAM indicator when inspection
+is needed. The following richer workload ideas belong in Resources, not the sidebar:
 
 - Group related child processes, such as a browser test runner and its workers.
 - Attribute workloads to their project, checkout, and initiating agent or terminal
@@ -31,13 +34,14 @@ other workloads have usage, status, and useful actions without needing a URL.
   open a preview, or stop a workload. Keep agent conversations in the Agents UI;
   avoid making users navigate duplicate lists of the same agents.
 - Let users pin a service they expect to keep running.
-- Keep the sidebar compact. Clicking the existing resource indicator opens a
-  fuller Resources view with Running, Storage, and Cleanup sections.
+- Keep process inspection on demand. The current Resources page shows running
+  processes, with no Storage or Cleanup tabs.
 - Provide the same information and safe actions on mobile with a compact layout.
 
-Running explains resource consumers. Storage inventories worktrees, temporary
-directories, logs, caches, and artifacts. Cleanup presents candidates with their
-owner, reason, estimated reclaimable resources, and any risk or uncertainty.
+An agent is better placed to investigate worktrees, temporary directories, logs,
+caches, and artifacts than a user reviewing a large directory list. Explore a
+manual or scheduled cleanup task with a dry-run plan, ownership checks, explicit
+authority, and a clear report of changes. Do not infer permission for daily deletion.
 Separate system/unattributed usage from attributed workloads; do not imply that
 summed process memory precisely equals whole-machine usage or double-count shared
 memory. Distinguish disk storage from memory-backed filesystems and process memory.
@@ -108,11 +112,11 @@ unavailable-data states must be explicit. See the
 
 ## Incremental delivery
 
-1. Process/workload visibility, ownership capture, logs/origin links, and safe manual
-   stop. Include dev-server links as a workload capability.
-2. Storage/worktree visibility and reviewable cleanup candidates.
-3. Managed job/service lifecycles, conservative automatic cleanup, and reclaim
-   history.
+1. Previews in the sidebar, on-demand Resources monitoring, and safe manual stop.
+2. A separate agent-led cleanup experiment: manual runs first, explicit schedule
+   and scope if approved, dry-run review, and a record of actions taken.
+3. Managed job/service ownership and lifecycles, conservative cleanup policies,
+   and reclaim history—not a directory-by-directory cleanup dashboard.
 4. Resource-aware scheduling and budgets.
 5. Optional on-demand workers and preview environments, using the same ownership
    model rather than introducing a disconnected second computer experience.
