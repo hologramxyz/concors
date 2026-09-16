@@ -1,4 +1,4 @@
-import { CalendarClock } from "lucide-react";
+import { Clock } from "lucide-react";
 import { cn } from "cn";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useSchedules } from "./use-schedules";
@@ -27,7 +27,7 @@ export function SchedulesNav({
             compact && "sidebar-rail-control justify-center px-0",
           )}
         >
-          <CalendarClock className="size-4 shrink-0" aria-hidden="true" />
+          <Clock className="size-4 shrink-0" aria-hidden="true" />
           {!compact && (
             <>
               <span className="flex-1 text-left">Schedules</span>
