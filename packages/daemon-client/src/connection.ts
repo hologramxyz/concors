@@ -1,3 +1,10 @@
+import {
+  SCHEDULES_CAPABILITY,
+  ScheduleRequestSchema,
+  type AgentSchedule,
+  type ScheduleOperation,
+  type ScheduleResult,
+} from "@concors/protocol";
 import { ThemeRequestSchema, type ThemeResult } from "@concors/protocol";
 import {
   ProviderRequestSchema,
@@ -136,6 +143,16 @@ export class DaemonConnection {
   #workspace: WorkspaceSnapshot | null = null;
   #projectSetups: ProjectSetup[] = [];
   #agents: AgentInfo[] = [];
+  #schedules: AgentSchedule[] | null = null;
+  readonly #scheduleListeners = new Set<(schedules: AgentSchedule[] | null) => void>();
+  readonly #scheduleRequests = new Map<
+    string,
+    {
+      resolve: (result: ScheduleResult) => void;
+      reject: (error: Error) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
+  >();
   #terminals: TerminalInfo[] = [];
   readonly #terminalSessionListeners = new Set<() => void>();
   readonly #agentListeners = new Set<(event: AgentEvent) => void>();
@@ -346,6 +363,40 @@ export class DaemonConnection {
     });
   }
 
+  get schedules(): AgentSchedule[] | null {
+    return this.#schedules;
+  }
+  onSchedules(listener: (schedules: AgentSchedule[] | null) => void): () => void {
+    this.#scheduleListeners.add(listener);
+    listener(this.#schedules);
+    return () => {
+      this.#scheduleListeners.delete(listener);
+    };
+  }
+  requestSchedule(operation: ScheduleOperation, requestId: string): Promise<ScheduleResult> {
+    if (this.#state.status !== "ready" || !this.#workspace)
+      return Promise.reject(new Error("Machine is disconnected"));
+    if (!this.#state.daemon.capabilities?.includes(SCHEDULES_CAPABILITY))
+      return Promise.reject(new Error("Update the daemon on this machine to use schedules"));
+    const request = ScheduleRequestSchema.parse({ type: "schedule.request", requestId, operation });
+    if (this.#scheduleRequests.has(requestId))
+      return Promise.reject(new Error("Request is already pending"));
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.#scheduleRequests.delete(requestId);
+        reject(new Error("Schedule request timed out. Check Schedules before retrying."));
+      }, 15000);
+      this.#scheduleRequests.set(requestId, { resolve, reject, timer });
+      try {
+        this.#socket?.send(JSON.stringify(request));
+      } catch (error) {
+        clearTimeout(timer);
+        this.#scheduleRequests.delete(requestId);
+        reject(error);
+      }
+    });
+  }
+
   requestThemes(requestId: string): Promise<ThemeResult> {
     if (this.#state.status !== "ready" || !this.#workspace)
       return Promise.reject(new Error("Workspace is disconnected"));
@@ -511,7 +562,7 @@ export class DaemonConnection {
         this.#setState({ status: "handshaking" });
         const hello: ClientHelloMessage = {
           type: "client.hello",
-          capabilities: ["agent-providers-v2"],
+          capabilities: ["agent-providers-v2", SCHEDULES_CAPABILITY],
           protocolVersion: this.#protocolVersion,
           client: this.#client,
         };
@@ -570,6 +621,21 @@ export class DaemonConnection {
               for (const listener of this.#hostUsageListeners) listener(message.usage);
             }
             break;
+          case "schedule.list":
+            if (this.#state.status === "ready") {
+              this.#schedules = message.schedules;
+              for (const listener of this.#scheduleListeners) listener(this.#schedules);
+            }
+            break;
+          case "schedule.result": {
+            const pending = this.#scheduleRequests.get(message.requestId);
+            if (pending) {
+              clearTimeout(pending.timer);
+              this.#scheduleRequests.delete(message.requestId);
+              pending.resolve(message);
+            }
+            break;
+          }
           case "agent.list":
           case "agent.state":
           case "agent.item":
@@ -800,6 +866,13 @@ export class DaemonConnection {
         pending.reject(new Error("Connection lost. Reload theme settings before retrying."));
       }
       this.#themeRequests.clear();
+      for (const pending of this.#scheduleRequests.values()) {
+        clearTimeout(pending.timer);
+        pending.reject(new Error("Machine disconnected. Check schedules before retrying."));
+      }
+      this.#scheduleRequests.clear();
+      this.#schedules = null;
+      for (const listener of this.#scheduleListeners) listener(null);
     }
     for (const listener of this.#listeners) {
       listener(state);
