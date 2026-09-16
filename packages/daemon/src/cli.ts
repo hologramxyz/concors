@@ -13,7 +13,7 @@ import { loadConfig, loadTls, ConfigError } from "./managed/config.ts";
 import { createTokenVerifier } from "./managed/auth.ts";
 import { createLogger } from "./managed/log.ts";
 import { DAEMON_VERSION } from "./version.ts";
-import { ProfileError, resolveDataDir } from "./profile.ts";
+import { applyResolvedDataDir, ProfileError, resolveDataDir } from "./profile.ts";
 import { adoptLegacyData } from "./profile-migration.ts";
 
 const USAGE = `concors-daemon ${DAEMON_VERSION}
@@ -110,6 +110,8 @@ async function serve(cli: ParsedCli): Promise<number> {
   const dataDir = resolveDataDir(profileEnv(cli));
   // Adopt an existing unpartitioned install before anything opens the database.
   if (!cli.ephemeral) await adoptLegacyData(dataDir, profileEnv(cli));
+  // Only after adoption, which still needs the base directory to find an unpartitioned install.
+  applyResolvedDataDir(dataDir);
   mkdirSync(dataDir, { recursive: true, mode: 0o700 });
   const server = cli.ephemeral
     ? createDaemonServer(config, { workspacePath: join(dataDir, "workspace.sqlite") })
