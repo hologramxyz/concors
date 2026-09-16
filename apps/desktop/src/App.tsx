@@ -1,3 +1,4 @@
+import { SchedulesPage } from "@/schedules/page";
 import { StartupScreen } from "@/startup/startup-screen";
 import { WindowControls, StandaloneWindowBar } from "@/window/controls";
 import { useWindowChrome } from "@/window/context";
@@ -288,7 +289,17 @@ function AppContent() {
     (id: string) => {
       const target = findSessionPane(transport?.workspace ?? null, id);
       if (target) openPane(target);
-      else setError("This agent's pane has been closed.");
+      else if (transport)
+        void transport
+          .requestAgent({ kind: "open-session", sessionId: id }, crypto.randomUUID())
+          .then((result) => {
+            if (result.outcome.status === "error") throw new Error(result.outcome.message);
+            const opened = findSessionPane(transport.workspace, id);
+            if (opened) openPane(opened);
+          })
+          .catch((cause: unknown) =>
+            setError(cause instanceof Error ? cause.message : "Could not open agent"),
+          );
     },
     [transport, openPane],
   );
@@ -430,6 +441,9 @@ function AppContent() {
                         onSelectAgent={openAgent}
                         view={view}
                         onOpenSettings={() => openSettings("account")}
+                        onOpenSchedules={() => {
+                          setView("schedules");
+                        }}
                         onOpenSearch={openSearch}
                         workspace={workspace}
                         canEdit={canEdit && !newWorkspace.busy}
@@ -523,6 +537,15 @@ function AppContent() {
                                 .setActiveOrganization(organizationId)
                                 .catch((cause: unknown) => setError(describeAuthError(cause)));
                             }}
+                          />
+                        ) : view === "schedules" ? (
+                          <SchedulesPage
+                            key={workspace?.machineId ?? endpoint?.url}
+                            workspace={workspace}
+                            connected={
+                              connection.workspaceReady && connection.state.status === "ready"
+                            }
+                            onOpenAgent={openAgent}
                           />
                         ) : view === "projects" ? (
                           workspace ? (
