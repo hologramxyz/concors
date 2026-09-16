@@ -1,8 +1,8 @@
 # iPhone beta through TestFlight
 
 Apple enrollment still pending? Use the [local Mac → iPhone development path](mobile-local-iphone.md)
-with a free Personal Team first. The approved development API is
-`https://concors-server-dev.up.railway.app`; this does not change the production default.
+with a free Personal Team first. The approved API for the mobile app is
+`https://api.concors.dev`, including the TestFlight candidate.
 
 This is the **internal beta** path, not a public App Store release. Use `candidate`: production
 identity, store distribution, no demo/private-daemon override, automatic build-number increments.
@@ -16,17 +16,21 @@ test account/machine. iPhone dictation uses the keyboard microphone, not desktop
 
 ## Current state
 
-Updated from desktop main `e6e0fe8` (including PRs #106, #108, #109 and #113). Shared desktop UI
+Updated from desktop main `a807962` (including PRs #111, #114 and #115). Shared desktop UI
 changes are bundled automatically; native startup uses the brand mark during session restoration.
 Settings → Diagnostics shows the phone's version/build and actual API instead of desktop's default URL.
 
 On 2026-09-16, the owner confirmed active developer accounts, the Expo project `@opser/concors`
 (`cbfccc75-202c-461c-a19d-46419a248dcd`), and Apple app ID `6812901549`. These public identifiers
-are now linked in the app/build configuration. The owner approved the Railway development backend
-for this beta; the local TestFlight configuration and unauthenticated HTTPS API probe passed.
-No automatic fallback to a development server was added. Expo login, Apple signing, and a real
-account/machine still require verification. No signed IPA, TestFlight upload or physical-device
-acceptance is claimed. Full release gates remain pending in the [release checklist](mobile-release.md).
+are now linked in the app/build configuration. Build 0.1.0 (3) was signed, uploaded to TestFlight,
+and installed by the owner, but still targeted the previously approved Railway development API.
+The owner subsequently requested `https://api.concors.dev`; new candidate/production builds pin
+that API explicitly. Accounts on the old development server are not automatically migrated.
+The update requires a fresh sign-in: native sessions are now bound to their issuing API and
+unscoped legacy tokens are not reused when changing backends.
+Native sign-in must send an Origin accepted by the configured API, without disabling the server's
+CSRF checks. Full account/workspace and physical-device acceptance remains pending in the
+[release checklist](mobile-release.md); installation alone does not verify those gates.
 
 ## 1. Account setup
 
@@ -50,7 +54,7 @@ With Node 24 / pnpm 11.1.1, create gitignored `apps/mobile/.env.local` using rea
 ```dotenv
 APP_VARIANT=production
 EXPO_PUBLIC_DEMO=false
-EXPO_PUBLIC_API_URL=https://concors-server-dev.up.railway.app
+EXPO_PUBLIC_API_URL=https://api.concors.dev
 EXPO_PUBLIC_EAS_PROJECT_ID=cbfccc75-202c-461c-a19d-46419a248dcd
 EXPO_OWNER=opser
 CONCORS_ASC_APP_ID=6812901549
@@ -84,8 +88,10 @@ pnpm dlx eas-cli@24.4.1 project:info
 
 Confirm the owner/project. In its **production EAS environment**, configure the same
 `EXPO_OWNER`, `EXPO_PUBLIC_EAS_PROJECT_ID` and `EXPO_PUBLIC_API_URL` as plain-text variables.
-The candidate profile already sets the production variant and disables demo. Local `.env.local`
-is gitignored and does not replace cloud variables. Never put credentials in `EXPO_PUBLIC_*`.
+The candidate profile explicitly pins `EXPO_PUBLIC_API_URL=https://api.concors.dev`, sets the
+production variant, and disables demo. Keep the cloud API variable aligned; preflight rejects a
+local API that differs from the candidate. Local `.env.local` is gitignored and does not replace
+cloud variables. Never put credentials in `EXPO_PUBLIC_*`.
 
 `submit.candidate.ios.ascAppId` and `submit.production.ios.ascAppId` in `apps/mobile/eas.json`
 already target Apple app `6812901549`. This is a public identifier, not an Apple login.
@@ -120,8 +126,16 @@ blocked; resolve that before rerunning those jobs. Check EAS account/build avail
 
 ```bash
 # Replace the UUID; avoid --latest when multiple builds may exist.
-pnpm dlx eas-cli@24.4.1 submit --platform ios --profile candidate --id YOUR-EAS-BUILD-UUID
+APP_VARIANT=production pnpm dlx eas-cli@24.4.1 submit --platform ios --profile candidate --id YOUR-EAS-BUILD-UUID
 ```
+
+Set `APP_VARIANT=production` explicitly for standalone submission: unlike build, submit does not
+load the build profile's environment. Otherwise credential lookup can use the preview bundle ID.
+If upload credentials need setup, run
+`APP_VARIANT=production pnpm dlx eas-cli@24.4.1 credentials --platform ios`, choose `candidate`,
+then **App Store Connect: Manage your API Key → Set up your project to use an API Key for EAS Submit**.
+Enter Apple credentials privately. Standard uploads need no automated release notes: if Expo
+rejects `--what-to-test` as Enterprise-only, omit it and add notes/groups directly in App Store Connect.
 
 [EAS Submit](https://docs.expo.dev/submit/ios/) uploads to the selected Apple app, not to a public
 release. After processing, answer compliance questions accurately, add the build to the internal

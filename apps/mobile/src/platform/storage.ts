@@ -1,16 +1,21 @@
 import * as SecureStore from "expo-secure-store";
 import { HydratedTokenStore, MachineCredentialStore } from "@concors/client-core";
+import { config } from "../config";
+import { apiSessionStorage } from "../auth/session-storage";
 
-const KEY = "concors.mobile.session.v1";
-export const tokenStore = new HydratedTokenStore({
-  read: () => SecureStore.getItemAsync(KEY),
-  write: (token) =>
-    token === null
-      ? SecureStore.deleteItemAsync(KEY)
-      : SecureStore.setItemAsync(KEY, token, {
-          keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
-        }),
-});
+// Never import the unscoped v1 token: its issuing backend cannot be established safely.
+const KEY = "concors.mobile.session.v2";
+export const tokenStore = new HydratedTokenStore(
+  apiSessionStorage(config.apiUrl, {
+    read: () => SecureStore.getItemAsync(KEY),
+    write: (token) =>
+      token === null
+        ? SecureStore.deleteItemAsync(KEY)
+        : SecureStore.setItemAsync(KEY, token, {
+            keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+          }),
+  }),
+);
 export const deviceStorage = {
   get: (key: string) => SecureStore.getItemAsync(`concors.mobile.${key}`),
   set: (key: string, value: string | null) =>
