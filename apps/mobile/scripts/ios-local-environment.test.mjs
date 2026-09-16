@@ -1,9 +1,10 @@
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
-import { developmentApi, localIosEnvironment } from "./ios-local-environment.mjs";
+import { defaultApi, localIosEnvironment } from "./ios-local-environment.mjs";
 
-it("uses the approved dev backend and overrides stale TestFlight/demo environment values", () => {
+it("uses the approved backend and overrides stale TestFlight/demo environment values", () => {
+  expect(defaultApi).toBe("https://api.concors.dev");
   const original = {
     APP_VARIANT: "production",
     EXPO_PUBLIC_API_URL: "https://wrong.example",
@@ -17,7 +18,7 @@ it("uses the approved dev backend and overrides stale TestFlight/demo environmen
   const before = { ...original };
   expect(localIosEnvironment(original)).toMatchObject({
     APP_VARIANT: "development",
-    EXPO_PUBLIC_API_URL: developmentApi,
+    EXPO_PUBLIC_API_URL: defaultApi,
     EXPO_PUBLIC_DEMO: "false",
     EXPO_PUBLIC_DEV_DAEMON_URL: "",
     EXPO_PUBLIC_EAS_PROJECT_ID: "",
@@ -31,8 +32,9 @@ it("uses the approved dev backend and overrides stale TestFlight/demo environmen
 });
 it("normalizes an explicit local-only backend override", () => {
   expect(
-    localIosEnvironment({ CONCORS_IOS_API_URL: `${developmentApi}/` }).EXPO_PUBLIC_API_URL,
-  ).toBe(developmentApi);
+    localIosEnvironment({ CONCORS_IOS_API_URL: "https://local-dev.example.com/" })
+      .EXPO_PUBLIC_API_URL,
+  ).toBe("https://local-dev.example.com");
 });
 it.each([
   "http://localhost:3000",
