@@ -76,10 +76,10 @@ function setup() {
   return { connection, messages, relay, off };
 }
 describe("offline UI protocol relay", () => {
-  it("relays resource requests without changing cleanup confirmations", async () => {
+  it("relays resource requests without changing process identities", async () => {
     const { connection, relay, messages } = setup();
     await relay.receive(hello);
-    const operation = { kind: "cleanup", id, confirmation: "/tmp/reviewed-path" } as const;
+    const operation = { kind: "stop", id: "123:456" } as const;
     await relay.receive({ type: "resource.request", requestId: id, operation });
     expect(connection.requestResource).toHaveBeenCalledWith(operation, id);
     expect(messages.at(-1)?.type).toBe("resource.result");

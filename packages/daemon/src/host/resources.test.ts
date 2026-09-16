@@ -38,7 +38,7 @@ it("requires a workspace subscription before resource inspection or mutation", a
     await server.close();
   }
 });
-it("round-trips real process inventory and safely rejects unknown cleanup candidates", async () => {
+it("round-trips real process inventory and safely rejects unknown process identities", async () => {
   const server = createDaemonServer(loadDaemonConfig({ port: 0, logLevel: "silent" }, {}));
   const url = await server.listen();
   const connection = new DaemonConnection({
@@ -52,7 +52,7 @@ it("round-trips real process inventory and safely rejects unknown cleanup candid
     const snapshot = await connection.requestResource({ kind: "processes" }, crypto.randomUUID());
     expect(snapshot.outcome.status).toBe("processes");
     const rejected = await connection.requestResource(
-      { kind: "cleanup", id: crypto.randomUUID(), confirmation: "/tmp" },
+      { kind: "stop", id: "invalid-process-identity" },
       crypto.randomUUID(),
     );
     expect(rejected.outcome).toMatchObject({ status: "error" });

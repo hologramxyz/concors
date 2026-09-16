@@ -393,7 +393,7 @@ describe("workspace replica lifecycle", () => {
     await ready;
     socket.serverSend({ type: "workspace.snapshot", snapshot });
     await expect(
-      connection.requestResource({ kind: "storage" }, "00000000-0000-4000-8000-000000000003"),
+      connection.requestResource({ kind: "processes" }, "00000000-0000-4000-8000-000000000003"),
     ).rejects.toThrow("Update");
     expect(socket.sent.some((raw) => JSON.parse(raw).type === "resource.request")).toBe(false);
     connection.disconnect();

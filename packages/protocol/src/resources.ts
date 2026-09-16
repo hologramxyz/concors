@@ -26,36 +26,9 @@ export const ProcessSnapshotSchema = z.object({
 });
 export type ProcessSnapshot = z.infer<typeof ProcessSnapshotSchema>;
 
-export const StorageEntrySchema = z.object({
-  id: z.string().uuid(),
-  kind: z.enum(["worktree", "temporary", "cache"]),
-  path: Path,
-  bytes: Bytes.nullable(),
-  modifiedAt: z.number().nonnegative(),
-  memoryBacked: z.boolean(),
-  branch: z.string().max(500).nullable(),
-  cleanupBlocked: z.string().max(500).nullable(),
-});
-export type StorageEntry = z.infer<typeof StorageEntrySchema>;
-
-export const StorageSnapshotSchema = z.object({
-  scannedAt: z.number().int().nonnegative(),
-  volumes: z
-    .array(
-      z.object({ path: Path, totalBytes: Bytes, availableBytes: Bytes, memoryBacked: z.boolean() }),
-    )
-    .max(10),
-  entries: z.array(StorageEntrySchema).max(256),
-  warnings: z.array(z.string().max(500)).max(20),
-});
-export type StorageSnapshot = z.infer<typeof StorageSnapshotSchema>;
-
 export const ResourceOperationSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("processes") }),
-  z.object({ kind: z.literal("storage") }),
   z.object({ kind: z.literal("stop"), id: z.string().max(120) }),
-  // Only daemon-issued candidate IDs are accepted, never arbitrary client paths.
-  z.object({ kind: z.literal("cleanup"), id: z.string().uuid(), confirmation: Path }),
 ]);
 export type ResourceOperation = z.infer<typeof ResourceOperationSchema>;
 export const ResourceRequestSchema = z.object({
@@ -69,7 +42,6 @@ export const ResourceResultSchema = z.object({
   requestId: z.string().uuid(),
   outcome: z.discriminatedUnion("status", [
     z.object({ status: z.literal("processes"), snapshot: ProcessSnapshotSchema }),
-    z.object({ status: z.literal("storage"), snapshot: StorageSnapshotSchema }),
     z.object({ status: z.literal("done"), message: z.string().max(1000) }),
     z.object({ status: z.literal("error"), message: z.string().max(1000) }),
   ]),
