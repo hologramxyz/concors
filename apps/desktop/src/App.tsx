@@ -25,6 +25,7 @@ import { api } from "@/auth/api";
 import { AuthScreen } from "@/auth/auth-screen";
 import { activeOrganization, describeAuthError } from "@/auth/auth-state";
 import { useAuth } from "@/auth/use-auth";
+import { useGitHubSignInAvailable } from "@/auth/github-sign-in";
 import { AppSidebar } from "@/components/app-sidebar";
 import { WorkspaceSearch } from "@/search/workspace-search";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -131,6 +132,7 @@ function AppContent() {
   const colorTheme = useColorThemePreference();
   const corners = useCornerStyle();
   const auth = useAuth(api);
+  const githubSignIn = useGitHubSignInAvailable(api);
   const organizationId =
     auth.state.status === "signed-in" ? activeOrganization(auth.state)?.id : undefined;
   const hostScope =
@@ -342,6 +344,7 @@ function AppContent() {
             state={auth.state}
             onSignIn={auth.signIn}
             onSignUp={auth.signUp}
+            onSignInWithGitHub={githubSignIn ? auth.signInWithGitHub : undefined}
             onRetry={() => void auth.refresh()}
           />
         ) : null}
