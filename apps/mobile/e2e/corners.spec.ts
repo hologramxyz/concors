@@ -117,7 +117,7 @@ for (const mode of ["light", "dark"] as const) {
         controlRadius,
       );
       if (square) {
-        await expect(ui.locator(".mobile-main")).toHaveCSS("clip-path", "inset(3px)");
+        await expect(ui.locator(".mobile-main")).toHaveCSS("clip-path", "inset(1px)");
         await assertSquare(ui.locator("body"));
       }
       if (shape !== "Slightly rounded") {

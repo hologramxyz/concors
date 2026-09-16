@@ -410,7 +410,7 @@ body {
   transition:
     transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
     border-radius 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
-  box-shadow: -6px 0 24px #00000018;
+  box-shadow: -4px 0 18px #00000010;
 }
 /* Only the rounded rim reveals the backdrop. Inset the opaque content with a
    clip, not padding: navigation must never resize/reflow chat or a terminal. */
@@ -420,19 +420,19 @@ body {
   inset: 0;
   pointer-events: none;
   border-radius: inherit;
-  border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--foreground) 6%, transparent);
   background: var(--background);
   box-shadow:
-    inset 1px 1px 0 #ffffff70,
-    inset -1px -1px 0 #00000016;
+    inset 0.5px 0.5px 0 #ffffff28,
+    inset -0.5px -0.5px 0 #00000008;
   opacity: var(--mobile-workspace-reveal, 0);
   transition: opacity 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .mobile-workspace::before {
-    background: linear-gradient(135deg, #ffffff50, #ffffff08 45%, #ffffff28);
-    -webkit-backdrop-filter: blur(18px) saturate(1.5);
-    backdrop-filter: blur(18px) saturate(1.5);
+    background: linear-gradient(135deg, #ffffff20, #ffffff04 45%, #ffffff10);
+    -webkit-backdrop-filter: blur(12px) saturate(1.1);
+    backdrop-filter: blur(12px) saturate(1.1);
   }
 }
 .mobile-main {
@@ -443,8 +443,8 @@ body {
   overflow: hidden;
   background: var(--background);
   clip-path: inset(
-    calc(3px * var(--mobile-workspace-reveal, 0)) round
-      calc(max(0px, var(--mobile-workspace-radius) - 3px) * var(--mobile-workspace-reveal, 0))
+    calc(1px * var(--mobile-workspace-reveal, 0)) round
+      calc(max(0px, var(--mobile-workspace-radius) - 1px) * var(--mobile-workspace-reveal, 0))
   );
   transition: clip-path 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
