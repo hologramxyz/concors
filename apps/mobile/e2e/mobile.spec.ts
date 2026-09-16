@@ -936,18 +936,18 @@ test("sidebar has no logo or duplicate menu, with glass search behind the rounde
   await expect(workspace).toHaveCSS("border-top-left-radius", "0px");
   await expect
     .poll(rim)
-    .toEqual({ opacity: "0", blur: "blur(18px) saturate(1.5)", pointerEvents: "none" });
+    .toEqual({ opacity: "0", blur: "blur(12px) saturate(1.1)", pointerEvents: "none" });
   await header.click();
   await expect(sidebar.getByRole("img", { name: "Concors", exact: true })).toHaveCount(0);
   await expect(sidebar.locator(".mobile-sidebar-head button")).toHaveCount(2);
   await expect(sidebar.locator('button[aria-label*="sidebar"]')).toHaveCount(0);
-  await expect(workspace).toHaveCSS("border-top-left-radius", "24px");
-  await expect(workspace).toHaveCSS("border-bottom-left-radius", "24px");
+  await expect(workspace).toHaveCSS("border-top-left-radius", "32px");
+  await expect(workspace).toHaveCSS("border-bottom-left-radius", "32px");
   await expect(workspace).toHaveCSS("overflow", "hidden");
   await expect
     .poll(rim)
-    .toEqual({ opacity: "1", blur: "blur(18px) saturate(1.5)", pointerEvents: "none" });
-  await expect(main).toHaveCSS("clip-path", "inset(3px round 21px)");
+    .toEqual({ opacity: "1", blur: "blur(12px) saturate(1.1)", pointerEvents: "none" });
+  await expect(main).toHaveCSS("clip-path", "inset(1px round 31px)");
   expect(await main.evaluate((element) => [element.clientWidth, element.clientHeight])).toEqual(
     closedSize,
   );
