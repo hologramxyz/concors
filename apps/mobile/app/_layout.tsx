@@ -64,7 +64,7 @@ function AppStack() {
   const theme = useTheme();
   return (
     <>
-      <StatusBar style="auto" />
+      <StatusBar style={theme.dark ? "light" : "dark"} />
       <Stack
         screenOptions={{
           headerStyle: { backgroundColor: theme.background },
