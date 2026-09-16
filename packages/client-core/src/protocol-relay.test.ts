@@ -26,6 +26,12 @@ function setup() {
     terminals: [],
     subscribeWorkspace: vi.fn(() => off),
     onAgent: vi.fn(() => off),
+    onSchedules: vi.fn(() => off),
+    requestSchedule: vi.fn<RelayConnection["requestSchedule"]>(async (_, requestId) => ({
+      type: "schedule.result",
+      requestId,
+      outcome: { status: "ok", schedules: [] },
+    })),
     onTerminal: vi.fn(() => off),
     subscribeProjectSetups: vi.fn(() => off),
     subscribeHostUsage: vi.fn(() => off),
@@ -85,7 +91,7 @@ describe("offline UI protocol relay", () => {
     expect(off).toHaveBeenCalledOnce();
     await relay.receive({ type: "host.subscribe", enabled: true });
     relay.dispose();
-    expect(off).toHaveBeenCalledTimes(6);
+    expect(off).toHaveBeenCalledTimes(7);
     const count = messages.length;
     listener(null);
     expect(messages).toHaveLength(count);
