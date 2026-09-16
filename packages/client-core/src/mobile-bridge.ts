@@ -111,6 +111,13 @@ export const MobileStateSchema = z.object({
   privacyUrl: z.string(),
   apiUrl: z.string(),
   endpointLabel: z.string(),
+  app: z
+    .object({
+      version: z.string().max(100),
+      build: z.string().max(100).nullable(),
+      personalTeam: z.boolean().optional(),
+    })
+    .optional(),
 });
 export type MobileState = z.infer<typeof MobileStateSchema>;
 export const MobileActionSchema = z.discriminatedUnion("kind", [

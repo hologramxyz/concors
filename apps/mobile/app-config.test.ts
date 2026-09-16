@@ -8,6 +8,49 @@ afterEach(() => {
   vi.resetModules();
 });
 
+it("uses a separate local Personal Team identity without push or associated domains", async () => {
+  vi.stubEnv("APP_VARIANT", "development");
+  vi.stubEnv("EAS_BUILD_PROFILE", "");
+  vi.stubEnv("EAS_BUILD", "");
+  vi.stubEnv("CONCORS_IOS_PERSONAL_TEAM", "true");
+  vi.stubEnv("CONCORS_IOS_BUNDLE_IDENTIFIER", "dev.tester.concors");
+  vi.stubEnv("CONCORS_IOS_TEAM_ID", "ABC1234567");
+  const { default: config } = await import("./app.config");
+  expect(config.name).toBe("Concors Dev");
+  expect(config.scheme).toBe("concors-local");
+  expect(config.ios?.bundleIdentifier).toBe("dev.tester.concors");
+  expect(config.ios?.appleTeamId).toBe("ABC1234567");
+  expect(config.ios?.associatedDomains).toBeUndefined();
+  expect(config.extra?.personalTeam).toBe(true);
+  expect(config.plugins).toContain("./plugins/with-personal-team.cjs");
+  expect(
+    config.plugins?.some(
+      (plugin) => (Array.isArray(plugin) ? plugin[0] : plugin) === "expo-notifications",
+    ),
+  ).toBe(false);
+});
+
+it.each([
+  { APP_VARIANT: "production" },
+  { APP_VARIANT: "preview" },
+  { EAS_BUILD_PROFILE: "development" },
+  { EAS_BUILD: "true" },
+  { CONCORS_IOS_BUNDLE_IDENTIFIER: "dev.concors.mobile" },
+  { CONCORS_IOS_BUNDLE_IDENTIFIER: "dev.concors.mobile.preview" },
+  { CONCORS_IOS_BUNDLE_IDENTIFIER: "not an identifier" },
+  { CONCORS_IOS_TEAM_ID: "wrong" },
+])("rejects invalid or non-local Personal Team configuration: %j", async (overrides) => {
+  for (const [key, value] of Object.entries({
+    APP_VARIANT: "development",
+    EAS_BUILD: "",
+    EAS_BUILD_PROFILE: "",
+    CONCORS_IOS_PERSONAL_TEAM: "true",
+    ...overrides,
+  }))
+    vi.stubEnv(key, value);
+  await expect(import("./app.config")).rejects.toThrow();
+});
+
 it("keeps candidate builds production-configured and candidate uploads internal-only", () => {
   expect(eas.build.candidate).toMatchObject({
     distribution: "store",
@@ -31,8 +74,15 @@ it("uses the production identity for candidates without a development launcher s
   expect(config.android?.package).toBe("dev.concors.mobile");
   expect(config.scheme).toBe("concors");
   expect(config.plugins).toContainEqual(["expo-dev-client", { addGeneratedScheme: false }]);
+  expect(config.plugins).toContainEqual(["expo-secure-store", { faceIDPermission: false }]);
   expect(config.android?.blockedPermissions).toContain("android.permission.SYSTEM_ALERT_WINDOW");
   expect(config.ios?.associatedDomains).toEqual(["applinks:concors.dev"]);
+  expect(config.plugins).toContainEqual([
+    "expo-splash-screen",
+    expect.objectContaining({
+      dark: { image: "./assets/splash-dark.png", backgroundColor: "#141414" },
+    }),
+  ]);
 });
 
 it("keeps preview identity separate and rejects misspelled variants", async () => {

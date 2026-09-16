@@ -25,6 +25,8 @@ interface SettingsViewProps {
   readonly state: ConnectionState;
   readonly apiUrl?: string;
   readonly endpointLabel?: string;
+  readonly clientVersion?: string;
+  readonly buildVersion?: string | null;
   readonly theme: ThemePreference;
   readonly onSetTheme: (theme: ThemePreference) => void;
   readonly cornerStyle: CornerStyle;
@@ -43,6 +45,8 @@ export function SettingsView({
   state,
   apiUrl,
   endpointLabel,
+  clientVersion,
+  buildVersion,
   theme,
   onSetTheme,
   cornerStyle,
@@ -111,6 +115,8 @@ export function SettingsView({
           state={state}
           {...(apiUrl ? { apiUrl } : {})}
           {...(endpointLabel ? { endpointLabel } : {})}
+          {...(clientVersion ? { clientVersion } : {})}
+          {...(buildVersion !== undefined ? { buildVersion } : {})}
         />
       );
       break;

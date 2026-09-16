@@ -11,6 +11,8 @@ interface AdvancedSettingsProps {
   readonly state: ConnectionState;
   readonly apiUrl?: string;
   readonly endpointLabel?: string;
+  readonly clientVersion?: string;
+  readonly buildVersion?: string | null;
 }
 
 export function AdvancedSettings({
@@ -18,6 +20,8 @@ export function AdvancedSettings({
   state,
   apiUrl = env.apiUrl,
   endpointLabel,
+  clientVersion = APP_VERSION,
+  buildVersion,
 }: AdvancedSettingsProps) {
   return (
     <>
@@ -48,8 +52,13 @@ export function AdvancedSettings({
 
       <Section title="About">
         <Row label="Client version">
-          <Mono>{APP_VERSION}</Mono>
+          <Mono>{clientVersion}</Mono>
         </Row>
+        {buildVersion !== undefined && (
+          <Row label="Build number">
+            <Mono>{buildVersion ?? "Development / browser preview"}</Mono>
+          </Row>
+        )}
         <Row
           label="Concors API"
           hint="Control plane for accounts, organizations, and cloud machines."

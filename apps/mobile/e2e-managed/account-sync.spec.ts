@@ -220,6 +220,49 @@ async function enter(page: Page) {
 }
 test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
+test("beta sign-in stays interactive and diagnostics reports the phone's backend and build", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await fixture(page);
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/auth/sign-in/email", async (route) => {
+    await pending;
+    await route.fallback();
+  });
+  try {
+    await page.goto("http://localhost:8088");
+    await page.getByRole("textbox", { name: "Email", exact: true }).fill("e2e@example.com");
+    await page.getByRole("textbox", { name: "Password", exact: true }).fill("test-password");
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "Checking session…", exact: true }),
+    ).toBeDisabled();
+    await expect(page.getByRole("textbox", { name: "Email", exact: true })).toHaveValue(
+      "e2e@example.com",
+    );
+    await expect(page.getByRole("progressbar", { name: "Opening Concors" })).toHaveCount(0);
+  } finally {
+    release();
+  }
+  const ui = uiFor(page);
+  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  const profile = await account(ui);
+  await profile.getByRole("button", { name: "Settings", exact: true }).click();
+  const settings = sheet(ui, "Settings");
+  await settings.getByRole("combobox", { name: "Settings section" }).click();
+  await ui.locator('[role="option"][data-value="advanced"]').click();
+  await expect(settings).toContainText("https://control-plane.example");
+  await expect(settings).toContainText("Build number");
+  await expect(settings).toContainText("Development / browser preview");
+  await expect(settings).not.toContainText("http://localhost:3000");
+  expect(errors).toEqual([]);
+});
+
 test("mobile sidebar reuses account avatars and edits machine names and icons through drawers", async ({
   page,
 }) => {

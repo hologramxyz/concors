@@ -12,6 +12,7 @@ if (developmentDaemon && process.env.EXPO_PUBLIC_DEMO === "true")
 export const config = {
   apiUrl: apiUrl(process.env.EXPO_PUBLIC_API_URL ?? "https://api.concors.dev", !production),
   demo: !production && process.env.EXPO_PUBLIC_DEMO === "true",
+  personalTeam: !production && Constants.expoConfig?.extra?.personalTeam === true,
   developmentDaemon,
   projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID,
   privacyUrl: "https://concors.dev/privacy",

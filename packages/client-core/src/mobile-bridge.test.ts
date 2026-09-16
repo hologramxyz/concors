@@ -6,6 +6,19 @@ import {
   parseMobileRendererMessage,
 } from "./mobile-bridge.ts";
 describe("mobile host boundary", () => {
+  it("accepts bounded installation metadata and discards unrelated fields", () => {
+    expect(
+      MobileStateSchema.shape.app.parse({ version: "0.1.0", build: "12", token: "secret" }),
+    ).toEqual({ version: "0.1.0", build: "12" });
+    expect(MobileStateSchema.shape.app.parse(undefined)).toBeUndefined();
+    expect(MobileStateSchema.shape.app.parse({ version: "0.1.0", build: null })).toEqual({
+      version: "0.1.0",
+      build: null,
+    });
+    expect(
+      MobileStateSchema.shape.app.safeParse({ version: "0.1.0", build: "1".repeat(101) }).success,
+    ).toBe(false);
+  });
   it("preserves display-only profile avatars without forwarding account credentials", () => {
     const profile = {
       name: "Test User",

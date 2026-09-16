@@ -1,5 +1,8 @@
 # Mobile release runbook
 
+For the two-week iPhone beta, start with the [internal TestFlight path](mobile-testflight.md).
+It uses `candidate` to collect signed-device evidence without claiming public-release readiness.
+
 ## Shortest path
 
 Start with the [submission packet](../apps/mobile/release/submission-packet.md): draft
