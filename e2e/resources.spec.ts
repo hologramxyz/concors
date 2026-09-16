@@ -123,7 +123,20 @@ test("Resources is available through usage and processes, with explicit stop and
   const operations = await resources(page);
   const sidebar = page.getByRole("navigation", { name: "Primary" });
   await expect(sidebar.getByRole("button", { name: "Processes", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Open resources" }).click();
+  const manage = sidebar.getByRole("button", { name: "Manage processes", exact: true });
+  await expect(manage).toBeVisible();
+  await expect(manage).toHaveText("");
+  await expect(manage.locator("svg")).toHaveAttribute("aria-hidden", "true");
+  const workspaceAction = await sidebar
+    .getByRole("button", { name: "Open workspace menu" })
+    .boundingBox();
+  const processAction = await manage.boundingBox();
+  expect(processAction?.width).toBe(workspaceAction?.width);
+  expect(processAction?.height).toBe(workspaceAction?.height);
+  await manage.hover();
+  await expect(page.getByRole("tooltip")).toHaveCount(0);
+  await manage.focus();
+  await page.keyboard.press("Enter");
   await expect(page.getByRole("heading", { name: "Resources", level: 2 })).toBeVisible();
   await expect(page.getByRole("main")).toContainText("512.0 MiB RAM");
   await expect(page.getByRole("button", { name: "Stop Concors daemon (PID 12)" })).toBeDisabled();

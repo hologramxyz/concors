@@ -8,7 +8,16 @@ test("mobile resources show processes and require confirmation before simulated 
   const ui = page.frameLocator('iframe[title="Concors workspace"]');
   await ui.locator("#mobile-sidebar-toggle").click();
   await expect(ui.getByRole("button", { name: "Processes", exact: true })).toBeVisible();
-  await ui.getByRole("button", { name: "Open resources" }).click();
+  const manage = ui.getByRole("button", { name: "Manage processes", exact: true });
+  await expect(manage).toHaveText("");
+  await expect(manage.locator("svg")).toHaveAttribute("aria-hidden", "true");
+  const workspaceAction = await ui
+    .getByRole("button", { name: "Open workspace menu" })
+    .boundingBox();
+  const processAction = await manage.boundingBox();
+  expect(processAction?.width).toBe(workspaceAction?.width);
+  expect(processAction?.height).toBe(workspaceAction?.height);
+  await manage.click();
   const drawer = ui.getByRole("dialog", { name: "Resources", exact: true });
   await expect(drawer).toContainText("Test runner");
   await expect(drawer).toContainText("512.0 MiB RAM");
