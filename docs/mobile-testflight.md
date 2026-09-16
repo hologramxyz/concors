@@ -78,8 +78,8 @@ Do not paste tokens into command arguments or a PR. This still does not prove ph
 From `apps/mobile`:
 
 ```bash
-pnpm dlx eas-cli@24.4.0 login
-pnpm dlx eas-cli@24.4.0 project:info
+pnpm dlx eas-cli@24.4.1 login
+pnpm dlx eas-cli@24.4.1 project:info
 ```
 
 Confirm the owner/project. In its **production EAS environment**, configure the same
@@ -93,13 +93,24 @@ Preflight rejects disagreement with `CONCORS_ASC_APP_ID`.
 
 ```bash
 pnpm testflight:check
-pnpm dlx eas-cli@24.4.0 build --platform ios --profile candidate
+pnpm dlx eas-cli@24.4.1 build --platform ios --profile candidate
 ```
 
 Follow Apple's signing prompts privately. EAS uses cloud macOS workers; this path does not need
 a local Mac. Do not auto-submit or mark pending gates verified to get a build through. `candidate`
 allows device evidence to be collected before public release approval. Its bundle ID is
 `dev.concors.mobile`, not `.preview`.
+
+Use EAS CLI 24.4.1 or newer: 24.4.0 can fail Apple authentication with
+`iTunes service key is empty` ([upstream fix](https://github.com/expo/eas-cli/issues/4392)).
+If signing needs to be configured separately, run
+`pnpm dlx eas-cli@24.4.1 credentials:configure-build --platform ios --profile candidate`
+in an interactive terminal. Enter Apple credentials and 2FA there, not in chat.
+
+The shared iOS build profile sets `SHARP_IGNORE_GLOBAL_LIBVIPS=1` before dependency installation.
+This keeps Sharp on its packaged binaries instead of compiling against the Mac builder's global
+libvips. Leave dependency lifecycle scripts and release checks enabled; this is a build-tool
+setting, not an app permission or signing change.
 
 Record build URL/ID, source commit, version/build, API and signing team; inspect logs and artifact
 metadata. A JS export or unsigned prebuild is not an installable IPA. GitHub native CI was billing
@@ -109,7 +120,7 @@ blocked; resolve that before rerunning those jobs. Check EAS account/build avail
 
 ```bash
 # Replace the UUID; avoid --latest when multiple builds may exist.
-pnpm dlx eas-cli@24.4.0 submit --platform ios --profile candidate --id YOUR-EAS-BUILD-UUID
+pnpm dlx eas-cli@24.4.1 submit --platform ios --profile candidate --id YOUR-EAS-BUILD-UUID
 ```
 
 [EAS Submit](https://docs.expo.dev/submit/ios/) uploads to the selected Apple app, not to a public

@@ -93,6 +93,16 @@ it("keeps candidate builds production-configured and candidate uploads internal-
   expect(eas.submit.production.ios).toEqual(eas.submit.candidate.ios);
 });
 
+it("uses prebuilt Sharp binaries on EAS Mac builders across inherited iOS profiles", () => {
+  // Global libvips on the builder otherwise triggers an unnecessary node-gyp build.
+  expect(eas.build.base.ios.env.SHARP_IGNORE_GLOBAL_LIBVIPS).toBe("1");
+  expect(eas.build.development.extends).toBe("base");
+  expect(eas.build.simulator.extends).toBe("development");
+  expect(eas.build.preview.extends).toBe("base");
+  expect(eas.build.candidate.extends).toBe("base");
+  expect(eas.build.production.extends).toBe("candidate");
+});
+
 it("uses the production identity for candidates without a development launcher scheme", async () => {
   vi.stubEnv("APP_VARIANT", "production");
   vi.stubEnv("EAS_BUILD_PROFILE", "candidate");
