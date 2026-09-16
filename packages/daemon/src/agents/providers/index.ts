@@ -65,5 +65,5 @@ export function providerFactory(registry: ProviderRegistry): AgentProviderFactor
     }
   };
 }
-export const createProvider: AgentProviderFactory = (cwd, onInput, provider) =>
-  providerFactory(new ProviderRegistry())(cwd, onInput, provider);
+export const createProvider: AgentProviderFactory = (cwd, onInput, provider, tools) =>
+  providerFactory(new ProviderRegistry())(cwd, onInput, provider, tools);
