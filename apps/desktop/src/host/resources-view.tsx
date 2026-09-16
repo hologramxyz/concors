@@ -49,6 +49,7 @@ function ResourceContent() {
   const [section, setSection] = useState<"running" | "storage">("running");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState("memory");
+  const [processLimit, setProcessLimit] = useState(100);
   const [storage, setStorage] = useState<StorageSnapshot | null>(null);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
@@ -131,13 +132,19 @@ function ResourceContent() {
     }
   };
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-5 px-4 py-6 sm:px-6">
-      <div>
-        <h2 className="text-base font-medium">Resources</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          See what is running and review what is taking up space on this machine.
-        </p>
-      </div>
+    <div
+      className={
+        compact ? "space-y-4 py-2" : "mx-auto w-full max-w-4xl space-y-5 px-4 py-6 sm:px-6"
+      }
+    >
+      {!compact && (
+        <div>
+          <h2 className="text-base font-medium">Resources</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            See what is running and review what is taking up space on this machine.
+          </p>
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex gap-1" aria-label="Resource sections">
           <Button
@@ -220,7 +227,7 @@ function ResourceContent() {
             </p>
           ))}
           <div className="divide-y rounded-lg border">
-            {filtered.map((item) => (
+            {filtered.slice(0, processLimit).map((item) => (
               <div key={item.id} className="flex min-w-0 flex-wrap items-center gap-3 p-3">
                 <div className="min-w-0 flex-1 basis-40">
                   <div className="flex items-center gap-2">
@@ -264,7 +271,7 @@ function ResourceContent() {
                 )}
                 <Button
                   variant="ghost"
-                  size="icon"
+                  size="sm"
                   aria-label={`Stop ${item.name} (PID ${item.pid})`}
                   disabled={!!item.stopBlocked || !supported || busy}
                   onClick={() => {
@@ -273,6 +280,7 @@ function ResourceContent() {
                   }}
                 >
                   <Square className="size-3.5" />
+                  Stop
                 </Button>
               </div>
             ))}
@@ -286,6 +294,11 @@ function ResourceContent() {
               </p>
             )}
           </div>
+          {filtered.length > processLimit && (
+            <Button variant="outline" onClick={() => setProcessLimit((limit) => limit + 100)}>
+              Show more processes ({processLimit} of {filtered.length})
+            </Button>
+          )}
         </>
       ) : (
         <>
