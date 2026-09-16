@@ -1,4 +1,4 @@
-import { CalendarClock, Plus, Play, Pause, Pencil, Trash2, ArrowUpRight } from "lucide-react";
+import { Clock, Plus, Play, Pause, Pencil, Trash2, ArrowUpRight } from "lucide-react";
 import { useState } from "react";
 import {
   SCHEDULES_CAPABILITY,
@@ -84,7 +84,7 @@ export function SchedulesPage({
       ) : !schedules.length ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-4 py-20 text-center">
           <div className="flex size-14 items-center justify-center rounded-xl border bg-muted/40">
-            <CalendarClock className="size-6 text-muted-foreground" />
+            <Clock className="size-6 text-muted-foreground" />
           </div>
           <div>
             <h3 className="text-lg font-medium">No schedules yet</h3>
@@ -107,7 +107,9 @@ export function SchedulesPage({
         <div className="mt-6 space-y-3">
           {schedules.map((schedule) => {
             const project = workspace?.projects.find((p) => p.id === schedule.projectId);
-            const last = schedule.runs[0];
+            const last =
+              schedule.runs.find((r) => r.status === "running" || r.status === "needs_input") ??
+              schedule.runs[0];
             const active = schedule.runs.some(
               (r) => r.status === "running" || r.status === "needs_input",
             );
@@ -237,7 +239,9 @@ export function SchedulesPage({
                               type="button"
                               variant="ghost"
                               size="sm"
-                              onClick={() => onOpenAgent(run.sessionId!)}
+                              onClick={() => {
+                                if (run.sessionId) onOpenAgent(run.sessionId);
+                              }}
                             >
                               Open agent
                               <ArrowUpRight className="size-3.5" />
