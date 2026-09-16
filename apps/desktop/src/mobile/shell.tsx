@@ -56,7 +56,7 @@ import { NativeSurfaces } from "./native-surfaces";
 import { NativeHeaderButton } from "./native-header-button";
 import { ResourceStatus } from "@/host/resource-status";
 import { ResourcesView } from "@/host/resources-view";
-import { ProcessesSidebar } from "@/host/processes-sidebar";
+import { PreviewsSidebar } from "@/host/previews-sidebar";
 import {
   Dialog,
   DialogContent,
@@ -499,6 +499,10 @@ function MobileWorkspaceContent({
                     <div className="mobile-sidebar-machine">
                       <MobileMachinePicker
                         host={host}
+                        onOpenResources={() => {
+                          setSidebarOpen(false);
+                          setResourcesOpen(true);
+                        }}
                         onSelect={(machineId) => {
                           setLocal({ machineId, target: {} });
                           runHost({ kind: "select-machine", machineId });
@@ -565,13 +569,7 @@ function MobileWorkspaceContent({
                     <SidebarSection title="Agents">
                       <AgentSidebar onSelect={openAgent} workspace={workspace} />
                     </SidebarSection>
-                    <ProcessesSidebar
-                      enabled={sidebarOpen}
-                      onOpen={() => {
-                        setSidebarOpen(false);
-                        setResourcesOpen(true);
-                      }}
-                    />
+                    <PreviewsSidebar />
                   </nav>
                   <div className="mobile-sidebar-footer">
                     <MobileAccountMenu
@@ -786,7 +784,7 @@ function MobileWorkspaceContent({
                   <DialogHeader>
                     <DialogTitle>Resources</DialogTitle>
                     <DialogDescription>
-                      Processes, storage, and cleanup on the selected machine.
+                      Process CPU and RAM usage on the selected machine.
                     </DialogDescription>
                   </DialogHeader>
                   {resourcesOpen && <ResourcesView />}
