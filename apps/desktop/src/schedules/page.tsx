@@ -1,4 +1,4 @@
-import { Clock, Plus, Play, Pause, Pencil, Trash2, ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, ChevronDown, Clock, Pause, Pencil, Play, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import {
   SCHEDULES_CAPABILITY,
@@ -19,6 +19,15 @@ import { useAgents } from "@/agents/context";
 import { useSchedules } from "./use-schedules";
 import { ScheduleForm } from "./schedule-form";
 import { cadenceLabel, dateLabel, runLabel } from "./schedule-labels";
+
+const runStatusColor = {
+  running: "bg-foreground",
+  needs_input: "bg-amber-500",
+  done: "bg-emerald-500",
+  failed: "bg-destructive",
+  skipped: "bg-muted-foreground/60",
+  interrupted: "bg-muted-foreground/60",
+} as const;
 
 export function SchedulesPage({
   workspace,
@@ -117,17 +126,28 @@ export function SchedulesPage({
             return (
               <article
                 key={schedule.id}
-                className="rounded-lg border bg-background p-4 text-ui sm:p-5"
+                className="overflow-hidden rounded-lg border bg-background text-ui shadow-xs"
               >
-                <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex flex-wrap items-start justify-between gap-4 p-4 sm:p-5">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-medium break-words">{schedule.name}</h3>
-                      <span className="rounded border px-1.5 py-0.5 text-xs text-muted-foreground">
+                      <span className="inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs text-muted-foreground">
+                        <span
+                          className={`size-1.5 rounded-full ${schedule.enabled ? "bg-foreground" : "bg-muted-foreground/50"}`}
+                          aria-hidden="true"
+                        />
                         {schedule.enabled ? "Active" : "Paused"}
                       </span>
                       {last && (
-                        <span className="text-xs text-muted-foreground" role="status">
+                        <span
+                          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
+                          role="status"
+                        >
+                          <span
+                            className={`size-1.5 rounded-full ${runStatusColor[last.status]}`}
+                            aria-hidden="true"
+                          />
                           {runLabel[last.status]}
                         </span>
                       )}
@@ -141,7 +161,7 @@ export function SchedulesPage({
                       {schedule.source === "agent" ? " · Created by agent" : ""}
                     </p>
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex w-full items-center justify-end gap-0.5 sm:w-auto">
                     <Button
                       type="button"
                       size="icon"
@@ -201,31 +221,42 @@ export function SchedulesPage({
                       <Trash2 className="size-4" />
                     </Button>
                   </div>
-                </div>
-                <p className="mt-3 line-clamp-2 break-words whitespace-pre-wrap text-muted-foreground">
-                  {schedule.prompt}
-                </p>
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-muted-foreground">
-                  <span>{cadenceLabel(schedule.cadence)}</span>
-                  <span>
-                    {schedule.nextRunAt
-                      ? `Next ${dateLabel(schedule.nextRunAt)}`
-                      : "No upcoming runs"}
-                  </span>
+                  <p className="line-clamp-2 w-full break-words whitespace-pre-wrap text-foreground/80">
+                    {schedule.prompt}
+                  </p>
+                  <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-md bg-muted/40 px-3 py-2.5 text-muted-foreground">
+                    <span className="inline-flex items-center gap-2">
+                      <Clock className="size-3.5 shrink-0" aria-hidden="true" />
+                      {cadenceLabel(schedule.cadence)}
+                    </span>
+                    <span>
+                      {schedule.nextRunAt
+                        ? `Next ${dateLabel(schedule.nextRunAt)}`
+                        : "No upcoming runs"}
+                    </span>
+                  </div>
                 </div>
                 {!!schedule.runs.length && (
-                  <details className="mt-4 border-t pt-3">
-                    <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-                      Recent runs · {schedule.runs.length}
+                  <details className="group border-t">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-muted-foreground transition-colors select-none hover:bg-muted/30 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-inset sm:px-5 [&::-webkit-details-marker]:hidden">
+                      <span>Recent runs · {schedule.runs.length}</span>
+                      <ChevronDown
+                        className="size-4 shrink-0 transition-transform duration-150 group-open:rotate-180"
+                        aria-hidden="true"
+                      />
                     </summary>
-                    <ol className="mt-3 space-y-3">
+                    <ol className="space-y-2 border-t px-4 py-3 sm:px-5">
                       {schedule.runs.map((run) => (
                         <li
                           key={run.id}
-                          className="flex flex-wrap items-start justify-between gap-2"
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/30 px-3 py-2.5"
                         >
-                          <div>
-                            <span>
+                          <div className="min-w-0">
+                            <span className="inline-flex items-center gap-2">
+                              <span
+                                className={`size-1.5 shrink-0 rounded-full ${runStatusColor[run.status]}`}
+                                aria-hidden="true"
+                              />
                               {runLabel[run.status]} · {dateLabel(run.startedAt)}
                             </span>
                             {run.message && (
