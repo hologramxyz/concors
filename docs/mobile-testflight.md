@@ -16,9 +16,9 @@ test account/machine. iPhone dictation uses the keyboard microphone, not desktop
 
 ## Current state
 
-Based on desktop main `16fbab0` (PRs #102–104). Shared chat/dictation changes are bundled
-automatically; native startup now uses the brand mark during session restoration. Settings →
-Diagnostics shows the phone's version/build and actual API instead of desktop's default URL.
+Updated from desktop main `e6e0fe8` (including PRs #106, #108, #109 and #113). Shared desktop UI
+changes are bundled automatically; native startup uses the brand mark during session restoration.
+Settings → Diagnostics shows the phone's version/build and actual API instead of desktop's default URL.
 
 On 2026-09-16, the owner confirmed active developer accounts, the Expo project `@opser/concors`
 (`cbfccc75-202c-461c-a19d-46419a248dcd`), and Apple app ID `6812901549`. These public identifiers
