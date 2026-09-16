@@ -455,7 +455,7 @@ export class AgentManager {
         turnStartedAt: null,
         revision: 0,
       };
-      this.#store.saveAgent(info);
+      this.#store.createBackgroundAgent(info);
       this.#emit({ type: "agent.state", agent: info });
     }
     try {
@@ -668,6 +668,11 @@ export class AgentManager {
         const error = this.#store.agentActionError(request.requestId);
         if (error) throw new Error(error);
         return this.result(request, receipt);
+      }
+      if (op.kind === "open-session") {
+        this.#store.openAgent(request);
+        this.#workspaceChanged();
+        return this.result(request, op.sessionId);
       }
       if (op.kind === "switch-provider") {
         const previous = this.#store.agent(op.sessionId);
@@ -1333,7 +1338,7 @@ export class AgentManager {
       ? await saveAttachments(this.#store.attachmentsDirectory, id, attachments)
       : [];
     const command = parseAgentCommand(text);
-    const instructions = ["pi", "omp"].includes(info.engine ?? info.provider)
+    const instructions = ["pi", "omp", "acp"].includes(info.engine ?? info.provider)
       ? this.tools?.(info).instructions
       : undefined;
     const inputText =
