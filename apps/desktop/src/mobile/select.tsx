@@ -29,6 +29,7 @@ export function MobileSelect({
   hierarchy = false,
   presentation = "popover",
   disabled = false,
+  actions = [],
 }: {
   label: string;
   value: string;
@@ -40,6 +41,7 @@ export function MobileSelect({
   hierarchy?: boolean;
   presentation?: "popover" | "sheet";
   disabled?: boolean;
+  actions?: { label: string; icon?: ReactNode; onSelect: () => void }[];
 }) {
   const [open, setOpen] = useState(false);
   const id = useId();
@@ -200,6 +202,23 @@ export function MobileSelect({
               <p className="p-3 text-sm text-muted-foreground">No options available.</p>
             )}
           </div>
+          {actions.length > 0 && (
+            <div className="mobile-account-actions">
+              {actions.map((action) => (
+                <button
+                  key={action.label}
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    action.onSelect();
+                  }}
+                >
+                  {action.icon}
+                  {action.label}
+                </button>
+              ))}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     );
