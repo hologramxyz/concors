@@ -30,7 +30,11 @@ import { ProviderRegistry } from "./providers/registry.ts";
 import { elicitationQuestions, elicitationContent } from "./elicitation.ts";
 import { mapCodexItem } from "./codex/items.ts";
 
-import { createProvider, type AgentProviderFactory } from "./providers/index.ts";
+import {
+  createProvider,
+  type AgentProviderFactory,
+  type AgentToolContext,
+} from "./providers/index.ts";
 import type { ConversationProvider as AgentProvider } from "./providers/contract.ts";
 import {
   agentProviderName,
@@ -89,6 +93,7 @@ export class AgentManager {
       result?: AgentProviderCatalog;
     }
   >();
+  private readonly tools: ((info: AgentInfo) => AgentToolContext) | undefined;
   constructor(
     store: WorkspaceStore,
     emit: (event: AgentEvent) => void,
@@ -96,7 +101,9 @@ export class AgentManager {
     factory: AgentProviderFactory = createProvider,
     registry: ProviderRegistry = new ProviderRegistry(),
     accountFactory?: AccountBackendFactory,
+    tools?: (info: AgentInfo) => AgentToolContext,
   ) {
+    this.tools = tools;
     this.registry = registry;
     this.#store = store;
     this.#emit = emit;
@@ -251,6 +258,7 @@ export class AgentManager {
       info.directory,
       (method, params, requestId) => this.approval(id, method, params, requestId),
       info.provider,
+      this.tools?.(info),
     );
     const runtime: Runtime = {
       provider,
@@ -1325,10 +1333,17 @@ export class AgentManager {
       ? await saveAttachments(this.#store.attachmentsDirectory, id, attachments)
       : [];
     const command = parseAgentCommand(text);
+    const instructions = ["pi", "omp"].includes(info.engine ?? info.provider)
+      ? this.tools?.(info).instructions
+      : undefined;
+    const inputText =
+      instructions && !command
+        ? `<concors-schedule-tools>\n${instructions}\n</concors-schedule-tools>\n\n${text}`
+        : text;
     const response = z.object({ turn: Turn }).parse(
       await provider.request(command ? "command/execute" : "turn/start", {
         threadId: info.threadId,
-        input: [...(text ? [{ type: "text", text }] : []), ...uploaded],
+        input: [...(text ? [{ type: "text", text: inputText }] : []), ...uploaded],
         ...(command ?? {}),
         ...turnControls({ ...info, settings: settings ?? defaultSettings }),
       }),

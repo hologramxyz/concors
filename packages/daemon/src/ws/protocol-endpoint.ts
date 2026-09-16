@@ -1,3 +1,7 @@
+import { ScheduleManager } from "../schedules/manager.ts";
+import { ScheduleStore } from "../schedules/store.ts";
+import { ScheduleTools } from "../schedules/tools.ts";
+import { SCHEDULES_CAPABILITY } from "@concors/protocol";
 import { ThemeRegistry } from "../themes/registry.ts";
 import { dirname, join, basename } from "node:path";
 import { ProviderRegistry } from "../agents/providers/registry.ts";
@@ -58,6 +62,7 @@ export function registerProtocolEndpoint(
   const connections = new Set<WebSocket>();
   const subscribers = new Set<WebSocket>();
   const agentV2 = new WeakSet<WebSocket>();
+  const scheduleClients = new WeakSet<WebSocket>();
   const hostUsage = createHostUsageMonitor();
   const send = (socket: WebSocket, message: DaemonMessage): void => {
     if (socket.readyState !== socket.OPEN) return;
@@ -110,6 +115,7 @@ export function registerProtocolEndpoint(
     },
     () => providers.terminalEnvironment(),
   );
+  const scheduleTools = new ScheduleTools();
   const agents = new AgentManager(
     options.workspace,
     (event) => {
@@ -122,11 +128,33 @@ export function registerProtocolEndpoint(
     options.agentProviderFactory ?? providerFactory(providers),
     providers,
     options.accountBackendFactory,
+    (info) => scheduleTools.context(info),
   );
+  const schedules = new ScheduleManager(
+    new ScheduleStore(
+      basename(attachments) === "attachments"
+        ? join(dirname(attachments), "schedules.sqlite")
+        : ":memory:",
+    ),
+    options.workspace,
+    agents,
+    providers,
+    (list) => {
+      for (const target of subscribers)
+        if (scheduleClients.has(target)) send(target, { type: "schedule.list", schedules: list });
+    },
+  );
+  app.addHook("onReady", async () => {
+    await scheduleTools.start(schedules);
+    schedules.start();
+  });
   app.addHook("onClose", async () => {
+    const closingSchedules = schedules.close();
+    await scheduleTools.close();
     providers.close();
     hostUsage.close();
     await agents.close();
+    await closingSchedules;
     projects.close();
     terminals.close();
   });
@@ -166,6 +194,7 @@ export function registerProtocolEndpoint(
     new ConnectionHandler(socket, log, options.state, handshakeTimeoutMs, (message) => {
       if (message.type === "client.hello") {
         if (message.capabilities?.includes("agent-providers-v2")) agentV2.add(socket);
+        if (message.capabilities?.includes(SCHEDULES_CAPABILITY)) scheduleClients.add(socket);
         return;
       }
       if (message.type === "agent.request" && !agentV2.has(socket)) {
@@ -197,7 +226,8 @@ export function registerProtocolEndpoint(
         message.type === "agent.request" ||
         message.type === "file.request" ||
         message.type === "provider.request" ||
-        message.type === "theme.request"
+        message.type === "theme.request" ||
+        message.type === "schedule.request"
       ) {
         if (!subscribers.has(socket)) {
           send(socket, {
@@ -206,7 +236,8 @@ export function registerProtocolEndpoint(
           });
           return;
         }
-        if (message.type === "theme.request")
+        if (message.type === "schedule.request") send(socket, schedules.request(message));
+        else if (message.type === "theme.request")
           send(socket, {
             type: "theme.result",
             requestId: message.requestId,
@@ -229,6 +260,8 @@ export function registerProtocolEndpoint(
         else void terminals.request(viewer, message).then((result) => send(socket, result));
       } else if (message.type === "workspace.subscribe") {
         subscribers.add(socket);
+        if (scheduleClients.has(socket))
+          send(socket, { type: "schedule.list", schedules: schedules.list() });
         for (const session of options.workspace.terminals())
           send(socket, { type: "terminal.state", session });
         send(socket, { type: "agent.list", agents: [] });
