@@ -1,7 +1,7 @@
 import { chmod, cp, readFile, readdir, writeFile } from "node:fs/promises";
 import { createRequire, isBuiltin } from "node:module";
 import { dirname, join } from "node:path";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 
 const require = createRequire(import.meta.url);
 
@@ -52,14 +52,17 @@ export async function writeDependencyNotices(outDir: string, root: string): Prom
       ...manifest.dependencies,
       ...manifest.optionalDependencies,
     }).sort()) {
-      let entry: string;
-      try {
-        entry = localRequire.resolve(name);
-      } catch (error) {
+      if (isBuiltin(name)) continue;
+      // Licenses belong to the package root, not a CJS/ESM entry's nearest
+      // package.json. Some SDKs intentionally publish only subpath entry points.
+      const dependency = (localRequire.resolve.paths(name) ?? [])
+        .map((modules) => join(modules, name))
+        .find((candidate) => existsSync(join(candidate, "package.json")));
+      if (!dependency) {
         if (name in (manifest.optionalDependencies ?? {})) continue;
-        throw error;
+        throw new Error(`Cannot locate dependency notices for ${name} from ${directory}`);
       }
-      if (!isBuiltin(entry)) await visit(packageDirectory(entry));
+      await visit(realpathSync(dependency));
     }
   }
   await visit(root);
