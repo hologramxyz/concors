@@ -53,7 +53,7 @@ export async function inspectTree(path: string) {
       throw new Error("Contains files owned by another OS user.");
     if (basename(file) === ".git") hasGit = true;
     hash.update(
-      `${file}\0${meta.dev}:${meta.ino}:${meta.mode}:${meta.size}:${meta.mtimeMs}:${meta.ctimeMs}\0`,
+      `${file.slice(path.length)}\0${meta.dev}:${meta.ino}:${meta.mode}:${meta.size}:${meta.mtimeMs}:${file === path ? 0 : meta.ctimeMs}\0`,
     );
     bytes += meta.blocks * 512;
     if (meta.isDirectory()) {
@@ -71,9 +71,14 @@ export async function activePaths(
 ): Promise<{ paths: string[]; mounts: string[]; uncertain: boolean }> {
   if (process.platform !== "linux") return { paths: [], mounts: [], uncertain: true };
   const mounted: string[] = [];
+  const deadline = Date.now() + 10_000;
   const pids = (await readdir("/proc")).filter((name) => /^\d+$/.test(name));
   let uncertain = pids.length > 8192;
   const groups = await concurrentMap(pids.slice(0, 8192), 12, async (pid) => {
+    if (Date.now() > deadline) {
+      uncertain = true;
+      return [];
+    }
     const directory = `/proc/${pid}`;
     try {
       if ((await lstat(directory)).uid !== process.getuid?.()) return [];
@@ -87,6 +92,10 @@ export async function activePaths(
         const files = await readdir(`${directory}/fd`);
         if (files.length > 8192) uncertain = true;
         for (const name of files.slice(0, 8192)) {
+          if (Date.now() > deadline) {
+            uncertain = true;
+            break;
+          }
           const target = await readlink(`${directory}/fd/${name}`).catch(() => null);
           if (target?.startsWith("/")) paths.push(target.replace(/ \(deleted\)$/, ""));
         }
@@ -97,15 +106,29 @@ export async function activePaths(
       return [];
     }
   });
-  if (
-    includeFiles &&
-    (await access("/var/run/docker.sock").then(
+  const runtime = process.env["XDG_RUNTIME_DIR"] ?? `/run/user/${process.getuid?.()}`;
+  const socketPaths = new Set([
+    "/var/run/docker.sock",
+    join(runtime, "docker.sock"),
+    join(runtime, "podman/podman.sock"),
+    "/run/podman/podman.sock",
+  ]);
+  const configured = process.env["DOCKER_HOST"];
+  if (configured?.startsWith("unix://")) socketPaths.add(configured.slice(7));
+  else if (configured) uncertain = true;
+  if (process.env["DOCKER_CONTEXT"] && process.env["DOCKER_CONTEXT"] !== "default")
+    uncertain = true;
+  for (const socketPath of includeFiles ? socketPaths : []) {
+    const exists = await access(socketPath).then(
       () => true,
-      () => false,
-    ))
-  ) {
+      (error: NodeJS.ErrnoException) => {
+        if (error.code !== "ENOENT") uncertain = true;
+        return false;
+      },
+    );
+    if (!exists) continue;
     try {
-      const args = ["--host", "unix:///var/run/docker.sock"];
+      const args = ["--host", `unix://${socketPath}`];
       const { stdout: ids } = await execute("docker", [...args, "ps", "-aq"], {
         timeout: 3000,
         maxBuffer: 100_000,
@@ -210,7 +233,7 @@ export class StorageInventory {
         const names = await readdir(root).catch(() => []);
         for (const name of names.sort()) {
           const path = join(root, name);
-          if (items.has(path) || name.startsWith(".concors-cleanup-")) continue;
+          if (items.has(path)) continue;
           try {
             const meta = await lstat(path);
             if (
@@ -236,7 +259,7 @@ export class StorageInventory {
           const meta = await lstat(path);
           let blocked = meta.isSymbolicLink()
             ? "Symbolic links are not cleanup targets."
-            : this.#protected(path);
+            : await this.#protected(path);
           if (item.main) blocked = "Primary repository checkout is protected.";
           if (item.locked) blocked = "Worktree is locked. Unlock it deliberately in Git first.";
           if (activity.paths.some((active) => within(active, path)))
@@ -312,19 +335,18 @@ export class StorageInventory {
     };
   }
 
-  #protected(path: string): string | null {
+  async #protected(path: string): Promise<string | null> {
     if (
       ["/", homedir(), ...this.roots.temporary, ...this.roots.caches].some(
         (root) => resolve(path) === resolve(root),
       )
     )
       return "Storage roots and your home directory are protected.";
-    if (
-      this.projects().some(
-        (project) => within(project.directory, path) || within(path, project.directory),
-      )
-    )
-      return "An open workspace uses this path. Close the workspace before cleanup.";
+    for (const project of this.projects()) {
+      const directory = await realpath(project.directory).catch(() => project.directory);
+      if (within(directory, path) || within(path, directory))
+        return "An open workspace uses this path. Close the workspace before cleanup.";
+    }
     return null;
   }
 
@@ -357,7 +379,7 @@ export class StorageInventory {
     this.#cleaning = true;
     try {
       const path = target.entry.path;
-      const blocked = this.#protected(path);
+      const blocked = await this.#protected(path);
       if (blocked) throw new Error(blocked);
       if ((await realpath(path)) !== path)
         throw new Error("Path now resolves through a symbolic link. Scan again.");
@@ -390,6 +412,10 @@ export class StorageInventory {
         // Move the exact verified entry out of its old name before removal. rm never follows symlinks.
         const staging = join(dirname(path), `.concors-cleanup-${randomUUID()}`);
         await rename(path, staging);
+        if ((await inspectTree(staging)).fingerprint !== target.fingerprint)
+          throw new Error(
+            `Files changed during cleanup. Nothing was deleted; inspect the preserved entry at ${staging}.`,
+          );
         try {
           await rm(staging, { recursive: true, force: false, maxRetries: 0 });
         } catch {

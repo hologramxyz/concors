@@ -99,6 +99,18 @@ it.skipIf(process.platform !== "linux")(
     expect((await inventory.scan()).entries[0]!.cleanupBlocked).toContain("Git checkout");
   },
 );
+
+it.skipIf(process.platform !== "linux")(
+  "protects open workspaces reached through a symbolic-link alias",
+  async () => {
+    const { root, path, inventory, projects } = await fixture();
+    const alias = join(root, "alias");
+    await symlink(path, alias);
+    projects.push({ id: randomUUID(), name: "alias", directory: alias, version: 1, tabs: [] });
+    const candidate = (await inventory.scan()).entries.find((entry) => entry.path === path);
+    expect(candidate?.cleanupBlocked).toContain("open workspace");
+  },
+);
 it.skipIf(process.platform !== "linux")(
   "blocks ignored files, locked trees, and unique commits; removes only a clean pushed linked checkout",
   async () => {

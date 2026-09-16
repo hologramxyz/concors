@@ -45,7 +45,8 @@ export function parseProcessStat(value: string) {
     pid <= 0 ||
     !Number.isInteger(parentPid) ||
     !Number.isFinite(ticks) ||
-    started === undefined || !/^\d+$/.test(started)
+    started === undefined ||
+    !/^\d+$/.test(started)
   )
     throw new Error("Invalid process stat");
   return {
@@ -129,8 +130,7 @@ export class ProcessInventory {
     const entries = (await readdir("/proc")).filter((name) => /^\d+$/.test(name));
     if (entries.length > 8192)
       warnings.push("Process scan limited to 8,192 operating-system entries.");
-    const cpu = ((await readFile("/proc/stat", "utf8"))
-      .split("\n")[0] ?? "")
+    const cpu = ((await readFile("/proc/stat", "utf8")).split("\n")[0] ?? "")
       .trim()
       .split(/\s+/)
       .slice(1, 9)
