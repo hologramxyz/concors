@@ -1,5 +1,5 @@
 import { machineAvailability, machineStatusLabel, type MobileState } from "@concors/client-core";
-import { Monitor } from "lucide-react";
+import { Activity, Monitor } from "lucide-react";
 import { MachineIcon } from "@/machines/machine-icon";
 import { MobileSelect } from "./select";
 
@@ -7,9 +7,11 @@ import { MobileSelect } from "./select";
 export function MobileMachinePicker({
   host,
   onSelect,
+  onOpenResources,
 }: {
   host: MobileState;
   onSelect(machineId: string): void;
+  onOpenResources: () => void;
 }) {
   return (
     <MobileSelect
@@ -18,6 +20,7 @@ export function MobileMachinePicker({
       value={host.machineId ?? ""}
       placeholder={host.direct ? "Connecting to desktop…" : "Choose a machine"}
       onValueChange={onSelect}
+      actions={[{ label: "Resources", icon: <Activity />, onSelect: onOpenResources }]}
       groups={[
         {
           label: host.direct ? "Direct connection" : "Your machines",

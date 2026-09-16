@@ -8,6 +8,34 @@ afterEach(() => {
   vi.resetModules();
 });
 
+it("links the registered Expo project by default without changing the app identity", async () => {
+  vi.stubEnv("APP_VARIANT", "production");
+  vi.stubEnv("EXPO_OWNER", undefined);
+  vi.stubEnv("EXPO_PUBLIC_EAS_PROJECT_ID", undefined);
+  const { default: config } = await import("./app.config");
+  expect(config.slug).toBe("concors");
+  expect(config.owner).toBe("opser");
+  expect(config.extra?.eas?.projectId).toBe("cbfccc75-202c-461c-a19d-46419a248dcd");
+  expect(config.name).toBe("Concors");
+  expect(config.ios?.bundleIdentifier).toBe("dev.concors.mobile");
+});
+
+it("allows explicit Expo project overrides", async () => {
+  vi.stubEnv("EXPO_OWNER", "test-team");
+  vi.stubEnv("EXPO_PUBLIC_EAS_PROJECT_ID", "12345678-1234-4123-8123-123456789abc");
+  const { default: config } = await import("./app.config");
+  expect(config.owner).toBe("test-team");
+  expect(config.extra?.eas?.projectId).toBe("12345678-1234-4123-8123-123456789abc");
+});
+
+it("keeps explicitly unlinked local builds independent of the registered Expo project", async () => {
+  vi.stubEnv("EXPO_OWNER", "");
+  vi.stubEnv("EXPO_PUBLIC_EAS_PROJECT_ID", "");
+  const { default: config } = await import("./app.config");
+  expect(config.owner).toBeUndefined();
+  expect(config.extra?.eas).toBeUndefined();
+});
+
 it("uses a separate local Personal Team identity without push or associated domains", async () => {
   vi.stubEnv("APP_VARIANT", "development");
   vi.stubEnv("EAS_BUILD_PROFILE", "");
@@ -56,12 +84,27 @@ it("keeps candidate builds production-configured and candidate uploads internal-
     distribution: "store",
     autoIncrement: true,
     environment: "production",
-    env: { APP_VARIANT: "production", EXPO_PUBLIC_DEMO: "false" },
+    env: {
+      APP_VARIANT: "production",
+      EXPO_PUBLIC_DEMO: "false",
+      EXPO_PUBLIC_API_URL: "https://api.concors.dev",
+    },
     android: { buildType: "app-bundle" },
   });
   expect(eas.build.production).toEqual({ extends: "candidate" });
   expect(eas.submit.candidate.android).toEqual({ track: "internal", releaseStatus: "draft" });
-  expect(eas.submit.candidate.ios).toEqual({});
+  expect(eas.submit.candidate.ios).toEqual({ ascAppId: "6812901549" });
+  expect(eas.submit.production.ios).toEqual(eas.submit.candidate.ios);
+});
+
+it("uses prebuilt Sharp binaries on EAS Mac builders across inherited iOS profiles", () => {
+  // Global libvips on the builder otherwise triggers an unnecessary node-gyp build.
+  expect(eas.build.base.ios.env.SHARP_IGNORE_GLOBAL_LIBVIPS).toBe("1");
+  expect(eas.build.development.extends).toBe("base");
+  expect(eas.build.simulator.extends).toBe("development");
+  expect(eas.build.preview.extends).toBe("base");
+  expect(eas.build.candidate.extends).toBe("base");
+  expect(eas.build.production.extends).toBe("candidate");
 });
 
 it("uses the production identity for candidates without a development launcher scheme", async () => {

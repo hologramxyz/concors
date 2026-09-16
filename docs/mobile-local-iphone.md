@@ -29,12 +29,13 @@ pnpm --filter @concors/mobile ios:local
 
 The command builds shared desktop assets, generates/updates iOS without `--clean`, installs
 Pods, asks which device to use, builds/installs **Concors Dev**, and starts Metro. Allow time for
-the first native compile. Open the app, sign in with the same account you use on the development
+the first native compile. Open the app, sign in with the same account you use on the configured
 backend, and select an existing machine. Remote machines/daemons must be reachable separately.
 
-The approved default API is **https://concors-server-dev.up.railway.app**. This is a real login,
-not a demo/private-daemon shortcut. On 2026-09-15 its account endpoint returned expected JSON
-401 without credentials; successful sign-in/workspace use still needs testing with your account.
+The approved default API is **https://api.concors.dev**, matching TestFlight and desktop. This is a
+real login, not a demo/private-daemon shortcut. Accounts on a separate development backend do not
+automatically carry over. Set `CONCORS_IOS_API_URL` explicitly when intentionally testing another API.
+Successful sign-in/workspace use still needs testing with your account.
 
 ## If automatic signing needs setup
 

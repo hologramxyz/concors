@@ -1,6 +1,7 @@
 import type { DaemonInfo, DaemonStatus } from "@concors/protocol";
 import {
   HOST_USAGE_CAPABILITY,
+  RESOURCES_CAPABILITY,
   PROJECT_ICON_CAPABILITY,
   PROTOCOL_VERSION,
 } from "@concors/protocol";
@@ -31,6 +32,7 @@ export class DaemonState {
       capabilities: [
         "agent-schedules-v1",
         HOST_USAGE_CAPABILITY,
+        RESOURCES_CAPABILITY,
         "terminal-profiles",
         "color-themes",
         "project-files",

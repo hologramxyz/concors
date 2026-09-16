@@ -71,6 +71,7 @@ describe("WebSocket handshake", () => {
         capabilities: [
           "agent-schedules-v1",
           "host-usage",
+          "machine-resources",
           "terminal-profiles",
           "color-themes",
           "project-files",

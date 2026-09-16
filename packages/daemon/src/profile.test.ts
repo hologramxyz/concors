@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { join } from "node:path";
 
-import { ProfileError, profileKey, resolveDataDir, resolvedDataDirEnv } from "./profile.ts";
+import {
+  applyResolvedDataDir,
+  ProfileError,
+  profileKey,
+  resolveDataDir,
+  resolvedDataDirEnv,
+} from "./profile.ts";
 
 const DEV = "https://concors-server-dev.up.railway.app";
 const PROD = "https://api.concors.dev";
@@ -98,5 +104,33 @@ describe("resolvedDataDirEnv", () => {
 
   it("keeps the rest of the environment intact", () => {
     expect(resolvedDataDirEnv("/data", { PATH: "/usr/bin" })["PATH"]).toBe("/usr/bin");
+  });
+});
+
+describe("applyResolvedDataDir", () => {
+  it("points environment-resolving components at the same partition as the database", () => {
+    const env: NodeJS.ProcessEnv = {
+      CONCORS_DATA_DIR: "/data",
+      CONCORS_PROFILE_ORIGIN: PROD,
+      CONCORS_PROFILE_USER: "user_1",
+    };
+    const resolved = resolveDataDir(env);
+    applyResolvedDataDir(resolved, env);
+    // The provider registry and friends read this directly rather than being handed a directory.
+    expect(env["CONCORS_DATA_DIR"]).toBe(resolved);
+    expect(env["CONCORS_PROFILE_ORIGIN"]).toBeUndefined();
+  });
+
+  it("is idempotent, so reapplying cannot nest another profile", () => {
+    const env: NodeJS.ProcessEnv = {
+      CONCORS_DATA_DIR: "/data",
+      CONCORS_PROFILE_ORIGIN: PROD,
+      CONCORS_PROFILE_USER: "user_1",
+    };
+    const resolved = resolveDataDir(env);
+    applyResolvedDataDir(resolved, env);
+    expect(resolveDataDir(env)).toBe(resolved);
+    applyResolvedDataDir(resolveDataDir(env), env);
+    expect(resolveDataDir(env)).toBe(resolved);
   });
 });

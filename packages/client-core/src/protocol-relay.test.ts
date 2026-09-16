@@ -71,12 +71,25 @@ function setup() {
       outcome: { status: "ok", sessions: [] },
     })),
     sendTerminalInput: vi.fn(),
+    requestResource: vi.fn<RelayConnection["requestResource"]>(async (_, requestId) => ({
+      type: "resource.result",
+      requestId,
+      outcome: { status: "error", message: "fixture" },
+    })),
   };
   const messages: DaemonMessage[] = [];
   const relay = createProtocolRelay(connection, (message) => messages.push(message));
   return { connection, messages, relay, off };
 }
 describe("offline UI protocol relay", () => {
+  it("relays resource requests without changing process identities", async () => {
+    const { connection, relay, messages } = setup();
+    await relay.receive(hello);
+    const operation = { kind: "stop", id: "123:456" } as const;
+    await relay.receive({ type: "resource.request", requestId: id, operation });
+    expect(connection.requestResource).toHaveBeenCalledWith(operation, id);
+    expect(messages.at(-1)?.type).toBe("resource.result");
+  });
   it("relays opt-in resource usage and detaches on disposal", async () => {
     const { connection, relay, messages, off } = setup();
     await relay.receive(hello);

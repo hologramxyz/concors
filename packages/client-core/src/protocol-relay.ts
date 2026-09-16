@@ -25,6 +25,7 @@ export type RelayConnection = Pick<
   | "requestFile"
   | "requestProvider"
   | "requestThemes"
+  | "requestResource"
   | "requestTerminal"
   | "sendTerminalInput"
 >;
@@ -103,6 +104,9 @@ export function createProtocolRelay(
           break;
         case "theme.request":
           emit(await connection.requestThemes(message.requestId));
+          break;
+        case "resource.request":
+          emit(await connection.requestResource(message.operation, message.requestId));
           break;
         case "provider.request":
           emit(await connection.requestProvider(message.operation, message.requestId));

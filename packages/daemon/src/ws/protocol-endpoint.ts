@@ -29,6 +29,7 @@ import type { WorkspaceStore } from "../workspace/store.ts";
 
 import type { DaemonState } from "../state.ts";
 import { createHostUsageMonitor } from "../host/usage.ts";
+import { MachineResources } from "../host/resources.ts";
 
 export interface ProtocolEndpointOptions {
   readonly agentProviderFactory?: AgentProviderFactory;
@@ -87,6 +88,7 @@ export function registerProtocolEndpoint(
   };
 
   const files = new ProjectFiles(options.workspace);
+  const resources = new MachineResources(options.workspace);
   const projects = new ProjectManager(options.workspace, () => {
     for (const target of subscribers) {
       send(target, { type: "workspace.snapshot", snapshot: options.workspace.snapshot() });
@@ -228,7 +230,8 @@ export function registerProtocolEndpoint(
         message.type === "file.request" ||
         message.type === "provider.request" ||
         message.type === "theme.request" ||
-        message.type === "schedule.request"
+        message.type === "schedule.request" ||
+        message.type === "resource.request"
       ) {
         if (!subscribers.has(socket)) {
           send(socket, {
@@ -238,6 +241,8 @@ export function registerProtocolEndpoint(
           return;
         }
         if (message.type === "schedule.request") send(socket, schedules.request(message));
+        else if (message.type === "resource.request")
+          void resources.request(message).then((result) => send(socket, result));
         else if (message.type === "theme.request")
           send(socket, {
             type: "theme.result",
