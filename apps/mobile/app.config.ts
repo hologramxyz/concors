@@ -34,8 +34,7 @@ if (webBasePath && (production || !/^\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/.tes
   );
 const identifier = "dev.concors.mobile";
 // Public project identifiers, not credentials. Explicit empty values keep local-only builds unlinked.
-const projectId =
-  process.env.EXPO_PUBLIC_EAS_PROJECT_ID ?? "cbfccc75-202c-461c-a19d-46419a248dcd";
+const projectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID ?? "cbfccc75-202c-461c-a19d-46419a248dcd";
 const owner = process.env.EXPO_OWNER ?? "opser";
 
 const config: ExpoConfig = {
