@@ -33,11 +33,14 @@ if (webBasePath && (production || !/^\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/.tes
     "CONCORS_MOBILE_WEB_BASE_PATH requires a preview build and an absolute URL path.",
   );
 const identifier = "dev.concors.mobile";
-const projectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
+// Public project identifiers, not credentials. Explicit empty values keep local-only builds unlinked.
+const projectId =
+  process.env.EXPO_PUBLIC_EAS_PROJECT_ID ?? "cbfccc75-202c-461c-a19d-46419a248dcd";
+const owner = process.env.EXPO_OWNER ?? "opser";
 
 const config: ExpoConfig = {
   name: personalTeam ? "Concors Dev" : production ? "Concors" : "Concors Preview",
-  slug: "concors-mobile",
+  slug: "concors",
   version,
   scheme: personalTeam ? "concors-local" : production ? "concors" : "concors-preview",
   platforms: ["ios", "android", "web"],
@@ -121,7 +124,7 @@ const config: ExpoConfig = {
           ],
         ] satisfies NonNullable<ExpoConfig["plugins"]>)),
   ],
-  ...(process.env.EXPO_OWNER ? { owner: process.env.EXPO_OWNER } : {}),
+  ...(owner ? { owner } : {}),
   extra: { variant, personalTeam, ...(projectId ? { eas: { projectId } } : {}) },
 };
 
