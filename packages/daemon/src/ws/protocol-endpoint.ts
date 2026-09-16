@@ -119,6 +119,7 @@ export function registerProtocolEndpoint(
   const agents = new AgentManager(
     options.workspace,
     (event) => {
+      if (event.type === "agent.state") schedules?.observe(event.agent);
       for (const target of subscribers) send(target, event);
     },
     () => {

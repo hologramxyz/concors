@@ -11,7 +11,7 @@ import {
 import type { WorkspaceStore } from "../workspace/store.ts";
 import type { AgentManager } from "../agents/manager.ts";
 import type { ProviderRegistry } from "../agents/providers/registry.ts";
-import { ScheduleStore } from "./store.ts";
+import type { ScheduleStore } from "./store.ts";
 import { nextRun } from "./cadence.ts";
 
 const active = (run?: ScheduleRun) => run?.status === "running" || run?.status === "needs_input";
@@ -138,7 +138,7 @@ export class ScheduleManager {
                 throw new Error("Stop the agent before deleting a running schedule");
               this.store.remove(schedule.id);
             } else {
-              this.validate(op.schedule);
+              if (op.schedule.enabled) this.validate(op.schedule);
               const targetChanged =
                 schedule.projectId !== op.schedule.projectId ||
                 JSON.stringify(schedule.target) !== JSON.stringify(op.schedule.target);
@@ -202,9 +202,50 @@ export class ScheduleManager {
       message: skipped ?? null,
     };
     if (advance) schedule.nextRunAt = nextRun(schedule.cadence, this.clock());
-    schedule.runs = [run, ...schedule.runs].slice(0, 20);
+    const history = [run, ...schedule.runs];
+    const running = history.filter(active);
+    const retained = new Set(
+      [...running, ...history.filter((r) => !active(r)).slice(0, 20 - running.length)].map(
+        (r) => r.id,
+      ),
+    );
+    schedule.runs = history.filter((r) => retained.has(r.id));
     this.save(schedule);
     return run;
+  }
+  /** Settle on the native state event, before a user can start another turn in the session. */
+  observe(agent: AgentInfo) {
+    if (this.closed) return;
+    for (const schedule of this.list()) {
+      let changed = false;
+      for (const run of schedule.runs) {
+        if (!active(run) || run.sessionId !== agent.id || !run.turnId) continue;
+        const actualTurn =
+          this.workspace.agentItem(agent.id, `prompt:${run.id}`)?.turnId ?? run.turnId;
+        if (actualTurn !== agent.turnId) continue;
+        const status =
+          agent.status === "needs_input"
+            ? "needs_input"
+            : agent.status === "working" || agent.status === "starting"
+              ? "running"
+              : agent.status === "idle"
+                ? "done"
+                : agent.status;
+        if (run.status !== status || run.turnId !== actualTurn) {
+          run.status = status;
+          run.turnId = actualTurn;
+          if (!active(run)) {
+            run.finishedAt = this.now();
+            run.message = agent.error;
+          }
+          changed = true;
+        }
+      }
+      if (changed) {
+        this.save(schedule);
+        this.publish();
+      }
+    }
   }
   /** Called even with no connected clients. Advance due time before launching any provider. */
   tick() {
@@ -241,10 +282,17 @@ export class ScheduleManager {
         this.publish();
       }
       if (!schedule.enabled || !schedule.nextRunAt || schedule.nextRunAt > this.now()) continue;
+      const scheduledAt = schedule.nextRunAt;
       // Do not let an overdue tick hide an earlier run still waiting for input.
       if (schedule.runs.some(active) || this.dispatching.has(schedule.id)) {
-        schedule.nextRunAt = nextRun(schedule.cadence, this.clock());
-        this.save(schedule);
+        this.store.transaction(() =>
+          this.claim(
+            schedule,
+            scheduledAt,
+            true,
+            "Previous run is still active or waiting for input",
+          ),
+        );
         this.publish();
         continue;
       }
@@ -255,9 +303,7 @@ export class ScheduleManager {
           : agent && busy(agent)
             ? "Agent is busy or waiting for input"
             : undefined;
-      const run = this.store.transaction(() =>
-        this.claim(schedule, schedule.nextRunAt!, true, skipped),
-      );
+      const run = this.store.transaction(() => this.claim(schedule, scheduledAt, true, skipped));
       this.publish();
       if (!skipped) this.dispatch(schedule, run);
     }
@@ -275,6 +321,9 @@ export class ScheduleManager {
     const job = this.deliver(schedule, run).finally(() => {
       this.dispatching.delete(schedule.id);
       this.jobs.delete(job);
+      const sessionId = this.list().find((s) => s.id === schedule.id)?.sessionId;
+      const agent = this.workspace.agents().find((a) => a.id === sessionId);
+      if (agent) this.observe(agent);
     });
     this.jobs.add(job);
   }
@@ -294,7 +343,15 @@ export class ScheduleManager {
       }
       if (!sessionId) throw new Error("Agent session is unavailable");
       if (this.closed) throw new Error("Machine is shutting down");
-      const info = this.workspace.agent(sessionId);
+      let info = this.workspace.agents().find((a) => a.id === sessionId);
+      if (!info && schedule.target.kind === "agent")
+        info = await this.agents.startScheduled(
+          sessionId,
+          schedule.projectId,
+          schedule.target.provider,
+          schedule.target.model,
+        );
+      if (!info) throw new Error("Agent session was removed");
       if (busy(info)) {
         this.patchRun(schedule.id, run.id, {
           status: "skipped",
@@ -306,6 +363,14 @@ export class ScheduleManager {
       // Resume the saved provider if needed; never silently start a new conversation.
       await this.agents.startScheduled(sessionId, schedule.projectId, info.provider, info.model);
       if (this.closed) throw new Error("Machine is shutting down");
+      if (busy(this.workspace.agent(sessionId))) {
+        this.patchRun(schedule.id, run.id, {
+          status: "skipped",
+          message: "Agent is busy or waiting for input",
+          finishedAt: this.now(),
+        });
+        return;
+      }
       const result = await this.agents.request(
         {
           type: "agent.request",
