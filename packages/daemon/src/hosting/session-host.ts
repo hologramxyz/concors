@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { z } from "zod";
 import { createDaemonServer, type DaemonServerOptions } from "../server.ts";
+import { resolvedDataDirEnv } from "../profile.ts";
 import type { DaemonConfig } from "../config.ts";
 
 const Descriptor = z.object({
@@ -162,7 +163,7 @@ export async function ensureSessionHost(
     detached: true,
     windowsHide: true,
     stdio: ["ignore", log.fd, log.fd],
-    env: { ...process.env, CONCORS_DATA_DIR: directory },
+    env: resolvedDataDirEnv(directory),
   });
   child.on("error", (error) => {
     launchError = error;

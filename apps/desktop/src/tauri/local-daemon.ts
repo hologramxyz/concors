@@ -15,12 +15,22 @@ const LocalDaemonStatusSchema = z.discriminatedUnion("state", [
 ]);
 export type LocalDaemonStatus = z.infer<typeof LocalDaemonStatusSchema>;
 
-async function call(command: string): Promise<LocalDaemonStatus> {
-  return LocalDaemonStatusSchema.parse(await invoke(command));
+/**
+ * Control-plane origin plus signed-in user id. The daemon partitions its data directory by this, so
+ * separate accounts — and the same account against development and production — never share
+ * projects, terminals or agent history. It is a partition key, not a credential.
+ */
+export interface DaemonIdentity {
+  readonly origin: string;
+  readonly user: string;
+}
+
+async function call(command: string, args?: Record<string, unknown>): Promise<LocalDaemonStatus> {
+  return LocalDaemonStatusSchema.parse(await invoke(command, args));
 }
 
 export const localDaemon = {
   status: () => call("local_daemon_status"),
-  start: () => call("start_local_daemon"),
+  start: (identity: DaemonIdentity) => call("start_local_daemon", { ...identity }),
   stop: () => call("stop_local_daemon"),
 } as const;
