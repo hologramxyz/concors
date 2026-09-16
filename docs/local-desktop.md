@@ -118,14 +118,45 @@ The native app owns its gateway and checks it every five seconds. If it exits, t
 another gateway and reconnects to the new port. Closing the app stops its gateway but leaves
 the persistent host running so existing terminals can be resumed on the next launch.
 
-Runtime data defaults to `~/.concors`; set `CONCORS_DATA_DIR` before launching the app to
-isolate a test installation. Native startup logs are written to Tauri's application log
+Runtime data defaults to `~/.concors`, partitioned per signed-in account (see below); set
+`CONCORS_DATA_DIR` before launching the app to isolate a test installation. Native startup logs are written to Tauri's application log
 directory as `local-daemon.log` (normally
 `~/.local/share/dev.concors.desktop/logs/local-daemon.log` on Linux).
 
 A startup timeout is reported with the log path. An incomplete production package reports
 that the runtime is missing instead of silently trying a different service on port 7420.
 Native development builds without bundled resources can still use a manually started daemon.
+
+## Runtime data is partitioned per account
+
+Projects, terminals, agent history and agent provider credentials belong to the account that
+created them. The daemon stores them under a per-identity directory:
+
+```
+~/.concors/profiles/<key>/workspace.sqlite
+```
+
+`<key>` is derived from the control-plane origin **and** the signed-in user id. The user id alone
+is not sufficient: separate control planes are separate databases and may issue the same subject,
+so a development and a production account could otherwise collide. Including the origin makes that
+impossible, and it also keeps a development build and a packaged build on one machine apart.
+
+The gateway takes the identity from `--profile-origin`/`--profile-user`, or from
+`CONCORS_PROFILE_ORIGIN`/`CONCORS_PROFILE_USER`. The desktop app passes the signed-in account
+automatically and restarts its gateway when the account changes, so the bundled runtime only
+starts once someone is signed in. With no identity configured the daemon uses the unpartitioned
+base directory exactly as before, which is what managed VPS machines and `--ephemeral` test runs
+rely on.
+
+The key is a partition key, not a credential. The local gateway binds to loopback and
+authenticates nothing, so anything able to reach it already has the access that forging a key
+would grant.
+
+The first account to sign in adopts an existing unpartitioned installation, so upgrading keeps
+its projects and history instead of presenting an empty machine. Adoption stops the running
+session host first, because the database moves out from under it — that ends running terminals,
+the same trade `pnpm desktop:reload` already makes, while every persisted record survives.
+Accounts that sign in afterwards start empty rather than inheriting the first account's data.
 
 ## Verification
 

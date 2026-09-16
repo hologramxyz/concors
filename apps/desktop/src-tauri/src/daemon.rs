@@ -22,6 +22,16 @@ pub enum LocalDaemonStatus {
 struct RunningDaemon {
     child: Child,
     port: u16,
+    /// Identity this gateway was started for; a different one needs its own data partition.
+    profile: Profile,
+}
+
+/// Control-plane origin plus signed-in user id. Selects the daemon's data directory; it is a
+/// partition key, not a credential (the loopback gateway authenticates nothing).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Profile {
+    origin: String,
+    user: String,
 }
 
 #[derive(Default)]
@@ -45,10 +55,17 @@ impl LocalDaemon {
         }
     }
 
-    fn start(&self, app: &AppHandle) -> Result<LocalDaemonStatus, String> {
+    fn start(&self, app: &AppHandle, profile: Profile) -> Result<LocalDaemonStatus, String> {
         let mut child = self.child.lock().map_err(|e| e.to_string())?;
         if let Some(status) = Self::running(&mut child) {
-            return Ok(status);
+            // Reuse the gateway only while it serves the account that is signed in now.
+            if child.as_ref().is_some_and(|d| d.profile == profile) {
+                return Ok(status);
+            }
+            if let Some(mut previous) = child.take() {
+                let _ = previous.child.kill();
+                let _ = previous.child.wait();
+            }
         }
         let Some(path) = bundled_daemon_path(app) else {
             return Ok(LocalDaemonStatus::NotBundled);
@@ -56,7 +73,7 @@ impl LocalDaemon {
         let logs = app.path().app_log_dir().map_err(|e| e.to_string())?;
         fs::create_dir_all(&logs).map_err(|e| e.to_string())?;
         let log_path = logs.join("local-daemon.log");
-        let running = launch(&path, &log_path, Duration::from_secs(15))?;
+        let running = launch(&path, &log_path, &profile, Duration::from_secs(15))?;
         let status = LocalDaemonStatus::Running {
             pid: running.child.id(),
             port: running.port,
@@ -84,7 +101,12 @@ fn ready_port(line: &str) -> Option<u16> {
     address.trim().parse::<u16>().ok().filter(|port| *port > 0)
 }
 
-fn launch(path: &Path, log_path: &Path, timeout: Duration) -> Result<RunningDaemon, String> {
+fn launch(
+    path: &Path,
+    log_path: &Path,
+    profile: &Profile,
+    timeout: Duration,
+) -> Result<RunningDaemon, String> {
     let mut output = OpenOptions::new()
         .create(true)
         .append(true)
@@ -103,6 +125,8 @@ fn launch(path: &Path, log_path: &Path, timeout: Duration) -> Result<RunningDaem
         ])
         // A desktop process must never inherit a managed VPS binding/configuration.
         .env_remove("CONCORS_DAEMON_MANAGED_CONFIG")
+        .env("CONCORS_PROFILE_ORIGIN", &profile.origin)
+        .env("CONCORS_PROFILE_USER", &profile.user)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(stderr)
@@ -123,7 +147,11 @@ fn launch(path: &Path, log_path: &Path, timeout: Duration) -> Result<RunningDaem
     });
     // The gateway prints readiness only after both its listener and persistent host are ready.
     match receive.recv_timeout(timeout) {
-        Ok(port) if matches!(child.try_wait(), Ok(None)) => Ok(RunningDaemon { child, port }),
+        Ok(port) if matches!(child.try_wait(), Ok(None)) => Ok(RunningDaemon {
+            child,
+            port,
+            profile: profile.clone(),
+        }),
         _ => {
             let _ = child.kill();
             let _ = child.wait();
@@ -171,8 +199,19 @@ pub fn local_daemon_status(
 }
 
 #[tauri::command]
-pub async fn start_local_daemon(app: AppHandle) -> Result<LocalDaemonStatus, String> {
-    tauri::async_runtime::spawn_blocking(move || app.state::<LocalDaemon>().start(&app))
+pub async fn start_local_daemon(
+    app: AppHandle,
+    origin: String,
+    user: String,
+) -> Result<LocalDaemonStatus, String> {
+    if origin.trim().is_empty() || user.trim().is_empty() {
+        return Err("A signed-in account is required to start the local runtime".into());
+    }
+    let profile = Profile {
+        origin: origin.trim().to_string(),
+        user: user.trim().to_string(),
+    };
+    tauri::async_runtime::spawn_blocking(move || app.state::<LocalDaemon>().start(&app, profile))
         .await
         .map_err(|e| e.to_string())?
 }
@@ -185,7 +224,14 @@ pub fn stop_local_daemon(daemon: State<'_, LocalDaemon>) -> Result<LocalDaemonSt
 
 #[cfg(test)]
 mod tests {
-    use super::ready_port;
+    use super::{ready_port, Profile};
+
+    fn profile() -> Profile {
+        Profile {
+            origin: "https://api.concors.dev".into(),
+            user: "user_1".into(),
+        }
+    }
 
     #[test]
     fn readiness_requires_a_loopback_address_and_real_port() {
@@ -214,10 +260,44 @@ mod tests {
         fs::write(&script, "#!/bin/sh\nexec sleep 10\n").unwrap();
         fs::set_permissions(&script, fs::Permissions::from_mode(0o700)).unwrap();
         let start = Instant::now();
-        assert!(super::launch(&script, &root.join("log"), Duration::from_millis(100)).is_err());
+        assert!(super::launch(
+            &script,
+            &root.join("log"),
+            &profile(),
+            Duration::from_millis(100)
+        )
+        .is_err());
         assert!(start.elapsed() < Duration::from_secs(2));
         fs::write(&script, "#!/bin/sh\nexit 1\n").unwrap();
-        assert!(super::launch(&script, &root.join("log"), Duration::from_secs(1)).is_err());
+        assert!(super::launch(
+            &script,
+            &root.join("log"),
+            &profile(),
+            Duration::from_secs(1)
+        )
+        .is_err());
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn identity_decides_whether_a_running_gateway_can_be_reused() {
+        let prod = profile();
+        assert_eq!(prod, profile());
+        // A different account on the same control plane needs its own data partition.
+        assert_ne!(
+            prod,
+            Profile {
+                origin: "https://api.concors.dev".into(),
+                user: "user_2".into(),
+            }
+        );
+        // So does the same user against a different control plane.
+        assert_ne!(
+            prod,
+            Profile {
+                origin: "http://localhost:3000".into(),
+                user: "user_1".into(),
+            }
+        );
     }
 }
