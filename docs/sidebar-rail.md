@@ -5,6 +5,10 @@ The desktop sidebar collapses from 216 px to a 44 px navigation rail. Controls h
 follow the selected appearance. Settings keeps its dedicated, full-width sidebar,
 and mobile keeps its existing swipe sidebar.
 
+- The expanded machine switcher shares the section rows' icon and label insets.
+  Its chevron sits beside the name; long names truncate before the chevron, leaving
+  Search and Collapse accessible. The header aligns with the page title, and the
+  open menu keeps its sidebar-sized width even when the trigger is short.
 - Machine switching, expand/collapse, Search and Account remain accessible.
 - Project and agent rows show tooltips on hover or keyboard focus in both layouts.
   Other controls (Search, machine switcher, expand/collapse, section menus and
