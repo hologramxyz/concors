@@ -348,7 +348,7 @@ test("sidebar pushes the workspace and settings opens as a drawer over the same 
   await expect(sidebar).toBeVisible();
   await expect(sidebar.getByText("Workspaces", { exact: true })).toBeVisible();
   await expect(sidebar.getByText("Agents", { exact: true })).toBeVisible();
-  await expect(sidebar.getByText("Servers", { exact: true })).toBeVisible();
+  await expect(sidebar.getByText("Processes", { exact: true })).toBeVisible();
   await expect
     .poll(() => ui.getByTestId("mobile-workspace").evaluate((el) => el.getBoundingClientRect().x))
     .toBeGreaterThan(250);

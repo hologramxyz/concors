@@ -51,7 +51,7 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
       "aria-expanded",
       "true",
     );
-    await expect(sidebar.getByRole("button", { name: "Servers", exact: true })).toHaveAttribute(
+    await expect(sidebar.getByRole("button", { name: "Processes", exact: true })).toHaveAttribute(
       "aria-expanded",
       "true",
     );
