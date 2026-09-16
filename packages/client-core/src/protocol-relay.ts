@@ -13,6 +13,8 @@ export type RelayConnection = Pick<
   | "workspace"
   | "terminals"
   | "subscribeWorkspace"
+  | "onSchedules"
+  | "requestSchedule"
   | "onAgent"
   | "onTerminal"
   | "subscribeProjectSetups"
@@ -62,6 +64,9 @@ export function createProtocolRelay(
             emit({ type: "workspace.snapshot", snapshot }),
           ),
           connection.onAgent(emit),
+          connection.onSchedules((schedules) => {
+            if (schedules) emit({ type: "schedule.list", schedules });
+          }),
           connection.onTerminal(emit),
           connection.subscribeProjectSetups((setups) => emit({ type: "project.setups", setups })),
         );
@@ -92,6 +97,9 @@ export function createProtocolRelay(
           break;
         case "project.request":
           emit(await connection.requestProject(message.operation, message.requestId));
+          break;
+        case "schedule.request":
+          emit(await connection.requestSchedule(message.operation, message.requestId));
           break;
         case "theme.request":
           emit(await connection.requestThemes(message.requestId));
