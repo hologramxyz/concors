@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { mkdirSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
@@ -14,6 +13,8 @@ import { loadConfig, loadTls, ConfigError } from "./managed/config.ts";
 import { createTokenVerifier } from "./managed/auth.ts";
 import { createLogger } from "./managed/log.ts";
 import { DAEMON_VERSION } from "./version.ts";
+import { ProfileError, resolveDataDir } from "./profile.ts";
+import { adoptLegacyData } from "./profile-migration.ts";
 
 const USAGE = `concors-daemon ${DAEMON_VERSION}
 
@@ -31,6 +32,10 @@ Options:
   --port <port>    Port to bind, 0 = random free port (default: 7420, env: CONCORS_DAEMON_PORT)
   --log-level <l>  fatal|error|warn|info|debug|trace|silent (default: info, env: CONCORS_DAEMON_LOG_LEVEL)
   --managed-config <path>  Managed TLS gateway config (env: CONCORS_DAEMON_MANAGED_CONFIG)
+  --profile-origin <url>   Control-plane origin selecting the data partition
+                           (env: CONCORS_PROFILE_ORIGIN)
+  --profile-user <id>      Signed-in user id selecting the data partition
+                           (env: CONCORS_PROFILE_USER)
   --ephemeral      Own sessions in this process, for isolated tests and temporary machines
   -v, --version    Print the daemon version and exit
   -h, --help       Show this help
@@ -45,6 +50,8 @@ interface ParsedCli {
   readonly logLevel: string | undefined;
   readonly ephemeral: boolean;
   readonly managedConfig: string | undefined;
+  readonly profileOrigin: string | undefined;
+  readonly profileUser: string | undefined;
 }
 
 export function parseCli(argv: readonly string[]): ParsedCli {
@@ -59,6 +66,8 @@ export function parseCli(argv: readonly string[]): ParsedCli {
       port: { type: "string" },
       "log-level": { type: "string" },
       "managed-config": { type: "string" },
+      "profile-origin": { type: "string" },
+      "profile-user": { type: "string" },
       ephemeral: { type: "boolean", default: false },
     },
   });
@@ -72,6 +81,17 @@ export function parseCli(argv: readonly string[]): ParsedCli {
     logLevel: values["log-level"],
     ephemeral: values.ephemeral,
     managedConfig: values["managed-config"],
+    profileOrigin: values["profile-origin"],
+    profileUser: values["profile-user"],
+  };
+}
+
+/** Explicit flags win over the environment, so a supervisor can pin a profile per invocation. */
+function profileEnv(cli: ParsedCli): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    ...(cli.profileOrigin ? { CONCORS_PROFILE_ORIGIN: cli.profileOrigin } : {}),
+    ...(cli.profileUser ? { CONCORS_PROFILE_USER: cli.profileUser } : {}),
   };
 }
 
@@ -87,7 +107,9 @@ async function serve(cli: ParsedCli): Promise<number> {
     logLevel: cli.logLevel,
   });
   const logger = createLogger(undefined, config.logLevel);
-  const dataDir = process.env["CONCORS_DATA_DIR"] ?? join(homedir(), ".concors");
+  const dataDir = resolveDataDir(profileEnv(cli));
+  // Adopt an existing unpartitioned install before anything opens the database.
+  if (!cli.ephemeral) await adoptLegacyData(dataDir, profileEnv(cli));
   mkdirSync(dataDir, { recursive: true, mode: 0o700 });
   const server = cli.ephemeral
     ? createDaemonServer(config, { workspacePath: join(dataDir, "workspace.sqlite") })
@@ -159,22 +181,26 @@ export async function main(argv: readonly string[]): Promise<number> {
 
   switch (cli.command) {
     case "wait-host":
-      await waitForSessionHost(process.env["CONCORS_DATA_DIR"] ?? join(homedir(), ".concors"));
+      await waitForSessionHost(resolveDataDir(profileEnv(cli)));
       return 0;
     case "session-host":
       await runSessionHost(
-        process.env["CONCORS_DATA_DIR"] ?? join(homedir(), ".concors"),
+        resolveDataDir(profileEnv(cli)),
         loadDaemonConfig({ logLevel: cli.logLevel }),
       );
       return 0;
     case "stop-host":
-      await stopSessionHost(process.env["CONCORS_DATA_DIR"] ?? join(homedir(), ".concors"));
+      await stopSessionHost(resolveDataDir(profileEnv(cli)));
       return 0;
     case "serve":
       try {
         return await serve(cli);
       } catch (err) {
-        if (err instanceof DaemonConfigError || err instanceof ConfigError) {
+        if (
+          err instanceof DaemonConfigError ||
+          err instanceof ConfigError ||
+          err instanceof ProfileError
+        ) {
           console.error(err.message);
           return 2;
         }

@@ -7,7 +7,7 @@
  */
 import { isTauri as tauriIsTauri } from "@tauri-apps/api/core";
 
-export { localDaemon, type LocalDaemonStatus } from "./local-daemon.ts";
+export { localDaemon, type DaemonIdentity, type LocalDaemonStatus } from "./local-daemon.ts";
 export { openExternal } from "./open-external.ts";
 
 /** `true` when running inside the Tauri webview, `false` in a plain browser (`pnpm desktop:web:dev`). */
