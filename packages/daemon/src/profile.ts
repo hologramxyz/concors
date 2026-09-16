@@ -99,3 +99,21 @@ export function resolvedDataDirEnv(
   delete next["CONCORS_PROFILE_USER"];
   return next;
 }
+
+/**
+ * Makes `directory` the authoritative data directory for this process and everything it spawns.
+ *
+ * Several components resolve their own paths from `CONCORS_DATA_DIR` rather than being handed a
+ * directory (the provider registry, for one). Leaving the base directory in place would let those
+ * read from outside the partition the workspace database lives in. Dropping the profile variables
+ * at the same time keeps the result idempotent: resolving again yields the same directory instead
+ * of nesting another profile beneath it.
+ */
+export function applyResolvedDataDir(
+  directory: string,
+  env: NodeJS.ProcessEnv = process.env,
+): void {
+  env["CONCORS_DATA_DIR"] = directory;
+  delete env["CONCORS_PROFILE_ORIGIN"];
+  delete env["CONCORS_PROFILE_USER"];
+}
