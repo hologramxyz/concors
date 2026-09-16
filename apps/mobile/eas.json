@@ -29,7 +29,11 @@
       "autoIncrement": true,
       "distribution": "store",
       "environment": "production",
-      "env": { "APP_VARIANT": "production", "EXPO_PUBLIC_DEMO": "false" },
+      "env": {
+        "APP_VARIANT": "production",
+        "EXPO_PUBLIC_DEMO": "false",
+        "EXPO_PUBLIC_API_URL": "https://api.concors.dev"
+      },
       "android": { "buildType": "app-bundle" }
     },
     "production": {
