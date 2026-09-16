@@ -57,7 +57,15 @@ export class ScheduleStore {
   remember(request: ScheduleRequest, result: ScheduleResult): void {
     this.db
       .prepare("INSERT INTO receipts (id,request,result) VALUES (?,?,?)")
-      .run(request.requestId, JSON.stringify(request), JSON.stringify(result));
+      .run(
+        request.requestId,
+        JSON.stringify(request),
+        JSON.stringify(
+          result.outcome.status === "ok"
+            ? { ...result, outcome: { status: "ok", schedules: [] } }
+            : result,
+        ),
+      );
     this.db.exec(
       "DELETE FROM receipts WHERE rowid NOT IN (SELECT rowid FROM receipts ORDER BY rowid DESC LIMIT 2048)",
     );
