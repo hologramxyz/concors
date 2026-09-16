@@ -525,8 +525,9 @@ function Split({
         aria-valuemin={10}
         aria-valuemax={90}
         aria-disabled={!canEdit}
+        data-resizing={preview !== null || undefined}
         tabIndex={canEdit ? 0 : -1}
-        className={`shrink-0 touch-none rounded hover:bg-primary/30 focus-visible:bg-primary/30 focus-visible:outline-none ${horizontal ? "w-2 cursor-col-resize" : "h-2 cursor-row-resize"}`}
+        className={`pane-resize-handle shrink-0 touch-none ${horizontal ? "w-2 cursor-col-resize" : "h-2 cursor-row-resize"}`}
         onPointerDown={(event) => {
           if (!canEdit) return;
           dragging.current = node.ratio;
