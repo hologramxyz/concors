@@ -52,7 +52,7 @@ export function AppSidebar(props: AppSidebarProps) {
         <div
           className={cn(
             "flex shrink-0 items-center gap-1",
-            props.collapsed ? "m-[6px] flex-col" : "m-2 h-9 justify-between",
+            props.collapsed ? "m-[6px] flex-col" : "m-2 h-11",
           )}
         >
           <MachineSwitcher
