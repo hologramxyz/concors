@@ -16,22 +16,26 @@ test account/machine. iPhone dictation uses the keyboard microphone, not desktop
 
 ## Current state
 
-Based on desktop main `16fbab0` (PRs #102–104). Shared chat/dictation changes are bundled
-automatically; native startup now uses the brand mark during session restoration. Settings →
-Diagnostics shows the phone's version/build and actual API instead of desktop's default URL.
+Updated from desktop main `e6e0fe8` (including PRs #106, #108, #109 and #113). Shared desktop UI
+changes are bundled automatically; native startup uses the brand mark during session restoration.
+Settings → Diagnostics shows the phone's version/build and actual API instead of desktop's default URL.
 
-On 2026-09-15, this environment had no Expo login, owner/project ID or Apple app ID.
-`api.concors.dev` failed DNS resolution here. The existing desktop development backend returned
-JSON HTTP 401 for an unauthenticated account request. **The owner must confirm the beta backend**
-and verify a real account/machine on it. No automatic fallback to a development server was added.
-No signed IPA, TestFlight upload or physical-device acceptance is claimed. Full release gates
-remain pending in the [release checklist](mobile-release.md).
+On 2026-09-16, the owner confirmed active developer accounts, the Expo project `@opser/concors`
+(`cbfccc75-202c-461c-a19d-46419a248dcd`), and Apple app ID `6812901549`. These public identifiers
+are now linked in the app/build configuration. The owner approved the Railway development backend
+for this beta; the local TestFlight configuration and unauthenticated HTTPS API probe passed.
+No automatic fallback to a development server was added. Expo login, Apple signing, and a real
+account/machine still require verification. No signed IPA, TestFlight upload or physical-device
+acceptance is claimed. Full release gates remain pending in the [release checklist](mobile-release.md).
 
 ## 1. Account setup
 
-- Confirm active Apple Developer membership/agreements. Create identifier `dev.concors.mobile`
-  and a **Concors** iOS app in App Store Connect using that bundle ID. Save its **numeric Apple ID**.
-- Create/link the team's Expo project, slug `concors-mobile`. Save the owner and project UUID.
+- Use the registered identifier `dev.concors.mobile` and App Store Connect app `6812901549`.
+  The App Store listing name may include a tagline; the installed app remains **Concors**.
+- Use the team's existing [Expo project `@opser/concors`](https://expo.dev/accounts/opser/projects/concors),
+  slug `concors`, project ID `cbfccc75-202c-461c-a19d-46419a248dcd`. Do not create a duplicate project.
+  App config defaults to this project; explicit environment overrides remain supported, including
+  the empty values used to keep Personal Team builds unlinked.
 - Create an internal TestFlight group and give the tester eligible App Store Connect access to
   this app. The account holder can test their own app. Other testers require external testing and
   potentially Beta App Review. See [Apple's internal tester instructions](https://developer.apple.com/help/app-store-connect/test-a-beta-version/add-internal-testers).
@@ -46,10 +50,10 @@ With Node 24 / pnpm 11.1.1, create gitignored `apps/mobile/.env.local` using rea
 ```dotenv
 APP_VARIANT=production
 EXPO_PUBLIC_DEMO=false
-EXPO_PUBLIC_API_URL=https://YOUR-CONFIRMED-BACKEND
-EXPO_PUBLIC_EAS_PROJECT_ID=YOUR-EXPO-PROJECT-UUID
-EXPO_OWNER=YOUR-EXPO-OWNER
-CONCORS_ASC_APP_ID=YOUR-NUMERIC-APPLE-APP-ID
+EXPO_PUBLIC_API_URL=https://concors-server-dev.up.railway.app
+EXPO_PUBLIC_EAS_PROJECT_ID=cbfccc75-202c-461c-a19d-46419a248dcd
+EXPO_OWNER=opser
+CONCORS_ASC_APP_ID=6812901549
 ```
 
 Do not include `EXPO_PUBLIC_DEV_DAEMON_URL` or `CONCORS_MOBILE_WEB_BASE_PATH`. The checker reads
@@ -83,9 +87,9 @@ Confirm the owner/project. In its **production EAS environment**, configure the 
 The candidate profile already sets the production variant and disables demo. Local `.env.local`
 is gitignored and does not replace cloud variables. Never put credentials in `EXPO_PUBLIC_*`.
 
-Set `submit.candidate.ios.ascAppId` in `apps/mobile/eas.json` to the real numeric Apple app ID
-as a string. This public identifier may be committed once known; until then EAS Submit asks
-interactively. Preflight rejects disagreement with `CONCORS_ASC_APP_ID`.
+`submit.candidate.ios.ascAppId` and `submit.production.ios.ascAppId` in `apps/mobile/eas.json`
+already target Apple app `6812901549`. This is a public identifier, not an Apple login.
+Preflight rejects disagreement with `CONCORS_ASC_APP_ID`.
 
 ```bash
 pnpm testflight:check

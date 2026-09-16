@@ -34,7 +34,13 @@
     }
   },
   "submit": {
-    "candidate": { "ios": {}, "android": { "track": "internal", "releaseStatus": "draft" } },
-    "production": { "ios": {}, "android": { "track": "internal", "releaseStatus": "draft" } }
+    "candidate": {
+      "ios": { "ascAppId": "6812901549" },
+      "android": { "track": "internal", "releaseStatus": "draft" }
+    },
+    "production": {
+      "ios": { "ascAppId": "6812901549" },
+      "android": { "track": "internal", "releaseStatus": "draft" }
+    }
   }
 }
