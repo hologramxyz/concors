@@ -11,6 +11,7 @@
 
 mod daemon;
 mod notifications;
+mod sign_in;
 
 use tauri::Manager;
 
@@ -24,12 +25,15 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .manage(daemon::LocalDaemon::default())
         .manage(notifications::Notifications::default())
+        .manage(sign_in::SignInListener::default())
         .invoke_handler(tauri::generate_handler![
             notifications::show_agent_notification,
             notifications::dismiss_agent_notification,
             daemon::local_daemon_status,
             daemon::start_local_daemon,
             daemon::stop_local_daemon,
+            sign_in::start_sign_in_listener,
+            sign_in::cancel_sign_in_listener,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Concors")
