@@ -4,7 +4,7 @@ import { useProjectIcons } from "@/workspace/use-project-icons";
 import { projectIconKey } from "@/workspace/project-icons";
 import { useShortcutLabels } from "@/shortcuts/preferences-context";
 import { AgentSidebar } from "@/agents/list";
-import { ProcessesSidebar } from "@/host/processes-sidebar";
+import { PreviewsSidebar } from "@/host/previews-sidebar";
 import { SidebarSection } from "./sidebar-section";
 import { PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
 import { TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -66,6 +66,7 @@ export function AppSidebar(props: AppSidebarProps) {
             selected={props.selectedHost}
             connected={props.machineConnected}
             onSelect={props.onSelectMachine}
+            onOpenResources={props.onOpenResources}
           />
           <div
             className={cn(
@@ -170,7 +171,7 @@ export function AppSidebar(props: AppSidebarProps) {
               <AgentSidebar onSelect={props.onSelectAgent} workspace={props.workspace} />
             </SidebarSection>
           )}
-          <ProcessesSidebar compact={props.collapsed} onOpen={props.onOpenResources} />
+          <PreviewsSidebar compact={props.collapsed} />
         </div>
         <div className={props.collapsed ? "p-[6px]" : "p-2"}>
           <AccountMenu

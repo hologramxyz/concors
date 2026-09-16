@@ -3,7 +3,7 @@ import { machineStatusLabel } from "@concors/client-core";
 import { useMachineList } from "@/machines/use-machines";
 import { LOCAL_HOST, loadHosts, machineAvailability, machineHost, type Host } from "./machines";
 import { useEffect, useState } from "react";
-import { ChevronDown, Check, Settings2 } from "lucide-react";
+import { Activity, ChevronDown, Check, Settings2 } from "lucide-react";
 import { TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import {
@@ -21,6 +21,7 @@ export function MachineSwitcher({
   connected,
   onSelect,
   onViewCloud,
+  onOpenResources,
   compact = false,
 }: {
   organizationId: string | undefined;
@@ -29,6 +30,7 @@ export function MachineSwitcher({
   connected: boolean;
   onSelect: (host: Host) => void;
   onViewCloud: (machineId?: string) => void;
+  onOpenResources: () => void;
   compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -159,6 +161,10 @@ export function MachineSwitcher({
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
+        <DropdownMenuItem className="min-h-[32px] gap-2 px-[8px]" onSelect={onOpenResources}>
+          <Activity />
+          Resources
+        </DropdownMenuItem>
         <DropdownMenuItem className="min-h-[32px] gap-2 px-[8px]" onSelect={() => onViewCloud()}>
           <Settings2 />
           Manage machines
