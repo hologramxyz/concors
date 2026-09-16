@@ -70,7 +70,7 @@ body {
   justify-content: center;
   width: 100%;
   min-width: 0;
-  min-height: 48px;
+  min-height: 44px;
   padding: 5px 14px;
   text-align: left;
   font-size: 15px;
@@ -273,7 +273,7 @@ body {
   min-width: 0;
 }
 .mobile-sidebar-machine .mobile-select-trigger {
-  height: 48px;
+  height: 44px;
 }
 .mobile-icon {
   display: inline-flex;
@@ -484,8 +484,8 @@ body {
   }
 }
 :is(.mobile-header, .mobile-files-header, .mobile-sidebar-head) .mobile-icon {
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   border-radius: var(--mobile-round-radius);
   color: var(--foreground);
 }
@@ -574,7 +574,7 @@ body {
   flex: 1;
   padding: 5px 14px;
   gap: 6px;
-  min-height: 48px;
+  min-height: 44px;
   font-size: 13px;
 }
 .mobile-header .mobile-picker {

@@ -6,6 +6,14 @@ import {
   nativeButtonShape,
 } from "./appearance";
 
+it("starts new installs with round iOS controls without overriding saved themes", async () => {
+  expect(DEFAULT_APPEARANCE.corners).toBe("rounded");
+  const saved = { ...DEFAULT_APPEARANCE, corners: "subtle" };
+  const store = createAppearanceStore({ get: async () => JSON.stringify(saved), set: vi.fn() });
+  await store.hydrate();
+  expect(store.getSnapshot().corners).toBe("subtle");
+});
+
 it.each([
   ["square", 0, ["roundedRectangle", 0], ["roundedRectangle", 0]],
   ["subtle", 6, ["roundedRectangle", 6], ["roundedRectangle", 6]],
