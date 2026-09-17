@@ -92,12 +92,13 @@ jobs:
       - name: Install the package on clean Arch and run the bundled daemon
         env:
           VERSION: ${{ steps.version.outputs.version }}
-        # --nodeps skips the GUI libraries an installing machine supplies; the daemon is
-        # self-contained, so it must run in a container that has nothing else.
+        # -dd skips every dependency check (once would only skip version checks), so the GUI
+        # libraries an installing machine supplies are not needed here. The daemon is
+        # self-contained, so it must still run in a container that has nothing else.
         run: |
           docker run --rm --network none -e VERSION \
             -v "$PWD/apps/desktop/dist/release:/rel:ro" archlinux:base bash -ec '
-              pacman -U --noconfirm --nodeps /rel/concors-bin-*.pkg.tar.zst
+              pacman -U --noconfirm -dd /rel/concors-bin-*.pkg.tar.zst
               test -x /opt/Concors/bin/concors-desktop
               test -x /usr/bin/concors
               test -f /usr/share/applications/concors.desktop
