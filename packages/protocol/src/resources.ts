@@ -3,6 +3,13 @@ import { z } from "zod";
 export const RESOURCES_CAPABILITY = "machine-resources";
 const Bytes = z.number().int().nonnegative();
 const Path = z.string().max(4096);
+export const PreviewProtocolSchema = z.enum(["http", "https"]);
+export type PreviewProtocol = z.infer<typeof PreviewProtocolSchema>;
+export const ProcessPreviewSchema = z.object({
+  port: z.number().int().min(1).max(65535),
+  protocol: PreviewProtocolSchema,
+});
+export type ProcessPreview = z.infer<typeof ProcessPreviewSchema>;
 
 export const MachineProcessSchema = z.object({
   id: z.string().max(120),
@@ -15,6 +22,8 @@ export const MachineProcessSchema = z.object({
   memoryBytes: Bytes.nullable(),
   state: z.enum(["running", "sleeping", "stopped", "zombie", "unknown"]),
   ports: z.array(z.number().int().min(1).max(65535)).max(64),
+  /** HTTP services confirmed by the daemon; absent on older daemons. */
+  previews: z.array(ProcessPreviewSchema).max(64).default([]),
   stopBlocked: z.string().max(500).nullable(),
 });
 export type MachineProcess = z.infer<typeof MachineProcessSchema>;

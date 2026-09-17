@@ -53,7 +53,13 @@ it("bounds process inventories and treats unknown measurements as null", () => {
       },
     ],
   };
-  expect(ProcessSnapshotSchema.safeParse(snapshot).success).toBe(true);
+  expect(ProcessSnapshotSchema.parse(snapshot).processes[0]?.previews).toEqual([]);
+  expect(
+    ProcessSnapshotSchema.parse({
+      ...snapshot,
+      processes: [{ ...snapshot.processes[0], previews: [{ port: 5173, protocol: "http" }] }],
+    }).processes[0]?.previews,
+  ).toEqual([{ port: 5173, protocol: "http" }]);
   expect(
     ProcessSnapshotSchema.safeParse({
       ...snapshot,
