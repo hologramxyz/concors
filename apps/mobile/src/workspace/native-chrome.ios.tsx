@@ -14,13 +14,16 @@ import {
 import { Button, Host, HStack, Image, RNHostView, Text, VStack } from "@expo/ui/swift-ui";
 import {
   accessibilityLabel,
+  background,
   buttonBorderShape,
   buttonStyle,
+  clipShape,
   controlSize,
   disabled,
   font,
   foregroundStyle,
   frame,
+  glassEffect,
   labelStyle,
   lineLimit,
   padding,
@@ -38,6 +41,7 @@ import type {
 } from "@concors/client-core";
 import {
   currentNativeSnapshot,
+  nativeSurfaceLayout,
   reconcileNativeDraft,
   type NativeChromeProps,
 } from "./native-chrome-types";
@@ -113,11 +117,8 @@ export function NativeChrome({ host, snapshot, send }: NativeChromeProps) {
       onLayout={(event) => setSize(event.nativeEvent.layout)}
     >
       {snapshot.surfaces.map((surface) => {
-        const scale = size.width ? size.width / snapshot.viewport.width : 1;
-        const top =
-          surface.content.kind === "composer" && size.height
-            ? size.height - (snapshot.viewport.height - surface.frame.y)
-            : surface.frame.y;
+        const layout = nativeSurfaceLayout(surface, snapshot.viewport, size);
+        const interactive = surface.interactive !== false;
         const emit = (event: NativeSurfaceEvent) =>
           send({
             type: "native-event",
@@ -129,31 +130,35 @@ export function NativeChrome({ host, snapshot, send }: NativeChromeProps) {
         return (
           <View
             key={surface.id}
+            pointerEvents={interactive ? "auto" : "none"}
+            accessibilityElementsHidden={!interactive}
             style={{
               position: "absolute",
-              left: surface.frame.x * scale,
-              top,
-              width: surface.frame.width * scale,
-              height: surface.frame.height,
+              overflow: "hidden",
+              ...layout.clip,
             }}
           >
-            {surface.content.kind === "button" ? (
-              <HeaderButton
-                content={surface.content}
-                corners={host.preferences.corners}
-                dark={dark}
-                glass={availability.glass}
-                emit={emit}
-              />
-            ) : (
-              <Composer
-                content={surface.content}
-                corners={host.preferences.corners}
-                dark={dark}
-                {...availability}
-                emit={emit}
-              />
-            )}
+            <View style={{ position: "absolute", ...layout.content }}>
+              {surface.content.kind === "button" ? (
+                <HeaderButton
+                  content={surface.content}
+                  width={layout.content.width}
+                  height={layout.content.height}
+                  corners={host.preferences.corners}
+                  dark={dark}
+                  glass={availability.glass}
+                  emit={emit}
+                />
+              ) : (
+                <Composer
+                  content={surface.content}
+                  corners={host.preferences.corners}
+                  dark={dark}
+                  {...availability}
+                  emit={emit}
+                />
+              )}
+            </View>
           </View>
         );
       })}
@@ -164,12 +169,16 @@ export function NativeChrome({ host, snapshot, send }: NativeChromeProps) {
 type Emit = (event: NativeSurfaceEvent) => void;
 function HeaderButton({
   content,
+  width,
+  height,
   corners,
   dark,
   glass,
   emit,
 }: {
   content: Extract<NativeSurface["content"], { kind: "button" }>;
+  width: number;
+  height: number;
   corners: CornerStyle;
   dark: boolean;
   glass: boolean;
@@ -205,6 +214,7 @@ function HeaderButton({
     [],
   );
   const pill = !!content.title;
+  const [shape, radius] = nativeButtonShape(corners, pill);
   return (
     <View
       style={styles.fill}
@@ -227,9 +237,19 @@ function HeaderButton({
             emit({ kind: "press", control: "activate" });
           }}
           modifiers={[
-            buttonStyle(glass ? "glass" : "bordered"),
-            buttonBorderShape(...nativeButtonShape(corners, pill)),
-            controlSize("large"),
+            // Styled SwiftUI buttons add their own padding around custom labels.
+            // Size the native button once, then apply real SwiftUI glass to that frame.
+            buttonStyle("plain"),
+            frame({ width, height }),
+            ...(glass
+              ? [
+                  glassEffect({
+                    shape,
+                    cornerRadius: radius,
+                    glass: { variant: "regular", interactive: true },
+                  }),
+                ]
+              : [background(dark ? "#292929" : "#e8e8e3"), clipShape(shape, radius)]),
             disabled(content.disabled),
             accessibilityLabel(
               [content.label, content.title, content.subtitle].filter(Boolean).join(", "),
@@ -239,14 +259,14 @@ function HeaderButton({
           {pill ? (
             <HStack
               spacing={8}
-              modifiers={[padding({ horizontal: 6 }), frame({ maxWidth: Infinity, height: 36 })]}
+              modifiers={[padding({ horizontal: 12 }), frame({ maxWidth: Infinity })]}
             >
               <VStack
                 alignment="leading"
                 spacing={1}
                 modifiers={[frame({ maxWidth: Infinity, alignment: "leading" })]}
               >
-                <Text modifiers={[font({ size: 14, weight: "semibold" }), lineLimit(1)]}>
+                <Text modifiers={[font({ size: 13, weight: "semibold" }), lineLimit(1)]}>
                   {content.title}
                 </Text>
                 {content.subtitle ? (
@@ -267,7 +287,7 @@ function HeaderButton({
             <Image
               systemName={symbols[content.icon]}
               size={20}
-              modifiers={[frame({ width: 28, height: 28 })]}
+              modifiers={[frame({ width: 20, height: 20 })]}
             />
           )}
         </Button>

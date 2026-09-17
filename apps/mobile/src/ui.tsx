@@ -49,7 +49,7 @@ export function useTheme() {
   const { preferences } = useAppearance();
   const systemDark = useColorScheme() === "dark";
   const isDark = preferences.theme === "dark" || (preferences.theme === "system" && systemDark);
-  return { ...(isDark ? dark : light), radius: cornerRadius(preferences.corners) };
+  return { ...(isDark ? dark : light), dark: isDark, radius: cornerRadius(preferences.corners) };
 }
 export function Copy({
   children,

@@ -15,7 +15,7 @@ import {
   useColorScheme,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import Constants from "expo-constants";
@@ -56,6 +56,22 @@ export function WorkspaceHost() {
   );
 }
 function SignedInWorkspace() {
+  const insets = useSafeAreaInsets();
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  useEffect(() => {
+    const show = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      () => setKeyboardVisible(true),
+    );
+    const hide = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => setKeyboardVisible(false),
+    );
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
   const auth = useAuth();
   const query = useQueryClient();
   const machines = useMachines();
@@ -151,6 +167,7 @@ function SignedInWorkspace() {
           demo: config.demo,
           native: Platform.OS !== "web",
           nativeChrome: Platform.OS === "ios",
+          safeArea: { ...insets, bottom: keyboardVisible ? 0 : insets.bottom },
           systemDark,
           preferences,
           pushEnabled: push,
@@ -360,14 +377,14 @@ function SignedInWorkspace() {
       DEFAULT_COLOR_THEME);
   const backgroundColor = mobileThemeBackground(colorTheme, dark ? "dark" : "light");
   return (
-    <SafeAreaView testID="workspace-safe-area" style={{ flex: 1, backgroundColor }}>
+    <View testID="workspace-safe-area" style={{ flex: 1, backgroundColor }}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
       >
         <View style={{ flex: 1, minHeight: 0 }}>
           {failed ? (
-            <View style={{ padding: 24, gap: 16 }}>
+            <SafeAreaView style={{ padding: 24, gap: 16 }}>
               <Copy>The workspace renderer stopped. Your machine sessions are still running.</Copy>
               <Button
                 onPress={() => {
@@ -378,7 +395,7 @@ function SignedInWorkspace() {
               >
                 Reload workspace
               </Button>
-            </View>
+            </SafeAreaView>
           ) : (
             <WorkspaceRenderer
               key={rendererKey}
@@ -390,6 +407,6 @@ function SignedInWorkspace() {
           )}
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }

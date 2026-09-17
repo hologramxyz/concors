@@ -103,6 +103,14 @@ export const MobileStateSchema = z.object({
   demo: z.boolean(),
   native: z.boolean(),
   nativeChrome: z.boolean().optional(),
+  safeArea: z
+    .object({
+      top: z.number().finite().min(0).max(200),
+      bottom: z.number().finite().min(0).max(200),
+      left: z.number().finite().min(0).max(200),
+      right: z.number().finite().min(0).max(200),
+    })
+    .optional(),
   systemDark: z.boolean(),
   preferences: MobilePreferencesSchema,
   pushEnabled: z.boolean(),
