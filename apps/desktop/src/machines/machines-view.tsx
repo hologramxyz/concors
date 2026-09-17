@@ -3,7 +3,17 @@ import { MachineIconPicker } from "./machine-icon-picker";
 import { DevelopmentToolsStatus } from "./development-tools-status";
 import type { Machine } from "@concors/api-client";
 import { cn } from "cn";
-import { CalendarX, Check, Cloud, Copy, LoaderCircle, Plus, RefreshCw, Undo2 } from "lucide-react";
+import {
+  CalendarX,
+  Check,
+  Cloud,
+  Copy,
+  KeyRound,
+  LoaderCircle,
+  Plus,
+  RefreshCw,
+  Undo2,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { activeOrganization, type SignedInAuth } from "@/auth/auth-state";
@@ -31,6 +41,7 @@ import {
   type StatusTone,
 } from "./format.ts";
 import { describeMachinesError, useMachines } from "./use-machines.ts";
+import { useDeviceSsh, type DeviceSsh } from "./device-ssh.ts";
 
 export interface MachinesViewProps {
   readonly auth: SignedInAuth;
@@ -48,6 +59,7 @@ export function MachinesView({
 }: MachinesViewProps) {
   const organization = activeOrganization(auth);
   const state = useMachines(organization?.id);
+  const ssh = useDeviceSsh(organization?.id);
   const [creating, setCreating] = useState(false);
   const [cancelling, setCancelling] = useState<Machine | null>(null);
   const [resuming, setResuming] = useState<string | null>(null);
@@ -159,6 +171,7 @@ export function MachinesView({
             >
               <MachineCard
                 machine={machine}
+                ssh={ssh}
                 onRename={(name) => state.rename(machine.id, name)}
                 onIconChange={(icon) => state.setIcon(machine.id, icon)}
                 onRetryTools={() => state.retryTools(machine.id)}
@@ -216,6 +229,7 @@ const TONE_CLASS: Record<StatusTone, string> = {
 
 function MachineCard({
   machine,
+  ssh,
   onRename,
   onIconChange,
   onRetryTools,
@@ -224,6 +238,7 @@ function MachineCard({
   resuming,
 }: {
   readonly machine: Machine;
+  readonly ssh: DeviceSsh;
   readonly onRename: (name: string) => Promise<void>;
   readonly onIconChange: (icon: string | null) => Promise<void>;
   readonly onRetryTools: () => Promise<void>;
@@ -231,7 +246,6 @@ function MachineCard({
   readonly onResume: () => void;
   readonly resuming: boolean;
 }) {
-  const command = sshCommand(machine);
   const tone = STATUS_TONE[machine.status];
   const ending = describeEnding(machine);
   return (
@@ -325,15 +339,8 @@ function MachineCard({
             <dt className="text-muted-foreground">Address</dt>
             <dd className="selectable font-mono break-all">{machine.ipv4 ?? "assigning…"}</dd>
             <dt className="text-muted-foreground">SSH</dt>
-            <dd className="flex min-w-0 items-center gap-2">
-              {command ? (
-                <>
-                  <code className="selectable font-mono break-all">{command}</code>
-                  <CopyButton text={command} />
-                </>
-              ) : (
-                <span className="text-muted-foreground">—</span>
-              )}
+            <dd className="min-w-0">
+              <SshAccess machine={machine} ssh={ssh} />
             </dd>
             {machine.paidUntil && (
               <>
@@ -351,6 +358,65 @@ function MachineCard({
       )}
       <DevelopmentToolsStatus machine={machine} onRetry={onRetryTools} />
     </div>
+  );
+}
+
+/**
+ * How to reach this machine from a terminal. Using a machine in Concors never needs SSH; this is
+ * for people who want plain `ssh`. The desktop app sets up a key for this computer on request,
+ * elsewhere a command appears once the person has added a key of their own in Settings.
+ */
+function SshAccess({ machine, ssh }: { readonly machine: Machine; readonly ssh: DeviceSsh }) {
+  const plain = sshCommand(machine);
+  if (plain === null) return <span className="text-muted-foreground">—</span>;
+
+  if (ssh.supported) {
+    if (ssh.registered && ssh.key) {
+      const command = sshCommand(machine, ssh.key.path) ?? plain;
+      return (
+        <div className="min-w-0 space-y-1">
+          <div className="flex min-w-0 items-center gap-2">
+            <code className="selectable font-mono break-all">{command}</code>
+            <CopyButton text={command} />
+          </div>
+          {ssh.justRegistered && (
+            <p role="status" className="text-xs text-muted-foreground">
+              Your key reaches this machine within a few seconds.
+            </p>
+          )}
+        </div>
+      );
+    }
+    return (
+      <div className="flex min-w-0 flex-col items-start gap-1.5">
+        <Button variant="outline" size="sm" disabled={ssh.settingUp} onClick={ssh.setUp}>
+          <KeyRound data-icon="inline-start" aria-hidden="true" />
+          {ssh.settingUp ? "Setting up…" : "Set up SSH on this computer"}
+        </Button>
+        {ssh.error ? (
+          <p role="alert" className="text-xs break-words text-destructive">
+            {ssh.error}
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Only needed to connect from your own terminal.
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  if (ssh.hasKeys)
+    return (
+      <div className="flex min-w-0 items-center gap-2">
+        <code className="selectable font-mono break-all">{plain}</code>
+        <CopyButton text={plain} />
+      </div>
+    );
+  return (
+    <span className="text-muted-foreground">
+      Add an SSH key in Settings to connect from your own terminal.
+    </span>
   );
 }
 

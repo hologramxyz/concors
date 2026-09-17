@@ -87,6 +87,22 @@ describe("sshCommand", () => {
     expect(sshCommand({ ...READY, accessReadyAt: null })).toBeNull();
     expect(sshCommand({ ...READY, ipv4: null })).toBeNull();
     expect(sshCommand({ ...READY, status: "provisioning" })).toBeNull();
+  });
+
+  it("names this computer's key so ssh uses it", () => {
+    expect(sshCommand(READY, "/home/ada/.ssh/concors_ed25519")).toBe(
+      "ssh -i /home/ada/.ssh/concors_ed25519 ubuntu@147.135.1.2",
+    );
+    expect(sshCommand(READY, "C:\\Users\\Ada\\.ssh\\concors_ed25519")).toBe(
+      "ssh -i C:\\Users\\Ada\\.ssh\\concors_ed25519 ubuntu@147.135.1.2",
+    );
+  });
+
+  it("quotes a key path that a shell would split", () => {
+    expect(sshCommand(READY, "/Users/Ada Lovelace/.ssh/concors_ed25519")).toBe(
+      'ssh -i "/Users/Ada Lovelace/.ssh/concors_ed25519" ubuntu@147.135.1.2',
+    );
+    expect(sshCommand({ ...READY, accessReadyAt: null }, "/k")).toBeNull();
     expect(sshCommand({ ...READY, status: "stopped" })).toBe("ssh ubuntu@147.135.1.2");
   });
 });
