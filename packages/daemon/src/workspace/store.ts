@@ -403,6 +403,14 @@ export class WorkspaceStore {
       .get(sessionId, nativeId);
     return row ? String(row["turn_id"]) : nativeId;
   }
+  createBackgroundAgent(info: AgentInfo): void {
+    if (!this.snapshot().projects.some((p) => p.id === info.projectId))
+      throw new Error("Project no longer exists");
+    if (this.agents().length >= 128) throw new Error("Agent session limit reached (128)");
+    this.#db
+      .prepare("INSERT INTO agents (id,info) VALUES (?,?)")
+      .run(info.id, JSON.stringify(AgentInfoSchema.parse(info)));
+  }
   saveAgent(info: AgentInfo): void {
     this.#db
       .prepare("UPDATE agents SET info = ? WHERE id = ?")
@@ -541,6 +549,49 @@ export class WorkspaceStore {
         .run(request.requestId, JSON.stringify(request), info.id);
       this.#db.exec("COMMIT");
       return info;
+    } catch (error) {
+      this.#db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+  /** Bring a saved/background agent into a tab without changing or restarting its turn. */
+  openAgent(request: AgentRequest): void {
+    if (request.operation.kind !== "open-session") throw new Error("Expected open session");
+    this.#db.exec("BEGIN IMMEDIATE");
+    try {
+      const info = this.agent(request.operation.sessionId);
+      let state = this.snapshot();
+      const project = state.projects.find((p) => p.id === info.projectId);
+      if (!project) throw new Error("The agent's workspace is unavailable");
+      if (
+        !project.tabs.some((tab) =>
+          tab.nodes.some((node) => node.kind === "pane" && node.sessionId === info.id),
+        )
+      ) {
+        const tabId = randomUUID(),
+          paneId = randomUUID();
+        state = applyWorkspaceOperation(state, {
+          kind: "tab.create",
+          projectId: project.id,
+          expectedVersion: project.version,
+          tabId,
+          paneId,
+          name: nextWorkspaceTabName(project.tabs),
+          profile: "chat",
+        });
+        const pane = state.projects
+          .find((p) => p.id === project.id)
+          ?.tabs.find((t) => t.id === tabId)
+          ?.nodes.find((n) => n.id === paneId);
+        if (!pane || pane.kind !== "pane") throw new Error("Could not open agent tab");
+        pane.sessionId = info.id;
+        pane.directory = info.directory;
+        this.#db.prepare("UPDATE workspace SET snapshot=? WHERE id=1").run(JSON.stringify(state));
+      }
+      this.#db
+        .prepare("INSERT INTO agent_requests (id,request,session_id) VALUES (?,?,?)")
+        .run(request.requestId, JSON.stringify(request), info.id);
+      this.#db.exec("COMMIT");
     } catch (error) {
       this.#db.exec("ROLLBACK");
       throw error;

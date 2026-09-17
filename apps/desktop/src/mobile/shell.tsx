@@ -1,3 +1,5 @@
+import { SchedulesNav } from "@/schedules/nav";
+import { SchedulesPage } from "@/schedules/page";
 import { ColorThemeProvider } from "@/theme/color-theme-provider";
 import { machineAvailability } from "@concors/client-core";
 import {
@@ -120,6 +122,7 @@ function MobileWorkspaceContent({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [creatingTerminalProfile, setCreatingTerminalProfile] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [schedulesOpen, setSchedulesOpen] = useState(false);
   const [resourcesOpen, setResourcesOpen] = useState(false);
   const [settingsPage, setSettingsPage] = useState<SettingsPage>("account");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -141,6 +144,7 @@ function MobileWorkspaceContent({
     (projectId: string) => {
       setLocal({ machineId: host.machineId, target: { projectId } });
       setSidebarOpen(false);
+      setSchedulesOpen(false);
       setError(null);
     },
     [host.machineId],
@@ -318,6 +322,7 @@ function MobileWorkspaceContent({
     };
   }, [sidebarOpen]);
   const select = (target: MobileTarget) => {
+    setSchedulesOpen(false);
     if (project && tab && pane)
       memories.current.set(`${host.machineId}:${project.id}`, {
         projectId: project.id,
@@ -335,9 +340,22 @@ function MobileWorkspaceContent({
       const target =
         connection?.workspace && resolveMobileSelection(connection.workspace, { sessionId });
       if (!target?.pane || !target.tab) {
-        setError("This agent's pane has been closed.");
+        if (connection)
+          void connection
+            .requestAgent({ kind: "open-session", sessionId }, crypto.randomUUID())
+            .then((result) => {
+              if (result.outcome.status === "error") throw new Error(result.outcome.message);
+              setLocal({ machineId: host.machineId, target: { sessionId } });
+              setSchedulesOpen(false);
+              setSidebarOpen(false);
+              setError(null);
+            })
+            .catch((cause: unknown) =>
+              setError(cause instanceof Error ? cause.message : "Could not open agent"),
+            );
         return;
       }
+      setSchedulesOpen(false);
       setLocal({
         machineId: host.machineId,
         target: { projectId: target.project.id, tabId: target.tab.id, paneId: target.pane.id },
@@ -403,7 +421,13 @@ function MobileWorkspaceContent({
     setSettingsOpen(true);
   };
   const unobscured =
-    !sidebarOpen && !files.sidebar.open && !settingsOpen && !searchOpen && !addingProject;
+    !sidebarOpen &&
+    !files.sidebar.open &&
+    !settingsOpen &&
+    !resourcesOpen &&
+    !searchOpen &&
+    !addingProject &&
+    !schedulesOpen;
   const cycleTab = (delta: number) => {
     if (!project || !tab || !pane) return;
     const entries = projectPanes(project);
@@ -536,6 +560,13 @@ function MobileWorkspaceContent({
                     </div>
                   )}
                   <nav aria-label="Primary" className="mobile-sidebar-content">
+                    <SchedulesNav
+                      selected={schedulesOpen}
+                      onClick={() => {
+                        setSchedulesOpen(true);
+                        setSidebarOpen(false);
+                      }}
+                    />
                     <SidebarSection
                       title="Workspaces"
                       action={
@@ -634,7 +665,9 @@ function MobileWorkspaceContent({
                       >
                         <Menu />
                       </NativeHeaderButton>
-                      {project ? (
+                      {schedulesOpen ? (
+                        <h1 className="min-w-0 flex-1 truncate text-base font-medium">Schedules</h1>
+                      ) : project ? (
                         <NewTabMenu
                           keyboard={commandsAvailable}
                           disabled={!canEdit}
@@ -661,6 +694,7 @@ function MobileWorkspaceContent({
                         icon="files"
                         id="mobile-files-toggle"
                         className="mobile-icon mobile-glass"
+                        hidden={schedulesOpen}
                         aria-label="Project files"
                         aria-controls="mobile-project-files"
                         aria-expanded={files.sidebar.open}
@@ -705,7 +739,16 @@ function MobileWorkspaceContent({
                           data-pane-id={pane?.id}
                           data-pane-profile={pane?.profile}
                         >
-                          {project && tab && pane ? (
+                          {schedulesOpen ? (
+                            <div className="h-full overflow-y-auto">
+                              <SchedulesPage
+                                key={host.machineId}
+                                workspace={workspace}
+                                connected={!!ready}
+                                onOpenAgent={openAgent}
+                              />
+                            </div>
+                          ) : project && tab && pane ? (
                             <ProjectFileLinks project={project}>
                               {pane.profile === "chat" ? (
                                 <ChatPane
@@ -839,7 +882,10 @@ function MobileWorkspaceContent({
                 onOpenChange={setSearchOpen}
                 onNavigate={(view) => {
                   if (view === "settings") openSettings();
-                  else if (view === "resources") {
+                  else if (view === "schedules") {
+                    setSchedulesOpen(true);
+                    setSidebarOpen(false);
+                  } else if (view === "resources") {
                     setSidebarOpen(false);
                     setResourcesOpen(true);
                   } else setSidebarOpen(true);

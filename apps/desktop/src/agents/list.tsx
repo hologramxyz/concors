@@ -1,3 +1,5 @@
+import { Clock } from "lucide-react";
+import { useSchedules } from "@/schedules/use-schedules";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { useContext } from "react";
 import { CompactLayoutContext } from "@/components/compact-layout";
@@ -18,12 +20,24 @@ export function AgentSidebar({
   workspace: WorkspaceSnapshot | null;
   compact?: boolean;
 }) {
+  const { schedules } = useSchedules();
   const mobile = useContext(CompactLayoutContext);
   const chats = useAgents();
   const terminals = useTerminalSessions();
   const visible = visibleAgentSessions(workspace, chats, terminals);
+  const scheduled = new Set(
+    schedules
+      ?.filter(
+        (s) =>
+          s.enabled || s.runs.some((r) => r.status === "running" || r.status === "needs_input"),
+      )
+      .map((s) => s.sessionId),
+  );
+  const activeChats = chats.filter(
+    (agent) => visible.chats.some((a) => a.id === agent.id) || scheduled.has(agent.id),
+  );
   const agents = [
-    ...visible.chats.map((agent) => ({
+    ...activeChats.map((agent) => ({
       id: agent.id,
       projectId: agent.projectId,
       name: agent.name,
@@ -124,6 +138,12 @@ export function AgentSidebar({
                     </span>
                   </span>
                   {!compact && <span className="min-w-0 flex-1 truncate">{agent.name}</span>}
+                  {!compact && schedules?.some((s) => s.enabled && s.sessionId === agent.id) && (
+                    <Clock
+                      className="size-3.5 shrink-0 text-muted-foreground"
+                      aria-label="Scheduled agent"
+                    />
+                  )}
                 </button>
               </TooltipTrigger>
               <TooltipContent side="right" sideOffset={6}>
@@ -134,6 +154,9 @@ export function AgentSidebar({
                   <p className="font-medium break-words">{projectName}</p>
                   <p className="opacity-75">
                     {status}
+                    {schedules?.some((s) => s.enabled && s.sessionId === agent.id)
+                      ? " · Scheduled"
+                      : ""}
                     {unread ? " · Unread update" : ""}
                   </p>
                 </div>
