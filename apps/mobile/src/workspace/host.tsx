@@ -55,6 +55,30 @@ export function WorkspaceHost() {
     />
   );
 }
+
+async function openExternalLink(value: string, hideFragment = false) {
+  const url = new URL(value);
+  if (!["https:", "mailto:"].includes(url.protocol) || url.username || url.password)
+    throw new Error("Only secure web and email links can be opened");
+  const display = new URL(url);
+  if (hideFragment) display.hash = "";
+  const approved =
+    Platform.OS === "web"
+      ? window.confirm(`Open external link?\n${display.href}`)
+      : await new Promise<boolean>((resolve) =>
+          Alert.alert(
+            "Open external link?",
+            display.href,
+            [
+              { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+              { text: "Open", onPress: () => resolve(true) },
+            ],
+            { cancelable: true, onDismiss: () => resolve(false) },
+          ),
+        );
+  if (approved) await Linking.openURL(url.href);
+}
+
 function SignedInWorkspace() {
   const insets = useSafeAreaInsets();
   const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -283,24 +307,25 @@ function SignedInWorkspace() {
         await setPreferences(action.preferences);
         return;
       case "open-url": {
-        const url = new URL(action.url);
-        if (!["https:", "mailto:"].includes(url.protocol) || url.username || url.password)
-          throw new Error("Only secure web and email links can be opened");
-        const approved =
-          Platform.OS === "web"
-            ? window.confirm(`Open external link?\n${url.href}`)
-            : await new Promise<boolean>((resolve) =>
-                Alert.alert(
-                  "Open external link?",
-                  url.href,
-                  [
-                    { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
-                    { text: "Open", onPress: () => resolve(true) },
-                  ],
-                  { cancelable: true, onDismiss: () => resolve(false) },
-                ),
-              );
-        if (approved) await Linking.openURL(url.href);
+        await openExternalLink(action.url);
+        return;
+      }
+      case "open-preview": {
+        if (!transport) throw new Error("Machine disconnected.");
+        const result = await transport.requestResource({ kind: "processes" }, newRequestId());
+        const confirmed =
+          result.outcome.status === "processes" &&
+          result.outcome.snapshot.processes.some((process) =>
+            process.previews.some(
+              (preview) =>
+                preview.port === action.preview.port &&
+                preview.protocol === action.preview.protocol,
+            ),
+          );
+        if (!confirmed) throw new Error("This preview is no longer available.");
+        const url = transport.previewUrl(action.preview);
+        if (!url) throw new Error("This machine connection does not support browser previews.");
+        await openExternalLink(url, true);
         return;
       }
     }

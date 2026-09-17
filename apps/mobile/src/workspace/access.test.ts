@@ -15,6 +15,7 @@ it("direct access allows workspace controls but never cloud account actions", ()
     { kind: "retry" },
     { kind: "sign-out" },
     { kind: "clipboard", text: "copy" },
+    { kind: "open-preview", preview: { port: 5173, protocol: "http" } },
   ] as const) {
     expect(() => assertWorkspaceActionAllowed(true, false, action)).not.toThrow();
     expect(() => assertWorkspaceActionAllowed(false, false, action)).toThrow("Sign in");

@@ -30,10 +30,9 @@ and mobile keeps its existing swipe sidebar.
 - The middle list scrolls independently, leaving the machine switcher and Account
   accessible in short windows. Navigation and collapsing do not restart sessions
   or discard chat drafts.
-- The empty Servers section is omitted from the rail, with no header icon or
-  placeholder. The expanded sidebar keeps its existing empty state: main does not
-  yet implement discovery or preview links. This change does not expose ports or
-  invent statuses.
+- Previews confirmed by the daemon appear as square external-link controls in the
+  rail. Tooltips identify each service and port without exposing access credentials;
+  an empty Previews section is omitted while collapsed.
 
 `e2e/sidebar-rail.spec.ts` covers dimensions, tooltips, keyboard navigation, machine
 switching, settings round-trips, light/dark themes, reduced motion, narrow windows
