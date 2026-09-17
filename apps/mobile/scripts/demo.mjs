@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { demoEnvironment } from "./demo-environment.mjs";
 
 const child = spawn(
   "pnpm",
@@ -6,7 +7,7 @@ const child = spawn(
   {
     shell: process.platform === "win32",
     stdio: "inherit",
-    env: { ...process.env, APP_VARIANT: "preview", EXPO_PUBLIC_DEMO: "true" },
+    env: demoEnvironment(process.env),
   },
 );
 child.on("exit", (code) => {

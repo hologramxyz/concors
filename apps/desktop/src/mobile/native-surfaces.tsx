@@ -2,6 +2,7 @@ import { useLayoutEffect, useState, type ReactNode } from "react";
 import type { MobileState, NativeSurface } from "@concors/client-core";
 import { NativeSurfaceContext, type NativeSurfaceRegistration } from "@/components/native-surface";
 import { hostAction, sendHost, subscribeHost } from "./bridge";
+import { clipNativeSurface } from "./native-geometry";
 
 /** Geometry travels out; a bounded UI event travels back. Credentials never enter this layer. */
 function createRegistry() {
@@ -35,19 +36,22 @@ export function NativeSurfaces({ host, children }: { host: MobileState; children
     const measure = () => {
       frame = 0;
       const surfaces: NativeSurface[] = [];
+      const viewport = { width: innerWidth, height: innerHeight };
+      const workspace = document.querySelector(".mobile-workspace")?.getBoundingClientRect();
+      const files = document.querySelector(".mobile-files")?.getBoundingClientRect();
       // DOM sheets remain authoritative; native views must not cover their backdrop or focus trap.
       const modal = document.querySelector(
         '[role="dialog"][data-state="open"], [role="menu"], [role="listbox"], [data-slot="popover-content"][data-state="open"]',
       );
-      if (!modal)
+      if (!modal && workspace && files)
         for (const [id, item] of registry.entries) {
           const element = item.element;
-          if (
-            !element.isConnected ||
-            element.closest("[inert], [hidden]") ||
-            element.parentElement?.closest('[aria-hidden="true"]')
-          )
-            continue;
+          if (!element.isConnected || element.closest("[hidden]")) continue;
+          const interactive =
+            !element.closest("[inert]") && !element.parentElement?.closest('[aria-hidden="true"]');
+          // Header controls travel with their panels, even while inactive. Keep the
+          // composer unmounted when obscured so it cannot retain keyboard focus.
+          if (!interactive && item.content.kind === "composer") continue;
           const rect = element.getBoundingClientRect();
           if (
             !rect.width ||
@@ -58,13 +62,22 @@ export function NativeSurfaces({ host, children }: { host: MobileState; children
             rect.left >= innerWidth
           )
             continue;
+          const layer = element.closest(".mobile-files")
+            ? "files"
+            : element.closest(".mobile-sidebar")
+              ? "sidebar"
+              : "workspace";
+          const clip = clipNativeSurface(rect, layer, viewport, workspace, files);
+          if (!clip) continue;
           surfaces.push({
             id,
             content: item.content,
             frame: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+            clip,
+            interactive,
           });
         }
-      visible = new Set(surfaces.map((item) => item.id));
+      visible = new Set(surfaces.filter((item) => item.interactive).map((item) => item.id));
       const message = {
         type: "native-surfaces" as const,
         scope: host.scope,

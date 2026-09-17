@@ -11,6 +11,11 @@
 /* Mobile points stay in sync with the native host, independently of desktop rem scaling. */
 :root {
   --corner-radius: 6px;
+  --mobile-safe-top: env(safe-area-inset-top, 0px);
+  --mobile-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --mobile-safe-left: env(safe-area-inset-left, 0px);
+  --mobile-safe-right: env(safe-area-inset-right, 0px);
+  --mobile-header-height: calc(68px + var(--mobile-safe-top));
 }
 :root[data-corner-style="square"] {
   --corner-radius: 0px;
@@ -59,6 +64,7 @@ body {
   background: var(--background);
   transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
   touch-action: pan-y;
+  padding-bottom: var(--mobile-safe-bottom);
 }
 .mobile-files-location {
   flex: 1;
@@ -70,7 +76,7 @@ body {
   justify-content: center;
   width: 100%;
   min-width: 0;
-  min-height: 48px;
+  min-height: 44px;
   padding: 5px 14px;
   text-align: left;
   font-size: 15px;
@@ -273,7 +279,8 @@ body {
   min-width: 0;
 }
 .mobile-sidebar-machine .mobile-select-trigger {
-  height: 48px;
+  height: 44px;
+  min-height: 44px;
 }
 .mobile-icon {
   display: inline-flex;
@@ -298,7 +305,7 @@ body {
   min-height: 0;
   flex: 1;
   overflow-y: auto;
-  padding: 0 12px;
+  padding: 0 12px 0 max(12px, var(--mobile-safe-left));
 }
 .mobile-sidebar-content > * {
   margin-bottom: 24px;
@@ -329,7 +336,7 @@ body {
   min-width: 36px;
 }
 .mobile-sidebar-footer {
-  padding: 8px 12px max(8px, env(safe-area-inset-bottom));
+  padding: 8px 12px max(8px, var(--mobile-safe-bottom)) max(12px, var(--mobile-safe-left));
 }
 .mobile-sidebar-footer > button {
   min-height: 44px;
@@ -403,7 +410,7 @@ body {
   transition:
     transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
     border-radius 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
-  box-shadow: -6px 0 24px #00000018;
+  box-shadow: -4px 0 18px #00000010;
 }
 /* Only the rounded rim reveals the backdrop. Inset the opaque content with a
    clip, not padding: navigation must never resize/reflow chat or a terminal. */
@@ -413,19 +420,19 @@ body {
   inset: 0;
   pointer-events: none;
   border-radius: inherit;
-  border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--foreground) 6%, transparent);
   background: var(--background);
   box-shadow:
-    inset 1px 1px 0 #ffffff70,
-    inset -1px -1px 0 #00000016;
+    inset 0.5px 0.5px 0 #ffffff28,
+    inset -0.5px -0.5px 0 #00000008;
   opacity: var(--mobile-workspace-reveal, 0);
   transition: opacity 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .mobile-workspace::before {
-    background: linear-gradient(135deg, #ffffff50, #ffffff08 45%, #ffffff28);
-    -webkit-backdrop-filter: blur(18px) saturate(1.5);
-    backdrop-filter: blur(18px) saturate(1.5);
+    background: linear-gradient(135deg, #ffffff20, #ffffff04 45%, #ffffff10);
+    -webkit-backdrop-filter: blur(12px) saturate(1.1);
+    backdrop-filter: blur(12px) saturate(1.1);
   }
 }
 .mobile-main {
@@ -436,8 +443,8 @@ body {
   overflow: hidden;
   background: var(--background);
   clip-path: inset(
-    calc(3px * var(--mobile-workspace-reveal, 0)) round
-      calc(max(0px, var(--mobile-workspace-radius) - 3px) * var(--mobile-workspace-reveal, 0))
+    calc(1px * var(--mobile-workspace-reveal, 0)) round
+      calc(max(0px, var(--mobile-workspace-radius) - 1px) * var(--mobile-workspace-reveal, 0))
   );
   transition: clip-path 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -452,13 +459,14 @@ body {
   align-items: center;
   flex-shrink: 0;
   gap: 10px;
-  height: 76px;
-  padding: 10px 12px 14px;
+  height: var(--mobile-header-height);
+  padding: calc(12px + var(--mobile-safe-top)) max(12px, var(--mobile-safe-right)) 12px
+    max(12px, var(--mobile-safe-left));
 }
 .mobile-header,
 .mobile-files-header {
   position: relative;
-  margin-bottom: -76px;
+  margin-bottom: calc(-1 * var(--mobile-header-height));
   pointer-events: none;
 }
 .mobile-files-header {
@@ -484,8 +492,8 @@ body {
   }
 }
 :is(.mobile-header, .mobile-files-header, .mobile-sidebar-head) .mobile-icon {
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   border-radius: var(--mobile-round-radius);
   color: var(--foreground);
 }
@@ -510,10 +518,10 @@ body {
   color: var(--muted-foreground);
 }
 .mobile-header + .mobile-notice {
-  margin-top: 76px;
+  margin-top: var(--mobile-header-height);
 }
 .mobile-pane:not([data-pane-profile="chat"]) {
-  padding-top: 76px;
+  padding-top: var(--mobile-header-height);
 }
 .mobile-main:has(.mobile-notice) .mobile-pane {
   padding-top: 0;
@@ -574,7 +582,7 @@ body {
   flex: 1;
   padding: 5px 14px;
   gap: 6px;
-  min-height: 48px;
+  min-height: 44px;
   font-size: 13px;
 }
 .mobile-header .mobile-picker {
@@ -751,6 +759,9 @@ aside[aria-label="Agent notifications"] {
   min-height: 0;
   min-width: 0;
   overflow: hidden;
+  padding-bottom: var(--mobile-safe-bottom);
+  padding-left: var(--mobile-safe-left);
+  padding-right: var(--mobile-safe-right);
 }
 .mobile-pane [aria-label="Agent conversation"] {
   background: var(--background);
@@ -869,10 +880,11 @@ aside[aria-label="Agent notifications"] {
   translate: none !important;
   width: 100% !important;
   max-width: none !important;
-  max-height: min(92dvh, 960px) !important;
+  max-height: min(calc(100dvh - var(--mobile-safe-top) - 8px), 960px) !important;
   border-radius: calc(var(--corner-radius) * 4) calc(var(--corner-radius) * 4) 0 0 !important;
   gap: 20px;
-  padding: 34px 20px max(20px, env(safe-area-inset-bottom)) !important;
+  padding: 34px max(20px, var(--mobile-safe-right)) max(20px, var(--mobile-safe-bottom))
+    max(20px, var(--mobile-safe-left)) !important;
   overflow-x: hidden;
   overscroll-behavior: contain;
   box-shadow: 0 -12px 48px #00000018;
@@ -922,7 +934,7 @@ aside[aria-label="Agent notifications"] {
 }
 [data-mobile-drawer] [data-slot="dialog-footer"] {
   margin: 4px -20px -20px;
-  padding: 16px 20px max(20px, env(safe-area-inset-bottom));
+  padding: 16px 20px max(20px, var(--mobile-safe-bottom));
   border-radius: 0;
   flex-direction: row;
   justify-content: flex-end;
@@ -1234,7 +1246,7 @@ aside[aria-label="Agent notifications"] {
   min-height: 0;
   overflow-y: auto;
   flex: 1;
-  padding-bottom: max(16px, env(safe-area-inset-bottom));
+  padding-bottom: max(16px, var(--mobile-safe-bottom));
 }
 .mobile-settings-body > div {
   padding-left: 8px;
@@ -1324,15 +1336,15 @@ aside[aria-label="Agent notifications"] {
 
 /* Keep message navigation below the floating header, with room for touch targets. */
 .mobile-pane .message-list-trigger {
-  top: 76px;
+  top: var(--mobile-header-height);
   right: 16px;
   width: 44px;
   height: 44px;
   border-radius: var(--radius-3xl);
 }
 .mobile-pane .chat-timeline-shell [aria-label="Chat timeline"] {
-  padding-top: 128px;
-  scroll-padding-top: 128px;
+  padding-top: calc(var(--mobile-header-height) + 52px);
+  scroll-padding-top: calc(var(--mobile-header-height) + 52px);
 }
 .mobile-main:has(.mobile-notice) .message-list-trigger {
   top: 4px;

@@ -233,6 +233,18 @@ export class AcpProvider extends EventProvider {
     this.controls.fork = !!this.capabilities.sessionCapabilities?.fork;
     this.controls.mcp = this.config.params?.supportsMcpServers !== false;
   }
+  private mcpServers() {
+    // The built-in scheduling endpoint uses HTTP. Older ACP agents get the shell tool
+    // instructions instead; an unsupported injected transport must not prevent startup.
+    return acpMcp(
+      (this.config.params?.mcpServers ?? []).filter(
+        (server) =>
+          server.name !== "concors-schedules" ||
+          (this.config.params?.supportsMcpServers !== false &&
+            this.capabilities.mcpCapabilities?.http === true),
+      ),
+    );
+  }
   private checkSession(id: string) {
     if (id !== this.threadId || this.closed || (!this.turnId && !this.loading))
       throw new Error("Agent session is not active");
@@ -552,7 +564,7 @@ export class AcpProvider extends EventProvider {
       const response = await connection.unstable_forkSession({
         sessionId: this.threadId,
         cwd: this.cwd,
-        mcpServers: acpMcp(this.config.params?.mcpServers ?? []),
+        mcpServers: this.mcpServers(),
       });
       return { thread: { id: response.sessionId, turns: [] } };
     }
@@ -615,7 +627,7 @@ export class AcpProvider extends EventProvider {
       this.lastUpdate = "";
       this.resetText();
       this.interrupted = false;
-      const args = { cwd: this.cwd, mcpServers: acpMcp(this.config.params?.mcpServers ?? []) };
+      const args = { cwd: this.cwd, mcpServers: this.mcpServers() };
       try {
         if (this.loading) {
           if (!this.capabilities.loadSession)

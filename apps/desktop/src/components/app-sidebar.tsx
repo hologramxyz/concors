@@ -1,3 +1,4 @@
+import { SchedulesNav } from "@/schedules/nav";
 import { NewWorkspaceMenu } from "@/workspace/new-workspace-menu";
 import { WorkspaceSidebarItem } from "@/workspace/sidebar-item";
 import { useProjectIcons } from "@/workspace/use-project-icons";
@@ -23,6 +24,7 @@ interface AppSidebarProps {
   onSelectAgent: (id: string) => void;
   view: View;
   onOpenSettings: () => void;
+  onOpenSchedules: () => void;
   onOpenSearch: () => void;
   onOpenResources: () => void;
   workspace: WorkspaceSnapshot | null;
@@ -125,6 +127,11 @@ export function AppSidebar(props: AppSidebarProps) {
             props.collapsed ? "px-[6px]" : "px-2",
           )}
         >
+          <SchedulesNav
+            selected={props.view === "schedules"}
+            compact={props.collapsed}
+            onClick={props.onOpenSchedules}
+          />
           <SidebarSection
             title="Workspaces"
             compact={props.collapsed}
