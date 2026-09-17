@@ -1,4 +1,4 @@
-import { Activity, ChevronRight, ExternalLink, Link2, Square } from "lucide-react";
+import { Activity, ChevronRight, ExternalLink, Square } from "lucide-react";
 import type { MachineProcess } from "@concors/protocol";
 import { Button } from "@/components/ui/button";
 import { formatMemory } from "./usage-display";
@@ -6,20 +6,16 @@ import { formatMemory } from "./usage-display";
 /** Keep the running list scannable; maintenance actions live behind a disclosure. */
 export function ResourceProcessRow({
   item,
-  hasPreview,
   canStop,
   onPreview,
-  onChangePreview,
   onStop,
 }: {
   item: MachineProcess;
-  hasPreview: boolean;
   canStop: boolean;
   onPreview: () => void;
-  onChangePreview: () => void;
   onStop: () => void;
 }) {
-  const Icon = item.ports.length ? ExternalLink : Activity;
+  const Icon = item.previews.length ? ExternalLink : Activity;
   return (
     <li className="flex min-w-0 items-start gap-1 rounded-md hover:bg-muted/40">
       <details className="group/process min-w-0 flex-1">
@@ -63,19 +59,13 @@ export function ResourceProcessRow({
               <Square className="size-3.5" />
               Stop
             </Button>
-            {hasPreview && (
-              <Button variant="ghost" size="sm" onClick={onChangePreview}>
-                <Link2 />
-                Change preview link
-              </Button>
-            )}
           </div>
         </div>
       </details>
-      {item.ports.length > 0 && (
+      {item.previews.length > 0 && (
         <Button variant="ghost" size="sm" className="mt-1" onClick={onPreview}>
           <ExternalLink />
-          {hasPreview ? "Preview" : `:${item.ports[0]}`}
+          Preview
         </Button>
       )}
     </li>
