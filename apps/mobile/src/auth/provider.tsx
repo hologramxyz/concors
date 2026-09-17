@@ -9,6 +9,7 @@ import { config } from "../config";
 import { useDirectProfile } from "./profile-sheet";
 import { nativeGitHubPlatform } from "./github-platform";
 import { GitHubSignInError, signInWithGitHub as runGitHubSignIn } from "./github-sign-in";
+import { useSignInProviders } from "./use-sign-in-providers";
 
 interface AuthState {
   me: Me | null;
@@ -24,6 +25,9 @@ interface AuthContextValue extends AuthState {
   signIn(email: string, password: string): Promise<void>;
   /** `true` once this build and the API both support GitHub sign-in. */
   githubSignIn: boolean;
+  githubSignInChecking: boolean;
+  githubSignInError: string | null;
+  retryGitHubSignIn(): Promise<void>;
   /** Signs in, or creates an account, through GitHub in an in-app browser sheet. */
   signInWithGitHub(): Promise<void>;
   signOut(): Promise<void>;
@@ -47,21 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [github] = useState(() =>
     config.demo || config.developmentDaemon ? null : nativeGitHubPlatform(),
   );
-  const [githubSignIn, setGitHubSignIn] = useState(false);
-  useEffect(() => {
-    // Offer GitHub only where the API has it configured, never a button that leads to an error.
-    if (!github) return;
-    let current = true;
-    api
-      .getSignInProviders()
-      .then((providers) => {
-        if (current) setGitHubSignIn(providers.github);
-      })
-      .catch(() => undefined);
-    return () => {
-      current = false;
-    };
-  }, [github]);
+  const githubProviders = useSignInProviders(!!github);
   const refresh = async () => {
     // A private-daemon test session is not a cloud login. Do not hydrate or send account tokens.
     if (config.developmentDaemon) {
@@ -255,10 +245,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setDirect(true);
         },
         signIn,
-        githubSignIn,
+        githubSignIn: githubProviders.available,
+        githubSignInChecking: githubProviders.checking,
+        githubSignInError: githubProviders.error,
+        retryGitHubSignIn: githubProviders.retry,
         signInWithGitHub,
         signOut,
-        refresh,
+        refresh: async () => {
+          await Promise.all([refresh(), githubProviders.retry()]);
+        },
         switchOrganization,
       }}
     >

@@ -70,6 +70,22 @@ export default function SignInScreen() {
             </Button>
           ) : (
             <>
+              {auth.githubSignInChecking && <Copy muted>Checking sign-in options…</Copy>}
+              {auth.githubSignInError && (
+                <>
+                  <Notice>{auth.githubSignInError}</Notice>
+                  <Button
+                    secondary
+                    testID="retry-github-sign-in"
+                    disabled={auth.githubSignInChecking}
+                    onPress={() => {
+                      void auth.retryGitHubSignIn();
+                    }}
+                  >
+                    Retry GitHub sign-in
+                  </Button>
+                </>
+              )}
               {auth.githubSignIn ? (
                 <>
                   <Button
