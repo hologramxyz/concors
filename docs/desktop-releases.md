@@ -8,15 +8,16 @@ Two halves meet here. This repository builds and publishes the app; the control 
 app never talks to GitHub, because the repository is private and the release assets are not
 public.
 
-## The version lives in three files
+## The version lives in four files
 
-`apps/desktop/package.json` is the source of truth. Two other files must carry the same number:
+`apps/desktop/package.json` is the source of truth. Three other files must carry the same number:
 
 | File                                     | What it decides                                           |
 | ---------------------------------------- | --------------------------------------------------------- |
 | `apps/desktop/package.json`              | the version the client reports; `src/version.ts` reads it |
 | `apps/desktop/src-tauri/tauri.conf.json` | the version compiled into the binary                      |
 | `packaging/linux/PKGBUILD` (`pkgver`)    | the version pacman records                                |
+| `apps/desktop/src-tauri/Cargo.toml`      | the crate version, shown by `cargo` and in a panic        |
 
 Nothing keeps them together except a check, so run it after a bump:
 
@@ -30,7 +31,7 @@ to a version it is not, and would never stop offering the one it already has.
 
 ## Publishing
 
-Bump the three files, merge to `main`, then tag the merge commit:
+Bump the four files, merge to `main`, then tag the merge commit:
 
 ```sh
 git tag -a desktop-v0.2.0 -m "Faster terminals and a quieter sidebar."

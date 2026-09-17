@@ -4,7 +4,12 @@ import { fileURLToPath } from "node:url";
 
 // The app version lives in `apps/desktop/package.json`, and three other files must agree with it:
 // `tauri.conf.json` (what the built binary reports), the Arch `PKGBUILD` (what pacman records) and
-// `src/version.ts` (what the client sends to daemons, which reads package.json directly).
+// the native crate's `Cargo.toml`. `src/version.ts` reads package.json directly, so it follows on
+// its own.
+//
+// The crate version is inert today — tauri.conf.json carries an explicit version, which wins — but
+// it is the number a Rust panic or `cargo` output would show, and a version that only some files
+// moved is exactly what this check exists to catch.
 //
 // They are separate files because each tool insists on its own; nothing but a check keeps them
 // together. A release whose pieces disagree is worse than a failed build: the app would ask the
@@ -17,6 +22,7 @@ export interface VersionSources {
   packageJson: string;
   tauriConf: string;
   pkgbuild: string;
+  cargoToml: string;
 }
 
 /** The agreed version, or an error naming every file that disagrees. */
@@ -27,9 +33,12 @@ export function agreedVersion(sources: VersionSources): string {
 
   const tauri = (JSON.parse(sources.tauriConf) as { version?: unknown }).version;
   const pkgver = /^pkgver=(.+)$/m.exec(sources.pkgbuild)?.[1]?.trim();
+  // The first `version = "..."` in Cargo.toml is the package's own, before any dependency table.
+  const crate = /^version = "(.+)"$/m.exec(sources.cargoToml)?.[1];
   const disagree = [
     tauri === version ? null : `src-tauri/tauri.conf.json is ${String(tauri)}`,
     pkgver === version ? null : `packaging/linux/PKGBUILD pkgver is ${pkgver ?? "missing"}`,
+    crate === version ? null : `src-tauri/Cargo.toml is ${crate ?? "missing"}`,
   ].filter((problem): problem is string => problem !== null);
 
   if (disagree.length > 0)
@@ -41,12 +50,13 @@ export function agreedVersion(sources: VersionSources): string {
 
 /** Reads the four files from a checkout and returns the version they agree on. */
 export async function desktopVersion(root = repoRoot): Promise<string> {
-  const [packageJson, tauriConf, pkgbuild] = await Promise.all([
+  const [packageJson, tauriConf, pkgbuild, cargoToml] = await Promise.all([
     readFile(join(root, "apps/desktop/package.json"), "utf8"),
     readFile(join(root, "apps/desktop/src-tauri/tauri.conf.json"), "utf8"),
     readFile(join(root, "packaging/linux/PKGBUILD"), "utf8"),
+    readFile(join(root, "apps/desktop/src-tauri/Cargo.toml"), "utf8"),
   ]);
-  return agreedVersion({ packageJson, tauriConf, pkgbuild });
+  return agreedVersion({ packageJson, tauriConf, pkgbuild, cargoToml });
 }
 
 // `node apps/desktop/scripts/release-version.ts` prints the version, and fails loudly when the
