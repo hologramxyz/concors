@@ -1,9 +1,11 @@
 import { expect, it } from "vitest";
+import { createServer } from "node:http";
 import {
   parseProcessStat,
   processLabel,
   listeningPorts,
   ProcessInventory,
+  previewProtocol,
   within,
 } from "./processes.ts";
 
@@ -39,6 +41,27 @@ it("maps listening ports only to explicitly reported PIDs", () => {
 it("matches path boundaries rather than similar prefixes", () => {
   expect(within("/repo2", "/repo")).toBe(false);
   expect(within("/repo/a", "/repo")).toBe(true);
+});
+it("discovers browser previews without promoting JSON APIs", async () => {
+  let browserContent = true;
+  const server = createServer((_request, response) => {
+    response.writeHead(200, {
+      "content-type": browserContent ? "text/html; charset=utf-8" : "application/json",
+    });
+    response.end();
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Test server did not listen");
+  try {
+    await expect(previewProtocol(address.port)).resolves.toBe("http");
+    browserContent = false;
+    await expect(previewProtocol(address.port)).resolves.toBeNull();
+  } finally {
+    await new Promise<void>((resolve, reject) =>
+      server.close((error) => (error ? reject(error) : resolve())),
+    );
+  }
 });
 it.skipIf(process.platform !== "linux")(
   "protects this daemon and rejects a stale process identity",
