@@ -246,6 +246,10 @@ export const AgentMessageIndexSchema = z.object({
 export type AgentMessageIndex = z.infer<typeof AgentMessageIndexSchema>;
 export const AgentOperationSchema = z.discriminatedUnion("kind", [
   z.object({
+    kind: z.literal("open-session"),
+    sessionId: Id,
+  }),
+  z.object({
     kind: z.literal("resume-session"),
     sessionId: Id,
     provider: AgentProviderIdSchema,
