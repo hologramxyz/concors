@@ -1156,11 +1156,11 @@ test("sidebar, chat and files share header spacing at narrow phone widths", asyn
       });
     const main = await geometry(".mobile-header");
     expect(main).toEqual({
-      padding: width <= 360 ? "10px 8px 14px" : "10px 12px 14px",
+      padding: width <= 360 ? "12px 8px" : "12px",
       gap: width <= 360 ? "6px" : "10px",
-      height: 76,
+      height: 68,
       top: 12,
-      bottom: 16,
+      bottom: 12,
       left: width <= 360 ? 8 : 12,
       right: width <= 360 ? 8 : 12,
     });
