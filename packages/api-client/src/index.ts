@@ -20,6 +20,8 @@ export {
 export { ApiError, ApiNetworkError } from "./errors.ts";
 export {
   ApiSessionSchema,
+  DesktopUpdateSchema,
+  type DesktopUpdate,
   ApiUserSchema,
   AuthResponseSchema,
   BillingStatusSchema,

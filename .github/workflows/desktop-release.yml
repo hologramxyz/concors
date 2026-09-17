@@ -1,0 +1,183 @@
+name: Desktop release
+
+on:
+  push:
+    tags: [desktop-v*]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: ${{ github.ref_name }}
+  GH_REPO: ${{ github.repository }}
+  # Published builds talk to production. A release pointed at the development API would look
+  # identical and quietly send everyone who installed it to the wrong control plane.
+  VITE_CONCORS_API_URL: https://api.concors.dev
+
+jobs:
+  build:
+    name: Build and test Linux release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require a commit on main
+        run: git merge-base --is-ancestor HEAD origin/main
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Verify tag matches the desktop version
+        id: version
+        # release-version.ts fails unless package.json, tauri.conf.json and the PKGBUILD agree.
+        run: |
+          version="$(node apps/desktop/scripts/release-version.ts)"
+          [ "$RELEASE_TAG" = "desktop-v$version" ] || {
+            echo "Tag $RELEASE_TAG must match desktop-v$version" >&2; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Disable unused Chrome package source
+        run: sudo rm -f /etc/apt/sources.list.d/google-chrome*.list /etc/apt/sources.list.d/google-chrome*.sources
+
+      - name: Install Tauri system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - run: pnpm install --frozen-lockfile
+
+      # Builds the daemon, checks its relocated runtime with a real PTY, then the app binary.
+      - name: Build the app and its bundled daemon
+        run: pnpm desktop:package:linux --no-bundle
+
+      - name: Assemble the relocatable tree
+        run: pnpm desktop:release:linux
+
+      - name: Build the Arch package
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        # Restages the tarball; nothing is compiled here, so an artifact built on Ubuntu 24.04
+        # (the oldest base we support) keeps its own glibc floor inside the pacman package.
+        run: |
+          docker run --rm -v "$PWD:/w" -e VERSION archlinux:base-devel bash -ec '
+            useradd -m builder
+            install -d -o builder /out
+            cp -r /w/packaging/linux /home/builder/packaging
+            cp "/w/apps/desktop/dist/release/Concors-$VERSION-x64.tar.gz" /home/builder/
+            chown -R builder /home/builder
+            su builder -c "/home/builder/packaging/build-package.sh \
+              /home/builder/Concors-$VERSION-x64.tar.gz $VERSION /out"
+            cp /out/*.pkg.tar.zst /w/apps/desktop/dist/release/
+          '
+
+      - name: Install the package on clean Arch and run the bundled daemon
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        # --nodeps skips the GUI libraries an installing machine supplies; the daemon is
+        # self-contained, so it must run in a container that has nothing else.
+        run: |
+          docker run --rm --network none -e VERSION \
+            -v "$PWD/apps/desktop/dist/release:/rel:ro" archlinux:base bash -ec '
+              pacman -U --noconfirm --nodeps /rel/concors-bin-*.pkg.tar.zst
+              test -x /opt/Concors/bin/concors-desktop
+              test -x /usr/bin/concors
+              test -f /usr/share/applications/concors.desktop
+              test -f /usr/share/icons/hicolor/256x256/apps/concors.png
+              installed="$(pacman -Q concors-bin | cut -d" " -f2)"
+              [ "$installed" = "$VERSION-1" ] || { echo "pacman recorded $installed" >&2; exit 1; }
+              /opt/Concors/lib/Concors/daemon/bin/concors-daemon --version
+            '
+
+      - name: Write the release manifest
+        # The annotated tag message becomes the release notes the app shows before updating.
+        run: |
+          git tag -l --format='%(contents)' "$RELEASE_TAG" > /tmp/notes.txt
+          [ -s /tmp/notes.txt ] || echo "Concors ${{ steps.version.outputs.version }}." > /tmp/notes.txt
+          node apps/desktop/scripts/release-manifest.ts --notes-file /tmp/notes.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-linux-x64
+          path: |
+            apps/desktop/dist/release/Concors-*-x64.tar.gz
+            apps/desktop/dist/release/Concors-*-x64.tar.gz.sha256
+            apps/desktop/dist/release/concors-bin-*.pkg.tar.zst
+            apps/desktop/dist/release/release.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  publish:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: desktop-linux-x64
+
+      - name: Create release with tested builds
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          gh release create "$RELEASE_TAG" \
+            "Concors-$VERSION-x64.tar.gz" \
+            "Concors-$VERSION-x64.tar.gz.sha256" \
+            concors-bin-*.pkg.tar.zst \
+            release.json \
+            --verify-tag --title "Concors $VERSION" --latest=false \
+            --notes "Concors $VERSION for Linux x86_64. Arch/Omarchy: install the .pkg.tar.zst with \`pacman -U\`. Other distributions: extract the tarball and run \`bin/concors-desktop\`, keeping \`bin/\` and \`lib/\` siblings. release.json is what the control plane reads to offer in-app updates."
+
+  verify-download:
+    name: Verify release download with read token
+    needs: [build, publish]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Download the published release and check it describes itself
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
+        # This is the path the control plane takes: read release.json, then fetch what it names.
+        run: |
+          gh release download "$RELEASE_TAG" -p 'release.json'
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const manifest = JSON.parse(readFileSync('release.json', 'utf8'));
+          if (manifest.version !== process.env.VERSION)
+            throw new Error(`manifest is ${manifest.version}, expected ${process.env.VERSION}`);
+          const formats = manifest.artifacts.map((a) => a.format).sort();
+          if (formats.join(',') !== 'pacman,tarball')
+            throw new Error(`unexpected formats: ${formats.join(',') || 'none'}`);
+          console.log(manifest.artifacts.map((a) => `${a.format} ${a.name} ${a.sha256}`).join('\n'));
+          NODE
+          for asset in $(node -p "JSON.parse(require('fs').readFileSync('release.json','utf8')).artifacts.map(a=>a.name).join('\n')"); do
+            gh release download "$RELEASE_TAG" -p "$asset" --clobber
+            expected="$(node -p "JSON.parse(require('fs').readFileSync('release.json','utf8')).artifacts.find(a=>a.name==='$asset').sha256")"
+            echo "$expected  $asset" | sha256sum -c -
+          done
