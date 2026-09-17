@@ -109,10 +109,24 @@ jobs:
             '
 
       - name: Write the release manifest
-        # The annotated tag message becomes the release notes the app shows before updating.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        # The tag's annotation becomes the release notes the app shows before updating, so it is
+        # read from the API rather than the checkout: actions/checkout creates the local tag ref
+        # from the commit SHA, which makes it lightweight, and `%(contents)` on a lightweight tag
+        # quietly yields the commit message instead. A release would then offer people
+        # "Merge pull request #124" as its description.
         run: |
-          git tag -l --format='%(contents)' "$RELEASE_TAG" > /tmp/notes.txt
-          [ -s /tmp/notes.txt ] || echo "Concors ${{ steps.version.outputs.version }}." > /tmp/notes.txt
+          object="$(gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" --jq '.object.type + " " + .object.sha')"
+          if [ "${object%% *}" = "tag" ]; then
+            gh api "repos/$GH_REPO/git/tags/${object##* }" --jq '.message' > /tmp/notes.txt
+          else
+            echo "::warning::$RELEASE_TAG is not an annotated tag, so the release has no notes."
+            : > /tmp/notes.txt
+          fi
+          [ -s /tmp/notes.txt ] || echo "Concors $VERSION." > /tmp/notes.txt
+          cat /tmp/notes.txt
           node apps/desktop/scripts/release-manifest.ts --notes-file /tmp/notes.txt
 
       - uses: actions/upload-artifact@v4
