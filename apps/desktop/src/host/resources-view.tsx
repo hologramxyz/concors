@@ -13,10 +13,8 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { openExternal } from "@/tauri/open-external";
+import { openPreview as openDetectedPreview } from "@/tauri/open-external";
 import { useProcesses } from "./use-processes";
-import { usePreviewLinks } from "./preview-links";
-import { PreviewEditor } from "./preview-editor";
 import { processStore } from "./process-store";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import { ResourceProcessRow } from "./process-row";
@@ -38,8 +36,6 @@ function ResourceContent() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [action, setAction] = useState<MachineProcess | null>(null);
-  const [preview, setPreview] = useState<MachineProcess | null>(null);
-  const { links, setLink, removeLink } = usePreviewLinks(connection);
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
@@ -91,9 +87,14 @@ function ResourceContent() {
           : (b.memoryBytes ?? -1) - (a.memoryBytes ?? -1),
     );
   const openPreview = (item: MachineProcess) => {
-    const link = links[item.id];
-    if (link) void openExternal(link.url).catch((cause: unknown) => setError(String(cause)));
-    else setPreview(item);
+    const preview = item.previews[0];
+    if (!connection || !preview) return;
+    const link = connection.previewUrl(preview);
+    if (!link) {
+      setError("This machine connection does not support browser preview routing.");
+      return;
+    }
+    void openDetectedPreview(preview, link).catch((cause: unknown) => setError(String(cause)));
   };
   return (
     <div
@@ -150,10 +151,8 @@ function ResourceContent() {
           <ResourceProcessRow
             key={item.id}
             item={item}
-            hasPreview={!!links[item.id]}
             canStop={!!supported && !busy}
             onPreview={() => openPreview(item)}
-            onChangePreview={() => setPreview(item)}
             onStop={() => {
               setAction(item);
               setError(null);
@@ -225,26 +224,6 @@ function ResourceContent() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {preview && (
-        <PreviewEditor
-          key={preview.id}
-          name={links[preview.id]?.name ?? preview.name}
-          url={links[preview.id]?.url ?? ""}
-          onClose={() => setPreview(null)}
-          onSave={(name, url) => {
-            setLink(preview.id, url, name);
-            setPreview(null);
-          }}
-          {...(links[preview.id]
-            ? {
-                onRemove: () => {
-                  removeLink(preview.id);
-                  setPreview(null);
-                },
-              }
-            : {})}
-        />
-      )}
     </div>
   );
 }
