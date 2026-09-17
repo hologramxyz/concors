@@ -117,6 +117,8 @@ export function embeddedConnection(connectionId: string) {
     // Native WebView startup can delay both JS runtimes beyond a network socket handshake.
     handshakeTimeoutMs: 30_000,
     webSocketFactory: () => new BridgeSocket(connectionId),
+    // The native host resolves the authenticated address when it receives open-preview.
+    previewUrl: (preview) => `https://preview.invalid/${preview.protocol}/${preview.port}`,
   });
 }
 class BridgeSocket implements WebSocketLike {

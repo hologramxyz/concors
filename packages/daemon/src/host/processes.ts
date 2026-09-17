@@ -1,9 +1,16 @@
 import { readFile, readlink, readdir, stat } from "node:fs/promises";
 import { readFileSync, statSync } from "node:fs";
+import { request as httpRequest, type IncomingHttpHeaders } from "node:http";
+import { request as httpsRequest } from "node:https";
 import { basename, sep } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import type { MachineProcess, ProcessSnapshot, WorkspaceProject } from "@concors/protocol";
+import type {
+  MachineProcess,
+  PreviewProtocol,
+  ProcessSnapshot,
+  WorkspaceProject,
+} from "@concors/protocol";
 
 const execute = promisify(execFile);
 export const within = (path: string, root: string) => path === root || path.startsWith(root + sep);
@@ -89,11 +96,64 @@ export function listeningPorts(output: string) {
   return result;
 }
 
+function previewResponse(status: number, headers: IncomingHttpHeaders) {
+  const contentType = headers["content-type"]?.toLowerCase() ?? "";
+  return (
+    (status >= 300 && status < 400) ||
+    contentType.includes("text/html") ||
+    contentType.includes("application/xhtml+xml")
+  );
+}
+
+function probe(port: number, protocol: PreviewProtocol): Promise<boolean> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (value: boolean) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+    const request = (protocol === "https" ? httpsRequest : httpRequest)(
+      {
+        host: "127.0.0.1",
+        port,
+        method: "HEAD",
+        path: "/",
+        headers: { host: `localhost:${port}`, "user-agent": "Concors preview discovery" },
+        ...(protocol === "https" ? { rejectUnauthorized: false } : {}),
+      },
+      (response) => {
+        response.resume();
+        finish(previewResponse(response.statusCode ?? 0, response.headers));
+        request.destroy();
+      },
+    );
+    request.setTimeout(500, () => request.destroy());
+    request.on("error", () => finish(false));
+    request.on("close", () => finish(false));
+    request.end();
+  });
+}
+
+/** Confirm that a listener serves browser content without sending it a state-changing request. */
+export async function previewProtocol(port: number): Promise<PreviewProtocol | null> {
+  if (await probe(port, "http")) return "http";
+  if (await probe(port, "https")) return "https";
+  return null;
+}
+
+function infrastructureProcess(args: string[]) {
+  return args.some((arg) =>
+    /(?:concors[-/]daemon|packages\/daemon\/|concors-daemon|tailscaled|sshd)/.test(arg),
+  );
+}
+
 export class ProcessInventory {
   #previous = new Map<string, number>();
   #total = 0;
   #snapshot: ProcessSnapshot | null = null;
   #pending: Promise<ProcessSnapshot> | null = null;
+  #previewProtocols = new Map<number, { protocol: PreviewProtocol | null; checkedAt: number }>();
   #identities = new Map<
     string,
     { pid: number; started: string; uid: number; blocked: string | null }
@@ -175,13 +235,39 @@ export class ProcessInventory {
     const next = new Map<string, number>();
     this.#identities.clear();
     const projects = [...this.projects()].sort((a, b) => b.directory.length - a.directory.length);
+    const allPreviewCandidates = [
+      ...new Set(
+        found.flatMap((process) =>
+          infrastructureProcess(process.argv) ? [] : (ports.get(process.pid) ?? []),
+        ),
+      ),
+    ];
+    const previewCandidates = allPreviewCandidates.slice(0, 128);
+    const now = Date.now();
+    const refreshPreviews = previewCandidates.filter((port) => {
+      const cached = this.#previewProtocols.get(port);
+      return !cached || now - cached.checkedAt >= 10_000;
+    });
+    for (const [port, protocol] of await concurrentMap(
+      refreshPreviews,
+      16,
+      async (port) => [port, await previewProtocol(port)] as const,
+    ))
+      this.#previewProtocols.set(port, { protocol, checkedAt: now });
+    for (const port of this.#previewProtocols.keys())
+      if (!previewCandidates.includes(port)) this.#previewProtocols.delete(port);
+    const previewProtocols = new Map(
+      [...this.#previewProtocols.entries()].flatMap(([port, entry]) =>
+        entry.protocol ? [[port, entry.protocol] as const] : [],
+      ),
+    );
+    if (allPreviewCandidates.length > previewCandidates.length)
+      warnings.push("Preview discovery limited to the first 128 listening ports.");
     const processes: MachineProcess[] = found.slice(0, 4096).map((p) => {
       const id = `${p.pid}:${p.started}`;
       const before = this.#previous.get(id);
       next.set(id, p.ticks);
-      const infrastructure = p.argv.some((arg) =>
-        /(?:concors[-/]daemon|packages\/daemon\/|concors-daemon|tailscaled|sshd)/.test(arg),
-      );
+      const infrastructure = infrastructureProcess(p.argv);
       const blocked =
         protectedPids.has(p.pid) ||
         infrastructure ||
@@ -216,6 +302,10 @@ export class ProcessInventory {
                   ? "zombie"
                   : "unknown",
         ports: ports.get(p.pid) ?? [],
+        previews: (ports.get(p.pid) ?? []).flatMap((port) => {
+          const protocol = previewProtocols.get(port);
+          return protocol ? [{ port, protocol }] : [];
+        }),
         stopBlocked: blocked,
       };
     });

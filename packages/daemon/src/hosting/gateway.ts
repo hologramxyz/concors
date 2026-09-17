@@ -21,6 +21,15 @@ import { DAEMON_VERSION } from "../version.ts";
 import type { Socket } from "node:net";
 import type { DaemonConfig } from "../config.ts";
 import { ensureSessionHost, type HostDescriptor, type HostLaunch } from "./session-host.ts";
+import {
+  PREVIEW_AUTH_PATH,
+  authorizePreview,
+  previewPrincipal,
+  previewTarget,
+  proxyPreviewHttp,
+  proxyPreviewUpgrade,
+  servePreviewLogin,
+} from "./preview-proxy.ts";
 
 export interface ManagedGatewayOptions {
   config: ManagedConfig;
@@ -88,6 +97,31 @@ export function createPersistentGateway(
   }
   const handle = async (req: IncomingMessage, res: ServerResponse) => {
     if (managed) {
+      const preview = previewTarget(req, managed.config.hostname, bindPort);
+      if (preview) {
+        const path = new URL(req.url ?? "/", "http://preview").pathname;
+        if (path === PREVIEW_AUTH_PATH && req.method === "POST") {
+          await authorizePreview(req, res, managed.verifier);
+          return;
+        }
+        let principal: Principal;
+        try {
+          principal = await previewPrincipal(req, managed.verifier);
+        } catch {
+          if (req.method === "GET") servePreviewLogin(req, res);
+          else res.writeHead(401).end();
+          return;
+        }
+        const expiry = setTimeout(
+          () => res.destroy(),
+          Math.max(0, principal.expiresAt - Date.now()),
+        );
+        expiry.unref();
+        res.once("close", () => clearTimeout(expiry));
+        if (req.headers.expect === "100-continue") res.writeContinue();
+        proxyPreviewHttp(req, res, preview);
+        return;
+      }
       let principal: Principal | undefined;
       if (req.method !== "GET" || req.url !== "/health") {
         try {
@@ -190,6 +224,23 @@ export function createPersistentGateway(
     let principal: Principal | undefined;
     if (managed) {
       downstream.pause();
+      const preview = previewTarget(req, managed.config.hostname, bindPort);
+      if (preview) {
+        try {
+          principal = await previewPrincipal(req, managed.verifier);
+        } catch {
+          rejectUpgrade(downstream, 401);
+          return;
+        }
+        const expiry = setTimeout(
+          () => downstream.destroy(),
+          Math.max(0, principal.expiresAt - Date.now()),
+        );
+        expiry.unref();
+        downstream.once("close", () => clearTimeout(expiry));
+        proxyPreviewUpgrade(req, downstream, head, preview, sockets);
+        return;
+      }
       try {
         principal = await authenticate(req);
       } catch {

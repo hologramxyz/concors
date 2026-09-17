@@ -15,6 +15,7 @@ export function demoResources() {
       memoryBytes: 256 * 1024 ** 2,
       state: "sleeping",
       ports: [5173],
+      previews: [{ port: 5173, protocol: "http" }],
       stopBlocked: null,
     },
     {
@@ -28,6 +29,7 @@ export function demoResources() {
       memoryBytes: 512 * 1024 ** 2,
       state: "running",
       ports: [],
+      previews: [],
       stopBlocked: null,
     },
   ];
