@@ -1,7 +1,7 @@
 import { once } from "node:events";
-import { request as httpRequest, type IncomingHttpHeaders } from "node:http";
+import { createServer, request as httpRequest, type IncomingHttpHeaders } from "node:http";
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from "jose";
-import { WebSocket } from "ws";
+import { WebSocket, WebSocketServer } from "ws";
 import { afterEach, expect, it, vi } from "vitest";
 import { createDaemonServer } from "../server.ts";
 import { DAEMON_VERSION } from "../version.ts";
@@ -250,6 +250,57 @@ it("proxies HTTP bodies, strips query credentials and private response headers, 
   expect(f.stop).not.toHaveBeenCalled();
 });
 
+it("authenticates detected preview hosts once, proxies browser traffic and supports HMR sockets", async () => {
+  const f = await fixture();
+  const seen: IncomingHttpHeaders[] = [];
+  const previewServer = createServer((request, response) => {
+    seen.push(request.headers);
+    response.writeHead(200, { "content-type": "text/html" }).end("<h1>Preview app</h1>");
+  });
+  const previewSockets = new WebSocketServer({ server: previewServer });
+  previewSockets.on("connection", (socket) =>
+    socket.on("message", (message) => socket.send(message)),
+  );
+  await new Promise<void>((resolve) => previewServer.listen(0, "127.0.0.1", resolve));
+  cleanups.push(
+    () =>
+      new Promise<void>((resolve, reject) =>
+        previewServer.close((error) => (error ? reject(error) : resolve())),
+      ),
+  );
+  const address = previewServer.address();
+  if (!address || typeof address === "string") throw new Error("Preview fixture did not listen");
+  const host = `${address.port}.${f.headers.host}`;
+  const login = await httpFetch(f.url + "/", { headers: { host } });
+  expect(login.status).toBe(401);
+  expect(await login.text()).toContain("Opening preview");
+  const authorized = await httpFetch(f.url + "/__concors/preview-auth", {
+    method: "POST",
+    headers: { host, "content-type": "text/plain" },
+    body: f.token,
+  });
+  expect(authorized.status).toBe(204);
+  const cookie = authorized.headers.get("set-cookie")!.split(";", 1)[0]!;
+  const page = await httpFetch(f.url + "/feature?ready=yes", { headers: { host, cookie } });
+  expect(page.status).toBe(200);
+  expect(await page.text()).toContain("Preview app");
+  expect(seen[0]).toMatchObject({
+    host: `localhost:${address.port}`,
+    "x-forwarded-host": host,
+    "x-forwarded-proto": "https",
+  });
+  expect(seen[0]?.cookie).toBeUndefined();
+
+  const socket = new WebSocket(f.url.replace("http:", "ws:") + "/hmr", [], {
+    headers: { host, cookie },
+  });
+  cleanups.push(async () => socket.terminate());
+  await once(socket, "open");
+  socket.send("ready");
+  const [message] = await once(socket, "message");
+  expect(message.toString()).toBe("ready");
+});
+
 it("starts a heartbeat after listen using the private host's session snapshot", async () => {
   const f = await fixture();
   const [url, request] = f.heartbeatFetch.mock.calls[0]!;
@@ -279,10 +330,13 @@ function httpFetch(
       response.on("error", reject);
       response.on("end", () =>
         resolve(
-          new Response(Buffer.concat(chunks), {
-            status: response.statusCode!,
-            headers: response.headers as Record<string, string>,
-          }),
+          new Response(
+            [204, 205, 304].includes(response.statusCode!) ? null : Buffer.concat(chunks),
+            {
+              status: response.statusCode!,
+              headers: response.headers as Record<string, string>,
+            },
+          ),
         ),
       );
     });
