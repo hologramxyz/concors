@@ -58,6 +58,7 @@ async function createConnection(machineId: string | null, scope: string, signal:
       endpoint: describeDaemonEndpoint("wss://demo.concors.invalid/ws"),
       client,
       webSocketFactory: (await demo).socket,
+      previewUrl: (preview) => `https://preview-${preview.port}.example.invalid/`,
     });
   if (config.developmentDaemon) {
     return new DaemonConnection({

@@ -6,7 +6,12 @@ import {
   MobileCapabilitiesSchema,
   OrganizationSchema,
 } from "@concors/api-client";
-import { ClientMessageSchema, DaemonMessageSchema, ThemeSelectionSchema } from "@concors/protocol";
+import {
+  ClientMessageSchema,
+  DaemonMessageSchema,
+  ProcessPreviewSchema,
+  ThemeSelectionSchema,
+} from "@concors/protocol";
 import { NativeSurfaceSchema, NativeSurfaceEventSchema } from "./native-surfaces.ts";
 
 const id = z.string().min(1).max(200);
@@ -135,6 +140,7 @@ export const MobileActionSchema = z.discriminatedUnion("kind", [
     confirmation: z.literal("DELETE"),
   }),
   z.object({ kind: z.literal("open-url"), url: z.string().max(4096) }),
+  z.object({ kind: z.literal("open-preview"), preview: ProcessPreviewSchema }),
   z.object({ kind: z.literal("clipboard"), text: z.string().max(1_000_000) }),
   z.object({ kind: z.literal("preferences"), preferences: MobilePreferencesSchema }),
   z.object({ kind: z.literal("file-guard"), active: z.boolean() }),
