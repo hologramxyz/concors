@@ -23,6 +23,7 @@ export default defineConfig({
         CI: "1",
         BROWSER: "none",
         EXPO_NO_TELEMETRY: "1",
+        EXPO_NO_DOTENV: "1",
         APP_VARIANT: "development",
         EXPO_PUBLIC_DEMO: "false",
         EXPO_PUBLIC_DEV_DAEMON_URL: "",
