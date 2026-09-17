@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   MobileApiCallSchema,
+  MobileActionSchema,
   MobilePreferencesSchema,
   MobileStateSchema,
   parseMobileRendererMessage,
@@ -51,6 +52,21 @@ describe("mobile host boundary", () => {
         action: { kind: "evaluate", code: "alert(1)" },
       }),
     ).toBeNull();
+  });
+  it("allows only bounded preview identities across the credential-free renderer bridge", () => {
+    expect(
+      MobileActionSchema.parse({
+        kind: "open-preview",
+        preview: { port: 5173, protocol: "http", token: "secret" },
+        url: "https://attacker.example",
+      }),
+    ).toEqual({ kind: "open-preview", preview: { port: 5173, protocol: "http" } });
+    for (const preview of [
+      { port: 0, protocol: "http" },
+      { port: 65536, protocol: "http" },
+      { port: 5173, protocol: "file" },
+    ])
+      expect(MobileActionSchema.safeParse({ kind: "open-preview", preview }).success).toBe(false);
   });
   it("validates arguments, sizes and supported device preferences", () => {
     expect(MobileApiCallSchema.safeParse({ method: "listMachines", args: [] }).success).toBe(true);

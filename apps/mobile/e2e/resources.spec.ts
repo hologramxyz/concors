@@ -10,39 +10,18 @@ test("mobile keeps previews in the sidebar and process inspection in computer Re
   const sidebar = ui.getByRole("navigation", { name: "Primary" });
   await expect(sidebar.getByRole("button", { name: "Previews", exact: true })).toBeVisible();
   await expect(sidebar).not.toContainText("Test runner");
-  await sidebar.getByRole("button", { name: "Add preview", exact: true }).click();
-  const add = ui.getByRole("dialog", { name: "Add preview", exact: true });
-  await add.getByRole("textbox", { name: "Name", exact: true }).fill("Web app");
-  await add.getByRole("textbox", { name: "Preview URL" }).fill("http://preview.example/");
-  await expect(add.getByRole("button", { name: "Save preview" })).toBeDisabled();
-  await add.getByRole("textbox", { name: "Preview URL" }).fill("https://preview.example/");
-  await add.getByRole("button", { name: "Save preview" }).click();
-  await expect(
-    sidebar.getByRole("button", { name: "Open preview: Web app", exact: true }),
-  ).toBeVisible();
-  const preview = sidebar.getByRole("button", { name: "Open preview: Web app", exact: true });
-  await preview.dispatchEvent("pointerdown", {
-    pointerType: "touch",
-    pointerId: 1,
-    button: 0,
-    clientX: 100,
-    clientY: 300,
+  const preview = sidebar.getByRole("button", { name: "Open preview: Dev server", exact: true });
+  await expect(preview).toBeVisible();
+  await expect(sidebar.getByRole("button", { name: "Add preview" })).toHaveCount(0);
+  await expect(ui.getByRole("dialog", { name: /preview/i })).toHaveCount(0);
+  let confirmation = "";
+  page.once("dialog", async (dialog) => {
+    confirmation = dialog.message();
+    await dialog.dismiss();
   });
-  const editAction = ui.getByRole("menuitem", { name: "Edit preview", exact: true });
-  await expect(editAction).toBeVisible();
-  // The open modal menu hides the sidebar from the accessibility tree, but the
-  // original touch target still receives the pointer release.
-  await ui.locator('button[aria-label="Open preview: Web app"]').dispatchEvent("pointerup", {
-    pointerType: "touch",
-    pointerId: 1,
-    button: 0,
-  });
-  await editAction.click();
-  const edit = ui.getByRole("dialog", { name: "Edit preview", exact: true });
-  await expect(edit.getByRole("textbox", { name: "Preview URL" })).toHaveValue(
-    "https://preview.example/",
-  );
-  await edit.getByRole("button", { name: "Cancel", exact: true }).click();
+  await preview.click();
+  expect(confirmation).toContain("preview-5173.example.invalid");
+  expect(confirmation).not.toContain("access_token");
   await page.screenshot({ path: "test-results/mobile-previews-sidebar.png" });
   await ui.getByRole("combobox", { name: "Machine", exact: true }).click();
   const machine = ui.getByRole("dialog", { name: "Machine", exact: true });
