@@ -548,7 +548,8 @@ it("negotiates ACP controls, switches models, streams tools and respects native 
         authMethods: [],
       }),
       authenticate: async () => ({}),
-      newSession: async () => {
+      newSession: async (params) => {
+        expect(params.mcpServers).toEqual([]);
         await client.sessionUpdate({
           sessionId: "acp-session",
           update: {
@@ -640,7 +641,18 @@ it("negotiates ACP controls, switches models, streams tools and respects native 
   const provider = new AcpProvider(
     tmpdir(),
     async () => ({ decision: "decline" }),
-    { id: "fixture-acp", label: "Fixture", engine: "acp", command: ["fixture"], enabled: true },
+    {
+      id: "fixture-acp",
+      label: "Fixture",
+      engine: "acp",
+      command: ["fixture"],
+      enabled: true,
+      params: {
+        mcpServers: [
+          { name: "concors-schedules", type: "http", url: "http://127.0.0.1:10000/mcp" },
+        ],
+      },
+    },
     () => process,
   );
   const { notifications } = observe(provider);

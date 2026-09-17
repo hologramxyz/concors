@@ -3,7 +3,7 @@ import { serialTasks } from "./platform/serial-task";
 
 export const DEFAULT_APPEARANCE: MobilePreferences = {
   theme: "system",
-  corners: "subtle",
+  corners: "rounded",
   sound: false,
 };
 export type CornerStyle = MobilePreferences["corners"];

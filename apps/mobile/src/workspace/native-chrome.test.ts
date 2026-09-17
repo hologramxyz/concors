@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import {
   currentNativeSnapshot,
+  nativeSurfaceLayout,
   reconcileNativeDraft,
   type NativeSurfaceSnapshot,
 } from "./native-chrome-types";
@@ -29,6 +30,23 @@ it("rejects stale scopes and daemon connections before showing native controls",
   expect(currentNativeSnapshot({ ...host, connectionId: "connection-b" }, snapshot)).toBe(false);
   expect(currentNativeSnapshot({ ...host, nativeChrome: false }, snapshot)).toBe(false);
   expect(currentNativeSnapshot(host, null)).toBe(false);
+});
+it("clips native controls without resizing their glass or label", () => {
+  const surface = {
+    id: "search",
+    content: { kind: "button", icon: "search", label: "Search", title: "", disabled: false },
+    frame: { x: 264, y: 70, width: 44, height: 44 },
+    clip: { x: 264, y: 70, width: 16, height: 44 },
+    interactive: false,
+  } as const;
+  const viewport = { width: 390, height: 844 };
+  expect(nativeSurfaceLayout(surface, viewport, viewport)).toEqual({
+    clip: { left: 264, top: 70, width: 16, height: 44 },
+    content: { left: 0, top: 0, width: 44, height: 44 },
+  });
+  expect(nativeSurfaceLayout(surface, viewport, { width: 780, height: 844 }).content.width).toBe(
+    88,
+  );
 });
 it("does not overwrite newer typing with an older native bridge echo", () => {
   expect(reconcileNativeDraft("hello", 5, "hell", 4)).toBe("hello");
