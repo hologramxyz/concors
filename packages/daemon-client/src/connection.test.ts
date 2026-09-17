@@ -91,6 +91,31 @@ function startConnection() {
 }
 
 describe("DaemonConnection", () => {
+  it("keeps remote preview credentials in URL fragments and opens local previews directly", () => {
+    const remote = new DaemonConnection({
+      endpoint: describeDaemonEndpoint("wss://m-example.dev.concors.app/ws"),
+      client,
+      protocols: ["concors.bearer.preview-token"],
+    });
+    const remoteUrl = new URL(remote.previewUrl({ port: 5173, protocol: "http" })!);
+    expect(remoteUrl.origin).toBe("https://5173.m-example.dev.concors.app");
+    expect(remoteUrl.search).toBe("");
+    expect(new URLSearchParams(remoteUrl.hash.slice(1)).get("access_token")).toBe("preview-token");
+    expect(
+      new DaemonConnection({
+        endpoint: describeDaemonEndpoint("ws://127.0.0.1:7420/ws"),
+        client,
+      }).previewUrl({ port: 5173, protocol: "http" }),
+    ).toBe("http://127.0.0.1:5173/");
+    expect(
+      new DaemonConnection({
+        endpoint: describeDaemonEndpoint("wss://preview.example/path/ws"),
+        client,
+        protocols: ["concors.bearer.preview-token"],
+      }).previewUrl({ port: 5173, protocol: "http" }),
+    ).toBeNull();
+  });
+
   it("resubscribes after reconnect without accepting the old socket's readings", async () => {
     const { connection, socket, ready, sockets } = startConnection();
     const listener = vi.fn();
