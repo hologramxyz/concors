@@ -20,7 +20,12 @@ import { countHostSessions } from "../managed/sessions.ts";
 import { DAEMON_VERSION } from "../version.ts";
 import type { Socket } from "node:net";
 import type { DaemonConfig } from "../config.ts";
-import { ensureSessionHost, type HostDescriptor, type HostLaunch } from "./session-host.ts";
+import {
+  ensureSessionHost,
+  hostBuild,
+  type HostDescriptor,
+  type HostLaunch,
+} from "./session-host.ts";
 import {
   PREVIEW_AUTH_PATH,
   authorizePreview,
@@ -51,13 +56,17 @@ export function createPersistentGateway(
     throw new Error(
       "Session gateways must bind to loopback. Use an authenticated tunnel for remote access.",
     );
+  // Read once, and only when a host is actually needed: the build its host must be running.
+  let build: Promise<string> | null = null;
   let pending: Promise<HostDescriptor> | null = null;
   let closing = false;
   const sockets = new Set<Socket>();
   const host = () =>
-    (pending ??= ensureSessionHost(directory, launch).finally(() => {
-      pending = null;
-    }));
+    (pending ??= (build ??= hostBuild(launch))
+      .then((expected) => ensureSessionHost(directory, launch, expected))
+      .finally(() => {
+        pending = null;
+      }));
   const heartbeat = managed
     ? createHeartbeat({
         ...managed.config,

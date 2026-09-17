@@ -10,7 +10,10 @@ import { createLogger } from "../managed/log.ts";
 import { createPersistentGateway } from "./gateway.ts";
 import { ensureSessionHost } from "./session-host.ts";
 
-vi.mock("./session-host.ts", () => ({ ensureSessionHost: vi.fn() }));
+vi.mock("./session-host.ts", () => ({
+  ensureSessionHost: vi.fn(),
+  hostBuild: vi.fn(async () => "test:build"),
+}));
 const cleanups: (() => Promise<unknown>)[] = [];
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
