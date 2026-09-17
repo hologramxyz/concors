@@ -5,6 +5,7 @@ import { machineAvailability } from "@concors/client-core";
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -73,6 +74,13 @@ const subscribeState = (listener: () => void) =>
   });
 export function MobileApp() {
   const host = useSyncExternalStore(subscribeState, getHostState);
+  useLayoutEffect(() => {
+    const style = document.documentElement.style;
+    for (const edge of ["top", "bottom", "left", "right"] as const) {
+      if (host?.safeArea) style.setProperty(`--mobile-safe-${edge}`, `${host.safeArea[edge]}px`);
+      else style.removeProperty(`--mobile-safe-${edge}`);
+    }
+  }, [host?.safeArea]);
   return host ? (
     <CompactLayoutContext value={true}>
       <ShortcutProvider
@@ -523,6 +531,7 @@ function MobileWorkspaceContent({
                     <div className="mobile-sidebar-machine">
                       <MobileMachinePicker
                         host={host}
+                        onManageMachines={() => openSettings("machines")}
                         onOpenResources={() => {
                           setSidebarOpen(false);
                           setResourcesOpen(true);
@@ -776,17 +785,25 @@ function MobileWorkspaceContent({
                                   ? "Session unavailable"
                                   : project
                                     ? "Start a conversation"
-                                    : "Your workspace, wherever you are"}
+                                    : !host.direct && !host.machines.length
+                                      ? "Connect a machine to get started"
+                                      : "Your workspace, wherever you are"}
                               </h1>
                               <p>
                                 {!host.capabilities.remoteAccess
                                   ? "Remote access is not available on this Concors server yet."
                                   : host.machineId && !workspace
                                     ? "Connecting to your projects and agents…"
-                                    : "Open a project from the sidebar or add one to get started."}
+                                    : !host.direct && !host.machines.length
+                                      ? "Your cloud machines appear in the selected organization. Check Machines in Settings or switch organizations from your profile."
+                                      : "Open a project from the sidebar or add one to get started."}
                               </p>
                               {project ? (
                                 <NewTabMenu empty disabled={!canEdit} onCreate={createTab} />
+                              ) : !host.direct && !host.machines.length ? (
+                                <Button onClick={() => openSettings("machines")}>
+                                  Manage machines
+                                </Button>
                               ) : (
                                 <Button variant="outline" onClick={() => setSidebarOpen(true)}>
                                   Open workspace sidebar

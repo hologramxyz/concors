@@ -571,7 +571,7 @@ test("message history uses the shared mobile drawer and returns focus to its tri
   // A hardware keyboard uses the same compact presentation as touch-triggered dialogs.
   await ui.getByRole("textbox", { name: "Message Codex" }).focus();
   await page.keyboard.press("Control+Shift+t");
-  const shortcuts = ui.getByRole("dialog", { name: "Tab shortcuts", exact: true });
+  const shortcuts = ui.getByRole("dialog", { name: "Shortcut actions", exact: true });
   await expect(shortcuts).toHaveAttribute("data-mobile-drawer", "true");
   await page.keyboard.press("Escape");
   await expect(shortcuts).toHaveCount(0);
@@ -936,18 +936,18 @@ test("sidebar has no logo or duplicate menu, with glass search behind the rounde
   await expect(workspace).toHaveCSS("border-top-left-radius", "0px");
   await expect
     .poll(rim)
-    .toEqual({ opacity: "0", blur: "blur(18px) saturate(1.5)", pointerEvents: "none" });
+    .toEqual({ opacity: "0", blur: "blur(12px) saturate(1.1)", pointerEvents: "none" });
   await header.click();
   await expect(sidebar.getByRole("img", { name: "Concors", exact: true })).toHaveCount(0);
   await expect(sidebar.locator(".mobile-sidebar-head button")).toHaveCount(2);
   await expect(sidebar.locator('button[aria-label*="sidebar"]')).toHaveCount(0);
-  await expect(workspace).toHaveCSS("border-top-left-radius", "24px");
-  await expect(workspace).toHaveCSS("border-bottom-left-radius", "24px");
+  await expect(workspace).toHaveCSS("border-top-left-radius", "32px");
+  await expect(workspace).toHaveCSS("border-bottom-left-radius", "32px");
   await expect(workspace).toHaveCSS("overflow", "hidden");
   await expect
     .poll(rim)
-    .toEqual({ opacity: "1", blur: "blur(18px) saturate(1.5)", pointerEvents: "none" });
-  await expect(main).toHaveCSS("clip-path", "inset(3px round 21px)");
+    .toEqual({ opacity: "1", blur: "blur(12px) saturate(1.1)", pointerEvents: "none" });
+  await expect(main).toHaveCSS("clip-path", "inset(1px round 31px)");
   expect(await main.evaluate((element) => [element.clientWidth, element.clientHeight])).toEqual(
     closedSize,
   );
@@ -1156,11 +1156,11 @@ test("sidebar, chat and files share header spacing at narrow phone widths", asyn
       });
     const main = await geometry(".mobile-header");
     expect(main).toEqual({
-      padding: width <= 360 ? "10px 8px 14px" : "10px 12px 14px",
+      padding: width <= 360 ? "12px 8px" : "12px",
       gap: width <= 360 ? "6px" : "10px",
-      height: 76,
+      height: 68,
       top: 12,
-      bottom: 16,
+      bottom: 12,
       left: width <= 360 ? 8 : 12,
       right: width <= 360 ? 8 : 12,
     });
