@@ -166,6 +166,29 @@ without private code, credentials or personal data in screenshots.
 - Optional services: only promise/test push and deletion when a functioning backend advertises
   them. Do not mark unimplemented features verified.
 
+### Navigation and sign-in regression pass
+
+Run these on the newly built candidate, not an older installed TestFlight binary:
+
+1. With the keyboard hidden, verify sidebar, Search and Files icon buttons share a compact
+   44-point frame. Check rounded, subtle and square themes, including Reduce Transparency.
+2. Slowly drag the workspace right, pause halfway, and reverse direction. Search must stay
+   behind the moving workspace; its menu button remains visible but does not activate through
+   the return-to-workspace scrim. The workspace edge should have only a subtle glass highlight.
+3. Drag Files in from the right and back out, including from a terminal. Its back button and
+   directory title travel with Files throughout the gesture; underlying controls do not float above it.
+4. Check sidebar and Files backgrounds behind the notch and home indicator. Controls stay in
+   the safe area; opening and dismissing the keyboard must not leave a blank bottom band.
+5. Sign out and choose GitHub. Verify successful return from the system browser, cancellation,
+   and an unlinked account without exposing callback codes or credentials in feedback.
+6. Open the machine picker, then Manage machines. Also test an account with no machines.
+   This provides setup navigation, not VPS provisioning: new machines still require desktop
+   setup under the existing companion scope. Do not record this as mobile machine creation.
+
+Browser geometry/bridge tests cover clipping and safe-area calculations, but cannot verify
+SwiftUI glass rendering, device keyboard behavior or a real GitHub browser callback. Record
+those separately on the physical device before marking them passed.
+
 After testing, record real evidence in `apps/mobile/release/readiness.json` and address the
 [submission packet](../apps/mobile/release/submission-packet.md). The beta does not approve
 privacy disclosures, public pages, app links, recovery/deletion or storefront policy.
