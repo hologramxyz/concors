@@ -571,7 +571,7 @@ test("message history uses the shared mobile drawer and returns focus to its tri
   // A hardware keyboard uses the same compact presentation as touch-triggered dialogs.
   await ui.getByRole("textbox", { name: "Message Codex" }).focus();
   await page.keyboard.press("Control+Shift+t");
-  const shortcuts = ui.getByRole("dialog", { name: "Tab shortcuts", exact: true });
+  const shortcuts = ui.getByRole("dialog", { name: "Shortcut actions", exact: true });
   await expect(shortcuts).toHaveAttribute("data-mobile-drawer", "true");
   await page.keyboard.press("Escape");
   await expect(shortcuts).toHaveCount(0);
