@@ -14,12 +14,12 @@ test("mobile keeps previews in the sidebar and process inspection in computer Re
   await expect(preview).toBeVisible();
   await expect(sidebar.getByRole("button", { name: "Add preview" })).toHaveCount(0);
   await expect(ui.getByRole("dialog", { name: /preview/i })).toHaveCount(0);
-  let confirmation = "";
-  page.once("dialog", async (dialog) => {
-    confirmation = dialog.message();
-    await dialog.dismiss();
-  });
-  await preview.click();
+  const dialogPromise = page.waitForEvent("dialog");
+  const clickPromise = preview.click();
+  const dialog = await dialogPromise;
+  const confirmation = dialog.message();
+  await dialog.dismiss();
+  await clickPromise;
   expect(confirmation).toContain("preview-5173.example.invalid");
   expect(confirmation).not.toContain("access_token");
   await page.screenshot({ path: "test-results/mobile-previews-sidebar.png" });
