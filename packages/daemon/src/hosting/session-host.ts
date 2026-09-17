@@ -1,10 +1,11 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
 import { mkdir, readFile, writeFile, rm, stat, open, realpath, rename } from "node:fs/promises";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { z } from "zod";
 import { createDaemonServer, type DaemonServerOptions } from "../server.ts";
+import { DAEMON_VERSION } from "../version.ts";
 import { resolvedDataDirEnv } from "../profile.ts";
 import type { DaemonConfig } from "../config.ts";
 
@@ -13,6 +14,8 @@ const Descriptor = z.object({
   pid: z.number().int().positive(),
   port: z.number().int().min(1).max(65535),
   token: z.string().regex(/^[a-f0-9]{64}$/),
+  /** Which build started this host. Absent in hosts from before builds were recorded. */
+  build: z.string().optional(),
 });
 export type HostDescriptor = z.infer<typeof Descriptor>;
 const hostDirectory = (directory: string) => join(directory, "session-host");
@@ -126,7 +129,13 @@ export async function runSessionHost(
   process.once("SIGTERM", () => void close());
   try {
     const url = new URL(await server.listen());
-    const host: HostDescriptor = { protocol: 1, pid: process.pid, port: Number(url.port), token };
+    const host: HostDescriptor = {
+      protocol: 1,
+      pid: process.pid,
+      port: Number(url.port),
+      token,
+      build: process.env[BUILD_ENV] ?? DAEMON_VERSION,
+    };
     await writeFile(join(hostDirectory(directory), "host.tmp"), JSON.stringify(host), {
       mode: 0o600,
     });
@@ -146,24 +155,53 @@ export interface HostLaunch {
   args: string[];
 }
 
+/** Passes the launching gateway's build to the host it spawns, so both name it the same way. */
+const BUILD_ENV = "CONCORS_HOST_BUILD";
+
+/**
+ * Identifies the daemon build a host should be running.
+ *
+ * The session host outlives the gateway so terminals survive restarts, which also means an updated
+ * daemon would keep serving from the previous build's host. Comparing versions is not enough: a
+ * rebuilt daemon usually carries the same version, and that is exactly when stale code goes
+ * unnoticed. So the program file the gateway launches is fingerprinted; any change to it replaces
+ * the host. Unreadable files fall back to the version, which never forces a replacement loop.
+ */
+export async function hostBuild(launch: HostLaunch): Promise<string> {
+  // The daemon's code lives in the script when one is passed, otherwise in the executable itself.
+  const program =
+    launch.args.find((argument) => /\.(js|mjs|cjs|ts)$/.test(argument)) ?? launch.executable;
+  const digest = await readFile(program)
+    .then((contents) => createHash("sha256").update(contents).digest("hex").slice(0, 16))
+    .catch(() => null);
+  return `${DAEMON_VERSION}:${digest ?? "unknown"}`;
+}
+
 export async function ensureSessionHost(
   directory: string,
   launch: HostLaunch,
+  build?: string,
 ): Promise<HostDescriptor> {
   await mkdir(directory, { recursive: true, mode: 0o700 });
   directory = await realpath(directory);
+  const expected = build ?? (await hostBuild(launch));
   const existing = await descriptor(directory);
-  if (existing && (await hostHealthy(existing))) return existing;
-  // A live but unresponsive runtime must not be replaced or have its database opened twice.
-  if (existing && alive(existing.pid))
+  if (existing && (await hostHealthy(existing))) {
+    if (existing.build === expected) return existing;
+    // An updated daemon must not keep serving through the previous build's host. Sessions it owns
+    // end here, as they do when a machine's daemon is upgraded.
+    await stopSessionHost(directory);
+  } else if (existing && alive(existing.pid)) {
+    // A live but unresponsive runtime must not be replaced or have its database opened twice.
     throw new Error("The session host is still reconnecting. Try again shortly.");
+  }
   const log = await open(join(directory, "session-host.log"), "a", 0o600);
   let launchError: Error | undefined;
   const child = spawn(launch.executable, launch.args, {
     detached: true,
     windowsHide: true,
     stdio: ["ignore", log.fd, log.fd],
-    env: resolvedDataDirEnv(directory),
+    env: { ...resolvedDataDirEnv(directory), [BUILD_ENV]: expected },
   });
   child.on("error", (error) => {
     launchError = error;
