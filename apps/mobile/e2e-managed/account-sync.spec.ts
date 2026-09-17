@@ -329,12 +329,15 @@ test("organization drawer preserves a failed switch and isolates machine lists a
   await expect(profile.getByRole("combobox", { name: "Organization", exact: true })).toContainText(
     "Personal",
   );
-  await profile.getByRole("combobox", { name: "Machine", exact: true }).click();
+  // Machine selection lives in the sidebar; account now only contains organization/settings.
+  await close(ui, "Account");
+  await ui.getByRole("combobox", { name: "Machine", exact: true }).click();
   await expect(ui.getByRole("option", { name: /build-server Connected/ })).toHaveAttribute(
     "aria-selected",
     "true",
   );
   await close(ui, "Machine");
+  await account(ui);
   await profile.getByRole("combobox", { name: "Organization", exact: true }).click();
   await ui.getByRole("option", { name: /Hologram team Team · admin/ }).click();
   await expect(sheet(ui, "Account")).toHaveCount(0);
@@ -345,18 +348,20 @@ test("organization drawer preserves a failed switch and isolates machine lists a
   await expect(profile.getByRole("combobox", { name: "Organization", exact: true })).toContainText(
     "Hologram team",
   );
-  await profile.getByRole("combobox", { name: "Machine", exact: true }).click();
+  await close(ui, "Account");
+  await ui.getByRole("combobox", { name: "Machine", exact: true }).click();
   await expect(ui.getByRole("option", { name: /team-server/ })).toBeVisible();
   await expect(ui.getByRole("option", { name: /build-server/ })).toHaveCount(0);
   await close(ui, "Machine");
+  await account(ui);
   await profile.getByRole("button", { name: "Settings", exact: true }).click();
   const settings = sheet(ui, "Settings");
   await settings.getByRole("combobox", { name: "Organization", exact: true }).click();
   await ui.getByRole("option", { name: /Personal Personal · owner/ }).click();
   await expect(settings).toHaveCount(0);
   await expect(ui.getByRole("button", { name: "Open sidebar", exact: true })).toBeVisible();
-  await account(ui);
-  await profile.getByRole("combobox", { name: "Machine", exact: true }).click();
+  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  await ui.getByRole("combobox", { name: "Machine", exact: true }).click();
   await expect(ui.getByRole("option", { name: /build-server Connected/ })).toHaveAttribute(
     "aria-selected",
     "true",
