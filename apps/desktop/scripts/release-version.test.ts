@@ -6,10 +6,13 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const sources = (over: Partial<Record<"packageJson" | "tauriConf" | "pkgbuild", string>> = {}) => ({
+const sources = (
+  over: Partial<Record<"packageJson" | "tauriConf" | "pkgbuild" | "cargoToml", string>> = {},
+) => ({
   packageJson: JSON.stringify({ name: "@concors/desktop", version: "0.2.0" }),
   tauriConf: JSON.stringify({ productName: "Concors", version: "0.2.0" }),
   pkgbuild: "pkgname=concors-bin\npkgver=0.2.0\npkgrel=1\n",
+  cargoToml: '[package]\nname = "concors-desktop"\nversion = "0.2.0"\nedition = "2021"\n',
   ...over,
 });
 
@@ -24,6 +27,9 @@ describe("agreedVersion", () => {
     ).toThrow("src-tauri/tauri.conf.json is 0.1.0");
     expect(() => agreedVersion(sources({ pkgbuild: "pkgver=0.1.0\n" }))).toThrow(
       "PKGBUILD pkgver is 0.1.0",
+    );
+    expect(() => agreedVersion(sources({ cargoToml: '[package]\nversion = "0.1.0"\n' }))).toThrow(
+      "Cargo.toml is 0.1.0",
     );
   });
 
@@ -57,6 +63,7 @@ describe("agreedVersion", () => {
         packageJson: JSON.stringify({ version: "0.2.0-rc.1" }),
         tauriConf: JSON.stringify({ version: "0.2.0-rc.1" }),
         pkgbuild: "pkgver=0.2.0-rc.1\n",
+        cargoToml: 'version = "0.2.0-rc.1"\n',
       }),
     ).toBe("0.2.0-rc.1");
   });
