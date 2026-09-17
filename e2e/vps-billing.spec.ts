@@ -30,7 +30,14 @@ const machine = {
 
 async function billingApi(
   page: Page,
-  options: { card?: boolean; unpriced?: boolean; decline?: boolean; savedKey?: boolean } = {},
+  options: {
+    card?: boolean;
+    unpriced?: boolean;
+    decline?: boolean;
+    savedKey?: boolean;
+    /** An existing machine that accepts SSH logins. */
+    ready?: boolean;
+  } = {},
 ) {
   await signedIn(page);
   const state = {
@@ -159,7 +166,6 @@ async function billingApi(
     } else if (path.endsWith("/machines")) {
       if (request.method() === "POST") {
         expect(state.card).toBe(true);
-        expect(state.keyAdded).toBe(true);
         expect(body).toMatchObject({
           name: "build-agent",
           region: machine.region,
@@ -174,7 +180,10 @@ async function billingApi(
           status = 201;
           result = { machine };
         }
-      } else result = { machines: state.created ? [machine] : [] };
+      } else
+        result = {
+          machines: options.ready ? [readyMachine] : state.created ? [machine] : [],
+        };
     } else throw new Error(`Unexpected billing API: ${path}`);
     await route.fulfill({
       status,
@@ -192,6 +201,22 @@ async function billingApi(
   return state;
 }
 
+const readyMachine = {
+  ...machine,
+  status: "running",
+  ovhState: "running",
+  serviceName: "vps-1.vps.ovh.us",
+  ipv4: "147.135.1.2",
+  accessReadyAt: "2026-09-08T00:10:00.000Z",
+};
+
+async function openMachines(page: Page) {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Switch machine", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Manage machines", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Machines", exact: true }).first()).toBeVisible();
+}
+
 async function openCreation(page: Page) {
   await page.goto("/");
   await page.getByRole("button", { name: "Switch machine", exact: true }).click();
@@ -207,8 +232,6 @@ async function openCreation(page: Page) {
   await expect(page.getByRole("dialog", { name: "New VPS" })).toBeVisible();
   await page.getByRole("textbox", { name: "Name", exact: true }).fill("build-agent");
   await page.getByRole("button", { name: "Continue", exact: true }).click();
-  const sshKey = page.getByRole("textbox", { name: "SSH public key", exact: true });
-  if (await sshKey.isVisible()) await sshKey.fill(key);
   await page.getByRole("button", { name: "Continue", exact: true }).click();
 }
 
@@ -345,11 +368,8 @@ for (const viewport of [
     const dialog = page.getByRole("dialog", { name: "New VPS" });
     const pay = dialog.getByRole("button", { name: "Pay $6.99 & deploy", exact: true });
     await expect(pay).toBeEnabled();
-    // Long keys and narrow windows must not push the form or its actions sideways.
+    // Narrow windows must not push the form or its actions sideways.
     await dialog.getByRole("button", { name: "Edit customization" }).click();
-    await page
-      .getByRole("textbox", { name: "SSH public key" })
-      .fill(`${key} ${"workstation".repeat(30)}`);
     const assertLayout = async () => {
       const geometry = await dialog.evaluate((element) => {
         const rect = element.getBoundingClientRect();
@@ -428,7 +448,6 @@ test("wizard preserves customization and only deploys on final confirmation", as
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(page.getByLabel("Node.js version", { exact: true })).toHaveValue("22");
   await expect(page.getByRole("checkbox", { name: /Docker/ })).toBeChecked();
-  await expect(page.getByRole("textbox", { name: "SSH public key", exact: true })).toHaveValue(key);
   await page.screenshot({ path: "/tmp/vps-wizard-customize.png" });
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(page.getByText(/Node.js \(Node 22\), npm, pnpm, Yarn/)).toBeVisible();
@@ -449,8 +468,11 @@ test("wizard preserves customization and only deploys on final confirmation", as
   ]);
 });
 
-test("saved SSH keys need no extra input and optional tools can be disabled", async ({ page }) => {
-  const state = await billingApi(page, { card: true, savedKey: true });
+test("creating a VPS never asks for an SSH key and optional tools can be disabled", async ({
+  page,
+}) => {
+  // No saved key: Concors manages the machine with its own key, so none is needed to create one.
+  const state = await billingApi(page, { card: true });
   await openCreation(page);
   await page.getByRole("button", { name: "Edit customization" }).click();
   await expect(page.getByRole("textbox", { name: "SSH public key", exact: true })).toHaveCount(0);
@@ -467,6 +489,28 @@ test("saved SSH keys need no extra input and optional tools can be disabled", as
   expect(
     state.requests.find((r) => r.path.endsWith("/machines") && r.body !== undefined)?.body,
   ).toMatchObject({ developmentTools: { node: null, docker: false } });
+});
+
+test("a machine points to Settings for SSH when there is no key", async ({ page }) => {
+  await billingApi(page, { ready: true });
+  await openMachines(page);
+  const card = page.locator("#cloud-machine-vps-1");
+  await expect(
+    card.getByText("Add an SSH key in Settings to connect from your own terminal.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(card.getByText(/^ssh /)).toHaveCount(0);
+  // Only the desktop app can create a key on this computer.
+  await expect(card.getByRole("button", { name: "Set up SSH on this computer" })).toHaveCount(0);
+});
+
+test("a machine shows its SSH command once a key exists", async ({ page }) => {
+  await billingApi(page, { ready: true, savedKey: true });
+  await openMachines(page);
+  const card = page.locator("#cloud-machine-vps-1");
+  await expect(card.getByText("ssh ubuntu@147.135.1.2", { exact: true })).toBeVisible();
+  await expect(card.getByRole("button", { name: "Copy SSH command" })).toBeVisible();
 });
 
 for (const width of [390, 1280]) {

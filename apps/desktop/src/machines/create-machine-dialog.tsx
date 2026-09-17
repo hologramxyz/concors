@@ -2,13 +2,9 @@ import type { MachineCatalog, CreateMachineInput, DevelopmentTools } from "@conc
 import { ChevronDown, CreditCard, MapPin, Server } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import { useSshKeys } from "@/data/ssh-keys";
-import { api } from "@/auth/api";
 import { DevelopmentToolPicker } from "./development-tool-picker";
 import { useBilling } from "@/billing/use-billing";
 import { openExternal } from "@/tauri";
-import { Textarea } from "@/components/ui/textarea";
-import { describeMachinesError } from "./use-machines";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -50,10 +46,6 @@ export function CreateMachineDialog({
   onClose,
 }: CreateMachineDialogProps) {
   const billing = useBilling(organizationId);
-  const keys = useSshKeys(organizationId);
-  const keyCount = keys.data?.length ?? null;
-  const [publicKey, setPublicKey] = useState("");
-  const keyError = keys.error ? describeMachinesError(keys.error) : null;
   const [step, setStep] = useState(0);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const previousStep = useRef(step);
@@ -80,8 +72,6 @@ export function CreateMachineDialog({
     nameOk &&
     region !== "" &&
     chosenSize !== undefined &&
-    keyCount !== null &&
-    (keyCount > 0 || publicKey.trim() !== "") &&
     billing.status !== null &&
     (!billed || (price !== undefined && billing.status.hasPaymentMethod));
 
@@ -91,11 +81,10 @@ export function CreateMachineDialog({
     chosenSize !== undefined &&
     billing.status !== null &&
     (!billed || price !== undefined);
-  const customizeReady = keyCount !== null && (keyCount > 0 || publicKey.trim() !== "");
   const busy = pending || billing.opening || billing.checkout !== null;
   const nodeLabel = tools.node === "lts" ? "Latest LTS" : `Node ${tools.node}`;
   const advance = () => {
-    if (!busy && ((step === 0 && serverReady) || (step === 1 && customizeReady))) setStep(step + 1);
+    if (!busy && ((step === 0 && serverReady) || step === 1)) setStep(step + 1);
   };
 
   return (
@@ -141,14 +130,6 @@ export function CreateMachineDialog({
             setPending(true);
             setError(null);
             void (async () => {
-              if (keyCount === 0) {
-                const key = await api.addSshKey({
-                  organizationId,
-                  name: `${name} access`,
-                  publicKey: publicKey.trim(),
-                });
-                keys.resource.set((current) => [...(current ?? []), key]);
-              }
               await onCreate({
                 name,
                 region,
@@ -309,38 +290,6 @@ export function CreateMachineDialog({
                     Optional development tool setup is unavailable right now. You can install tools
                     from the terminal after deployment.
                   </p>
-                )}
-                {keyCount === 0 && (
-                  <label className="block space-y-2 text-sm">
-                    <span className="block font-medium">SSH public key</span>
-                    <Textarea
-                      className="max-h-32 min-h-20 resize-y font-mono text-xs [overflow-wrap:anywhere]"
-                      aria-label="SSH public key"
-                      value={publicKey}
-                      disabled={pending}
-                      onChange={(event) => setPublicKey(event.target.value)}
-                      placeholder="ssh-ed25519 AAAA…"
-                      required
-                    />
-                    <span className="block text-xs text-muted-foreground">
-                      Paste your public key to access the VPS. It will be saved to this workspace.
-                    </span>
-                  </label>
-                )}
-                {keyCount === null && !keyError && (
-                  <p role="status" className="text-xs text-muted-foreground">
-                    Loading SSH keys…
-                  </p>
-                )}
-                {keyError && (
-                  <p role="alert" className="text-sm break-words text-destructive">
-                    {keyError}
-                  </p>
-                )}
-                {keyCount === null && keyError && (
-                  <Button type="button" variant="ghost" onClick={() => void keys.refresh()}>
-                    Retry loading SSH keys
-                  </Button>
                 )}
               </>
             )}
@@ -543,7 +492,7 @@ export function CreateMachineDialog({
             <Button
               type="submit"
               className="min-w-0"
-              disabled={busy || (step === 0 ? !serverReady : step === 1 ? !customizeReady : !ready)}
+              disabled={busy || (step === 0 ? !serverReady : step === 2 && !ready)}
             >
               {step < 2
                 ? "Continue"

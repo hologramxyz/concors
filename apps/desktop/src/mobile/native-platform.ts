@@ -14,3 +14,12 @@ export async function onNativeNotificationClick() {
 }
 
 export { readText as readClipboardText, copyText as writeClipboardText } from "@/lib/clipboard";
+
+// A phone cannot keep an SSH private key for the person's own terminal. With no device key the
+// shared machine UI shows the plain command once a key exists, or points to Settings.
+export const deviceSshKey = {
+  find: async () => null,
+  create: async (): Promise<never> => {
+    throw new Error("Set up SSH from the Concors desktop app.");
+  },
+} as const;
