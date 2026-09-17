@@ -9,6 +9,7 @@ import { isTauri as tauriIsTauri } from "@tauri-apps/api/core";
 
 export { localDaemon, type DaemonIdentity, type LocalDaemonStatus } from "./local-daemon.ts";
 export { openExternal } from "./open-external.ts";
+export { deviceSshKey, type DeviceSshKey } from "./device-ssh-key.ts";
 export {
   startSignInListener,
   type SignInCallback,

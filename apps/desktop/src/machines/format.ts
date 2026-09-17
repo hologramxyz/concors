@@ -78,11 +78,21 @@ export function describeEnding(
     : `Ends ${date.toLocaleDateString(locale, { dateStyle: "medium" })}`;
 }
 
-/** `ssh ubuntu@1.2.3.4`, or `null` until the machine has an address and accepts logins. */
+/**
+ * `ssh ubuntu@1.2.3.4`, or `null` until the machine has an address and accepts logins. With
+ * `identityPath` the command names this computer's Concors key, which `ssh` would not try by default.
+ */
 export function sshCommand(
   machine: Pick<Machine, "sshUser" | "ipv4" | "accessReadyAt" | "status">,
+  identityPath?: string,
 ): string | null {
   if (machine.ipv4 === null || machine.accessReadyAt === null) return null;
   if (machine.status !== "running" && machine.status !== "stopped") return null;
-  return `ssh ${machine.sshUser}@${machine.ipv4}`;
+  const identity = identityPath === undefined ? "" : `-i ${quotePath(identityPath)} `;
+  return `ssh ${identity}${machine.sshUser}@${machine.ipv4}`;
+}
+
+/** Double quotes only when needed; they work in POSIX shells, PowerShell and cmd alike. */
+function quotePath(path: string): string {
+  return /^[\w./:~\\-]+$/.test(path) ? path : `"${path.replace(/"/g, '\\"')}"`;
 }
