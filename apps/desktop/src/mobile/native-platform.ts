@@ -23,3 +23,16 @@ export const deviceSshKey = {
     throw new Error("Set up SSH from the Concors desktop app.");
   },
 } as const;
+
+// The app store updates the mobile app; nothing in the shared UI should offer to do it here.
+export const appUpdate = {
+  installation: async () => ({
+    kind: "unknown" as const,
+    formats: [],
+    platform: "unknown",
+    arch: "unknown",
+  }),
+  install: async (): Promise<never> => {
+    throw new Error("The mobile app updates through the app store.");
+  },
+} as const;

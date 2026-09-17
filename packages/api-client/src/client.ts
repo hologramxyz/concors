@@ -5,7 +5,7 @@ import {
   GitHubRepositoriesSchema,
   GitHubPreparedSchema,
 } from "./github.ts";
-import type { DevelopmentTools } from "./schemas.ts";
+import type { DesktopUpdate, DevelopmentTools } from "./schemas.ts";
 import type { z } from "zod";
 
 import { ApiError, ApiNetworkError } from "./errors.ts";
@@ -13,6 +13,7 @@ import {
   AuthResponseSchema,
   NativeSignInResponseSchema,
   SignInProvidersSchema,
+  DesktopUpdateSchema,
   type SignInProviders,
   BillingStatusSchema,
   SetupCheckoutSchema,
@@ -154,6 +155,37 @@ export class ApiClient {
     });
     this.#rememberToken(response, data.token);
     return data.user;
+  }
+
+  /**
+   * The published desktop build newer than `version`, or `null` when this copy is current — which
+   * is also the answer while no version is pinned, or when nothing is published in a format this
+   * installation can apply. Needs no session: it reveals only what we publish, and the app checks
+   * before anyone signs in.
+   */
+  async getDesktopUpdate(input: {
+    readonly version: string;
+    readonly platform: string;
+    readonly arch: string;
+    readonly formats: readonly string[];
+  }): Promise<DesktopUpdate | null> {
+    if (input.formats.length === 0) return null;
+    const path =
+      `/api/v1/releases/desktop/${encodeURIComponent(input.platform)}` +
+      `/${encodeURIComponent(input.arch)}/${encodeURIComponent(input.version)}` +
+      `?formats=${encodeURIComponent(input.formats.join(","))}`;
+    const { response } = await this.#request("GET", path, { schema: null });
+    if (response.status === 204) return null;
+
+    const parsed = DesktopUpdateSchema.safeParse(await readJson(response));
+    if (!parsed.success)
+      throw new ApiError(
+        response.status,
+        "Unexpected response from the update check",
+        "INVALID_RESPONSE",
+      );
+    const { pub_date: publishedAt, ...rest } = parsed.data;
+    return { ...rest, publishedAt };
   }
 
   /** Sign-in methods beyond email this API offers; an environment without credentials hides them. */

@@ -22,6 +22,8 @@
     "desktop:build": "pnpm --filter @concors/desktop build",
     "desktop:package:linux": "node apps/desktop/scripts/package-linux.ts",
     "desktop:release:linux": "node apps/desktop/scripts/release-tarball.ts",
+    "desktop:release:manifest": "node apps/desktop/scripts/release-manifest.ts",
+    "desktop:version": "node apps/desktop/scripts/release-version.ts",
     "desktop:web:dev": "pnpm --filter @concors/desktop web:dev",
     "desktop:web:build": "pnpm --filter @concors/desktop web:build",
     "mobile:dev": "pnpm --filter @concors/mobile dev",
