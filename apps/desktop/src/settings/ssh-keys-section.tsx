@@ -15,6 +15,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { sameSshKey, useDeviceSsh } from "@/machines/device-ssh";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDate } from "@/lib/format-date";
 import { Mono, Section } from "@/views/settings-primitives";
@@ -23,7 +25,10 @@ interface SshKeysSectionProps {
   readonly organization: Organization | undefined;
 }
 
-/** SSH public keys installed on every machine the organization creates from now on. */
+/**
+ * Keys for connecting to your machines from your own terminal. Concors never needs them: it manages
+ * machines with its own key. Added and removed keys reach running machines within seconds.
+ */
 export function SshKeysSection({ organization }: SshKeysSectionProps) {
   const organizationId = organization?.id;
   const query = useSshKeys(organizationId);
@@ -33,11 +38,12 @@ export function SshKeysSection({ organization }: SshKeysSectionProps) {
   const error = actionError ?? (query.error ? describeApiError(query.error) : null);
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
+  const device = useDeviceSsh(organizationId);
 
   return (
     <Section
       title="SSH keys"
-      description="Public keys installed on the machines of this organization. Keys are added to machines when they are created; existing machines keep the keys they were installed with."
+      description="Keys for connecting to your machines from your own terminal. You don't need one to use your machines in Concors. Keys you add or remove reach your running machines within a few seconds."
     >
       {error && (
         <p role="alert" className="py-2 text-sm text-destructive">
@@ -50,7 +56,7 @@ export function SshKeysSection({ organization }: SshKeysSectionProps) {
         </p>
       ) : keys !== null && keys.length === 0 ? (
         <p className="py-2 text-sm text-muted-foreground">
-          No keys yet. Add one before creating a machine, or nobody will be able to log in to it.
+          No keys. You only need one to connect from your own terminal.
         </p>
       ) : (
         <ul className="flex flex-col">
@@ -60,6 +66,9 @@ export function SshKeysSection({ organization }: SshKeysSectionProps) {
                 <div className="flex items-center gap-2 font-medium">
                   <KeyRound className="size-3.5 text-muted-foreground" aria-hidden="true" />
                   <span className="truncate">{key.name}</span>
+                  {device.key && sameSshKey(key.publicKey, device.key.publicKey) && (
+                    <Badge variant="secondary">This computer</Badge>
+                  )}
                 </div>
                 <div className="selectable mt-0.5 truncate text-xs text-muted-foreground">
                   <Mono>{key.type}</Mono> · <Mono>{key.fingerprint}</Mono> · added{" "}
@@ -89,12 +98,23 @@ export function SshKeysSection({ organization }: SshKeysSectionProps) {
           ))}
         </ul>
       )}
-      <div className="py-2.5">
+      <div className="flex flex-wrap items-center gap-2 py-2.5">
+        {device.supported && !device.registered && (
+          <Button size="sm" disabled={device.settingUp} onClick={device.setUp}>
+            <KeyRound data-icon="inline-start" aria-hidden="true" />
+            {device.settingUp ? "Setting up…" : "Set up SSH on this computer"}
+          </Button>
+        )}
         <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
           <Plus data-icon="inline-start" aria-hidden="true" />
-          Add SSH key
+          Add your own key
         </Button>
       </div>
+      {device.error && (
+        <p role="alert" className="pb-2 text-sm break-words text-destructive">
+          {device.error}
+        </p>
+      )}
 
       {adding && (
         <AddSshKeyDialog

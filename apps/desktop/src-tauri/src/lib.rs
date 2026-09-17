@@ -12,6 +12,7 @@
 mod daemon;
 mod notifications;
 mod sign_in;
+mod ssh_key;
 
 use tauri::Manager;
 
@@ -34,6 +35,7 @@ pub fn run() {
             daemon::stop_local_daemon,
             sign_in::start_sign_in_listener,
             sign_in::cancel_sign_in_listener,
+            ssh_key::device_ssh_key,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Concors")

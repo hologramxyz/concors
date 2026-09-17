@@ -216,7 +216,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
 ### Cloud VPS and test billing
 
 From the workspace’s machine menu, choose **Add a machine**, then **New machine**. Select the
-region and size, add an SSH public key if the workspace has none, and save a
+region and size, and save a
 card on Stripe’s hosted page. Return to Concors and choose **Pay … and create
 VPS** to charge the first month and provision the server. The Machines page
 shows provisioning progress and SSH access. **Connect a machine** is disabled
