@@ -2,6 +2,7 @@ import { ThemeRequestSchema, type ThemeResult } from "@concors/protocol";
 import {
   RESOURCES_CAPABILITY,
   ResourceRequestSchema,
+  type ProcessPreview,
   type ResourceOperation,
   type ResourceResult,
 } from "@concors/protocol";
@@ -82,6 +83,8 @@ export interface DaemonConnectionOptions {
   readonly protocolVersion?: ProtocolVersion;
   /** Authentication subprotocols stay in the host transport, never in the endpoint URL. */
   readonly protocols?: string | readonly string[];
+  /** Preview routing supplied by simulated or path-hosted transports. */
+  readonly previewUrl?: (preview: ProcessPreview) => string | null;
   /** How long to wait for `daemon.ready` after the socket opens. */
   readonly handshakeTimeoutMs?: number;
   /** Override the WebSocket implementation (tests, custom transports). */
@@ -248,6 +251,7 @@ export class DaemonConnection {
   readonly #protocolVersion: ProtocolVersion;
   readonly #handshakeTimeoutMs: number;
   readonly #protocols: string | string[] | undefined;
+  readonly #previewUrl: ((preview: ProcessPreview) => string | null) | undefined;
   readonly #createSocket: WebSocketFactory;
 
   constructor(options: DaemonConnectionOptions) {
@@ -257,7 +261,26 @@ export class DaemonConnection {
     this.#handshakeTimeoutMs = options.handshakeTimeoutMs ?? DEFAULT_HANDSHAKE_TIMEOUT_MS;
     this.#protocols =
       typeof options.protocols === "string" ? options.protocols : options.protocols?.slice();
+    this.#previewUrl = options.previewUrl;
     this.#createSocket = options.webSocketFactory ?? defaultWebSocketFactory;
+  }
+
+  /** A browser URL for a daemon-confirmed preview. Remote credentials stay in the fragment. */
+  previewUrl(preview: ProcessPreview): string | null {
+    if (this.#previewUrl) return this.#previewUrl(preview);
+    const daemon = new URL(this.endpoint.url);
+    if (this.endpoint.kind === "local") return `${preview.protocol}://127.0.0.1:${preview.port}/`;
+    if (daemon.protocol !== "wss:" || daemon.pathname !== "/ws") return null;
+    const protocols =
+      typeof this.#protocols === "string" ? [this.#protocols] : (this.#protocols ?? []);
+    const bearer = protocols.find((value) => value.startsWith("concors.bearer."));
+    if (!bearer) return null;
+    const label = preview.protocol === "https" ? `https-${preview.port}` : String(preview.port);
+    const url = new URL(`https://${label}.${daemon.hostname}/`);
+    url.hash = new URLSearchParams({
+      access_token: bearer.slice("concors.bearer.".length),
+    }).toString();
+    return url.href;
   }
 
   get state(): ConnectionState {
