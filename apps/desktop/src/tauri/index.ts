@@ -11,6 +11,12 @@ export { localDaemon, type DaemonIdentity, type LocalDaemonStatus } from "./loca
 export { openExternal } from "./open-external.ts";
 export { deviceSshKey, type DeviceSshKey } from "./device-ssh-key.ts";
 export {
+  appUpdate,
+  type Installation,
+  type InstallationReport,
+  type InstallUpdateInput,
+} from "./app-update.ts";
+export {
   startSignInListener,
   type SignInCallback,
   type SignInListener,

@@ -58,6 +58,10 @@ cp apps/desktop/dist/release/Concors-0.1.0-x64.tar.gz packaging/linux/
 cd packaging/linux && makepkg -si
 ```
 
+`packaging/linux/build-package.sh <tarball> <version> <output-dir>` does the same without
+installing, which is how CI builds it; see [desktop releases](./desktop-releases.md) for
+publishing a build and for the in-app update that consumes it.
+
 The package installs the runtime under `/opt/Concors`, a `/usr/bin/concors` wrapper, a desktop
 entry and hicolor icons; `pacman -R concors-bin` removes it. It sets `!strip` because the
 bundled Node binary and the daemon's native terminal module must not be stripped. The

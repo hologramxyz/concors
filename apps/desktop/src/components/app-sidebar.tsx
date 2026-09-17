@@ -15,6 +15,7 @@ import type { WorkspaceSnapshot, WorkspaceOperation } from "@concors/protocol";
 import type { View } from "@/navigation";
 import { activeOrganization, type SignedInAuth } from "@/auth/auth-state";
 import { AccountMenu } from "@/components/account-menu";
+import { UpdateBadge } from "@/update/update-badge";
 import { MachineSwitcher } from "@/workspace/machine-switcher";
 import type { Host } from "@/workspace/machines";
 
@@ -180,7 +181,8 @@ export function AppSidebar(props: AppSidebarProps) {
           )}
           <PreviewsSidebar compact={props.collapsed} />
         </div>
-        <div className={props.collapsed ? "p-[6px]" : "p-2"}>
+        <div className={cn("space-y-1", props.collapsed ? "p-[6px]" : "p-2")}>
+          <UpdateBadge collapsed={props.collapsed} />
           <AccountMenu
             collapsed={props.collapsed}
             auth={props.auth}

@@ -55,6 +55,27 @@ export const NativeSignInResponseSchema = z.object({ token: z.string().min(1) })
 export const SignInProvidersSchema = z.object({ github: z.boolean() });
 export type SignInProviders = z.infer<typeof SignInProvidersSchema>;
 
+/**
+ * `GET /api/v1/releases/desktop/:platform/:arch/:version`: the published build newer than the
+ * caller's, when there is one. The field names are the ones `tauri-plugin-updater` expects from a
+ * dynamic endpoint, so one document serves both the in-app badge and the updater plugin.
+ */
+export const DesktopUpdateSchema = z.object({
+  version: z.string().min(1),
+  pub_date: z.string().min(1),
+  notes: z.string(),
+  url: z.string().min(1),
+  signature: z.string(),
+  format: z.enum(["tarball", "pacman", "appimage"]),
+  size: z.number().int().positive(),
+  sha256: z.string().regex(/^[0-9a-f]{64}$/),
+});
+
+/** As the client hands it to the UI, with the wire's `pub_date` renamed. */
+export type DesktopUpdate = Omit<z.infer<typeof DesktopUpdateSchema>, "pub_date"> & {
+  publishedAt: string;
+};
+
 export const OrganizationSchema = z.object({
   id: z.string(),
   name: z.string(),
