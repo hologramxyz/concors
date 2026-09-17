@@ -76,10 +76,23 @@ test("native surface bridge preserves navigation, drafts, settings, attachments 
   expect(initial?.surfaces.filter((item) => item.content.kind === "button")).toHaveLength(3);
   await event(page, "button", "Open sidebar", { kind: "press", control: "activate" });
   const sidebarSurfaces = async () =>
-    (await snapshot(page))?.surfaces.map((item) =>
-      item.content.kind === "button" ? [item.content.label, item.content.icon] : "composer",
-    );
+    (await snapshot(page))?.surfaces
+      .filter((item) => item.interactive !== false)
+      .map((item) =>
+        item.content.kind === "button" ? [item.content.label, item.content.icon] : "composer",
+      );
   await expect.poll(sidebarSurfaces).toEqual([["Search workspace", "search"]]);
+  // The translated workspace menu remains drawn beside Search, underneath its scrim.
+  await expect
+    .poll(async () =>
+      (await snapshot(page))?.surfaces.some(
+        (item) =>
+          item.content.kind === "button" &&
+          item.content.icon === "menu" &&
+          item.interactive === false,
+      ),
+    )
+    .toBe(true);
   const menu = initial.surfaces.find(
     (item) => item.content.kind === "button" && item.content.label === "Open sidebar",
   );
