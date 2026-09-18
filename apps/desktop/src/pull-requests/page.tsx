@@ -20,7 +20,7 @@ import { openExternal } from "@/tauri";
 import { ProjectImage } from "@/workspace/project-image";
 import { projectIconKey } from "@/workspace/project-icons";
 import { useProjectIcons } from "@/workspace/use-project-icons";
-import { ageLabel, checksLabel, foldersLabel, reviewLabel } from "./labels";
+import { ageLabel, byOpenCount, checksLabel, foldersLabel, reviewLabel } from "./labels";
 import { pullRequestKey, totalOpenCount, workspaceOpenCount } from "./store";
 import { usePullRequests } from "./use-pull-requests";
 
@@ -166,7 +166,7 @@ export function PullRequestsPage({
                   </h3>
                 )}
                 <div className="space-y-3">
-                  {listing.repositories.map((repository) => (
+                  {byOpenCount(listing.repositories).map((repository) => (
                     <Repository
                       key={repository.name}
                       repository={repository}
@@ -200,7 +200,12 @@ function Repository({
       aria-label={repository.name}
       className="overflow-hidden rounded-lg border bg-background text-ui shadow-xs"
     >
-      <header className="flex items-center gap-2 border-b bg-muted/30 px-4 py-2.5">
+      <header
+        className={cn(
+          "flex items-center gap-2 bg-muted/30 px-4 py-2.5",
+          (repository.error || pullRequests.length > 0) && "border-b",
+        )}
+      >
         <a
           href={pulls}
           onClick={open(pulls)}
@@ -212,21 +217,24 @@ function Repository({
           <span className="min-w-0 truncate text-xs text-muted-foreground">in {folders}</span>
         )}
         <span className="ml-auto shrink-0 text-xs text-muted-foreground tabular-nums">
-          {repository.error ? "Unavailable" : `${repository.openCount} open`}
+          {repository.error
+            ? "Unavailable"
+            : mine && repository.openCount && !pullRequests.length
+              ? "None opened by you"
+              : `${repository.openCount} open`}
         </span>
       </header>
+      {/* A repository with nothing to list stays a one-line header. */}
       {repository.error ? (
         <p className="px-4 py-3 text-muted-foreground">{repository.error}</p>
-      ) : !pullRequests.length ? (
-        <p className="px-4 py-3 text-muted-foreground">
-          {mine && repository.openCount ? "None opened by you." : "No open pull requests."}
-        </p>
       ) : (
-        <ul className="divide-y">
-          {pullRequests.map((pullRequest) => (
-            <PullRequestRow key={pullRequest.number} pullRequest={pullRequest} />
-          ))}
-        </ul>
+        pullRequests.length > 0 && (
+          <ul className="divide-y">
+            {pullRequests.map((pullRequest) => (
+              <PullRequestRow key={pullRequest.number} pullRequest={pullRequest} />
+            ))}
+          </ul>
+        )
       )}
       {!repository.error && repository.openCount > repository.pullRequests.length && (
         <a
