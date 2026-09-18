@@ -20,6 +20,12 @@ import {
 } from "@concors/protocol";
 import { FileRequestSchema, type FileOperation, type FileResult } from "@concors/protocol";
 import {
+  PULL_REQUESTS_CAPABILITY,
+  PullRequestRequestSchema,
+  type PullRequestOperation,
+  type PullRequestResult,
+} from "@concors/protocol";
+import {
   AgentRequestSchema,
   type AgentInfo,
   type AgentEvent,
@@ -153,6 +159,46 @@ export class DaemonConnection {
       } catch (error) {
         clearTimeout(timer);
         this.#resourceRequests.delete(requestId);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
+  }
+  readonly #pullRequestRequests = new Map<
+    string,
+    {
+      resolve: (result: PullRequestResult) => void;
+      reject: (error: Error) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
+  >();
+
+  requestPullRequests(
+    operation: PullRequestOperation,
+    requestId: string,
+  ): Promise<PullRequestResult> {
+    if (this.#state.status !== "ready" || !this.#workspace)
+      return Promise.reject(new Error("Workspace is disconnected"));
+    if (!this.#state.daemon.capabilities?.includes(PULL_REQUESTS_CAPABILITY))
+      return Promise.reject(new Error("Update the machine daemon to see pull requests."));
+    if (this.#pullRequestRequests.has(requestId))
+      return Promise.reject(new Error("Request is already pending"));
+    const request = PullRequestRequestSchema.parse({
+      type: "pull-request.request",
+      requestId,
+      operation,
+    });
+    return new Promise((resolve, reject) => {
+      // Discovery plus a GitHub round trip for every uncached repository.
+      const timer = setTimeout(() => {
+        this.#pullRequestRequests.delete(requestId);
+        reject(new Error("GitHub took too long to answer. Pull requests will refresh shortly."));
+      }, 45_000);
+      this.#pullRequestRequests.set(requestId, { resolve, reject, timer });
+      try {
+        this.#socket?.send(JSON.stringify(request));
+      } catch (error) {
+        clearTimeout(timer);
+        this.#pullRequestRequests.delete(requestId);
         reject(error instanceof Error ? error : new Error(String(error)));
       }
     });
@@ -743,6 +789,15 @@ export class DaemonConnection {
             }
             break;
           }
+          case "pull-request.result": {
+            const pending = this.#pullRequestRequests.get(message.requestId);
+            if (pending) {
+              clearTimeout(pending.timer);
+              this.#pullRequestRequests.delete(message.requestId);
+              pending.resolve(message);
+            }
+            break;
+          }
           case "file.result": {
             const pending = this.#fileRequests.get(message.requestId);
             if (pending) {
@@ -959,6 +1014,13 @@ export class DaemonConnection {
         );
       }
       this.#resourceRequests.clear();
+      for (const pending of this.#pullRequestRequests.values()) {
+        clearTimeout(pending.timer);
+        pending.reject(
+          new Error("Connection lost. Pull requests will refresh after reconnecting."),
+        );
+      }
+      this.#pullRequestRequests.clear();
     }
     for (const listener of this.#listeners) {
       listener(state);
