@@ -70,6 +70,7 @@ export interface AppUpdateDependencies {
   install(input: {
     url: string;
     sha256: string;
+    size: number;
     format: string;
     token: string;
     version: string;
@@ -119,6 +120,7 @@ export async function applyUpdate(
   await dependencies.install({
     url: update.url,
     sha256: update.sha256,
+    size: update.size,
     format: update.format,
     token,
     version: update.version,
