@@ -9,7 +9,7 @@ import { useCallback, useEffect } from "react";
 import { api } from "@/auth/api";
 import { describeAuthError } from "@/auth/auth-state";
 
-import { apiCache, useApiResource } from "@/data/api-resource";
+import { useApiResource } from "@/data/api-resource";
 
 import { isSettling } from "./format.ts";
 
@@ -67,7 +67,6 @@ export function useMachines(organizationId: string | undefined): MachinesState {
           .map((candidate) => (candidate.id === machine.id ? machine : candidate))
           .filter((candidate) => candidate.status !== "deleted"),
       );
-      apiCache().invalidate("subscriptions:");
     },
     [list.resource],
   );
@@ -87,7 +86,6 @@ export function useMachines(organizationId: string | undefined): MachinesState {
         machine,
         ...(current ?? []).filter((item) => item.id !== machine.id),
       ]);
-      apiCache().invalidate("subscriptions:");
       return machine;
     },
     cancel: async (id) => replace(await api.cancelMachine(id)),

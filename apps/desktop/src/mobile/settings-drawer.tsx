@@ -236,7 +236,6 @@ export function SettingsDrawer({
                 )
               }
               auth={{ status: "signed-in", ...host.me, organizations: host.organizations }}
-              onSignOut={() => void run(() => hostAction({ kind: "sign-out" }))}
               onSetActiveOrganization={(organizationId) =>
                 hostAction({ kind: "switch-organization", organizationId })
               }
