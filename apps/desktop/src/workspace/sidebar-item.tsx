@@ -10,7 +10,8 @@ import { ProjectActions } from "./project-actions";
 import { ProjectImage } from "./project-image";
 import { useContext } from "react";
 import { CompactLayoutContext } from "@/components/compact-layout";
-import { pullRequestsLabel, WorkspacePullRequestCount } from "@/pull-requests/workspace-count";
+import { WorkspacePullRequestCount } from "@/pull-requests/workspace-count";
+import { pullRequestsLabel } from "@/pull-requests/labels";
 import { workspaceOpenCount } from "@/pull-requests/store";
 
 export function WorkspaceSidebarItem({

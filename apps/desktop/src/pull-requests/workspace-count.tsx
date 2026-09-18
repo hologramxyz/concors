@@ -4,10 +4,8 @@ import type { WorkspacePullRequests, WorkspaceProject } from "@concors/protocol"
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import { openExternal } from "@/tauri";
+import { pullRequestsLabel } from "./labels";
 import { workspaceOpenCount } from "./store";
-
-export const pullRequestsLabel = (count: number) =>
-  `${count} open pull request${count === 1 ? "" : "s"}`;
 
 /**
  * A workspace's open pull request count, at the end of its sidebar row. Hovering shows each

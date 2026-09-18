@@ -1,5 +1,8 @@
 import type { PullRequest, PullRequestRepository } from "@concors/protocol";
 
+export const pullRequestsLabel = (count: number) =>
+  `${count} open pull request${count === 1 ? "" : "s"}`;
+
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
