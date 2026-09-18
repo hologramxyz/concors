@@ -48,6 +48,7 @@ import {
 } from "./format.ts";
 import { describeMachinesError, useMachines } from "./use-machines.ts";
 import { useDeviceSsh, type DeviceSsh } from "./device-ssh.ts";
+import { SettingsSectionHeader } from "@/views/settings-primitives";
 
 export interface MachinesViewProps {
   readonly auth: SignedInAuth;
@@ -89,36 +90,37 @@ export function MachinesView({
       : machines.filter((machine) => machine.status !== "deleted").length;
 
   return (
-    <div data-machines-view className="flex w-full min-w-0 flex-col">
-      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="text-base font-semibold">Machines</h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Manage this computer and your cloud development machines.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={state.reload}
-            disabled={state.loading}
-            aria-label="Refresh"
-          >
-            <RefreshCw className={cn(state.loading && "animate-spin")} aria-hidden="true" />
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCreating(true)}
-            disabled={state.catalog === null || !organization}
-          >
-            <Plus data-icon="inline-start" aria-hidden="true" />
-            New machine
-          </Button>
-        </div>
-      </div>
-
+    <section
+      data-machines-view
+      aria-label="Machines"
+      className="flex w-full min-w-0 flex-col [overflow-wrap:anywhere]"
+    >
+      <SettingsSectionHeader
+        title="Machines"
+        description="Manage this computer and your cloud development machines."
+        actions={
+          <>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={state.reload}
+              disabled={state.loading}
+              aria-label="Refresh"
+            >
+              <RefreshCw className={cn(state.loading && "animate-spin")} aria-hidden="true" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCreating(true)}
+              disabled={state.catalog === null || !organization}
+            >
+              <Plus data-icon="inline-start" aria-hidden="true" />
+              New machine
+            </Button>
+          </>
+        }
+      />
       {(state.error ?? actionError) && (
         <div
           role="alert"
@@ -141,7 +143,7 @@ export function MachinesView({
 
       {onSelectLocal && (
         <div
-          className="mb-5 flex flex-col items-start justify-between gap-4 rounded-xl border bg-card/40 p-5 sm:flex-row sm:items-center sm:p-6"
+          className="mb-5 flex flex-col items-start justify-between gap-4 rounded-xl border bg-card/40 p-5 md:flex-row md:items-center md:p-6"
           aria-label="Local machine"
         >
           <div className="flex min-w-0 items-center gap-3">
@@ -240,7 +242,7 @@ export function MachinesView({
           onClose={() => setCancelling(null)}
         />
       )}
-    </div>
+    </section>
   );
 }
 
