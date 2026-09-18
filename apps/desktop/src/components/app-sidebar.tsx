@@ -6,7 +6,7 @@ import { projectIconKey } from "@/workspace/project-icons";
 import { useShortcutLabels } from "@/shortcuts/preferences-context";
 import { AgentSidebar } from "@/agents/list";
 import { PreviewsSidebar } from "@/host/previews-sidebar";
-import { SidebarSection } from "./sidebar-section";
+import { SidebarEmpty, SidebarSection } from "./sidebar-section";
 import { PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
 import { TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
@@ -145,32 +145,32 @@ export function AppSidebar(props: AppSidebarProps) {
               />
             }
           >
-            <ul className="mt-1 space-y-0.5">
-              {props.workspace?.projects.map((project) => (
-                <WorkspaceSidebarItem
-                  key={project.id}
-                  project={project}
-                  compact={props.collapsed}
-                  selected={
-                    props.view === "projects" &&
-                    props.workspace?.selection?.projectId === project.id
-                  }
-                  canEdit={props.canEdit}
-                  icon={
-                    props.workspace
-                      ? icons.get(projectIconKey(props.workspace.epoch, project))
-                      : undefined
-                  }
-                  onSelect={props.onSelectProject}
-                  execute={props.execute}
-                />
-              ))}
-              {!props.collapsed && props.workspace?.projects.length === 0 && (
-                <li className="px-2 py-3 text-ui leading-relaxed text-muted-foreground">
-                  Start a workspace or open a folder.
-                </li>
-              )}
-            </ul>
+            {props.workspace?.projects.length ? (
+              <ul className="mt-1 space-y-0.5">
+                {props.workspace.projects.map((project) => (
+                  <WorkspaceSidebarItem
+                    key={project.id}
+                    project={project}
+                    compact={props.collapsed}
+                    selected={
+                      props.view === "projects" &&
+                      props.workspace?.selection?.projectId === project.id
+                    }
+                    canEdit={props.canEdit}
+                    icon={
+                      props.workspace
+                        ? icons.get(projectIconKey(props.workspace.epoch, project))
+                        : undefined
+                    }
+                    onSelect={props.onSelectProject}
+                    execute={props.execute}
+                  />
+                ))}
+              </ul>
+            ) : null}
+            {!props.collapsed && props.workspace?.projects.length === 0 && (
+              <SidebarEmpty>No workspaces yet.</SidebarEmpty>
+            )}
           </SidebarSection>
           {props.collapsed ? (
             <AgentSidebar compact onSelect={props.onSelectAgent} workspace={props.workspace} />
