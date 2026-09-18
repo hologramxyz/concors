@@ -1,4 +1,4 @@
-import { useContext } from "react";
+import { useContext, useState } from "react";
 import { ArrowRight, ArrowUpRight, GitPullRequest } from "lucide-react";
 import type { WorkspacePullRequests, WorkspaceProject } from "@concors/protocol";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
@@ -22,6 +22,7 @@ export function WorkspacePullRequestCount({
   onOpen: (projectId: string) => void;
 }) {
   const mobile = useContext(CompactLayoutContext);
+  const [open, setOpen] = useState(false);
   const count = workspaceOpenCount(listing);
   if (!listing || !count) return null;
   const trigger = (
@@ -29,7 +30,10 @@ export function WorkspacePullRequestCount({
       type="button"
       data-pull-request-count={count}
       aria-label={`${pullRequestsLabel(count)} in ${project.name}`}
-      onClick={() => onOpen(project.id)}
+      onClick={() => {
+        setOpen(false);
+        onOpen(project.id);
+      }}
       className="flex h-6 shrink-0 items-center gap-1 rounded px-1.5 text-xs text-muted-foreground tabular-nums hover:text-sidebar-foreground data-[state=open]:text-sidebar-foreground"
     >
       <GitPullRequest className="size-3.5" aria-hidden="true" />
@@ -41,7 +45,7 @@ export function WorkspacePullRequestCount({
     (a, b) => b.openCount - a.openCount || a.name.localeCompare(b.name),
   );
   return (
-    <HoverCard openDelay={150} closeDelay={100}>
+    <HoverCard open={open} onOpenChange={setOpen} openDelay={150} closeDelay={100}>
       <HoverCardTrigger asChild>{trigger}</HoverCardTrigger>
       <HoverCardContent side="right" align="start" sideOffset={10} className="w-72">
         <p className="truncate px-2 pt-1.5 pb-1 text-xs text-muted-foreground">
@@ -74,7 +78,10 @@ export function WorkspacePullRequestCount({
         <div className="-mx-1 my-1 h-px bg-border" />
         <button
           type="button"
-          onClick={() => onOpen(project.id)}
+          onClick={() => {
+            setOpen(false);
+            onOpen(project.id);
+          }}
           className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-ui hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
         >
           <span className="flex-1">View all</span>
