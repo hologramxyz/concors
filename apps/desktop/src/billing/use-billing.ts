@@ -6,11 +6,20 @@ import { api } from "@/auth/api";
 import { describeMachinesError } from "@/machines/use-machines";
 import { openExternal } from "@/tauri";
 
-/** Scoped by the parent's organization key; confirms only the checkout we opened. */
-export function useBilling(organizationId: string) {
-  const query = useApiResource(`billing:${organizationId}`, () =>
+/**
+ * Billing status on its own, for callers that only need to read it — the machines list wants
+ * `paymentFailedAt` without dragging in the card-setup machinery below. One definition of the
+ * cache key keeps those callers sharing a single request with the settings page.
+ */
+export function useBillingStatus(organizationId: string) {
+  return useApiResource(`billing:${organizationId}`, () =>
     api.getBillingStatus({ organizationId }),
   );
+}
+
+/** Scoped by the parent's organization key; confirms only the checkout we opened. */
+export function useBilling(organizationId: string) {
+  const query = useBillingStatus(organizationId);
   const status = query.data;
   const [checkout, setCheckout] = useState<SetupCheckout | null>(null);
   const [error, setError] = useState<string | null>(null);

@@ -1,9 +1,11 @@
 import { ApiError, type Organization } from "@concors/api-client";
 import { CreditCard, ExternalLink } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 
 import { useApiResource } from "@/data/api-resource";
 import { useBilling } from "@/billing/use-billing";
+import { useBillingPortal } from "@/billing/use-billing-portal";
+import { PaymentFailedWarning } from "@/billing/payment-failed-warning";
 import { api } from "@/auth/api";
 import { describeAuthError } from "@/auth/auth-state";
 import { formatMoney, formatMonthly } from "@/machines/format";
@@ -30,39 +32,18 @@ export function BillingSection({ organization }: BillingSectionProps) {
     api.listInvoices(scope),
   );
   const invoices = invoiceQuery.data;
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState<"setup" | "portal" | null>(null);
+  const [addingCard, setAddingCard] = useState(false);
 
-  const portalOpen = useRef(false);
-  useEffect(() => {
-    const returned = () => {
-      if (!portalOpen.current) return;
-      portalOpen.current = false;
-      refreshBilling();
-      void invoiceQuery.resource.load(30_000, true);
-    };
-    window.addEventListener("focus", returned);
-    return () => window.removeEventListener("focus", returned);
+  const reload = useCallback(() => {
+    refreshBilling();
+    void invoiceQuery.resource.load(30_000, true);
   }, [refreshBilling, invoiceQuery.resource]);
+  const portal = useBillingPortal(organizationId, reload);
+  const busy = addingCard || portal.opening;
 
-  function open(kind: "setup" | "portal") {
-    setPending(kind);
-    setError(null);
-    if (kind === "setup") {
-      void billing.addCard().finally(() => setPending(null));
-      return;
-    }
-    const url = api.createBillingPortalUrl(scope);
-    void url
-      .then((url) => {
-        portalOpen.current = true;
-        return openExternal(url);
-      })
-      .catch((cause: unknown) => {
-        portalOpen.current = false;
-        setError(describeApiError(cause));
-      })
-      .finally(() => setPending(null));
+  function addCard() {
+    setAddingCard(true);
+    void billing.addCard().finally(() => setAddingCard(false));
   }
 
   return (
@@ -70,11 +51,11 @@ export function BillingSection({ organization }: BillingSectionProps) {
       title="Billing"
       description="Each machine is a monthly subscription charged in advance to this organization’s card."
     >
-      {(error ??
+      {(portal.error ??
         billing.error ??
         (invoiceQuery.error ? describeApiError(invoiceQuery.error) : null)) && (
         <p role="alert" className="py-2 text-sm text-destructive">
-          {error ??
+          {portal.error ??
             billing.error ??
             (invoiceQuery.error ? describeApiError(invoiceQuery.error) : null)}
         </p>
@@ -89,14 +70,14 @@ export function BillingSection({ organization }: BillingSectionProps) {
         </p>
       ) : status ? (
         <>
-          <Row
-            label="Payment method"
-            hint={
-              status.paymentFailedAt
-                ? `A payment failed on ${formatDate(status.paymentFailedAt)}. Update the card to keep your machines.`
-                : "Saved with Stripe; Concors never sees the card number."
-            }
-          >
+          <PaymentFailedWarning
+            className="mb-4"
+            organizationId={organizationId}
+            paymentFailedAt={status.paymentFailedAt}
+            atRisk={null}
+            onReturn={reload}
+          />
+          <Row label="Payment method" hint="Saved with Stripe; Concors never sees the card number.">
             <span className="flex items-center gap-2">
               {status.card ? (
                 <>
@@ -128,36 +109,23 @@ export function BillingSection({ organization }: BillingSectionProps) {
             <Button
               variant={status.hasPaymentMethod ? "outline" : "default"}
               size="sm"
-              disabled={pending !== null || billing.checkout !== null}
-              onClick={() => open("setup")}
+              disabled={busy || billing.checkout !== null}
+              onClick={addCard}
             >
               <CreditCard data-icon="inline-start" aria-hidden="true" />
-              {pending === "setup"
+              {addingCard
                 ? "Opening…"
                 : status.hasPaymentMethod
                   ? "Add another card"
                   : "Add a card"}
             </Button>
             {status.hasPaymentMethod && (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={pending !== null}
-                onClick={() => open("portal")}
-              >
+              <Button variant="outline" size="sm" disabled={busy} onClick={portal.open}>
                 <ExternalLink data-icon="inline-start" aria-hidden="true" />
-                {pending === "portal" ? "Opening…" : "Manage billing"}
+                {portal.opening ? "Opening…" : "Manage billing"}
               </Button>
             )}
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={pending !== null}
-              onClick={() => {
-                billing.refresh();
-                void invoiceQuery.refresh();
-              }}
-            >
+            <Button variant="ghost" size="sm" disabled={busy} onClick={reload}>
               Refresh
             </Button>
           </div>
