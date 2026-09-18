@@ -1,32 +1,31 @@
-import { execFile } from "node:child_process";
 import { constants } from "node:fs";
 import { open, opendir } from "node:fs/promises";
-import { promisify } from "node:util";
+import { join } from "node:path";
 import { MAX_PROJECT_ICON_BYTES, type ProjectIcon } from "@concors/protocol";
+import { childRepositories, git } from "../projects/repositories.ts";
 import { resolveProjectPath } from "./paths.ts";
 
-const exec = promisify(execFile);
 const folders = ["", "public", "static", "assets", "app", "src/app", "src", "src/assets"];
 const names = ["favicon.svg", "favicon.png", "favicon.ico", "favicon.webp"];
 
 /** Fixed local candidates only; never follow a repository's remote URL or HTML links. */
 export async function readProjectIcon(root: string): Promise<ProjectIcon> {
-  const env: NodeJS.ProcessEnv = { ...process.env, GIT_OPTIONAL_LOCKS: "0" };
-  delete env.GIT_DIR;
-  delete env.GIT_WORK_TREE;
-  delete env.GIT_COMMON_DIR;
-  delete env.GIT_INDEX_FILE;
+  let isGit: boolean;
   try {
-    const { stdout } = await exec("git", ["-C", root, "rev-parse", "--is-inside-work-tree"], {
-      timeout: 1500,
-      maxBuffer: 4096,
-      windowsHide: true,
-      env,
-    });
-    if (stdout.trim() !== "true") return { isGit: false, source: null };
+    isGit = (await git(root, ["rev-parse", "--is-inside-work-tree"])).trim() === "true";
   } catch {
-    return { isGit: false, source: null };
+    isGit = false;
   }
+  if (isGit) return { isGit, source: await readRepositoryIcon(root) };
+  // A folder of repositories shows its first child repository's favicon. One level only.
+  for (const child of await childRepositories(root)) {
+    const source = await readRepositoryIcon(join(root, child)).catch(() => null);
+    if (source) return { isGit, source };
+  }
+  return { isGit, source: null };
+}
+
+async function readRepositoryIcon(root: string): Promise<string | null> {
   const roots = [""];
   // Also recognize the standard web-app folders of a monorepo, with bounded scanning.
   for (const container of ["apps", "packages"]) {
@@ -50,7 +49,7 @@ export async function readProjectIcon(root: string): Promise<ProjectIcon> {
   let inspected = 0;
   for (const base of roots)
     for (const folder of folders) {
-      if (++inspected > 128) return { isGit: true, source: null };
+      if (++inspected > 128) return null;
       try {
         await resolveProjectPath(root, [base, folder].filter(Boolean).join("/"));
       } catch {
@@ -60,10 +59,10 @@ export async function readProjectIcon(root: string): Promise<ProjectIcon> {
       for (const name of candidates) {
         const path = [base, folder, name].filter(Boolean).join("/");
         const source = await readIcon(root, path).catch(() => null);
-        if (source) return { isGit: true, source };
+        if (source) return source;
       }
     }
-  return { isGit: true, source: null };
+  return null;
 }
 
 async function readIcon(root: string, path: string): Promise<string | null> {
