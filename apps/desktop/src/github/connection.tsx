@@ -11,11 +11,11 @@ export function GitHubConnection({ github }: { readonly github: ReturnType<typeo
       <div
         role="group"
         aria-label="GitHub integration"
-        className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4"
+        className="grid gap-4 rounded-xl border p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
       >
-        <div className="flex items-center gap-3">
-          <GitHubIcon className="size-5" aria-hidden="true" />
-          <div>
+        <div className="flex min-w-0 items-start gap-3">
+          <GitHubIcon className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
+          <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-sm font-medium">
                 {status?.connected ? `GitHub · ${status.login}` : "GitHub"}
@@ -41,7 +41,7 @@ export function GitHubConnection({ github }: { readonly github: ReturnType<typeo
             </p>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 md:justify-end">
           {status?.configured && (
             <Button
               type="button"

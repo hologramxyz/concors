@@ -32,7 +32,6 @@ interface SettingsViewProps {
   readonly cornerStyle: CornerStyle;
   readonly onSetCornerStyle: (style: CornerStyle) => void;
   readonly auth: SignedInAuth;
-  readonly onSignOut: () => void;
   readonly onSetActiveOrganization: (organizationId: string) => unknown;
 }
 
@@ -52,7 +51,6 @@ export function SettingsView({
   cornerStyle,
   onSetCornerStyle,
   auth,
-  onSignOut,
   onSetActiveOrganization,
 }: SettingsViewProps) {
   const organization = activeOrganization(auth);
@@ -74,13 +72,7 @@ export function SettingsView({
       );
       break;
     case "account":
-      content = (
-        <AccountSettings
-          auth={auth}
-          onSignOut={onSignOut}
-          onSetActiveOrganization={onSetActiveOrganization}
-        />
-      );
+      content = <AccountSettings auth={auth} onSetActiveOrganization={onSetActiveOrganization} />;
       break;
     case "appearance":
       content = (
