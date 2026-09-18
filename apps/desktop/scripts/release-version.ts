@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -59,7 +59,72 @@ export async function desktopVersion(root = repoRoot): Promise<string> {
   return agreedVersion({ packageJson, tauriConf, pkgbuild, cargoToml });
 }
 
-// `node apps/desktop/scripts/release-version.ts` prints the version, and fails loudly when the
-// files have drifted apart. The release workflow runs it before building anything.
-if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`)
-  process.stdout.write(`${await desktopVersion()}\n`);
+export const VERSION_PATTERN = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
+
+/** Every file rewritten to carry `version`. Pure, so the rewrite is testable without a checkout. */
+export function bumpSources(sources: VersionSources, version: string): VersionSources {
+  if (!VERSION_PATTERN.test(version))
+    throw new Error(`"${version}" is not a version like 0.3.0 or 0.3.0-rc.1`);
+  // Anchored replacements, one each: the value being replaced is the file's own version, never a
+  // dependency's. In Cargo.toml only `[package]` is touched, since dependency versions are inline.
+  // Cargo.toml opens with `[package]`; everything from the next section header on is left alone,
+  // so a dependency pinned to its own version is never rewritten.
+  const nextSection = sources.cargoToml.search(/^\[(?!package\])/m);
+  const packageSection =
+    nextSection === -1 ? sources.cargoToml : sources.cargoToml.slice(0, nextSection);
+  const otherSections = nextSection === -1 ? "" : sources.cargoToml.slice(nextSection);
+  return {
+    packageJson: sources.packageJson.replace(/("version":\s*)"[^"]*"/, `$1"${version}"`),
+    tauriConf: sources.tauriConf.replace(/("version":\s*)"[^"]*"/, `$1"${version}"`),
+    // A new version starts at pkgrel 1; the number only climbs when a release is repackaged.
+    pkgbuild: sources.pkgbuild
+      .replace(/^pkgver=.*$/m, `pkgver=${version}`)
+      .replace(/^pkgrel=.*$/m, "pkgrel=1"),
+    cargoToml:
+      packageSection.replace(/^version = ".*"$/m, `version = "${version}"`) + otherSections,
+  };
+}
+
+/** Writes the bumped files back and returns the version, having checked they now agree. */
+export async function setDesktopVersion(version: string, root = repoRoot): Promise<string> {
+  const paths = {
+    packageJson: join(root, "apps/desktop/package.json"),
+    tauriConf: join(root, "apps/desktop/src-tauri/tauri.conf.json"),
+    pkgbuild: join(root, "packaging/linux/PKGBUILD"),
+    cargoToml: join(root, "apps/desktop/src-tauri/Cargo.toml"),
+  } as const;
+  const entries = await Promise.all(
+    Object.entries(paths).map(async ([key, path]) => [key, await readFile(path, "utf8")] as const),
+  );
+  const bumped = bumpSources(Object.fromEntries(entries) as unknown as VersionSources, version);
+  await Promise.all(
+    Object.entries(paths).map(([key, path]) =>
+      writeFile(path, bumped[key as keyof VersionSources]),
+    ),
+  );
+  // Reads the files back, so a rewrite that silently missed one fails here and not in CI.
+  return desktopVersion(root);
+}
+
+// `node apps/desktop/scripts/release-version.ts` prints the version and fails loudly when the files
+// have drifted apart; `--set <version>` rewrites all four. The release workflow runs the check
+// before building anything.
+if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
+  const set = process.argv.indexOf("--set");
+  if (set === -1) {
+    process.stdout.write(`${await desktopVersion()}\n`);
+  } else {
+    const wanted = process.argv[set + 1];
+    if (!wanted) throw new Error("--set needs a version, e.g. --set 0.3.0");
+    const previous = await desktopVersion().catch(() => "unknown");
+    const version = await setDesktopVersion(wanted);
+    process.stdout.write(
+      `${previous} -> ${version}\n\n` +
+        `Cargo.lock still records the old version; refresh it with:\n` +
+        `  cargo metadata --manifest-path apps/desktop/src-tauri/Cargo.toml --format-version 1 >/dev/null\n\n` +
+        `Then commit, merge to main, and tag the merge commit:\n` +
+        `  git tag -a desktop-v${version} -m "What changed, for the people reading it in the app."\n` +
+        `  git push origin desktop-v${version}\n`,
+    );
+  }
+}
