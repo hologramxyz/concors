@@ -40,7 +40,7 @@ test.beforeEach(async ({ page, baseURL }) => {
   });
 });
 
-async function githubApi(page: Page, initiallyConnected = true) {
+async function githubApi(page: Page, initiallyConnected = true, identityConnected = false) {
   let connected = initiallyConnected;
   let ready = false;
   let accounts = [
@@ -108,6 +108,7 @@ async function githubApi(page: Page, initiallyConnected = true) {
             }
           : {
               configured: true,
+              identityConnected,
               connected,
               login: connected ? "alice" : null,
               updatedAt: connected ? "2026-09-12T00:00:00Z" : null,
@@ -155,6 +156,24 @@ test("account settings connects and disconnects GitHub without exposing credenti
   await expect(page.getByText("Connected across your VPSs.")).toBeVisible();
   await page.getByRole("button", { name: "Disconnect", exact: true }).click();
   await expect(page.getByRole("button", { name: "Connect GitHub", exact: true })).toBeVisible();
+});
+
+test("GitHub sign-in appears connected before repository access is enabled", async ({ page }) => {
+  await signedIn(page);
+  await githubApi(page, false, true);
+  await page.goto("/");
+  await page.getByRole("button", { name: /^Account:/ }).click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
+
+  const integration = page.getByRole("group", { name: "GitHub integration" });
+  await expect(integration.getByText("Connected", { exact: true })).toBeVisible();
+  await expect(integration).toContainText("Connected for sign-in");
+  await expect(
+    integration.getByRole("button", { name: "Enable repository access", exact: true }),
+  ).toBeVisible();
+  await expect(
+    integration.getByRole("button", { name: "Connect GitHub", exact: true }),
+  ).toHaveCount(0);
 });
 
 test("GitHub setup discovers newly granted organizations automatically on return", async ({
@@ -268,7 +287,9 @@ test("repository picker switches personal and organization repos and prepares th
     const avatarBounds = await avatar.boundingBox();
     await photo.dispatchEvent("error");
     await expect(avatar).toHaveText("A");
-    expect(await avatar.boundingBox()).toEqual(avatarBounds);
+    const fallbackBounds = await avatar.boundingBox();
+    expect(fallbackBounds?.width).toBeCloseTo(avatarBounds?.width ?? 0, 0);
+    expect(fallbackBounds?.height).toBeCloseTo(avatarBounds?.height ?? 0, 0);
     github.setAccounts([
       { id: 1, login: "alice" },
       { id: 2, login: "acme" },

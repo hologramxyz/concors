@@ -300,6 +300,7 @@ describe("account GitHub API", () => {
       .mockResolvedValueOnce(
         json({
           configured: true,
+          identityConnected: true,
           connected: true,
           login: "alice",
           updatedAt: null,
@@ -311,7 +312,11 @@ describe("account GitHub API", () => {
       .mockResolvedValueOnce(json({ ready: true }))
       .mockResolvedValueOnce(new Response(null, { status: 204 }));
     const { api, tokens } = client(fetch, "concors-session");
-    expect((await api.githubStatus()).login).toBe("alice");
+    await expect(api.githubStatus()).resolves.toMatchObject({
+      identityConnected: true,
+      connected: true,
+      login: "alice",
+    });
     expect((await api.githubAccounts()).accounts[0]!.login).toBe("acme");
     await api.githubRepositories(12, 2);
     await api.prepareGitHubMachine("machine/1", "acme/private");
