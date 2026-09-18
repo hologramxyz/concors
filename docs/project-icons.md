@@ -7,6 +7,15 @@ found, or a rounded tile with the first grapheme of the project name. Unreadable
 oversized, unsupported or broken images fall back to that tile. Bare repositories
 and machines without Git use the folder fallback.
 
+A folder that is not itself a repository but contains repositories (for example
+`~/repos/hologram` holding several checkouts) shows the first favicon found in its
+direct child repositories, checked in name order. The rule is one level deep: a
+folder of folders of repositories, such as `~/repos`, keeps the folder icon. A child
+counts when it has a `.git` directory or worktree file; linked children, plain
+folders and grandchildren are ignored. Without a child favicon the folder icon stays.
+Workspace pull requests follow the same one-level rule; see
+[Workspace pull requests](pull-requests.md).
+
 The daemon checks `favicon.svg`, `favicon.png`, `favicon.ico`, then `favicon.webp`
 in the project root, `public`, `static`, `assets`, `app`, `src/app`, `src`, and
 `src/assets`. App directories also support `icon.svg` and `icon.png`. It then checks
