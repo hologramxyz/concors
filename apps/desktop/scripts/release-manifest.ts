@@ -25,6 +25,13 @@ export interface ReleaseArtifact extends ArtifactKind {
   name: string;
   size: number;
   sha256: string;
+  /**
+   * The detached signature next to the build, when the release was signed. The digest alone is
+   * enough for the badge, which fetches both from the control plane; a signature is what proves
+   * the build came from us rather than from whoever served it, and `tauri-plugin-updater` will
+   * not install an update without one.
+   */
+  signature?: string;
 }
 
 export interface ReleaseManifest {
@@ -58,12 +65,20 @@ export async function collectArtifacts(
     const kind = describeArtifact(name, version);
     if (!kind) continue;
     const path = join(directory, name);
-    const [contents, info] = await Promise.all([readFile(path), stat(path)]);
+    const [contents, info, signature] = await Promise.all([
+      readFile(path),
+      stat(path),
+      // `tauri signer sign` writes `<artifact>.sig`; its absence means this release is unsigned.
+      readFile(`${path}.sig`, "utf8")
+        .then((text) => text.trim())
+        .catch(() => null),
+    ]);
     artifacts.push({
       name,
       ...kind,
       size: info.size,
       sha256: createHash("sha256").update(contents).digest("hex"),
+      ...(signature ? { signature } : {}),
     });
   }
   return artifacts;
@@ -95,7 +110,15 @@ if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
   };
   const path = join(directory, "release.json");
   await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`);
+  const unsigned = artifacts.filter((artifact) => !artifact.signature);
+  if (unsigned.length > 0)
+    process.stdout.write(`Unsigned: ${unsigned.map((artifact) => artifact.name).join(", ")}\n`);
   process.stdout.write(
-    `${path}\n${artifacts.map((a) => `  ${a.format.padEnd(8)} ${a.name} (${a.size} bytes)`).join("\n")}\n`,
+    `${path}\n${artifacts
+      .map(
+        (a) =>
+          `  ${a.format.padEnd(8)} ${a.name} (${a.size} bytes${a.signature ? ", signed" : ""})`,
+      )
+      .join("\n")}\n`,
   );
 }

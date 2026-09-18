@@ -108,6 +108,26 @@ jobs:
               /opt/Concors/lib/Concors/daemon/bin/concors-daemon --version
             '
 
+      - name: Sign the builds
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        # Without the key a release still publishes, unsigned, and the badge still installs it
+        # after checking the digest. A signature is what proves a build came from us rather than
+        # from whoever served it, and it is what `tauri-plugin-updater` refuses to go without, so
+        # the absence is a loud warning rather than a silent default.
+        run: |
+          if [ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
+            echo "::warning::TAURI_SIGNING_PRIVATE_KEY is not set; publishing an unsigned release."
+            exit 0
+          fi
+          for artifact in apps/desktop/dist/release/Concors-*-x64.tar.gz \
+                          apps/desktop/dist/release/concors-bin-*.pkg.tar.zst; do
+            pnpm --filter @concors/desktop exec tauri signer sign "$artifact" > /dev/null
+            test -s "$artifact.sig" || { echo "no signature for $artifact" >&2; exit 1; }
+            echo "signed $(basename "$artifact")"
+          done
+
       - name: Write the release manifest
         env:
           GH_TOKEN: ${{ github.token }}
@@ -136,6 +156,7 @@ jobs:
             apps/desktop/dist/release/Concors-*-x64.tar.gz
             apps/desktop/dist/release/Concors-*-x64.tar.gz.sha256
             apps/desktop/dist/release/concors-bin-*.pkg.tar.zst
+            apps/desktop/dist/release/*.sig
             apps/desktop/dist/release/release.json
           if-no-files-found: error
           compression-level: 0
@@ -158,11 +179,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.build.outputs.version }}
         run: |
+          # Signatures are only present once a signing key is configured.
+          signatures=()
+          for candidate in *.sig; do [ -e "$candidate" ] && signatures+=("$candidate"); done
           gh release create "$RELEASE_TAG" \
             "Concors-$VERSION-x64.tar.gz" \
             "Concors-$VERSION-x64.tar.gz.sha256" \
             concors-bin-*.pkg.tar.zst \
             release.json \
+            "${signatures[@]}" \
             --verify-tag --title "Concors $VERSION" --latest=false \
             --notes "Concors $VERSION for Linux x86_64. Arch/Omarchy: install the .pkg.tar.zst with \`pacman -U\`. Other distributions: extract the tarball and run \`bin/concors-desktop\`, keeping \`bin/\` and \`lib/\` siblings. release.json is what the control plane reads to offer in-app updates."
 

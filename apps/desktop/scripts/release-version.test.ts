@@ -177,4 +177,18 @@ describe("collectArtifacts", () => {
       sha256: "bc4a71180870f7945155fbb02f4b0a2e3faa2a62d6d31b7039013055ed19869a",
     });
   });
+
+  it("carries the detached signature when the build was signed", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "concors-release-"));
+    await writeFile(join(directory, "Concors-0.2.0-x64.tar.gz"), "tree");
+    // `tauri signer sign` writes the base64 blob with a trailing newline.
+    await writeFile(join(directory, "Concors-0.2.0-x64.tar.gz.sig"), "dW50cnVzdGVk\n");
+    await writeFile(join(directory, "concors-bin-0.2.0-1-x86_64.pkg.tar.zst"), "package");
+
+    const artifacts = await collectArtifacts(directory, "0.2.0");
+
+    expect(artifacts[0]?.signature).toBe("dW50cnVzdGVk");
+    // An unsigned build carries no empty string to be mistaken for a signature.
+    expect(artifacts[1]).not.toHaveProperty("signature");
+  });
 });
