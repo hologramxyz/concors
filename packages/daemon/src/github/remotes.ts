@@ -20,9 +20,9 @@ const OWNER = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
 const NAME = /^[A-Za-z0-9._-]{1,100}$/;
 
 export function parseGitHubRemote(url: string): GitHubRepository | null {
-  let path: string | undefined;
+  let path: string;
   const scp = /^(?:[^@/\s]+@)?(?:www\.)?github\.com:(?!\d+\/)(.+)$/i.exec(url.trim());
-  if (scp) path = scp[1];
+  if (scp) path = scp[1] ?? "";
   else {
     try {
       const parsed = new URL(url.trim());
