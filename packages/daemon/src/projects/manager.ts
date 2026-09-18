@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { projectDirectory, projectDirectoryError } from "./directories.ts";
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdir, realpath, stat, opendir } from "node:fs/promises";
-import { isAbsolute, dirname, basename, join } from "node:path";
+import { isAbsolute, dirname, basename, join, sep } from "node:path";
 import type { ProjectRequest, ProjectResult, ProjectSetup } from "@concors/protocol";
 import { nextWorkspaceTabName } from "@concors/protocol";
 import type { WorkspaceStore } from "../workspace/store.ts";
@@ -170,9 +170,11 @@ export class ProjectManager {
           throw new Error("Project path must be a directory");
       } else {
         this.check(setup.id);
-        if (dirname(setup.directory) === join(this.#home, "repos"))
-          await mkdir(join(this.#home, "repos"), { recursive: true });
-        const parent = await realpath(dirname(setup.directory));
+        const repos = join(this.#home, "repos");
+        const requestedParent = dirname(setup.directory);
+        if (requestedParent === repos || requestedParent.startsWith(`${repos}${sep}`))
+          await mkdir(requestedParent, { recursive: true });
+        const parent = await realpath(requestedParent);
         directory = join(parent, basename(setup.directory));
         this.check(setup.id);
         // Exclusive creation never overwrites an existing folder, even an empty one.

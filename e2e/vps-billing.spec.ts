@@ -39,6 +39,8 @@ async function billingApi(
     ready?: boolean;
     /** ISO date of the last failed charge, as the server reports it. */
     paymentFailed?: string;
+    /** Include one invoice with this Stripe status. */
+    invoiceStatus?: string | null;
   } = {},
 ) {
   await signedIn(page);
@@ -117,7 +119,26 @@ async function billingApi(
       result = { url: "https://checkout.stripe.test/setup", sessionId: "cs_test_1" };
     else if (path.endsWith("/billing/portal"))
       result = { url: "https://checkout.stripe.test/portal" };
-    else if (path.endsWith("/billing/invoices")) result = { invoices: [] };
+    else if (path.endsWith("/billing/invoices"))
+      result = {
+        invoices:
+          options.invoiceStatus === undefined
+            ? []
+            : [
+                {
+                  id: "in_1",
+                  number: "Q4VMGIBQ-0001",
+                  status: options.invoiceStatus,
+                  amountDue: price,
+                  amountPaid: price,
+                  createdAt: "2026-09-18T00:00:00.000Z",
+                  periodStart: "2026-09-18T00:00:00.000Z",
+                  periodEnd: "2026-10-18T00:00:00.000Z",
+                  hostedInvoiceUrl: "https://invoice.stripe.test/i",
+                  invoicePdf: null,
+                },
+              ],
+      };
     else if (path.endsWith("/billing"))
       result = {
         configured: true,
@@ -550,6 +571,23 @@ test("billing and SSH keys stay visible when revisiting settings", async ({ page
   await navigation.getByRole("button", { name: "SSH keys", exact: true }).click();
   await expect(page.getByText("build-agent access", { exact: true })).toBeVisible();
   expect(state.requests.length).toBe(reads);
+});
+
+test("paid invoices use a readable green status badge", async ({ page }) => {
+  await billingApi(page, { card: true, invoiceStatus: "paid" });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Account: E2E User" }).click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
+  await page
+    .getByRole("navigation", { name: "Settings" })
+    .getByRole("button", { name: "Billing", exact: true })
+    .click();
+
+  const paid = page.getByText("Paid", { exact: true });
+  await expect(paid).toBeVisible();
+  await expect(paid).toHaveClass(/text-emerald-700/);
+  await expect(page.getByText("paid", { exact: true })).toHaveCount(0);
+  await page.screenshot({ path: "test-results/billing-paid-invoice.png" });
 });
 
 // The only warning anyone gets: Stripe emails the cardholder, who may not be the person looking
