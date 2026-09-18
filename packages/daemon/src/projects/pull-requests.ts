@@ -1,6 +1,8 @@
 import { realpath } from "node:fs/promises";
 import { join } from "node:path";
 import type {
+  MergeMethod,
+  PullRequestOperation,
   PullRequestRepository,
   PullRequestRequest,
   PullRequestResult,
@@ -14,6 +16,12 @@ import {
   type RepositoryPullRequests,
 } from "../github/pull-requests.ts";
 import { gitHubRepository, repositoryKey, type GitHubRepository } from "../github/remotes.ts";
+import { fetchPullRequestDetail, type PullRequestRecord } from "../github/pull-request-detail.ts";
+import {
+  closePullRequest,
+  commentOnPullRequest,
+  mergePullRequest,
+} from "../github/pull-request-actions.ts";
 import type { WorkspaceStore } from "../workspace/store.ts";
 import { childRepositories, workTreeRoot } from "./repositories.ts";
 
@@ -56,16 +64,42 @@ type Fetcher = (
   token: string,
   repositories: readonly GitHubRepository[],
 ) => Promise<PullRequestListing>;
+/** One pull request on GitHub: read it, merge, close or comment by node ID. */
+export interface PullRequestApi {
+  readonly detail: (
+    token: string,
+    repository: GitHubRepository,
+    number: number,
+  ) => Promise<PullRequestRecord>;
+  readonly merge: (
+    token: string,
+    id: string,
+    method: MergeMethod,
+    expectedHeadSha: string,
+  ) => Promise<void>;
+  readonly close: (token: string, id: string) => Promise<void>;
+  readonly comment: (token: string, id: string, body: string) => Promise<void>;
+}
+const gitHubPullRequests: PullRequestApi = {
+  detail: (token, repository, number) => fetchPullRequestDetail(token, repository, number),
+  merge: (token, id, method, head) => mergePullRequest(token, id, method, head),
+  close: (token, id) => closePullRequest(token, id),
+  comment: (token, id, body) => commentOnPullRequest(token, id, body),
+};
 /** Replaces the machine's GitHub token and api.github.com, for isolated acceptance tests. */
 export interface GitHubSource {
   readonly token: () => Promise<string | null>;
   readonly fetch: Fetcher;
+  readonly pullRequest?: PullRequestApi;
 }
+type Outcome = PullRequestResult["outcome"];
+type Action = Exclude<PullRequestOperation, { kind: "list" }>;
 
 export class WorkspacePullRequests {
   #workspace: WorkspaceStore;
   #credentials: GitHubCredentials;
   #fetch: Fetcher;
+  #api: PullRequestApi;
   #cache = new Map<
     string,
     { fetchedAt: number; result: Promise<RepositoryPullRequests & { viewer: string | null }> }
@@ -74,10 +108,12 @@ export class WorkspacePullRequests {
     workspace: WorkspaceStore,
     credentials = new GitHubCredentials(),
     fetcher: Fetcher = fetchPullRequests,
+    api: PullRequestApi = gitHubPullRequests,
   ) {
     this.#workspace = workspace;
     this.#credentials = credentials;
     this.#fetch = fetcher;
+    this.#api = api;
   }
 
   async request(request: PullRequestRequest): Promise<PullRequestResult> {
@@ -86,59 +122,17 @@ export class WorkspacePullRequests {
       requestId: request.requestId,
       outcome,
     });
-    const { epoch, projects, refresh = false } = request.operation;
+    const operation = request.operation;
     try {
-      if (this.#workspace.snapshot().epoch !== epoch)
+      if (this.#workspace.snapshot().epoch !== operation.epoch)
         throw new Error("Machine state changed. Reconnect before loading pull requests.");
       const token = await this.#credentials.token();
       if (!token) return reply({ status: "signed-out", message: SIGNED_OUT });
-      const workspaces = (
-        await Promise.all(
-          projects.map(async ({ projectId, directory }) => {
-            try {
-              const requested = this.#workspace.fileDirectory(projectId, directory);
-              return [
-                {
-                  projectId,
-                  directory: requested,
-                  checkouts: await workspaceCheckouts(await realpath(requested)),
-                },
-              ];
-            } catch {
-              // A closed workspace or missing folder has nothing to list.
-              return [];
-            }
-          }),
-        )
-      ).flat();
-      const unique = new Map<string, GitHubRepository>();
-      for (const { checkouts } of workspaces)
-        for (const { repository } of checkouts) unique.set(repositoryKey(repository), repository);
-      const results = await this.#load([...unique].slice(0, MAX_REPOSITORIES), token, refresh);
-      let viewer: string | null = null;
-      const listings: WorkspaceListing[] = workspaces.map(({ projectId, directory, checkouts }) => {
-        const repositories = new Map<string, PullRequestRepository>();
-        for (const { folder, repository } of checkouts) {
-          const key = repositoryKey(repository);
-          const existing = repositories.get(key);
-          if (existing) {
-            existing.folders.push(folder);
-            continue;
-          }
-          const result = results.get(key);
-          viewer ??= result?.viewer ?? null;
-          repositories.set(key, {
-            name: result?.name ?? `${repository.owner}/${repository.name}`,
-            url: result?.url ?? `https://github.com/${repository.owner}/${repository.name}`,
-            folders: [folder],
-            openCount: result?.openCount ?? 0,
-            pullRequests: result?.pullRequests ?? [],
-            error: result ? result.error : "Not loaded: too many repositories in open workspaces.",
-          });
-        }
-        return { projectId, directory, repositories: [...repositories.values()] };
-      });
-      return reply({ status: "listed", viewer, fetchedAt: Date.now(), workspaces: listings });
+      return reply(
+        operation.kind === "list"
+          ? await this.#list(operation.projects, operation.refresh ?? false, token)
+          : await this.#act(operation, token),
+      );
     } catch (error) {
       if (error instanceof GitHubAuthError) {
         this.#credentials.invalidate();
@@ -149,6 +143,98 @@ export class WorkspacePullRequests {
         message: error instanceof Error ? error.message : "Could not load pull requests.",
       });
     }
+  }
+
+  /** Detail, merge, close or comment, only for a repository that belongs to the workspace. */
+  async #act(operation: Action, token: string): Promise<Outcome> {
+    const root = await realpath(
+      this.#workspace.fileDirectory(operation.projectId, operation.directory),
+    );
+    const repository = (await workspaceCheckouts(root)).find(
+      (checkout) => repositoryKey(checkout.repository) === operation.repository.toLowerCase(),
+    )?.repository;
+    if (!repository) throw new Error("This repository is no longer part of the workspace.");
+    const current = await this.#api.detail(token, repository, operation.number);
+    if (operation.kind === "detail") return { status: "detail", detail: current.detail };
+    const { detail } = current;
+    if (operation.kind !== "comment" && detail.state !== "open")
+      throw new Error(`This pull request is already ${detail.state}.`);
+    let action: "merged" | "closed" | "commented";
+    if (operation.kind === "merge") {
+      if (!detail.canMerge)
+        throw new Error("This machine's GitHub account cannot merge into this repository.");
+      if (!detail.mergeMethods.includes(operation.method))
+        throw new Error("This repository does not allow that merge method.");
+      await this.#api.merge(token, current.id, operation.method, operation.expectedHeadSha);
+      action = "merged";
+    } else if (operation.kind === "close") {
+      if (!detail.canClose)
+        throw new Error("This machine's GitHub account cannot close this pull request.");
+      if (operation.comment) await this.#api.comment(token, current.id, operation.comment);
+      await this.#api.close(token, current.id);
+      action = "closed";
+    } else {
+      await this.#api.comment(token, current.id, operation.body);
+      action = "commented";
+    }
+    // Counts change at once rather than after the minute-long cache expires.
+    this.#cache.delete(repositoryKey(repository));
+    const after = await this.#api.detail(token, repository, operation.number);
+    return { status: "updated", action, detail: after.detail };
+  }
+
+  async #list(
+    projects: { projectId: string; directory?: string | undefined }[],
+    refresh: boolean,
+    token: string,
+  ): Promise<Outcome> {
+    const workspaces = (
+      await Promise.all(
+        projects.map(async ({ projectId, directory }) => {
+          try {
+            const requested = this.#workspace.fileDirectory(projectId, directory);
+            return [
+              {
+                projectId,
+                directory: requested,
+                checkouts: await workspaceCheckouts(await realpath(requested)),
+              },
+            ];
+          } catch {
+            // A closed workspace or missing folder has nothing to list.
+            return [];
+          }
+        }),
+      )
+    ).flat();
+    const unique = new Map<string, GitHubRepository>();
+    for (const { checkouts } of workspaces)
+      for (const { repository } of checkouts) unique.set(repositoryKey(repository), repository);
+    const results = await this.#load([...unique].slice(0, MAX_REPOSITORIES), token, refresh);
+    let viewer: string | null = null;
+    const listings: WorkspaceListing[] = workspaces.map(({ projectId, directory, checkouts }) => {
+      const repositories = new Map<string, PullRequestRepository>();
+      for (const { folder, repository } of checkouts) {
+        const key = repositoryKey(repository);
+        const existing = repositories.get(key);
+        if (existing) {
+          existing.folders.push(folder);
+          continue;
+        }
+        const result = results.get(key);
+        viewer ??= result?.viewer ?? null;
+        repositories.set(key, {
+          name: result?.name ?? `${repository.owner}/${repository.name}`,
+          url: result?.url ?? `https://github.com/${repository.owner}/${repository.name}`,
+          folders: [folder],
+          openCount: result?.openCount ?? 0,
+          pullRequests: result?.pullRequests ?? [],
+          error: result ? result.error : "Not loaded: too many repositories in open workspaces.",
+        });
+      }
+      return { projectId, directory, repositories: [...repositories.values()] };
+    });
+    return { status: "listed", viewer, fetchedAt: Date.now(), workspaces: listings };
   }
 
   async #load(repositories: [string, GitHubRepository][], token: string, refresh: boolean) {
