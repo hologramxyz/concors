@@ -1,4 +1,7 @@
 import { SchedulesNav } from "@/schedules/nav";
+import { PullRequestsNav } from "@/pull-requests/nav";
+import { usePullRequests } from "@/pull-requests/use-pull-requests";
+import { pullRequestKey } from "@/pull-requests/store";
 import { NewWorkspaceMenu } from "@/workspace/new-workspace-menu";
 import { WorkspaceSidebarItem } from "@/workspace/sidebar-item";
 import { useProjectIcons } from "@/workspace/use-project-icons";
@@ -26,6 +29,8 @@ interface AppSidebarProps {
   view: View;
   onOpenSettings: () => void;
   onOpenSchedules: () => void;
+  /** Opens the Pull requests page, for one workspace when given. */
+  onOpenPullRequests: (projectId?: string) => void;
   onOpenSearch: () => void;
   onOpenResources: () => void;
   workspace: WorkspaceSnapshot | null;
@@ -46,6 +51,7 @@ interface AppSidebarProps {
 export function AppSidebar(props: AppSidebarProps) {
   const shortcutLabel = useShortcutLabels();
   const icons = useProjectIcons(props.workspace);
+  const pullRequests = usePullRequests(props.workspace);
 
   return (
     <div className="sidebar-shell" data-collapsed={props.collapsed}>
@@ -128,11 +134,19 @@ export function AppSidebar(props: AppSidebarProps) {
             props.collapsed ? "px-[6px]" : "px-2",
           )}
         >
-          <SchedulesNav
-            selected={props.view === "schedules"}
-            compact={props.collapsed}
-            onClick={props.onOpenSchedules}
-          />
+          <div className="space-y-0.5">
+            <SchedulesNav
+              selected={props.view === "schedules"}
+              compact={props.collapsed}
+              onClick={props.onOpenSchedules}
+            />
+            <PullRequestsNav
+              workspace={props.workspace}
+              selected={props.view === "pull-requests"}
+              compact={props.collapsed}
+              onClick={() => props.onOpenPullRequests()}
+            />
+          </div>
           <SidebarSection
             title="Workspaces"
             compact={props.collapsed}
@@ -162,7 +176,15 @@ export function AppSidebar(props: AppSidebarProps) {
                         ? icons.get(projectIconKey(props.workspace.epoch, project))
                         : undefined
                     }
+                    pullRequests={
+                      props.workspace
+                        ? pullRequests.workspaces.get(
+                            pullRequestKey(props.workspace.epoch, project),
+                          )
+                        : undefined
+                    }
                     onSelect={props.onSelectProject}
+                    onOpenPullRequests={props.onOpenPullRequests}
                     execute={props.execute}
                   />
                 ))}
