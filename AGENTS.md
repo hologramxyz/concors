@@ -51,8 +51,13 @@ publishes it. Nothing is offered to anyone until the control plane points at it:
 railway variables --environment production --service concors-server --set "DESKTOP_VERSION=0.3.0"
 ```
 
-Publishing and rolling out are separate on purpose, so a release can be held back. `DAEMON_VERSION`
-is the same idea for the daemon that runs on cloud machines, released by the `daemon-v*` tag.
+Publishing and rolling out are separate on purpose, so a release can be held back — and in that
+order: pinning a version before its release exists leaves the update check answering 502 until it
+does. `DAEMON_VERSION` is the same idea for the daemon that runs on cloud machines, released by the
+`daemon-v*` tag.
+
+Put the version bump in the pull request from the start rather than pushing it to a branch under
+review. A bump that lands after the merge button is pressed is simply not in the merge.
 
 Two habits worth keeping, both learned the hard way:
 

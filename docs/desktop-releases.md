@@ -72,6 +72,10 @@ A published release reaches nobody until the control plane points at it. Set `DE
 the API to the version just published; until then every copy is told it is current. It is a
 separate, deliberate step, so a release can be published and then rolled out — or held back.
 
+**Publish first, pin second.** Pinning a version whose release does not exist yet leaves the update
+check answering 502 until it does. Nothing is user-visible while that lasts — a failed check is
+silence, and the rest of the API is untouched — but there is no reason to arrange it.
+
 ```sh
 railway variable set DESKTOP_VERSION=0.2.0
 ```
@@ -86,9 +90,13 @@ produced them.
 
 ## What a running app does
 
-On launch, and every six hours after, the app asks
+On launch, every 30 minutes after, and whenever its window comes back to the front, the app asks
 `GET /api/v1/releases/desktop/:platform/:arch/:version`, which answers `204` when there is nothing
-to offer. The check needs no session — it reveals only what we publish, and it runs before anyone
+to offer. The focus check is throttled to once every five minutes, and it is the one that matters:
+coming back to Concors is when someone would look for a badge, and an interval alone leaves it
+missing from exactly that moment. The request costs little enough that the timings are chosen by
+how soon someone should find out — an empty answer has no body, and the control plane serves it
+from a manifest it already holds in memory. The check needs no session — it reveals only what we publish, and it runs before anyone
 signs in. Downloading a build does need one.
 
 What the app can do about an answer depends on how that copy was installed, which the native side
