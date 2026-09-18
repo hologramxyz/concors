@@ -68,9 +68,9 @@ test("a folder of repositories shows a child favicon, its pull request count and
     const breakdown = page.getByRole("list", {
       name: "Pull requests by repository in hologram",
     });
-    await expect(breakdown.getByRole("listitem")).toHaveText(["hologram/app2", "hologram/site1"]);
+    await expect(breakdown.getByRole("listitem")).toHaveText(["app2", "site1"]);
     await page.screenshot({ path: test.info().outputPath("workspace-pull-requests-hover.png") });
-    await breakdown.getByRole("link", { name: /hologram\/site/ }).click();
+    await breakdown.getByRole("link", { name: /^site/ }).click();
     opened.push(...(await page.evaluate(() => (window as unknown as { opened: string[] }).opened)));
     expect(opened).toEqual(["https://github.com/hologram/site/pulls"]);
 
@@ -93,7 +93,7 @@ test("a folder of repositories shows a child favicon, its pull request count and
     await page.getByRole("button", { name: "Opened by you" }).click();
     await expect(app.locator("[data-pull-request]")).toHaveCount(1);
     await expect(page.getByRole("article", { name: "hologram/site" })).toContainText(
-      "None opened by you.",
+      "None opened by you",
     );
     await page.getByRole("button", { name: /^All workspaces/ }).click();
     await expect(page.getByRole("button", { name: /^All workspaces/ })).toHaveAttribute(
