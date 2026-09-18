@@ -1,10 +1,26 @@
 # Workspace pull requests
 
 Each workspace shows how many GitHub pull requests are open in its repositories, at the far
-right of its sidebar row. Hovering the count lists each repository's share, linking to its pull
-requests on GitHub, with **View all** opening the Pull requests page for that workspace. The
+right of its sidebar row. Hovering the count lists each repository's share; a repository opens
+the Pull requests page filtered to it, and **View all** opens it for the whole workspace. The
 **Pull requests** entry under Schedules opens every workspace's pull requests and shows the total.
-The phone sidebar shows the same counts; tapping one opens the page for that workspace.
+Filters carry each workspace's logo. The phone sidebar shows the same counts; tapping one opens
+the page for that workspace.
+
+Pull requests are managed without leaving Concors. Opening one shows its state, branches, size,
+labels, merge readiness with its checks, description and recent conversation, with:
+
+- **Merge…** confirms the method (the repository's allowed ones, defaulting to the account's
+  usual choice). The merge carries the head that was shown, so GitHub refuses it if newer commits
+  arrived. Merging is disabled when GitHub would always refuse: no write access, a draft, or
+  conflicts. Out-of-date branches, branch protection and failing checks are explained and left to
+  GitHub, which lets administrators merge anyway.
+- **Close…** closes without merging, optionally posting a comment first.
+- **Comment** posts to the conversation (⌘/Ctrl+Enter).
+- **Open on GitHub** is the only link out.
+
+GitHub's reason is shown as written when it refuses. After a change, the workspace's counts
+refresh at once.
 
 ## Which repositories belong to a workspace
 
@@ -34,7 +50,10 @@ If GitHub rejects the token, the daemon forgets it and looks again on the next r
 
 ## Freshness and limits
 
-One GraphQL request covers up to thirty repositories. Each repository reports its exact open
+One GraphQL request covers up to thirty repositories. A pull request's detail is one more
+request, with up to 50 checks and its 30 most recent comments and 20 reviews; descriptions and
+comments longer than 20,000 characters are cut. While GitHub still reports mergeability as unknown,
+the detail is fetched again a few times. Each repository reports its exact open
 count and its 25 most recently updated open pull requests with draft, review and check state; a
 repository with more links to the rest on GitHub. The daemon caches each repository for a minute,
 shared by every client and workspace. Visible clients check once a minute and on window focus;
@@ -47,7 +66,9 @@ refresh and are retried on the next one; failures are never cached.
 
 ## Compatibility
 
-Listing requires the daemon's `workspace-pull-requests` capability. Older daemons never receive
+Listing requires the daemon's `workspace-pull-requests` capability; detail, merge, close and
+comment require `pull-request-actions`. Actions only target a repository that still belongs to
+the workspace, and merges require write access (closing: triage access or authorship). Older daemons never receive
 the request: the sidebar shows no counts and the page asks to update the daemon. No workspace
 migration is required. The mobile companion relays `pull-request.request` through its protocol
 relay like other workspace requests.
