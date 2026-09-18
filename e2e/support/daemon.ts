@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { createDaemonServer } from "../../packages/daemon/src/server.ts";
 import { loadDaemonConfig } from "../../packages/daemon/src/config.ts";
 import { TestAgentProvider } from "../../packages/daemon/src/agents/testing/provider.ts";
+import { fixtureGitHub } from "./github-pull-requests.ts";
 const directory = process.env["CONCORS_DATA_DIR"];
 if (!directory) throw new Error("Set an isolated acceptance-test directory");
 await mkdir(directory, { recursive: true });
@@ -30,6 +31,7 @@ if (![7429, 7430].includes(port)) throw new Error("Invalid fixture daemon port")
 const server = createDaemonServer(loadDaemonConfig({ port, logLevel: "warn" }, {}), {
   workspacePath: join(directory, "workspace.sqlite"),
   accountBackendFactory: (info) => new TestAccountBackend(info),
+  gitHub: fixtureGitHub,
   agentProviderFactory: (cwd, handler, provider) => {
     const agent = new TestAgentProvider(handler, provider);
     agent.cwd = cwd;
