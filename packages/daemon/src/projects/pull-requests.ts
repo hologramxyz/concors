@@ -150,10 +150,14 @@ export class WorkspacePullRequests {
     const now = Date.now();
     for (const [key, entry] of this.#cache)
       if (now - entry.fetchedAt > CACHE_TTL_MS) this.#cache.delete(key);
-    const stale = repositories.filter(([key]) => {
-      const age = now - (this.#cache.get(key)?.fetchedAt ?? -Infinity);
-      return age > (refresh ? REFRESH_FLOOR_MS : CACHE_TTL_MS);
-    });
+    const results = new Map<string, Promise<RepositoryPullRequests & { viewer: string | null }>>();
+    const stale: [string, GitHubRepository][] = [];
+    for (const [key, repository] of repositories) {
+      const cached = this.#cache.get(key);
+      if (cached && now - cached.fetchedAt <= (refresh ? REFRESH_FLOOR_MS : CACHE_TTL_MS))
+        results.set(key, cached.result);
+      else stale.push([key, repository]);
+    }
     if (stale.length) {
       const batch = this.#fetch(
         token,
@@ -169,16 +173,15 @@ export class WorkspacePullRequests {
           }),
         };
         this.#cache.set(key, entry);
+        results.set(key, entry.result);
         // Failures are reported to this request and retried by the next one, never cached.
         entry.result.catch(() => {
           if (this.#cache.get(key) === entry) this.#cache.delete(key);
         });
       });
     }
-    // Every entry exists synchronously here, before any failure can remove it.
-    const pending = repositories.map(
-      async ([key]) => [key, await this.#cache.get(key)!.result] as const,
+    return new Map(
+      await Promise.all([...results].map(async ([key, result]) => [key, await result] as const)),
     );
-    return new Map(await Promise.all(pending));
   }
 }
