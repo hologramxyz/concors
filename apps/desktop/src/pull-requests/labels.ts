@@ -36,10 +36,34 @@ export const checksLabel: Record<NonNullable<PullRequest["checks"]>, string> = {
   pending: "Checks running",
 };
 
-/** Which child folders hold a repository; nothing when the workspace is the repository itself. */
-export function foldersLabel(repository: Pick<PullRequestRepository, "folders">): string | null {
+/** A repository's name without its owner, unless another listed repository shares that name. */
+export function repositoryLabel(name: string, names: readonly string[]): string {
+  const short = (full: string) => full.slice(full.indexOf("/") + 1).toLowerCase();
+  const own = short(name);
+  return names.some((other) => other !== name && short(other) === own)
+    ? name
+    : name.slice(name.indexOf("/") + 1);
+}
+
+/** Repositories with the most open pull requests first, then by name. */
+export function byOpenCount<T extends Pick<PullRequestRepository, "name" | "openCount">>(
+  repositories: readonly T[],
+): T[] {
+  return [...repositories].sort(
+    (a, b) => b.openCount - a.openCount || a.name.localeCompare(b.name),
+  );
+}
+
+/**
+ * Which child folders hold a repository. Nothing when the workspace is the repository itself, or
+ * when its one folder is simply named after it.
+ */
+export function foldersLabel(
+  repository: Pick<PullRequestRepository, "folders" | "name">,
+): string | null {
   const folders = repository.folders.filter(Boolean);
-  if (!folders.length) return null;
+  const name = repository.name.slice(repository.name.indexOf("/") + 1).toLowerCase();
+  if (!folders.length || (folders.length === 1 && folders[0]?.toLowerCase() === name)) return null;
   if (folders.length <= 2) return folders.join(", ");
   return `${folders.slice(0, 2).join(", ")} +${folders.length - 2}`;
 }
