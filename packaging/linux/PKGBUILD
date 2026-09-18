@@ -1,7 +1,7 @@
 # Maintainer: Pierlorenzo Peruzzo <pierlorenzo.peruzzo@gmail.com>
 
 pkgname=concors-bin
-pkgver=0.2.0
+pkgver=0.3.0
 pkgrel=1
 pkgdesc="A client and runtime for orchestrating coding agents locally and in the cloud"
 arch=('x86_64')
