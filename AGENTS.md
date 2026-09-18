@@ -56,8 +56,12 @@ order: pinning a version before its release exists leaves the update check answe
 does. `DAEMON_VERSION` is the same idea for the daemon that runs on cloud machines, released by the
 `daemon-v*` tag.
 
-Put the version bump in the pull request from the start rather than pushing it to a branch under
-review. A bump that lands after the merge button is pressed is simply not in the merge.
+**Once a pull request is ready for review, stop pushing to it.** Anything else — a version bump, a
+follow-up fix — gets its own pull request. A commit pushed to a branch someone is already merging
+is simply not in the merge, and the result looks merged while missing the very thing it was for.
+This has happened twice: a version bump that left `main` a release behind, and the fix for a broken
+updater that left `main` still shipping the bug. Before tagging a release, check that the commit
+being tagged actually contains what it is supposed to.
 
 Two habits worth keeping, both learned the hard way:
 

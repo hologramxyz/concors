@@ -123,12 +123,34 @@ session host is replaced when the daemon behind it changes (see
 [session recovery](./session-recovery.md)). Projects, history and settings survive. The dialog says
 so before anything is downloaded.
 
+## Signing
+
+The release workflow signs each build when `TAURI_SIGNING_PRIVATE_KEY` is set, publishes the
+detached `.sig` files alongside the builds, and carries each signature in `release.json`, which the
+control plane passes straight through to the app.
+
+Without the key a release still publishes. It is simply unsigned, the workflow says so with a
+warning annotation, and `release-manifest.ts` prints which builds went out that way. The badge
+installs an unsigned build after checking its digest; a signature is what proves a build came from
+us rather than from whoever served it, and it is what `tauri-plugin-updater` refuses to go without.
+
+To start signing, generate a key and keep both halves somewhere you will not lose them — **a lost
+private key cannot be replaced, and every copy of the app trusts only the key its build was
+verified against**:
+
+```sh
+pnpm --filter @concors/desktop exec tauri signer generate -w ~/.concors/updater.key
+```
+
+Add the private key and its password as the repository secrets `TAURI_SIGNING_PRIVATE_KEY` and
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. The public half goes in `tauri.conf.json` when the updater
+plugin is adopted; nothing reads it before then.
+
 ## Not done yet
 
 - **macOS and Windows.** The manifest and the endpoint already carry `platform` and `arch`; only
   the builds are missing.
-- **Signed updates.** `release.json` and the update response both carry a `signature` field, empty
-  until the release workflow signs builds with a minisign key. `tauri-plugin-updater` refuses an
-  update without one, so signing is what stands between this and the plugin's own one-click update
-  for AppImage, macOS and Windows. The endpoint already answers in the shape that plugin expects.
 - **AppImage**, which would give a self-updating build to Linux users who are not on Arch.
+- **`tauri-plugin-updater` itself**, whose one-click path covers AppImage, macOS and Windows. The
+  endpoint already answers in the shape the plugin expects, and builds are signed once a key
+  exists, so what remains is the plugin and the builds for those platforms.
