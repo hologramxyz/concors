@@ -21,6 +21,7 @@ import {
 import { FileRequestSchema, type FileOperation, type FileResult } from "@concors/protocol";
 import {
   PULL_REQUESTS_CAPABILITY,
+  PULL_REQUEST_ACTIONS_CAPABILITY,
   PullRequestRequestSchema,
   type PullRequestOperation,
   type PullRequestResult,
@@ -180,6 +181,11 @@ export class DaemonConnection {
       return Promise.reject(new Error("Workspace is disconnected"));
     if (!this.#state.daemon.capabilities?.includes(PULL_REQUESTS_CAPABILITY))
       return Promise.reject(new Error("Update the machine daemon to see pull requests."));
+    if (
+      operation.kind !== "list" &&
+      !this.#state.daemon.capabilities.includes(PULL_REQUEST_ACTIONS_CAPABILITY)
+    )
+      return Promise.reject(new Error("Update the machine daemon to manage pull requests."));
     if (this.#pullRequestRequests.has(requestId))
       return Promise.reject(new Error("Request is already pending"));
     const request = PullRequestRequestSchema.parse({
@@ -1017,7 +1023,9 @@ export class DaemonConnection {
       for (const pending of this.#pullRequestRequests.values()) {
         clearTimeout(pending.timer);
         pending.reject(
-          new Error("Connection lost. Pull requests will refresh after reconnecting."),
+          new Error(
+            "Connection lost. Pull requests refresh after reconnecting; a merge or close may have completed.",
+          ),
         );
       }
       this.#pullRequestRequests.clear();
