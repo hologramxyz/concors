@@ -30,6 +30,8 @@ export type InstallationReport = z.infer<typeof InstallationReportSchema>;
 export interface InstallUpdateInput {
   readonly url: string;
   readonly sha256: string;
+  /** Published size, which lets the native side tell a short download from a wrong one. */
+  readonly size: number;
   readonly format: string;
   /** Session token; the control plane serves builds only to signed-in clients. */
   readonly token: string;
