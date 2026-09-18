@@ -76,6 +76,11 @@ function setup() {
       requestId,
       outcome: { status: "error", message: "fixture" },
     })),
+    requestPullRequests: vi.fn<RelayConnection["requestPullRequests"]>(async (_, requestId) => ({
+      type: "pull-request.result",
+      requestId,
+      outcome: { status: "signed-out", message: "fixture" },
+    })),
   };
   const messages: DaemonMessage[] = [];
   const relay = createProtocolRelay(connection, (message) => messages.push(message));
@@ -89,6 +94,14 @@ describe("offline UI protocol relay", () => {
     await relay.receive({ type: "resource.request", requestId: id, operation });
     expect(connection.requestResource).toHaveBeenCalledWith(operation, id);
     expect(messages.at(-1)?.type).toBe("resource.result");
+  });
+  it("relays pull request listings with the original request ID", async () => {
+    const { connection, relay, messages } = setup();
+    await relay.receive(hello);
+    const operation = { kind: "list", epoch: id, projects: [{ projectId: id }] } as const;
+    await relay.receive({ type: "pull-request.request", requestId: id, operation });
+    expect(connection.requestPullRequests).toHaveBeenCalledWith(operation, id);
+    expect(messages.at(-1)).toMatchObject({ type: "pull-request.result", requestId: id });
   });
   it("relays opt-in resource usage and detaches on disposal", async () => {
     const { connection, relay, messages, off } = setup();
