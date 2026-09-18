@@ -14,6 +14,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Section, SettingsCard } from "@/views/settings-primitives";
 
 export function TerminalsSettings({
   creating,
@@ -29,9 +30,10 @@ export function TerminalsSettings({
     onCreatingChange(false);
   };
   return (
-    <section aria-label="Terminal profiles">
-      <div className="flex items-center justify-between gap-4">
-        <h2 className="text-base font-semibold">Terminal profiles</h2>
+    <Section
+      title="Terminal profiles"
+      description="Choose the commands you launch from tab and pane menus. Profiles are stored on the connected machine and shared across your clients."
+      actions={
         <Button
           variant="outline"
           size="sm"
@@ -40,19 +42,16 @@ export function TerminalsSettings({
         >
           <Plus /> Add terminal profile
         </Button>
-      </div>
-      <p className="mt-2 text-sm text-muted-foreground">
-        Choose the commands you launch from the tab and pane menus. Profiles are saved on this
-        machine and shared across your clients.
-      </p>
+      }
+    >
       {!profiles.canEdit && (
-        <p role="status" className="mt-4 text-sm text-muted-foreground">
+        <p role="status" className="mb-4 text-sm text-muted-foreground">
           {profiles.supported
             ? "Reconnect to this machine to edit profiles."
             : "Connect to a machine with terminal profile support to edit profiles."}
         </p>
       )}
-      <div className="mt-6 divide-y rounded-lg border">
+      <SettingsCard className="divide-y">
         {profiles.profiles.map((profile) => {
           const Icon = profileIcon(profile.id);
           return (
@@ -84,9 +83,9 @@ export function TerminalsSettings({
             Add a profile to launch your preferred commands.
           </p>
         )}
-      </div>
+      </SettingsCard>
       {(creating || editing) && <ProfileEditor profile={editing} onClose={close} />}
-    </section>
+    </Section>
   );
 }
 

@@ -207,7 +207,12 @@ test("shortcuts have a dedicated settings page and the account menu only shows i
   await expect(shortcuts).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   const main = page.getByRole("main");
-  await expect(main.getByRole("heading", { level: 2 })).toHaveText(["Workspace", "Tabs", "Panes"]);
+  await expect(main.getByRole("heading", { level: 2 })).toHaveText([
+    "Keyboard shortcuts",
+    "Workspace",
+    "Tabs",
+    "Panes",
+  ]);
   await expect(main.locator("dt")).toHaveCount(BINDINGS.length);
   for (const binding of BINDINGS) {
     const label = main.getByText(binding.label, { exact: true });

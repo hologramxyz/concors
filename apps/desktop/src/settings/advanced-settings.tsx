@@ -4,7 +4,7 @@ import { PROTOCOL_VERSION } from "@concors/protocol";
 import { Badge } from "@/components/ui/badge";
 import { env } from "@/config/env";
 import { APP_VERSION } from "@/version";
-import { Mono, Row, Section } from "@/views/settings-primitives";
+import { Mono, Row, Section, SettingsCard } from "@/views/settings-primitives";
 
 interface AdvancedSettingsProps {
   readonly endpoint: DaemonEndpoint | null;
@@ -29,42 +29,48 @@ export function AdvancedSettings({
         title="Daemon"
         description="The Concors daemon runs your agents locally or on a remote machine."
       >
-        <Row label="Endpoint">
-          <span className="flex items-center gap-2">
-            <Mono>{endpointLabel ?? endpoint?.url ?? "resolving…"}</Mono>
-            {endpoint !== null && (
-              <Badge variant="outline" className="tracking-wide uppercase">
-                {endpoint.kind}
-              </Badge>
-            )}
-          </span>
-        </Row>
-        <Row label="Status">
-          <span className="capitalize">{state.status.replace("_", " ")}</span>
-        </Row>
-        <Row label="Daemon version">
-          <Mono>{state.status === "ready" ? state.daemon.daemonVersion : "—"}</Mono>
-        </Row>
-        <Row label="Protocol" hint="Version negotiated with the daemon.">
-          <Mono>{state.status === "ready" ? state.daemon.protocolVersion : PROTOCOL_VERSION}</Mono>
-        </Row>
+        <SettingsCard className="divide-y">
+          <Row label="Endpoint">
+            <span className="flex items-center gap-2">
+              <Mono>{endpointLabel ?? endpoint?.url ?? "resolving…"}</Mono>
+              {endpoint !== null && (
+                <Badge variant="outline" className="tracking-wide uppercase">
+                  {endpoint.kind}
+                </Badge>
+              )}
+            </span>
+          </Row>
+          <Row label="Status">
+            <span className="capitalize">{state.status.replace("_", " ")}</span>
+          </Row>
+          <Row label="Daemon version">
+            <Mono>{state.status === "ready" ? state.daemon.daemonVersion : "—"}</Mono>
+          </Row>
+          <Row label="Protocol" hint="Version negotiated with the daemon.">
+            <Mono>
+              {state.status === "ready" ? state.daemon.protocolVersion : PROTOCOL_VERSION}
+            </Mono>
+          </Row>
+        </SettingsCard>
       </Section>
 
-      <Section title="About">
-        <Row label="Client version">
-          <Mono>{clientVersion}</Mono>
-        </Row>
-        {buildVersion !== undefined && (
-          <Row label="Build number">
-            <Mono>{buildVersion ?? "Development / browser preview"}</Mono>
+      <Section title="About" description="Version and service details for this Concors client.">
+        <SettingsCard className="divide-y">
+          <Row label="Client version">
+            <Mono>{clientVersion}</Mono>
           </Row>
-        )}
-        <Row
-          label="Concors API"
-          hint="Control plane for accounts, organizations, and cloud machines."
-        >
-          <Mono>{apiUrl}</Mono>
-        </Row>
+          {buildVersion !== undefined && (
+            <Row label="Build number">
+              <Mono>{buildVersion ?? "Development / browser preview"}</Mono>
+            </Row>
+          )}
+          <Row
+            label="Concors API"
+            hint="Control plane for accounts, organizations, and cloud machines."
+          >
+            <Mono>{apiUrl}</Mono>
+          </Row>
+        </SettingsCard>
       </Section>
     </>
   );

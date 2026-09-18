@@ -19,7 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { sameSshKey, useDeviceSsh } from "@/machines/device-ssh";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDate } from "@/lib/format-date";
-import { Mono, Section } from "@/views/settings-primitives";
+import { Mono, Section, SettingsCard } from "@/views/settings-primitives";
 
 interface SshKeysSectionProps {
   readonly organization: Organization | undefined;
@@ -50,66 +50,68 @@ export function SshKeysSection({ organization }: SshKeysSectionProps) {
           {error}
         </p>
       )}
-      {keys === null && !error ? (
-        <p role="status" className="py-2 text-sm text-muted-foreground">
-          Loading keys…
-        </p>
-      ) : keys !== null && keys.length === 0 ? (
-        <p className="py-2 text-sm text-muted-foreground">
-          No keys. You only need one to connect from your own terminal.
-        </p>
-      ) : (
-        <ul className="flex flex-col">
-          {(keys ?? []).map((key) => (
-            <li key={key.id} className="flex items-center justify-between gap-6 py-2.5">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 font-medium">
-                  <KeyRound className="size-3.5 text-muted-foreground" aria-hidden="true" />
-                  <span className="truncate">{key.name}</span>
-                  {device.key && sameSshKey(key.publicKey, device.key.publicKey) && (
-                    <Badge variant="secondary">This computer</Badge>
-                  )}
+      <SettingsCard>
+        {keys === null && !error ? (
+          <p role="status" className="p-4 text-sm text-muted-foreground">
+            Loading keys…
+          </p>
+        ) : keys !== null && keys.length === 0 ? (
+          <p className="p-4 text-sm text-muted-foreground">
+            No keys yet. Add one only if you want to connect from your own terminal.
+          </p>
+        ) : (
+          <ul className="flex flex-col divide-y">
+            {(keys ?? []).map((key) => (
+              <li key={key.id} className="flex items-center justify-between gap-6 px-4 py-3.5">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 font-medium">
+                    <KeyRound className="size-3.5 text-muted-foreground" aria-hidden="true" />
+                    <span className="truncate">{key.name}</span>
+                    {device.key && sameSshKey(key.publicKey, device.key.publicKey) && (
+                      <Badge variant="secondary">This computer</Badge>
+                    )}
+                  </div>
+                  <div className="selectable mt-0.5 truncate text-xs text-muted-foreground">
+                    <Mono>{key.type}</Mono> · <Mono>{key.fingerprint}</Mono> · added{" "}
+                    {formatDate(key.createdAt)}
+                  </div>
                 </div>
-                <div className="selectable mt-0.5 truncate text-xs text-muted-foreground">
-                  <Mono>{key.type}</Mono> · <Mono>{key.fingerprint}</Mono> · added{" "}
-                  {formatDate(key.createdAt)}
-                </div>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`Remove ${key.name}`}
-                disabled={removing === key.id}
-                onClick={() => {
-                  setRemoving(key.id);
-                  setError(null);
-                  void api
-                    .removeSshKey(key.id)
-                    .then(() =>
-                      setKeys((current) => (current ?? []).filter((k) => k.id !== key.id)),
-                    )
-                    .catch((cause: unknown) => setError(describeApiError(cause)))
-                    .finally(() => setRemoving(null));
-                }}
-              >
-                <Trash2 aria-hidden="true" />
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="flex flex-wrap items-center gap-2 py-2.5">
-        {device.supported && !device.registered && (
-          <Button size="sm" disabled={device.settingUp} onClick={device.setUp}>
-            <KeyRound data-icon="inline-start" aria-hidden="true" />
-            {device.settingUp ? "Setting up…" : "Set up SSH on this computer"}
-          </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`Remove ${key.name}`}
+                  disabled={removing === key.id}
+                  onClick={() => {
+                    setRemoving(key.id);
+                    setError(null);
+                    void api
+                      .removeSshKey(key.id)
+                      .then(() =>
+                        setKeys((current) => (current ?? []).filter((k) => k.id !== key.id)),
+                      )
+                      .catch((cause: unknown) => setError(describeApiError(cause)))
+                      .finally(() => setRemoving(null));
+                  }}
+                >
+                  <Trash2 aria-hidden="true" />
+                </Button>
+              </li>
+            ))}
+          </ul>
         )}
-        <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
-          <Plus data-icon="inline-start" aria-hidden="true" />
-          Add your own key
-        </Button>
-      </div>
+        <div className="flex flex-wrap items-center gap-2 border-t p-4">
+          {device.supported && !device.registered && (
+            <Button size="sm" disabled={device.settingUp} onClick={device.setUp}>
+              <KeyRound data-icon="inline-start" aria-hidden="true" />
+              {device.settingUp ? "Setting up…" : "Set up SSH on this computer"}
+            </Button>
+          )}
+          <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
+            <Plus data-icon="inline-start" aria-hidden="true" />
+            Add your own key
+          </Button>
+        </div>
+      </SettingsCard>
       {device.error && (
         <p role="alert" className="pb-2 text-sm break-words text-destructive">
           {device.error}

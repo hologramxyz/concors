@@ -13,7 +13,7 @@ import { openExternal } from "@/tauri";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/format-date";
-import { Row, Section } from "@/views/settings-primitives";
+import { Row, Section, SettingsCard } from "@/views/settings-primitives";
 
 interface BillingSectionProps {
   readonly organization: Organization | undefined;
@@ -77,63 +77,71 @@ export function BillingSection({ organization }: BillingSectionProps) {
             atRisk={null}
             onReturn={reload}
           />
-          <Row label="Payment method" hint="Saved with Stripe; Concors never sees the card number.">
-            <span className="flex items-center gap-2">
-              {status.card ? (
-                <>
-                  <CreditCard className="size-4" aria-hidden="true" />
-                  <span className="capitalize">{status.card.brand}</span> ···· {status.card.last4}
-                  <span className="text-xs">
-                    {String(status.card.expMonth).padStart(2, "0")}/{status.card.expYear}
-                  </span>
-                  {status.paymentFailedAt && <Badge variant="destructive">Payment failed</Badge>}
-                </>
-              ) : status.hasPaymentMethod ? (
-                "Card on file"
-              ) : (
-                <Badge variant="outline">No card yet</Badge>
-              )}
-            </span>
-          </Row>
-          <Row label="Prices" hint="Per machine, per month.">
-            <span className="flex flex-wrap justify-end gap-x-3 gap-y-1 text-xs">
-              {status.prices.map((price) => (
-                <span key={price.size}>
-                  <span className="capitalize">{price.size}</span>{" "}
-                  {formatMonthly(price.monthlyPrice)}
-                </span>
-              ))}
-            </span>
-          </Row>
-          <div className="flex flex-wrap items-center gap-2 py-2.5">
-            <Button
-              variant={status.hasPaymentMethod ? "outline" : "default"}
-              size="sm"
-              disabled={busy || billing.checkout !== null}
-              onClick={addCard}
+          <SettingsCard className="divide-y">
+            <Row
+              label="Payment method"
+              hint="Saved with Stripe; Concors never sees the card number."
             >
-              <CreditCard data-icon="inline-start" aria-hidden="true" />
-              {addingCard
-                ? "Opening…"
-                : status.hasPaymentMethod
-                  ? "Add another card"
-                  : "Add a card"}
-            </Button>
-            {status.hasPaymentMethod && (
-              <Button variant="outline" size="sm" disabled={busy} onClick={portal.open}>
-                <ExternalLink data-icon="inline-start" aria-hidden="true" />
-                {portal.opening ? "Opening…" : "Manage billing"}
-              </Button>
-            )}
-            <Button variant="ghost" size="sm" disabled={busy} onClick={reload}>
-              Refresh
-            </Button>
-          </div>
-          <p className="pb-2 text-xs text-muted-foreground">
-            Cards are added on a Stripe page in your browser. Your card updates here after setup.
-          </p>
+              <span className="flex flex-wrap items-center justify-end gap-2">
+                {status.card ? (
+                  <>
+                    <CreditCard className="size-4" aria-hidden="true" />
+                    <span className="capitalize">{status.card.brand}</span> ···· {status.card.last4}
+                    <span className="text-xs">
+                      {String(status.card.expMonth).padStart(2, "0")}/{status.card.expYear}
+                    </span>
+                    {status.paymentFailedAt && <Badge variant="destructive">Payment failed</Badge>}
+                  </>
+                ) : status.hasPaymentMethod ? (
+                  "Card on file"
+                ) : (
+                  <Badge variant="outline">No card yet</Badge>
+                )}
+              </span>
+            </Row>
+            <Row label="Prices" hint="Per machine, per month.">
+              <span className="flex flex-wrap justify-end gap-x-3 gap-y-1 text-xs">
+                {status.prices.map((price) => (
+                  <span key={price.size}>
+                    <span className="capitalize">{price.size}</span>{" "}
+                    {formatMonthly(price.monthlyPrice)}
+                  </span>
+                ))}
+              </span>
+            </Row>
+            <div className="p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant={status.hasPaymentMethod ? "outline" : "default"}
+                  size="sm"
+                  disabled={busy || billing.checkout !== null}
+                  onClick={addCard}
+                >
+                  <CreditCard data-icon="inline-start" aria-hidden="true" />
+                  {addingCard
+                    ? "Opening…"
+                    : status.hasPaymentMethod
+                      ? "Add another card"
+                      : "Add a card"}
+                </Button>
+                {status.hasPaymentMethod && (
+                  <Button variant="outline" size="sm" disabled={busy} onClick={portal.open}>
+                    <ExternalLink data-icon="inline-start" aria-hidden="true" />
+                    {portal.opening ? "Opening…" : "Manage billing"}
+                  </Button>
+                )}
+                <Button variant="ghost" size="sm" disabled={busy} onClick={reload}>
+                  Refresh
+                </Button>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Cards are added on a Stripe page in your browser. Your card updates here after
+                setup.
+              </p>
+            </div>
+          </SettingsCard>
           {billing.checkout && (
-            <div className="flex gap-2">
+            <div className="mt-3 flex gap-2">
               <Button
                 variant="link"
                 size="sm"
@@ -149,17 +157,17 @@ export function BillingSection({ organization }: BillingSectionProps) {
             </div>
           )}
           {invoices && invoices.length > 0 && (
-            <div className="pt-2">
-              <div className="mb-1 text-xs font-medium text-muted-foreground uppercase">
+            <SettingsCard className="mt-4">
+              <div className="border-b px-4 py-3 text-xs font-medium tracking-wide text-muted-foreground uppercase">
                 Invoices
               </div>
-              <ul className="flex flex-col">
+              <ul className="flex flex-col divide-y">
                 {invoices.map((invoice) => {
                   const invoiceUrl = invoice.hostedInvoiceUrl;
                   return (
                     <li
                       key={invoice.id}
-                      className="flex items-center justify-between gap-4 py-1.5 text-sm"
+                      className="flex items-center justify-between gap-4 px-4 py-3 text-sm"
                     >
                       <span className="min-w-0 truncate">
                         {formatDate(invoice.createdAt)}
@@ -187,7 +195,7 @@ export function BillingSection({ organization }: BillingSectionProps) {
                   );
                 })}
               </ul>
-            </div>
+            </SettingsCard>
           )}
         </>
       ) : null}
