@@ -197,7 +197,13 @@ export class DaemonConnection {
       // Discovery plus a GitHub round trip for every uncached repository.
       const timer = setTimeout(() => {
         this.#pullRequestRequests.delete(requestId);
-        reject(new Error("GitHub took too long to answer. Pull requests will refresh shortly."));
+        reject(
+          new Error(
+            operation.kind === "list" || operation.kind === "detail"
+              ? "GitHub took too long to answer. Pull requests will refresh shortly."
+              : "GitHub took too long to answer. Refresh to see whether the change was applied.",
+          ),
+        );
       }, 45_000);
       this.#pullRequestRequests.set(requestId, { resolve, reject, timer });
       try {
