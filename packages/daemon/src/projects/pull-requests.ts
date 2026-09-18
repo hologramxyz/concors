@@ -56,6 +56,11 @@ type Fetcher = (
   token: string,
   repositories: readonly GitHubRepository[],
 ) => Promise<PullRequestListing>;
+/** Replaces the machine's GitHub token and api.github.com, for isolated acceptance tests. */
+export interface GitHubSource {
+  readonly token: () => Promise<string | null>;
+  readonly fetch: Fetcher;
+}
 
 export class WorkspacePullRequests {
   #workspace: WorkspaceStore;
