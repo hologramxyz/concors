@@ -1,6 +1,7 @@
 import { Clock } from "lucide-react";
 import { cn } from "cn";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { useSchedules } from "./use-schedules";
 export function SchedulesNav({
   selected,
@@ -14,7 +15,7 @@ export function SchedulesNav({
   const { schedules } = useSchedules();
   const count = schedules?.filter((s) => s.enabled).length ?? 0;
   return (
-    <Tooltip>
+    <SidebarTooltip collapsed={compact}>
       <TooltipTrigger asChild>
         <button
           type="button"
@@ -36,7 +37,7 @@ export function SchedulesNav({
           )}
         </button>
       </TooltipTrigger>
-      {compact && <TooltipContent side="right">Schedules</TooltipContent>}
-    </Tooltip>
+      <TooltipContent side="right">Schedules</TooltipContent>
+    </SidebarTooltip>
   );
 }

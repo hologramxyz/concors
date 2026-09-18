@@ -1,7 +1,8 @@
 import { GitPullRequest } from "lucide-react";
 import { cn } from "cn";
 import type { WorkspaceSnapshot } from "@concors/protocol";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { totalOpenCount } from "./store";
 import { usePullRequests } from "./use-pull-requests";
 
@@ -19,7 +20,7 @@ export function PullRequestsNav({
   const { workspaces } = usePullRequests(workspace);
   const count = totalOpenCount(workspaces.values());
   return (
-    <Tooltip>
+    <SidebarTooltip collapsed={compact}>
       <TooltipTrigger asChild>
         <button
           type="button"
@@ -41,7 +42,7 @@ export function PullRequestsNav({
           )}
         </button>
       </TooltipTrigger>
-      {compact && <TooltipContent side="right">Pull requests</TooltipContent>}
-    </Tooltip>
+      <TooltipContent side="right">Pull requests</TooltipContent>
+    </SidebarTooltip>
   );
 }
