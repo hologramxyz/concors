@@ -12,6 +12,7 @@ import { loadDaemonConfig } from "../../packages/daemon/src/config.ts";
 import { TestAccountBackend } from "../../packages/daemon/src/agents/testing/account.ts";
 import { TestAgentProvider } from "../../packages/daemon/src/agents/testing/provider.ts";
 import { mobileDirectPort, mobileWebOrigin } from "./mobile-direct-ports.cjs";
+import { fixtureGitHub } from "./github-pull-requests.ts";
 const directory = await mkdtemp(join(tmpdir(), "concors-mobile-direct-daemon-"));
 // Provider discovery must find harmless fixture executables, never a developer's AI CLI.
 process.env["PATH"] = installTestCodexProfile(directory) + delimiter + (process.env["PATH"] ?? "");
@@ -34,6 +35,7 @@ const server = createDaemonServer(
       return agent;
     },
     accountBackendFactory: (info) => new TestAccountBackend(info),
+    gitHub: fixtureGitHub,
   },
 );
 server.app.addHook("onRequest", async (request) => {
