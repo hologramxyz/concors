@@ -1,17 +1,20 @@
 import { MachineIcon } from "./machine-icon";
 import { MachineIconPicker } from "./machine-icon-picker";
-import { DevelopmentToolsStatus } from "./development-tools-status";
 import type { Machine } from "@concors/api-client";
 import { cn } from "cn";
 import {
   CalendarX,
   Check,
+  ChevronDown,
   Cloud,
   Copy,
   KeyRound,
   LoaderCircle,
+  MapPin,
   Plus,
   RefreshCw,
+  Server,
+  Settings2,
   Undo2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -87,34 +90,23 @@ export function MachinesView({
 
   return (
     <div data-machines-view className="flex w-full min-w-0 flex-col">
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h2 className="text-[15px] font-semibold">Machines</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Your computers and cloud development machines.
-          </p>
-          <p className="mt-1 text-xs break-words text-muted-foreground">
-            {organization?.name ?? "Your organization"} · Billed monthly
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={state.reload}
-            disabled={state.loading}
-            aria-label="Refresh"
-          >
-            <RefreshCw className={cn(state.loading && "animate-spin")} aria-hidden="true" />
-          </Button>
-          <Button
-            onClick={() => setCreating(true)}
-            disabled={state.catalog === null || !organization}
-          >
-            <Plus data-icon="inline-start" aria-hidden="true" />
-            New machine
-          </Button>
-        </div>
+      <div className="mb-5 flex items-center justify-end gap-2">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={state.reload}
+          disabled={state.loading}
+          aria-label="Refresh"
+        >
+          <RefreshCw className={cn(state.loading && "animate-spin")} aria-hidden="true" />
+        </Button>
+        <Button
+          onClick={() => setCreating(true)}
+          disabled={state.catalog === null || !organization}
+        >
+          <Plus data-icon="inline-start" aria-hidden="true" />
+          New machine
+        </Button>
       </div>
 
       {(state.error ?? actionError) && (
@@ -193,7 +185,10 @@ export function MachinesView({
                 paymentFailed={billing.data?.paymentFailedAt != null}
                 onRename={(name) => state.rename(machine.id, name)}
                 onIconChange={(icon) => state.setIcon(machine.id, icon)}
-                onRetryTools={() => state.retryTools(machine.id)}
+                location={
+                  state.catalog?.regions.find((region) => region.id === machine.region)?.location ??
+                  readableRegion(machine.region)
+                }
                 onCancel={() => setCancelling(machine)}
                 resuming={resuming === machine.id}
                 onResume={() => {
@@ -250,9 +245,9 @@ function MachineCard({
   machine,
   ssh,
   paymentFailed,
+  location,
   onRename,
   onIconChange,
-  onRetryTools,
   onCancel,
   onResume,
   resuming,
@@ -261,9 +256,9 @@ function MachineCard({
   readonly ssh: DeviceSsh;
   /** The organization's card is failing, so this machine is on Stripe's retry clock. */
   readonly paymentFailed: boolean;
+  readonly location: string;
   readonly onRename: (name: string) => Promise<void>;
   readonly onIconChange: (icon: string | null) => Promise<void>;
-  readonly onRetryTools: () => Promise<void>;
   readonly onCancel: () => void;
   readonly onResume: () => void;
   readonly resuming: boolean;
@@ -271,64 +266,73 @@ function MachineCard({
   const tone = STATUS_TONE[machine.status];
   const ending = describeEnding(machine);
   return (
-    <div className="rounded-xl border bg-card/40 p-5 sm:p-6">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2.5">
-            <MachineIconPicker machine={machine} onSave={onIconChange} />
-            <span
-              className={cn(
-                "size-2 shrink-0 rounded-full",
-                TONE_CLASS[tone],
-                tone === "pending" && "animate-pulse",
+    <div className="overflow-hidden rounded-xl border bg-card/40">
+      <div className="p-5 sm:p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <MachineIconPicker machine={machine} onSave={onIconChange} />
+              <span
+                className={cn(
+                  "size-2 shrink-0 rounded-full",
+                  TONE_CLASS[tone],
+                  tone === "pending" && "animate-pulse",
+                )}
+                aria-hidden="true"
+              />
+              <h3 className="min-w-0 text-lg font-semibold break-all">{machine.name}</h3>
+              <RenameMachineDialog machine={machine} onRename={onRename} />
+              <Badge variant="outline">{describeStatus(machine)}</Badge>
+              {ending && <Badge variant="secondary">{ending}</Badge>}
+              {paymentFailed && !ending && machine.status !== "deleted" && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge variant="destructive">At risk</Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    This machine is deleted, with everything on it, if the payment keeps failing.
+                  </TooltipContent>
+                </Tooltip>
               )}
-              aria-hidden="true"
-            />
-            <h3 className="min-w-0 text-lg font-semibold break-all">{machine.name}</h3>
-            <RenameMachineDialog machine={machine} onRename={onRename} />
-            <Badge variant="outline">{describeStatus(machine)}</Badge>
-            {ending && <Badge variant="secondary">{ending}</Badge>}
-            {paymentFailed && !ending && machine.status !== "deleted" && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Badge variant="destructive">At risk</Badge>
-                </TooltipTrigger>
-                <TooltipContent>
-                  This machine is deleted, with everything on it, if the payment keeps failing.
-                </TooltipContent>
-              </Tooltip>
-            )}
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5" title={machine.region}>
+                <MapPin className="size-3.5 shrink-0" aria-hidden="true" />
+                {location}
+              </span>
+              <span className="inline-flex items-center gap-1.5 capitalize">
+                <Server className="size-3.5 shrink-0" aria-hidden="true" />
+                {machine.size}
+              </span>
+              <span>{formatMonthly(machine.monthlyPrice)}</span>
+            </div>
           </div>
-          <p className="mt-2 text-sm text-muted-foreground">
-            <span className="capitalize">{machine.size}</span> · {machine.region} ·{" "}
-            {formatMonthly(machine.monthlyPrice)}
-          </p>
+          {ending ? (
+            <Button variant="outline" size="sm" onClick={onResume} disabled={resuming}>
+              <Undo2 data-icon="inline-start" aria-hidden="true" />
+              {resuming ? "Resuming…" : "Keep machine"}
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={onCancel}
+              aria-label={`Cancel ${machine.name}`}
+            >
+              <CalendarX aria-hidden="true" />
+            </Button>
+          )}
         </div>
-        {ending ? (
-          <Button variant="outline" size="sm" onClick={onResume} disabled={resuming}>
-            <Undo2 data-icon="inline-start" aria-hidden="true" />
-            {resuming ? "Resuming…" : "Keep machine"}
-          </Button>
-        ) : (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={onCancel}
-            aria-label={`Cancel ${machine.name}`}
-          >
-            <CalendarX aria-hidden="true" />
-          </Button>
-        )}
       </div>
 
       {machine.lastError && (
-        <p role="alert" className="selectable mt-3 text-xs text-destructive">
+        <p role="alert" className="selectable mx-5 mb-5 text-xs text-destructive sm:mx-6 sm:mb-6">
           {machine.lastError}
         </p>
       )}
 
       {machine.status === "provisioning" ? (
-        <div className="mt-6 border-t pt-5">
+        <div className="border-t p-5 sm:p-6">
           <div role="status" className="flex items-start gap-3 rounded-lg bg-muted/30 p-4">
             <LoaderCircle
               className="mt-0.5 size-4 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none"
@@ -356,7 +360,7 @@ function MachineCard({
               )}
               {machine.paidUntil && (
                 <p className="ml-auto">
-                  Paid until{" "}
+                  Renews on{" "}
                   {new Date(machine.paidUntil).toLocaleDateString(undefined, {
                     dateStyle: "medium",
                   })}
@@ -366,31 +370,57 @@ function MachineCard({
           )}
         </div>
       ) : (
-        <div className="mt-6 grid gap-6 border-t pt-5 lg:grid-cols-2 lg:gap-10">
-          <dl className="grid grid-cols-[auto_minmax(0,1fr)] content-start items-center gap-x-5 gap-y-3 text-sm">
-            <dt className="text-muted-foreground">Address</dt>
-            <dd className="selectable font-mono break-all">{machine.ipv4 ?? "assigning…"}</dd>
-            <dt className="text-muted-foreground">SSH</dt>
-            <dd className="min-w-0">
-              <SshAccess machine={machine} ssh={ssh} />
-            </dd>
+        <div className="grid gap-6 border-t p-5 sm:p-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-10">
+          <dl className="grid content-start gap-5 text-sm sm:grid-cols-2 lg:grid-cols-1">
+            <div>
+              <dt className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                Address
+              </dt>
+              <dd className="selectable font-mono break-all">{machine.ipv4 ?? "Assigning…"}</dd>
+            </div>
             {machine.paidUntil && (
-              <>
-                <dt className="text-muted-foreground">Paid until</dt>
+              <div>
+                <dt className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                  {ending ? "Available until" : "Renews on"}
+                </dt>
                 <dd>
                   {new Date(machine.paidUntil).toLocaleDateString(undefined, {
                     dateStyle: "medium",
                   })}
                 </dd>
-              </>
+              </div>
             )}
           </dl>
           <MachineUsage machine={machine} />
         </div>
       )}
-      <DevelopmentToolsStatus machine={machine} onRetry={onRetryTools} />
+      <details className="group border-t">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 text-sm text-muted-foreground transition-colors select-none hover:bg-muted/30 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-inset sm:px-6 [&::-webkit-details-marker]:hidden">
+          <span className="inline-flex items-center gap-2">
+            <Settings2 className="size-3.5" aria-hidden="true" />
+            Advanced
+          </span>
+          <ChevronDown
+            className="size-4 shrink-0 transition-transform duration-150 group-open:rotate-180"
+            aria-hidden="true"
+          />
+        </summary>
+        <div className="border-t bg-muted/10 px-5 py-4 sm:px-6">
+          <p className="mb-3 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+            SSH access
+          </p>
+          <SshAccess machine={machine} ssh={ssh} />
+        </div>
+      </details>
     </div>
   );
+}
+
+function readableRegion(region: string): string {
+  return region
+    .split("-")
+    .map((part) => (part.length <= 2 ? part : `${part[0]}${part.slice(1).toLowerCase()}`))
+    .join(" ");
 }
 
 /**

@@ -31,7 +31,6 @@ export interface MachinesState {
   resume(id: string): Promise<void>;
   rename(id: string, name: string): Promise<void>;
   setIcon(id: string, icon: string | null): Promise<void>;
-  retryTools(id: string): Promise<void>;
 }
 
 /**
@@ -95,7 +94,6 @@ export function useMachines(organizationId: string | undefined): MachinesState {
     resume: async (id) => replace(await api.resumeMachine(id)),
     rename: async (id, name) => replace(await api.renameMachine(id, name)),
     setIcon: async (id, icon) => replace(await api.updateMachineIcon(id, icon)),
-    retryTools: async (id) => replace(await api.retryDevelopmentTools(id)),
   };
 }
 
