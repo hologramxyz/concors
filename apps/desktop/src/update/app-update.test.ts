@@ -3,7 +3,15 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { InstallationReport } from "@/tauri";
 
-import { applyUpdate, findUpdate, updateQuery, type AppUpdateDependencies } from "./app-update.ts";
+import {
+  applyUpdate,
+  CHECK_INTERVAL_MS,
+  findUpdate,
+  FOCUS_THROTTLE_MS,
+  shouldCheckOnFocus,
+  updateQuery,
+  type AppUpdateDependencies,
+} from "./app-update.ts";
 
 const UPDATE: DesktopUpdate = {
   version: "0.2.0",
@@ -138,5 +146,30 @@ describe("applyUpdate", () => {
       "Sign in",
     );
     expect(install).not.toHaveBeenCalled();
+  });
+});
+
+describe("shouldCheckOnFocus", () => {
+  const now = Date.UTC(2026, 8, 18, 12, 0, 0);
+
+  it("checks again when the last answer has gone stale", () => {
+    expect(shouldCheckOnFocus(now - FOCUS_THROTTLE_MS, now)).toBe(true);
+    expect(shouldCheckOnFocus(now - FOCUS_THROTTLE_MS - 1, now)).toBe(true);
+  });
+
+  it("rides on a recent answer, so working in and out of the window costs nothing", () => {
+    expect(shouldCheckOnFocus(now, now)).toBe(false);
+    expect(shouldCheckOnFocus(now - 1000, now)).toBe(false);
+  });
+
+  it("checks on the first focus of a session, before anything has been asked", () => {
+    expect(shouldCheckOnFocus(0, now)).toBe(true);
+  });
+});
+
+describe("check timings", () => {
+  it("are short enough to find a release the same session, and far apart enough to be quiet", () => {
+    expect(CHECK_INTERVAL_MS).toBe(30 * 60 * 1000);
+    expect(FOCUS_THROTTLE_MS).toBeLessThan(CHECK_INTERVAL_MS);
   });
 });

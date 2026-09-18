@@ -17,8 +17,22 @@ import { APP_VERSION } from "@/version";
  * part that matters, and it is better than silence.
  */
 
-/** How often a running app looks again. Releases are rare; this is a background courtesy. */
-export const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+/**
+ * How often a running app looks again, and how soon it will look after the window comes back.
+ *
+ * The check is a request that answers 204 with no body nearly every time, and the control plane
+ * serves it from a manifest it already holds in memory, so the interval is chosen by how quickly
+ * someone should find out rather than by what it costs. The focus check is what makes it feel
+ * immediate: returning to Concors after a release is when people look, and an interval alone would
+ * leave the badge missing from exactly that moment.
+ */
+export const CHECK_INTERVAL_MS = 30 * 60 * 1000;
+export const FOCUS_THROTTLE_MS = 5 * 60 * 1000;
+
+/** Whether a window regaining focus should check again, or ride on a recent enough answer. */
+export function shouldCheckOnFocus(lastCheckedAt: number, now: number): boolean {
+  return now - lastCheckedAt >= FOCUS_THROTTLE_MS;
+}
 
 export type AppUpdateState =
   | { readonly kind: "none" }
@@ -125,9 +139,9 @@ export interface AppUpdateControls {
 }
 
 /**
- * Checks once on mount and every few hours after that. `dependencies` defaults to a module
- * constant, so the schedule is set up once; a caller passing a fresh object each render would
- * restart it each time.
+ * Checks on mount, on a timer, and whenever the window comes back to the front. `dependencies`
+ * defaults to a module constant, so the schedule is set up once; a caller passing a fresh object
+ * each render would restart it each time.
  */
 export function useAppUpdate(
   dependencies: AppUpdateDependencies = liveDependencies,
@@ -136,7 +150,9 @@ export function useAppUpdate(
 
   useEffect(() => {
     let cancelled = false;
+    let lastCheckedAt = 0;
     const look = async () => {
+      lastCheckedAt = Date.now();
       const found = await findUpdate(dependencies);
       if (cancelled) return;
       // An install in progress must not be replaced by a check that finished late.
@@ -148,11 +164,24 @@ export function useAppUpdate(
             : { kind: "none" },
       );
     };
+    // Coming back to the window is the moment someone would look for a badge, but it also happens
+    // constantly while working, so a recent answer is reused instead of asking again.
+    const lookIfStale = () => {
+      if (shouldCheckOnFocus(lastCheckedAt, Date.now())) void look();
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") lookIfStale();
+    };
+
     void look();
     const timer = setInterval(() => void look(), CHECK_INTERVAL_MS);
+    window.addEventListener("focus", lookIfStale);
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       cancelled = true;
       clearInterval(timer);
+      window.removeEventListener("focus", lookIfStale);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [dependencies]);
 
