@@ -70,21 +70,32 @@ test("a folder of repositories shows a child favicon, its pull request count and
     });
     await expect(breakdown.getByRole("listitem")).toHaveText(["app2", "site1"]);
     await page.screenshot({ path: test.info().outputPath("workspace-pull-requests-hover.png") });
-    await breakdown.getByRole("link", { name: /^site/ }).click();
-    opened.push(...(await page.evaluate(() => (window as unknown as { opened: string[] }).opened)));
-    expect(opened).toEqual(["https://github.com/hologram/site/pulls"]);
+    // A repository opens its pull requests in Concors, not on GitHub.
+    await breakdown.getByRole("button", { name: /^site/ }).click();
+    await expect(page.getByRole("heading", { name: "Pull requests", level: 2 })).toBeVisible();
+    await expect(page.getByRole("article", { name: "hologram/site" })).toBeVisible();
+    await expect(page.getByRole("article", { name: "hologram/app" })).toHaveCount(0);
+    await page.getByRole("button", { name: "Show every repository in hologram" }).click();
+    await expect(page.getByRole("article", { name: "hologram/app" })).toBeVisible();
 
     await count.hover();
     await page.getByRole("button", { name: "View all", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Pull requests", level: 2 })).toBeVisible();
     await expect(breakdown).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /^hologram/, pressed: true })).toBeVisible();
+    const chip = page.getByRole("button", { name: /^hologram/, pressed: true });
+    await expect(chip.locator('[data-project-icon="favicon"]')).toBeVisible();
+    // One workspace still gets its heading and logo.
+    await expect(
+      page.getByRole("heading", { name: /^hologram/, level: 3 }).locator("[data-project-icon]"),
+    ).toBeVisible();
     const app = page.getByRole("article", { name: "hologram/app" });
     await expect(app).toContainText("Show pull requests in workspaces");
     await expect(app).toContainText("#42 · e2e-user · change-42 · 2h ago");
     await expect(app).toContainText("Approved");
     await expect(app.getByRole("img", { name: "Checks passing" })).toBeVisible();
-    await expect(app.getByRole("img", { name: "Draft" })).toBeVisible();
+    await expect(app.getByRole("button", { name: /^Draft: redesign onboarding/ })).toContainText(
+      "Draft",
+    );
     await expect(page.getByRole("article", { name: "hologram/site" })).toContainText(
       "Changes requested",
     );
@@ -100,6 +111,90 @@ test("a folder of repositories shows a child favicon, its pull request count and
       "aria-pressed",
       "true",
     );
+    opened.push(
+      ...((await page.evaluate(() => (window as unknown as { opened?: string[] }).opened)) ?? []),
+    );
+    expect(opened).toEqual([]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("pull requests are read, commented on, merged and closed without leaving Concors", async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  const root = await mkdtemp(join(tmpdir(), "concors-pull-request-actions-"));
+  try {
+    repository(join(root, "actions"), "https://github.com/hologram/actions.git");
+    await signedIn(page);
+    await page.addInitScript(() => {
+      window.open = (url) => {
+        (window as unknown as { opened: string[] }).opened ??= [];
+        (window as unknown as { opened: string[] }).opened.push(String(url));
+        return null;
+      };
+    });
+    await page.goto("/");
+    await seedProject(page, "Actions", root);
+    const sidebar = page.getByRole("navigation", { name: "Primary" });
+    const count = sidebar.getByRole("button", { name: "2 open pull requests in Actions" });
+    await count.click();
+    await page.getByRole("button", { name: /^Merge me/ }).click();
+
+    const view = page.getByRole("article", { name: "Pull request #12" });
+    await expect(view.getByRole("heading", { name: "Merge me", level: 2 })).toBeVisible();
+    await expect(view.locator('[data-pull-request-state="open"]')).toHaveText("Open");
+    await expect(view.getByRole("region", { name: "Merge status" })).toContainText(
+      "Ready to merge",
+    );
+    await expect(view.getByRole("region", { name: "Description" })).toContainText(
+      "Merge me, described for review.",
+    );
+    await expect(view.getByRole("button", { name: "Open on GitHub" })).toBeVisible();
+
+    await view.getByRole("textbox", { name: "Comment" }).fill("Looks good to me");
+    await view.getByRole("button", { name: "Comment", exact: true }).click();
+    await expect(view.getByRole("region", { name: "Conversation" })).toContainText(
+      "Looks good to me",
+    );
+    await expect(view.getByRole("textbox", { name: "Comment" })).toHaveValue("");
+
+    await view.getByRole("button", { name: "Merge…" }).click();
+    const merge = page.getByRole("dialog", { name: "Merge pull request #12?" });
+    await expect(merge.getByRole("radio", { name: /Squash and merge/ })).toBeChecked();
+    await page.screenshot({ path: test.info().outputPath("pull-request-merge-dialog.png") });
+    await merge.getByRole("radio", { name: /Rebase and merge/ }).check();
+    await merge.getByRole("button", { name: "Rebase and merge" }).click();
+    await expect(merge).toHaveCount(0);
+    await expect(view.locator('[data-pull-request-state="merged"]')).toHaveText("Merged");
+    await expect(view.getByRole("status")).toHaveText("Merged into main.");
+    await expect(view.getByRole("button", { name: "Merge…" })).toHaveCount(0);
+    await expect(count).toHaveCount(0);
+    await expect(
+      sidebar.getByRole("button", { name: "1 open pull request in Actions" }),
+    ).toHaveText("1");
+    await page.screenshot({ path: test.info().outputPath("pull-request-merged.png") });
+
+    await page.getByRole("button", { name: "Pull requests", exact: true }).first().click();
+    await expect(page.getByRole("button", { name: /^Merge me/ })).toHaveCount(0);
+    await page.getByRole("button", { name: /^Close me/ }).click();
+    const closing = page.getByRole("article", { name: "Pull request #11" });
+    await closing.getByRole("button", { name: "Close…" }).click();
+    const close = page.getByRole("dialog", { name: "Close pull request #11?" });
+    await close.getByRole("textbox", { name: "Closing comment" }).fill("Superseded by #12");
+    await close.getByRole("button", { name: "Comment and close" }).click();
+    await expect(close).toHaveCount(0);
+    await expect(closing.locator('[data-pull-request-state="closed"]')).toHaveText("Closed");
+    await expect(closing.getByRole("region", { name: "Conversation" })).toContainText(
+      "Superseded by #12",
+    );
+    await expect(
+      sidebar.getByRole("button", { name: /open pull requests? in Actions/ }),
+    ).toHaveCount(0);
+    expect(
+      (await page.evaluate(() => (window as unknown as { opened?: string[] }).opened)) ?? [],
+    ).toEqual([]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
