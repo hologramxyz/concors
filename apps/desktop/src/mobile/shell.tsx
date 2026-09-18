@@ -36,7 +36,7 @@ import { NewWorkspaceMenu } from "@/workspace/new-workspace-menu";
 import { useNewWorkspace } from "@/workspace/use-new-workspace";
 import { useProjectIcons } from "@/workspace/use-project-icons";
 import { projectIconKey } from "@/workspace/project-icons";
-import { SidebarSection } from "@/components/sidebar-section";
+import { SidebarEmpty, SidebarSection } from "@/components/sidebar-section";
 import { NewTabMenu } from "@/workspace/new-tab-menu";
 import { nextWorkspaceTabName } from "@concors/protocol";
 import { WorkspaceSearch } from "@/search/workspace-search";
@@ -601,9 +601,7 @@ function MobileWorkspaceContent({
                         ))}
                       </ul>
                       {!workspace?.projects.length && (
-                        <p className="px-2 py-3 text-sm text-muted-foreground">
-                          Open a folder or start a workspace to organize your tabs and panes.
-                        </p>
+                        <SidebarEmpty>No workspaces yet.</SidebarEmpty>
                       )}
                     </SidebarSection>
                     <SidebarSection title="Agents">
