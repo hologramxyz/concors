@@ -4,7 +4,7 @@ import type { ConnectionState, DaemonConnection } from "@concors/daemon-client";
 import { HOST_USAGE_CAPABILITY, type HostUsage } from "@concors/protocol";
 import { HOST_USAGE_STALE_MS, usageSummary } from "./usage-display";
 
-/** Kept outside the scrolling workspace so usage stays visible in settings and collapsed layouts. */
+/** Kept outside the scrolling workspace so usage stays visible across app views and collapsed layouts. */
 export function ResourceStatus({
   connection,
   state,

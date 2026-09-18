@@ -576,12 +576,14 @@ function AppContent() {
                           <ResourcesView />
                         )}
                       </main>
-                      <ResourceStatus
-                        connection={connection.transport}
-                        state={connection.state}
-                        machine={selectedHost.label}
-                        onOpenResources={() => setView("resources")}
-                      />
+                      {view !== "settings" && (
+                        <ResourceStatus
+                          connection={connection.transport}
+                          state={connection.state}
+                          machine={selectedHost.label}
+                          onOpenResources={() => setView("resources")}
+                        />
+                      )}
                     </div>
                     <FilesSidebar project={view === "projects" ? activeProject : undefined} />
                   </div>

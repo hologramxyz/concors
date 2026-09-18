@@ -66,7 +66,6 @@ export function MachineUsage({ machine }: { readonly machine: Machine }) {
         <time dateTime={usage.sampledAt} title={new Date(usage.sampledAt).toLocaleString()}>
           {new Date(usage.sampledAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
         </time>
-        {freshness === "fresh" && " · refreshes every 30 seconds"}
       </p>
     </section>
   );

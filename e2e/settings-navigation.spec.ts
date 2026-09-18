@@ -61,7 +61,9 @@ test("settings replace the app sidebar with grouped pages and return to the app"
 
   await settingsNavigation.getByRole("button", { name: "Machines", exact: true }).click();
   await expect(page.locator("header").getByRole("heading", { name: "Machines" })).toBeVisible();
+  await expect(main.getByRole("heading", { name: "Machines", exact: true })).toHaveCount(0);
   await expect(main.getByLabel("Local machine", { exact: true })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Machine resource usage" })).toHaveCount(0);
   await expect(primaryNavigation).toHaveCount(0);
 
   await settingsNavigation.getByRole("button", { name: "Billing", exact: true }).click();
