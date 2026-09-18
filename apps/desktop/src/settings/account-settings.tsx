@@ -14,7 +14,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Section } from "@/views/settings-primitives";
+import { Section, SettingsCard } from "@/views/settings-primitives";
 
 import { MobileOrganizationPicker } from "@/mobile/organization-picker";
 
@@ -31,7 +31,7 @@ export function AccountSettings({ auth, onSetActiveOrganization }: AccountSettin
   return (
     <>
       <Section title="Profile" description="Your identity across Concors.">
-        <div className="flex min-w-0 items-center gap-3 rounded-xl border p-4">
+        <SettingsCard className="flex items-center gap-3 p-4">
           <AccountAvatar user={auth.user} githubEnabled className="size-10 shrink-0" />
           <div className="min-w-0">
             <p className="text-sm font-medium text-foreground">{auth.user.name}</p>
@@ -44,7 +44,7 @@ export function AccountSettings({ auth, onSetActiveOrganization }: AccountSettin
               )}
             </div>
           </div>
-        </div>
+        </SettingsCard>
       </Section>
 
       <Section title="Integrations" description="Connect services to your Concors account.">
@@ -55,7 +55,7 @@ export function AccountSettings({ auth, onSetActiveOrganization }: AccountSettin
         title="Organization"
         description="Machines, access, and billing are scoped to the active organization."
       >
-        <div className="flex flex-col gap-3 rounded-xl border p-4 md:flex-row md:items-center md:justify-between md:gap-6">
+        <SettingsCard className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between md:gap-6">
           <div className="min-w-0">
             <p className="text-sm font-medium text-foreground">Active organization</p>
             <p className="mt-0.5 text-xs text-muted-foreground">
@@ -103,7 +103,7 @@ export function AccountSettings({ auth, onSetActiveOrganization }: AccountSettin
               </span>
             )}
           </div>
-        </div>
+        </SettingsCard>
       </Section>
     </>
   );

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Check, Copy, RefreshCw } from "lucide-react";
 import { useColorThemes } from "@/theme/color-theme-context";
 import { Button } from "@/components/ui/button";
-import { Section } from "@/views/settings-primitives";
+import { Section, SettingsCard } from "@/views/settings-primitives";
 
 export function ColorThemeSettings() {
   const { themes, selected, select, mode, catalog, error, refresh } = useColorThemes();
@@ -92,7 +92,7 @@ export function ColorThemeSettings() {
           })}
         </div>
       </fieldset>
-      <div className="mt-5 space-y-3 rounded-lg border bg-muted/30 p-4">
+      <SettingsCard className="mt-5 space-y-3 bg-muted/20 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-medium">Custom themes</h3>
           {catalog && (
@@ -133,7 +133,7 @@ export function ColorThemeSettings() {
             {error ?? copyError}
           </p>
         )}
-      </div>
+      </SettingsCard>
     </Section>
   );
 }

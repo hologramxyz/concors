@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { ProviderIcon } from "@/agents/provider-icon";
 import { invalidateModelCatalogs } from "@/agents/model-catalog";
+import { Section, SettingsCard } from "@/views/settings-primitives";
 
 export function ProvidersSettings() {
   const connection = useContext(TerminalConnectionContext);
@@ -82,10 +83,11 @@ export function ProvidersSettings() {
   };
   const visibleError = error ?? refreshError;
   return (
-    <section aria-label="Agent providers">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-base font-semibold">Agent providers</h2>
-        <div className="flex gap-2">
+    <Section
+      title="Agent providers"
+      description="Run your own agent CLIs and accounts. Installations and settings belong to the connected machine and work from desktop or mobile."
+      actions={
+        <>
           <Button
             variant="ghost"
             size="icon-sm"
@@ -107,14 +109,11 @@ export function ProvidersSettings() {
           >
             <Plus /> Add provider
           </Button>
-        </div>
-      </div>
-      <p className="mt-2 text-sm text-muted-foreground">
-        Run your own agent CLIs and accounts. Installations and settings belong to the connected
-        machine and work from desktop or mobile.
-      </p>
+        </>
+      }
+    >
       {!supported && (
-        <p role="status" className="mt-4 text-sm text-muted-foreground">
+        <p role="status" className="text-sm text-muted-foreground">
           Connect to a machine with provider settings support. Update its daemon if this page is
           unavailable.
         </p>
@@ -133,7 +132,7 @@ export function ProvidersSettings() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          <div className="mt-4 divide-y rounded-lg border">
+          <SettingsCard className="mt-4 divide-y">
             {data?.providers
               .filter((p) => `${p.label} ${p.engine}`.toLowerCase().includes(search.toLowerCase()))
               .map((p) => (
@@ -205,7 +204,7 @@ export function ProvidersSettings() {
                 Checking installed providers…
               </p>
             )}
-          </div>
+          </SettingsCard>
           <p className="mt-4 text-sm text-muted-foreground">
             Installed doesn’t mean signed in. Open the provider’s CLI on this machine to connect
             your account. ACP controls and available models depend on the provider.
@@ -221,7 +220,7 @@ export function ProvidersSettings() {
           onClose={() => setEditing(null)}
         />
       )}
-    </section>
+    </Section>
   );
 }
 
