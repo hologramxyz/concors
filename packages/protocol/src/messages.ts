@@ -1,6 +1,7 @@
 import { ScheduleRequestSchema, ScheduleResultSchema, ScheduleListSchema } from "./schedules.ts";
 import { ThemeRequestSchema, ThemeResultSchema } from "./themes.ts";
 import { ResourceRequestSchema, ResourceResultSchema } from "./resources.ts";
+import { PullRequestRequestSchema, PullRequestResultSchema } from "./pull-requests.ts";
 import { ProviderRequestSchema, ProviderResultSchema } from "./providers.ts";
 import { FileRequestSchema, FileResultSchema } from "./files.ts";
 import { AgentRequestSchema, AgentResultSchema, AgentEventSchema } from "./agents.ts";
@@ -63,6 +64,7 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
   ThemeRequestSchema,
   ScheduleRequestSchema,
   ResourceRequestSchema,
+  PullRequestRequestSchema,
 ]);
 export type ClientMessage = z.infer<typeof ClientMessageSchema>;
 
@@ -95,6 +97,7 @@ export const DaemonMessageSchema = z.discriminatedUnion("type", [
   ScheduleResultSchema,
   ScheduleListSchema,
   ResourceResultSchema,
+  PullRequestResultSchema,
   AgentResultSchema,
   ...AgentEventSchema.options,
 ]);
