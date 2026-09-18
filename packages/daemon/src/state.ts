@@ -3,6 +3,7 @@ import {
   HOST_USAGE_CAPABILITY,
   RESOURCES_CAPABILITY,
   PROJECT_ICON_CAPABILITY,
+  PULL_REQUESTS_CAPABILITY,
   PROTOCOL_VERSION,
 } from "@concors/protocol";
 
@@ -37,6 +38,7 @@ export class DaemonState {
         "color-themes",
         "project-files",
         PROJECT_ICON_CAPABILITY,
+        PULL_REQUESTS_CAPABILITY,
         "project-file-create",
         "folder-workspaces",
         "agent-chat",
