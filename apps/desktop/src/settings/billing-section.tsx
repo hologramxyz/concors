@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/format-date";
 import { Row, Section, SettingsCard } from "@/views/settings-primitives";
+import { describeInvoiceStatus } from "./invoice-status";
 
 interface BillingSectionProps {
   readonly organization: Organization | undefined;
@@ -164,6 +165,7 @@ export function BillingSection({ organization }: BillingSectionProps) {
               <ul className="flex flex-col divide-y">
                 {invoices.map((invoice) => {
                   const invoiceUrl = invoice.hostedInvoiceUrl;
+                  const status = describeInvoiceStatus(invoice.status);
                   return (
                     <li
                       key={invoice.id}
@@ -176,8 +178,8 @@ export function BillingSection({ organization }: BillingSectionProps) {
                         </span>
                       </span>
                       <span className="flex items-center gap-3">
-                        <Badge variant={invoice.status === "paid" ? "outline" : "destructive"}>
-                          {invoice.status ?? "unknown"}
+                        <Badge variant="outline" className={status.className}>
+                          {status.label}
                         </Badge>
                         <span>{formatMoney(invoice.amountDue)}</span>
                         {invoiceUrl && (

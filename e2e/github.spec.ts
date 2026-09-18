@@ -310,7 +310,7 @@ test("repository picker switches personal and organization repos and prepares th
     await page.screenshot({ path: "test-results/github-repository-picker.png" });
     await dialog.getByRole("button", { name: "Continue", exact: true }).click();
     await expect(dialog.getByRole("textbox", { name: "Destination folder" })).toHaveValue(
-      "~/repos/private-service",
+      "~/repos/acme/private-service",
     );
     await page.screenshot({ path: "test-results/github-clone-destination.png" });
     await dialog.getByRole("button", { name: "Clone repository", exact: true }).click();
@@ -434,7 +434,7 @@ test("clone dialog keeps its layout, rows and selection through focus and slow o
   await page.screenshot({ path: "test-results/clone-repositories.png" });
   await dialog.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(dialog.getByRole("textbox", { name: "Destination folder" })).toHaveValue(
-    "~/repos/project",
+    "~/repos/alice/project",
   );
   await expect(dialog.getByRole("textbox", { name: "Destination folder" })).toBeFocused();
   const beforeBack = requests;
