@@ -17,8 +17,11 @@ import {
 import { useEffect, useState } from "react";
 
 import { activeOrganization, type SignedInAuth } from "@/auth/auth-state";
+import { useBillingStatus } from "@/billing/use-billing";
+import { PaymentFailedWarning } from "@/billing/payment-failed-warning";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { copyText } from "@/lib/clipboard";
 import {
   Dialog,
@@ -60,6 +63,7 @@ export function MachinesView({
   const organization = activeOrganization(auth);
   const state = useMachines(organization?.id);
   const ssh = useDeviceSsh(organization?.id);
+  const billing = useBillingStatus(organization?.id ?? "");
   const [creating, setCreating] = useState(false);
   const [cancelling, setCancelling] = useState<Machine | null>(null);
   const [resuming, setResuming] = useState<string | null>(null);
@@ -74,6 +78,12 @@ export function MachinesView({
 
   const machines = state.machines ?? [];
   const empty = state.machines !== null && machines.length === 0;
+  // Every machine is its own subscription on the same card, so a failed payment puts all of the
+  // ones still running at risk. `null` while the list is loading keeps the warning plural.
+  const atRisk =
+    state.machines === null
+      ? null
+      : machines.filter((machine) => machine.status !== "deleted").length;
 
   return (
     <div data-machines-view className="flex w-full min-w-0 flex-col">
@@ -118,6 +128,14 @@ export function MachinesView({
           </Button>
         </div>
       )}
+
+      <PaymentFailedWarning
+        className="mb-5"
+        organizationId={organization?.id}
+        paymentFailedAt={billing.data?.paymentFailedAt ?? null}
+        atRisk={atRisk}
+        onReturn={() => void billing.refresh()}
+      />
 
       {onSelectLocal && (
         <div
@@ -172,6 +190,7 @@ export function MachinesView({
               <MachineCard
                 machine={machine}
                 ssh={ssh}
+                paymentFailed={billing.data?.paymentFailedAt != null}
                 onRename={(name) => state.rename(machine.id, name)}
                 onIconChange={(icon) => state.setIcon(machine.id, icon)}
                 onRetryTools={() => state.retryTools(machine.id)}
@@ -230,6 +249,7 @@ const TONE_CLASS: Record<StatusTone, string> = {
 function MachineCard({
   machine,
   ssh,
+  paymentFailed,
   onRename,
   onIconChange,
   onRetryTools,
@@ -239,6 +259,8 @@ function MachineCard({
 }: {
   readonly machine: Machine;
   readonly ssh: DeviceSsh;
+  /** The organization's card is failing, so this machine is on Stripe's retry clock. */
+  readonly paymentFailed: boolean;
   readonly onRename: (name: string) => Promise<void>;
   readonly onIconChange: (icon: string | null) => Promise<void>;
   readonly onRetryTools: () => Promise<void>;
@@ -266,6 +288,16 @@ function MachineCard({
             <RenameMachineDialog machine={machine} onRename={onRename} />
             <Badge variant="outline">{describeStatus(machine)}</Badge>
             {ending && <Badge variant="secondary">{ending}</Badge>}
+            {paymentFailed && !ending && machine.status !== "deleted" && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge variant="destructive">At risk</Badge>
+                </TooltipTrigger>
+                <TooltipContent>
+                  This machine is deleted, with everything on it, if the payment keeps failing.
+                </TooltipContent>
+              </Tooltip>
+            )}
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
             <span className="capitalize">{machine.size}</span> · {machine.region} ·{" "}
