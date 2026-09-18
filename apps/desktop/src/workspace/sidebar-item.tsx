@@ -32,7 +32,7 @@ export function WorkspaceSidebarItem({
   icon: ProjectIcon | undefined;
   pullRequests?: WorkspacePullRequests | undefined;
   onSelect: (id: string) => void;
-  onOpenPullRequests?: (projectId: string) => void;
+  onOpenPullRequests?: (projectId: string, repository?: string) => void;
   execute: (operation: WorkspaceOperation) => Promise<void>;
 }) {
   const mobile = useContext(CompactLayoutContext);
