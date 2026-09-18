@@ -1,5 +1,9 @@
 import { SchedulesNav } from "@/schedules/nav";
 import { SchedulesPage } from "@/schedules/page";
+import { PullRequestsNav } from "@/pull-requests/nav";
+import { PullRequestsPage } from "@/pull-requests/page";
+import { pullRequestKey } from "@/pull-requests/store";
+import { usePullRequests } from "@/pull-requests/use-pull-requests";
 import { ColorThemeProvider } from "@/theme/color-theme-provider";
 import { machineAvailability } from "@concors/client-core";
 import {
@@ -130,7 +134,10 @@ function MobileWorkspaceContent({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [creatingTerminalProfile, setCreatingTerminalProfile] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [schedulesOpen, setSchedulesOpen] = useState(false);
+  /** A full-height page over the workspace; Pull requests may show one workspace. */
+  const [page, setPage] = useState<
+    { kind: "schedules" } | { kind: "pull-requests"; projectId: string | null } | null
+  >(null);
   const [resourcesOpen, setResourcesOpen] = useState(false);
   const [settingsPage, setSettingsPage] = useState<SettingsPage>("account");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -152,7 +159,7 @@ function MobileWorkspaceContent({
     (projectId: string) => {
       setLocal({ machineId: host.machineId, target: { projectId } });
       setSidebarOpen(false);
-      setSchedulesOpen(false);
+      setPage(null);
       setError(null);
     },
     [host.machineId],
@@ -165,6 +172,11 @@ function MobileWorkspaceContent({
   const canEdit = !!ready && !pending;
   const draftScope = useMemo(() => ({ machineId: host.machineId }), [host.machineId]);
   const icons = useProjectIcons(workspace);
+  const pullRequests = usePullRequests(workspace);
+  const openPullRequests = (projectId: string | null = null) => {
+    setPage({ kind: "pull-requests", projectId });
+    setSidebarOpen(false);
+  };
   const selected = workspace
     ? resolveMobileSelection(workspace, local.machineId === host.machineId ? local.target : {})
     : null;
@@ -330,7 +342,7 @@ function MobileWorkspaceContent({
     };
   }, [sidebarOpen]);
   const select = (target: MobileTarget) => {
-    setSchedulesOpen(false);
+    setPage(null);
     if (project && tab && pane)
       memories.current.set(`${host.machineId}:${project.id}`, {
         projectId: project.id,
@@ -354,7 +366,7 @@ function MobileWorkspaceContent({
             .then((result) => {
               if (result.outcome.status === "error") throw new Error(result.outcome.message);
               setLocal({ machineId: host.machineId, target: { sessionId } });
-              setSchedulesOpen(false);
+              setPage(null);
               setSidebarOpen(false);
               setError(null);
             })
@@ -363,7 +375,7 @@ function MobileWorkspaceContent({
             );
         return;
       }
-      setSchedulesOpen(false);
+      setPage(null);
       setLocal({
         machineId: host.machineId,
         target: { projectId: target.project.id, tabId: target.tab.id, paneId: target.pane.id },
@@ -435,7 +447,7 @@ function MobileWorkspaceContent({
     !resourcesOpen &&
     !searchOpen &&
     !addingProject &&
-    !schedulesOpen;
+    !page;
   const cycleTab = (delta: number) => {
     if (!project || !tab || !pane) return;
     const entries = projectPanes(project);
@@ -569,13 +581,20 @@ function MobileWorkspaceContent({
                     </div>
                   )}
                   <nav aria-label="Primary" className="mobile-sidebar-content">
-                    <SchedulesNav
-                      selected={schedulesOpen}
-                      onClick={() => {
-                        setSchedulesOpen(true);
-                        setSidebarOpen(false);
-                      }}
-                    />
+                    <div className="space-y-0.5">
+                      <SchedulesNav
+                        selected={page?.kind === "schedules"}
+                        onClick={() => {
+                          setPage({ kind: "schedules" });
+                          setSidebarOpen(false);
+                        }}
+                      />
+                      <PullRequestsNav
+                        workspace={workspace}
+                        selected={page?.kind === "pull-requests"}
+                        onClick={() => openPullRequests()}
+                      />
+                    </div>
                     <SidebarSection
                       title="Workspaces"
                       action={
@@ -595,7 +614,11 @@ function MobileWorkspaceContent({
                             selected={project?.id === item.id}
                             canEdit={canEdit}
                             icon={icons.get(projectIconKey(workspace.epoch, item))}
+                            pullRequests={pullRequests.workspaces.get(
+                              pullRequestKey(workspace.epoch, item),
+                            )}
                             onSelect={selectProject}
+                            onOpenPullRequests={openPullRequests}
                             execute={execute}
                           />
                         ))}
@@ -672,8 +695,10 @@ function MobileWorkspaceContent({
                       >
                         <Menu />
                       </NativeHeaderButton>
-                      {schedulesOpen ? (
-                        <h1 className="min-w-0 flex-1 truncate text-base font-medium">Schedules</h1>
+                      {page ? (
+                        <h1 className="min-w-0 flex-1 truncate text-base font-medium">
+                          {page.kind === "schedules" ? "Schedules" : "Pull requests"}
+                        </h1>
                       ) : project ? (
                         <NewTabMenu
                           keyboard={commandsAvailable}
@@ -701,7 +726,7 @@ function MobileWorkspaceContent({
                         icon="files"
                         id="mobile-files-toggle"
                         className="mobile-icon mobile-glass"
-                        hidden={schedulesOpen}
+                        hidden={!!page}
                         aria-label="Project files"
                         aria-controls="mobile-project-files"
                         aria-expanded={files.sidebar.open}
@@ -746,13 +771,25 @@ function MobileWorkspaceContent({
                           data-pane-id={pane?.id}
                           data-pane-profile={pane?.profile}
                         >
-                          {schedulesOpen ? (
+                          {page?.kind === "schedules" ? (
                             <div className="h-full overflow-y-auto">
                               <SchedulesPage
                                 key={host.machineId}
                                 workspace={workspace}
                                 connected={!!ready}
                                 onOpenAgent={openAgent}
+                              />
+                            </div>
+                          ) : page?.kind === "pull-requests" ? (
+                            <div className="h-full overflow-y-auto">
+                              <PullRequestsPage
+                                key={host.machineId}
+                                workspace={workspace}
+                                connected={!!ready}
+                                projectId={page.projectId}
+                                onFilter={(projectId) =>
+                                  setPage({ kind: "pull-requests", projectId })
+                                }
                               />
                             </div>
                           ) : project && tab && pane ? (
@@ -898,9 +935,10 @@ function MobileWorkspaceContent({
                 onNavigate={(view) => {
                   if (view === "settings") openSettings();
                   else if (view === "schedules") {
-                    setSchedulesOpen(true);
+                    setPage({ kind: "schedules" });
                     setSidebarOpen(false);
-                  } else if (view === "resources") {
+                  } else if (view === "pull-requests") openPullRequests();
+                  else if (view === "resources") {
                     setSidebarOpen(false);
                     setResourcesOpen(true);
                   } else setSidebarOpen(true);
