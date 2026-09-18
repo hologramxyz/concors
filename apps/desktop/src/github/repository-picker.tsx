@@ -92,11 +92,13 @@ export function GitHubRepositoryPicker(props: PickerProps) {
               ? "GitHub is not available. You can paste a repository URL instead."
               : !github.status
                 ? "Could not check your GitHub connection. Use Refresh GitHub to try again."
-                : "Connect GitHub to browse your private and organization repositories."}
+                : github.status.identityConnected
+                  ? "Enable repository access to browse your private and organization repositories."
+                  : "Connect GitHub to browse your private and organization repositories."}
           </p>
           {github.status?.configured && (
             <Button type="button" disabled={github.busy} onClick={() => void github.connect()}>
-              Connect GitHub
+              {github.status.identityConnected ? "Enable repository access" : "Connect GitHub"}
             </Button>
           )}
         </div>
@@ -108,7 +110,9 @@ export function GitHubRepositoryPicker(props: PickerProps) {
           </p>
         ) : github.waiting ? (
           <p role="status">
-            Finish setup on GitHub, then return here.{" "}
+            {github.status?.identityConnected && !github.status.connected
+              ? "Finish enabling repository access on GitHub, then return here. "
+              : "Finish setup on GitHub, then return here. "}
             {github.authorizeUrl && (
               <a href={github.authorizeUrl} target="_blank" rel="noreferrer" className="underline">
                 Continue on GitHub

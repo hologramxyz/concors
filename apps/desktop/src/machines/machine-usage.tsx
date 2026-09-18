@@ -12,7 +12,7 @@ export function MachineUsage({ machine }: { readonly machine: Machine }) {
   const usage = machine.resourceUsage;
   if (freshness === "unavailable" || !usage)
     return (
-      <p className="text-sm text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         Usage unavailable · waiting for a resource report
       </p>
     );
@@ -25,7 +25,7 @@ export function MachineUsage({ machine }: { readonly machine: Machine }) {
           const percent = value ? usagePercent(value) : null;
           return (
             <div key={kind}>
-              <div className="mb-2 flex justify-between text-sm">
+              <div className="mb-2 flex justify-between text-xs">
                 <span className="text-muted-foreground">{label}</span>
                 <span className="font-medium tabular-nums">
                   {percent === null ? "Unavailable" : `${percent}%`}
@@ -51,7 +51,7 @@ export function MachineUsage({ machine }: { readonly machine: Machine }) {
                       style={{ width: `${percent}%` }}
                     />
                   </div>
-                  <p className="mt-2 text-xs text-muted-foreground tabular-nums">
+                  <p className="mt-2 text-[11px] text-muted-foreground tabular-nums">
                     {formatResourceBytes(value.totalBytes - value.availableBytes)} /{" "}
                     {formatResourceBytes(value.totalBytes)} used
                   </p>

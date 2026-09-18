@@ -1,6 +1,9 @@
 import { z } from "zod";
 export const GitHubStatusSchema = z.object({
   configured: z.boolean(),
+  /** The Concors account has a GitHub identity linked for sign-in. */
+  identityConnected: z.boolean().default(false),
+  /** Repository access has been authorized separately through the Concors GitHub App. */
   connected: z.boolean(),
   login: z.string().nullable(),
   updatedAt: z.string().nullable(),
