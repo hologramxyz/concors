@@ -534,7 +534,6 @@ function AppContent() {
                             cornerStyle={corners.preference}
                             onSetCornerStyle={corners.setPreference}
                             auth={account}
-                            onSignOut={signOut}
                             onSetActiveOrganization={(organizationId) => {
                               setError(null);
                               void auth
