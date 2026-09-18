@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { agreedVersion, desktopVersion } from "./release-version.ts";
+import { agreedVersion, bumpSources, desktopVersion } from "./release-version.ts";
 import { collectArtifacts, describeArtifact } from "./release-manifest.ts";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -66,6 +66,58 @@ describe("agreedVersion", () => {
         cargoToml: 'version = "0.2.0-rc.1"\n',
       }),
     ).toBe("0.2.0-rc.1");
+  });
+});
+
+describe("bumpSources", () => {
+  const cargo = [
+    "[package]",
+    'name = "concors-desktop"',
+    'version = "0.2.0"',
+    'edition = "2021"',
+    "",
+    "[dependencies]",
+    'tauri = { version = "2", features = [] }',
+    'serde = "1"',
+    "",
+    "[profile.release]",
+    'opt-level = "s"',
+  ].join("\n");
+
+  const bumped = (version = "0.3.0") =>
+    bumpSources(
+      sources({ cargoToml: cargo, packageJson: JSON.stringify({ version: "0.2.0" }) }),
+      version,
+    );
+
+  it("carries the new version into every file", () => {
+    expect(agreedVersion(bumped())).toBe("0.3.0");
+  });
+
+  it("leaves dependency versions alone", () => {
+    const result = bumped().cargoToml;
+    expect(result).toContain('tauri = { version = "2", features = [] }');
+    expect(result).toContain('serde = "1"');
+    expect(result).toContain('version = "0.3.0"');
+    expect(result).toContain("[profile.release]");
+  });
+
+  it("resets pkgrel, which only climbs when one version is repackaged", () => {
+    const result = bumpSources(
+      sources({ pkgbuild: "pkgname=concors-bin\npkgver=0.2.0\npkgrel=3\n" }),
+      "0.3.0",
+    ).pkgbuild;
+    expect(result).toContain("pkgver=0.3.0");
+    expect(result).toContain("pkgrel=1");
+  });
+
+  it("refuses anything that is not a version", () => {
+    for (const bad of ["latest", "v0.3.0", "0.3", ""])
+      expect(() => bumped(bad)).toThrow("is not a version");
+  });
+
+  it("accepts a pre-release version", () => {
+    expect(agreedVersion(bumped("0.3.0-rc.1"))).toBe("0.3.0-rc.1");
   });
 });
 
