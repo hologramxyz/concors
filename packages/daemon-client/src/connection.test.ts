@@ -424,6 +424,41 @@ describe("workspace replica lifecycle", () => {
     connection.disconnect();
   });
 
+  it("gates pull request listings on the daemon capability and settles them on disconnect", async () => {
+    const operation = { kind: "list" as const, epoch: snapshot.epoch, projects: [] };
+    const id = "00000000-0000-4000-8000-000000000003";
+    const older = startConnection();
+    older.connection.subscribeWorkspace(() => undefined);
+    older.socket.serverOpen();
+    older.socket.serverSend(READY);
+    await older.ready;
+    older.socket.serverSend({ type: "workspace.snapshot", snapshot });
+    await expect(older.connection.requestPullRequests(operation, id)).rejects.toThrow("Update");
+    expect(older.socket.sent.some((raw) => JSON.parse(raw).type === "pull-request.request")).toBe(
+      false,
+    );
+    older.connection.disconnect();
+
+    const { connection, socket, ready } = startConnection();
+    connection.subscribeWorkspace(() => undefined);
+    socket.serverOpen();
+    socket.serverSend({ ...READY, capabilities: ["workspace-pull-requests"] });
+    await ready;
+    socket.serverSend({ type: "workspace.snapshot", snapshot });
+    const pending = connection.requestPullRequests(operation, id);
+    socket.serverSend({
+      type: "pull-request.result",
+      requestId: id,
+      outcome: { status: "listed", viewer: "octocat", fetchedAt: 1, workspaces: [] },
+    });
+    await expect(pending).resolves.toMatchObject({ outcome: { status: "listed" } });
+    const lost = expect(connection.requestPullRequests(operation, id)).rejects.toThrow(
+      "Connection lost",
+    );
+    socket.serverClose();
+    await lost;
+  });
+
   it("ignores stale snapshots and rejects pending commands on disconnect", async () => {
     const { connection, socket, ready } = startConnection();
     const listener = vi.fn();
