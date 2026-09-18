@@ -133,6 +133,8 @@ describe("applyUpdate", () => {
     expect(install).toHaveBeenCalledWith({
       url: UPDATE.url,
       sha256: UPDATE.sha256,
+      // Passed through so a truncated download is reported as one, not as a checksum failure.
+      size: 48_765_146,
       format: "pacman",
       token: "session-token",
       version: "0.2.0",
