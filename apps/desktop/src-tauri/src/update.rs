@@ -147,6 +147,8 @@ pub struct UpdateRequest {
     url: String,
     /// Lowercase hex SHA-256 the download must have.
     sha256: String,
+    /// Bytes the build should have, which tells a short download apart from a wrong one.
+    size: u64,
     /// Release format, which must be one this installation can apply.
     format: String,
     /// Session token for the control plane. Never written to the command line.
@@ -198,7 +200,7 @@ fn download_and_install(
     };
     let file = directory.join(name);
     download(&request.url, &request.token, &file)?;
-    verify(&file, &request.sha256)?;
+    verify(&file, &request.sha256, request.size)?;
     match installation {
         Installation::Pacman { .. } => install_package(&file),
         Installation::Tarball { root, .. } => replace_tree(&file, Path::new(root)),
@@ -215,10 +217,12 @@ fn download(url: &str, token: &str, destination: &Path) -> Result<(), String> {
             "--fail",
             "--silent",
             "--show-error",
+            // Follow the control plane's redirect to wherever the build is stored. curl sends the
+            // credential below to the first host only and drops it on a cross-host redirect, which
+            // is exactly what we want here. `--no-location-trusted` is NOT the careful spelling of
+            // that: it cancels following redirects altogether, and curl then writes the empty body
+            // of the 302 and exits successfully, leaving a 0-byte "build".
             "--location",
-            // Our token is for the control plane. A redirect leads elsewhere, and curl drops the
-            // header on its own unless told otherwise; this says plainly that it must.
-            "--no-location-trusted",
             "--retry",
             "2",
             "--config",
@@ -244,15 +248,30 @@ fn download(url: &str, token: &str, destination: &Path) -> Result<(), String> {
         .wait_with_output()
         .map_err(|error| format!("Downloading the update failed: {error}"))?;
     if !output.status.success() {
-        return Err(format!(
-            "Downloading the update failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        ));
+        let reason = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+        log::warn!("update download failed: {reason}");
+        return Err(format!("Downloading the update failed: {reason}"));
     }
+    log::info!(
+        "downloaded update: {} bytes",
+        fs::metadata(destination)
+            .map(|meta| meta.len())
+            .unwrap_or(0)
+    );
     Ok(())
 }
 
-fn verify(file: &Path, sha256: &str) -> Result<(), String> {
+fn verify(file: &Path, sha256: &str, expected_size: u64) -> Result<(), String> {
+    // Length first: a transfer that stopped early is a different problem from one that arrived
+    // changed, and saying so is the difference between "try again" and "something is wrong".
+    let actual_size = fs::metadata(file).map(|meta| meta.len()).unwrap_or(0);
+    if expected_size > 0 && actual_size != expected_size {
+        log::warn!("update download is {actual_size} bytes, expected {expected_size}");
+        return Err(format!(
+            "The update downloaded incompletely ({actual_size} of {expected_size} bytes) and was discarded."
+        ));
+    }
+
     let output = Command::new("sha256sum")
         .arg(file)
         .stdin(Stdio::null())
@@ -264,13 +283,16 @@ fn verify(file: &Path, sha256: &str) -> Result<(), String> {
         .unwrap_or_default()
         .to_owned();
     if !output.status.success() || digest != sha256 {
+        log::warn!("update digest {digest} does not match the published {sha256}");
         return Err("The downloaded update did not match its checksum and was discarded.".into());
     }
+    log::info!("update verified: {actual_size} bytes, sha256 {sha256}");
     Ok(())
 }
 
 /// pacman keeps its own record of what is installed, so an update must go through it.
 fn install_package(file: &Path) -> Result<(), String> {
+    log::info!("installing {} with pacman", file.display());
     let output = Command::new("pkexec")
         .args(["pacman", "-U", "--noconfirm"])
         .arg(file)
@@ -278,8 +300,14 @@ fn install_package(file: &Path) -> Result<(), String> {
         .output()
         .map_err(|error| format!("Could not ask for administrator access: {error}"))?;
     if output.status.success() {
+        log::info!("update installed; restarting");
         return Ok(());
     }
+    log::warn!(
+        "pacman exited {:?}: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stderr).trim()
+    );
     // 126 is polkit's "dismissed or not authorised"; anything else is pacman's own failure.
     if output.status.code() == Some(126) {
         return Err("Administrator access was not granted, so nothing changed.".into());
@@ -407,16 +435,54 @@ mod tests {
     fn a_download_that_does_not_match_its_checksum_is_refused() {
         let directory = temp("verify");
         let file = directory.join("build.tar.gz");
-        fs::write(&file, "not the build you asked for").unwrap();
+        let body = "not the build you asked for";
+        fs::write(&file, body).unwrap();
+        let size = body.len() as u64;
 
-        assert!(verify(&file, &"0".repeat(64)).is_err());
+        assert!(verify(&file, &"0".repeat(64), size).is_err());
         let digest = Command::new("sha256sum").arg(&file).output().unwrap();
         let expected = String::from_utf8_lossy(&digest.stdout)
             .split_whitespace()
             .next()
             .unwrap()
             .to_owned();
-        assert!(verify(&file, &expected).is_ok());
+        assert!(verify(&file, &expected, size).is_ok());
+        fs::remove_dir_all(&directory).unwrap();
+    }
+
+    /// The failure this actually shipped with: a redirect that was never followed left an empty
+    /// file, and a bare checksum mismatch said nothing about why.
+    #[test]
+    fn an_empty_or_short_download_says_so_rather_than_blaming_the_checksum() {
+        let directory = temp("short");
+        let file = directory.join("build.tar.gz");
+        fs::write(&file, "").unwrap();
+
+        let error = verify(&file, &"0".repeat(64), 48_761_820).unwrap_err();
+        assert!(error.contains("downloaded incompletely"), "{error}");
+        assert!(error.contains("0 of 48761820"), "{error}");
+
+        fs::write(&file, "half").unwrap();
+        assert!(verify(&file, &"0".repeat(64), 8)
+            .unwrap_err()
+            .contains("4 of 8"));
+        fs::remove_dir_all(&directory).unwrap();
+    }
+
+    /// A release that does not publish a size must still be installable.
+    #[test]
+    fn an_unknown_size_falls_back_to_the_checksum_alone() {
+        let directory = temp("nosize");
+        let file = directory.join("build.tar.gz");
+        fs::write(&file, "build").unwrap();
+        let digest = Command::new("sha256sum").arg(&file).output().unwrap();
+        let expected = String::from_utf8_lossy(&digest.stdout)
+            .split_whitespace()
+            .next()
+            .unwrap()
+            .to_owned();
+
+        assert!(verify(&file, &expected, 0).is_ok());
         fs::remove_dir_all(&directory).unwrap();
     }
 
