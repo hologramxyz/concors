@@ -133,6 +133,39 @@ it("does not read icons through directory links or outside the selected project"
   expect(await request({ epoch: randomUUID() })).toMatchObject({ status: "error" });
   expect(await request({ projectId: randomUUID() })).toMatchObject({ status: "error" });
 });
+it("shows the first child repository's favicon for a folder of repositories, one level deep", async () => {
+  const repository = (name: string) =>
+    execFileSync("git", ["init", "--quiet", join(root, name)], { stdio: "pipe" });
+  const encoded = (content: string) =>
+    `data:image/svg+xml;base64,${Buffer.from(content).toString("base64")}`;
+  // Grandchildren do not count: a folder of folders of repositories stays a plain folder.
+  repository("group/deep");
+  await write("group/deep/favicon.svg", svg);
+  expect(await request()).toEqual({ status: "project-icon", icon: { isGit: false, source: null } });
+  // Child repositories are checked in name order; one without a favicon is skipped.
+  repository("alpha");
+  repository("beta");
+  repository("gamma");
+  await write("beta/public/favicon.svg", svg.replace("blue", "red"));
+  await write("gamma/favicon.svg", svg);
+  expect(await request()).toEqual({
+    status: "project-icon",
+    icon: { isGit: false, source: encoded(svg.replace("blue", "red")) },
+  });
+  await rm(join(root, "beta/public/favicon.svg"));
+  expect(await request()).toEqual({
+    status: "project-icon",
+    icon: { isGit: false, source: encoded(svg) },
+  });
+  // Ordinary child folders and linked repositories are not repository children.
+  await rm(join(root, "gamma"), { recursive: true });
+  await write("plain/favicon.svg", svg);
+  const linked = join(directory, "linked");
+  execFileSync("git", ["init", "--quiet", linked], { stdio: "pipe" });
+  await writeFile(join(linked, "favicon.svg"), svg);
+  await symlink(linked, join(root, "linked"), process.platform === "win32" ? "junction" : "dir");
+  expect(await request()).toEqual({ status: "project-icon", icon: { isGit: false, source: null } });
+});
 it("rejects remote URLs in project icon responses", () => {
   expect(
     FileResultSchema.safeParse({
