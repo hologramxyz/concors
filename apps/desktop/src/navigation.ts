@@ -1,6 +1,13 @@
-import { Activity, Clock, FolderKanban, Settings, type LucideIcon } from "lucide-react";
+import {
+  Activity,
+  Clock,
+  FolderKanban,
+  GitPullRequest,
+  Settings,
+  type LucideIcon,
+} from "lucide-react";
 
-export type View = "projects" | "resources" | "schedules" | "settings";
+export type View = "projects" | "resources" | "schedules" | "pull-requests" | "settings";
 
 export interface NavItem {
   readonly view: View;
@@ -12,6 +19,7 @@ export interface NavItem {
 
 export const PRIMARY_NAV: readonly NavItem[] = [
   { view: "schedules", label: "Schedules", icon: Clock },
+  { view: "pull-requests", label: "Pull requests", icon: GitPullRequest },
   { view: "projects", label: "Projects", icon: FolderKanban },
   { view: "resources", label: "Resources", icon: Activity },
 ];
