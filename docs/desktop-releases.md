@@ -19,19 +19,21 @@ public.
 | `packaging/linux/PKGBUILD` (`pkgver`)    | the version pacman records                                |
 | `apps/desktop/src-tauri/Cargo.toml`      | the crate version, shown by `cargo` and in a panic        |
 
-Nothing keeps them together except a check, so run it after a bump:
+Nothing keeps them together except a check, so bump them with one command rather than by hand:
 
 ```sh
-pnpm desktop:version
+pnpm desktop:version --set 0.3.0
+cargo metadata --manifest-path apps/desktop/src-tauri/Cargo.toml --format-version 1 >/dev/null
 ```
 
-It prints the agreed version, or names every file that disagrees. The release workflow runs it
-before building anything: a release whose pieces disagree would ask the control plane for updates
+That rewrites all four, resets the PKGBUILD's `pkgrel` to 1, and reads them back to check they
+agree. `pnpm desktop:version` on its own prints the agreed version, or names every file that
+disagrees, which is what the release workflow runs before building anything: a release whose pieces disagree would ask the control plane for updates
 to a version it is not, and would never stop offering the one it already has.
 
 ## Publishing
 
-Bump the four files, merge to `main`, then tag the merge commit:
+Bump the version as above, merge to `main`, then tag the merge commit:
 
 ```sh
 git tag -a desktop-v0.2.0 -m "Faster terminals and a quieter sidebar."
