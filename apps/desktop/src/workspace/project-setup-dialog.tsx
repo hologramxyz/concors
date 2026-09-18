@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { defaultCloneDirectory } from "./clone-directory";
 
 export function ProjectSetupDialog({
   onClose,
@@ -37,15 +38,7 @@ export function ProjectSetupDialog({
   const [repository, setRepository] = useState("");
   const [source, setSource] = useState<"github" | "url">(githubEnabled ? "github" : "url");
   const [customDirectory, setCustomDirectory] = useState<string | null>(null);
-  const folderName =
-    repository
-      .trim()
-      .split(/[/:]/)
-      .at(-1)
-      ?.replace(/\.git$/, "")
-      .replace(/[^\p{L}\p{N}_-]+/gu, "-")
-      .slice(0, 100) ?? "";
-  const defaultDirectory = mode === "open" ? "" : folderName ? `~/repos/${folderName}` : "";
+  const defaultDirectory = mode === "open" ? "" : defaultCloneDirectory(repository);
   const [setups, setSetups] = useState<ProjectSetup[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -306,7 +299,7 @@ export function ProjectSetupDialog({
                       maxLength={4096}
                       value={customDirectory ?? defaultDirectory}
                       onChange={(event) => setCustomDirectory(event.target.value)}
-                      placeholder="~/repos/my-project"
+                      placeholder="~/repos/owner/my-project"
                       disabled={busy}
                       className="h-10 font-mono"
                     />
