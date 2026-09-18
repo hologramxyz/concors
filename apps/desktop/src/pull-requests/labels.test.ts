@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { ageLabel, foldersLabel } from "./labels";
+import { ageLabel, byOpenCount, foldersLabel, repositoryLabel } from "./labels";
 
 it("describes pull request ages compactly", () => {
   const now = Date.parse("2026-09-18T12:00:00Z");
@@ -14,9 +14,28 @@ it("describes pull request ages compactly", () => {
   expect(ageLabel("not a date", now)).toBe("");
 });
 
+it("drops the owner from repository names unless that makes two look alike", () => {
+  const names = ["hologramxyz/studio", "hologramxyz/app", "fork/app"];
+  expect(repositoryLabel("hologramxyz/studio", names)).toBe("studio");
+  expect(repositoryLabel("hologramxyz/app", names)).toBe("hologramxyz/app");
+  expect(repositoryLabel("fork/App", ["fork/App", "hologramxyz/app"])).toBe("fork/App");
+});
+
+it("orders repositories by open pull requests, then name", () => {
+  expect(
+    byOpenCount([
+      { name: "b", openCount: 0 },
+      { name: "c", openCount: 4 },
+      { name: "a", openCount: 0 },
+    ]).map((repository) => repository.name),
+  ).toEqual(["c", "a", "b"]);
+});
+
 it("names the child folders holding a repository", () => {
-  expect(foldersLabel({ folders: [""] })).toBeNull();
-  expect(foldersLabel({ folders: ["app"] })).toBe("app");
-  expect(foldersLabel({ folders: ["app", "app-copy"] })).toBe("app, app-copy");
-  expect(foldersLabel({ folders: ["a", "b", "c", "d"] })).toBe("a, b +2");
+  const name = "hologram/app";
+  expect(foldersLabel({ name, folders: [""] })).toBeNull();
+  expect(foldersLabel({ name, folders: ["App"] })).toBeNull();
+  expect(foldersLabel({ name, folders: ["web"] })).toBe("web");
+  expect(foldersLabel({ name, folders: ["app", "app-copy"] })).toBe("app, app-copy");
+  expect(foldersLabel({ name, folders: ["a", "b", "c", "d"] })).toBe("a, b +2");
 });
