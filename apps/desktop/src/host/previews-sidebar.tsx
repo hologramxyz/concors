@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ExternalLink } from "lucide-react";
-import { SidebarSection } from "@/components/sidebar-section";
+import { SidebarEmpty, SidebarSection } from "@/components/sidebar-section";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { openPreview } from "@/tauri/open-external";
@@ -51,17 +51,11 @@ export function PreviewsSidebar({ compact = false }: { compact?: boolean }) {
   if (compact) return items.length ? <section aria-label="Previews">{list}</section> : null;
   return (
     <SidebarSection title="Previews">
-      {list}
+      {items.length ? list : null}
       {!items.length && (
-        <p className="px-2 py-2 text-ui text-muted-foreground">
-          {loading ? "Discovering previews…" : "No previews detected."}
-        </p>
+        <SidebarEmpty>{loading ? "Discovering previews…" : "No previews detected."}</SidebarEmpty>
       )}
-      {error && (
-        <p role="alert" className="px-2 py-2 text-ui text-destructive">
-          {error}
-        </p>
-      )}
+      {error && <SidebarEmpty tone="alert">{error}</SidebarEmpty>}
     </SidebarSection>
   );
 }

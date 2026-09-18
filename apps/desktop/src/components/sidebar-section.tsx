@@ -63,3 +63,30 @@ export function SidebarSection({
     </section>
   );
 }
+
+/**
+ * What a sidebar section says when it has nothing to list.
+ *
+ * Indented to sit under the section's own name, one step quieter and smaller than both the heading
+ * above it and a real item, so an empty section reads as absence rather than as something to act
+ * on. All three sections share this so they cannot drift apart again.
+ */
+export function SidebarEmpty({
+  children,
+  tone = "muted",
+}: {
+  children: ReactNode;
+  /** `alert` keeps the same shape for a failure, which is still not a list item. */
+  tone?: "muted" | "alert";
+}) {
+  return (
+    <p
+      {...(tone === "alert" ? { role: "alert" } : {})}
+      className={`mt-1 py-1.5 pr-2 pl-8 text-xs ${
+        tone === "alert" ? "text-destructive" : "text-muted-foreground/70"
+      }`}
+    >
+      {children}
+    </p>
+  );
+}

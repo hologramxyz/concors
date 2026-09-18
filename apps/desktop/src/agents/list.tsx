@@ -1,6 +1,7 @@
 import { Clock } from "lucide-react";
 import { useSchedules } from "@/schedules/use-schedules";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { SidebarEmpty } from "@/components/sidebar-section";
 import { useContext } from "react";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import { visibleAgentSessions } from "./visible-sessions";
@@ -88,10 +89,7 @@ export function AgentSidebar({
       unread: false,
     })),
   ].toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  if (!agents.length)
-    return compact ? null : (
-      <p className="px-2 py-2 text-ui text-muted-foreground">No agents yet.</p>
-    );
+  if (!agents.length) return compact ? null : <SidebarEmpty>No agents yet.</SidebarEmpty>;
   const list = (
     <ul className="mt-1 space-y-0.5">
       {agents.map((agent) => {
