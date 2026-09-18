@@ -1,17 +1,17 @@
 import { useContext, useState } from "react";
 import { cn } from "cn";
-import { ArrowRight, ArrowUpRight, GitPullRequest } from "lucide-react";
+import { ArrowRight, GitPullRequest } from "lucide-react";
 import type { WorkspacePullRequests, WorkspaceProject } from "@concors/protocol";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { CompactLayoutContext } from "@/components/compact-layout";
-import { openExternal } from "@/tauri";
 import { byOpenCount, pullRequestsLabel, repositoryLabel } from "./labels";
 import { workspaceOpenCount } from "./store";
 
 /**
  * A workspace's open pull request count, at the end of its sidebar row. Hovering shows each
- * repository's share; clicking (or tapping, where there is no hover) opens the Pull requests page
- * for that workspace. Nothing is shown when the workspace has none.
+ * repository's share, each opening that repository's pull requests; clicking the count (or
+ * tapping, where there is no hover) opens the whole workspace's. Nothing is shown when the
+ * workspace has none. Everything stays in Concors.
  */
 export function WorkspacePullRequestCount({
   project,
@@ -20,7 +20,7 @@ export function WorkspacePullRequestCount({
 }: {
   project: WorkspaceProject;
   listing: WorkspacePullRequests | undefined;
-  onOpen: (projectId: string) => void;
+  onOpen: (projectId: string, repository?: string) => void;
 }) {
   const mobile = useContext(CompactLayoutContext);
   const [open, setOpen] = useState(false);
@@ -54,29 +54,29 @@ export function WorkspacePullRequestCount({
         <ul aria-label={`Pull requests by repository in ${project.name}`}>
           {repositories.map((repository) => (
             <li key={repository.name}>
-              <a
-                href={`${repository.url}/pulls`}
-                onClick={(event) => {
-                  event.preventDefault();
-                  void openExternal(`${repository.url}/pulls`);
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  onOpen(project.id, repository.name);
                 }}
-                title={repository.error ?? `Open ${repository.name} pull requests on GitHub`}
+                title={repository.error ?? repository.name}
                 className={cn(
-                  "group/repository flex h-8 items-center gap-2 rounded-md px-2 text-ui hover:bg-accent focus-visible:bg-accent focus-visible:outline-none",
+                  "group/repository flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-ui hover:bg-accent focus-visible:bg-accent focus-visible:outline-none",
                   !repository.openCount && "text-muted-foreground",
                 )}
               >
                 <span className="min-w-0 flex-1 truncate">
                   {repositoryLabel(repository.name, names)}
                 </span>
-                <ArrowUpRight
+                <ArrowRight
                   className="size-3.5 text-muted-foreground opacity-0 group-hover/repository:opacity-100 group-focus-visible/repository:opacity-100"
                   aria-hidden="true"
                 />
                 <span className="w-5 text-right text-xs text-muted-foreground tabular-nums">
                   {repository.error ? "–" : repository.openCount}
                 </span>
-              </a>
+              </button>
             </li>
           ))}
         </ul>
