@@ -317,7 +317,7 @@ function PullRequestRow({ pullRequest, onOpen }: { pullRequest: PullRequest; onO
             "mt-0.5 size-4 shrink-0",
             pullRequest.draft ? "text-muted-foreground" : "text-emerald-600 dark:text-emerald-500",
           )}
-          aria-label={pullRequest.draft ? "Draft" : "Open"}
+          aria-hidden="true"
         />
         <div className="min-w-0 flex-1">
           <p className="font-medium break-words">{pullRequest.title}</p>
