@@ -97,6 +97,7 @@ export function registerProtocolEndpoint(
         options.workspace,
         new GitHubCredentials(options.gitHub.token),
         options.gitHub.fetch,
+        options.gitHub.pullRequest,
       )
     : new WorkspacePullRequests(options.workspace);
   const projects = new ProjectManager(options.workspace, () => {
