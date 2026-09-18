@@ -1,8 +1,8 @@
 # Machine CPU and RAM
 
 The desktop/web workspace has a compact status bar showing the selected machine, CPU
-percentage, and RAM used/total plus its percentage. It remains visible in settings,
-when the primary sidebar is collapsed, and while workspace content scrolls.
+percentage, and RAM used/total plus its percentage. It remains visible when the primary
+sidebar is collapsed and while workspace content scrolls, but is hidden throughout Settings.
 
 Mobile reuses this status component in a compact row below the sidebar machine
 selector, not below the chat or in the profile footer. It shows CPU percentage and

@@ -43,7 +43,7 @@ test("machine cards display usage, poll, and identify stale or missing reports",
     accessReadyAt: time,
     reinstallTaskId: null,
     monthlyPrice: { amount: 6.99, currency: "USD" },
-    paidUntil: null,
+    paidUntil: "2026-10-18T00:00:00.000Z",
     cancelledAt: null,
     createdAt: time,
     updatedAt: time,
@@ -80,7 +80,12 @@ test("machine cards display usage, poll, and identify stale or missing reports",
       if (fail) return route.fulfill({ status: 503, headers, body: "Unavailable" });
       body = { machines: [{ ...machine, resourceUsage: usage }] };
     } else if (path === "/api/v1/machines/catalog")
-      body = { regions: [], sizes: [], image: "ubuntu", sshUser: "ubuntu" };
+      body = {
+        regions: [{ id: "US-EAST-VA", location: "Vint Hill, Virginia", countryCode: "US" }],
+        sizes: [],
+        image: "ubuntu",
+        sshUser: "ubuntu",
+      };
     return route.fulfill({
       status: 200,
       headers,
@@ -91,7 +96,7 @@ test("machine cards display usage, poll, and identify stale or missing reports",
   await page.goto("/");
   await page.getByRole("button", { name: "Switch machine" }).click();
   await page.getByRole("menuitem", { name: "Manage machines" }).click();
-  await expect(page.getByRole("heading", { name: "Machines", level: 2 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Machines", level: 1 })).toBeVisible();
   const create = page.getByRole("button", { name: "New machine", exact: true });
   await expect(create).toBeEnabled();
   const colors = await create.evaluate((element) => {
@@ -99,7 +104,16 @@ test("machine cards display usage, poll, and identify stale or missing reports",
     return { foreground: style.color, background: style.backgroundColor };
   });
   expect(colors.foreground).not.toBe(colors.background);
-  expect((await create.boundingBox())?.height).toBeGreaterThanOrEqual(40);
+  expect((await create.boundingBox())?.height).toBeGreaterThanOrEqual(28);
+  await expect(page.getByText("Vint Hill, Virginia", { exact: true })).toBeVisible();
+  await expect(page.getByText("Renews on", { exact: true })).toBeVisible();
+  await expect(page.getByText("Paid until", { exact: true })).toHaveCount(0);
+  await expect(page.getByText(/refreshes every 30 seconds/i)).toHaveCount(0);
+  await expect(page.getByText(/Development tools ready/i)).toHaveCount(0);
+  const advanced = page.locator("details").filter({ hasText: "Advanced" });
+  await expect(advanced.getByText("SSH access", { exact: true })).toBeHidden();
+  await advanced.locator("summary").click();
+  await expect(advanced.getByText("SSH access", { exact: true })).toBeVisible();
   const memory = page.getByRole("meter", { name: "Memory usage" });
   await expect(memory).toHaveAttribute("aria-valuenow", "63");
   await expect(page.getByRole("meter", { name: "Disk usage" })).toHaveAttribute(

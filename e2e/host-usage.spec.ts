@@ -9,9 +9,7 @@ const reading = {
   memory: { usedBytes: 7.5 * 1024 ** 3, totalBytes: 8 * 1024 ** 3 },
 };
 
-test("CPU and RAM stay visible in settings and collapsed layouts, without retaining stale values", async ({
-  page,
-}) => {
+test("CPU and RAM stay out of settings and remain correct in the workspace", async ({ page }) => {
   await signedIn(page);
   let paused = false;
   let client: WebSocketRoute | undefined;
@@ -50,9 +48,10 @@ test("CPU and RAM stay visible in settings and collapsed layouts, without retain
   await page.getByRole("main").evaluate((element) => {
     element.scrollTop = element.scrollHeight;
   });
-  await expect(status).toBeVisible();
+  await expect(status).toHaveCount(0);
   await page.screenshot({ path: "test-results/host-usage-settings.png" });
   await page.getByRole("button", { name: "Back to app", exact: true }).click();
+  await expect(status).toBeVisible();
   await page.emulateMedia({ colorScheme: "dark" });
   await page.setViewportSize({ width: 600, height: 850 });
   expect(await status.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);

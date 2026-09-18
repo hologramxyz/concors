@@ -8,7 +8,7 @@ The New VPS dialog has three steps: Server, Customize, Review. Back and the revi
 
 Only final confirmation creates the machine. Navigating steps, editing choices, and setting up a payment method never deploy a VPS. Existing Stripe confirmation/retry handling is retained. Failed creation keeps the review open with an error and Edit actions.
 
-The Machines page displays optional tool setup status and installed versions, and offers Retry setup after failure. This calls the organization-authorized retry endpoint; it does not create a new VPS. On older control planes without the catalog capability, optional tool controls are omitted and creation retains its original payload.
+Optional tools install after deployment without adding a persistent setup-status section to the machine card. On older control planes without the catalog capability, optional tool controls are omitted and creation retains its original payload.
 
 Deploy the corresponding concors-server PR and its database migration before enabling customization. Keep the shared development preview on main; feature development and local build-based browser checks use a separate checkout.
 
@@ -18,7 +18,7 @@ Creating a VPS never involves SSH keys. Using a machine in Concors — terminals
 through its daemon, and Concors reaches the server with its own management key. SSH keys are only for
 connecting from your own terminal:
 
-- **Desktop app:** the machine card offers **Set up SSH on this computer**. It creates
+- **Desktop app:** the machine card's collapsed **Advanced** section offers **Set up SSH on this computer**. It creates
   `~/.ssh/concors_ed25519` with the system's `ssh-keygen` if that file does not exist (an existing
   key is never replaced), registers the public key under the computer's name, and then shows
   `ssh -i <key path> ubuntu@<address>` with a copy button. The server pushes the key to running

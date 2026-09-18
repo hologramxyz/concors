@@ -499,6 +499,13 @@ test("a machine points to Settings for SSH when there is no key", async ({ page 
   await billingApi(page, { ready: true });
   await openMachines(page);
   const card = page.locator("#cloud-machine-vps-1");
+  const advanced = card.locator("details").filter({ hasText: "Advanced" });
+  await expect(
+    card.getByText("Add an SSH key in Settings to connect from your own terminal.", {
+      exact: true,
+    }),
+  ).toBeHidden();
+  await advanced.locator("summary").click();
   await expect(
     card.getByText("Add an SSH key in Settings to connect from your own terminal.", {
       exact: true,
@@ -513,6 +520,8 @@ test("a machine shows its SSH command once a key exists", async ({ page }) => {
   await billingApi(page, { ready: true, savedKey: true });
   await openMachines(page);
   const card = page.locator("#cloud-machine-vps-1");
+  await expect(card.getByText("ssh ubuntu@147.135.1.2", { exact: true })).toBeHidden();
+  await card.locator("details").filter({ hasText: "Advanced" }).locator("summary").click();
   await expect(card.getByText("ssh ubuntu@147.135.1.2", { exact: true })).toBeVisible();
   await expect(card.getByRole("button", { name: "Copy SSH command" })).toBeVisible();
 });
