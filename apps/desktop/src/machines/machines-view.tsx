@@ -90,23 +90,33 @@ export function MachinesView({
 
   return (
     <div data-machines-view className="flex w-full min-w-0 flex-col">
-      <div className="mb-5 flex items-center justify-end gap-2">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={state.reload}
-          disabled={state.loading}
-          aria-label="Refresh"
-        >
-          <RefreshCw className={cn(state.loading && "animate-spin")} aria-hidden="true" />
-        </Button>
-        <Button
-          onClick={() => setCreating(true)}
-          disabled={state.catalog === null || !organization}
-        >
-          <Plus data-icon="inline-start" aria-hidden="true" />
-          New machine
-        </Button>
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-base font-semibold">Machines</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Manage this computer and your cloud development machines.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={state.reload}
+            disabled={state.loading}
+            aria-label="Refresh"
+          >
+            <RefreshCw className={cn(state.loading && "animate-spin")} aria-hidden="true" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCreating(true)}
+            disabled={state.catalog === null || !organization}
+          >
+            <Plus data-icon="inline-start" aria-hidden="true" />
+            New machine
+          </Button>
+        </div>
       </div>
 
       {(state.error ?? actionError) && (
@@ -138,10 +148,10 @@ export function MachinesView({
             <MachineIcon local className="size-6 text-muted-foreground" />
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2.5">
-                <h3 className="text-lg font-semibold">This computer</h3>
+                <h3 className="text-base font-semibold">This computer</h3>
                 <Badge variant="outline">Local</Badge>
               </div>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mt-1 text-xs text-muted-foreground">
                 Your local files, terminals, and agents.
               </p>
             </div>
@@ -280,7 +290,7 @@ function MachineCard({
                 )}
                 aria-hidden="true"
               />
-              <h3 className="min-w-0 text-lg font-semibold break-all">{machine.name}</h3>
+              <h3 className="min-w-0 text-base font-semibold break-all">{machine.name}</h3>
               <RenameMachineDialog machine={machine} onRename={onRename} />
               <Badge variant="outline">{describeStatus(machine)}</Badge>
               {ending && <Badge variant="secondary">{ending}</Badge>}
@@ -295,7 +305,7 @@ function MachineCard({
                 </Tooltip>
               )}
             </div>
-            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+            <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1.5" title={machine.region}>
                 <MapPin className="size-3.5 shrink-0" aria-hidden="true" />
                 {location}
@@ -371,16 +381,16 @@ function MachineCard({
         </div>
       ) : (
         <div className="grid gap-6 border-t p-5 sm:p-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-10">
-          <dl className="grid content-start gap-5 text-sm sm:grid-cols-2 lg:grid-cols-1">
+          <dl className="grid content-start gap-5 text-xs sm:grid-cols-2 lg:grid-cols-1">
             <div>
-              <dt className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              <dt className="mb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
                 Address
               </dt>
               <dd className="selectable font-mono break-all">{machine.ipv4 ?? "Assigning…"}</dd>
             </div>
             {machine.paidUntil && (
               <div>
-                <dt className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                <dt className="mb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
                   {ending ? "Available until" : "Renews on"}
                 </dt>
                 <dd>
@@ -395,7 +405,7 @@ function MachineCard({
         </div>
       )}
       <details className="group border-t">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 text-sm text-muted-foreground transition-colors select-none hover:bg-muted/30 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-inset sm:px-6 [&::-webkit-details-marker]:hidden">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 text-xs text-muted-foreground transition-colors select-none hover:bg-muted/30 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-inset sm:px-6 [&::-webkit-details-marker]:hidden">
           <span className="inline-flex items-center gap-2">
             <Settings2 className="size-3.5" aria-hidden="true" />
             Advanced

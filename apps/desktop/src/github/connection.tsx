@@ -1,18 +1,29 @@
 import { GitHubIcon } from "./icon";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import type { useGitHub } from "./use-github";
 export function GitHubConnection({ github }: { readonly github: ReturnType<typeof useGitHub> }) {
   const { status, accounts, error, busy, waiting } = github;
+  const identityConnected = status?.identityConnected ?? false;
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4">
+      <div
+        role="group"
+        aria-label="GitHub integration"
+        className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4"
+      >
         <div className="flex items-center gap-3">
           <GitHubIcon className="size-5" aria-hidden="true" />
           <div>
-            <p className="text-sm font-medium">
-              {status?.connected ? `GitHub · ${status.login}` : "GitHub"}
-            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm font-medium">
+                {status?.connected ? `GitHub · ${status.login}` : "GitHub"}
+              </p>
+              {(status?.connected || identityConnected) && (
+                <Badge variant="secondary">Connected</Badge>
+              )}
+            </div>
             <p className="mt-1 text-xs text-muted-foreground">
               {!status
                 ? error
@@ -24,7 +35,9 @@ export function GitHubConnection({ github }: { readonly github: ReturnType<typeo
                     ? accounts?.length === 0
                       ? "GitHub connected. Choose an account or organization to access its repositories."
                       : "Connected across your VPSs."
-                    : "Connect GitHub, then choose your accounts and repositories."}
+                    : identityConnected
+                      ? "Connected for sign-in. Enable repository access to use private repositories on your VPSs."
+                      : "Connect GitHub, then choose your accounts and repositories."}
             </p>
           </div>
         </div>
@@ -37,7 +50,11 @@ export function GitHubConnection({ github }: { readonly github: ReturnType<typeo
               disabled={busy}
               onClick={() => void github.connect()}
             >
-              {status.connected ? "Reconnect" : "Connect GitHub"}
+              {status.connected
+                ? "Reconnect"
+                : identityConnected
+                  ? "Enable repository access"
+                  : "Connect GitHub"}
             </Button>
           )}
           {status?.connected && (

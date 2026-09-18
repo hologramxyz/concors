@@ -108,6 +108,7 @@ export function useGitHub() {
       const disconnected = {
         connected: false,
         configured: status?.configured ?? true,
+        identityConnected: status?.identityConnected ?? false,
         login: null,
         updatedAt: null,
         manageUrl: null,
