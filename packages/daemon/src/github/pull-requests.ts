@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { MAX_PULL_REQUESTS_PER_REPOSITORY, type PullRequest } from "@concors/protocol";
 import type { GitHubRepository } from "./remotes.ts";
+import { clip, gitHubGraphQL } from "./graphql.ts";
+
+export { GitHubAuthError } from "./graphql.ts";
 
 /**
  * Open pull requests for a set of GitHub repositories, in as few GraphQL requests as possible.
@@ -20,9 +23,6 @@ export interface PullRequestListing {
   readonly viewer: string | null;
   readonly repositories: RepositoryPullRequests[];
 }
-export class GitHubAuthError extends Error {}
-
-const ENDPOINT = "https://api.github.com/graphql";
 const BATCH_SIZE = 30;
 
 export function pullRequestsQuery(repositories: readonly GitHubRepository[]) {
@@ -110,8 +110,6 @@ const checks: Record<string, PullRequest["checks"]> = {
   EXPECTED: "pending",
 };
 const isGitHubUrl = (url: string) => url.startsWith("https://github.com/");
-const clip = (text: string, length: number) =>
-  text.length > length ? text.slice(0, length) : text;
 
 function readPullRequest(node: z.infer<typeof PullRequestNode>): PullRequest | null {
   if (!isGitHubUrl(node.url)) return null;
@@ -182,22 +180,8 @@ export async function fetchPullRequests(
   const results: RepositoryPullRequests[] = [];
   for (let start = 0; start < repositories.length; start += BATCH_SIZE) {
     const batch = repositories.slice(start, start + BATCH_SIZE);
-    const response = await request(ENDPOINT, {
-      method: "POST",
-      headers: {
-        authorization: `bearer ${token}`,
-        "content-type": "application/json",
-        "user-agent": "Concors",
-      },
-      body: JSON.stringify(pullRequestsQuery(batch)),
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (response.status === 401)
-      throw new GitHubAuthError("GitHub rejected this machine's credentials.");
-    if (response.status === 403 || response.status === 429)
-      throw new Error("GitHub's rate limit was reached. Pull requests will refresh shortly.");
-    if (!response.ok) throw new Error(`GitHub is unavailable (HTTP ${response.status}).`);
-    const listing = readPullRequests(batch, await response.json());
+    const { query, variables } = pullRequestsQuery(batch);
+    const listing = readPullRequests(batch, await gitHubGraphQL(token, query, variables, request));
     viewer ??= listing.viewer;
     results.push(...listing.repositories);
   }
