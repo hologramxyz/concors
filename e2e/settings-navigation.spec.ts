@@ -27,7 +27,8 @@ test("settings replace the app sidebar with grouped pages and return to the app"
   await expect(account).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("heading", { name: "Profile", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Organization", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Session", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Session", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "VPS subscriptions" })).toHaveCount(0);
 
   const main = page.getByRole("main");
   const mainBounds = await main.boundingBox();

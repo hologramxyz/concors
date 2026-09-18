@@ -118,24 +118,6 @@ async function billingApi(
     else if (path.endsWith("/billing/portal"))
       result = { url: "https://checkout.stripe.test/portal" };
     else if (path.endsWith("/billing/invoices")) result = { invoices: [] };
-    else if (path.endsWith("/billing/subscriptions"))
-      result = {
-        subscriptions: state.created
-          ? [
-              {
-                id: "sub_1",
-                machineId: machine.id,
-                machineName: machine.name,
-                region: machine.region,
-                size: machine.size,
-                status: "active",
-                monthlyPrice: price,
-                currentPeriodEnd: machine.paidUntil,
-                cancelAtPeriodEnd: false,
-              },
-            ]
-          : [],
-      };
     else if (path.endsWith("/billing"))
       result = {
         configured: true,
@@ -239,7 +221,7 @@ async function openCreation(page: Page) {
   await page.getByRole("button", { name: "Continue", exact: true }).click();
 }
 
-test("create a workspace VPS with a test card, then view its subscription in Profile", async ({
+test("create a workspace VPS with a test card and keep billing out of Account", async ({
   page,
 }) => {
   const state = await billingApi(page);
@@ -270,11 +252,14 @@ test("create a workspace VPS with a test card, then view its subscription in Pro
     .getByRole("navigation", { name: "Settings" })
     .getByRole("button", { name: "Account", exact: true })
     .click();
-  await expect(page.getByRole("heading", { name: "VPS subscriptions" })).toBeVisible();
-  await expect(page.getByText("Active", { exact: true })).toBeVisible();
-  await expect(page.getByText("$6.99/month", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "VPS subscriptions" })).toHaveCount(0);
+  await page
+    .getByRole("navigation", { name: "Settings" })
+    .getByRole("button", { name: "Billing", exact: true })
+    .click();
+  await expect(page.getByRole("main").getByRole("heading", { name: "Billing" })).toBeVisible();
+  await expect(page.getByRole("main")).toContainText("$6.99/month");
   await expect(page.getByText("Stripe test mode", { exact: true })).toHaveCount(0);
-  await expect(page.getByText(/Renews/)).toBeVisible();
   await expect(page.getByRole("button", { name: /Cancel build-agent|Delete/ })).toHaveCount(0);
 });
 
