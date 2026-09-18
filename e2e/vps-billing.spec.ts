@@ -37,6 +37,8 @@ async function billingApi(
     savedKey?: boolean;
     /** An existing machine that accepts SSH logins. */
     ready?: boolean;
+    /** ISO date of the last failed charge, as the server reports it. */
+    paymentFailed?: string;
   } = {},
 ) {
   await signedIn(page);
@@ -113,6 +115,8 @@ async function billingApi(
       result = { status: state.complete ? "complete" : "open" };
     } else if (path.endsWith("/billing/setup"))
       result = { url: "https://checkout.stripe.test/setup", sessionId: "cs_test_1" };
+    else if (path.endsWith("/billing/portal"))
+      result = { url: "https://checkout.stripe.test/portal" };
     else if (path.endsWith("/billing/invoices")) result = { invoices: [] };
     else if (path.endsWith("/billing/subscriptions"))
       result = {
@@ -138,7 +142,7 @@ async function billingApi(
         testMode: true,
         hasPaymentMethod: state.card,
         card: state.card ? { brand: "visa", last4: "4242", expMonth: 12, expYear: 2030 } : null,
-        paymentFailedAt: null,
+        paymentFailedAt: options.paymentFailed ?? null,
         prices: options.unpriced
           ? []
           : [
@@ -552,4 +556,37 @@ test("billing and SSH keys stay visible when revisiting settings", async ({ page
   await navigation.getByRole("button", { name: "SSH keys", exact: true }).click();
   await expect(page.getByText("build-agent access", { exact: true })).toBeVisible();
   expect(state.requests.length).toBe(reads);
+});
+
+// The only warning anyone gets: Stripe emails the cardholder, who may not be the person looking
+// at this screen, and the machine is destroyed with its disk when the retries run out.
+test("a failed payment warns on the machines page that machines will be deleted", async ({
+  page,
+}) => {
+  await billingApi(page, { card: true, ready: true, paymentFailed: "2026-09-18T10:00:00.000Z" });
+  await openMachines(page);
+
+  const warning = page.getByRole("alert", { name: "Payment failed" });
+  await expect(warning).toBeVisible();
+  await expect(
+    warning.getByText("Payment failed — your machines will be deleted", { exact: true }),
+  ).toBeVisible();
+  await expect(warning).toContainText("permanently deleted");
+  await expect(warning).toContainText("cannot be undone");
+  // One machine is running, so the copy must not read as if several were at stake.
+  await expect(warning).toContainText("your machine will be permanently deleted");
+
+  await expect(page.locator("#cloud-machine-vps-1").getByText("At risk")).toBeVisible();
+
+  const popup = page.waitForEvent("popup");
+  await warning.getByRole("button", { name: "Update payment method" }).click();
+  expect((await popup).url()).toContain("checkout.stripe.test/portal");
+});
+
+test("machines page says nothing about payments while the card works", async ({ page }) => {
+  await billingApi(page, { card: true, ready: true });
+  await openMachines(page);
+  await expect(page.getByRole("heading", { name: "Machines", exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("alert", { name: "Payment failed" })).toHaveCount(0);
+  await expect(page.locator("#cloud-machine-vps-1").getByText("At risk")).toHaveCount(0);
 });
