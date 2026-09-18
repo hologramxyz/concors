@@ -111,12 +111,12 @@ it("clones a real Git repository and registers it only after checkout succeeds",
     "-m",
     "Fixture",
   ]);
-  const destination = join(root, "clone");
+  const destination = join(root, "repos", "opserai", "opser");
   manager.request(request("clone", destination, source));
   expect(store.snapshot().projects).toHaveLength(0);
   await expect.poll(() => store.projectSetups()[0]?.status, { timeout: 5000 }).toBe("done");
   expect(readFileSync(join(destination, "README.md"), "utf8")).toBe("real checked out content");
-  expect(store.snapshot().projects[0]?.directory).toContain("clone");
+  expect(store.snapshot().projects[0]?.directory).toBe(await realpath(destination));
   manager.request(request("clone", join(root, "failed-clone"), join(root, "missing-repo")));
   await expect.poll(() => store.projectSetups()[1]?.status, { timeout: 5000 }).toBe("failed");
   expect(store.snapshot().projects).toHaveLength(1);
