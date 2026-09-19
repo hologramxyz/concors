@@ -178,7 +178,7 @@ function MobileWorkspaceContent({
     setPage({
       kind: "pull-requests",
       view: projectId
-        ? { projectId, repository: repository ?? null, pullRequest: null }
+        ? { projectId, repository: repository ?? null, state: "open", pullRequest: null }
         : allPullRequests,
     });
     setSidebarOpen(false);

@@ -454,6 +454,7 @@ function AppContent() {
                           setPullRequestsView({
                             projectId: projectId ?? null,
                             repository: repository ?? null,
+                            state: "open",
                             pullRequest: null,
                           });
                           setView("pull-requests");
