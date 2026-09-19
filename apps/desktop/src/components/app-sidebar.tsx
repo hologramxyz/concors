@@ -29,8 +29,8 @@ interface AppSidebarProps {
   view: View;
   onOpenSettings: () => void;
   onOpenSchedules: () => void;
-  /** Opens the Pull requests page, for one workspace when given. */
-  onOpenPullRequests: (projectId?: string) => void;
+  /** Opens the Pull requests page, for one workspace or one of its repositories when given. */
+  onOpenPullRequests: (projectId?: string, repository?: string) => void;
   onOpenSearch: () => void;
   onOpenResources: () => void;
   workspace: WorkspaceSnapshot | null;

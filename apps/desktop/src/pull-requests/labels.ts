@@ -1,4 +1,9 @@
-import type { PullRequest, PullRequestRepository } from "@concors/protocol";
+import type {
+  MergeMethod,
+  PullRequest,
+  PullRequestDetail,
+  PullRequestRepository,
+} from "@concors/protocol";
 
 export const pullRequestsLabel = (count: number) =>
   `${count} open pull request${count === 1 ? "" : "s"}`;
@@ -66,4 +71,93 @@ export function foldersLabel(
   if (!folders.length || (folders.length === 1 && folders[0]?.toLowerCase() === name)) return null;
   if (folders.length <= 2) return folders.join(", ");
   return `${folders.slice(0, 2).join(", ")} +${folders.length - 2}`;
+}
+
+export const mergeMethodLabel: Record<MergeMethod, string> = {
+  squash: "Squash and merge",
+  merge: "Create a merge commit",
+  rebase: "Rebase and merge",
+};
+
+export interface MergeReadiness {
+  readonly tone: "ready" | "pending" | "warning" | "blocked";
+  readonly title: string;
+  readonly description: string;
+  /** False only when GitHub would certainly refuse; otherwise GitHub has the final say. */
+  readonly allowed: boolean;
+}
+
+/** What stands between an open pull request and a merge, in the order people fix them. */
+export function mergeReadiness(detail: PullRequestDetail): MergeReadiness {
+  const base = detail.baseBranch;
+  const failing = detail.checks.some((check) => check.state === "failing");
+  const pending = detail.checks.some((check) => check.state === "pending");
+  if (!detail.canMerge)
+    return {
+      tone: "blocked",
+      title: "You can't merge this pull request",
+      description: `This machine's GitHub account needs write access to ${detail.repository}.`,
+      allowed: false,
+    };
+  if (detail.draft || detail.mergeState === "draft")
+    return {
+      tone: "blocked",
+      title: "This pull request is still a draft",
+      description: "Drafts can't be merged until they are marked ready for review.",
+      allowed: false,
+    };
+  if (detail.mergeable === "conflicting" || detail.mergeState === "dirty")
+    return {
+      tone: "blocked",
+      title: "This branch has conflicts",
+      description: `Resolve the conflicts with ${base} before merging.`,
+      allowed: false,
+    };
+  if (detail.mergeable === "unknown" || detail.mergeState === "unknown")
+    return {
+      tone: "pending",
+      title: "Checking whether this can be merged…",
+      description: "GitHub is still working out mergeability.",
+      allowed: true,
+    };
+  if (detail.mergeState === "behind")
+    return {
+      tone: "warning",
+      title: `This branch is out of date with ${base}`,
+      description: "The repository requires it to be up to date before merging.",
+      allowed: true,
+    };
+  if (detail.mergeState === "blocked")
+    return {
+      tone: "warning",
+      title:
+        detail.review === "changes-requested"
+          ? "Changes were requested"
+          : detail.review === "review-required"
+            ? "Review required"
+            : failing
+              ? "Required checks are failing"
+              : pending
+                ? "Required checks are still running"
+                : "Merging is blocked",
+      description: "Branch protection must be satisfied first; administrators may merge anyway.",
+      allowed: true,
+    };
+  if (detail.mergeState === "unstable" || failing)
+    return {
+      tone: "warning",
+      title: failing ? "Some checks are failing" : "Some checks are still running",
+      description: "They are not required, so this can still be merged.",
+      allowed: true,
+    };
+  return {
+    tone: "ready",
+    title: "Ready to merge",
+    description: pending
+      ? "Some optional checks are still running."
+      : detail.checks.length
+        ? "All checks have passed."
+        : `No conflicts with ${base}.`,
+    allowed: true,
+  };
 }

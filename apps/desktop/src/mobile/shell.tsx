@@ -4,6 +4,7 @@ import { PullRequestsNav } from "@/pull-requests/nav";
 import { PullRequestsPage } from "@/pull-requests/page";
 import { pullRequestKey } from "@/pull-requests/store";
 import { usePullRequests } from "@/pull-requests/use-pull-requests";
+import { allPullRequests, type PullRequestsView } from "@/pull-requests/view";
 import { ColorThemeProvider } from "@/theme/color-theme-provider";
 import { machineAvailability } from "@concors/client-core";
 import {
@@ -136,7 +137,7 @@ function MobileWorkspaceContent({
   const [settingsOpen, setSettingsOpen] = useState(false);
   /** A full-height page over the workspace; Pull requests may show one workspace. */
   const [page, setPage] = useState<
-    { kind: "schedules" } | { kind: "pull-requests"; projectId: string | null } | null
+    { kind: "schedules" } | { kind: "pull-requests"; view: PullRequestsView } | null
   >(null);
   const [resourcesOpen, setResourcesOpen] = useState(false);
   const [settingsPage, setSettingsPage] = useState<SettingsPage>("account");
@@ -173,8 +174,13 @@ function MobileWorkspaceContent({
   const draftScope = useMemo(() => ({ machineId: host.machineId }), [host.machineId]);
   const icons = useProjectIcons(workspace);
   const pullRequests = usePullRequests(workspace);
-  const openPullRequests = (projectId: string | null = null) => {
-    setPage({ kind: "pull-requests", projectId });
+  const openPullRequests = (projectId?: string, repository?: string) => {
+    setPage({
+      kind: "pull-requests",
+      view: projectId
+        ? { projectId, repository: repository ?? null, pullRequest: null }
+        : allPullRequests,
+    });
     setSidebarOpen(false);
   };
   const selected = workspace
@@ -786,10 +792,8 @@ function MobileWorkspaceContent({
                                 key={host.machineId}
                                 workspace={workspace}
                                 connected={!!ready}
-                                projectId={page.projectId}
-                                onFilter={(projectId) =>
-                                  setPage({ kind: "pull-requests", projectId })
-                                }
+                                view={page.view}
+                                onNavigate={(view) => setPage({ kind: "pull-requests", view })}
                               />
                             </div>
                           ) : project && tab && pane ? (

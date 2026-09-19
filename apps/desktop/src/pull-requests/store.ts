@@ -152,7 +152,8 @@ export class PullRequestStore {
             { ...unavailablePullRequests, status: "signed-out", message: outcome.message },
             RETRY_TTL_MS,
           );
-        else fail(outcome.message);
+        else
+          fail(outcome.status === "error" ? outcome.message : "Unexpected reply from the machine.");
       })
       .catch((cause: unknown) =>
         fail(cause instanceof Error ? cause.message : "Could not load pull requests."),
