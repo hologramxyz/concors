@@ -81,6 +81,7 @@ export class ClaudeAccount implements AccountBackend {
           const url = browserUrl(match[0]);
           if (
             ![
+              "claude.com",
               "claude.ai",
               "console.anthropic.com",
               "platform.claude.com",
