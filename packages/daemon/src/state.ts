@@ -5,6 +5,7 @@ import {
   PROJECT_ICON_CAPABILITY,
   PULL_REQUESTS_CAPABILITY,
   PULL_REQUEST_ACTIONS_CAPABILITY,
+  PULL_REQUEST_STATES_CAPABILITY,
   PROTOCOL_VERSION,
 } from "@concors/protocol";
 
@@ -41,6 +42,7 @@ export class DaemonState {
         PROJECT_ICON_CAPABILITY,
         PULL_REQUESTS_CAPABILITY,
         PULL_REQUEST_ACTIONS_CAPABILITY,
+        PULL_REQUEST_STATES_CAPABILITY,
         "project-file-create",
         "folder-workspaces",
         "agent-chat",
