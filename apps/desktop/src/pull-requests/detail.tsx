@@ -229,6 +229,7 @@ export function PullRequestView({
           </section>
           <MergeDialog
             key={`merge-${detail.headSha}`}
+            number={detail.number}
             detail={detail}
             open={dialog === "merge"}
             onOpenChange={(open) => setDialog(open ? "merge" : null)}
@@ -241,7 +242,7 @@ export function PullRequestView({
           />
           <CloseDialog
             key={`close-${dialog === "close"}`}
-            detail={detail}
+            number={detail.number}
             open={dialog === "close"}
             initialComment={comment}
             onOpenChange={(open) => setDialog(open ? "close" : null)}

@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { MAX_PULL_REQUESTS_PER_REPOSITORY, type PullRequest } from "@concors/protocol";
+import {
+  MAX_PULL_REQUESTS_PER_REPOSITORY,
+  type PullRequest,
+  type PullRequestRepository,
+  type PullRequestState,
+} from "@concors/protocol";
 import type { GitHubRepository } from "./remotes.ts";
 import { clip, gitHubGraphQL } from "./graphql.ts";
 
@@ -18,6 +23,7 @@ export interface RepositoryPullRequests {
   readonly openCount: number;
   readonly pullRequests: PullRequest[];
   readonly error: string | null;
+  readonly permission?: PullRequestRepository["permission"];
 }
 export interface PullRequestListing {
   readonly viewer: string | null;
@@ -25,7 +31,10 @@ export interface PullRequestListing {
 }
 const BATCH_SIZE = 30;
 
-export function pullRequestsQuery(repositories: readonly GitHubRepository[]) {
+export function pullRequestsQuery(
+  repositories: readonly GitHubRepository[],
+  state: PullRequestState = "open",
+) {
   const variables: Record<string, string> = {};
   const parameters: string[] = [];
   const fields = repositories.map((repository, index) => {
@@ -36,11 +45,11 @@ export function pullRequestsQuery(repositories: readonly GitHubRepository[]) {
   });
   const query = `query(${parameters.join(", ")}) { viewer { login } ${fields.join(" ")} }
 fragment OpenPullRequests on Repository {
-  nameWithOwner url
-  pullRequests(states: OPEN, first: ${MAX_PULL_REQUESTS_PER_REPOSITORY}, orderBy: {field: UPDATED_AT, direction: DESC}) {
+  nameWithOwner url viewerPermission
+  pullRequests(states: ${state.toUpperCase()}, first: ${MAX_PULL_REQUESTS_PER_REPOSITORY}, orderBy: {field: UPDATED_AT, direction: DESC}) {
     totalCount
     nodes {
-      number title url isDraft createdAt updatedAt headRefName reviewDecision viewerDidAuthor
+      number title url state isDraft createdAt updatedAt headRefName reviewDecision viewerDidAuthor
       author { login }
       commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
     }
@@ -53,6 +62,7 @@ const PullRequestNode = z.object({
   number: z.number().int().positive(),
   title: z.string(),
   url: z.string(),
+  state: z.enum(["OPEN", "CLOSED", "MERGED"]).optional(),
   isDraft: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -79,6 +89,7 @@ const PullRequestNode = z.object({
 const RepositoryNode = z.object({
   nameWithOwner: z.string(),
   url: z.string(),
+  viewerPermission: z.string().nullish(),
   pullRequests: z.object({
     totalCount: z.number().int().nonnegative(),
     nodes: z.array(PullRequestNode.nullish()).nullish(),
@@ -109,6 +120,13 @@ const checks: Record<string, PullRequest["checks"]> = {
   PENDING: "pending",
   EXPECTED: "pending",
 };
+const permissions: Record<string, NonNullable<PullRequestRepository["permission"]>> = {
+  ADMIN: "admin",
+  MAINTAIN: "maintain",
+  WRITE: "write",
+  TRIAGE: "triage",
+  READ: "read",
+};
 const isGitHubUrl = (url: string) => url.startsWith("https://github.com/");
 
 function readPullRequest(node: z.infer<typeof PullRequestNode>): PullRequest | null {
@@ -121,6 +139,7 @@ function readPullRequest(node: z.infer<typeof PullRequestNode>): PullRequest | n
     author: node.author ? clip(node.author.login, 100) : null,
     mine: node.viewerDidAuthor,
     draft: node.isDraft,
+    state: node.state === "MERGED" ? "merged" : node.state === "CLOSED" ? "closed" : "open",
     branch: clip(node.headRefName, 255),
     createdAt: clip(node.createdAt, 40),
     updatedAt: clip(node.updatedAt, 40),
@@ -161,6 +180,7 @@ export function readPullRequests(
         name: clip(node.data.nameWithOwner, 200),
         url: isGitHubUrl(node.data.url) ? clip(node.data.url, 2048) : fallback.url,
         openCount: node.data.pullRequests.totalCount,
+        permission: permissions[node.data.viewerPermission ?? ""] ?? null,
         pullRequests: (node.data.pullRequests.nodes ?? [])
           .flatMap((item) => (item ? [readPullRequest(item)] : []))
           .filter((item): item is PullRequest => !!item)
@@ -175,12 +195,13 @@ export async function fetchPullRequests(
   token: string,
   repositories: readonly GitHubRepository[],
   request: typeof fetch = fetch,
+  state: PullRequestState = "open",
 ): Promise<PullRequestListing> {
   let viewer: string | null = null;
   const results: RepositoryPullRequests[] = [];
   for (let start = 0; start < repositories.length; start += BATCH_SIZE) {
     const batch = repositories.slice(start, start + BATCH_SIZE);
-    const { query, variables } = pullRequestsQuery(batch);
+    const { query, variables } = pullRequestsQuery(batch, state);
     const listing = readPullRequests(batch, await gitHubGraphQL(token, query, variables, request));
     viewer ??= listing.viewer;
     results.push(...listing.repositories);

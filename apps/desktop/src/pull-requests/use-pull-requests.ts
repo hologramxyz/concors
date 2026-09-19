@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useMemo, useSyncExternalStore } from "react";
-import type { WorkspaceSnapshot } from "@concors/protocol";
+import type { PullRequestState, WorkspaceSnapshot } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { pullRequestStore, unavailablePullRequests } from "./store";
 
@@ -7,9 +7,15 @@ const unavailable = () => unavailablePullRequests;
 const noSubscription = () => () => undefined;
 
 /** Visible clients check once a minute and on focus; the store skips anything still fresh. */
-export function usePullRequests(workspace: WorkspaceSnapshot | null) {
+export function usePullRequests(
+  workspace: WorkspaceSnapshot | null,
+  listed: PullRequestState = "open",
+) {
   const connection = useContext(TerminalConnectionContext);
-  const store = useMemo(() => (connection ? pullRequestStore(connection) : null), [connection]);
+  const store = useMemo(
+    () => (connection ? pullRequestStore(connection, listed) : null),
+    [connection, listed],
+  );
   const state = useSyncExternalStore(
     store?.subscribe ?? noSubscription,
     store?.getSnapshot ?? unavailable,

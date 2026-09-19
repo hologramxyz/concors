@@ -161,3 +161,26 @@ export function mergeReadiness(detail: PullRequestDetail): MergeReadiness {
     allowed: true,
   };
 }
+
+/**
+ * What an open row offers: nothing from a daemon that cannot act on pull requests; otherwise
+ * Merge for write access (disabled for drafts) and Close for write, triage or the author. When an
+ * older daemon does not report access, GitHub decides.
+ */
+export function rowActions({
+  supported,
+  permission,
+  draft,
+  mine,
+}: {
+  supported: boolean;
+  permission: PullRequestRepository["permission"];
+  draft: boolean;
+  mine: boolean;
+}): { merge: "enabled" | "draft" | null; close: boolean } | null {
+  if (!supported) return null;
+  const canMerge = !permission || ["admin", "maintain", "write"].includes(permission);
+  const canClose = canMerge || permission === "triage" || mine;
+  if (!canMerge && !canClose) return null;
+  return { merge: canMerge ? (draft ? "draft" : "enabled") : null, close: canClose };
+}

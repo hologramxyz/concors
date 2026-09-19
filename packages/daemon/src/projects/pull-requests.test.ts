@@ -132,6 +132,39 @@ it("groups checkouts by repository and fetches each repository once for every wo
   expect(fetcher).toHaveBeenCalledTimes(1);
 });
 
+it("caches each state separately and clears every state after an action", async () => {
+  const folder = join(directory, "app");
+  repository(folder, "https://github.com/hologram/app.git");
+  const projectId = addProject("App", folder);
+  const fetcher = vi.fn(
+    async (_token: string, repositories: readonly GitHubRepository[], _state: string) =>
+      listing(repositories),
+  );
+  const service = new WorkspacePullRequests(
+    store,
+    new GitHubCredentials(async () => "token"),
+    fetcher,
+  );
+  const request = async (state?: "merged") => {
+    const result = await service.request({
+      type: "pull-request.request",
+      requestId: randomUUID(),
+      operation: {
+        kind: "list",
+        epoch: store.snapshot().epoch,
+        projects: [{ projectId }],
+        ...(state ? { state } : {}),
+      },
+    });
+    return listed(result.outcome);
+  };
+  expect((await request()).state).toBe("open");
+  expect((await request("merged")).state).toBe("merged");
+  await request();
+  await request("merged");
+  expect(fetcher.mock.calls.map((call) => call[2])).toEqual(["open", "merged"]);
+});
+
 it("does not cache failures", async () => {
   const folder = join(directory, "app");
   repository(folder, "https://github.com/hologram/app.git");
@@ -268,7 +301,7 @@ describe("pull request actions", () => {
       expect(PullRequestResultSchema.safeParse(result).success).toBe(true);
       return result.outcome;
     };
-    return { service, act, calls, fetcher, projectId };
+    return { service, act, calls, fetcher, projectId, api };
   }
 
   it("reads, merges with the reviewed head and refreshes the workspace's counts", async () => {
@@ -307,6 +340,38 @@ describe("pull request actions", () => {
       "comment PR_7 Superseded by #8",
       "close PR_7",
     ]);
+  });
+
+  /** The read before the change works; the read back afterwards fails. */
+  const failReadBack = (api: PullRequestApi) => {
+    const read = vi.mocked(api.detail).getMockImplementation();
+    let reads = 0;
+    vi.mocked(api.detail).mockImplementation(async (...args) => {
+      if (++reads === 2 || !read) throw new Error("GitHub is unavailable (HTTP 502).");
+      return read(...args);
+    });
+  };
+
+  it("reports a change that succeeded even when reading it back fails", async () => {
+    const { act, calls, api } = setup();
+    failReadBack(api);
+    expect(await act({ kind: "merge", method: "squash", expectedHeadSha: head })).toMatchObject({
+      status: "updated",
+      action: "merged",
+      detail: { state: "merged" },
+    });
+    expect(calls).toEqual(["merge PR_7 squash true"]);
+  });
+
+  it("does not repeat a closing comment when the read back fails", async () => {
+    const { act, calls, api } = setup();
+    failReadBack(api);
+    expect(await act({ kind: "close", comment: "Superseded" })).toMatchObject({
+      status: "updated",
+      action: "closed",
+      detail: { state: "closed" },
+    });
+    expect(calls).toEqual(["comment PR_7 Superseded", "close PR_7"]);
   });
 
   it("refuses what the account cannot do, disallowed methods and other repositories", async () => {
