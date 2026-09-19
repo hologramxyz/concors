@@ -234,12 +234,12 @@ it("reads Claude status and forwards a pasted code on stdin without a terminal",
   expect((await read).connected).toBe(false);
   const done = vi.fn();
   const started = account.start("claudeai", done);
-  children[1]!.stdout.emit("data", Buffer.from("Visit: https://claude.ai/oauth/"));
+  children[1]!.stdout.emit("data", Buffer.from("Visit: https://claude.com/cai/oauth/"));
   children[1]!.stdout.emit(
     "data",
     Buffer.from("authorize?state=state\nPaste code here if prompted > "),
   );
-  expect((await started).url).toBe("https://claude.ai/oauth/authorize?state=state");
+  expect((await started).url).toBe("https://claude.com/cai/oauth/authorize?state=state");
   let input = "";
   children[1]!.stdin.on("data", (data) => {
     input += String(data);
