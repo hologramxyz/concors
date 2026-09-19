@@ -1,10 +1,18 @@
-import type { ProjectIcon, WorkspaceOperation, WorkspaceProject } from "@concors/protocol";
+import type {
+  ProjectIcon,
+  WorkspaceOperation,
+  WorkspaceProject,
+  WorkspacePullRequests,
+} from "@concors/protocol";
 import { cn } from "cn";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ProjectActions } from "./project-actions";
 import { ProjectImage } from "./project-image";
 import { useContext } from "react";
 import { CompactLayoutContext } from "@/components/compact-layout";
+import { WorkspacePullRequestCount } from "@/pull-requests/workspace-count";
+import { pullRequestsLabel } from "@/pull-requests/labels";
+import { workspaceOpenCount } from "@/pull-requests/store";
 
 export function WorkspaceSidebarItem({
   project,
@@ -12,7 +20,9 @@ export function WorkspaceSidebarItem({
   selected,
   canEdit,
   icon,
+  pullRequests,
   onSelect,
+  onOpenPullRequests,
   execute,
 }: {
   project: WorkspaceProject;
@@ -20,10 +30,13 @@ export function WorkspaceSidebarItem({
   selected: boolean;
   canEdit: boolean;
   icon: ProjectIcon | undefined;
+  pullRequests?: WorkspacePullRequests | undefined;
   onSelect: (id: string) => void;
+  onOpenPullRequests?: (projectId: string) => void;
   execute: (operation: WorkspaceOperation) => Promise<void>;
 }) {
   const mobile = useContext(CompactLayoutContext);
+  const openPullRequests = workspaceOpenCount(pullRequests);
   const button = (
     <button
       type="button"
@@ -63,11 +76,21 @@ export function WorkspaceSidebarItem({
             <div className="min-w-0 break-words">
               <p className="font-medium">{project.name}</p>
               <p className="opacity-75">{project.directory}</p>
+              {openPullRequests > 0 && (
+                <p className="opacity-75">{pullRequestsLabel(openPullRequests)}</p>
+              )}
             </div>
           </TooltipContent>
         </Tooltip>
       )}
       {!compact && <ProjectActions project={project} canEdit={canEdit} execute={execute} />}
+      {!compact && onOpenPullRequests && (
+        <WorkspacePullRequestCount
+          project={project}
+          listing={pullRequests}
+          onOpen={onOpenPullRequests}
+        />
+      )}
     </li>
   );
 }

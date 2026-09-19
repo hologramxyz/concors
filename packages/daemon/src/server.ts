@@ -9,12 +9,15 @@ import type { DaemonConfig } from "./config.ts";
 import { WorkspaceStore } from "./workspace/store.ts";
 import { DaemonState } from "./state.ts";
 import { registerProtocolEndpoint } from "./ws/protocol-endpoint.ts";
+import type { GitHubSource } from "./projects/pull-requests.ts";
 
 export interface DaemonServerOptions {
   /** Private session hosts accept only their local gateway's credential. */
   readonly internalToken?: string;
   readonly agentProviderFactory?: AgentProviderFactory;
   readonly accountBackendFactory?: AccountBackendFactory;
+  /** Test-only GitHub token and API; production uses the machine's own. */
+  readonly gitHub?: GitHubSource;
   /** Overrides for tests; production always uses the defaults. */
   readonly handshakeTimeoutMs?: number;
   /** In-memory by default for embedded/test servers. The CLI supplies a durable file. */
@@ -80,6 +83,7 @@ export function createDaemonServer(
       ...(options.agentProviderFactory
         ? { agentProviderFactory: options.agentProviderFactory }
         : {}),
+      ...(options.gitHub ? { gitHub: options.gitHub } : {}),
       ...(options.handshakeTimeoutMs === undefined
         ? {}
         : { handshakeTimeoutMs: options.handshakeTimeoutMs }),

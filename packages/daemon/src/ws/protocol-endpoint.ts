@@ -10,6 +10,8 @@ import type { AccountBackendFactory } from "../agents/accounts/manager.ts";
 import { ProjectFiles } from "../files/service.ts";
 import { AgentManager, type AgentProviderFactory } from "../agents/manager.ts";
 import { ProjectManager } from "../projects/manager.ts";
+import { WorkspacePullRequests, type GitHubSource } from "../projects/pull-requests.ts";
+import { GitHubCredentials } from "../github/credentials.ts";
 import { randomUUID } from "node:crypto";
 import { TerminalManager } from "../terminal/manager.ts";
 import {
@@ -34,6 +36,7 @@ import { MachineResources } from "../host/resources.ts";
 export interface ProtocolEndpointOptions {
   readonly agentProviderFactory?: AgentProviderFactory;
   readonly accountBackendFactory?: AccountBackendFactory;
+  readonly gitHub?: GitHubSource;
   readonly state: DaemonState;
   readonly workspace: WorkspaceStore;
   /** How long a freshly-opened socket may stay silent before we drop it. */
@@ -89,6 +92,13 @@ export function registerProtocolEndpoint(
 
   const files = new ProjectFiles(options.workspace);
   const resources = new MachineResources(options.workspace);
+  const pullRequests = options.gitHub
+    ? new WorkspacePullRequests(
+        options.workspace,
+        new GitHubCredentials(options.gitHub.token),
+        options.gitHub.fetch,
+      )
+    : new WorkspacePullRequests(options.workspace);
   const projects = new ProjectManager(options.workspace, () => {
     for (const target of subscribers) {
       send(target, { type: "workspace.snapshot", snapshot: options.workspace.snapshot() });
@@ -231,7 +241,8 @@ export function registerProtocolEndpoint(
         message.type === "provider.request" ||
         message.type === "theme.request" ||
         message.type === "schedule.request" ||
-        message.type === "resource.request"
+        message.type === "resource.request" ||
+        message.type === "pull-request.request"
       ) {
         if (!subscribers.has(socket)) {
           send(socket, {
@@ -243,6 +254,8 @@ export function registerProtocolEndpoint(
         if (message.type === "schedule.request") send(socket, schedules.request(message));
         else if (message.type === "resource.request")
           void resources.request(message).then((result) => send(socket, result));
+        else if (message.type === "pull-request.request")
+          void pullRequests.request(message).then((result) => send(socket, result));
         else if (message.type === "theme.request")
           send(socket, {
             type: "theme.result",
