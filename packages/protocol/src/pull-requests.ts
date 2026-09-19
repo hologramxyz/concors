@@ -3,6 +3,10 @@ import { z } from "zod";
 export const PULL_REQUESTS_CAPABILITY = "workspace-pull-requests";
 /** Detail, merge, close and comment; listing alone only needs PULL_REQUESTS_CAPABILITY. */
 export const PULL_REQUEST_ACTIONS_CAPABILITY = "pull-request-actions";
+/** Listing merged or closed pull requests, and each repository's permission. */
+export const PULL_REQUEST_STATES_CAPABILITY = "pull-request-states";
+export const PullRequestStateSchema = z.enum(["open", "merged", "closed"]);
+export type PullRequestState = z.infer<typeof PullRequestStateSchema>;
 /** Each repository lists its most recently updated open pull requests; `openCount` has the rest. */
 export const MAX_PULL_REQUESTS_PER_REPOSITORY = 25;
 export const MAX_WORKSPACE_REPOSITORIES = 32;
@@ -25,6 +29,8 @@ export const PullRequestSchema = z.object({
   updatedAt: z.string().max(40),
   review: z.enum(["approved", "changes-requested", "review-required"]).nullable(),
   checks: z.enum(["passing", "failing", "pending"]).nullable(),
+  /** Absent from older daemons, which only list open pull requests. */
+  state: PullRequestStateSchema.optional(),
 });
 export type PullRequest = z.infer<typeof PullRequestSchema>;
 
@@ -34,9 +40,12 @@ export const PullRequestRepositorySchema = z.object({
   url: GitHubUrl,
   /** Workspace folders using this repository: "" is the workspace itself, otherwise a child name. */
   folders: z.array(z.string().max(255)).max(MAX_WORKSPACE_REPOSITORIES),
+  /** Pull requests in the listed state: open (drafts included) unless merged or closed was asked. */
   openCount: z.number().int().nonnegative(),
   pullRequests: z.array(PullRequestSchema).max(MAX_PULL_REQUESTS_PER_REPOSITORY),
   error: z.string().max(500).nullable(),
+  /** The machine's GitHub access, which decides whether rows offer Merge and Close. */
+  permission: z.enum(["admin", "maintain", "write", "triage", "read"]).nullable().optional(),
 });
 export type PullRequestRepository = z.infer<typeof PullRequestRepositorySchema>;
 
@@ -143,6 +152,8 @@ export const PullRequestOperationSchema = z.discriminatedUnion("kind", [
       .max(64),
     /** Skip the machine's short-lived cache, for an explicit refresh. */
     refresh: z.boolean().optional(),
+    /** Open when absent. Merged and closed need PULL_REQUEST_STATES_CAPABILITY. */
+    state: PullRequestStateSchema.optional(),
   }),
   z.object({ kind: z.literal("detail"), ...PullRequestTarget }),
   z.object({
@@ -182,6 +193,7 @@ export const PullRequestResultSchema = z.object({
       /** GitHub login of the machine's account. */
       viewer: z.string().max(100).nullable(),
       fetchedAt: z.number().int().nonnegative(),
+      state: PullRequestStateSchema.optional(),
       workspaces: z.array(WorkspacePullRequestsSchema).max(64),
     }),
     z.object({ status: z.literal("detail"), detail: PullRequestDetailSchema }),
