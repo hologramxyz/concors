@@ -7,6 +7,14 @@ the Pull requests page filtered to it, and **View all** opens it for the whole w
 Filters carry each workspace's logo. The phone sidebar shows the same counts; tapping one opens
 the page for that workspace.
 
+The page lists **Open** pull requests by default; **Merged** and **Closed** tabs show the most
+recently updated ones of each, in GitHub's purple and red. Counts, in the sidebar and on the Open
+tab, only ever include open pull requests, drafts included; the sidebar count's icon is green.
+
+Open rows can be merged or closed in place: **Merge** confirms the method, and its menu offers
+**Close pull request…** and **View details**. Rows only offer what the machine's GitHub account
+may do, and drafts cannot be merged. Clicking a row opens its details.
+
 Pull requests are managed without leaving Concors. Opening one shows its state, branches, size,
 labels, merge readiness with its checks, description and recent conversation, with:
 
@@ -67,7 +75,8 @@ refresh and are retried on the next one; failures are never cached.
 ## Compatibility
 
 Listing requires the daemon's `workspace-pull-requests` capability; detail, merge, close and
-comment require `pull-request-actions`. Actions only target a repository that still belongs to
+comment require `pull-request-actions`; merged and closed tabs and per-repository access require
+`pull-request-states`. Actions only target a repository that still belongs to
 the workspace, and merges require write access (closing: triage access or authorship). Older daemons never receive
 the request: the sidebar shows no counts and the page asks to update the daemon. No workspace
 migration is required. The mobile companion relays `pull-request.request` through its protocol
