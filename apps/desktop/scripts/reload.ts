@@ -37,7 +37,11 @@ async function main() {
       "Run desktop:reload from an external terminal, not a Concors terminal: reload restarts the local session host.",
     );
   if (process.platform !== "linux" || process.arch !== "x64")
-    throw new Error("desktop:reload currently supports Linux x86_64.");
+    throw new Error(
+      process.platform === "darwin"
+        ? "desktop:reload currently supports Linux x86_64. On macOS, rebuild with pnpm desktop:package:macos --debug and reopen Concors.app."
+        : "desktop:reload currently supports Linux x86_64.",
+    );
   if (Number(process.versions.node.split(".")[0]) < 24)
     throw new Error("Use Node.js 24 or newer, then rerun pnpm desktop:reload.");
   if (!process.env["DISPLAY"] && !process.env["WAYLAND_DISPLAY"])
