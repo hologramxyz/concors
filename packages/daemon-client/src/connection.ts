@@ -22,6 +22,7 @@ import { FileRequestSchema, type FileOperation, type FileResult } from "@concors
 import {
   PULL_REQUESTS_CAPABILITY,
   PULL_REQUEST_ACTIONS_CAPABILITY,
+  PULL_REQUEST_STATES_CAPABILITY,
   PullRequestRequestSchema,
   type PullRequestOperation,
   type PullRequestResult,
@@ -186,6 +187,15 @@ export class DaemonConnection {
       !this.#state.daemon.capabilities.includes(PULL_REQUEST_ACTIONS_CAPABILITY)
     )
       return Promise.reject(new Error("Update the machine daemon to manage pull requests."));
+    if (
+      operation.kind === "list" &&
+      operation.state &&
+      operation.state !== "open" &&
+      !this.#state.daemon.capabilities.includes(PULL_REQUEST_STATES_CAPABILITY)
+    )
+      return Promise.reject(
+        new Error("Update the machine daemon to see merged and closed pull requests."),
+      );
     if (this.#pullRequestRequests.has(requestId))
       return Promise.reject(new Error("Request is already pending"));
     const request = PullRequestRequestSchema.parse({

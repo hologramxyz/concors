@@ -461,6 +461,10 @@ describe("workspace replica lifecycle", () => {
       method: "squash" as const,
       expectedHeadSha: "a".repeat(40),
     };
+    // Nor that it can list merged or closed pull requests.
+    await expect(
+      connection.requestPullRequests({ ...operation, state: "merged" }, id),
+    ).rejects.toThrow("merged and closed");
     // Listing alone does not imply the daemon can act on pull requests.
     await expect(connection.requestPullRequests(merge, id)).rejects.toThrow("manage pull requests");
     const lost = expect(connection.requestPullRequests(operation, id)).rejects.toThrow(
