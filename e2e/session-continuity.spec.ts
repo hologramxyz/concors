@@ -61,7 +61,9 @@ test("Codex and Claude panes reconnect to the same processes, then recover lost 
       }, `ws://127.0.0.1:${port}/ws`);
     }
     await page.goto("/");
-    await seedProject(page, "Persistent agents", directory, `ws://127.0.0.1:${port}/ws`);
+    await seedProject(page, "Persistent agents", directory, {
+      url: `ws://127.0.0.1:${port}/ws`,
+    });
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await page.getByRole("button", { name: "Pane actions", exact: true }).click();
     await page.getByRole("menuitemradio", { name: "Codex", exact: true }).click();

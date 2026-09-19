@@ -4,19 +4,18 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
 
-test("projects open a terminal immediately and new tabs start the chosen profile", async ({
+test("projects open an agent immediately and new tabs start the chosen profile", async ({
   page,
 }) => {
   const directory = await mkdtemp(join(tmpdir(), "concors-profile-controls-"));
   try {
     await signedIn(page);
     await page.goto("/");
-    await seedProject(page, "Profile controls", directory);
+    await seedProject(page, "Profile controls", directory, { initialPane: "default" });
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(page.getByRole("banner")).toHaveCount(0);
-    await expect(page.getByLabel("Terminal output").filter({ visible: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Start terminal", exact: true })).toHaveCount(0);
-    await expect(page.getByText("A terminal for this project")).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Agent pane", exact: true })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     for (const name of ["Terminal", "Agent", "Codex", "Claude Code", "OpenCode"]) {
       await expect(page.getByRole("menuitem", { name, exact: true })).toBeVisible();

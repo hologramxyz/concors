@@ -4,13 +4,20 @@ import {
   describeDaemonEndpoint,
 } from "../../packages/daemon-client/src/index.ts";
 
+interface SeedProjectOptions {
+  url?: string;
+  /** Preserve the product default when the test specifically covers initial-pane behavior. */
+  initialPane?: "default" | "terminal";
+}
+
 /** Seed named legacy projects for tests of unrelated features. Folder creation has dedicated UI coverage. */
 export async function seedProject(
   page: Page,
   name: string,
   directory: string,
-  url = "ws://127.0.0.1:7429/ws",
+  options: SeedProjectOptions = {},
 ) {
+  const { initialPane = "terminal", url = "ws://127.0.0.1:7429/ws" } = options;
   const connection = new DaemonConnection({
     endpoint: describeDaemonEndpoint(url),
     client: { kind: "test", name: "workspace fixture", version: "0.0.0" },
@@ -21,11 +28,12 @@ export async function seedProject(
     await expect.poll(() => connection.workspace).not.toBeNull();
     const workspace = connection.workspace;
     if (!workspace) throw new Error("Workspace did not connect");
+    const projectId = crypto.randomUUID();
     const result = await connection.requestProject(
       {
         kind: "start",
         epoch: workspace.epoch,
-        id: crypto.randomUUID(),
+        id: projectId,
         mode: "open",
         name,
         directory,
@@ -34,6 +42,42 @@ export async function seedProject(
       crypto.randomUUID(),
     );
     expect(result.outcome.status).toBe("ok");
+    await expect
+      .poll(
+        () => connection.workspace?.projects.find((project) => project.id === projectId)?.tabs[0],
+      )
+      .toBeTruthy();
+    if (initialPane === "terminal") {
+      const project = connection.workspace?.projects.find((item) => item.id === projectId);
+      const tab = project?.tabs[0];
+      const pane = tab?.nodes.find((node) => node.id === tab.root);
+      if (!project || !tab || !pane || pane.kind !== "pane")
+        throw new Error("Seeded project did not create its initial pane");
+      const currentWorkspace = connection.workspace;
+      if (!currentWorkspace) throw new Error("Workspace disconnected while seeding project");
+      const configured = await connection.executeWorkspace({
+        type: "workspace.command",
+        commandId: crypto.randomUUID(),
+        epoch: currentWorkspace.epoch,
+        operation: {
+          kind: "pane.configure",
+          projectId,
+          expectedVersion: project.version,
+          tabId: tab.id,
+          paneId: pane.id,
+          profile: "shell",
+        },
+      });
+      expect(configured.outcome.status).toBe("accepted");
+      await expect
+        .poll(() => {
+          const node = connection.workspace?.projects
+            .find((item) => item.id === projectId)
+            ?.tabs[0]?.nodes.find((item) => item.id === pane.id);
+          return node?.kind === "pane" ? node.profile : undefined;
+        })
+        .toBe("shell");
+    }
     await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
   } finally {
     unsubscribe();

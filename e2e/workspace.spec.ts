@@ -143,7 +143,9 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
     ).toBeVisible();
     await first.keyboard.press("Escape");
     expect(managed.tokenCount()).toBe(1);
-    await seedProject(first, "Managed acceptance", "/tmp", "ws://127.0.0.1:7430/ws");
+    await seedProject(first, "Managed acceptance", "/tmp", {
+      url: "ws://127.0.0.1:7430/ws",
+    });
     await first.getByRole("button", { name: "New tab", exact: true }).click();
     await first.getByRole("menuitem", { name: "Terminal", exact: true }).click();
     const remoteTerminal = first.getByLabel("Terminal output").filter({ visible: true });
