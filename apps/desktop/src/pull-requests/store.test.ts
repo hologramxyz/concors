@@ -146,3 +146,16 @@ it("reports signed-out machines and never asks an older daemon", async () => {
   expect(older.connection.requestPullRequests).not.toHaveBeenCalled();
   expect(older.store.getSnapshot()).toBe(unavailablePullRequests);
 });
+
+it("lists merged pull requests separately, only from daemons that support them", async () => {
+  const { connection } = setup(["workspace-pull-requests", "pull-request-states"]);
+  const merged = new PullRequestStore(connection, "merged");
+  merged.refresh(workspace);
+  await vi.waitFor(() => expect(merged.getSnapshot().status).toBe("listed"));
+  expect(connection.requestPullRequests.mock.calls[0]?.[0]).toMatchObject({ state: "merged" });
+  const older = setup();
+  const history = new PullRequestStore(older.connection, "closed");
+  history.refresh(workspace);
+  expect(older.connection.requestPullRequests).not.toHaveBeenCalled();
+  expect(history.getSnapshot()).toBe(unavailablePullRequests);
+});
