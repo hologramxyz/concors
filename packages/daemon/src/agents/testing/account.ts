@@ -37,7 +37,7 @@ export class TestAccountBackend implements AccountBackend {
       };
     }
     if (this.info.provider === "claude")
-      return { url: "https://claude.ai/oauth/authorize", input: "code" as const };
+      return { url: "https://claude.com/cai/oauth/authorize", input: "code" as const };
     return { input: "api-key" as const };
   }
   async complete(value: string) {
