@@ -1,6 +1,8 @@
 import type { DaemonConnection } from "@concors/daemon-client";
 import {
   PULL_REQUESTS_CAPABILITY,
+  PULL_REQUEST_STATES_CAPABILITY,
+  type PullRequestState as ListedState,
   type WorkspacePullRequests,
   type WorkspaceProject,
   type WorkspaceSnapshot,
@@ -10,7 +12,9 @@ import {
  * Open pull requests for every workspace on the connected machine, shared by the sidebar and the
  * Pull requests page. One request covers all workspaces; the daemon owns GitHub access and its
  * own per-repository cache, so this only decides when to ask. A failed refresh keeps the last
- * listing, and a reply for another machine state or folder layout is dropped.
+ * listing, and a reply for another machine state or folder layout is dropped. Open pull requests
+ * are what the sidebar counts; merged and closed ones have their own stores, loaded only when
+ * someone looks at them.
  */
 export const pullRequestKey = (
   epoch: string,
@@ -62,8 +66,13 @@ export class PullRequestStore {
   #listeners = new Set<() => void>();
   #pending: { keys: string } | null = null;
   #settled: { keys: string; expires: number } | null = null;
-  constructor(connection: Pick<DaemonConnection, "state" | "requestPullRequests">) {
+  readonly state: ListedState;
+  constructor(
+    connection: Pick<DaemonConnection, "state" | "requestPullRequests">,
+    state: ListedState = "open",
+  ) {
     this.#connection = connection;
+    this.state = state;
   }
   getSnapshot = () => this.#state;
   subscribe = (listener: () => void) => {
@@ -78,9 +87,11 @@ export class PullRequestStore {
   }
 
   refresh(workspace: WorkspaceSnapshot, force = false) {
+    const capabilities =
+      this.#connection.state.status === "ready" ? this.#connection.state.daemon.capabilities : [];
     if (
-      this.#connection.state.status !== "ready" ||
-      !this.#connection.state.daemon.capabilities?.includes(PULL_REQUESTS_CAPABILITY)
+      !capabilities?.includes(PULL_REQUESTS_CAPABILITY) ||
+      (this.state !== "open" && !capabilities.includes(PULL_REQUEST_STATES_CAPABILITY))
     ) {
       this.#pending = null;
       this.#settled = null;
@@ -124,6 +135,7 @@ export class PullRequestStore {
             directory: project.directory,
           })),
           ...(force ? { refresh: true } : {}),
+          ...(this.state === "open" ? {} : { state: this.state }),
         },
         crypto.randomUUID(),
       )
@@ -161,12 +173,17 @@ export class PullRequestStore {
   }
 }
 
-const stores = new WeakMap<DaemonConnection, PullRequestStore>();
-export function pullRequestStore(connection: DaemonConnection) {
-  let store = stores.get(connection);
+const stores = new WeakMap<DaemonConnection, Map<ListedState, PullRequestStore>>();
+export function pullRequestStore(connection: DaemonConnection, state: ListedState = "open") {
+  let byState = stores.get(connection);
+  if (!byState) {
+    byState = new Map();
+    stores.set(connection, byState);
+  }
+  let store = byState.get(state);
   if (!store) {
-    store = new PullRequestStore(connection);
-    stores.set(connection, store);
+    store = new PullRequestStore(connection, state);
+    byState.set(state, store);
   }
   return store;
 }
