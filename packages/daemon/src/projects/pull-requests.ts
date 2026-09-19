@@ -188,8 +188,17 @@ export class WorkspacePullRequests {
     // Counts change at once rather than after the minute-long cache expires.
     for (const state of ["open", "merged", "closed"])
       this.#cache.delete(`${state}:${repositoryKey(repository)}`);
-    const after = await this.#api.detail(token, repository, operation.number);
-    return { status: "updated", action, detail: after.detail };
+    // The change already happened on GitHub; a failed re-read must not report it as failed, or a
+    // retry would post a closing comment twice. Fall back to what the change implies.
+    const after = await this.#api
+      .detail(token, repository, operation.number)
+      .then((record) => record.detail)
+      .catch(() =>
+        action === "commented"
+          ? detail
+          : ({ ...detail, state: action === "merged" ? "merged" : "closed" } as const),
+      );
+    return { status: "updated", action, detail: after };
   }
 
   async #list(
