@@ -2,6 +2,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { availableMemory, createHostUsageMonitor, createHostUsageSampler } from "./usage.ts";
 
 afterEach(() => vi.useRealTimers());
+const VM_STAT = `Mach Virtual Memory Statistics: (page size of 16384 bytes)
+Pages free:                                    92167.
+Pages active:                                 994333.
+Pages inactive:                               990479.
+Pages speculative:                             15005.
+Pages throttled:                                   0.
+Pages wired down:                             174490.
+Pages purgeable:                               43218.
+`;
 const usage = {
   sampledAt: 100,
   cpuPercent: 25,
@@ -11,11 +20,33 @@ const usage = {
 
 describe("machine measurements", () => {
   it("uses Linux available memory and safely falls back on other systems", () => {
-    expect(availableMemory("MemFree: 1 kB\nMemAvailable: 6 kB\n", 1000, 8192)).toBe(6144);
-    expect(availableMemory(null, 1000, 8192)).toBe(1000);
-    expect(availableMemory("MemAvailable: broken kB", 1000, 8192)).toBe(1000);
-    expect(availableMemory("MemAvailable: 900 kB", 1000, 8192)).toBe(8192);
-    expect(availableMemory(null, -5, 8192)).toBe(0);
+    expect(availableMemory("MemFree: 1 kB\nMemAvailable: 6 kB\n", null, 1000, 8192)).toBe(6144);
+    expect(availableMemory(null, null, 1000, 8192)).toBe(1000);
+    expect(availableMemory("MemAvailable: broken kB", null, 1000, 8192)).toBe(1000);
+    expect(availableMemory("MemAvailable: 900 kB", null, 1000, 8192)).toBe(8192);
+    expect(availableMemory(null, null, -5, 8192)).toBe(0);
+  });
+  // os.freemem() on macOS counts only the free list, which the kernel keeps near empty on
+  // purpose, so trusting it reports an idle machine as ~97% full.
+  it("counts reclaimable macOS pages instead of the nearly empty free list", () => {
+    const total = 36 * 1024 ** 3;
+    expect(availableMemory(null, VM_STAT, 1.11 * 1024 ** 3, total)).toBe(
+      (92167 + 990479 + 15005) * 16384,
+    );
+    // Roughly half the machine, not 97% of it.
+    const used = total - availableMemory(null, VM_STAT, 1.11 * 1024 ** 3, total);
+    expect(Math.round((used / total) * 100)).toBe(53);
+  });
+  it("falls back rather than guessing when vm_stat output is unusable", () => {
+    expect(availableMemory(null, "not vm_stat output", 1000, 8192)).toBe(1000);
+    expect(availableMemory(null, "page size of 0 bytes\nPages free: 1.\n", 1000, 8192)).toBe(1000);
+    // A future macOS that drops a counter must not be read as a nearly empty machine.
+    expect(availableMemory(null, "page size of 4096 bytes\nPages free:  2.\n", 1000, 8192)).toBe(
+      1000,
+    );
+  });
+  it("prefers Linux meminfo when both are somehow present", () => {
+    expect(availableMemory("MemAvailable: 6 kB", VM_STAT, 1000, 8192)).toBe(6144);
   });
   it("measures CPU deltas across cores, not load averages or process usage", async () => {
     let times = { user: 100, nice: 0, sys: 0, irq: 0, idle: 100 };
@@ -24,6 +55,7 @@ describe("machine measurements", () => {
       totalmem: () => 8192,
       freemem: () => 1000,
       meminfo: async () => "MemAvailable: 6 kB",
+      vmstat: async () => null,
       now: () => 100,
     };
     const sample = createHostUsageSampler(read);
@@ -45,6 +77,7 @@ describe("machine measurements", () => {
       totalmem: () => 8,
       freemem: () => 3,
       meminfo: async () => null,
+      vmstat: async () => null,
       now: () => 1,
     });
     expect((await sample()).cpuPercent).toBeNull();

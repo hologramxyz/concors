@@ -1,6 +1,10 @@
+import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { cpus, freemem, totalmem } from "node:os";
+import { promisify } from "node:util";
 import { HOST_USAGE_INTERVAL_MS, type HostUsage } from "@concors/protocol";
+
+const run = promisify(execFile);
 
 interface CpuTimes {
   user: number;
@@ -14,6 +18,7 @@ interface UsageSource {
   totalmem(): number;
   freemem(): number;
   meminfo(): Promise<string | null>;
+  vmstat(): Promise<string | null>;
   now(): number;
 }
 const source: UsageSource = {
@@ -24,13 +29,48 @@ const source: UsageSource = {
     process.platform === "linux"
       ? readFile("/proc/meminfo", "utf8").catch(() => null)
       : Promise.resolve(null),
+  vmstat: () =>
+    process.platform === "darwin"
+      ? run("vm_stat", [], { timeout: 2000 })
+          .then(({ stdout }) => stdout)
+          .catch(() => null)
+      : Promise.resolve(null),
   now: Date.now,
 };
 
 /** Linux's MemAvailable includes reclaimable cache, unlike MemFree. */
-export function availableMemory(meminfo: string | null, fallback: number, total: number): number {
+function memAvailable(meminfo: string | null): number | null {
   const match = meminfo?.match(/^MemAvailable:\s+(\d+)\s+kB\s*$/m);
-  const available = match ? Number(match[1]) * 1024 : fallback;
+  return match ? Number(match[1]) * 1024 : null;
+}
+
+/**
+ * macOS keeps almost nothing in the free list on purpose — spare memory holds evictable file cache
+ * instead — so `os.freemem()` reports a healthy machine as nearly full. Counting the pages the
+ * kernel can hand back on demand is the equivalent of Linux's MemAvailable. Purgeable pages are
+ * deliberately excluded: they are already counted in the active and inactive lists.
+ */
+function vmStatAvailable(vmstat: string | null): number | null {
+  if (!vmstat) return null;
+  const pageSize = Number(vmstat.match(/page size of (\d+) bytes/)?.[1]);
+  if (!Number.isFinite(pageSize) || pageSize <= 0) return null;
+  let pages = 0;
+  for (const name of ["free", "inactive", "speculative"]) {
+    const match = vmstat.match(new RegExp(`^Pages ${name}:\\s+(\\d+)\\.?\\s*$`, "m"));
+    if (!match) return null;
+    pages += Number(match[1]);
+  }
+  return Number.isFinite(pages) ? pages * pageSize : null;
+}
+
+/** Both platforms report reclaimable cache as available; only their free counters omit it. */
+export function availableMemory(
+  meminfo: string | null,
+  vmstat: string | null,
+  fallback: number,
+  total: number,
+): number {
+  const available = memAvailable(meminfo) ?? vmStatAvailable(vmstat) ?? fallback;
   return Math.max(0, Math.min(total, Number.isFinite(available) ? available : fallback));
 }
 
@@ -56,7 +96,8 @@ export function createHostUsageSampler(read: UsageSource = source): () => Promis
     }
     previous = current;
     const totalBytes = read.totalmem();
-    const available = availableMemory(await read.meminfo(), read.freemem(), totalBytes);
+    const [meminfo, vmstat] = await Promise.all([read.meminfo(), read.vmstat()]);
+    const available = availableMemory(meminfo, vmstat, read.freemem(), totalBytes);
     if (!Number.isSafeInteger(totalBytes) || totalBytes <= 0 || !Number.isFinite(available))
       throw new Error("System memory information unavailable");
     return {
