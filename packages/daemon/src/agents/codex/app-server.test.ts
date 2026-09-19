@@ -13,6 +13,12 @@ readline.createInterface({input:process.stdin}).on('line', line => {
   if(frame.method==='initialized') {initialized=true;return;}
   if(!initialized) {send({id:frame.id,error:{code:-1,message:'Not initialized'}});return;}
   switch(frame.method) {
+    case 'model/list': {
+      if(frame.params.limit!==100 || frame.params.includeHidden!==false) {send({id:frame.id,error:{code:-1,message:'invalid model page'}});break;}
+      const second=frame.params.cursor==='models-2';
+      send({id:frame.id,result:{data:[{model:second?'model-b':'model-a',displayName:second?'Model B':'Model A'}],nextCursor:second?null:'models-2'}});
+      break;
+    }
     case 'thread/compact/start': {
       send({id:frame.id,result:{}});
       send({method:'turn/started',params:{threadId:frame.params.threadId,turn:{id:'compact-turn',status:'inProgress'}}});
@@ -63,6 +69,17 @@ it("initializes once, correlates out-of-order replies and decodes split UTF-8 no
   client.onNotification((_method, params) => events.push(params));
   await client.request("notify");
   expect(events).toContainEqual({ delta: "hello 🌍" });
+});
+it("loads every visible Codex model page", async () => {
+  const client = open();
+  await client.initialize();
+  await expect(client.request("model/list")).resolves.toEqual({
+    data: [
+      { model: "model-a", displayName: "Model A" },
+      { model: "model-b", displayName: "Model B" },
+    ],
+    nextCursor: null,
+  });
 });
 it("passes input requests to the host and never implicitly approves an unknown request", async () => {
   const client = open();

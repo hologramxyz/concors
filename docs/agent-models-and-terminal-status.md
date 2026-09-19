@@ -5,8 +5,10 @@
 The unified composer displays provider-reported model names instead of a synthetic
 “Machine default” model row. Model catalogs retain default/alias metadata and
 canonical IDs, so Claude aliases such as “Fable” or “Opus” can display their reported
-version and context variant. There is no pinned list of model versions. Capability
-lookups (including thinking effort) match canonical IDs as well as aliases.
+version and context variant. Capability lookups (including thinking effort) match
+canonical IDs as well as aliases. Claude Code's curated picker can omit the valid
+`claude-fable-5` explicit ID, so the daemon adds that documented compatibility row
+when the CLI does not report it itself.
 
 Claude reads its effective model from the CLI's context metadata, retains initialization
 model rows, and publishes root-session model events. OpenCode publishes assistant model events and restores saved session
@@ -40,6 +42,8 @@ that selection immediately.
   and ACP catalogs are session-negotiated, so stale discovery uses a separate
   prompt-free provider process, closed afterward. It never reinitializes a live
   Claude query, sends a prompt, or approves a tool.
+- Codex catalogs follow every `model/list` cursor and exclude provider-hidden rows,
+  matching the app-server picker contract instead of silently stopping at its first page.
 
 “Fresh” means the installed provider's current catalog, subject to its own account,
 configuration, and network availability, not a guarantee of access to every model.
