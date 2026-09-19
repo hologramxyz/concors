@@ -14,6 +14,7 @@ import {
 import { cn } from "cn";
 import {
   PULL_REQUESTS_CAPABILITY,
+  PULL_REQUEST_ACTIONS_CAPABILITY,
   PULL_REQUEST_STATES_CAPABILITY,
   type PullRequest,
   type PullRequestRepository,
@@ -39,6 +40,7 @@ import {
   foldersLabel,
   repositoryLabel,
   reviewLabel,
+  rowActions,
 } from "./labels";
 import {
   invalidatePullRequests,
@@ -95,6 +97,8 @@ export function PullRequestsPage({
   const [notice, setNotice] = useState<string | null>(null);
   const capabilities =
     connection?.state.status === "ready" ? connection.state.daemon.capabilities : undefined;
+  /** A daemon that only lists pull requests cannot merge or close them. */
+  const actions = !!capabilities?.includes(PULL_REQUEST_ACTIONS_CAPABILITY);
   const supported =
     !!capabilities?.includes(PULL_REQUESTS_CAPABILITY) &&
     (view.state === "open" || capabilities.includes(PULL_REQUEST_STATES_CAPABILITY));
@@ -317,6 +321,7 @@ export function PullRequestsPage({
                       key={item.name}
                       repository={item}
                       state={view.state}
+                      actions={actions}
                       pullRequests={visible(item)}
                       mine={mine}
                       onOpen={(number) =>
@@ -361,6 +366,7 @@ export function PullRequestsPage({
 function Repository({
   repository,
   state,
+  actions,
   pullRequests,
   mine,
   onOpen,
@@ -368,6 +374,7 @@ function Repository({
 }: {
   repository: PullRequestRepository;
   state: PullRequestState;
+  actions: boolean;
   pullRequests: PullRequest[];
   mine: boolean;
   onOpen: (number: number) => void;
@@ -408,6 +415,7 @@ function Repository({
                 key={pullRequest.number}
                 pullRequest={pullRequest}
                 permission={repository.permission}
+                actions={actions}
                 onOpen={() => onOpen(pullRequest.number)}
                 onAction={(action) => onAction(pullRequest.number, action)}
               />
@@ -435,11 +443,13 @@ const rowState = {
 function PullRequestRow({
   pullRequest,
   permission,
+  actions,
   onOpen,
   onAction,
 }: {
   pullRequest: PullRequest;
   permission: PullRequestRepository["permission"];
+  actions: boolean;
   onOpen: () => void;
   onAction: (action: "merge" | "close") => void;
 }) {
@@ -484,7 +494,12 @@ function PullRequestRow({
       {state === "open" && (
         <RowActions
           pullRequest={pullRequest}
-          permission={permission}
+          offered={rowActions({
+            supported: actions,
+            permission,
+            draft: pullRequest.draft,
+            mine: pullRequest.mine,
+          })}
           onOpen={onOpen}
           onAction={onAction}
         />
@@ -500,20 +515,17 @@ function PullRequestRow({
  */
 function RowActions({
   pullRequest,
-  permission,
+  offered,
   onOpen,
   onAction,
 }: {
   pullRequest: PullRequest;
-  permission: PullRequestRepository["permission"];
+  offered: ReturnType<typeof rowActions>;
   onOpen: () => void;
   onAction: (action: "merge" | "close") => void;
 }) {
-  const known = permission !== undefined && permission !== null;
-  const canMerge = !known || ["admin", "maintain", "write"].includes(permission);
-  const canClose = canMerge || permission === "triage" || pullRequest.mine;
-  if (!canMerge && !canClose) return null;
-  if (!canMerge)
+  if (!offered) return null;
+  if (!offered.merge)
     return (
       <Button
         variant="outline"
@@ -531,8 +543,8 @@ function RowActions({
       <Button
         variant="outline"
         className="rounded-r-none"
-        disabled={pullRequest.draft}
-        title={pullRequest.draft ? "Drafts can't be merged" : undefined}
+        disabled={offered.merge === "draft"}
+        title={offered.merge === "draft" ? "Drafts can't be merged" : undefined}
         aria-label={`Merge #${pullRequest.number}`}
         onClick={() => onAction("merge")}
       >
@@ -554,7 +566,7 @@ function RowActions({
           <DropdownMenuItem onSelect={onOpen}>
             <GitPullRequest /> View details
           </DropdownMenuItem>
-          {canClose && (
+          {offered.close && (
             <DropdownMenuItem variant="destructive" onSelect={() => onAction("close")}>
               <GitPullRequestClosed /> Close pull request…
             </DropdownMenuItem>
