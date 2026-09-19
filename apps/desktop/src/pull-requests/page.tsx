@@ -526,7 +526,8 @@ function RowActions({
       </Button>
     );
   return (
-    <div className="mt-2.5 flex shrink-0">
+    // Both halves share one height, including the taller touch targets on phones.
+    <div className="mt-2.5 flex shrink-0 items-stretch">
       <Button
         variant="outline"
         className="rounded-r-none"
@@ -543,7 +544,7 @@ function RowActions({
           <Button
             variant="outline"
             size="icon"
-            className="-ml-px rounded-l-none"
+            className="-ml-px h-auto w-7 rounded-l-none"
             aria-label={`More actions for #${pullRequest.number}`}
           >
             <ChevronDown />
