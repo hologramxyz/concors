@@ -86,6 +86,11 @@ export class PullRequestStore {
     for (const listener of this.#listeners) listener();
   }
 
+  /** The next refresh asks again, even within a minute of the last listing. */
+  invalidate() {
+    this.#settled = null;
+  }
+
   refresh(workspace: WorkspaceSnapshot, force = false) {
     const capabilities =
       this.#connection.state.status === "ready" ? this.#connection.state.daemon.capabilities : [];
@@ -186,4 +191,9 @@ export function pullRequestStore(connection: DaemonConnection, state: ListedStat
     byState.set(state, store);
   }
   return store;
+}
+
+/** After a merge, close or comment, every state's listing is out of date. */
+export function invalidatePullRequests(connection: DaemonConnection) {
+  for (const store of stores.get(connection)?.values() ?? []) store.invalidate();
 }
