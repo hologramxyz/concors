@@ -1,4 +1,5 @@
 import { SchedulesPage } from "@/schedules/page";
+import { PullRequestsPage } from "@/pull-requests/page";
 import { StartupScreen } from "@/startup/startup-screen";
 import { WindowControls, StandaloneWindowBar } from "@/window/controls";
 import { useWindowChrome } from "@/window/context";
@@ -96,6 +97,8 @@ function AppContent() {
   const [view, setView] = useState<View>(() =>
     window.location.pathname === "/settings/billing" ? "settings" : "projects",
   );
+  /** The Pull requests page shows one workspace, or all of them. */
+  const [pullRequestsProject, setPullRequestsProject] = useState<string | null>(null);
   const [focusedCloudMachineId, setFocusedCloudMachineId] = useState<string | null>(null);
   const [creatingTerminalProfile, setCreatingTerminalProfile] = useState(false);
   const [settingsPage, setSettingsPage] = useState<SettingsPage>(() =>
@@ -447,6 +450,10 @@ function AppContent() {
                         onOpenSchedules={() => {
                           setView("schedules");
                         }}
+                        onOpenPullRequests={(projectId) => {
+                          setPullRequestsProject(projectId ?? null);
+                          setView("pull-requests");
+                        }}
                         onOpenSearch={openSearch}
                         onOpenResources={() => setView("resources")}
                         workspace={workspace}
@@ -549,6 +556,16 @@ function AppContent() {
                               connection.workspaceReady && connection.state.status === "ready"
                             }
                             onOpenAgent={openAgent}
+                          />
+                        ) : view === "pull-requests" ? (
+                          <PullRequestsPage
+                            key={workspace?.machineId ?? endpoint?.url}
+                            workspace={workspace}
+                            connected={
+                              connection.workspaceReady && connection.state.status === "ready"
+                            }
+                            projectId={pullRequestsProject}
+                            onFilter={setPullRequestsProject}
                           />
                         ) : view === "projects" ? (
                           workspace ? (
