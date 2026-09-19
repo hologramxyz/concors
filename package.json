@@ -21,6 +21,7 @@
     "desktop:dev": "pnpm --filter @concors/desktop dev",
     "desktop:build": "pnpm --filter @concors/desktop build",
     "desktop:package:linux": "node apps/desktop/scripts/package-linux.ts",
+    "desktop:package:macos": "node apps/desktop/scripts/package-macos.ts",
     "desktop:release:linux": "node apps/desktop/scripts/release-tarball.ts",
     "desktop:release:manifest": "node apps/desktop/scripts/release-manifest.ts",
     "desktop:version": "node apps/desktop/scripts/release-version.ts",
@@ -39,6 +40,7 @@
     "daemon:test": "pnpm --filter @concors/daemon test",
     "test:workspace:e2e": "playwright test",
     "daemon:package": "pnpm daemon:build && pnpm --filter @concors/daemon package:linux",
+    "daemon:package:macos": "pnpm daemon:build && pnpm --filter @concors/daemon package:macos",
     "test:mobile:managed": "playwright test --config apps/mobile/playwright.managed.config.mts",
     "test:github:e2e": "pnpm desktop:web:build && playwright test --config playwright.github.config.ts",
     "desktop:reload": "node apps/desktop/scripts/reload.ts"

@@ -155,9 +155,20 @@ pnpm daemon:package
 This builds `packages/daemon/dist/release/concors-daemon-linux-x64.tar.gz`. Packaging downloads the
 official Node **24.20.0** Linux x64 runtime and verifies its pinned SHA-256 before including it.
 The download requires network access only on the build machine. Update the runtime version and
-checksum together in `scripts/package-linux.ts` when adopting a Node security update, then rerun
+checksum together in `scripts/package-release.ts` when adopting a Node security update, then rerun
 the Ubuntu acceptance check. The tarball uses the official runtime rather than copying a build
 host's potentially incompatible Node executable.
+
+The same script packages the macOS runtime as `concors-daemon-darwin-<arch>.tar.gz`:
+
+```sh
+pnpm daemon:package:macos
+```
+
+`scripts/package-release.ts` holds one entry per supported runtime, each with its own archive name,
+pinned SHA-256 and `tar` flag — nodejs.org publishes Linux as `.tar.xz` and macOS as `.tar.gz`.
+It never cross-compiles: the bundled native terminal module is the build host's prebuild, so the
+target must match the host.
 
 It extracts into exactly one relocatable directory:
 
