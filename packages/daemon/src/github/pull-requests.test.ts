@@ -26,6 +26,7 @@ const node = (number: number, overrides: Record<string, unknown> = {}) => ({
 const repository = (nodes: unknown[], totalCount = nodes.length) => ({
   nameWithOwner: "concors-dev/concors",
   url: "https://github.com/concors-dev/concors",
+  viewerPermission: "WRITE",
   pullRequests: { totalCount, nodes },
 });
 
@@ -63,6 +64,7 @@ it("maps pull requests, reviews and checks, keeping the exact open count", () =>
       url: "https://github.com/concors-dev/concors",
       openCount: 40,
       error: null,
+      permission: "write",
       pullRequests: [
         {
           number: 2,

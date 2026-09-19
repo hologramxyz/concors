@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { MAX_PULL_REQUESTS_PER_REPOSITORY, type PullRequest } from "@concors/protocol";
+import {
+  MAX_PULL_REQUESTS_PER_REPOSITORY,
+  type PullRequest,
+  type PullRequestRepository,
+} from "@concors/protocol";
 import type { GitHubRepository } from "./remotes.ts";
 import { clip, gitHubGraphQL } from "./graphql.ts";
 
@@ -18,6 +22,7 @@ export interface RepositoryPullRequests {
   readonly openCount: number;
   readonly pullRequests: PullRequest[];
   readonly error: string | null;
+  readonly permission?: PullRequestRepository["permission"];
 }
 export interface PullRequestListing {
   readonly viewer: string | null;
@@ -36,7 +41,7 @@ export function pullRequestsQuery(repositories: readonly GitHubRepository[]) {
   });
   const query = `query(${parameters.join(", ")}) { viewer { login } ${fields.join(" ")} }
 fragment OpenPullRequests on Repository {
-  nameWithOwner url
+  nameWithOwner url viewerPermission
   pullRequests(states: OPEN, first: ${MAX_PULL_REQUESTS_PER_REPOSITORY}, orderBy: {field: UPDATED_AT, direction: DESC}) {
     totalCount
     nodes {
@@ -79,6 +84,7 @@ const PullRequestNode = z.object({
 const RepositoryNode = z.object({
   nameWithOwner: z.string(),
   url: z.string(),
+  viewerPermission: z.string().nullish(),
   pullRequests: z.object({
     totalCount: z.number().int().nonnegative(),
     nodes: z.array(PullRequestNode.nullish()).nullish(),
@@ -108,6 +114,13 @@ const checks: Record<string, PullRequest["checks"]> = {
   ERROR: "failing",
   PENDING: "pending",
   EXPECTED: "pending",
+};
+const permissions: Record<string, NonNullable<PullRequestRepository["permission"]>> = {
+  ADMIN: "admin",
+  MAINTAIN: "maintain",
+  WRITE: "write",
+  TRIAGE: "triage",
+  READ: "read",
 };
 const isGitHubUrl = (url: string) => url.startsWith("https://github.com/");
 
@@ -161,6 +174,7 @@ export function readPullRequests(
         name: clip(node.data.nameWithOwner, 200),
         url: isGitHubUrl(node.data.url) ? clip(node.data.url, 2048) : fallback.url,
         openCount: node.data.pullRequests.totalCount,
+        permission: permissions[node.data.viewerPermission ?? ""] ?? null,
         pullRequests: (node.data.pullRequests.nodes ?? [])
           .flatMap((item) => (item ? [readPullRequest(item)] : []))
           .filter((item): item is PullRequest => !!item)

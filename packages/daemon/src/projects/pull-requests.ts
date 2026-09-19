@@ -230,6 +230,7 @@ export class WorkspacePullRequests {
           openCount: result?.openCount ?? 0,
           pullRequests: result?.pullRequests ?? [],
           error: result ? result.error : "Not loaded: too many repositories in open workspaces.",
+          permission: result?.permission ?? null,
         });
       }
       return { projectId, directory, repositories: [...repositories.values()] };
