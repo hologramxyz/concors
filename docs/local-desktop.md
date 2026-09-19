@@ -1,6 +1,6 @@
-# Local desktop runtime (Linux first)
+# Local desktop runtime (Linux and macOS)
 
-The native Linux desktop package includes the daemon, Node, and the native terminal module.
+The native desktop package includes the daemon, Node, and the native terminal module.
 Opening the application starts a loopback gateway on an available port and waits for its
 persistent session host to be ready before connecting. No separate Node installation or
 manual daemon command is needed on the target computer.
@@ -30,8 +30,38 @@ For a faster local test, append `--debug --no-bundle`; run
 This uses the built frontend and does not start a Vite development server. Keep the runtime
 resource directory intact when moving the application.
 
-This first packaging command supports Linux x86_64. macOS/Windows installers, signing,
-and automatic desktop/runtime updates need their own packaging and validation.
+Windows installers, code signing, notarization and automatic desktop/runtime updates
+need their own packaging and validation.
+
+## Build on macOS
+
+Install the Xcode command line tools (`xcode-select --install`), a stable Rust toolchain and the
+repository's Node 24/pnpm dependencies. No GTK or WebKitGTK is needed — macOS renders through the
+system WKWebView. Then run:
+
+```sh
+pnpm install --frozen-lockfile
+VITE_CONCORS_API_URL=https://concors-server-dev.up.railway.app pnpm desktop:package:macos
+```
+
+That mirrors the Linux command — daemon archive, relocated-runtime PTY check, embedded resource —
+and writes `Concors.app` under `apps/desktop/src-tauri/target/release/bundle/macos/`
+(`target/debug/bundle/macos/` with `--debug`). Apple Silicon and Intel are both supported; the
+build always targets the host architecture, so do not set `CARGO_BUILD_TARGET`.
+
+**On macOS always build with the bundler.** `daemon.rs` resolves the runtime through
+`resource_dir()`, which is `Concors.app/Contents/Resources` — the Linux trick of running the bare
+`target/debug` executable beside a `daemon/` directory has no equivalent here, and such a build
+reports the runtime as missing. `--debug` alone is the fast path; do not add `--no-bundle`.
+
+The build is unsigned, so it runs from Finder on the machine that built it but is not
+distributable. Signing, notarization and DMG packaging are deliberately out of scope.
+Opening the app the first time may raise a macOS firewall prompt, because sign-in listens on a
+loopback port for the OAuth callback, and a terminal that reaches `~/Documents` or `~/Desktop`
+raises the usual privacy prompts.
+
+`pnpm desktop:reload` remains Linux-only and refuses to run on macOS; rebuild with
+`pnpm desktop:package:macos --debug` and reopen the app instead.
 
 ## Distributable tarball and Arch package
 
@@ -125,7 +155,8 @@ the persistent host running so existing terminals can be resumed on the next lau
 Runtime data defaults to `~/.concors`, partitioned per signed-in account (see below); set
 `CONCORS_DATA_DIR` before launching the app to isolate a test installation. Native startup logs are written to Tauri's application log
 directory as `local-daemon.log` (normally
-`~/.local/share/dev.concors.desktop/logs/local-daemon.log` on Linux).
+`~/.local/share/dev.concors.desktop/logs/local-daemon.log` on Linux and
+`~/Library/Logs/dev.concors.desktop/local-daemon.log` on macOS).
 
 A startup timeout is reported with the log path. An incomplete production package reports
 that the runtime is missing instead of silently trying a different service on port 7420.
@@ -183,7 +214,10 @@ WebKitWebDriver can automate this built application with `TAURI_WEBVIEW_AUTOMATI
 and `webkitgtk:browserOptions.binary` pointing at the native executable. Account API fixtures
 must remain isolated test services; the daemon, filesystem and PTYs should be real.
 
-## Linux window controls
+## Window controls
+
+macOS keeps its native title bar and traffic lights: only `tauri.linux.conf.json` sets
+`decorations: false`, and the shared UI hides its own controls whenever the window is decorated.
 
 Linux builds use the existing tab/header row for minimize, maximize/restore and close.
 When the Files panel is open, the controls move to its header. Sign-in and settings also

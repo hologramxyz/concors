@@ -1,0 +1,8 @@
+{
+  "bundle": {
+    "targets": ["app"],
+    "resources": {
+      "resources/local-daemon/concors-daemon/": "daemon/"
+    }
+  }
+}
