@@ -452,8 +452,19 @@ describe("workspace replica lifecycle", () => {
       outcome: { status: "listed", viewer: "octocat", fetchedAt: 1, workspaces: [] },
     });
     await expect(pending).resolves.toMatchObject({ outcome: { status: "listed" } });
+    const merge = {
+      kind: "merge" as const,
+      epoch: snapshot.epoch,
+      projectId: snapshot.epoch,
+      repository: "concors-dev/concors",
+      number: 7,
+      method: "squash" as const,
+      expectedHeadSha: "a".repeat(40),
+    };
+    // Listing alone does not imply the daemon can act on pull requests.
+    await expect(connection.requestPullRequests(merge, id)).rejects.toThrow("manage pull requests");
     const lost = expect(connection.requestPullRequests(operation, id)).rejects.toThrow(
-      "Connection lost",
+      "may have completed",
     );
     socket.serverClose();
     await lost;

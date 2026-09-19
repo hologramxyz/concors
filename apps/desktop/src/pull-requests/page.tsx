@@ -1,4 +1,4 @@
-import { useContext, useState, type MouseEvent, type ReactNode } from "react";
+import { useContext, useState, type ReactNode } from "react";
 import {
   CircleCheck,
   CircleDot,
@@ -6,6 +6,7 @@ import {
   GitPullRequest,
   GitPullRequestDraft,
   RefreshCw,
+  X,
 } from "lucide-react";
 import { cn } from "cn";
 import {
@@ -16,35 +17,38 @@ import {
 } from "@concors/protocol";
 import { Button } from "@/components/ui/button";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
-import { openExternal } from "@/tauri";
 import { ProjectImage } from "@/workspace/project-image";
 import { projectIconKey } from "@/workspace/project-icons";
 import { useProjectIcons } from "@/workspace/use-project-icons";
-import { ageLabel, byOpenCount, checksLabel, foldersLabel, reviewLabel } from "./labels";
+import { PullRequestView } from "./detail";
+import {
+  ageLabel,
+  byOpenCount,
+  checksLabel,
+  foldersLabel,
+  repositoryLabel,
+  reviewLabel,
+} from "./labels";
 import { pullRequestKey, totalOpenCount, workspaceOpenCount } from "./store";
 import { usePullRequests } from "./use-pull-requests";
-
-const open = (url: string) => (event: MouseEvent) => {
-  event.preventDefault();
-  void openExternal(url);
-};
+import type { PullRequestsView } from "./view";
 
 /**
- * Open pull requests in the GitHub repositories of every workspace, or of one. Grouped by
- * workspace, then repository; each row opens on GitHub. The machine's own GitHub sign-in is used,
- * so a signed-out machine explains how to sign in instead of listing anything.
+ * Open pull requests in the GitHub repositories of every workspace, or of one workspace or
+ * repository, grouped by workspace then repository. Opening one shows it here to merge, close or
+ * comment on. The machine's own GitHub sign-in is used, so a signed-out machine explains how to
+ * sign in instead of listing anything.
  */
 export function PullRequestsPage({
   workspace,
   connected,
-  projectId,
-  onFilter,
+  view,
+  onNavigate,
 }: {
   workspace: WorkspaceSnapshot | null;
   connected: boolean;
-  /** One workspace's pull requests, or every workspace's when null. */
-  projectId: string | null;
-  onFilter: (projectId: string | null) => void;
+  view: PullRequestsView;
+  onNavigate: (view: PullRequestsView) => void;
 }) {
   const connection = useContext(TerminalConnectionContext);
   const state = usePullRequests(workspace);
@@ -58,8 +62,29 @@ export function PullRequestsPage({
     return listing?.repositories.length ? [{ project, listing }] : [];
   });
   // A filter for a workspace that has since closed falls back to every workspace.
-  const filtered = workspace?.projects.find((project) => project.id === projectId);
-  const shown = filtered ? listings.filter((item) => item.project === filtered) : listings;
+  const filtered = workspace?.projects.find((project) => project.id === view.projectId);
+  const repository = filtered ? view.repository : null;
+  const shown = (filtered ? listings.filter((item) => item.project === filtered) : listings).map(
+    ({ project, listing }) => ({
+      project,
+      listing,
+      repositories: byOpenCount(listing.repositories).filter(
+        (item) => !repository || item.name.toLowerCase() === repository.toLowerCase(),
+      ),
+    }),
+  );
+  const filter = (projectId: string | null, repository: string | null = null) =>
+    onNavigate({ projectId, repository, pullRequest: null });
+  if (view.pullRequest)
+    return (
+      <PullRequestView
+        key={JSON.stringify(view.pullRequest)}
+        workspace={workspace}
+        target={view.pullRequest}
+        onBack={() => onNavigate({ ...view, pullRequest: null })}
+        onChanged={state.refresh}
+      />
+    );
   const total = totalOpenCount(listings.map((item) => item.listing));
   const visible = (repository: PullRequestRepository) =>
     mine
@@ -88,19 +113,45 @@ export function PullRequestsPage({
           aria-label="Filter pull requests"
           className="-mx-4 mt-5 flex items-center gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0"
         >
-          <FilterChip pressed={!filtered} onClick={() => onFilter(null)} count={total}>
+          <FilterChip pressed={!filtered} onClick={() => filter(null)} count={total}>
             All workspaces
           </FilterChip>
-          {listings.map(({ project, listing }) => (
-            <FilterChip
-              key={project.id}
-              pressed={filtered === project}
-              onClick={() => onFilter(project.id)}
-              count={workspaceOpenCount(listing)}
+          {listings.map(({ project, listing }) => {
+            const icon = icons.get(projectIconKey(workspace?.epoch ?? "", project));
+            return (
+              <FilterChip
+                key={project.id}
+                pressed={filtered === project && !repository}
+                onClick={() => filter(project.id)}
+                count={workspaceOpenCount(listing)}
+                icon={
+                  <ProjectImage
+                    key={icon?.source ?? "fallback"}
+                    source={icon?.source ?? null}
+                    isGit={icon?.isGit ?? false}
+                    name={project.name}
+                    size={16}
+                  />
+                }
+              >
+                {project.name}
+              </FilterChip>
+            );
+          })}
+          {filtered && repository && (
+            <button
+              type="button"
+              aria-label={`Show every repository in ${filtered.name}`}
+              onClick={() => filter(filtered.id)}
+              className="flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-foreground/20 bg-muted px-2.5 text-ui"
             >
-              {project.name}
-            </FilterChip>
-          ))}
+              {repositoryLabel(
+                repository,
+                listings.flatMap((item) => item.listing.repositories.map((entry) => entry.name)),
+              )}
+              <X className="size-3.5 text-muted-foreground" aria-hidden="true" />
+            </button>
+          )}
           {state.viewer && (
             <>
               <span className="mx-1 h-4 w-px shrink-0 bg-border" aria-hidden="true" />
@@ -136,7 +187,7 @@ export function PullRequestsPage({
         </Empty>
       ) : state.status !== "listed" ? (
         <Status>Loading pull requests…</Status>
-      ) : !shown.length ? (
+      ) : !shown.some((item) => item.repositories.length) ? (
         <Empty
           title={
             filtered ? `No GitHub repositories in ${filtered.name}` : "No GitHub repositories yet"
@@ -147,11 +198,11 @@ export function PullRequestsPage({
         </Empty>
       ) : (
         <div className="mt-6 space-y-8">
-          {shown.map(({ project, listing }) => {
+          {shown.map(({ project, listing, repositories }) => {
             const icon = icons.get(projectIconKey(workspace?.epoch ?? "", project));
             return (
               <section key={project.id} aria-label={project.name}>
-                {shown.length > 1 && (
+                {
                   <h3 className="mb-3 flex items-center gap-2 text-ui font-medium">
                     <ProjectImage
                       key={icon?.source ?? "fallback"}
@@ -164,14 +215,20 @@ export function PullRequestsPage({
                       {workspaceOpenCount(listing)}
                     </span>
                   </h3>
-                )}
+                }
                 <div className="space-y-3">
-                  {byOpenCount(listing.repositories).map((repository) => (
+                  {repositories.map((item) => (
                     <Repository
-                      key={repository.name}
-                      repository={repository}
-                      pullRequests={visible(repository)}
+                      key={item.name}
+                      repository={item}
+                      pullRequests={visible(item)}
                       mine={mine}
+                      onOpen={(number) =>
+                        onNavigate({
+                          ...view,
+                          pullRequest: { projectId: project.id, repository: item.name, number },
+                        })
+                      }
                     />
                   ))}
                 </div>
@@ -188,13 +245,14 @@ function Repository({
   repository,
   pullRequests,
   mine,
+  onOpen,
 }: {
   repository: PullRequestRepository;
   pullRequests: PullRequest[];
   mine: boolean;
+  onOpen: (number: number) => void;
 }) {
   const folders = foldersLabel(repository);
-  const pulls = `${repository.url}/pulls`;
   return (
     <article
       aria-label={repository.name}
@@ -206,13 +264,7 @@ function Repository({
           (repository.error || pullRequests.length > 0) && "border-b",
         )}
       >
-        <a
-          href={pulls}
-          onClick={open(pulls)}
-          className="min-w-0 truncate font-medium hover:underline"
-        >
-          {repository.name}
-        </a>
+        <h4 className="min-w-0 truncate font-medium">{repository.name}</h4>
         {folders && (
           <span className="min-w-0 truncate text-xs text-muted-foreground">in {folders}</span>
         )}
@@ -231,40 +283,41 @@ function Repository({
         pullRequests.length > 0 && (
           <ul className="divide-y">
             {pullRequests.map((pullRequest) => (
-              <PullRequestRow key={pullRequest.number} pullRequest={pullRequest} />
+              <PullRequestRow
+                key={pullRequest.number}
+                pullRequest={pullRequest}
+                onOpen={() => onOpen(pullRequest.number)}
+              />
             ))}
           </ul>
         )
       )}
       {!repository.error && repository.openCount > repository.pullRequests.length && (
-        <a
-          href={pulls}
-          onClick={open(pulls)}
-          className="block border-t px-4 py-2 text-xs text-muted-foreground hover:text-foreground"
-        >
-          View all {repository.openCount} on GitHub
-        </a>
+        <p className="border-t px-4 py-2 text-xs text-muted-foreground">
+          Showing the {repository.pullRequests.length} most recently updated of{" "}
+          {repository.openCount} open.
+        </p>
       )}
     </article>
   );
 }
 
-function PullRequestRow({ pullRequest }: { pullRequest: PullRequest }) {
+function PullRequestRow({ pullRequest, onOpen }: { pullRequest: PullRequest; onOpen: () => void }) {
   const Icon = pullRequest.draft ? GitPullRequestDraft : GitPullRequest;
   return (
     <li>
-      <a
-        href={pullRequest.url}
-        onClick={open(pullRequest.url)}
+      <button
+        type="button"
+        onClick={onOpen}
         data-pull-request={pullRequest.number}
-        className="flex items-start gap-3 px-4 py-3 hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none"
+        className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none"
       >
         <Icon
           className={cn(
             "mt-0.5 size-4 shrink-0",
             pullRequest.draft ? "text-muted-foreground" : "text-emerald-600 dark:text-emerald-500",
           )}
-          aria-label={pullRequest.draft ? "Draft" : "Open"}
+          aria-hidden="true"
         />
         <div className="min-w-0 flex-1">
           <p className="font-medium break-words">{pullRequest.title}</p>
@@ -291,7 +344,7 @@ function PullRequestRow({ pullRequest }: { pullRequest: PullRequest }) {
           )}
           {pullRequest.checks && <Checks state={pullRequest.checks} />}
         </div>
-      </a>
+      </button>
     </li>
   );
 }
@@ -317,11 +370,13 @@ function FilterChip({
   pressed,
   onClick,
   count,
+  icon,
   children,
 }: {
   pressed: boolean;
   onClick: () => void;
   count?: number;
+  icon?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -330,12 +385,14 @@ function FilterChip({
       aria-pressed={pressed}
       onClick={onClick}
       className={cn(
-        "flex h-7 max-w-56 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-ui",
+        "flex h-7 max-w-56 shrink-0 items-center gap-1.5 rounded-md border text-ui",
+        icon ? "pr-2.5 pl-1.5" : "px-2.5",
         pressed
           ? "border-foreground/20 bg-muted text-foreground"
           : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
       )}
     >
+      {icon}
       <span className="truncate">{children}</span>
       {count !== undefined && <span className="text-xs tabular-nums opacity-70">{count}</span>}
     </button>

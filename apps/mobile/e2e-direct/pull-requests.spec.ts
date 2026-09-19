@@ -57,6 +57,22 @@ test("mobile shows workspace pull request counts and opens a workspace's pull re
       expect(await main.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
     }
     await page.screenshot({ path: test.info().outputPath("pull-requests-mobile-page.png") });
+    await ui.getByRole("button", { name: /^Show pull requests in workspaces/ }).click();
+    const view = ui.getByRole("article", { name: "Pull request #42" });
+    await expect(view.getByRole("region", { name: "Merge status" })).toContainText(
+      "Ready to merge",
+    );
+    await expect(view.getByRole("button", { name: "Merge…" })).toBeVisible();
+    await expect(view.getByRole("button", { name: "Close…" })).toBeVisible();
+    for (const width of [320, 390]) {
+      await page.setViewportSize({ width, height: 844 });
+      const main = ui.locator("main");
+      expect(await main.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+    }
+    await page.screenshot({ path: test.info().outputPath("pull-request-mobile-detail.png") });
+    await view.getByRole("button", { name: "Merge…" }).click();
+    await expect(ui.getByRole("dialog", { name: "Merge pull request #42?" })).toBeVisible();
+    await page.screenshot({ path: test.info().outputPath("pull-request-mobile-merge.png") });
   } finally {
     desktop.disconnect();
     await rm(directory, { recursive: true, force: true });
