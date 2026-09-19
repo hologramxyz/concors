@@ -199,3 +199,75 @@ test("pull requests are read, commented on, merged and closed without leaving Co
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("rows merge and close in place, and tabs show merged and closed pull requests", async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  const root = await mkdtemp(join(tmpdir(), "concors-pull-request-rows-"));
+  try {
+    repository(join(root, "rows"), "https://github.com/hologram/rows.git");
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Rows", root);
+    const sidebar = page.getByRole("navigation", { name: "Primary" });
+    // Drafts count as open; merged and closed pull requests never count.
+    const count = sidebar.getByRole("button", { name: "3 open pull requests in Rows" });
+    await expect(count.locator("svg")).toHaveClass(/text-emerald-600/);
+    await count.click();
+
+    await expect(page.getByRole("tab", { name: /^Open/, selected: true })).toContainText("3");
+    await expect(page.getByRole("button", { name: "Merge #33" })).toBeDisabled();
+    await page.screenshot({ path: test.info().outputPath("pull-request-rows.png") });
+
+    await page.getByRole("button", { name: "Merge #31" }).click();
+    const merge = page.getByRole("dialog", { name: "Merge pull request #31?" });
+    await expect(merge.getByRole("radio", { name: /Squash and merge/ })).toBeChecked();
+    await merge.getByRole("button", { name: "Squash and merge" }).click();
+    await expect(merge).toHaveCount(0);
+    await expect(
+      page.getByRole("status").filter({ hasText: "Merged #31 into main." }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Merge from a row/ })).toHaveCount(0);
+    await expect(
+      sidebar.getByRole("button", { name: "2 open pull requests in Rows" }),
+    ).toBeVisible();
+
+    await page.getByRole("button", { name: "More actions for #32" }).click();
+    await page.getByRole("menuitem", { name: "Close pull request…" }).click();
+    const close = page.getByRole("dialog", { name: "Close pull request #32?" });
+    await close.getByRole("button", { name: "Close pull request" }).click();
+    await expect(close).toHaveCount(0);
+    await expect(
+      page.getByRole("status").filter({ hasText: "Closed #32 without merging." }),
+    ).toBeVisible();
+    await expect(
+      sidebar.getByRole("button", { name: "1 open pull request in Rows" }),
+    ).toBeVisible();
+
+    await page.getByRole("tab", { name: /^Merged/ }).click();
+    const merged = page.getByRole("article", { name: "hologram/rows" });
+    await expect(merged).toContainText("2 merged");
+    await expect(merged.locator("[data-pull-request-state]")).toHaveCount(2);
+    await expect(merged.locator('[data-pull-request-state="merged"]')).toHaveCount(2);
+    await expect(merged.locator('[data-pull-request="31"] svg').first()).toHaveClass(
+      /text-violet-600/,
+    );
+    await expect(merged.getByRole("button", { name: /^Merge #/ })).toHaveCount(0);
+    await page.screenshot({ path: test.info().outputPath("pull-request-merged-tab.png") });
+
+    await page.getByRole("tab", { name: /^Closed/ }).click();
+    const closed = page.getByRole("article", { name: "hologram/rows" });
+    await expect(closed.locator('[data-pull-request-state="closed"]')).toHaveCount(2);
+    await expect(closed).toContainText("Close from a row");
+    await expect(closed).toContainText("Abandoned idea");
+
+    await page.getByRole("tab", { name: /^Open/ }).click();
+    await expect(page.getByRole("article", { name: "hologram/rows" })).toContainText("1 open");
+    // Details still open from the row.
+    await page.getByRole("button", { name: /^Draft from a row/ }).click();
+    await expect(page.getByRole("article", { name: "Pull request #33" })).toBeVisible();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
