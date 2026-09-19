@@ -2,7 +2,7 @@ import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { z } from "zod";
 import { codexMcp } from "../providers/mcp.ts";
 import type { McpServer } from "@concors/protocol";
-import { AgentControlsSchema } from "@concors/protocol";
+import { AgentControlsSchema, MAX_AGENT_MODELS } from "@concors/protocol";
 
 const Frame = z.object({
   id: z.union([z.string(), z.number()]).optional(),
@@ -116,6 +116,7 @@ export class CodexAppServer {
         threadId: (params as { childId: string }).childId,
         includeTurns: true,
       });
+    if (method === "model/list") return this.models();
     if (method === "session/list")
       return this.rpc("thread/list", {
         cwd: (params as { cwd: string }).cwd,
@@ -196,6 +197,34 @@ export class CodexAppServer {
         ),
       );
     return this.rpc(method, params, timeoutMs);
+  }
+  private async models(): Promise<unknown> {
+    const data: unknown[] = [];
+    const cursors = new Set<string>();
+    let cursor: string | null = null;
+    do {
+      const page = z
+        .object({
+          data: z.array(z.unknown()),
+          nextCursor: z.string().nullable().optional(),
+        })
+        .parse(
+          await this.rpc("model/list", {
+            limit: Math.min(100, MAX_AGENT_MODELS - data.length),
+            includeHidden: false,
+            ...(cursor ? { cursor } : {}),
+          }),
+        );
+      data.push(...page.data);
+      if (data.length > MAX_AGENT_MODELS)
+        throw new Error(`Codex reported more than ${MAX_AGENT_MODELS} models`);
+      cursor = page.nextCursor ?? null;
+      if (cursor && data.length >= MAX_AGENT_MODELS)
+        throw new Error(`Codex reported more than ${MAX_AGENT_MODELS} models`);
+      if (cursor && cursors.has(cursor)) throw new Error("Codex repeated a model catalog cursor");
+      if (cursor) cursors.add(cursor);
+    } while (cursor);
+    return { data, nextCursor: null };
   }
   private compact(threadId: string): Promise<unknown> {
     // Native compaction starts a real Codex turn. Wait for its identity rather

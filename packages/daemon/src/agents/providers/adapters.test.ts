@@ -82,6 +82,11 @@ it("maps Claude streaming and tool decisions, interrupts, and resumes the native
         models: [{ value: "default", displayName: "Default", resolvedModel: "claude-opus-5" }],
       }),
       supportedModels: async () => [
+        {
+          value: "claude-fable-5-1[1m]",
+          displayName: "Fable",
+          resolvedModel: "claude-fable-5-1",
+        },
         { value: "sonnet", displayName: "Sonnet", resolvedModel: "claude-sonnet-5" },
       ],
       getContextUsage: async () => ({ model: "claude-sonnet-5" }),
@@ -100,7 +105,15 @@ it("maps Claude streaming and tool decisions, interrupts, and resumes the native
   const session = object(await provider.request("thread/start"));
   expect(session["model"]).toBe("claude-sonnet-5");
   expect(await provider.request("model/list")).toMatchObject({
-    data: [{ model: "sonnet", resolvedModel: "claude-sonnet-5" }],
+    data: [
+      { model: "claude-fable-5-1[1m]", resolvedModel: "claude-fable-5-1" },
+      {
+        model: "claude-fable-5",
+        displayName: "Fable 5",
+        resolvedModel: "claude-fable-5",
+      },
+      { model: "sonnet", resolvedModel: "claude-sonnet-5" },
+    ],
   });
   await provider.request("turn/start", turn);
   expect(options!.permissionMode).toBe("default");

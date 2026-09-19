@@ -31,6 +31,34 @@ import {
   type InputHandler,
 } from "./contract.ts";
 
+const fable5: ModelInfo = {
+  value: "claude-fable-5",
+  resolvedModel: "claude-fable-5",
+  displayName: "Fable 5",
+  description: "Demanding reasoning and long-horizon agentic work",
+  supportsEffort: true,
+  supportedEffortLevels: ["low", "medium", "high", "xhigh", "max"],
+  supportsAdaptiveThinking: true,
+};
+const canonicalClaudeModel = (value: string | undefined) => value?.replace(/\[1m\]$/, "");
+/** Claude Code advertises a curated picker, which can omit valid explicit model IDs. */
+function completeClaudeModels(models: ModelInfo[]): ModelInfo[] {
+  if (
+    models.some(
+      (model) =>
+        canonicalClaudeModel(model.value) === fable5.value ||
+        canonicalClaudeModel(model.resolvedModel) === fable5.value,
+    )
+  )
+    return models;
+  const fable51 = models.findIndex((model) =>
+    canonicalClaudeModel(model.resolvedModel ?? model.value)?.startsWith("claude-fable-5-1"),
+  );
+  return fable51 < 0
+    ? [...models, fable5]
+    : [...models.slice(0, fable51 + 1), fable5, ...models.slice(fable51 + 1)];
+}
+
 export class ClaudeProvider extends EventProvider {
   private session: Query | undefined;
   private pending: SDKUserMessage[] = [];
@@ -241,7 +269,7 @@ export class ClaudeProvider extends EventProvider {
       }
     })();
     const initial = await session.initializationResult();
-    this.models = initial.models ?? [];
+    this.models = completeClaudeModels(initial.models ?? []);
     this.currentModel = string(object(initial)["model"]);
     // Modern initialize responses contain models but no selected model. Read the CLI's
     // effective configuration without sending a prompt or guessing from its recommended alias.
@@ -358,7 +386,7 @@ export class ClaudeProvider extends EventProvider {
     }
     if (method === "session/controls") return this.controls;
     if (method === "model/list") {
-      this.models = await session.supportedModels();
+      this.models = completeClaudeModels(await session.supportedModels());
       if (this.models.some((m) => m.supportsAutoMode))
         this.controls.modes = [
           ...this.controls.modes.filter((m) => m.id !== "auto"),
@@ -456,7 +484,7 @@ export class ClaudeProvider extends EventProvider {
       if (item["type"] === "localImage") {
         const model = this.models.find((m) => m.value === this.currentModel);
         if (
-          !/^(?:claude-)?(?:opus|sonnet|haiku)(?:-|$)/.test(
+          !/^(?:claude-)?(?:opus|sonnet|haiku|fable|mythos)(?:-|$)/.test(
             model?.resolvedModel ?? this.currentModel,
           )
         ) {
