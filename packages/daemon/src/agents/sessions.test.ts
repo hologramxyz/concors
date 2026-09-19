@@ -923,7 +923,7 @@ it("keeps saved history visible and retries a failed native recovery", async () 
   expect(providers.at(-1)?.requests.some((r) => r.method === "thread/resume")).toBe(true);
 });
 it.each(["sign-in", "restart"])(
-  "recovers an empty Codex thread after %s and sends only the new prompt",
+  "replaces an empty provider thread after %s and sends only the new prompt",
   async (reason) => {
     const { a, b, id } = await setup("missing");
     const oldThread = a.agents[0]!.threadId;
@@ -956,12 +956,13 @@ it.each(["sign-in", "restart"])(
     const count = TestAgentProvider.turns;
     const requestId = randomUUID();
     const op: AgentOperation = { kind: "send", sessionId: id, text: "hello after recovery" };
-    await action(c, op, requestId);
+    const sent = await action(c, op, requestId);
+    if (sent.outcome.status === "error") throw new Error(sent.outcome.message);
     await expect.poll(() => c.agents[0]?.status).toBe("done");
     expect(c.agents[0]!.threadId).not.toBe(oldThread);
     expect(
       providers[1]!.requests.filter((r) => r.method.startsWith("thread/")).map((r) => r.method),
-    ).toEqual(["thread/resume", "thread/start"]);
+    ).toEqual(reason === "sign-in" ? ["thread/start"] : ["thread/resume", "thread/start"]);
     expect(providers[1]!.requests.find((r) => r.method === "turn/start")?.params).toMatchObject({
       threadId: c.agents[0]!.threadId,
       input: [{ type: "text", text: op.text }],
@@ -970,6 +971,36 @@ it.each(["sign-in", "restart"])(
     expect(TestAgentProvider.turns).toBe(count + 1);
   },
 );
+
+it("preserves a signed-in conversation that already has provider history", async () => {
+  const { a, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "first message" });
+  await expect.poll(() => a.agents[0]?.status).toBe("done");
+  const oldThread = a.agents[0]!.threadId;
+  const flow = await action(a, {
+    kind: "account",
+    sessionId: id,
+    action: { type: "start", methodId: "fixture" },
+  });
+  if (flow.outcome.status !== "ok" || !flow.outcome.account?.challenge)
+    throw new Error("Missing challenge");
+  await action(a, {
+    kind: "account",
+    sessionId: id,
+    action: {
+      type: "complete",
+      flowId: flow.outcome.account.challenge.flowId,
+      value: "test-credential",
+    },
+  });
+  expect(a.agents[0]!.threadId).toBe(oldThread);
+  expect(providers[0]!.closed).toBe(true);
+  await action(a, { kind: "send", sessionId: id, text: "second message" });
+  await expect.poll(() => a.agents[0]?.status).toBe("done");
+  expect(
+    providers[1]!.requests.filter((r) => r.method.startsWith("thread/")).map((r) => r.method),
+  ).toEqual(["thread/resume"]);
+});
 
 it("does not replace a missing Codex thread that has provider history", async () => {
   const { a, b, id } = await setup();

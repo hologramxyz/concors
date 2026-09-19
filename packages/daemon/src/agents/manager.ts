@@ -113,17 +113,27 @@ export class AgentManager {
     this.accounts = new AgentAccounts(accountFactory ?? accountBackendFactory(registry), (info) => {
       this.catalogs.clear();
       this.catalogGeneration++;
-      // Idle runtimes reload the provider's freshly saved credentials on the next send.
-      for (const [id, runtime] of this.#runtimes) {
-        const current = this.#store.agent(id);
+      // An empty conversation created before authentication may never have been persisted by
+      // the provider. Start it afresh with the new credentials instead of resuming a phantom ID.
+      // Conversations with provider history and explicitly imported native sessions are durable.
+      for (const current of this.#store.agents()) {
         if (
           current.directory !== info.directory ||
           current.provider !== info.provider ||
           ["starting", "working", "needs_input"].includes(current.status)
         )
           continue;
+        if (
+          current.threadId &&
+          !current.nativeImport &&
+          !this.#store.hasAgentProviderHistory(current.id)
+        )
+          this.update(current.id, { threadId: null, updatedAt: current.updatedAt });
+        // Idle runtimes reload the provider's freshly saved credentials on the next send.
+        const runtime = this.#runtimes.get(current.id);
+        if (!runtime) continue;
         runtime.closed = true;
-        this.#runtimes.delete(id);
+        this.#runtimes.delete(current.id);
         void runtime.provider.close().catch(() => undefined);
       }
     });
@@ -873,7 +883,7 @@ export class AgentManager {
             .catch((error) => this.fail(info.id, error));
         return this.result(request, reserved.id);
       }
-      const info = this.#store.agent(op.sessionId);
+      let info = this.#store.agent(op.sessionId);
       if (this.mutations.has(info.id))
         throw new Error("This session is being changed. Try again when it finishes.");
       if (op.kind === "steer") {
@@ -1060,6 +1070,15 @@ export class AgentManager {
       if (op.kind === "send") {
         if (["starting", "working", "needs_input"].includes(info.status))
           throw new Error("This agent already has an active turn");
+        if (!info.threadId) {
+          try {
+            await this.provider(info.id);
+          } catch (error) {
+            this.fail(info.id, error);
+            throw error;
+          }
+          info = this.#store.agent(info.id);
+        }
         if (!info.threadId)
           throw new Error(
             "This conversation could not be started. Create a new chat pane after fixing the connection.",
