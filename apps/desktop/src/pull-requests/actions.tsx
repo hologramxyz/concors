@@ -22,15 +22,20 @@ const methodDescription = (method: MergeMethod, base: string) =>
 
 /**
  * Confirms a merge and its method. The merge carries the head shown here, so commits pushed
- * after opening the dialog make GitHub refuse rather than merge unseen work.
+ * after opening the dialog make GitHub refuse rather than merge unseen work. Opened from a list
+ * row, it waits for the pull request's details before offering the merge.
  */
 export function MergeDialog({
+  number,
   detail,
+  loadError = null,
   open,
   onOpenChange,
   onMerge,
 }: {
-  detail: PullRequestDetail;
+  number: number;
+  detail: PullRequestDetail | null;
+  loadError?: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onMerge: (method: MergeMethod, expectedHeadSha: string) => Promise<void>;
@@ -38,8 +43,9 @@ export function MergeDialog({
   const [method, setMethod] = useState<MergeMethod | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const chosen = method ?? detail.defaultMergeMethod ?? detail.mergeMethods[0] ?? "merge";
-  const readiness = mergeReadiness(detail);
+  const chosen = method ?? detail?.defaultMergeMethod ?? detail?.mergeMethods[0] ?? "merge";
+  const readiness = detail ? mergeReadiness(detail) : null;
+  const closed = detail && detail.state !== "open";
   return (
     <Dialog
       open={open}
@@ -51,39 +57,56 @@ export function MergeDialog({
     >
       <DialogContent showCloseButton={!pending}>
         <DialogHeader>
-          <DialogTitle>Merge pull request #{detail.number}?</DialogTitle>
+          <DialogTitle>Merge pull request #{number}?</DialogTitle>
           <DialogDescription>
-            {detail.repository}: {detail.headBranch} into {detail.baseBranch}.
+            {detail
+              ? `${detail.title} · ${detail.headBranch} into ${detail.baseBranch}`
+              : "Checking the pull request…"}
           </DialogDescription>
         </DialogHeader>
-        <div role="radiogroup" aria-label="Merge method" className="space-y-1.5">
-          {detail.mergeMethods.map((option) => (
-            <label
-              key={option}
-              className={cn(
-                "flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2.5 text-ui",
-                chosen === option ? "border-foreground/30 bg-muted/60" : "hover:bg-muted/40",
-              )}
-            >
-              <input
-                type="radio"
-                name="merge-method"
-                className="mt-1 accent-foreground"
-                checked={chosen === option}
-                disabled={pending}
-                onChange={() => setMethod(option)}
-              />
-              <span>
-                <span className="block font-medium">{mergeMethodLabel[option]}</span>
-                <span className="block text-muted-foreground">
-                  {methodDescription(option, detail.baseBranch)}
+        {!detail ? (
+          <p role={loadError ? "alert" : "status"} className="text-ui text-muted-foreground">
+            {loadError ?? "Loading merge options…"}
+          </p>
+        ) : closed ? (
+          <p role="status" className="text-ui text-muted-foreground">
+            This pull request is already {detail.state}.
+          </p>
+        ) : (
+          <div role="radiogroup" aria-label="Merge method" className="space-y-1.5">
+            {detail.mergeMethods.map((option) => (
+              <label
+                key={option}
+                className={cn(
+                  "flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2.5 text-ui",
+                  chosen === option ? "border-foreground/30 bg-muted/60" : "hover:bg-muted/40",
+                )}
+              >
+                <input
+                  type="radio"
+                  name="merge-method"
+                  className="mt-1 accent-foreground"
+                  checked={chosen === option}
+                  disabled={pending}
+                  onChange={() => setMethod(option)}
+                />
+                <span>
+                  <span className="block font-medium">{mergeMethodLabel[option]}</span>
+                  <span className="block text-muted-foreground">
+                    {methodDescription(option, detail.baseBranch)}
+                  </span>
                 </span>
-              </span>
-            </label>
-          ))}
-        </div>
-        {readiness.tone === "warning" && (
-          <p className="text-ui text-muted-foreground">
+              </label>
+            ))}
+          </div>
+        )}
+        {detail && !closed && readiness && readiness.tone !== "ready" && (
+          <p
+            className={cn(
+              "text-ui",
+              readiness.tone === "blocked" ? "text-destructive" : "text-muted-foreground",
+            )}
+          >
             {readiness.title}. {readiness.description}
           </p>
         )}
@@ -97,8 +120,9 @@ export function MergeDialog({
             Cancel
           </Button>
           <Button
-            disabled={pending || !readiness.allowed}
+            disabled={pending || !detail || !!closed || !readiness?.allowed}
             onClick={() => {
+              if (!detail) return;
               setPending(true);
               setError(null);
               onMerge(chosen, detail.headSha)
@@ -119,13 +143,13 @@ export function MergeDialog({
 
 /** Confirms closing, optionally posting a comment first, like GitHub's Close with comment. */
 export function CloseDialog({
-  detail,
+  number,
   open,
   initialComment,
   onOpenChange,
   onClose,
 }: {
-  detail: PullRequestDetail;
+  number: number;
   open: boolean;
   initialComment: string;
   onOpenChange: (open: boolean) => void;
@@ -145,7 +169,7 @@ export function CloseDialog({
     >
       <DialogContent showCloseButton={!pending}>
         <DialogHeader>
-          <DialogTitle>Close pull request #{detail.number}?</DialogTitle>
+          <DialogTitle>Close pull request #{number}?</DialogTitle>
           <DialogDescription>
             It is closed without merging. It stays on GitHub and can be reopened there.
           </DialogDescription>

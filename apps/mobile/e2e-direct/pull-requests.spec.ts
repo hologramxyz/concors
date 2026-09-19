@@ -57,6 +57,13 @@ test("mobile shows workspace pull request counts and opens a workspace's pull re
       expect(await main.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
     }
     await page.screenshot({ path: test.info().outputPath("pull-requests-mobile-page.png") });
+    // Merge and its menu read as one control.
+    const [mergeBox, menuBox] = await Promise.all([
+      ui.getByRole("button", { name: "Merge #42" }).boundingBox(),
+      ui.getByRole("button", { name: "More actions for #42" }).boundingBox(),
+    ]);
+    expect(mergeBox?.height).toBe(menuBox?.height);
+    expect(mergeBox?.y).toBe(menuBox?.y);
     await ui.getByRole("button", { name: /^Show pull requests in workspaces/ }).click();
     const view = ui.getByRole("article", { name: "Pull request #42" });
     await expect(view.getByRole("region", { name: "Merge status" })).toContainText(

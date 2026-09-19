@@ -26,6 +26,7 @@ const node = (number: number, overrides: Record<string, unknown> = {}) => ({
 const repository = (nodes: unknown[], totalCount = nodes.length) => ({
   nameWithOwner: "concors-dev/concors",
   url: "https://github.com/concors-dev/concors",
+  viewerPermission: "WRITE",
   pullRequests: { totalCount, nodes },
 });
 
@@ -63,6 +64,7 @@ it("maps pull requests, reviews and checks, keeping the exact open count", () =>
       url: "https://github.com/concors-dev/concors",
       openCount: 40,
       error: null,
+      permission: "write",
       pullRequests: [
         {
           number: 2,
@@ -76,6 +78,7 @@ it("maps pull requests, reviews and checks, keeping the exact open count", () =>
           updatedAt: "2026-09-18T11:00:00Z",
           review: "approved",
           checks: "failing",
+          state: "open",
         },
         expect.objectContaining({
           number: 1,
@@ -87,6 +90,19 @@ it("maps pull requests, reviews and checks, keeping the exact open count", () =>
         }),
       ],
     },
+  ]);
+});
+
+it("lists merged or closed pull requests when asked, with their state", () => {
+  expect(pullRequestsQuery([concors]).query).toContain("states: OPEN");
+  expect(pullRequestsQuery([concors], "merged").query).toContain("states: MERGED");
+  expect(pullRequestsQuery([concors], "closed").query).toContain("states: CLOSED");
+  const listing = readPullRequests([concors], {
+    data: { r0: repository([node(5, { state: "MERGED" }), node(4, { state: "CLOSED" })]) },
+  });
+  expect(listing.repositories[0]?.pullRequests.map((item) => item.state)).toEqual([
+    "merged",
+    "closed",
   ]);
 });
 

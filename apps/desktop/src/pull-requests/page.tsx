@@ -1,9 +1,12 @@
 import { useContext, useState, type ReactNode } from "react";
 import {
+  ChevronDown,
   CircleCheck,
   CircleDot,
   CircleX,
+  GitMerge,
   GitPullRequest,
+  GitPullRequestClosed,
   GitPullRequestDraft,
   RefreshCw,
   X,
@@ -11,11 +14,20 @@ import {
 import { cn } from "cn";
 import {
   PULL_REQUESTS_CAPABILITY,
+  PULL_REQUEST_ACTIONS_CAPABILITY,
+  PULL_REQUEST_STATES_CAPABILITY,
   type PullRequest,
   type PullRequestRepository,
+  type PullRequestState,
   type WorkspaceSnapshot,
 } from "@concors/protocol";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { ProjectImage } from "@/workspace/project-image";
 import { projectIconKey } from "@/workspace/project-icons";
@@ -28,16 +40,39 @@ import {
   foldersLabel,
   repositoryLabel,
   reviewLabel,
+  rowActions,
 } from "./labels";
-import { pullRequestKey, totalOpenCount, workspaceOpenCount } from "./store";
+import {
+  invalidatePullRequests,
+  pullRequestKey,
+  totalOpenCount,
+  workspaceOpenCount,
+} from "./store";
+import { QuickAction } from "./quick-action";
 import { usePullRequests } from "./use-pull-requests";
-import type { PullRequestsView } from "./view";
+import type { PullRequestTarget, PullRequestsView } from "./view";
+
+const states = [
+  {
+    state: "open",
+    label: "Open",
+    Icon: GitPullRequest,
+    tone: "text-emerald-600 dark:text-emerald-500",
+  },
+  {
+    state: "merged",
+    label: "Merged",
+    Icon: GitMerge,
+    tone: "text-violet-600 dark:text-violet-400",
+  },
+  { state: "closed", label: "Closed", Icon: GitPullRequestClosed, tone: "text-destructive" },
+] as const;
 
 /**
- * Open pull requests in the GitHub repositories of every workspace, or of one workspace or
- * repository, grouped by workspace then repository. Opening one shows it here to merge, close or
- * comment on. The machine's own GitHub sign-in is used, so a signed-out machine explains how to
- * sign in instead of listing anything.
+ * Pull requests in the GitHub repositories of every workspace, or of one workspace or repository,
+ * grouped by workspace then repository: open ones by default, merged or closed on request. Open
+ * rows can be merged or closed in place; opening one shows its details. The machine's own GitHub
+ * sign-in is used, so a signed-out machine explains how to sign in instead of listing anything.
  */
 export function PullRequestsPage({
   workspace,
@@ -51,12 +86,27 @@ export function PullRequestsPage({
   onNavigate: (view: PullRequestsView) => void;
 }) {
   const connection = useContext(TerminalConnectionContext);
-  const state = usePullRequests(workspace);
+  const open = usePullRequests(workspace);
+  const state = usePullRequests(workspace, view.state);
   const icons = useProjectIcons(workspace);
   const [mine, setMine] = useState(false);
+  const [quick, setQuick] = useState<{
+    target: PullRequestTarget;
+    action: "merge" | "close";
+  } | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const capabilities =
+    connection?.state.status === "ready" ? connection.state.daemon.capabilities : undefined;
+  /** A daemon that only lists pull requests cannot merge or close them. */
+  const actions = !!capabilities?.includes(PULL_REQUEST_ACTIONS_CAPABILITY);
   const supported =
-    connection?.state.status === "ready" &&
-    !!connection.state.daemon.capabilities?.includes(PULL_REQUESTS_CAPABILITY);
+    !!capabilities?.includes(PULL_REQUESTS_CAPABILITY) &&
+    (view.state === "open" || capabilities.includes(PULL_REQUEST_STATES_CAPABILITY));
+  const changed = () => {
+    if (connection) invalidatePullRequests(connection);
+    open.refresh();
+    if (view.state !== "open") state.refresh();
+  };
   const listings = (workspace?.projects ?? []).flatMap((project) => {
     const listing = state.workspaces.get(pullRequestKey(workspace?.epoch ?? "", project));
     return listing?.repositories.length ? [{ project, listing }] : [];
@@ -74,7 +124,7 @@ export function PullRequestsPage({
     }),
   );
   const filter = (projectId: string | null, repository: string | null = null) =>
-    onNavigate({ projectId, repository, pullRequest: null });
+    onNavigate({ ...view, projectId, repository, pullRequest: null });
   if (view.pullRequest)
     return (
       <PullRequestView
@@ -82,7 +132,7 @@ export function PullRequestsPage({
         workspace={workspace}
         target={view.pullRequest}
         onBack={() => onNavigate({ ...view, pullRequest: null })}
-        onChanged={state.refresh}
+        onChanged={changed}
       />
     );
   const total = totalOpenCount(listings.map((item) => item.listing));
@@ -97,7 +147,7 @@ export function PullRequestsPage({
         <div className="min-w-0">
           <h2 className="text-xl font-semibold">Pull requests</h2>
           <p className="mt-1 text-ui text-muted-foreground">
-            Open pull requests in your workspaces&rsquo; GitHub repositories.
+            Pull requests in your workspaces&rsquo; GitHub repositories.
           </p>
         </div>
         {listed && (
@@ -107,11 +157,51 @@ export function PullRequestsPage({
           </Button>
         )}
       </div>
+      {connected && capabilities?.includes(PULL_REQUESTS_CAPABILITY) && (
+        <div
+          role="tablist"
+          aria-label="Pull request state"
+          className="mt-5 inline-flex self-start rounded-lg border bg-muted/40 p-0.5"
+        >
+          {states.map(({ state: option, label, Icon, tone }) => {
+            const count =
+              option === "open"
+                ? open.status === "listed"
+                  ? totalOpenCount(open.workspaces.values())
+                  : null
+                : option === view.state && listed
+                  ? total
+                  : null;
+            return (
+              <button
+                key={option}
+                type="button"
+                role="tab"
+                aria-selected={view.state === option}
+                onClick={() => {
+                  setNotice(null);
+                  onNavigate({ ...view, state: option, pullRequest: null });
+                }}
+                className={cn(
+                  "flex h-7 items-center gap-1.5 rounded-md px-2.5 text-ui",
+                  view.state === option
+                    ? "bg-background text-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Icon className={cn("size-3.5", tone)} aria-hidden="true" />
+                {label}
+                {count !== null && <span className="text-xs tabular-nums opacity-70">{count}</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
       {listed && (listings.length > 0 || filtered) && (
         <div
           role="toolbar"
           aria-label="Filter pull requests"
-          className="-mx-4 mt-5 flex items-center gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0"
+          className="-mx-4 mt-3 flex items-center gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0"
         >
           <FilterChip pressed={!filtered} onClick={() => filter(null)} count={total}>
             All workspaces
@@ -162,6 +252,11 @@ export function PullRequestsPage({
           )}
         </div>
       )}
+      {notice && (
+        <p role="status" className="mt-4 text-ui text-muted-foreground">
+          {notice}
+        </p>
+      )}
       {listed && state.message && (
         <p role="status" className="mt-4 text-ui text-muted-foreground">
           Showing the last loaded pull requests. {state.message}
@@ -170,7 +265,11 @@ export function PullRequestsPage({
       {!connected ? (
         <Status>Connect to a machine to see its pull requests.</Status>
       ) : !supported ? (
-        <Status>Update the daemon on this machine to see pull requests.</Status>
+        <Status>
+          {view.state === "open"
+            ? "Update the daemon on this machine to see pull requests."
+            : `Update the daemon on this machine to see ${view.state} pull requests.`}
+        </Status>
       ) : state.status === "signed-out" ? (
         <Empty title="Sign in to GitHub on this machine">
           {state.message}
@@ -221,6 +320,8 @@ export function PullRequestsPage({
                     <Repository
                       key={item.name}
                       repository={item}
+                      state={view.state}
+                      actions={actions}
                       pullRequests={visible(item)}
                       mine={mine}
                       onOpen={(number) =>
@@ -229,6 +330,13 @@ export function PullRequestsPage({
                           pullRequest: { projectId: project.id, repository: item.name, number },
                         })
                       }
+                      onAction={(number, action) => {
+                        setNotice(null);
+                        setQuick({
+                          target: { projectId: project.id, repository: item.name, number },
+                          action,
+                        });
+                      }}
                     />
                   ))}
                 </div>
@@ -237,20 +345,40 @@ export function PullRequestsPage({
           })}
         </div>
       )}
+      {quick && (
+        <QuickAction
+          key={JSON.stringify(quick)}
+          workspace={workspace}
+          target={quick.target}
+          action={quick.action}
+          onFinish={(result) => {
+            setQuick(null);
+            if (!result) return;
+            setNotice(result);
+            changed();
+          }}
+        />
+      )}
     </div>
   );
 }
 
 function Repository({
   repository,
+  state,
+  actions,
   pullRequests,
   mine,
   onOpen,
+  onAction,
 }: {
   repository: PullRequestRepository;
+  state: PullRequestState;
+  actions: boolean;
   pullRequests: PullRequest[];
   mine: boolean;
   onOpen: (number: number) => void;
+  onAction: (number: number, action: "merge" | "close") => void;
 }) {
   const folders = foldersLabel(repository);
   return (
@@ -273,7 +401,7 @@ function Repository({
             ? "Unavailable"
             : mine && repository.openCount && !pullRequests.length
               ? "None opened by you"
-              : `${repository.openCount} open`}
+              : `${repository.openCount} ${state}`}
         </span>
       </header>
       {/* A repository with nothing to list stays a one-line header. */}
@@ -286,7 +414,10 @@ function Repository({
               <PullRequestRow
                 key={pullRequest.number}
                 pullRequest={pullRequest}
+                permission={repository.permission}
+                actions={actions}
                 onOpen={() => onOpen(pullRequest.number)}
+                onAction={(action) => onAction(pullRequest.number, action)}
               />
             ))}
           </ul>
@@ -295,30 +426,45 @@ function Repository({
       {!repository.error && repository.openCount > repository.pullRequests.length && (
         <p className="border-t px-4 py-2 text-xs text-muted-foreground">
           Showing the {repository.pullRequests.length} most recently updated of{" "}
-          {repository.openCount} open.
+          {repository.openCount} {state}.
         </p>
       )}
     </article>
   );
 }
 
-function PullRequestRow({ pullRequest, onOpen }: { pullRequest: PullRequest; onOpen: () => void }) {
-  const Icon = pullRequest.draft ? GitPullRequestDraft : GitPullRequest;
+const rowState = {
+  open: [GitPullRequest, "text-emerald-600 dark:text-emerald-500"],
+  draft: [GitPullRequestDraft, "text-muted-foreground"],
+  merged: [GitMerge, "text-violet-600 dark:text-violet-400"],
+  closed: [GitPullRequestClosed, "text-destructive"],
+} as const;
+
+function PullRequestRow({
+  pullRequest,
+  permission,
+  actions,
+  onOpen,
+  onAction,
+}: {
+  pullRequest: PullRequest;
+  permission: PullRequestRepository["permission"];
+  actions: boolean;
+  onOpen: () => void;
+  onAction: (action: "merge" | "close") => void;
+}) {
+  const state = pullRequest.state ?? "open";
+  const [Icon, tone] = rowState[state === "open" && pullRequest.draft ? "draft" : state];
   return (
-    <li>
+    <li className="flex items-start gap-2 pr-3 hover:bg-muted/50 has-[>button:focus-visible]:bg-muted/50">
       <button
         type="button"
         onClick={onOpen}
         data-pull-request={pullRequest.number}
-        className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none"
+        data-pull-request-state={state}
+        className="flex min-w-0 flex-1 items-start gap-3 py-3 pl-4 text-left focus-visible:outline-none"
       >
-        <Icon
-          className={cn(
-            "mt-0.5 size-4 shrink-0",
-            pullRequest.draft ? "text-muted-foreground" : "text-emerald-600 dark:text-emerald-500",
-          )}
-          aria-hidden="true"
-        />
+        <Icon className={cn("mt-0.5 size-4 shrink-0", tone)} aria-hidden="true" />
         <div className="min-w-0 flex-1">
           <p className="font-medium break-words">{pullRequest.title}</p>
           <p className="mt-0.5 truncate text-xs text-muted-foreground">
@@ -328,10 +474,10 @@ function PullRequestRow({ pullRequest, onOpen }: { pullRequest: PullRequest; onO
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 text-xs text-muted-foreground">
-          {pullRequest.draft && (
+          {pullRequest.draft && state === "open" && (
             <span className="rounded-md border px-1.5 py-0.5 max-sm:hidden">Draft</span>
           )}
-          {pullRequest.review && (
+          {pullRequest.review && state === "open" && (
             <span
               className={cn(
                 "max-sm:hidden",
@@ -345,7 +491,89 @@ function PullRequestRow({ pullRequest, onOpen }: { pullRequest: PullRequest; onO
           {pullRequest.checks && <Checks state={pullRequest.checks} />}
         </div>
       </button>
+      {state === "open" && (
+        <RowActions
+          pullRequest={pullRequest}
+          offered={rowActions({
+            supported: actions,
+            permission,
+            draft: pullRequest.draft,
+            mine: pullRequest.mine,
+          })}
+          onOpen={onOpen}
+          onAction={onAction}
+        />
+      )}
     </li>
+  );
+}
+
+/**
+ * Merge, with Close and details behind its menu, without opening the pull request. Only what the
+ * machine's GitHub account may do is offered; an older daemon that does not report access leaves
+ * the decision to GitHub.
+ */
+function RowActions({
+  pullRequest,
+  offered,
+  onOpen,
+  onAction,
+}: {
+  pullRequest: PullRequest;
+  offered: ReturnType<typeof rowActions>;
+  onOpen: () => void;
+  onAction: (action: "merge" | "close") => void;
+}) {
+  if (!offered) return null;
+  if (!offered.merge)
+    return (
+      <Button
+        variant="outline"
+        className="mt-2.5 shrink-0"
+        aria-label={`Close #${pullRequest.number}`}
+        onClick={() => onAction("close")}
+      >
+        <GitPullRequestClosed />
+        <span className="max-sm:sr-only">Close</span>
+      </Button>
+    );
+  return (
+    // Both halves share one height, including the taller touch targets on phones.
+    <div className="mt-2.5 flex shrink-0 items-stretch">
+      <Button
+        variant="outline"
+        className="rounded-r-none"
+        disabled={offered.merge === "draft"}
+        title={offered.merge === "draft" ? "Drafts can't be merged" : undefined}
+        aria-label={`Merge #${pullRequest.number}`}
+        onClick={() => onAction("merge")}
+      >
+        <GitMerge />
+        <span className="max-sm:sr-only">Merge</span>
+      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            size="icon"
+            className="-ml-px h-auto w-7 rounded-l-none"
+            aria-label={`More actions for #${pullRequest.number}`}
+          >
+            <ChevronDown />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-52">
+          <DropdownMenuItem onSelect={onOpen}>
+            <GitPullRequest /> View details
+          </DropdownMenuItem>
+          {offered.close && (
+            <DropdownMenuItem variant="destructive" onSelect={() => onAction("close")}>
+              <GitPullRequestClosed /> Close pull request…
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 }
 

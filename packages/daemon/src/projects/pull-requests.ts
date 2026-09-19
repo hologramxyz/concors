@@ -1,6 +1,7 @@
 import { realpath } from "node:fs/promises";
 import { join } from "node:path";
 import type {
+  PullRequestState,
   MergeMethod,
   PullRequestOperation,
   PullRequestRepository,
@@ -63,6 +64,7 @@ const REJECTED =
 type Fetcher = (
   token: string,
   repositories: readonly GitHubRepository[],
+  state: PullRequestState,
 ) => Promise<PullRequestListing>;
 /** One pull request on GitHub: read it, merge, close or comment by node ID. */
 export interface PullRequestApi {
@@ -107,7 +109,8 @@ export class WorkspacePullRequests {
   constructor(
     workspace: WorkspaceStore,
     credentials = new GitHubCredentials(),
-    fetcher: Fetcher = fetchPullRequests,
+    fetcher: Fetcher = (token, repositories, state) =>
+      fetchPullRequests(token, repositories, fetch, state),
     api: PullRequestApi = gitHubPullRequests,
   ) {
     this.#workspace = workspace;
@@ -130,7 +133,12 @@ export class WorkspacePullRequests {
       if (!token) return reply({ status: "signed-out", message: SIGNED_OUT });
       return reply(
         operation.kind === "list"
-          ? await this.#list(operation.projects, operation.refresh ?? false, token)
+          ? await this.#list(
+              operation.projects,
+              operation.refresh ?? false,
+              token,
+              operation.state ?? "open",
+            )
           : await this.#act(operation, token),
       );
     } catch (error) {
@@ -178,15 +186,26 @@ export class WorkspacePullRequests {
       action = "commented";
     }
     // Counts change at once rather than after the minute-long cache expires.
-    this.#cache.delete(repositoryKey(repository));
-    const after = await this.#api.detail(token, repository, operation.number);
-    return { status: "updated", action, detail: after.detail };
+    for (const state of ["open", "merged", "closed"])
+      this.#cache.delete(`${state}:${repositoryKey(repository)}`);
+    // The change already happened on GitHub; a failed re-read must not report it as failed, or a
+    // retry would post a closing comment twice. Fall back to what the change implies.
+    const after = await this.#api
+      .detail(token, repository, operation.number)
+      .then((record) => record.detail)
+      .catch(() =>
+        action === "commented"
+          ? detail
+          : ({ ...detail, state: action === "merged" ? "merged" : "closed" } as const),
+      );
+    return { status: "updated", action, detail: after };
   }
 
   async #list(
     projects: { projectId: string; directory?: string | undefined }[],
     refresh: boolean,
     token: string,
+    state: PullRequestState,
   ): Promise<Outcome> {
     const workspaces = (
       await Promise.all(
@@ -210,7 +229,7 @@ export class WorkspacePullRequests {
     const unique = new Map<string, GitHubRepository>();
     for (const { checkouts } of workspaces)
       for (const { repository } of checkouts) unique.set(repositoryKey(repository), repository);
-    const results = await this.#load([...unique].slice(0, MAX_REPOSITORIES), token, refresh);
+    const results = await this.#load([...unique].slice(0, MAX_REPOSITORIES), token, refresh, state);
     let viewer: string | null = null;
     const listings: WorkspaceListing[] = workspaces.map(({ projectId, directory, checkouts }) => {
       const repositories = new Map<string, PullRequestRepository>();
@@ -230,14 +249,24 @@ export class WorkspacePullRequests {
           openCount: result?.openCount ?? 0,
           pullRequests: result?.pullRequests ?? [],
           error: result ? result.error : "Not loaded: too many repositories in open workspaces.",
+          permission: result?.permission ?? null,
         });
       }
       return { projectId, directory, repositories: [...repositories.values()] };
     });
-    return { status: "listed", viewer, fetchedAt: Date.now(), workspaces: listings };
+    return { status: "listed", viewer, fetchedAt: Date.now(), state, workspaces: listings };
   }
 
-  async #load(repositories: [string, GitHubRepository][], token: string, refresh: boolean) {
+  /** Cached per state and repository, so each listing of a repository costs GitHub one lookup. */
+  async #load(
+    listed: [string, GitHubRepository][],
+    token: string,
+    refresh: boolean,
+    state: PullRequestState,
+  ) {
+    const repositories = listed.map(
+      ([key, repository]) => [`${state}:${key}`, repository] as [string, GitHubRepository],
+    );
     const now = Date.now();
     for (const [key, entry] of this.#cache)
       if (now - entry.fetchedAt > CACHE_TTL_MS) this.#cache.delete(key);
@@ -253,6 +282,7 @@ export class WorkspacePullRequests {
       const batch = this.#fetch(
         token,
         stale.map(([, repository]) => repository),
+        state,
       );
       stale.forEach(([key], index) => {
         const entry = {
@@ -272,7 +302,11 @@ export class WorkspacePullRequests {
       });
     }
     return new Map(
-      await Promise.all([...results].map(async ([key, result]) => [key, await result] as const)),
+      await Promise.all(
+        [...results].map(
+          async ([key, result]) => [key.slice(state.length + 1), await result] as const,
+        ),
+      ),
     );
   }
 }

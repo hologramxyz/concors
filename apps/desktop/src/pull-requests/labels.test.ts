@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { PullRequestDetail } from "@concors/protocol";
-import { ageLabel, byOpenCount, foldersLabel, mergeReadiness, repositoryLabel } from "./labels";
+import {
+  ageLabel,
+  byOpenCount,
+  foldersLabel,
+  mergeReadiness,
+  repositoryLabel,
+  rowActions,
+} from "./labels";
 
 it("describes pull request ages compactly", () => {
   const now = Date.parse("2026-09-18T12:00:00Z");
@@ -113,4 +120,18 @@ describe("mergeReadiness", () => {
     ).toEqual(["warning", "Some checks are failing", true]);
     expect(summary({})).toEqual(["ready", "Ready to merge", true]);
   });
+});
+
+it("offers row actions only where the daemon and the GitHub account allow them", () => {
+  const row = (overrides: Partial<Parameters<typeof rowActions>[0]>) =>
+    rowActions({ supported: true, permission: "write", draft: false, mine: false, ...overrides });
+  // A daemon that only lists pull requests cannot act on them.
+  expect(row({ supported: false })).toBeNull();
+  expect(row({})).toEqual({ merge: "enabled", close: true });
+  expect(row({ draft: true })).toEqual({ merge: "draft", close: true });
+  expect(row({ permission: "triage" })).toEqual({ merge: null, close: true });
+  expect(row({ permission: "read", mine: true })).toEqual({ merge: null, close: true });
+  expect(row({ permission: "read" })).toBeNull();
+  // Older daemons do not report access, so GitHub decides.
+  expect(row({ permission: undefined })).toEqual({ merge: "enabled", close: true });
 });

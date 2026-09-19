@@ -78,6 +78,7 @@ describe("WebSocket handshake", () => {
           "project-icons",
           "workspace-pull-requests",
           "pull-request-actions",
+          "pull-request-states",
           "project-file-create",
           "folder-workspaces",
           "agent-chat",
