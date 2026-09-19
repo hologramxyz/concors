@@ -223,7 +223,7 @@ export class ProjectManager {
         throw new Error(result.result.outcome.message);
       const project = this.#store.snapshot().projects.find((item) => item.id === setup.id);
       if (!project) throw new Error("Created project is unavailable");
-      const terminal = this.#store.execute({
+      const initialTab = this.#store.execute({
         type: "workspace.command",
         commandId: randomUUID(),
         epoch,
@@ -234,11 +234,13 @@ export class ProjectManager {
           tabId: randomUUID(),
           paneId: randomUUID(),
           name: nextWorkspaceTabName(project.tabs),
-          profile: "shell",
+          // A named folder is ready for agent work. One-click workspaces still start with a
+          // shell because their identity follows the first terminal's working directory.
+          profile: setup.directoryMode === "follow" ? "shell" : "chat",
         },
       });
-      if (terminal.result.outcome.status === "rejected")
-        throw new Error(terminal.result.outcome.message);
+      if (initialTab.result.outcome.status === "rejected")
+        throw new Error(initialTab.result.outcome.message);
       this.save({ ...setup, projectId: project.id, status: "done", progress: "Ready" });
     } catch (error) {
       this.save({

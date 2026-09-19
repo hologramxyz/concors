@@ -81,7 +81,7 @@ it("opens and creates real folders, preserving duplicate receipts and existing f
     expect(project.tabs).toHaveLength(1);
     expect(project.tabs[0]).toMatchObject({
       name: "Tab 1",
-      nodes: [{ kind: "pane", profile: "shell", sessionId: null }],
+      nodes: [{ kind: "pane", profile: "chat", sessionId: null }],
     });
   }
   const selectedProject = store.snapshot().projects[1]!;
@@ -259,5 +259,6 @@ it("creates separate one-click workspaces and browses folders on this machine", 
       directoryMode: "follow",
       followPaneId: project.tabs[0]?.root,
       directory: await realpath(root),
+      tabs: [{ nodes: [{ kind: "pane", profile: "shell" }] }],
     });
 });
