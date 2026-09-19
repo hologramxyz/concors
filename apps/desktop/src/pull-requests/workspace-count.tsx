@@ -37,7 +37,10 @@ export function WorkspacePullRequestCount({
       }}
       className="flex h-6 shrink-0 items-center gap-1 rounded px-1.5 text-xs text-muted-foreground tabular-nums hover:text-sidebar-foreground data-[state=open]:text-sidebar-foreground"
     >
-      <GitPullRequest className="size-3.5" aria-hidden="true" />
+      <GitPullRequest
+        className="size-3.5 text-emerald-600 dark:text-emerald-500"
+        aria-hidden="true"
+      />
       {count}
     </button>
   );
