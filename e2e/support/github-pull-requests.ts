@@ -59,13 +59,23 @@ export const fixturePullRequests: Record<string, PullRequest[]> = {
     }),
     pullRequest("hologram/actions", 11, { title: "Close me" }),
   ],
+  "hologram/rows": [
+    pullRequest("hologram/rows", 33, { title: "Draft from a row", draft: true }),
+    pullRequest("hologram/rows", 32, { title: "Close from a row" }),
+    pullRequest("hologram/rows", 31, { title: "Merge from a row", checks: "passing" }),
+    pullRequest("hologram/rows", 30, { title: "Shipped last week" }),
+    pullRequest("hologram/rows", 29, { title: "Abandoned idea" }),
+  ],
 };
 
 const key = (repository: string, number: number) => `${repository}#${number}`;
-const states = new Map<string, PullRequestDetail["state"]>();
+const states = new Map<string, PullRequestDetail["state"]>([
+  ["hologram/rows#30", "merged"],
+  ["hologram/rows#29", "closed"],
+]);
 const conversations = new Map<string, PullRequestTimelineEntry[]>();
-const isOpen = (repository: string, number: number) =>
-  (states.get(key(repository, number)) ?? "open") === "open";
+const stateOf = (repository: string, number: number) =>
+  states.get(key(repository, number)) ?? "open";
 const headSha = (number: number) => String(number).padStart(40, "0");
 
 function detail(repository: string, item: PullRequest): PullRequestDetail {
@@ -118,19 +128,20 @@ const find = (id: string) => {
 
 export const fixtureGitHub: GitHubSource = {
   token: async () => "e2e-token",
-  fetch: async (_token, repositories) => ({
+  fetch: async (_token, repositories, state = "open") => ({
     viewer: "e2e-user",
     repositories: repositories.map(({ owner, name }) => {
       const repository = `${owner}/${name}`;
-      const pullRequests = (fixturePullRequests[repository] ?? []).filter((item) =>
-        isOpen(repository, item.number),
-      );
+      const pullRequests = (fixturePullRequests[repository] ?? [])
+        .filter((item) => stateOf(repository, item.number) === state)
+        .map((item) => ({ ...item, state }));
       return {
         name: repository,
         url: `https://github.com/${repository}`,
         openCount: pullRequests.length,
         pullRequests,
         error: null,
+        permission: "write" as const,
       };
     }),
   }),
