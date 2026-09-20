@@ -73,6 +73,7 @@ export class ClaudeProvider extends EventProvider {
   private models: ModelInfo[] = [];
   private currentModel = "";
   private currentUsed = 0;
+  private readingContext = false;
   private contextLimit: number | null = null;
   private totalTokens: number | null = null;
   private compactCompleted = false;
@@ -319,6 +320,9 @@ export class ClaudeProvider extends EventProvider {
         },
       ],
     });
+    // A fresh session already holds a system prompt and its tools; show that before the first
+    // turn rather than an empty ring.
+    void this.refreshContext();
     if (session.supportedCommands) {
       const commands = await session.supportedCommands();
       this.controls.commands = [
@@ -714,6 +718,7 @@ export class ClaudeProvider extends EventProvider {
           0,
         );
       if (this.currentUsed) this.usage(this.currentUsed, this.contextLimit, this.totalTokens);
+      void this.refreshContext();
       this.finish(
         m["is_error"] === true
           ? array(m["errors"]).map(String).join("\n") || "Claude Code failed"
@@ -746,6 +751,29 @@ export class ClaudeProvider extends EventProvider {
    * Claude reports plan limits through the session's own control channel, so nothing reads the
    * CLI's credentials. API-key sessions report that plan limits do not apply.
    */
+  /**
+   * What Claude Code itself counts as context, which is what `/context` shows. Summing a
+   * message's tokens cannot know the compaction boundary or the window a 1M model actually runs
+   * with, so the streamed sum is only a stand-in between turns.
+   */
+  private async refreshContext() {
+    const session = this.session;
+    if (!session?.getContextUsage || this.readingContext || this.closed) return;
+    this.readingContext = true;
+    try {
+      const context = await session.getContextUsage();
+      if (typeof context.maxTokens === "number" && context.maxTokens > 0)
+        this.contextLimit = context.maxTokens;
+      if (typeof context.totalTokens === "number" && context.totalTokens >= 0)
+        this.currentUsed = context.totalTokens;
+      this.usage(this.currentUsed, this.contextLimit, this.totalTokens);
+    } catch {
+      // An older CLI or a closed session keeps the streamed estimate.
+    } finally {
+      this.readingContext = false;
+    }
+  }
+
   async planUsage(): Promise<AgentPlanUsage> {
     const session = this.session;
     const read = session?.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET;
