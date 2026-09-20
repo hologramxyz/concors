@@ -10,6 +10,7 @@ import {
 import { defaultSettings, parseModels, turnControls } from "./controls.ts";
 import { saveAttachments } from "./attachments.ts";
 import type { AgentAttachment } from "@concors/protocol";
+import { AGENT_USAGE_TTL_MS, unsupportedPlanUsage, type AgentPlanUsage } from "@concors/protocol";
 import { normalizeCommandExecutionCommand } from "./codex/command-display.ts";
 import { randomUUID } from "node:crypto";
 import { stat } from "node:fs/promises";
@@ -77,6 +78,8 @@ export class AgentManager {
   readonly #workspaceChanged: () => void;
   readonly #factory: AgentProviderFactory;
   readonly #runtimes = new Map<string, Runtime>();
+  /** Plan limits belong to an account, so every session of a provider shares one lookup. */
+  readonly #usage = new Map<string, { at: number; usage: Promise<AgentPlanUsage> }>();
   #closed = false;
   private mutations = new Set<string>();
   private draining = new Set<string>();
@@ -250,6 +253,29 @@ export class AgentManager {
       error: (error instanceof Error ? error.message : String(error)).slice(0, 4000),
     });
   }
+  /**
+   * Asks the provider behind a session what is left of its plan. Only a connected session can
+   * answer, since the provider owns the account; starting one just to read usage would launch a
+   * CLI behind someone's back.
+   */
+  private async planUsage(info: AgentInfo): Promise<AgentPlanUsage> {
+    const engine = info.engine ?? info.provider;
+    const provider = this.#runtimes.get(info.id)?.provider;
+    if (!provider) return unsupportedPlanUsage(engine, "Open this agent to see its plan usage.");
+    if (!provider.planUsage)
+      return unsupportedPlanUsage(engine, "This provider does not report plan limits.");
+    const cached = this.#usage.get(engine);
+    if (cached && Date.now() - cached.at < AGENT_USAGE_TTL_MS) return cached.usage;
+    const read = provider.planUsage();
+    const entry = { at: Date.now(), usage: read };
+    this.#usage.set(engine, entry);
+    // A failure is reported to whoever asked and retried by the next request, never cached.
+    read.catch(() => {
+      if (this.#usage.get(engine) === entry) this.#usage.delete(engine);
+    });
+    return read;
+  }
+
   private provider(id: string): Promise<AgentProvider> {
     const existing = this.#runtimes.get(id);
     if (existing) return existing.ready;
@@ -545,6 +571,18 @@ export class AgentManager {
           type: "agent.result",
           requestId: request.requestId,
           outcome: { status: "ok", conversation: this.#store.agentConversation(info.id), account },
+        };
+      }
+      if (op.kind === "usage") {
+        const info = this.#store.agent(op.sessionId);
+        return {
+          type: "agent.result",
+          requestId: request.requestId,
+          outcome: {
+            status: "ok",
+            conversation: { agent: info, items: [], hasMore: false },
+            usage: await this.planUsage(info),
+          },
         };
       }
       if (op.kind === "list-messages") {
