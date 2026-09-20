@@ -27,6 +27,7 @@ export * from "./agents.ts";
 export * from "./native-sessions.ts";
 export * from "./agent-models.ts";
 export * from "./agent-controls.ts";
+export * from "./agent-usage.ts";
 
 export * from "./files.ts";
 
