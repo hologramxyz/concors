@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { unsupportedPlanUsage, type AgentPlanUsage } from "@concors/protocol";
+import { readClaudePlanUsage } from "../usage/claude-usage.ts";
 import { sessionOffset } from "./session-page.ts";
 import { readFile } from "node:fs/promises";
 import {
@@ -740,6 +742,21 @@ export class ClaudeProvider extends EventProvider {
         ]
       : [];
   }
+  /**
+   * Claude reports plan limits through the session's own control channel, so nothing reads the
+   * CLI's credentials. API-key sessions report that plan limits do not apply.
+   */
+  async planUsage(): Promise<AgentPlanUsage> {
+    const session = this.session;
+    const read = session?.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET;
+    if (!session || !read)
+      return unsupportedPlanUsage(
+        "claude",
+        "Update Claude Code on this machine to see plan usage.",
+      );
+    return readClaudePlanUsage(await read.call(session));
+  }
+
   async close() {
     this.closed = true;
     this.generation++;
