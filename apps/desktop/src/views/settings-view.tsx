@@ -1,5 +1,8 @@
 import { ProvidersSettings } from "@/settings/providers-settings";
-import { SubscriptionsSettings } from "@/settings/subscriptions-settings";
+import {
+  SubscriptionsSettings,
+  type SubscriptionsSettingsProps,
+} from "@/settings/subscriptions-settings";
 import { NotificationSettings } from "@/notifications/settings";
 import type { ConnectionState, DaemonEndpoint } from "@concors/daemon-client";
 import type { ReactNode } from "react";
@@ -22,6 +25,7 @@ interface SettingsViewProps {
   readonly onCreatingTerminalProfileChange: (creating: boolean) => void;
   readonly page: SettingsPage;
   readonly machines?: Omit<MachinesViewProps, "auth">;
+  readonly subscriptions?: Omit<SubscriptionsSettingsProps, "auth">;
   readonly endpoint: DaemonEndpoint | null;
   readonly state: ConnectionState;
   readonly apiUrl?: string;
@@ -41,6 +45,7 @@ export function SettingsView({
   onCreatingTerminalProfileChange,
   page,
   machines,
+  subscriptions,
   endpoint,
   state,
   apiUrl,
@@ -65,7 +70,7 @@ export function SettingsView({
       content = <ProvidersSettings />;
       break;
     case "subscriptions":
-      content = <SubscriptionsSettings />;
+      content = <SubscriptionsSettings auth={auth} {...subscriptions} />;
       break;
     case "terminals":
       content = (
@@ -122,5 +127,11 @@ export function SettingsView({
     }
   }
 
-  return <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">{content}</div>;
+  return (
+    <div
+      className={`mx-auto w-full px-4 py-6 sm:px-6 ${page === "subscriptions" ? "max-w-5xl" : "max-w-3xl"}`}
+    >
+      {content}
+    </div>
+  );
 }

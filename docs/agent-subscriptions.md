@@ -51,10 +51,11 @@ subscriptions is instant and local.
 ## Settings → Subscriptions
 
 The desktop settings page (`apps/desktop/src/settings/subscriptions-settings.tsx`, also reachable
-from the mobile settings drawer) groups the built-in sign-in and extra subscriptions per engine,
-shows each one's sign-in state and which is **Active on this machine**, and offers **Add
-subscription** (name it, then sign in immediately), **Use on this machine**, **Connect / Manage
-sign-in**, and a confirmed **Sign out and remove**. Sign-in state
+from the mobile settings drawer) lists the local and cloud machines and keeps the user on the page
+while they switch between them. For the selected machine it groups the built-in sign-in and extra
+subscriptions per engine, shows the active account, and offers add, connect, activate, rename, and
+remove actions. An account displays its signed-in email by default; `accountNickname` stores an
+optional override for both built-in and extra accounts. Sign-in state
 without an open session uses the provider-level `account` operation on `provider.request`
 (`AgentManager.providerAccount`), which reuses the session account backends and their privacy
 rules: flows are socket-scoped, transient, and never enter receipts or broadcasts. A successful

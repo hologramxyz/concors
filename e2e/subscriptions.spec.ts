@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
+import { managedHost } from "./support/managed-host.ts";
 
 test("add a Claude subscription, sign it in, make it the machine's account, and remove it", async ({
   page,
@@ -12,6 +13,7 @@ test("add a Claude subscription, sign it in, make it the machine's account, and 
   const directory = await mkdtemp(join(tmpdir(), "concors-subscriptions-ui-"));
   try {
     await signedIn(page);
+    await managedHost(page);
     await page.goto("/");
     await seedProject(page, "Subscriptions", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
@@ -25,32 +27,52 @@ test("add a Claude subscription, sign it in, make it the machine's account, and 
     await settingsNavigation.getByRole("button", { name: "Subscriptions", exact: true }).click();
     const section = page.getByRole("region", { name: "Subscriptions" });
     await expect(section).toBeVisible();
-    // Per engine, the default account holds the machine until a subscription takes over.
-    await expect(section.getByText("Default account")).toHaveCount(2);
-    await expect(section.getByText("Active on this machine")).toHaveCount(2);
+    await expect(section.getByRole("button", { name: "This computer" })).toBeVisible();
+    const secondMachine = section.getByRole("button", { name: /Second machine/ });
+    await expect(secondMachine).toBeVisible();
+    await secondMachine.click();
+    await expect(secondMachine).toHaveAttribute("aria-pressed", "true");
+    await expect(section).toBeVisible();
+    await section.getByRole("button", { name: /This computer/ }).click();
+    await expect(section.getByRole("button", { name: /This computer/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    // Per engine, the built-in account holds the machine until another one takes over.
+    await expect(section.getByText("Active", { exact: true })).toHaveCount(2);
+
+    // Built-in accounts can be named too; they are no longer fixed as "Default account".
+    await section.getByRole("button", { name: "Rename Account" }).first().click();
+    const renameDialog = page.getByRole("dialog", { name: "Rename account" });
+    await renameDialog.getByLabel("Account name").fill("Personal Claude");
+    await renameDialog.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(section.getByRole("button", { name: "Rename Personal Claude" })).toBeVisible();
 
     await section.getByRole("button", { name: "Add subscription", exact: true }).click();
     const addDialog = page.getByRole("dialog", { name: "Add a subscription" });
-    await addDialog.getByLabel("Name").fill("Work");
     await addDialog.getByRole("button", { name: "Add subscription", exact: true }).click();
 
-    // Saving immediately opens the sign-in for the new subscription.
-    const connectDialog = page.getByRole("dialog", { name: "Claude — Work" });
+    // With no custom name, the connected email becomes the account's name.
+    const connectDialog = page.getByRole("dialog", { name: "Claude — Account" });
     await expect(connectDialog).toBeVisible();
     await connectDialog.getByRole("button", { name: "Connect account", exact: true }).click();
     await connectDialog.getByLabel("Provider API key").fill("test-fixture-key");
     await connectDialog.getByRole("button", { name: "Connect", exact: true }).click();
     await expect(connectDialog).toContainText("Connected as fixture-account@example.test");
     await connectDialog.getByRole("button", { name: "Done", exact: true }).click();
+    await expect(section.getByText("fixture-account@example.test", { exact: true })).toBeVisible();
+
+    // Any account can be renamed inline from the list.
+    await section.getByRole("button", { name: "Rename fixture-account@example.test" }).click();
+    await renameDialog.getByLabel("Account name").fill("Work");
+    await renameDialog.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(section.getByRole("button", { name: "Rename Work" })).toBeVisible();
     await expect(section.getByText("Connected · fixture-account@example.test")).toBeVisible();
 
     // Activating hands the whole machine's Claude chats to the subscription.
-    await section.getByRole("button", { name: "Use Work on this machine", exact: true }).click();
-    await expect(section.getByRole("button", { name: "Use Work on this machine" })).toHaveCount(0);
-    await expect(
-      section.getByRole("button", { name: "Use Default account on this machine" }),
-    ).toBeVisible();
-    await expect(section.getByText("Active on this machine")).toHaveCount(2);
+    await section.getByRole("button", { name: "Use Work", exact: true }).click();
+    await expect(section.getByRole("button", { name: "Use Work", exact: true })).toHaveCount(0);
+    await expect(section.getByText("Active", { exact: true })).toHaveCount(2);
 
     // Chats never pick a subscription; the provider list stays the engines themselves.
     await settingsNavigation.getByRole("button", { name: "Back to app", exact: true }).click();
@@ -67,10 +89,7 @@ test("add a Claude subscription, sign it in, make it the machine's account, and 
     await section.getByRole("button", { name: "Remove Work", exact: true }).click();
     await section.getByRole("button", { name: "Sign out and remove", exact: true }).click();
     await expect(section.getByText("Work", { exact: true })).toHaveCount(0);
-    await expect(
-      section.getByRole("button", { name: "Use Default account on this machine" }),
-    ).toHaveCount(0);
-    await expect(section.getByText("Active on this machine")).toHaveCount(2);
+    await expect(section.getByText("Active", { exact: true })).toHaveCount(2);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

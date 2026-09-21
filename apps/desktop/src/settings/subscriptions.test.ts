@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { ProviderStatus } from "@concors/protocol";
-import { subscriptionConfig, subscriptionGroups, subscriptionId } from "./subscriptions";
+import {
+  renamedAccountConfig,
+  subscriptionConfig,
+  subscriptionGroups,
+  subscriptionId,
+} from "./subscriptions";
 
 const status = (overrides: Partial<ProviderStatus>): ProviderStatus => ({
   id: "claude",
@@ -76,5 +81,28 @@ describe("subscriptionConfig", () => {
     expect(subscriptionId("claude", "A".repeat(80), "x")).toHaveLength(
       "claude-".length + 40 + "-x".length,
     );
+  });
+  it("leaves the visible name unset when it should default to the signed-in email", () => {
+    const config = subscriptionConfig("claude", "  ", undefined, "ef56");
+    expect(config).toMatchObject({
+      id: "claude-account-ef56",
+      label: "Claude — Account",
+      subscription: { nickname: "Account" },
+    });
+    expect(config.accountNickname).toBeUndefined();
+  });
+});
+
+describe("renamedAccountConfig", () => {
+  it("renames built-in accounts without changing the provider label", () => {
+    const config = renamedAccountConfig(status({}), "Personal");
+    expect(config.label).toBe("Claude Code");
+    expect(config.accountNickname).toBe("Personal");
+    expect(config.subscription).toBeUndefined();
+  });
+
+  it("can return to the automatic account identity", () => {
+    const config = renamedAccountConfig(status({ accountNickname: "Work" }), undefined);
+    expect(config.accountNickname).toBeUndefined();
   });
 });

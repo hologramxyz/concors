@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
-import { Check, Copy, ExternalLink, LoaderCircle, Plus, Trash2, X } from "lucide-react";
+import { Check, Copy, ExternalLink, LoaderCircle, Pencil, Plus, Trash2, X } from "lucide-react";
 import {
   PROVIDER_SUBSCRIPTIONS_CAPABILITY,
   type AgentAccount,
@@ -8,6 +8,7 @@ import {
   type ProviderStatus,
 } from "@concors/protocol";
 import type { DaemonConnection } from "@concors/daemon-client";
+import type { Machine } from "@concors/api-client";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,14 +20,19 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { ProviderIcon } from "@/agents/provider-icon";
+import { MachineIcon } from "@/machines/machine-icon";
+import { useMachineList } from "@/machines/use-machines";
+import { activeOrganization, type SignedInAuth } from "@/auth/auth-state";
+import { machineAvailability } from "@/workspace/machines";
+import { machineStatusLabel } from "@concors/client-core";
 import { invalidateModelCatalogs } from "@/agents/model-catalog";
 import { copyText } from "@/lib/clipboard";
 import { openExternal } from "@/tauri/open-external";
 import { Section, SettingsCard } from "@/views/settings-primitives";
 import {
   subscriptionConfig,
-  subscriptionEngineLabels,
   subscriptionGroups,
+  renamedAccountConfig,
   type SubscriptionEngine,
 } from "./subscriptions";
 
@@ -58,8 +64,22 @@ function requestAccount(connection: DaemonConnection, id: string, action: AgentA
   return next;
 }
 
-export function SubscriptionsSettings() {
+export interface SubscriptionsSettingsProps {
+  readonly auth?: SignedInAuth;
+  readonly selectedMachineId?: string;
+  readonly connected?: boolean;
+  readonly onSelectMachine?: (machine: Machine | null) => void;
+}
+
+export function SubscriptionsSettings({
+  auth,
+  selectedMachineId,
+  connected,
+  onSelectMachine,
+}: SubscriptionsSettingsProps) {
   const connection = useContext(TerminalConnectionContext);
+  const organization = auth ? activeOrganization(auth) : undefined;
+  const machineList = useMachineList(organization?.id, !!auth);
   const [state, setState] = useState(connection?.state);
   const [data, setData] = useState<{ revision: number; providers: ProviderStatus[] } | null>(null);
   const [error, setError] = useState<string | null>(null),
@@ -127,7 +147,7 @@ export function SubscriptionsSettings() {
   return (
     <Section
       title="Subscriptions"
-      description="Connect several Claude or ChatGPT accounts to this machine and choose which one it uses. Sign-ins stay side by side, so switching the whole machine over is instant."
+      description="Choose the Claude and ChatGPT accounts each machine uses."
       actions={
         <Button
           variant="outline"
@@ -139,10 +159,18 @@ export function SubscriptionsSettings() {
         </Button>
       }
     >
+      {onSelectMachine && (
+        <MachinePicker
+          machines={machineList.data}
+          error={machineList.error ? "Could not load machines." : null}
+          selectedMachineId={selectedMachineId ?? "local"}
+          connected={connected ?? false}
+          onSelect={onSelectMachine}
+        />
+      )}
       {!supported && (
-        <p role="status" className="text-sm text-muted-foreground">
-          Connect to a machine with subscription support. Update its daemon if this page is
-          unavailable.
+        <p role="status" className="mt-4 text-sm text-muted-foreground">
+          Select an online machine. Older machines may need an update.
         </p>
       )}
       {visibleError && (
@@ -163,10 +191,16 @@ export function SubscriptionsSettings() {
                   <SubscriptionRow
                     connection={connection}
                     provider={group.base}
-                    name="Default account"
                     epoch={accountEpoch}
                     busy={busy}
                     onConnect={() => setConnecting(group.base?.id ?? null)}
+                    onRename={(current, accountNickname) =>
+                      execute({
+                        kind: "save",
+                        config: renamedAccountConfig(current, accountNickname),
+                        expectedRevision: data?.revision ?? 0,
+                      })
+                    }
                     onActivate={() =>
                       void execute({
                         kind: "activate",
@@ -184,10 +218,16 @@ export function SubscriptionsSettings() {
                     key={provider.id}
                     connection={connection}
                     provider={provider}
-                    name={provider.subscription?.nickname ?? provider.label}
                     epoch={accountEpoch}
                     busy={busy}
                     onConnect={() => setConnecting(provider.id)}
+                    onRename={(current, accountNickname) =>
+                      execute({
+                        kind: "save",
+                        config: renamedAccountConfig(current, accountNickname),
+                        expectedRevision: data?.revision ?? 0,
+                      })
+                    }
                     onActivate={() =>
                       void execute({
                         kind: "activate",
@@ -217,11 +257,6 @@ export function SubscriptionsSettings() {
               </SettingsCard>
             </div>
           ))}
-          <p className="mt-4 text-sm text-muted-foreground">
-            The active subscription is used by every chat on this machine; other machines choose
-            their own. Each subscription keeps its own sign-in on the connected machine and
-            credentials never leave it. Removing a subscription signs it out there.
-          </p>
         </>
       )}
       {adding && data && (
@@ -248,28 +283,106 @@ export function SubscriptionsSettings() {
   );
 }
 
+function MachinePicker({
+  machines,
+  error,
+  selectedMachineId,
+  connected,
+  onSelect,
+}: {
+  machines: readonly Machine[] | null;
+  error: string | null;
+  selectedMachineId: string;
+  connected: boolean;
+  onSelect: (machine: Machine | null) => void;
+}) {
+  const available = machines?.filter((machine) => machine.status !== "deleted") ?? [];
+  return (
+    <div>
+      <p className="mb-2 text-xs font-medium text-muted-foreground">Machine</p>
+      <SettingsCard className="divide-y">
+        <button
+          type="button"
+          className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/50"
+          aria-pressed={selectedMachineId === "local"}
+          onClick={() => onSelect(null)}
+        >
+          <MachineIcon local className="size-4 text-muted-foreground" />
+          <span className="min-w-0 flex-1 font-medium">This computer</span>
+          <MachineState
+            selected={selectedMachineId === "local"}
+            status={selectedMachineId === "local" && connected ? "Connected" : "Available"}
+          />
+        </button>
+        {available.map((machine) => {
+          const availability = machineAvailability(machine);
+          const selected = selectedMachineId === machine.id;
+          const connectable = availability === "connectable";
+          return (
+            <button
+              key={machine.id}
+              type="button"
+              className="flex w-full items-center gap-3 px-4 py-3 text-left enabled:hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-60"
+              aria-pressed={selected}
+              disabled={!connectable && !selected}
+              onClick={() => onSelect(machine)}
+            >
+              <MachineIcon icon={machine.icon} className="size-4 text-muted-foreground" />
+              <span className="min-w-0 flex-1 truncate font-medium">{machine.name}</span>
+              <MachineState
+                selected={selected}
+                status={machineStatusLabel(availability, selected && connected)}
+              />
+            </button>
+          );
+        })}
+        {machines === null && !error && (
+          <p role="status" className="px-4 py-3 text-sm text-muted-foreground">
+            Loading machines…
+          </p>
+        )}
+      </SettingsCard>
+      {error && (
+        <p role="alert" className="mt-2 text-xs text-destructive">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function MachineState({ selected, status }: { selected: boolean; status: string }) {
+  return (
+    <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+      {status}
+      {selected && <Check className="size-4 text-primary" aria-label="Selected" />}
+    </span>
+  );
+}
+
 function SubscriptionRow({
   connection,
   provider,
-  name,
   epoch,
   busy,
   onConnect,
   onActivate,
+  onRename,
   onRemove,
 }: {
   connection: DaemonConnection;
   provider: ProviderStatus;
-  name: string;
   epoch: number;
   busy: boolean;
   onConnect: () => void;
   onActivate?: () => void;
+  onRename: (provider: ProviderStatus, name: string | undefined) => Promise<void>;
   onRemove?: () => void;
 }) {
   const [account, setAccount] = useState<AgentAccount | null>(null);
   const [failed, setFailed] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [renaming, setRenaming] = useState(false);
   useEffect(() => {
     if (!provider.installed || !provider.enabled) return;
     let cancelled = false;
@@ -288,6 +401,11 @@ function SubscriptionRow({
     };
   }, [connection, provider.id, provider.installed, provider.enabled, epoch]);
   const connected = account?.status === "connected";
+  const providerFallback = provider.subscription?.nickname;
+  const name =
+    provider.accountNickname ??
+    account?.label ??
+    (providerFallback && providerFallback !== "Account" ? providerFallback : "Account");
   const status = !provider.installed
     ? "Not installed · Install it in Providers settings"
     : !provider.enabled
@@ -297,7 +415,7 @@ function SubscriptionRow({
         : !account
           ? "Checking sign-in…"
           : connected
-            ? `Connected${account.label ? ` · ${account.label}` : ""}`
+            ? `Connected${account.label && account.label !== name ? ` · ${account.label}` : ""}`
             : "Not connected";
   return (
     <div className="flex flex-wrap items-center gap-3 p-4">
@@ -306,7 +424,7 @@ function SubscriptionRow({
           {name}
           {provider.active && (
             <span className="rounded-full border px-2 py-0.5 text-[11px] font-normal text-muted-foreground">
-              Active on this machine
+              Active
             </span>
           )}
         </p>
@@ -318,17 +436,26 @@ function SubscriptionRow({
             variant="outline"
             size="sm"
             disabled={busy}
-            aria-label={`Use ${name} on this machine`}
+            aria-label={`Use ${name}`}
             onClick={onActivate}
           >
-            Use on this machine
+            Use
           </Button>
         )}
         {provider.installed && provider.enabled && (
           <Button variant="outline" size="sm" disabled={busy} onClick={onConnect}>
-            {connected ? "Manage sign-in" : "Connect"}
+            {connected ? "Manage" : "Connect"}
           </Button>
         )}
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={`Rename ${name}`}
+          disabled={busy}
+          onClick={() => setRenaming(true)}
+        >
+          <Pencil />
+        </Button>
         {onRemove &&
           (confirming ? (
             <>
@@ -364,7 +491,80 @@ function SubscriptionRow({
             </Button>
           ))}
       </div>
+      {renaming && (
+        <RenameAccountDialog
+          name={provider.accountNickname ?? ""}
+          fallbackName={account?.label ?? providerFallback ?? "Account"}
+          onSave={(nextName) => onRename(provider, nextName)}
+          onClose={() => setRenaming(false)}
+        />
+      )}
     </div>
+  );
+}
+
+function RenameAccountDialog({
+  name,
+  fallbackName,
+  onSave,
+  onClose,
+}: {
+  name: string;
+  fallbackName: string;
+  onSave: (name: string | undefined) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [value, setValue] = useState(name);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const submit = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await onSave(value.trim() || undefined);
+      onClose();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not rename account");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog open onOpenChange={(open) => !open && !busy && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Rename account</DialogTitle>
+          <DialogDescription>Leave blank to use {fallbackName}.</DialogDescription>
+        </DialogHeader>
+        <form
+          className="space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submit();
+          }}
+        >
+          <Input
+            autoFocus
+            aria-label="Account name"
+            value={value}
+            maxLength={100}
+            placeholder={fallbackName}
+            onChange={(event) => setValue(event.target.value)}
+          />
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" disabled={busy} onClick={onClose}>
+              Cancel
+            </Button>
+            <Button disabled={busy}>{busy ? "Saving…" : "Save"}</Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -387,10 +587,6 @@ function AddSubscriptionDialog({
     [busy, setBusy] = useState(false);
   const submit = async () => {
     setError(null);
-    if (!nickname.trim()) {
-      setError("Name the subscription, like Work or Personal.");
-      return;
-    }
     setBusy(true);
     try {
       const base = providers.find((p) => p.id === engine && !p.subscription);
@@ -413,10 +609,7 @@ function AddSubscriptionDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add a subscription</DialogTitle>
-          <DialogDescription>
-            Adds another {subscriptionEngineLabels[engine]} account next to the ones already on this
-            machine. You sign in right after.
-          </DialogDescription>
+          <DialogDescription>Connect another account on this machine.</DialogDescription>
         </DialogHeader>
         <form
           className="space-y-4"
@@ -437,13 +630,12 @@ function AddSubscriptionDialog({
             </select>
           </label>
           <label className="block space-y-1 text-sm">
-            Name
+            Name <span className="text-muted-foreground">(optional)</span>
             <Input
               value={nickname}
               onChange={(e) => setNickname(e.target.value)}
-              placeholder="Work, Personal, …"
+              placeholder="Defaults to account email"
               maxLength={100}
-              required
             />
           </label>
           {error && (
@@ -562,10 +754,7 @@ function AccountConnectDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{name}</DialogTitle>
-          <DialogDescription>
-            Signs this subscription in on the connected machine. The sign-in stays there, next to
-            your other subscriptions.
-          </DialogDescription>
+          <DialogDescription>Sign in on this machine.</DialogDescription>
         </DialogHeader>
         {(error || account?.message) && (
           <p role="alert" className="text-sm text-destructive">
@@ -582,9 +771,6 @@ function AccountConnectDialog({
             <p className="flex items-center gap-1.5">
               <Check className="size-4 text-green-600" />
               Connected{account.label ? ` as ${account.label}` : ""}.
-            </p>
-            <p className="text-xs text-muted-foreground">
-              To use a different account here, connect again and sign in with the other account.
             </p>
             <div className="flex justify-end gap-2">
               {selected && (
