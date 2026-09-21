@@ -45,6 +45,8 @@ export const ProviderConfigSchema = z.object({
   enabled: z.boolean(),
   env: z.record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/), z.string().max(16000)).optional(),
   models: z.array(z.string().min(1).max(1024)).max(4096).optional(),
+  /** A user-chosen name for the account. Without one, clients show the signed-in identity. */
+  accountNickname: z.string().trim().min(1).max(100).optional(),
   params: z
     .object({
       supportsMcpServers: z.boolean().optional(),
