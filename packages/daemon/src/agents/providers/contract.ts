@@ -2,6 +2,7 @@ import { TaskState, isTaskTool } from "./plans.ts";
 import { nativeToolItem } from "./tool-items.ts";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import type { AgentPlanUsage } from "@concors/protocol";
 import { AgentControlsSchema, type AgentControls } from "@concors/protocol";
 
 export type InputHandler = (
@@ -17,6 +18,11 @@ export interface ConversationProvider {
   onNotification(listener: (method: string, params: unknown) => void): () => void;
   onFailure(listener: (error: Error) => void): void;
   close(): Promise<void>;
+  /**
+   * What is left of the account's plan, asked of the provider when someone looks. Providers
+   * without the notion leave it out, and the machine reports that instead of guessing.
+   */
+  planUsage?(): Promise<AgentPlanUsage>;
 }
 export const object = (value: unknown): Record<string, unknown> =>
   z.record(z.string(), z.unknown()).parse(value);

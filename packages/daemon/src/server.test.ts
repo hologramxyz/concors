@@ -86,6 +86,7 @@ describe("WebSocket handshake", () => {
           "agent-message-navigation",
           "agent-accounts",
           "agent-attention",
+          "agent-plan-usage",
           "agent-composer",
           "agent-queue",
           "agent-providers",

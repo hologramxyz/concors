@@ -28,6 +28,7 @@ import {
   type PullRequestResult,
 } from "@concors/protocol";
 import {
+  AGENT_USAGE_CAPABILITY,
   AgentRequestSchema,
   type AgentInfo,
   type AgentEvent,
@@ -568,6 +569,11 @@ export class DaemonConnection {
   requestAgent(operation: AgentOperation, requestId: string): Promise<AgentResult> {
     if (this.#state.status !== "ready" || !this.#workspace)
       return Promise.reject(new Error("Workspace is disconnected"));
+    if (
+      operation.kind === "usage" &&
+      !this.#state.daemon.capabilities?.includes(AGENT_USAGE_CAPABILITY)
+    )
+      return Promise.reject(new Error("Update the machine daemon to see plan usage."));
     const request = AgentRequestSchema.parse({ type: "agent.request", requestId, operation });
     if (this.#agentRequests.has(requestId))
       return Promise.reject(new Error("Request is already pending"));

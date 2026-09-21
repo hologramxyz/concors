@@ -6,6 +6,7 @@ import {
   PULL_REQUESTS_CAPABILITY,
   PULL_REQUEST_ACTIONS_CAPABILITY,
   PULL_REQUEST_STATES_CAPABILITY,
+  AGENT_USAGE_CAPABILITY,
   PROTOCOL_VERSION,
 } from "@concors/protocol";
 
@@ -50,6 +51,7 @@ export class DaemonState {
         "agent-message-navigation",
         "agent-accounts",
         "agent-attention",
+        AGENT_USAGE_CAPABILITY,
         "agent-composer",
         "agent-queue",
         "agent-providers",
