@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Check, Copy, ExternalLink, LoaderCircle, Pencil, Plus, Trash2, X } from "lucide-react";
 import {
   PROVIDER_SUBSCRIPTIONS_CAPABILITY,
@@ -7,7 +7,12 @@ import {
   type ProviderOperation,
   type ProviderStatus,
 } from "@concors/protocol";
-import type { DaemonConnection } from "@concors/daemon-client";
+import {
+  describeDaemonEndpoint,
+  type ConnectionState,
+  type DaemonConnection,
+  type DaemonEndpoint,
+} from "@concors/daemon-client";
 import type { Machine } from "@concors/api-client";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { Button } from "@/components/ui/button";
@@ -23,16 +28,16 @@ import { ProviderIcon } from "@/agents/provider-icon";
 import { MachineIcon } from "@/machines/machine-icon";
 import { useMachineList } from "@/machines/use-machines";
 import { activeOrganization, type SignedInAuth } from "@/auth/auth-state";
-import { machineAvailability } from "@/workspace/machines";
-import { machineStatusLabel } from "@concors/client-core";
+import { useDaemonConnection } from "@/daemon/use-daemon-connection";
 import { invalidateModelCatalogs } from "@/agents/model-catalog";
 import { copyText } from "@/lib/clipboard";
 import { openExternal } from "@/tauri/open-external";
 import { Section, SettingsCard } from "@/views/settings-primitives";
 import {
   subscriptionConfig,
-  subscriptionGroups,
+  portableSubscriptionConfig,
   renamedAccountConfig,
+  subscriptionEngineLabels,
   type SubscriptionEngine,
 } from "./subscriptions";
 
@@ -66,42 +71,237 @@ function requestAccount(connection: DaemonConnection, id: string, action: AgentA
 
 export interface SubscriptionsSettingsProps {
   readonly auth?: SignedInAuth;
-  readonly selectedMachineId?: string;
-  readonly connected?: boolean;
-  readonly onSelectMachine?: (machine: Machine | null) => void;
+  readonly localEndpoint?: DaemonEndpoint | null;
+  readonly hostScope?: string;
 }
 
 export function SubscriptionsSettings({
   auth,
-  selectedMachineId,
-  connected,
-  onSelectMachine,
+  localEndpoint,
+  hostScope = "",
 }: SubscriptionsSettingsProps) {
-  const connection = useContext(TerminalConnectionContext);
+  const selectedConnection = useContext(TerminalConnectionContext);
+  const selectedState = useConnectionState(selectedConnection);
+  const localHandle = useDaemonConnection(localEndpoint ?? null, "local", hostScope);
+  const localConnection = localEndpoint ? localHandle.transport : selectedConnection;
+  const localState = localEndpoint ? localHandle.state : selectedState;
+  const local = useProviderMachine(localConnection, localState);
   const organization = auth ? activeOrganization(auth) : undefined;
   const machineList = useMachineList(organization?.id, !!auth);
-  const [state, setState] = useState(connection?.state);
-  const [data, setData] = useState<{ revision: number; providers: ProviderStatus[] } | null>(null);
-  const [error, setError] = useState<string | null>(null),
-    [busy, setBusy] = useState(false);
-  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [machineData, setMachineData] = useState<Record<string, ProviderSnapshot | null>>({});
+  const [accountLabels, setAccountLabels] = useState<Record<string, string>>({});
+  const [pageError, setPageError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [accountEpoch, setAccountEpoch] = useState(0);
+  const subscriptions = (local.data?.providers ?? [])
+    .filter((provider) => provider.subscription)
+    .sort((a, b) => a.label.localeCompare(b.label));
+  const availableMachines =
+    machineList.data?.filter((machine) => machine.status !== "deleted") ?? [];
+  const reportMachine = useCallback((machineId: string, data: ProviderSnapshot | null) => {
+    setMachineData((current) =>
+      current[machineId] === data ? current : { ...current, [machineId]: data },
+    );
+  }, []);
+  const reportAccountLabel = useCallback((id: string, label: string | undefined) => {
+    if (!label) return;
+    setAccountLabels((current) => (current[id] === label ? current : { ...current, [id]: label }));
+  }, []);
+  const accountChanged = useCallback(() => setAccountEpoch((epoch) => epoch + 1), []);
+  const usedOn = (id: string) =>
+    [local.data, ...Object.values(machineData)].filter((snapshot) =>
+      snapshot?.providers.some((provider) => provider.id === id && provider.active),
+    ).length;
+  const connectingProvider = connecting
+    ? local.data?.providers.find((provider) => provider.id === connecting)
+    : undefined;
+  const visibleError = pageError ?? local.error;
+  return (
+    <Section
+      title="Subscriptions"
+      description="Add your accounts, then choose which one each machine uses."
+    >
+      {visibleError && (
+        <p role="alert" className="mb-4 text-sm text-destructive">
+          {visibleError}
+        </p>
+      )}
+
+      <div>
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-medium">Machine assignments</h3>
+            <p className="mt-0.5 text-xs text-muted-foreground">One account per provider.</p>
+          </div>
+        </div>
+        <div className="space-y-3">
+          <MachineAssignmentCard
+            machineId="local"
+            name="This computer"
+            local
+            connection={localConnection}
+            machine={local}
+            subscriptions={subscriptions}
+            accountLabels={accountLabels}
+          />
+          {availableMachines.map((machine) => (
+            <RemoteMachineAssignment
+              key={machine.id}
+              machine={machine}
+              hostScope={hostScope}
+              subscriptions={subscriptions}
+              accountLabels={accountLabels}
+              onSnapshot={reportMachine}
+            />
+          ))}
+          {machineList.data === null && !machineList.error && (
+            <p role="status" className="text-sm text-muted-foreground">
+              Loading machines…
+            </p>
+          )}
+        </div>
+        {!!machineList.error && (
+          <p role="alert" className="mt-2 text-xs text-destructive">
+            Could not load machines.
+          </p>
+        )}
+      </div>
+
+      <div className="mt-8">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <h3 className="text-sm font-medium">Your subscriptions</h3>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!local.supported || !local.data}
+            onClick={() => setAdding(true)}
+          >
+            <Plus /> Add subscription
+          </Button>
+        </div>
+        <SettingsCard className="divide-y">
+          {subscriptions.map((provider) => (
+            <SubscriptionLibraryRow
+              key={provider.id}
+              connection={localConnection}
+              provider={provider}
+              epoch={accountEpoch}
+              busy={local.busy}
+              usedOn={usedOn(provider.id)}
+              onAccountLabel={reportAccountLabel}
+              onConnect={() => setConnecting(provider.id)}
+              onRename={(current, accountNickname) =>
+                local.execute({
+                  kind: "save",
+                  config: renamedAccountConfig(current, accountNickname),
+                  expectedRevision: local.data?.revision ?? 0,
+                })
+              }
+              onRemove={() => {
+                const count = usedOn(provider.id);
+                if (count) {
+                  setPageError(
+                    `Unassign ${accountName(provider, accountLabels)} before removing it.`,
+                  );
+                  return;
+                }
+                setPageError(null);
+                void local
+                  .execute({
+                    kind: "remove",
+                    id: provider.id,
+                    expectedRevision: local.data?.revision ?? 0,
+                  })
+                  .catch(() => undefined);
+              }}
+            />
+          ))}
+          {local.data && subscriptions.length === 0 && (
+            <p className="px-4 py-5 text-sm text-muted-foreground">No subscriptions added yet.</p>
+          )}
+          {!local.data && <p className="px-4 py-5 text-sm text-muted-foreground">Connecting…</p>}
+        </SettingsCard>
+      </div>
+
+      {adding && local.data && (
+        <AddSubscriptionDialog
+          providers={local.data.providers}
+          revision={local.data.revision}
+          onSave={local.execute}
+          onCreated={(id) => {
+            setAdding(false);
+            setConnecting(id);
+          }}
+          onClose={() => setAdding(false)}
+        />
+      )}
+      {connectingProvider && localConnection && (
+        <AccountConnectDialog
+          connection={localConnection}
+          provider={connectingProvider}
+          onChanged={accountChanged}
+          onClose={() => setConnecting(null)}
+        />
+      )}
+    </Section>
+  );
+}
+
+interface ProviderSnapshot {
+  revision: number;
+  providers: ProviderStatus[];
+}
+
+interface ProviderMachineState {
+  data: ProviderSnapshot | null;
+  error: string | null;
+  busy: boolean;
+  supported: boolean;
+  state: ConnectionState | undefined;
+  execute(operation: ProviderOperation): Promise<ProviderSnapshot>;
+}
+
+function useConnectionState(connection: DaemonConnection | null) {
+  const [observed, setObserved] = useState<{
+    connection: DaemonConnection;
+    state: ConnectionState;
+  } | null>(connection ? { connection, state: connection.state } : null);
+  useEffect(
+    () =>
+      connection?.subscribe((state) => {
+        setObserved({ connection, state });
+      }),
+    [connection],
+  );
+  return observed?.connection === connection ? observed.state : connection?.state;
+}
+
+function useProviderMachine(
+  connection: DaemonConnection | null,
+  state: ConnectionState | undefined,
+): ProviderMachineState {
+  const [snapshot, setSnapshot] = useState<{
+    connection: DaemonConnection;
+    data: ProviderSnapshot;
+  } | null>(null);
+  const [machineError, setMachineError] = useState<{
+    connection: DaemonConnection | null;
+    message: string | null;
+  } | null>(null);
+  const [busy, setBusy] = useState(false);
   const mounted = useRef(true);
   const supported =
     state?.status === "ready" &&
-    state.daemon.capabilities?.includes(PROVIDER_SUBSCRIPTIONS_CAPABILITY);
+    !!state.daemon.capabilities?.includes(PROVIDER_SUBSCRIPTIONS_CAPABILITY);
   const request = useCallback(
-    async (operation: ProviderOperation, active: () => boolean = () => true) => {
-      if (!connection) throw new Error("Reconnect to the machine first.");
+    async (operation: ProviderOperation) => {
+      if (!connection) throw new Error("This machine is unavailable.");
       const result = await connection.requestProvider(operation, crypto.randomUUID());
       if (result.outcome.status === "error") throw new Error(result.outcome.message);
       if (operation.kind !== "list") invalidateModelCatalogs(connection);
-      if (mounted.current && active()) {
-        setData(result.outcome);
-        if (operation.kind === "list") setRefreshError(null);
-      }
+      if (mounted.current) setSnapshot({ connection, data: result.outcome });
+      return result.outcome;
     },
     [connection],
   );
@@ -111,14 +311,14 @@ export function SubscriptionsSettings({
       mounted.current = false;
     };
   }, [connection]);
-  useEffect(() => connection?.subscribe(setState), [connection]);
   useEffect(() => {
     if (!supported) return;
     let cancelled = false;
     const refresh = () => {
-      void request({ kind: "list" }, () => !cancelled).catch((e: Error) => {
-        if (!cancelled) setRefreshError(e.message);
-      });
+      void request({ kind: "list" }).then(
+        () => !cancelled && setMachineError({ connection, message: null }),
+        (cause: Error) => !cancelled && setMachineError({ connection, message: cause.message }),
+      );
     };
     refresh();
     const timer = setInterval(refresh, 4000);
@@ -126,270 +326,312 @@ export function SubscriptionsSettings({
       cancelled = true;
       clearInterval(timer);
     };
-  }, [connection, supported, request]); // Poll also observes subscriptions added from another client.
-  const execute = async (operation: ProviderOperation) => {
-    setBusy(true);
-    setError(null);
-    try {
-      await request(operation);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not update subscriptions");
-      throw e;
-    } finally {
-      setBusy(false);
-    }
-  };
-  const groups = subscriptionGroups(data?.providers ?? []);
-  const connectingProvider = connecting
-    ? data?.providers.find((p) => p.id === connecting)
-    : undefined;
-  const visibleError = error ?? refreshError;
-  return (
-    <Section
-      title="Subscriptions"
-      description="Choose the Claude and ChatGPT accounts each machine uses."
-      actions={
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={!supported || !data}
-          onClick={() => setAdding(true)}
-        >
-          <Plus /> Add subscription
-        </Button>
+  }, [connection, request, supported]);
+  const execute = useCallback(
+    async (operation: ProviderOperation) => {
+      setBusy(true);
+      setMachineError({ connection, message: null });
+      try {
+        return await request(operation);
+      } catch (cause) {
+        setMachineError({
+          connection,
+          message: cause instanceof Error ? cause.message : "Could not update subscriptions",
+        });
+        throw cause;
+      } finally {
+        setBusy(false);
       }
-    >
-      {onSelectMachine && (
-        <MachinePicker
-          machines={machineList.data}
-          error={machineList.error ? "Could not load machines." : null}
-          selectedMachineId={selectedMachineId ?? "local"}
-          connected={connected ?? false}
-          onSelect={onSelectMachine}
-        />
-      )}
-      {!supported && (
-        <p role="status" className="mt-4 text-sm text-muted-foreground">
-          Select an online machine. Older machines may need an update.
-        </p>
-      )}
-      {visibleError && (
-        <p role="alert" className="mt-4 text-sm text-destructive">
-          {visibleError}
-        </p>
-      )}
-      {supported && connection && (
-        <>
-          {groups.map((group) => (
-            <div key={group.engine} className="mt-5">
-              <div className="flex items-center gap-2">
-                <ProviderIcon provider={group.engine} />
-                <h3 className="text-sm font-medium">{group.label}</h3>
-              </div>
-              <SettingsCard className="mt-2 divide-y">
-                {group.base && (
-                  <SubscriptionRow
-                    connection={connection}
-                    provider={group.base}
-                    epoch={accountEpoch}
-                    busy={busy}
-                    onConnect={() => setConnecting(group.base?.id ?? null)}
-                    onRename={(current, accountNickname) =>
-                      execute({
-                        kind: "save",
-                        config: renamedAccountConfig(current, accountNickname),
-                        expectedRevision: data?.revision ?? 0,
-                      })
-                    }
-                    onActivate={() =>
-                      void execute({
-                        kind: "activate",
-                        engine: group.engine,
-                        id: null,
-                        expectedRevision: data?.revision ?? 0,
-                      }).catch(() => {
-                        /* The operation already displayed its error. */
-                      })
-                    }
-                  />
-                )}
-                {group.subscriptions.map((provider) => (
-                  <SubscriptionRow
-                    key={provider.id}
-                    connection={connection}
-                    provider={provider}
-                    epoch={accountEpoch}
-                    busy={busy}
-                    onConnect={() => setConnecting(provider.id)}
-                    onRename={(current, accountNickname) =>
-                      execute({
-                        kind: "save",
-                        config: renamedAccountConfig(current, accountNickname),
-                        expectedRevision: data?.revision ?? 0,
-                      })
-                    }
-                    onActivate={() =>
-                      void execute({
-                        kind: "activate",
-                        engine: group.engine,
-                        id: provider.id,
-                        expectedRevision: data?.revision ?? 0,
-                      }).catch(() => {
-                        /* The operation already displayed its error. */
-                      })
-                    }
-                    onRemove={() =>
-                      void execute({
-                        kind: "remove",
-                        id: provider.id,
-                        expectedRevision: data?.revision ?? 0,
-                      }).catch(() => {
-                        /* The operation already displayed its error. */
-                      })
-                    }
-                  />
-                ))}
-                {!group.base && group.subscriptions.length === 0 && (
-                  <p role="status" className="p-4 text-sm text-muted-foreground">
-                    {data ? `${group.label} is not set up on this machine.` : "Checking…"}
-                  </p>
-                )}
-              </SettingsCard>
-            </div>
-          ))}
-        </>
-      )}
-      {adding && data && (
-        <AddSubscriptionDialog
-          providers={data.providers}
-          revision={data.revision}
-          onSave={execute}
-          onCreated={(id) => {
-            setAdding(false);
-            setConnecting(id);
-          }}
-          onClose={() => setAdding(false)}
-        />
-      )}
-      {connectingProvider && connection && (
-        <AccountConnectDialog
-          connection={connection}
-          provider={connectingProvider}
-          onChanged={() => setAccountEpoch((epoch) => epoch + 1)}
-          onClose={() => setConnecting(null)}
-        />
-      )}
-    </Section>
+    },
+    [connection, request],
+  );
+  const data = snapshot?.connection === connection ? snapshot.data : null;
+  const error = machineError?.connection === connection ? machineError.message : null;
+  return { data, error, busy, supported, state, execute };
+}
+
+function RemoteMachineAssignment({
+  machine,
+  hostScope,
+  subscriptions,
+  accountLabels,
+  onSnapshot,
+}: {
+  machine: Machine;
+  hostScope: string;
+  subscriptions: ProviderStatus[];
+  accountLabels: Record<string, string>;
+  onSnapshot: (machineId: string, data: ProviderSnapshot | null) => void;
+}) {
+  const endpoint = useMemo(
+    () =>
+      machine.status === "running" && machine.hostname
+        ? describeDaemonEndpoint(`wss://${machine.hostname}/ws`, machine.name)
+        : null,
+    [machine.hostname, machine.name, machine.status],
+  );
+  const handle = useDaemonConnection(endpoint, machine.id, hostScope);
+  const providerMachine = useProviderMachine(handle.transport, handle.state);
+  useEffect(
+    () => onSnapshot(machine.id, providerMachine.data),
+    [machine.id, onSnapshot, providerMachine.data],
+  );
+  return (
+    <MachineAssignmentCard
+      machineId={machine.id}
+      name={machine.name}
+      {...(machine.icon === undefined ? {} : { icon: machine.icon })}
+      connection={handle.transport}
+      machine={providerMachine}
+      subscriptions={subscriptions}
+      accountLabels={accountLabels}
+      unavailable={!endpoint}
+    />
   );
 }
 
-function MachinePicker({
-  machines,
-  error,
-  selectedMachineId,
-  connected,
-  onSelect,
+function MachineAssignmentCard({
+  machineId,
+  name,
+  icon,
+  local = false,
+  connection,
+  machine,
+  subscriptions,
+  accountLabels,
+  unavailable = false,
 }: {
-  machines: readonly Machine[] | null;
-  error: string | null;
-  selectedMachineId: string;
-  connected: boolean;
-  onSelect: (machine: Machine | null) => void;
+  machineId: string;
+  name: string;
+  icon?: string | null;
+  local?: boolean;
+  connection: DaemonConnection | null;
+  machine: ProviderMachineState;
+  subscriptions: ProviderStatus[];
+  accountLabels: Record<string, string>;
+  unavailable?: boolean;
 }) {
-  const available = machines?.filter((machine) => machine.status !== "deleted") ?? [];
+  const [connecting, setConnecting] = useState<string | null>(null);
+  const [accountEpoch, setAccountEpoch] = useState(0);
+  const accountChanged = useCallback(() => setAccountEpoch((epoch) => epoch + 1), []);
+  const connectingProvider = connecting
+    ? machine.data?.providers.find((provider) => provider.id === connecting)
+    : undefined;
+  const status = unavailable
+    ? "Provisioning"
+    : machine.state?.status === "ready"
+      ? machine.supported
+        ? "Online"
+        : "Update required"
+      : machine.state?.status === "error"
+        ? "Unavailable"
+        : "Connecting…";
   return (
-    <div>
-      <p className="mb-2 text-xs font-medium text-muted-foreground">Machine</p>
-      <SettingsCard className="divide-y">
-        <button
-          type="button"
-          className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/50"
-          aria-pressed={selectedMachineId === "local"}
-          onClick={() => onSelect(null)}
-        >
-          <MachineIcon local className="size-4 text-muted-foreground" />
-          <span className="min-w-0 flex-1 font-medium">This computer</span>
-          <MachineState
-            selected={selectedMachineId === "local"}
-            status={selectedMachineId === "local" && connected ? "Connected" : "Available"}
-          />
-        </button>
-        {available.map((machine) => {
-          const availability = machineAvailability(machine);
-          const selected = selectedMachineId === machine.id;
-          const connectable = availability === "connectable";
-          return (
-            <button
-              key={machine.id}
-              type="button"
-              className="flex w-full items-center gap-3 px-4 py-3 text-left enabled:hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-60"
-              aria-pressed={selected}
-              disabled={!connectable && !selected}
-              onClick={() => onSelect(machine)}
-            >
-              <MachineIcon icon={machine.icon} className="size-4 text-muted-foreground" />
-              <span className="min-w-0 flex-1 truncate font-medium">{machine.name}</span>
-              <MachineState
-                selected={selected}
-                status={machineStatusLabel(availability, selected && connected)}
-              />
-            </button>
-          );
-        })}
-        {machines === null && !error && (
-          <p role="status" className="px-4 py-3 text-sm text-muted-foreground">
-            Loading machines…
+    <div role="group" aria-label={`${name} assignments`}>
+      <SettingsCard>
+        <div className="flex items-center gap-3 border-b px-4 py-3">
+          <MachineIcon local={local} icon={icon} className="size-4 text-muted-foreground" />
+          <h4 className="min-w-0 flex-1 truncate text-sm font-medium">{name}</h4>
+          <span className="text-xs text-muted-foreground">{status}</span>
+        </div>
+        <div className="divide-y">
+          {(["claude", "codex"] as const).map((engine) => (
+            <ProviderAssignment
+              key={engine}
+              machineId={machineId}
+              machineName={name}
+              engine={engine}
+              connection={connection}
+              machine={machine}
+              subscriptions={subscriptions}
+              accountLabels={accountLabels}
+              epoch={accountEpoch}
+              onConnect={setConnecting}
+            />
+          ))}
+        </div>
+        {machine.error && (
+          <p role="alert" className="border-t px-4 py-2 text-xs text-destructive">
+            {machine.error}
           </p>
         )}
+        {connectingProvider && connection && (
+          <AccountConnectDialog
+            connection={connection}
+            provider={connectingProvider}
+            onChanged={accountChanged}
+            onClose={() => setConnecting(null)}
+          />
+        )}
       </SettingsCard>
-      {error && (
-        <p role="alert" className="mt-2 text-xs text-destructive">
-          {error}
-        </p>
-      )}
     </div>
   );
 }
 
-function MachineState({ selected, status }: { selected: boolean; status: string }) {
+function ProviderAssignment({
+  machineName,
+  engine,
+  connection,
+  machine,
+  subscriptions,
+  accountLabels,
+  epoch,
+  onConnect,
+}: {
+  machineId: string;
+  machineName: string;
+  engine: SubscriptionEngine;
+  connection: DaemonConnection | null;
+  machine: ProviderMachineState;
+  subscriptions: ProviderStatus[];
+  accountLabels: Record<string, string>;
+  epoch: number;
+  onConnect: (id: string) => void;
+}) {
+  const choices = subscriptions.filter((provider) => provider.engine === engine);
+  const active = machine.data?.providers.find(
+    (provider) => provider.engine === engine && provider.subscription && provider.active,
+  );
+  const managed = active && choices.some((provider) => provider.id === active.id);
+  const [accountResult, setAccountResult] = useState<{
+    connection: DaemonConnection;
+    providerId: string;
+    account: AgentAccount | null;
+    failed: boolean;
+  } | null>(null);
+  const account =
+    accountResult?.connection === connection && accountResult.providerId === active?.id
+      ? accountResult.account
+      : null;
+  const checkingFailed =
+    accountResult?.connection === connection && accountResult.providerId === active?.id
+      ? accountResult.failed
+      : false;
+  useEffect(() => {
+    if (!connection || !active?.installed || !active.enabled) return;
+    let cancelled = false;
+    requestAccount(connection, active.id, { type: "read" }).then(
+      (next) =>
+        !cancelled &&
+        setAccountResult({ connection, providerId: active.id, account: next, failed: false }),
+      () =>
+        !cancelled &&
+        setAccountResult({ connection, providerId: active.id, account: null, failed: true }),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [active?.enabled, active?.id, active?.installed, connection, epoch]);
+  const assign = async (id: string) => {
+    if (!machine.data) throw new Error("This machine is unavailable.");
+    let revision = machine.data.revision;
+    if (id && !machine.data.providers.some((provider) => provider.id === id)) {
+      const source = choices.find((provider) => provider.id === id);
+      if (!source) throw new Error("Choose an available subscription.");
+      revision = (
+        await machine.execute({
+          kind: "save",
+          config: portableSubscriptionConfig(source),
+          expectedRevision: revision,
+        })
+      ).revision;
+    }
+    await machine.execute({ kind: "activate", engine, id: id || null, expectedRevision: revision });
+  };
+  const status = !active
+    ? "Not assigned"
+    : !managed
+      ? "Subscription is no longer in your library"
+      : checkingFailed
+        ? "Could not check sign-in"
+        : !account
+          ? "Checking sign-in…"
+          : account.status === "connected"
+            ? "Signed in"
+            : "Needs sign-in";
   return (
-    <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-      {status}
-      {selected && <Check className="size-4 text-primary" aria-label="Selected" />}
-    </span>
+    <div className="grid gap-2 px-4 py-3 sm:grid-cols-[8rem_minmax(0,1fr)_auto] sm:items-center">
+      <div className="flex items-center gap-2 text-sm font-medium">
+        <ProviderIcon provider={engine} />
+        {subscriptionEngineLabels[engine]}
+      </div>
+      <div className="min-w-0">
+        <select
+          aria-label={`${machineName} ${subscriptionEngineLabels[engine]} subscription`}
+          className="h-9 w-full min-w-0 rounded-md border bg-background px-2.5 text-sm outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+          value={active?.id ?? ""}
+          disabled={!machine.supported || !machine.data || machine.busy}
+          onChange={(event) => void assign(event.target.value).catch(() => undefined)}
+        >
+          <option value="">Not assigned</option>
+          {active && !managed && <option value={active.id}>Unavailable subscription</option>}
+          {choices.map((provider) => (
+            <option key={provider.id} value={provider.id}>
+              {accountName(provider, accountLabels)}
+            </option>
+          ))}
+        </select>
+        <p className="mt-1 text-xs text-muted-foreground">{status}</p>
+      </div>
+      <div className="sm:w-24 sm:text-right">
+        {active && managed && account?.status !== "connected" && (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!machine.supported || machine.busy}
+            aria-label={`Connect ${subscriptionEngineLabels[engine]} on ${machineName}`}
+            onClick={() => onConnect(active.id)}
+          >
+            Connect
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }
 
-function SubscriptionRow({
+function accountName(provider: ProviderStatus, labels: Record<string, string>) {
+  return (
+    provider.accountNickname ??
+    labels[provider.id] ??
+    (provider.subscription?.nickname !== "Account" ? provider.subscription?.nickname : undefined) ??
+    "Account"
+  );
+}
+
+function SubscriptionLibraryRow({
   connection,
   provider,
   epoch,
   busy,
+  usedOn,
+  onAccountLabel,
   onConnect,
-  onActivate,
   onRename,
   onRemove,
 }: {
-  connection: DaemonConnection;
+  connection: DaemonConnection | null;
   provider: ProviderStatus;
   epoch: number;
   busy: boolean;
+  usedOn: number;
+  onAccountLabel: (id: string, label: string | undefined) => void;
   onConnect: () => void;
-  onActivate?: () => void;
-  onRename: (provider: ProviderStatus, name: string | undefined) => Promise<void>;
-  onRemove?: () => void;
+  onRename: (provider: ProviderStatus, name: string | undefined) => Promise<unknown>;
+  onRemove: () => void;
 }) {
   const [account, setAccount] = useState<AgentAccount | null>(null);
   const [failed, setFailed] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [renaming, setRenaming] = useState(false);
   useEffect(() => {
-    if (!provider.installed || !provider.enabled) return;
+    if (!connection || !provider.installed || !provider.enabled) return;
     let cancelled = false;
     requestAccount(connection, provider.id, { type: "read" }).then(
       (next) => {
         if (cancelled) return;
         setAccount(next);
+        onAccountLabel(provider.id, next.label);
         setFailed(false);
       },
       () => {
@@ -399,7 +641,7 @@ function SubscriptionRow({
     return () => {
       cancelled = true;
     };
-  }, [connection, provider.id, provider.installed, provider.enabled, epoch]);
+  }, [connection, provider.id, provider.installed, provider.enabled, epoch, onAccountLabel]);
   const connected = account?.status === "connected";
   const providerFallback = provider.subscription?.nickname;
   const name =
@@ -418,30 +660,20 @@ function SubscriptionRow({
             ? `Connected${account.label && account.label !== name ? ` · ${account.label}` : ""}`
             : "Not connected";
   return (
-    <div className="flex flex-wrap items-center gap-3 p-4">
+    <div
+      role="group"
+      aria-label={`${subscriptionEngineLabels[provider.engine as SubscriptionEngine]} subscription ${name}`}
+      className="flex flex-wrap items-center gap-3 px-4 py-3"
+    >
+      <ProviderIcon provider={provider.engine} />
       <div className="min-w-0 flex-1 basis-32">
-        <p className="flex items-center gap-2 font-medium">
-          {name}
-          {provider.active && (
-            <span className="rounded-full border px-2 py-0.5 text-[11px] font-normal text-muted-foreground">
-              Active
-            </span>
-          )}
+        <p className="font-medium">{name}</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {status}
+          {usedOn ? ` · Used on ${usedOn} machine${usedOn === 1 ? "" : "s"}` : ""}
         </p>
-        <p className="mt-1 text-xs text-muted-foreground">{status}</p>
       </div>
       <div className="flex shrink-0 items-center gap-1">
-        {onActivate && !provider.active && provider.installed && provider.enabled && (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={busy}
-            aria-label={`Use ${name}`}
-            onClick={onActivate}
-          >
-            Use
-          </Button>
-        )}
         {provider.installed && provider.enabled && (
           <Button variant="outline" size="sm" disabled={busy} onClick={onConnect}>
             {connected ? "Manage" : "Connect"}
@@ -456,40 +688,39 @@ function SubscriptionRow({
         >
           <Pencil />
         </Button>
-        {onRemove &&
-          (confirming ? (
-            <>
-              <Button
-                variant="destructive"
-                size="sm"
-                disabled={busy}
-                onClick={() => {
-                  setConfirming(false);
-                  onRemove();
-                }}
-              >
-                <Trash2 /> Sign out and remove
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`Keep ${name}`}
-                onClick={() => setConfirming(false)}
-              >
-                <X />
-              </Button>
-            </>
-          ) : (
+        {confirming ? (
+          <>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={busy}
+              onClick={() => {
+                setConfirming(false);
+                onRemove();
+              }}
+            >
+              <Trash2 /> Sign out and remove
+            </Button>
             <Button
               variant="ghost"
               size="icon-sm"
-              aria-label={`Remove ${name}`}
-              disabled={busy}
-              onClick={() => setConfirming(true)}
+              aria-label={`Keep ${name}`}
+              onClick={() => setConfirming(false)}
             >
-              <Trash2 />
+              <X />
             </Button>
-          ))}
+          </>
+        ) : (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`Remove ${name}`}
+            disabled={busy}
+            onClick={() => setConfirming(true)}
+          >
+            <Trash2 />
+          </Button>
+        )}
       </div>
       {renaming && (
         <RenameAccountDialog
@@ -511,7 +742,7 @@ function RenameAccountDialog({
 }: {
   name: string;
   fallbackName: string;
-  onSave: (name: string | undefined) => Promise<void>;
+  onSave: (name: string | undefined) => Promise<unknown>;
   onClose: () => void;
 }) {
   const [value, setValue] = useState(name);
@@ -577,7 +808,7 @@ function AddSubscriptionDialog({
 }: {
   providers: ProviderStatus[];
   revision: number;
-  onSave: (op: ProviderOperation) => Promise<void>;
+  onSave: (op: ProviderOperation) => Promise<unknown>;
   onCreated: (id: string) => void;
   onClose: () => void;
 }) {
@@ -609,7 +840,7 @@ function AddSubscriptionDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add a subscription</DialogTitle>
-          <DialogDescription>Connect another account on this machine.</DialogDescription>
+          <DialogDescription>Add an account to your subscription library.</DialogDescription>
         </DialogHeader>
         <form
           className="space-y-4"
@@ -675,6 +906,10 @@ function AccountConnectDialog({
   const mounted = useRef(true);
   const latest = useRef<AgentAccount | null>(null);
   const reading = useRef(false);
+  const changed = useRef(onChanged);
+  useEffect(() => {
+    changed.current = onChanged;
+  }, [onChanged]);
   const request = useCallback(
     async (action: AgentAccountAction, background = false) => {
       if (action.type === "read") {
@@ -702,7 +937,7 @@ function AccountConnectDialog({
           next.message = "Sign-in expired or was cancelled. Try again.";
         if (next.status === "connected" && latest.current?.status !== "connected") {
           invalidateModelCatalogs(connection);
-          onChanged();
+          changed.current();
         }
         latest.current = next;
         setAccount(next);
@@ -715,7 +950,7 @@ function AccountConnectDialog({
         if (mounted.current && !background) setBusy(false);
       }
     },
-    [connection, provider.id, onChanged],
+    [connection, provider.id],
   );
   useEffect(() => {
     mounted.current = true;

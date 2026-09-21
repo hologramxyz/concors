@@ -51,11 +51,16 @@ subscriptions is instant and local.
 ## Settings → Subscriptions
 
 The desktop settings page (`apps/desktop/src/settings/subscriptions-settings.tsx`, also reachable
-from the mobile settings drawer) lists the local and cloud machines and keeps the user on the page
-while they switch between them. For the selected machine it groups the built-in sign-in and extra
-subscriptions per engine, shows the active account, and offers add, connect, activate, rename, and
-remove actions. An account displays its signed-in email by default; `accountNickname` stores an
-optional override for both built-in and extra accounts. Sign-in state
+from the mobile settings drawer) separates the subscription library from machine assignments.
+Built-in CLI sign-ins are not library entries: only accounts explicitly added as subscriptions are
+shown. Each local or cloud machine has one Claude selector and one ChatGPT selector, and selecting
+an account copies its public provider configuration to that machine before activating it. Its
+credentials are still created independently on that machine, so an assignment that has not signed
+in there shows a Connect action. The page opens live management connections while visible; machine
+status reflects those connections instead of the control plane's last heartbeat timestamp.
+
+The local daemon holds the library's public account definitions. An account displays its signed-in
+email by default; `accountNickname` stores an optional override. Sign-in state
 without an open session uses the provider-level `account` operation on `provider.request`
 (`AgentManager.providerAccount`), which reuses the session account backends and their privacy
 rules: flows are socket-scoped, transient, and never enter receipts or broadcasts. A successful
@@ -72,6 +77,6 @@ database migrations are needed.
 engine restrictions, base-install binary resolution, activation and its credential redirection,
 and removal cleanup; `packages/daemon/src/agents/providers.test.ts` covers the provider-level
 account flow and catalog exclusion over a real socket;
-`apps/desktop/src/settings/subscriptions.test.ts` covers grouping and configuration building;
-`e2e/subscriptions.spec.ts` walks add → sign in → activate on the machine → remove in the
-browser.
+`apps/desktop/src/settings/subscriptions.test.ts` covers grouping, configuration building and safe
+cross-machine copies; `e2e/subscriptions.spec.ts` walks library add → sign in → assignment →
+per-machine sign in, including Codex device auth across a background refresh.
