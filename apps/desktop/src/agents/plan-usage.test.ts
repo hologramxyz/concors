@@ -76,3 +76,36 @@ it("never asks a machine that cannot answer", () => {
   expect(older.store.supported).toBe(false);
   expect(older.store.getSnapshot().size).toBe(0);
 });
+
+it("asks again on the next look when the answer described one session, not the account", async () => {
+  const { store, connection } = setup();
+  connection.requestAgent.mockResolvedValueOnce(
+    ok({
+      ...usage,
+      status: "unsupported",
+      windows: [],
+      message: "Open this agent to see its plan usage.",
+    }),
+  );
+  store.refresh("claude", sessionId);
+  await vi.waitFor(() =>
+    expect(store.getSnapshot().get("claude")?.usage?.status).toBe("unsupported"),
+  );
+  store.refresh("claude", crypto.randomUUID());
+  await vi.waitFor(() =>
+    expect(store.getSnapshot().get("claude")?.usage?.status).toBe("available"),
+  );
+  expect(connection.requestAgent).toHaveBeenCalledTimes(2);
+});
+
+it("judges freshness on this client's clock, whatever the machine's says", async () => {
+  const { store, connection } = setup();
+  // A machine clock a day ahead must not keep an answer fresh forever.
+  connection.requestAgent.mockResolvedValue(ok({ ...usage, fetchedAt: Date.now() + 86_400_000 }));
+  store.refresh("claude", sessionId);
+  await vi.waitFor(() => expect(store.getSnapshot().get("claude")?.receivedAt).not.toBeNull());
+  const now = Date.now();
+  vi.spyOn(Date, "now").mockReturnValue(now + 61_000);
+  store.refresh("claude", sessionId);
+  expect(connection.requestAgent).toHaveBeenCalledTimes(2);
+});
