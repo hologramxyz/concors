@@ -121,8 +121,10 @@ jobs:
             echo "::warning::TAURI_SIGNING_PRIVATE_KEY is not set; publishing an unsigned release."
             exit 0
           fi
-          for artifact in apps/desktop/dist/release/Concors-*-x64.tar.gz \
-                          apps/desktop/dist/release/concors-bin-*.pkg.tar.zst; do
+          # Absolute paths: `pnpm --filter … exec` runs the signer from apps/desktop, where a
+          # repository-relative path does not exist.
+          for artifact in "$PWD"/apps/desktop/dist/release/Concors-*-x64.tar.gz \
+                          "$PWD"/apps/desktop/dist/release/concors-bin-*.pkg.tar.zst; do
             pnpm --filter @concors/desktop exec tauri signer sign "$artifact" > /dev/null
             test -s "$artifact.sig" || { echo "no signature for $artifact" >&2; exit 1; }
             echo "signed $(basename "$artifact")"
