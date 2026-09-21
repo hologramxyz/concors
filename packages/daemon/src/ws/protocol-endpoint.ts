@@ -268,6 +268,8 @@ export function registerProtocolEndpoint(
             void agents.discoverSessions(message).then((result) => send(socket, result));
           else if (message.operation.kind === "account")
             void agents.providerAccount(viewer.id, message).then((result) => send(socket, result));
+          else if (message.operation.kind === "activate")
+            send(socket, agents.activateSubscription(message));
           else send(socket, providers.request(message));
         } else if (message.type === "file.request")
           void files.request(message).then((result) => send(socket, result));

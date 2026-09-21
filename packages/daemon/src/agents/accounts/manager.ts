@@ -5,8 +5,9 @@ import {
   type AgentAccountAction,
   type AgentInfo,
 } from "@concors/protocol";
-import { providerFactory } from "../providers/index.ts";
 import { ProviderRegistry } from "../providers/registry.ts";
+import { CodexAppServer } from "../codex/app-server.ts";
+import { OpenCodeProvider } from "../providers/opencode.ts";
 import { ClaudeAccount } from "./claude.ts";
 import { CodexAccount } from "./codex.ts";
 import { OpenCodeAccount } from "./opencode.ts";
@@ -19,18 +20,29 @@ export const accountBackendFactory =
   (registry: ProviderRegistry): AccountBackendFactory =>
   (info) => {
     const config = registry.config(info.provider);
+    const refuse = async () => {
+      throw new Error("Sign-in cannot approve agent tools");
+    };
+    // Sign-in addresses this configuration's own credential home, never the machine-wide
+    // active subscription: connecting the default account must not touch the active one.
     if (config.engine === "claude")
-      return new ClaudeAccount(info.directory, registry.launcher(config));
-    if (!["codex", "opencode"].includes(config.engine))
-      throw new Error("Sign in through this agent's CLI on the machine.");
-    const provider = providerFactory(registry)(
-      info.directory,
-      async () => {
-        throw new Error("Sign-in cannot approve agent tools");
-      },
-      info.provider,
-    );
-    return config.engine === "codex" ? new CodexAccount(provider) : new OpenCodeAccount(provider);
+      return new ClaudeAccount(info.directory, registry.launcher(config, false));
+    if (config.engine === "codex")
+      return new CodexAccount(
+        new CodexAppServer(
+          registry.launcher(config, false)(
+            "codex",
+            ["app-server", "--listen", "stdio://"],
+            info.directory,
+          ),
+          refuse,
+        ),
+      );
+    if (config.engine === "opencode")
+      return new OpenCodeAccount(
+        new OpenCodeProvider(info.directory, refuse, registry.launcher(config, false)),
+      );
+    throw new Error("Sign in through this agent's CLI on the machine.");
   };
 const createAccountBackend = accountBackendFactory(new ProviderRegistry());
 interface Entry {
