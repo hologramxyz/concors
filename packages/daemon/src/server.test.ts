@@ -91,6 +91,7 @@ describe("WebSocket handshake", () => {
           "agent-queue",
           "agent-providers",
           "provider-settings",
+          "provider-subscriptions",
           "agent-native-controls",
           "agent-plan-implementation",
           "pane-rearrangement",

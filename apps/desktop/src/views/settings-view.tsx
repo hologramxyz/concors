@@ -1,4 +1,5 @@
 import { ProvidersSettings } from "@/settings/providers-settings";
+import { SubscriptionsSettings } from "@/settings/subscriptions-settings";
 import { NotificationSettings } from "@/notifications/settings";
 import type { ConnectionState, DaemonEndpoint } from "@concors/daemon-client";
 import type { ReactNode } from "react";
@@ -62,6 +63,9 @@ export function SettingsView({
       break;
     case "providers":
       content = <ProvidersSettings />;
+      break;
+    case "subscriptions":
+      content = <SubscriptionsSettings />;
       break;
     case "terminals":
       content = (

@@ -540,3 +540,62 @@ it("keeps account exchanges out of receipts and broadcasts, scoped to the initia
     another.disconnect();
   }
 });
+it("connects a subscription's account from settings without an open session", async () => {
+  const { c, id } = await setup();
+  const provider = (operation: Parameters<typeof c.requestProvider>[0]) =>
+    c.requestProvider(operation, randomUUID());
+  const save = await provider({
+    kind: "save",
+    config: {
+      id: "claude-work",
+      label: "Claude — Work",
+      engine: "claude",
+      enabled: true,
+      command: ["claude"],
+      subscription: { nickname: "Work" },
+    },
+    expectedRevision: 0,
+  });
+  if (save.outcome.status !== "ok") throw new Error(save.outcome.message);
+  expect(save.outcome.providers.find((p) => p.id === "claude-work")?.subscription).toEqual({
+    nickname: "Work",
+  });
+  const read = await provider({ kind: "account", id: "claude-work", action: { type: "read" } });
+  if (read.outcome.status !== "ok") throw new Error(read.outcome.message);
+  expect(read.outcome.account?.status).toBe("disconnected");
+  const start = await provider({
+    kind: "account",
+    id: "claude-work",
+    action: { type: "start", methodId: "fixture" },
+  });
+  if (start.outcome.status !== "ok" || !start.outcome.account?.challenge)
+    throw new Error("Sign-in did not start");
+  const complete = await provider({
+    kind: "account",
+    id: "claude-work",
+    action: {
+      type: "complete",
+      flowId: start.outcome.account.challenge.flowId,
+      value: "test-fixture-code",
+    },
+  });
+  expect(complete.outcome.status).toBe("ok");
+  const after = await provider({ kind: "account", id: "claude-work", action: { type: "read" } });
+  if (after.outcome.status !== "ok") throw new Error(after.outcome.message);
+  expect(after.outcome.account?.status).toBe("connected");
+  expect(after.outcome.account?.label).toBe("fixture-account@example.test");
+  // Activation is a machine-wide choice, and subscriptions never join the per-chat catalog.
+  const activated = await provider({
+    kind: "activate",
+    engine: "claude",
+    id: "claude-work",
+    expectedRevision: 1,
+  });
+  if (activated.outcome.status !== "ok") throw new Error(activated.outcome.message);
+  expect(activated.outcome.providers.find((p) => p.id === "claude-work")?.active).toBe(true);
+  expect(activated.outcome.providers.find((p) => p.id === "claude")?.active).toBe(false);
+  const catalog = await c.requestAgent({ kind: "provider-catalog", sessionId: id }, randomUUID());
+  if (catalog.outcome.status !== "ok") throw new Error("Catalog failed");
+  expect(catalog.outcome.providers?.some((p) => p.id === "claude-work")).toBe(false);
+  expect(catalog.outcome.providers?.some((p) => p.id === "claude")).toBe(true);
+});

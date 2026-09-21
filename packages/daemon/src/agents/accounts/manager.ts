@@ -5,30 +5,44 @@ import {
   type AgentAccountAction,
   type AgentInfo,
 } from "@concors/protocol";
-import { providerFactory } from "../providers/index.ts";
 import { ProviderRegistry } from "../providers/registry.ts";
+import { CodexAppServer } from "../codex/app-server.ts";
+import { OpenCodeProvider } from "../providers/opencode.ts";
 import { ClaudeAccount } from "./claude.ts";
 import { CodexAccount } from "./codex.ts";
 import { OpenCodeAccount } from "./opencode.ts";
 import type { AccountBackend } from "./backend.ts";
 
-export type AccountBackendFactory = (info: AgentInfo) => AccountBackend;
+/** What an account flow needs to address a backend; sessions and provider configs both qualify. */
+export type AccountTarget = Pick<AgentInfo, "id" | "provider" | "directory">;
+export type AccountBackendFactory = (info: AccountTarget) => AccountBackend;
 export const accountBackendFactory =
   (registry: ProviderRegistry): AccountBackendFactory =>
   (info) => {
     const config = registry.config(info.provider);
+    const refuse = async () => {
+      throw new Error("Sign-in cannot approve agent tools");
+    };
+    // Sign-in addresses this configuration's own credential home, never the machine-wide
+    // active subscription: connecting the default account must not touch the active one.
     if (config.engine === "claude")
-      return new ClaudeAccount(info.directory, registry.launcher(config));
-    if (!["codex", "opencode"].includes(config.engine))
-      throw new Error("Sign in through this agent's CLI on the machine.");
-    const provider = providerFactory(registry)(
-      info.directory,
-      async () => {
-        throw new Error("Sign-in cannot approve agent tools");
-      },
-      info.provider,
-    );
-    return config.engine === "codex" ? new CodexAccount(provider) : new OpenCodeAccount(provider);
+      return new ClaudeAccount(info.directory, registry.launcher(config, false));
+    if (config.engine === "codex")
+      return new CodexAccount(
+        new CodexAppServer(
+          registry.launcher(config, false)(
+            "codex",
+            ["app-server", "--listen", "stdio://"],
+            info.directory,
+          ),
+          refuse,
+        ),
+      );
+    if (config.engine === "opencode")
+      return new OpenCodeAccount(
+        new OpenCodeProvider(info.directory, refuse, registry.launcher(config, false)),
+      );
+    throw new Error("Sign in through this agent's CLI on the machine.");
   };
 const createAccountBackend = accountBackendFactory(new ProviderRegistry());
 interface Entry {
@@ -43,10 +57,10 @@ export class AgentAccounts {
   private entries = new Map<string, Entry>();
   private requests = new Set<string>();
   private factory: AccountBackendFactory;
-  private connected: (info: AgentInfo) => void;
+  private connected: (info: AccountTarget) => void;
   constructor(
     factory: AccountBackendFactory = createAccountBackend,
-    connected: (info: AgentInfo) => void = () => undefined,
+    connected: (info: AccountTarget) => void = () => undefined,
   ) {
     this.factory = factory;
     this.connected = connected;
@@ -58,7 +72,11 @@ export class AgentAccounts {
     clearTimeout(entry.timer);
     await entry.backend.close().catch(() => undefined);
   }
-  async request(owner: string, info: AgentInfo, action: AgentAccountAction): Promise<AgentAccount> {
+  async request(
+    owner: string,
+    info: AccountTarget,
+    action: AgentAccountAction,
+  ): Promise<AgentAccount> {
     const key = JSON.stringify([owner, info.id]);
     if (this.requests.has(key)) throw new Error("Account request is already in progress");
     this.requests.add(key);
@@ -71,7 +89,7 @@ export class AgentAccounts {
   private async perform(
     key: string,
     owner: string,
-    info: AgentInfo,
+    info: AccountTarget,
     action: AgentAccountAction,
   ): Promise<AgentAccount> {
     let entry = this.entries.get(key);
