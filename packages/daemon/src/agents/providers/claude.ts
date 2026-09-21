@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { unsupportedPlanUsage, type AgentPlanUsage } from "@concors/protocol";
+import { readClaudePlanUsage } from "../usage/claude-usage.ts";
 import { sessionOffset } from "./session-page.ts";
 import { readFile } from "node:fs/promises";
 import {
@@ -71,6 +73,7 @@ export class ClaudeProvider extends EventProvider {
   private models: ModelInfo[] = [];
   private currentModel = "";
   private currentUsed = 0;
+  private readingContext = false;
   private contextLimit: number | null = null;
   private totalTokens: number | null = null;
   private compactCompleted = false;
@@ -317,6 +320,9 @@ export class ClaudeProvider extends EventProvider {
         },
       ],
     });
+    // A fresh session already holds a system prompt and its tools; show that before the first
+    // turn rather than an empty ring.
+    void this.refreshContext();
     if (session.supportedCommands) {
       const commands = await session.supportedCommands();
       this.controls.commands = [
@@ -712,6 +718,7 @@ export class ClaudeProvider extends EventProvider {
           0,
         );
       if (this.currentUsed) this.usage(this.currentUsed, this.contextLimit, this.totalTokens);
+      void this.refreshContext();
       this.finish(
         m["is_error"] === true
           ? array(m["errors"]).map(String).join("\n") || "Claude Code failed"
@@ -740,6 +747,56 @@ export class ClaudeProvider extends EventProvider {
         ]
       : [];
   }
+  /**
+   * Claude reports plan limits through the session's own control channel, so nothing reads the
+   * CLI's credentials. API-key sessions report that plan limits do not apply.
+   */
+  /**
+   * What Claude Code itself counts as context, which is what `/context` shows. Summing a
+   * message's tokens cannot know the compaction boundary or the window a 1M model actually runs
+   * with, so the streamed sum is only a stand-in between turns.
+   */
+  private async refreshContext() {
+    const session = this.session;
+    if (!session?.getContextUsage || this.readingContext || this.closed) return;
+    this.readingContext = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      // Older CLIs may never answer; the ring keeps the streamed figure rather than stalling.
+      const context = await Promise.race([
+        session.getContextUsage(),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error("Context usage timed out")), 5000);
+        }),
+      ]);
+      // A reply for a session replaced meanwhile (a model switch, a resume) is not this one's.
+      if (this.session !== session || this.closed) return;
+      if (typeof context.maxTokens === "number" && context.maxTokens > 0)
+        this.contextLimit = context.maxTokens;
+      if (typeof context.totalTokens === "number" && context.totalTokens >= 0)
+        this.currentUsed = context.totalTokens;
+      this.usage(this.currentUsed, this.contextLimit, this.totalTokens);
+    } catch {
+      // An older CLI or a closed session keeps the streamed estimate.
+    } finally {
+      clearTimeout(timer);
+      this.readingContext = false;
+    }
+  }
+
+  async planUsage(): Promise<AgentPlanUsage> {
+    const session = this.session;
+    // Transient, so neither the machine nor clients keep it as the account's answer.
+    if (!session) throw new Error("Claude Code is still starting. Try again in a moment.");
+    const read = session.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET;
+    if (!read)
+      return unsupportedPlanUsage(
+        "claude",
+        "Update Claude Code on this machine to see plan usage.",
+      );
+    return readClaudePlanUsage(await read.call(session));
+  }
+
   async close() {
     this.closed = true;
     this.generation++;

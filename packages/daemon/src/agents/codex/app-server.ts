@@ -1,4 +1,7 @@
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
+import type { AgentPlanUsage } from "@concors/protocol";
+import { object } from "../providers/contract.ts";
+import { readCodexPlanUsage } from "../usage/codex-usage.ts";
 import { z } from "zod";
 import { codexMcp } from "../providers/mcp.ts";
 import type { McpServer } from "@concors/protocol";
@@ -95,6 +98,14 @@ export class CodexAppServer {
       this.#notifications.delete(listener);
     };
   }
+  /** Account-wide, so it answers whether or not a thread is running. */
+  async planUsage(): Promise<AgentPlanUsage> {
+    const response = object(
+      await this.request("account/rateLimits/read", { excludeResetCreditDetails: true }, 10000),
+    );
+    return readCodexPlanUsage(response["rateLimits"]);
+  }
+
   request(method: string, params: unknown = {}, timeoutMs = 30000): Promise<unknown> {
     if (!this.#ready) return Promise.reject(new Error("Initialize the Codex app server first"));
     if (this.mcp.length && ["thread/start", "thread/resume", "session/fork"].includes(method))

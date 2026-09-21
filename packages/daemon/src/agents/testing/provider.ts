@@ -1,4 +1,5 @@
 import type { AgentProviderId } from "@concors/protocol";
+import type { AgentPlanUsage } from "@concors/protocol";
 import type { AgentProvider, AgentProviderFactory } from "../manager.ts";
 
 /** Deterministic provider used only by integration tests and the acceptance-test server. */
@@ -317,6 +318,32 @@ export class TestAgentProvider implements AgentProvider {
       },
     });
   }
+  /** Fixed windows, including a model-scoped weekly one, so tests can read real bars. */
+  async planUsage(): Promise<AgentPlanUsage> {
+    return {
+      provider: "codex",
+      status: "available",
+      planLabel: "Max 20x",
+      message: null,
+      windows: [
+        {
+          id: "five-hour",
+          label: "Session",
+          usedPercent: 42,
+          resetsAt: new Date(Date.now() + 2 * 3_600_000).toISOString(),
+        },
+        {
+          id: "weekly",
+          label: "Weekly",
+          usedPercent: 13,
+          resetsAt: new Date(Date.now() + 3 * 86_400_000).toISOString(),
+        },
+        { id: "weekly-fable", label: "Weekly · Fable", usedPercent: 91, resetsAt: null },
+      ],
+      fetchedAt: Date.now(),
+    };
+  }
+
   async close(): Promise<void> {
     this.closed = true;
   }

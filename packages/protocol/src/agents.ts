@@ -1,5 +1,6 @@
 import { AgentAccountActionSchema, AgentAccountSchema } from "./agent-accounts.ts";
 import { z } from "zod";
+import { AgentPlanUsageSchema } from "./agent-usage.ts";
 import { AgentControlsSchema, AgentFeatureValueSchema } from "./agent-controls.ts";
 import { ProviderIdSchema, ProviderEngineSchema } from "./providers.ts";
 import { providerPresets } from "./provider-presets.ts";
@@ -316,6 +317,8 @@ export const AgentOperationSchema = z.discriminatedUnion("kind", [
     provider: AgentProviderIdSchema.optional(),
   }),
   z.object({ kind: z.literal("account"), sessionId: Id, action: AgentAccountActionSchema }),
+  /** What is left of the plan behind this session's provider. */
+  z.object({ kind: z.literal("usage"), sessionId: Id }),
   z.object({
     kind: z.literal("switch-provider"),
     sessionId: Id,
@@ -404,6 +407,7 @@ export const AgentResultSchema = z.object({
       account: AgentAccountSchema.optional(),
       attachment: AgentAttachmentSchema.optional(),
       messageIndex: AgentMessageIndexSchema.optional(),
+      usage: AgentPlanUsageSchema.optional(),
     }),
     z.object({ status: z.literal("error"), message: z.string() }),
   ]),
