@@ -193,10 +193,10 @@ live. Native command, model, and session availability remains provider-dependent
 
 ## Remaining scope boundaries
 
-The fixes above cover the identified core defects. See the [primitive audit](chat-primitives-audit.md)
+The fixes above cover the identified core defects. Context window and plan usage per provider
+are described in [Context window and plan usage](agent-usage.md). See the [primitive audit](chat-primitives-audit.md)
 for precise limits, including queued async answers and unsupported custom UIs. Additional
-features still outside this change include provider quota/rate-limit dashboards,
-imported attachment downloads/automatic cleanup, a general plugin loader, and
+features still outside this change include imported attachment downloads/automatic cleanup, a general plugin loader, and
 a portable dictation backend. Pi extension-specific custom UIs are limited to
 the supported question and control contract. There is no automatic replay of an
 unconfirmed request after a crash and no blanket execution-isolation guarantee
