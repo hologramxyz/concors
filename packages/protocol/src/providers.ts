@@ -64,6 +64,8 @@ export type ProviderPreset = ProviderConfig & {
   installLink: string;
 };
 export const ProviderStatusSchema = ProviderConfigSchema.omit({ env: true, params: true }).extend({
+  /** Whether this account is the one every chat on the machine uses for its engine. */
+  active: z.boolean().optional(),
   envKeys: z.array(z.string()),
   params: z.object({ supportsMcpServers: z.boolean().optional() }).optional(),
   mcpServerNames: z.array(z.string()).optional(),
@@ -106,6 +108,13 @@ export const ProviderRequestSchema = z.object({
       kind: z.literal("account"),
       id: ProviderIdSchema,
       action: AgentAccountActionSchema,
+    }),
+    /** Which subscription every chat on this machine uses for an engine; null = default account. */
+    z.object({
+      kind: z.literal("activate"),
+      engine: z.enum(SUBSCRIPTION_ENGINES),
+      id: ProviderIdSchema.nullable(),
+      expectedRevision: z.number().int().nonnegative(),
     }),
   ]),
 });

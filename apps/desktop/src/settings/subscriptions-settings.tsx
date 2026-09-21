@@ -127,7 +127,7 @@ export function SubscriptionsSettings() {
   return (
     <Section
       title="Subscriptions"
-      description="Connect several Claude or ChatGPT accounts to this machine and pick which one each chat uses. Sign-ins stay side by side, so switching is instant."
+      description="Connect several Claude or ChatGPT accounts to this machine and choose which one it uses. Sign-ins stay side by side, so switching the whole machine over is instant."
       actions={
         <Button
           variant="outline"
@@ -167,6 +167,16 @@ export function SubscriptionsSettings() {
                     epoch={accountEpoch}
                     busy={busy}
                     onConnect={() => setConnecting(group.base?.id ?? null)}
+                    onActivate={() =>
+                      void execute({
+                        kind: "activate",
+                        engine: group.engine,
+                        id: null,
+                        expectedRevision: data?.revision ?? 0,
+                      }).catch(() => {
+                        /* The operation already displayed its error. */
+                      })
+                    }
                   />
                 )}
                 {group.subscriptions.map((provider) => (
@@ -178,6 +188,16 @@ export function SubscriptionsSettings() {
                     epoch={accountEpoch}
                     busy={busy}
                     onConnect={() => setConnecting(provider.id)}
+                    onActivate={() =>
+                      void execute({
+                        kind: "activate",
+                        engine: group.engine,
+                        id: provider.id,
+                        expectedRevision: data?.revision ?? 0,
+                      }).catch(() => {
+                        /* The operation already displayed its error. */
+                      })
+                    }
                     onRemove={() =>
                       void execute({
                         kind: "remove",
@@ -198,9 +218,9 @@ export function SubscriptionsSettings() {
             </div>
           ))}
           <p className="mt-4 text-sm text-muted-foreground">
-            Each subscription keeps its own sign-in on the connected machine; credentials never
-            leave it. Removing a subscription signs it out there. Pick a subscription for a chat
-            from the composer’s model menu.
+            The active subscription is used by every chat on this machine; other machines choose
+            their own. Each subscription keeps its own sign-in on the connected machine and
+            credentials never leave it. Removing a subscription signs it out there.
           </p>
         </>
       )}
@@ -235,6 +255,7 @@ function SubscriptionRow({
   epoch,
   busy,
   onConnect,
+  onActivate,
   onRemove,
 }: {
   connection: DaemonConnection;
@@ -243,6 +264,7 @@ function SubscriptionRow({
   epoch: number;
   busy: boolean;
   onConnect: () => void;
+  onActivate?: () => void;
   onRemove?: () => void;
 }) {
   const [account, setAccount] = useState<AgentAccount | null>(null);
@@ -280,10 +302,28 @@ function SubscriptionRow({
   return (
     <div className="flex flex-wrap items-center gap-3 p-4">
       <div className="min-w-0 flex-1 basis-32">
-        <p className="font-medium">{name}</p>
+        <p className="flex items-center gap-2 font-medium">
+          {name}
+          {provider.active && (
+            <span className="rounded-full border px-2 py-0.5 text-[11px] font-normal text-muted-foreground">
+              Active on this machine
+            </span>
+          )}
+        </p>
         <p className="mt-1 text-xs text-muted-foreground">{status}</p>
       </div>
       <div className="flex shrink-0 items-center gap-1">
+        {onActivate && !provider.active && provider.installed && provider.enabled && (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={busy}
+            aria-label={`Use ${name} on this machine`}
+            onClick={onActivate}
+          >
+            Use on this machine
+          </Button>
+        )}
         {provider.installed && provider.enabled && (
           <Button variant="outline" size="sm" disabled={busy} onClick={onConnect}>
             {connected ? "Manage sign-in" : "Connect"}

@@ -19,6 +19,8 @@ import type { launch } from "./launch.ts";
 const Saved = z.object({
   revision: z.number().int().nonnegative(),
   providers: z.array(ProviderConfigSchema).max(128),
+  /** Per engine, the subscription every chat on this machine uses; absent = default account. */
+  active: z.record(z.string(), z.string()).default({}),
 });
 /** Machine-local configuration. Credential values never leave this service. */
 export class ProviderRegistry {
@@ -40,7 +42,7 @@ export class ProviderRegistry {
     const path = join(directory, "config.json");
     this.saved = existsSync(path)
       ? Saved.parse(JSON.parse(readFileSync(path, "utf8")))
-      : { revision: 0, providers: [] };
+      : { revision: 0, providers: [], active: {} };
   }
   get revision() {
     return this.saved.revision;
@@ -83,6 +85,28 @@ export class ProviderRegistry {
   credentialHome(config: ProviderConfig): string {
     return join(dirname(this.directory), "accounts", config.engine, config.id);
   }
+  /**
+   * The machine-wide active subscription redirects its engine's regular configurations to the
+   * subscription's credential home. A configuration with its own explicit credential directory,
+   * and the subscription configurations themselves, are never redirected.
+   */
+  private credentialOverlay(config: ProviderConfig): Record<string, string> {
+    const key = ProviderRegistry.credentialEnvKey(config.engine);
+    if (!key || config.subscription || config.env?.[key]) return {};
+    const activeId = this.saved.active[config.engine];
+    const active = activeId
+      ? this.saved.providers.find(
+          (p) => p.id === activeId && p.subscription && p.engine === config.engine,
+        )
+      : undefined;
+    return active ? { [key]: active.env?.[key] ?? this.credentialHome(active) } : {};
+  }
+  /** The credential home this configuration's conversations effectively run under. */
+  credentialDir(config: ProviderConfig): string | undefined {
+    const key = ProviderRegistry.credentialEnvKey(config.engine);
+    if (!key) return undefined;
+    return this.credentialOverlay(config)[key] ?? config.env?.[key];
+  }
   private env(config: ProviderConfig): NodeJS.ProcessEnv {
     const bin = join(this.directory, this.baseId(config), "node_modules", ".bin");
     return {
@@ -123,7 +147,7 @@ export class ProviderRegistry {
       return false;
     }
   }
-  launcher(config: ProviderConfig): typeof launch {
+  launcher(config: ProviderConfig, activeCredentials = true): typeof launch {
     if (!config.enabled) throw new Error("This provider is disabled in Settings → Providers.");
     if (!this.installed(config))
       throw new Error(
@@ -145,6 +169,9 @@ export class ProviderRegistry {
           (process.env[key] !== value && !(key in (config.env ?? {})))
         )
           merged[key] = value;
+      // The machine-wide subscription choice is authoritative for conversations; account
+      // sign-in flows address a specific credential home and skip it.
+      if (activeCredentials) Object.assign(merged, this.credentialOverlay(config));
       const resolved = resolveTerminalCommand(command ?? "", [], process.platform, merged, cwd);
       return spawn(
         process.platform === "win32" ? (command ?? "") : resolved.command,
@@ -158,8 +185,16 @@ export class ProviderRegistry {
       const { env, params, ...publicConfig } = config;
       const preset = providerPresets.find((p) => p.id === config.id),
         job = this.jobs.get(config.id);
+      const subscribable = ProviderRegistry.credentialEnvKey(config.engine) !== undefined;
       return {
         ...publicConfig,
+        ...(subscribable
+          ? {
+              active: config.subscription
+                ? this.saved.active[config.engine] === config.id
+                : !this.saved.active[config.engine],
+            }
+          : {}),
         ...(params?.supportsMcpServers === undefined
           ? {}
           : { params: { supportsMcpServers: params.supportsMcpServers } }),
@@ -184,10 +219,20 @@ export class ProviderRegistry {
     try {
       if (op.kind === "sessions-list") throw new Error("Use the session discovery service");
       if (op.kind === "account") throw new Error("Use the account service");
-      if (op.kind === "save" || op.kind === "remove") {
+      if (op.kind === "save" || op.kind === "remove" || op.kind === "activate") {
         if (op.expectedRevision !== this.saved.revision)
           throw new Error("Provider settings changed on another client. Reload before saving.");
-        if (op.kind === "save") {
+        if (op.kind === "activate") {
+          if (op.id) {
+            const target = this.saved.providers.find((p) => p.id === op.id);
+            if (!target?.subscription || target.engine !== op.engine)
+              throw new Error("Choose one of this engine's subscriptions.");
+            this.saved.active = { ...this.saved.active, [op.engine]: op.id };
+          } else {
+            const { [op.engine]: _, ...rest } = this.saved.active;
+            this.saved.active = rest;
+          }
+        } else if (op.kind === "save") {
           const config = ProviderConfigSchema.parse(op.config),
             previous = this.configs().find((p) => p.id === config.id);
           config.env = { ...previous?.env, ...config.env };
@@ -221,6 +266,10 @@ export class ProviderRegistry {
         } else {
           const removed = this.saved.providers.find((p) => p.id === op.id);
           this.saved.providers = this.saved.providers.filter((p) => p.id !== op.id);
+          if (removed?.subscription && this.saved.active[removed.engine] === removed.id) {
+            const { [removed.engine]: _, ...rest } = this.saved.active;
+            this.saved.active = rest;
+          }
           const key = removed?.subscription
             ? ProviderRegistry.credentialEnvKey(removed.engine)
             : undefined;

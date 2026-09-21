@@ -305,3 +305,72 @@ it("resolves a subscription's binaries from its engine's base installation", asy
     vi.unstubAllEnvs();
   }
 });
+
+it("activates one subscription machine-wide and falls back to the default on removal", async () => {
+  const root = await mkdtemp(join(tmpdir(), "concors-subscription-active-"));
+  directories.push(root);
+  const registry = new ProviderRegistry(join(root, "providers"));
+  const request = (operation: object) =>
+    registry.request(
+      ProviderRequestSchema.parse({
+        type: "provider.request",
+        requestId: randomUUID(),
+        operation,
+      }),
+    );
+  const flags = (result: ReturnType<typeof registry.request>) =>
+    result.outcome.status === "ok"
+      ? Object.fromEntries(
+          result.outcome.providers
+            .filter((p) => ["claude", "claude-work"].includes(p.id))
+            .map((p) => [p.id, p.active]),
+        )
+      : result.outcome.message;
+  const save = request({
+    kind: "save",
+    config: {
+      id: "claude-work",
+      label: "Claude — Work",
+      engine: "claude",
+      enabled: true,
+      command: ["claude"],
+      subscription: { nickname: "Work" },
+    },
+    expectedRevision: 0,
+  });
+  // The default account is active until a subscription takes over, and conversations of the
+  // engine's regular configurations run under the active subscription's credential home.
+  expect(flags(save)).toEqual({ claude: true, "claude-work": false });
+  expect(registry.credentialDir(registry.config("claude"))).toBeUndefined();
+  const rejected = request({
+    kind: "activate",
+    engine: "claude",
+    id: "codex",
+    expectedRevision: 1,
+  });
+  expect(rejected.outcome.status).toBe("error");
+  const activated = request({
+    kind: "activate",
+    engine: "claude",
+    id: "claude-work",
+    expectedRevision: 1,
+  });
+  expect(flags(activated)).toEqual({ claude: false, "claude-work": true });
+  const home = join(root, "accounts", "claude", "claude-work");
+  expect(registry.credentialDir(registry.config("claude"))).toBe(home);
+  // The subscription itself and explicitly configured credential homes are never redirected.
+  expect(registry.credentialDir(registry.config("claude-work"))).toBe(home);
+  expect(
+    registry.credentialDir({
+      ...registry.config("claude"),
+      env: { CLAUDE_CONFIG_DIR: "/custom/home" },
+    }),
+  ).toBe("/custom/home");
+  // The machine remembers its choice across restarts.
+  const reloaded = new ProviderRegistry(join(root, "providers"));
+  expect(reloaded.credentialDir(reloaded.config("claude"))).toBe(home);
+  const removal = request({ kind: "remove", id: "claude-work", expectedRevision: 2 });
+  if (removal.outcome.status !== "ok") throw new Error(removal.outcome.message);
+  expect(removal.outcome.providers.find((p) => p.id === "claude")?.active).toBe(true);
+  expect(registry.credentialDir(registry.config("claude"))).toBeUndefined();
+});
