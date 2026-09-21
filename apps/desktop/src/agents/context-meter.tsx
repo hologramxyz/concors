@@ -20,7 +20,7 @@ import { usageTone, windowSummary } from "./usage-labels";
  */
 export function ContextMeter({ agent }: { agent: AgentInfo }) {
   const composerSurface = useContext(ComposerSurfaceContext);
-  const plans = usePlanUsage(agent.engine ?? agent.provider);
+  const plans = usePlanUsage(agent.provider);
   const plan = plans.state;
   const window = contextWindow(agent);
   const reports = agent.controls?.contextUsage ?? window !== null;

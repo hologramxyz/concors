@@ -304,7 +304,7 @@ export function AgentComposer({
     // Native action sheets have no open event; load on connection/session changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [native, connected, agent.id]);
-  const planUsage = usePlanUsage(agent.engine ?? agent.provider);
+  const planUsage = usePlanUsage(agent.provider);
   useEffect(() => {
     // The native context sheet opens without an event either; read plan usage up front.
     if (native && connected) planUsage.refresh(agent.id);
