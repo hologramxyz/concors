@@ -1,4 +1,5 @@
 import {
+  AGENT_USAGE_CAPABILITY,
   parseClientMessage,
   applyWorkspaceOperation,
   WorkspaceOperationError,
@@ -19,6 +20,7 @@ import {
   demoItems,
   demoMachine,
   demoMe,
+  demoPlanUsage,
   demoTerminal,
   demoWorkspace,
   ids,
@@ -346,6 +348,7 @@ export function createDemoServer() {
                   "directional-pane-split",
                   "workspace-pane-rearrangement",
                   "folder-workspaces",
+                  AGENT_USAGE_CAPABILITY,
                 ],
               });
               break;
@@ -399,6 +402,7 @@ export function createDemoServer() {
                       (item) => item.position > (items.at(-1)?.position ?? Infinity),
                     ),
                   },
+                  ...(message.operation.kind === "usage" ? { usage: demoPlanUsage() } : {}),
                 },
               });
               break;
