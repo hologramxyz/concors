@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ProviderStatus } from "@concors/protocol";
 import {
   renamedAccountConfig,
+  portableSubscriptionConfig,
   subscriptionConfig,
   subscriptionGroups,
   subscriptionId,
@@ -104,5 +105,30 @@ describe("renamedAccountConfig", () => {
   it("can return to the automatic account identity", () => {
     const config = renamedAccountConfig(status({ accountNickname: "Work" }), undefined);
     expect(config.accountNickname).toBeUndefined();
+  });
+});
+
+describe("portableSubscriptionConfig", () => {
+  it("copies public account metadata without machine status", () => {
+    const config = portableSubscriptionConfig(
+      status({
+        id: "codex-work",
+        engine: "codex",
+        label: "ChatGPT — Work",
+        command: ["codex"],
+        accountNickname: "Work",
+        subscription: { nickname: "Work" },
+        active: true,
+      }),
+    );
+    expect(config).toEqual({
+      id: "codex-work",
+      engine: "codex",
+      label: "ChatGPT — Work",
+      command: ["codex"],
+      enabled: true,
+      accountNickname: "Work",
+      subscription: { nickname: "Work" },
+    });
   });
 });

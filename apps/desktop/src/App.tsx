@@ -540,20 +540,8 @@ function AppContent() {
                               focusedMachineId: focusedCloudMachineId,
                             }}
                             subscriptions={{
-                              selectedMachineId,
-                              connected: connection.state.status === "ready",
-                              onSelectMachine: (machine) =>
-                                selectMachine(
-                                  machine
-                                    ? machineHost(
-                                        machine,
-                                        loadHosts(hostScope).find(
-                                          (host) => host.machineId === machine.id,
-                                        ),
-                                      )
-                                    : LOCAL_HOST,
-                                  "settings",
-                                ),
+                              localEndpoint,
+                              hostScope,
                             }}
                             endpoint={endpoint}
                             state={connection.state}
