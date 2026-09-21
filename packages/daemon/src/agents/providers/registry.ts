@@ -1,5 +1,5 @@
-import { mkdirSync, readFileSync, renameSync, writeFileSync, existsSync } from "node:fs";
-import { join, delimiter } from "node:path";
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { join, dirname, delimiter } from "node:path";
 import { homedir } from "node:os";
 import { randomUUID } from "node:crypto";
 import spawn from "cross-spawn";
@@ -7,6 +7,7 @@ import { z } from "zod";
 import {
   ProviderConfigSchema,
   providerPresets,
+  SUBSCRIPTION_ENGINES,
   type ProviderConfig,
   type ProviderRequest,
   type ProviderResult,
@@ -70,8 +71,20 @@ export class ProviderRegistry {
       .filter((path) => existsSync(path));
     return { ...process.env, PATH: [...bins, process.env["PATH"] ?? ""].join(delimiter) };
   }
+  /** A subscription runs its engine's regular CLI; resolve binaries from the base configuration. */
+  private baseId(config: ProviderConfig): string {
+    return config.subscription ? config.engine : config.id;
+  }
+  static credentialEnvKey(engine: string): "CLAUDE_CONFIG_DIR" | "CODEX_HOME" | undefined {
+    if (!(SUBSCRIPTION_ENGINES as readonly string[]).includes(engine)) return undefined;
+    return engine === "claude" ? "CLAUDE_CONFIG_DIR" : "CODEX_HOME";
+  }
+  /** Where this subscription's CLI keeps its sign-in, isolated from every other subscription. */
+  credentialHome(config: ProviderConfig): string {
+    return join(dirname(this.directory), "accounts", config.engine, config.id);
+  }
   private env(config: ProviderConfig): NodeJS.ProcessEnv {
-    const bin = join(this.directory, config.id, "node_modules", ".bin");
+    const bin = join(this.directory, this.baseId(config), "node_modules", ".bin");
     return {
       ...process.env,
       ...config.env,
@@ -166,9 +179,11 @@ export class ProviderRegistry {
     if (op.kind !== "list" && this.receipts.has(request.requestId))
       return this.receipts.get(request.requestId) as ProviderResult;
     let result: ProviderResult;
+    let cleanup: string | undefined;
     const savedBefore = structuredClone(this.saved);
     try {
       if (op.kind === "sessions-list") throw new Error("Use the session discovery service");
+      if (op.kind === "account") throw new Error("Use the account service");
       if (op.kind === "save" || op.kind === "remove") {
         if (op.expectedRevision !== this.saved.revision)
           throw new Error("Provider settings changed on another client. Reload before saving.");
@@ -187,14 +202,35 @@ export class ProviderRegistry {
           config.env = Object.fromEntries(
             Object.entries(config.env).filter(([key]) => !op.removeEnv?.includes(key)),
           );
+          if (config.subscription) {
+            const key = ProviderRegistry.credentialEnvKey(config.engine);
+            if (!key) throw new Error("Subscriptions are available for Claude and Codex.");
+            if (providerPresets.some((p) => p.id === config.id))
+              throw new Error("A built-in provider cannot become a subscription. Add a new one.");
+            if (!config.env[key]) {
+              const home = this.credentialHome(config);
+              mkdirSync(home, { recursive: true, mode: 0o700 });
+              config.env[key] = home;
+            }
+          }
           if (!previous && this.configs().length >= 128) throw new Error("Provider limit reached");
           this.saved.providers = [
             ...this.saved.providers.filter((p) => p.id !== config.id),
             config,
           ];
-        } else this.saved.providers = this.saved.providers.filter((p) => p.id !== op.id);
+        } else {
+          const removed = this.saved.providers.find((p) => p.id === op.id);
+          this.saved.providers = this.saved.providers.filter((p) => p.id !== op.id);
+          const key = removed?.subscription
+            ? ProviderRegistry.credentialEnvKey(removed.engine)
+            : undefined;
+          if (removed && key && removed.env?.[key] === this.credentialHome(removed))
+            cleanup = this.credentialHome(removed);
+        }
         this.saved.revision++;
         this.persist();
+        // Removing a subscription is its sign-out: saved credentials must not linger on disk.
+        if (cleanup) rmSync(cleanup, { recursive: true, force: true });
       }
       if (op.kind === "install") this.install(op.id);
       result = {

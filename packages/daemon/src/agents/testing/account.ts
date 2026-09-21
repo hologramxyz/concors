@@ -1,13 +1,13 @@
-import type { AgentInfo } from "@concors/protocol";
 import type { AccountBackend } from "../accounts/backend.ts";
+import type { AccountTarget } from "../accounts/manager.ts";
 
 /** Explicit injection for browser acceptance; production never selects this backend. */
 export class TestAccountBackend implements AccountBackend {
   private done: ((error?: Error) => void) | undefined;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private connected = false;
-  private info: AgentInfo;
-  constructor(info: AgentInfo) {
+  private info: AccountTarget;
+  constructor(info: AccountTarget) {
     this.info = info;
   }
   async read() {

@@ -1,4 +1,5 @@
 import { ProvidersSettings } from "@/settings/providers-settings";
+import { SubscriptionsSettings } from "@/settings/subscriptions-settings";
 import { useState } from "react";
 import type { ConnectionState } from "@concors/daemon-client";
 import type { MobileState } from "@concors/client-core";
@@ -98,6 +99,7 @@ export function SettingsDrawer({
                       "advanced",
                       "terminals",
                       "providers",
+                      "subscriptions",
                       "machines",
                     ].includes(item.page),
                 )
@@ -125,6 +127,10 @@ export function SettingsDrawer({
           ) : page === "providers" ? (
             <div className="p-4">
               <ProvidersSettings />
+            </div>
+          ) : page === "subscriptions" ? (
+            <div className="p-4">
+              <SubscriptionsSettings />
             </div>
           ) : page === "terminals" ? (
             <div className="p-4">

@@ -1,5 +1,11 @@
 import { z } from "zod";
 import { NativeSessionPageSchema } from "./native-sessions.ts";
+import { AgentAccountActionSchema, AgentAccountSchema } from "./agent-accounts.ts";
+
+/** Daemons that manage per-subscription credential homes and provider-level account flows. */
+export const PROVIDER_SUBSCRIPTIONS_CAPABILITY = "provider-subscriptions";
+/** Engines whose CLIs support an isolated credential home per provider configuration. */
+export const SUBSCRIPTION_ENGINES = ["claude", "codex"] as const;
 
 export const ProviderIdSchema = z
   .string()
@@ -45,6 +51,12 @@ export const ProviderConfigSchema = z.object({
       mcpServers: z.array(McpServerSchema).max(32).optional(),
     })
     .optional(),
+  /**
+   * Marks this configuration as one signed-in subscription of its engine ("Work", "Personal").
+   * The daemon gives it an isolated credential home so several subscriptions of the same
+   * engine stay signed in side by side; credentials themselves never leave the machine.
+   */
+  subscription: z.object({ nickname: z.string().trim().min(1).max(100) }).optional(),
 });
 export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
 export type ProviderPreset = ProviderConfig & {
@@ -89,6 +101,12 @@ export const ProviderRequestSchema = z.object({
       expectedRevision: z.number().int().nonnegative(),
     }),
     z.object({ kind: z.literal("install"), id: ProviderIdSchema }),
+    /** Sign-in state of the account behind a provider configuration, without an open session. */
+    z.object({
+      kind: z.literal("account"),
+      id: ProviderIdSchema,
+      action: AgentAccountActionSchema,
+    }),
   ]),
 });
 export type ProviderRequest = z.infer<typeof ProviderRequestSchema>;
@@ -102,6 +120,7 @@ export const ProviderResultSchema = z.object({
       revision: z.number().int().nonnegative(),
       providers: z.array(ProviderStatusSchema).max(128),
       sessions: NativeSessionPageSchema.optional(),
+      account: AgentAccountSchema.optional(),
     }),
     z.object({ status: z.literal("error"), message: z.string() }),
   ]),
