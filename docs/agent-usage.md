@@ -35,5 +35,12 @@ the last windows and shows why.
 ## Compatibility
 
 Plan usage needs the daemon's `agent-plan-usage` capability; older daemons never receive the
-request and the ring shows only the context window. The phone's native context sheet shows the
-same figures as text, read when the composer connects since that sheet has no open event.
+request and the ring shows only the context window.
+
+## Phone
+
+On iPhone the composer's context button opens a native sheet with the same figures and bars as
+the desktop popover: both are built from one `usageView`, so their wording cannot drift. The
+button turns amber from 70% and red from 90%, like the ring. Opening the sheet asks for plan usage
+and it follows the answer while open; its refresh button asks again. Android and the browser keep
+the shared popover.

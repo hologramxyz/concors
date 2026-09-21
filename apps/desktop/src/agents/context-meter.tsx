@@ -4,12 +4,11 @@ import { Popover } from "radix-ui";
 import { useContext } from "react";
 import { RefreshCw } from "lucide-react";
 import { cn } from "cn";
-import type { AgentInfo, AgentUsageWindow } from "@concors/protocol";
+import type { AgentInfo } from "@concors/protocol";
+import type { NativeUsageWindow } from "@concors/client-core";
 import { ComposerSurfaceContext } from "./composer-expansion";
-import { formatTokenCount } from "./paseo/context-window-meter.utils";
-import { contextWindow } from "./context-window";
+import { usageView } from "./context-window";
 import { usePlanUsage } from "./use-plan-usage";
-import { usageTone, windowSummary } from "./usage-labels";
 
 /**
  * The composer's context ring, and behind it what is left of the provider's plan.
@@ -21,11 +20,10 @@ import { usageTone, windowSummary } from "./usage-labels";
 export function ContextMeter({ agent }: { agent: AgentInfo }) {
   const composerSurface = useContext(ComposerSurfaceContext);
   const plans = usePlanUsage(agent.provider);
-  const plan = plans.state;
-  const window = contextWindow(agent);
-  const reports = agent.controls?.contextUsage ?? window !== null;
-  if (!reports && !plans.supported) return null;
-  const percent = window?.percent ?? null;
+  const view = usageView(agent, plans);
+  if (!view) return null;
+  const { context, plan } = view;
+  const percent = context.percent;
   const refresh = (force = false) => plans.refresh(agent.id, force);
   return (
     <Popover.Root onOpenChange={(open) => open && refresh()}>
@@ -40,8 +38,8 @@ export function ContextMeter({ agent }: { agent: AgentInfo }) {
           viewBox="0 0 16 16"
           className={cn(
             "size-4 -rotate-90",
-            percent !== null && percent > 90 && "text-destructive",
-            percent !== null && percent >= 70 && percent <= 90 && "text-amber-500",
+            context.tone === "danger" && "text-destructive",
+            context.tone === "warning" && "text-amber-500",
           )}
         >
           <circle
@@ -80,27 +78,19 @@ export function ContextMeter({ agent }: { agent: AgentInfo }) {
         >
           <section aria-label="Context window">
             <p className="font-medium">Context window</p>
-            <p className="mt-2 text-muted-foreground">
-              {window
-                ? `${formatTokenCount(window.used)} / ${formatTokenCount(window.limit)} tokens · ${Math.round(window.percent)}% used`
-                : agent.controls?.contextUsage === false
-                  ? "This provider does not report context usage."
-                  : "Usage will appear after the agent reports it."}
-            </p>
-            {agent.context && agent.context.total !== null && (
-              <p className="mt-1 text-xs text-muted-foreground">
-                {formatTokenCount(agent.context.total)} cumulative tokens
-              </p>
+            <p className="mt-2 text-muted-foreground">{context.summary}</p>
+            {context.detail && (
+              <p className="mt-1 text-xs text-muted-foreground">{context.detail}</p>
             )}
           </section>
-          {plans.supported && (
+          {plan && (
             <section aria-label="Plan usage" className="mt-4 border-t pt-3">
               <div className="flex items-center justify-between gap-2">
                 <p className="font-medium">
                   Plan usage
-                  {plan.usage?.planLabel && (
+                  {plan.label && (
                     <span className="ml-2 text-xs font-normal text-muted-foreground">
-                      {plan.usage.planLabel}
+                      {plan.label}
                     </span>
                   )}
                 </p>
@@ -120,20 +110,14 @@ export function ContextMeter({ agent }: { agent: AgentInfo }) {
                   {plan.error}
                 </p>
               )}
-              {plan.usage?.windows.length ? (
+              {plan.windows.length ? (
                 <ul className="mt-2.5 space-y-2.5">
-                  {plan.usage.windows.map((window) => (
+                  {plan.windows.map((window) => (
                     <UsageBar key={window.id} window={window} />
                   ))}
                 </ul>
               ) : (
-                !plan.error && (
-                  <p className="mt-2 text-muted-foreground">
-                    {plan.loading && !plan.usage
-                      ? "Reading plan usage…"
-                      : (plan.usage?.message ?? "This provider does not report plan limits.")}
-                  </p>
-                )
+                plan.message && <p className="mt-2 text-muted-foreground">{plan.message}</p>
               )}
             </section>
           )}
@@ -149,18 +133,18 @@ const tones = {
   danger: "bg-destructive",
 } as const;
 
-function UsageBar({ window }: { window: AgentUsageWindow }) {
-  const tone = usageTone(window.usedPercent);
+function UsageBar({ window }: { window: NativeUsageWindow }) {
+  const { tone } = window;
   return (
     <li>
       <p className="flex items-baseline justify-between gap-2 text-xs">
         <span className="min-w-0 truncate font-medium">{window.label}</span>
-        <span className="shrink-0 text-muted-foreground tabular-nums">{windowSummary(window)}</span>
+        <span className="shrink-0 text-muted-foreground tabular-nums">{window.summary}</span>
       </p>
       <div
         role="progressbar"
         aria-label={window.label}
-        aria-valuenow={window.usedPercent ?? undefined}
+        aria-valuenow={window.percent ?? undefined}
         aria-valuemin={0}
         aria-valuemax={100}
         className="mt-1 h-1 overflow-hidden rounded-full bg-muted"
@@ -168,7 +152,7 @@ function UsageBar({ window }: { window: AgentUsageWindow }) {
         <div
           data-usage-tone={tone ?? "unknown"}
           className={cn("h-full rounded-full", tone ? tones[tone] : "bg-transparent")}
-          style={{ width: `${Math.min(100, Math.max(0, window.usedPercent ?? 0))}%` }}
+          style={{ width: `${Math.min(100, Math.max(0, window.percent ?? 0))}%` }}
         />
       </div>
     </li>

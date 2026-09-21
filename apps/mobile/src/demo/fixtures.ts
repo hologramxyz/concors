@@ -3,6 +3,7 @@ import {
   AgentItemSchema,
   TerminalInfoSchema,
   WorkspaceSnapshotSchema,
+  type AgentPlanUsage,
 } from "@concors/protocol";
 import { MeSchema, MachineSchema } from "@concors/api-client";
 
@@ -68,6 +69,28 @@ export const demoWorkspace = WorkspaceSnapshotSchema.parse({
       ],
     },
   ],
+});
+/** The demo agent's plan: a session window with room left, and a weekly one running low. */
+export const demoPlanUsage = (now = Date.now()): AgentPlanUsage => ({
+  provider: "codex",
+  status: "available",
+  planLabel: "Pro",
+  message: null,
+  windows: [
+    {
+      id: "five-hour",
+      label: "Session",
+      usedPercent: 28,
+      resetsAt: new Date(now + 3 * 3_600_000).toISOString(),
+    },
+    {
+      id: "weekly",
+      label: "Weekly",
+      usedPercent: 74,
+      resetsAt: new Date(now + 4 * 86_400_000).toISOString(),
+    },
+  ],
+  fetchedAt: now,
 });
 export const demoAgent = AgentInfoSchema.parse({
   id: ids.agent,
