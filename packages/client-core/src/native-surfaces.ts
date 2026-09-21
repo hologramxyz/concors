@@ -96,7 +96,8 @@ export const NativeSurfaceContentSchema = z.discriminatedUnion("kind", [
     hasAttachments: z.boolean(),
     attachEnabled: z.boolean(),
     controls: z.array(NativeControlSchema).max(4),
-    context: z.string().max(1000),
+    /** Null when the provider reports neither context nor plan usage: there is no sheet. */
+    usage: NativeUsageSchema.nullable(),
   }),
 ]);
 export type NativeSurfaceContent = z.infer<typeof NativeSurfaceContentSchema>;

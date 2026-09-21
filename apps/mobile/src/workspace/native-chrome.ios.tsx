@@ -11,7 +11,19 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Button, Host, HStack, Image, RNHostView, Text, VStack } from "@expo/ui/swift-ui";
+import {
+  BottomSheet,
+  Button,
+  Divider,
+  Host,
+  HStack,
+  Image,
+  ProgressView,
+  RNHostView,
+  Spacer,
+  Text,
+  VStack,
+} from "@expo/ui/swift-ui";
 import {
   accessibilityLabel,
   background,
@@ -20,13 +32,19 @@ import {
   clipShape,
   controlSize,
   disabled,
+  environment,
   font,
   foregroundStyle,
   frame,
   glassEffect,
   labelStyle,
   lineLimit,
+  monospacedDigit,
   padding,
+  presentationBackground,
+  presentationDragIndicator,
+  progressViewStyle,
+  tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from "expo-glass-effect";
 import * as DocumentPicker from "expo-document-picker";
@@ -38,6 +56,7 @@ import type {
   NativeIcon,
   NativeSurface,
   NativeSurfaceEvent,
+  NativeUsage,
 } from "@concors/client-core";
 import {
   currentNativeSnapshot,
@@ -296,6 +315,38 @@ function HeaderButton({
   );
 }
 
+function controlModifiers({
+  corners,
+  label,
+  dark,
+  primary,
+  blocked,
+  color,
+  width,
+}: {
+  corners: CornerStyle;
+  label: string;
+  dark: boolean;
+  primary?: boolean;
+  blocked?: boolean;
+  color?: string | null;
+  width: number;
+}) {
+  return [
+    buttonStyle(primary ? "borderedProminent" : "plain"),
+    ...(primary
+      ? [foregroundStyle(dark ? "#141414" : "#ffffff")]
+      : color
+        ? [foregroundStyle(color)]
+        : []),
+    buttonBorderShape(...nativeButtonShape(corners)),
+    controlSize("regular"),
+    disabled(!!blocked),
+    accessibilityLabel(label),
+    frame({ width, height: 44 }),
+  ];
+}
+
 function Control({
   icon,
   corners,
@@ -321,15 +372,7 @@ function Control({
   onPresent?(open: boolean): void;
   width?: number;
 }) {
-  const modifiers = [
-    buttonStyle(primary ? "borderedProminent" : "plain"),
-    ...(primary ? [foregroundStyle(dark ? "#141414" : "#ffffff")] : []),
-    buttonBorderShape(...nativeButtonShape(corners)),
-    controlSize("regular"),
-    disabled(!!blocked),
-    accessibilityLabel(label),
-    frame({ width, height: 44 }),
-  ];
+  const modifiers = controlModifiers({ corners, label, dark, primary, blocked, width });
   return (
     <Host
       style={[styles.control, { width }]}
@@ -590,19 +633,16 @@ function Composer({
             />
           ))}
           <View style={styles.spacer} />
-          <Control
-            icon="context"
-            corners={corners}
-            label="Context window"
-            dark={dark}
-            width={controlWidth}
-            onPress={() => {
-              onPresent(true);
-              Alert.alert("Context window", content.context, [
-                { text: "OK", onPress: () => onPresent(false) },
-              ]);
-            }}
-          />
+          {content.usage ? (
+            <ContextControl
+              usage={content.usage}
+              corners={corners}
+              dark={dark}
+              width={controlWidth}
+              emit={emit}
+              onPresent={onPresent}
+            />
+          ) : null}
           <Control
             icon="mic"
             corners={corners}
@@ -652,6 +692,192 @@ function Composer({
       )}
       {surface}
     </Animated.View>
+  );
+}
+
+const toneColors = {
+  light: { warning: "#fe9a00", danger: "#de3b3d" },
+  dark: { warning: "#fe9a00", danger: "#f75d59" },
+} as const;
+// The desktop ring's amber and destructive red; an ordinary share keeps the control's own color.
+function toneColor(tone: NativeUsage["context"]["tone"], dark: boolean) {
+  return tone === "warning" || tone === "danger" ? toneColors[dark ? "dark" : "light"][tone] : null;
+}
+
+/**
+ * The composer's context button and the sheet behind it: this conversation's context window, and
+ * what is left of the plan the provider bills. Opening the sheet is what asks for plan usage,
+ * as opening the desktop popover does, and the sheet follows the answer while it is open.
+ */
+function ContextControl({
+  usage,
+  corners,
+  dark,
+  width,
+  emit,
+  onPresent,
+}: {
+  usage: NativeUsage;
+  corners: CornerStyle;
+  dark: boolean;
+  width: number;
+  emit: Emit;
+  onPresent(open: boolean): void;
+}) {
+  const [open, setOpen] = useState(false);
+  const { percent } = usage.context;
+  const label =
+    percent === null ? "Context window" : `Context window, ${Math.round(percent)}% used`;
+  return (
+    <Host
+      style={[styles.control, { width }]}
+      colorScheme={dark ? "dark" : "light"}
+      seedColor={dark ? "#ededed" : "#20211f"}
+      ignoreSafeArea="all"
+    >
+      <BottomSheet
+        isPresented={open}
+        onIsPresentedChange={setOpen}
+        onDismiss={() => onPresent(false)}
+        fitToContents
+        anchor={
+          <Button
+            testID="native-composer-context"
+            label={label}
+            systemImage={symbols.context}
+            onPress={() => {
+              onPresent(true);
+              setOpen(true);
+              emit({ kind: "press", control: "context" });
+            }}
+            modifiers={[
+              ...controlModifiers({
+                corners,
+                label,
+                dark,
+                color: toneColor(usage.context.tone, dark),
+                width,
+              }),
+              labelStyle("iconOnly"),
+            ]}
+          />
+        }
+      >
+        <UsageSheet
+          usage={usage}
+          dark={dark}
+          onRefresh={() => emit({ kind: "press", control: "context-refresh" })}
+        />
+      </BottomSheet>
+    </Host>
+  );
+}
+
+function UsageSheet({
+  usage: { context, plan },
+  dark,
+  onRefresh,
+}: {
+  usage: NativeUsage;
+  dark: boolean;
+  onRefresh(): void;
+}) {
+  const muted = dark ? "#a3a3a3" : "#646464";
+  const heading = [font({ size: 17, weight: "semibold" }), lineLimit(1)];
+  const detail = [font({ size: 13 }), foregroundStyle(muted)];
+  return (
+    <VStack
+      alignment="leading"
+      spacing={20}
+      modifiers={[
+        padding({ horizontal: 20, top: 28, bottom: 24 }),
+        frame({ maxWidth: Infinity, alignment: "leading" }),
+        environment("colorScheme", dark ? "dark" : "light"),
+        presentationDragIndicator("visible"),
+        // Painted explicitly: the sheet's chrome would otherwise follow the phone, not the app.
+        presentationBackground(dark ? "#1f1f1f" : "#ffffff"),
+      ]}
+    >
+      <VStack alignment="leading" spacing={8}>
+        <Text modifiers={heading}>Context window</Text>
+        <Text modifiers={[font({ size: 15 }), foregroundStyle(muted)]}>{context.summary}</Text>
+        {context.percent === null ? null : (
+          <UsageBar percent={context.percent} tone={context.tone} dark={dark} />
+        )}
+        {context.detail ? <Text modifiers={detail}>{context.detail}</Text> : null}
+      </VStack>
+      {plan ? (
+        <VStack alignment="leading" spacing={12}>
+          <Divider />
+          <HStack spacing={8}>
+            <Text modifiers={heading}>Plan usage</Text>
+            {plan.label ? <Text modifiers={[...detail, lineLimit(1)]}>{plan.label}</Text> : null}
+            <Spacer />
+            <Button
+              testID="native-plan-usage-refresh"
+              label="Refresh plan usage"
+              systemImage="arrow.clockwise"
+              onPress={onRefresh}
+              modifiers={[
+                buttonStyle("plain"),
+                labelStyle("iconOnly"),
+                foregroundStyle(muted),
+                disabled(plan.loading),
+                frame({ width: 44, height: 44 }),
+              ]}
+            />
+          </HStack>
+          {plan.error ? (
+            <Text
+              modifiers={[
+                font({ size: 13 }),
+                foregroundStyle(toneColors[dark ? "dark" : "light"].danger),
+              ]}
+            >
+              {plan.error}
+            </Text>
+          ) : null}
+          {plan.windows.map((window) => (
+            <VStack key={window.id} alignment="leading" spacing={6}>
+              <HStack spacing={8}>
+                <Text modifiers={[font({ size: 13, weight: "medium" }), lineLimit(1)]}>
+                  {window.label}
+                </Text>
+                <Spacer />
+                <Text modifiers={[...detail, monospacedDigit(), lineLimit(1)]}>
+                  {window.summary}
+                </Text>
+              </HStack>
+              <UsageBar percent={window.percent} tone={window.tone} dark={dark} />
+            </VStack>
+          ))}
+          {plan.message ? (
+            <Text modifiers={[font({ size: 15 }), foregroundStyle(muted)]}>{plan.message}</Text>
+          ) : null}
+        </VStack>
+      ) : null}
+    </VStack>
+  );
+}
+
+function UsageBar({
+  percent,
+  tone,
+  dark,
+}: {
+  percent: number | null;
+  tone: NativeUsage["context"]["tone"];
+  dark: boolean;
+}) {
+  // A window reported without a share keeps an empty track, never an indeterminate spinner.
+  return (
+    <ProgressView
+      value={Math.min(100, Math.max(0, percent ?? 0)) / 100}
+      modifiers={[
+        progressViewStyle("linear"),
+        tint(toneColor(tone, dark) ?? (dark ? "#d4d4d4" : "#3f3f3f")),
+      ]}
+    />
   );
 }
 
