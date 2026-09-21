@@ -474,6 +474,23 @@ describe("workspace replica lifecycle", () => {
     await lost;
   });
 
+  it("never asks an older daemon for plan usage", async () => {
+    const { connection, socket, ready } = startConnection();
+    connection.subscribeWorkspace(() => undefined);
+    socket.serverOpen();
+    socket.serverSend(READY);
+    await ready;
+    socket.serverSend({ type: "workspace.snapshot", snapshot });
+    await expect(
+      connection.requestAgent(
+        { kind: "usage", sessionId: "00000000-0000-4000-8000-000000000004" },
+        "00000000-0000-4000-8000-000000000003",
+      ),
+    ).rejects.toThrow("plan usage");
+    expect(socket.sent.some((raw) => JSON.parse(raw).type === "agent.request")).toBe(false);
+    connection.disconnect();
+  });
+
   it("ignores stale snapshots and rejects pending commands on disconnect", async () => {
     const { connection, socket, ready } = startConnection();
     const listener = vi.fn();
