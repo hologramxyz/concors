@@ -36,11 +36,13 @@ async function event(
     event: action,
   } satisfies MobileHostMessage);
 }
-test("native surface bridge preserves navigation, drafts, settings, attachments and submission", async ({
-  page,
-}) => {
-  const errors: string[] = [];
-  page.on("pageerror", (error) => errors.push(error.message));
+async function composer(page: Page) {
+  const content = (await snapshot(page))?.surfaces.find(
+    (item) => item.content.kind === "composer",
+  )?.content;
+  return content?.kind === "composer" ? content : null;
+}
+async function openNativeDemo(page: Page) {
   await page.addInitScript(() => {
     window.addEventListener("message", (event) => {
       const message = event.data?.concorsMobile;
@@ -55,12 +57,15 @@ test("native surface bridge preserves navigation, drafts, settings, attachments 
   });
   await page.goto("/");
   await page.getByRole("button", { name: "Explore demo" }).click();
-  const ui = page.frameLocator('iframe[title="Concors workspace"]');
-  await expect
-    .poll(async () =>
-      (await snapshot(page))?.surfaces.some((item) => item.content.kind === "composer"),
-    )
-    .toBe(true);
+  await expect.poll(async () => !!(await composer(page))).toBe(true);
+  return page.frameLocator('iframe[title="Concors workspace"]');
+}
+test("native surface bridge preserves navigation, drafts, settings, attachments and submission", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  const ui = await openNativeDemo(page);
   await expect(ui.locator("[data-agent-composer]")).toHaveCount(0);
   await expect(ui.getByRole("button", { name: "Open sidebar", exact: true })).toHaveCount(0);
   await expect(ui.getByLabel("Agent tasks", { exact: true })).not.toHaveCSS(
@@ -253,5 +258,45 @@ test("native surface bridge preserves navigation, drafts, settings, attachments 
       return content?.kind === "composer" ? content.draft : null;
     })
     .toBe("");
+  expect(errors).toEqual([]);
+});
+
+test("the native context sheet reads plan usage when it opens", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await openNativeDemo(page);
+  // The composer carries the context window from the start; plan usage waits for the sheet.
+  expect((await composer(page))?.usage).toEqual({
+    context: {
+      summary: "12k / 200k tokens · 6% used",
+      detail: "18k cumulative tokens",
+      percent: 6.2,
+      tone: "ok",
+    },
+    plan: {
+      label: null,
+      loading: false,
+      error: null,
+      message: "Reading plan usage…",
+      windows: [],
+    },
+  });
+  await event(page, "composer", "", { kind: "press", control: "context" });
+  await expect
+    .poll(async () => (await composer(page))?.usage?.plan)
+    .toMatchObject({
+      label: "Pro",
+      loading: false,
+      message: null,
+      windows: [
+        {
+          label: "Session",
+          percent: 28,
+          tone: "ok",
+          summary: expect.stringMatching(/^28% · resets in (3h|2h 59m)$/),
+        },
+        { label: "Weekly", percent: 74, tone: "warning" },
+      ],
+    });
   expect(errors).toEqual([]);
 });
