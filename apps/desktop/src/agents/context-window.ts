@@ -1,5 +1,8 @@
 import { findAgentModel, type AgentInfo, type AgentPlanUsage } from "@concors/protocol";
-import { windowSummary } from "./usage-labels";
+import type { NativeUsage } from "@concors/client-core";
+import { formatTokenCount } from "./paseo/context-window-meter.utils";
+import type { PlanUsageState } from "./plan-usage";
+import { usageTone, windowSummary } from "./usage-labels";
 
 /**
  * How full this conversation's context window is.
@@ -18,6 +21,60 @@ export function contextWindow(
   const limit = agent.context?.limit ?? (typeof catalog === "number" ? catalog : null);
   if (!limit || limit <= 0) return null;
   return { used, limit, percent: Math.max(0, Math.min(100, (used / limit) * 100)) };
+}
+
+/**
+ * What the context popover says, worded once so the phone's native sheet reads the same. Null
+ * when the provider reports neither context nor plan usage: that is nothing to show, not an
+ * empty ring.
+ */
+export function usageView(
+  agent: Pick<AgentInfo, "context" | "controls" | "model" | "models">,
+  plans: { supported: boolean; state: PlanUsageState },
+  now = Date.now(),
+): NativeUsage | null {
+  const window = contextWindow(agent);
+  const reports = agent.controls?.contextUsage ?? window !== null;
+  if (!reports && !plans.supported) return null;
+  const { usage, loading, error } = plans.state;
+  const windows = usage?.windows ?? [];
+  return {
+    context: {
+      summary: window
+        ? `${formatTokenCount(window.used)} / ${formatTokenCount(window.limit)} tokens · ${Math.round(window.percent)}% used`
+        : agent.controls?.contextUsage === false
+          ? "This provider does not report context usage."
+          : "Usage will appear after the agent reports it.",
+      detail:
+        agent.context && agent.context.total !== null
+          ? `${formatTokenCount(agent.context.total)} cumulative tokens`
+          : null,
+      percent: window?.percent ?? null,
+      tone: usageTone(window?.percent ?? null),
+    },
+    plan: plans.supported
+      ? {
+          label: usage?.planLabel ?? null,
+          loading,
+          // The machine's reason is shown as written, within what the native bridge carries.
+          error: error?.slice(0, 500) ?? null,
+          // Nothing answered yet means it is being asked: opening either surface asks.
+          message:
+            windows.length || error
+              ? null
+              : usage
+                ? (usage.message ?? "This provider does not report plan limits.")
+                : "Reading plan usage…",
+          windows: windows.map((entry) => ({
+            id: entry.id,
+            label: entry.label,
+            summary: windowSummary(entry, now),
+            percent: entry.usedPercent,
+            tone: usageTone(entry.usedPercent),
+          })),
+        }
+      : null,
+  };
 }
 
 /**
