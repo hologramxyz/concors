@@ -1,8 +1,8 @@
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { providerPresets, ProviderRequestSchema } from "@concors/protocol";
 import { ProviderRegistry } from "./registry.ts";
 
@@ -191,4 +191,186 @@ it("keeps private OpenCode transport settings authoritative without discarding a
     "adapter-config",
     "own-account",
   ]);
+});
+it("provisions an isolated credential home for a subscription and removes it on delete", async () => {
+  const root = await mkdtemp(join(tmpdir(), "concors-subscriptions-"));
+  directories.push(root);
+  const registry = new ProviderRegistry(join(root, "providers"));
+  const config = {
+    id: "claude-work",
+    label: "Claude — Work",
+    engine: "claude" as const,
+    enabled: true,
+    command: ["claude"],
+    subscription: { nickname: "Work" },
+  };
+  const save = registry.request(
+    ProviderRequestSchema.parse({
+      type: "provider.request",
+      requestId: randomUUID(),
+      operation: { kind: "save", config, expectedRevision: 0 },
+    }),
+  );
+  if (save.outcome.status !== "ok") throw new Error(save.outcome.message);
+  const home = join(root, "accounts", "claude", "claude-work");
+  expect(registry.config("claude-work").env?.["CLAUDE_CONFIG_DIR"]).toBe(home);
+  expect((await stat(home)).isDirectory()).toBe(true);
+  if (process.platform !== "win32") expect((await stat(home)).mode & 0o077).toBe(0);
+  const status = save.outcome.providers.find((p) => p.id === "claude-work");
+  expect(status?.subscription?.nickname).toBe("Work");
+  expect(status?.envKeys).toContain("CLAUDE_CONFIG_DIR");
+  // The credential home's location is an env value, and values never leave the machine.
+  expect(JSON.stringify(save)).not.toContain(home);
+  await writeFile(join(home, "credentials.json"), "fixture-oauth-token");
+  const removal = registry.request(
+    ProviderRequestSchema.parse({
+      type: "provider.request",
+      requestId: randomUUID(),
+      operation: { kind: "remove", id: "claude-work", expectedRevision: 1 },
+    }),
+  );
+  expect(removal.outcome.status).toBe("ok");
+  await expect(stat(home)).rejects.toThrow();
+});
+it("gives Codex subscriptions their own CODEX_HOME and rejects unsupported engines", async () => {
+  const root = await mkdtemp(join(tmpdir(), "concors-subscriptions-codex-"));
+  directories.push(root);
+  const registry = new ProviderRegistry(join(root, "providers"));
+  const save = (config: object, expectedRevision: number) =>
+    registry.request(
+      ProviderRequestSchema.parse({
+        type: "provider.request",
+        requestId: randomUUID(),
+        operation: { kind: "save", config, expectedRevision },
+      }),
+    );
+  const base = { enabled: true, subscription: { nickname: "Personal" } };
+  const codex = save(
+    {
+      ...base,
+      id: "codex-personal",
+      label: "Codex — Personal",
+      engine: "codex",
+      command: ["codex"],
+    },
+    0,
+  );
+  expect(codex.outcome.status).toBe("ok");
+  expect(registry.config("codex-personal").env?.["CODEX_HOME"]).toBe(
+    join(root, "accounts", "codex", "codex-personal"),
+  );
+  const rejected = save(
+    { ...base, id: "pi-personal", label: "Pi — Personal", engine: "pi", command: ["pi"] },
+    1,
+  );
+  expect(rejected.outcome.status).toBe("error");
+  const builtin = save(
+    { ...base, id: "claude", label: "Claude Code", engine: "claude", command: ["claude"] },
+    1,
+  );
+  expect(builtin.outcome.status).toBe("error");
+  expect(registry.revision).toBe(1);
+});
+it("resolves a subscription's binaries from its engine's base installation", async () => {
+  const root = await mkdtemp(join(tmpdir(), "concors-subscription-bin-"));
+  directories.push(root);
+  const bin = join(root, "providers", "claude", "node_modules", ".bin");
+  await mkdir(bin, { recursive: true });
+  const name = "claude" + (process.platform === "win32" ? ".cmd" : "");
+  await writeFile(join(bin, name), "", { mode: 0o755 });
+  vi.stubEnv("PATH", root);
+  try {
+    const registry = new ProviderRegistry(join(root, "providers"));
+    const result = registry.request(
+      ProviderRequestSchema.parse({
+        type: "provider.request",
+        requestId: randomUUID(),
+        operation: {
+          kind: "save",
+          config: {
+            id: "claude-work",
+            label: "Claude — Work",
+            engine: "claude",
+            enabled: true,
+            command: ["claude"],
+            subscription: { nickname: "Work" },
+          },
+          expectedRevision: 0,
+        },
+      }),
+    );
+    if (result.outcome.status !== "ok") throw new Error(result.outcome.message);
+    expect(result.outcome.providers.find((p) => p.id === "claude-work")?.installed).toBe(true);
+  } finally {
+    vi.unstubAllEnvs();
+  }
+});
+
+it("activates one subscription machine-wide and falls back to the default on removal", async () => {
+  const root = await mkdtemp(join(tmpdir(), "concors-subscription-active-"));
+  directories.push(root);
+  const registry = new ProviderRegistry(join(root, "providers"));
+  const request = (operation: object) =>
+    registry.request(
+      ProviderRequestSchema.parse({
+        type: "provider.request",
+        requestId: randomUUID(),
+        operation,
+      }),
+    );
+  const flags = (result: ReturnType<typeof registry.request>) =>
+    result.outcome.status === "ok"
+      ? Object.fromEntries(
+          result.outcome.providers
+            .filter((p) => ["claude", "claude-work"].includes(p.id))
+            .map((p) => [p.id, p.active]),
+        )
+      : result.outcome.message;
+  const save = request({
+    kind: "save",
+    config: {
+      id: "claude-work",
+      label: "Claude — Work",
+      engine: "claude",
+      enabled: true,
+      command: ["claude"],
+      subscription: { nickname: "Work" },
+    },
+    expectedRevision: 0,
+  });
+  // The default account is active until a subscription takes over, and conversations of the
+  // engine's regular configurations run under the active subscription's credential home.
+  expect(flags(save)).toEqual({ claude: true, "claude-work": false });
+  expect(registry.credentialDir(registry.config("claude"))).toBeUndefined();
+  const rejected = request({
+    kind: "activate",
+    engine: "claude",
+    id: "codex",
+    expectedRevision: 1,
+  });
+  expect(rejected.outcome.status).toBe("error");
+  const activated = request({
+    kind: "activate",
+    engine: "claude",
+    id: "claude-work",
+    expectedRevision: 1,
+  });
+  expect(flags(activated)).toEqual({ claude: false, "claude-work": true });
+  const home = join(root, "accounts", "claude", "claude-work");
+  expect(registry.credentialDir(registry.config("claude"))).toBe(home);
+  // The subscription itself and explicitly configured credential homes are never redirected.
+  expect(registry.credentialDir(registry.config("claude-work"))).toBe(home);
+  expect(
+    registry.credentialDir({
+      ...registry.config("claude"),
+      env: { CLAUDE_CONFIG_DIR: "/custom/home" },
+    }),
+  ).toBe("/custom/home");
+  // The machine remembers its choice across restarts.
+  const reloaded = new ProviderRegistry(join(root, "providers"));
+  expect(reloaded.credentialDir(reloaded.config("claude"))).toBe(home);
+  const removal = request({ kind: "remove", id: "claude-work", expectedRevision: 2 });
+  if (removal.outcome.status !== "ok") throw new Error(removal.outcome.message);
+  expect(removal.outcome.providers.find((p) => p.id === "claude")?.active).toBe(true);
+  expect(registry.credentialDir(registry.config("claude"))).toBeUndefined();
 });

@@ -42,7 +42,7 @@ export function providerFactory(registry: ProviderRegistry): AgentProviderFactor
           onInput,
           undefined,
           launch,
-          config.env?.["CLAUDE_CONFIG_DIR"],
+          registry.credentialDir(config),
           config.params?.mcpServers,
         );
       case "opencode":

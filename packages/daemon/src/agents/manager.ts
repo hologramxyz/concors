@@ -13,6 +13,7 @@ import type { AgentAttachment } from "@concors/protocol";
 import { AGENT_USAGE_TTL_MS, unsupportedPlanUsage, type AgentPlanUsage } from "@concors/protocol";
 import { normalizeCommandExecutionCommand } from "./codex/command-display.ts";
 import { randomUUID } from "node:crypto";
+import { homedir } from "node:os";
 import { stat } from "node:fs/promises";
 import { z } from "zod";
 import {
@@ -118,31 +119,13 @@ export class AgentManager {
     this.#factory = factory;
     this.nativeSessions = new NativeSessions(factory, registry);
     this.accounts = new AgentAccounts(accountFactory ?? accountBackendFactory(registry), (info) => {
-      this.catalogs.clear();
-      this.catalogGeneration++;
-      // An empty conversation created before authentication may never have been persisted by
-      // the provider. Start it afresh with the new credentials instead of resuming a phantom ID.
-      // Conversations with provider history and explicitly imported native sessions are durable.
-      for (const current of this.#store.agents()) {
-        if (
-          current.directory !== info.directory ||
-          current.provider !== info.provider ||
-          ["starting", "working", "needs_input"].includes(current.status)
-        )
-          continue;
-        if (
-          current.threadId &&
-          !current.nativeImport &&
-          !this.#store.hasAgentProviderHistory(current.id)
-        )
-          this.update(current.id, { threadId: null, updatedAt: current.updatedAt });
-        // Idle runtimes reload the provider's freshly saved credentials on the next send.
-        const runtime = this.#runtimes.get(current.id);
-        if (!runtime) continue;
-        runtime.closed = true;
-        this.#runtimes.delete(current.id);
-        void runtime.provider.close().catch(() => undefined);
-      }
+      // A provider-scoped sign-in (Settings → Subscriptions) refreshes every directory's sessions.
+      const providerScoped = info.id.startsWith("provider-account:");
+      this.refreshSessions(
+        (current) =>
+          (providerScoped || current.directory === info.directory) &&
+          current.provider === info.provider,
+      );
     });
     for (const info of store.agents())
       if (["starting", "working", "needs_input"].includes(info.status)) {
@@ -414,6 +397,84 @@ export class AgentManager {
       return provider;
     })();
     return runtime.ready;
+  }
+  /**
+   * An empty conversation created before authentication may never have been persisted by the
+   * provider. Start it afresh with the new credentials instead of resuming a phantom ID.
+   * Conversations with provider history and explicitly imported native sessions are durable.
+   * Idle runtimes are dropped so the next send reloads the freshly selected credentials.
+   */
+  private refreshSessions(matches: (info: AgentInfo) => boolean): void {
+    this.catalogs.clear();
+    this.catalogGeneration++;
+    this.#usage.clear();
+    for (const current of this.#store.agents()) {
+      if (!matches(current) || ["starting", "working", "needs_input"].includes(current.status))
+        continue;
+      if (
+        current.threadId &&
+        !current.nativeImport &&
+        !this.#store.hasAgentProviderHistory(current.id)
+      )
+        this.update(current.id, { threadId: null, updatedAt: current.updatedAt });
+      const runtime = this.#runtimes.get(current.id);
+      if (!runtime) continue;
+      runtime.closed = true;
+      this.#runtimes.delete(current.id);
+      void runtime.provider.close().catch(() => undefined);
+    }
+  }
+  /** Applies a machine-wide subscription switch: every chat of that engine reloads credentials. */
+  activateSubscription(request: ProviderRequest): ProviderResult {
+    const op = request.operation;
+    const result = this.registry.request(request);
+    if (op.kind === "activate" && result.outcome.status === "ok")
+      this.refreshSessions((current) => {
+        try {
+          const config = this.registry.config(current.provider);
+          return config.engine === op.engine && !config.subscription;
+        } catch {
+          return false;
+        }
+      });
+    return result;
+  }
+  /**
+   * Sign-in state for a provider configuration itself, so Settings can connect a subscription
+   * before any session exists. Runs the same account backends as session-scoped sign-in; the
+   * flow stays socket-scoped and credentials stay with the CLI on this machine.
+   */
+  async providerAccount(owner: string, request: ProviderRequest): Promise<ProviderResult> {
+    try {
+      const op = request.operation;
+      if (op.kind !== "account") throw new Error("Expected an account operation");
+      const config = this.registry.config(op.id);
+      if (!config.enabled) throw new Error("This provider is disabled in Settings → Providers.");
+      const account = await this.accounts.request(
+        owner,
+        { id: `provider-account:${op.id}`, provider: op.id, directory: homedir() },
+        op.action,
+      );
+      return {
+        type: "provider.result",
+        requestId: request.requestId,
+        outcome: {
+          status: "ok",
+          revision: this.registry.revision,
+          providers: this.registry.statuses(),
+          account,
+        },
+      };
+    } catch (error) {
+      return {
+        type: "provider.result",
+        requestId: request.requestId,
+        outcome: {
+          status: "error",
+          message: error instanceof Error ? error.message : "Could not check this account",
+        },
+      };
+    }
   }
   async discoverSessions(request: ProviderRequest): Promise<ProviderResult> {
     try {
@@ -1858,7 +1919,10 @@ export class AgentManager {
     return result;
   }
   private async catalog(info: AgentInfo, selected?: string): Promise<AgentProviderCatalog[]> {
-    const configs = this.registry.configs().filter((c) => c.enabled && this.registry.installed(c));
+    // Subscriptions are a machine-wide choice made in Settings, never a per-chat one.
+    const configs = this.registry
+      .configs()
+      .filter((c) => c.enabled && !c.subscription && this.registry.installed(c));
     return Promise.all(
       configs.map(async (config): Promise<AgentProviderCatalog> => {
         const id = config.id,
