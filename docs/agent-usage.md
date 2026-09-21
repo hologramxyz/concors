@@ -8,7 +8,7 @@ coding subscriptions are limited by, each as a bar with its share and a reset co
 The two are separate on purpose. The context window belongs to one conversation and is pushed
 with each turn (`AgentInfo.context`). Plan windows belong to the provider account that several
 conversations share, so they are asked for only when someone opens the ring, and every session
-of a provider shares one answer.
+of a provider configuration shares one answer (configurations can sign in to different accounts).
 
 ## Per provider
 
@@ -26,8 +26,9 @@ context nor plan usage shows no ring.
 
 ## Freshness
 
-The machine caches a provider's plan windows for a minute, and clients reuse an answer for as long.
-The refresh button asks again. Only a connected session can answer: opening a chat connects it,
+The machine caches a provider's plan windows for a minute, and clients reuse an account's answer
+for as long, timed on their own clock. Answers about one session — still starting, not connected —
+are asked again on the next look. The refresh button always asks again. Only a connected session can answer: opening a chat connects it,
 while starting a provider just to read its usage would launch a CLI unasked. A failed refresh keeps
 the last windows and shows why.
 
