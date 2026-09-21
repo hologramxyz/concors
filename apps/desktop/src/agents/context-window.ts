@@ -1,4 +1,4 @@
-import { findAgentModel, type AgentInfo, type AgentPlanUsage } from "@concors/protocol";
+import { findAgentModel, type AgentInfo } from "@concors/protocol";
 import type { NativeUsage } from "@concors/client-core";
 import { formatTokenCount } from "./paseo/context-window-meter.utils";
 import type { PlanUsageState } from "./plan-usage";
@@ -75,28 +75,4 @@ export function usageView(
         }
       : null,
   };
-}
-
-/**
- * The same figures as one line per fact, for surfaces that can only show text — the phone's
- * native composer shows this in an alert. Bounded, because that surface carries 1,000 characters.
- */
-export function usageSummary(
-  agent: Pick<AgentInfo, "context" | "model" | "models">,
-  plan: AgentPlanUsage | null,
-  now = Date.now(),
-): string {
-  const window = contextWindow(agent);
-  const lines = [
-    window
-      ? `${window.used.toLocaleString()} / ${window.limit.toLocaleString()} tokens · ${Math.round(window.percent)}% used`
-      : "Usage will appear after the agent reports it.",
-  ];
-  if (agent.context && agent.context.total !== null)
-    lines.push(`${agent.context.total.toLocaleString()} cumulative tokens`);
-  if (plan?.status === "available" && plan.windows.length) {
-    lines.push("", plan.planLabel ? `Plan usage · ${plan.planLabel}` : "Plan usage");
-    for (const entry of plan.windows) lines.push(`${entry.label}: ${windowSummary(entry, now)}`);
-  } else if (plan?.message) lines.push("", plan.message);
-  return lines.join("\n").slice(0, 1000);
 }

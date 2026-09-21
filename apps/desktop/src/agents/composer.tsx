@@ -29,7 +29,7 @@ import { submitAgentInput } from "./paseo/submit";
 import { ControlPicker } from "./control-picker";
 import { Popover } from "radix-ui";
 import { ContextMeter } from "./context-meter";
-import { usageSummary } from "./context-window";
+import { usageView } from "./context-window";
 import { usePlanUsage } from "./use-plan-usage";
 import { AgentModelPicker } from "./model-picker";
 import { findAgentModel } from "@concors/protocol";
@@ -305,11 +305,6 @@ export function AgentComposer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [native, connected, agent.id]);
   const planUsage = usePlanUsage(agent.provider);
-  useEffect(() => {
-    // The native context sheet opens without an event either; read plan usage up front.
-    if (native && connected) planUsage.refresh(agent.id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [native, connected, agent.id]);
   const nativeProvider = nativeModels.providers.find(
     (provider) => provider.id === nativeProviderPage,
   );
@@ -466,7 +461,7 @@ export function AgentComposer({
           (control.id === "mode" && !!agent.controls?.modes.length) ||
           (control.id === "options" && !!agent.controls?.features.length),
       ),
-      context: usageSummary(agent, planUsage.state.usage),
+      usage: usageView(agent, planUsage),
     },
     (event) => {
       if (event.kind === "text") {
@@ -494,6 +489,9 @@ export function AgentComposer({
           if (!uncertain) void submit({ message: event.text ?? draft, attachments });
         } else if (event.control === "stop") {
           if (connected && agent.turnId && !agent.turnId.startsWith("pending:")) onInterrupt();
+        } else if (event.control === "context" || event.control === "context-refresh") {
+          // Like the desktop popover: plan usage is read while the sheet is open, not before.
+          planUsage.refresh(agent.id, event.control === "context-refresh");
         } else if (!controlsDisabled) {
           const value = event.value ?? "";
           if (event.control === "model") {
