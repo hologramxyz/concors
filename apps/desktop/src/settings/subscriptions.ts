@@ -75,3 +75,9 @@ export function renamedAccountConfig(
     ...(accountNickname ? { accountNickname } : {}),
   });
 }
+
+/** Public subscription fields that can be installed on another machine without moving secrets. */
+export function portableSubscriptionConfig(provider: ProviderStatus): ProviderConfig {
+  if (!provider.subscription) throw new Error("Choose a subscription account.");
+  return renamedAccountConfig(provider, provider.accountNickname);
+}

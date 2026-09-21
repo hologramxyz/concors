@@ -11,32 +11,38 @@ export class TestAccountBackend implements AccountBackend {
     this.info = info;
   }
   async read() {
+    const engine = this.info.provider.split("-", 1)[0];
     return {
       connected: this.connected,
       ...(this.connected ? { label: "fixture-account@example.test" } : {}),
       methods: [
         {
           id: "fixture",
-          label: this.info.provider === "codex" ? "Sign in with ChatGPT" : "Connect account",
-          kind: this.info.provider === "opencode" ? ("api-key" as const) : ("browser" as const),
+          label: engine === "codex" ? "Sign in with ChatGPT" : "Connect account",
+          kind: engine === "opencode" ? ("api-key" as const) : ("browser" as const),
         },
       ],
     };
   }
   async start(_method: string, done: (error?: Error) => void) {
     this.done = done;
-    if (this.info.provider === "codex") {
-      this.timer = setTimeout(() => {
-        this.connected = true;
-        done();
-      }, 2500);
+    const engine = this.info.provider.split("-", 1)[0];
+    if (engine === "codex") {
+      // Provider-level flows outlast the settings catalog poll to catch accidental cancellation.
+      this.timer = setTimeout(
+        () => {
+          this.connected = true;
+          done();
+        },
+        this.info.id.startsWith("provider-account:codex-") ? 5200 : 2500,
+      );
       return {
         url: "https://auth.openai.com/codex/device",
         code: "TEST-CODE",
         instructions: "Enter the code in your browser.",
       };
     }
-    if (this.info.provider === "claude")
+    if (engine === "claude")
       return { url: "https://claude.com/cai/oauth/authorize", input: "code" as const };
     return { input: "api-key" as const };
   }
