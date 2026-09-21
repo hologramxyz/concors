@@ -181,6 +181,11 @@ Run these on the newly built candidate, not an older installed TestFlight binary
    the safe area; opening and dismissing the keyboard must not leave a blank bottom band.
 5. Sign out and choose GitHub. Verify successful return from the system browser, cancellation,
    and an unlinked account without exposing callback codes or credentials in feedback.
+   Force-close and cold-launch while signed out: **Continue with GitHub** must appear above
+   email/password after discovery finishes, without needing an existing saved session.
+   Repeat in airplane mode: email/password stays usable and provider discovery eventually
+   offers **Retry GitHub sign-in**, rather than silently hiding the option. Restore connectivity
+   and retry, then repeat recovery by backgrounding/foregrounding without restarting.
 6. Open the machine picker, then Manage machines. Also test an account with no machines.
    This provides setup navigation, not VPS provisioning: new machines still require desktop
    setup under the existing companion scope. Do not record this as mobile machine creation.
