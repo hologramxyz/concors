@@ -13,6 +13,7 @@ import type { AgentAttachment } from "@concors/protocol";
 import { AGENT_USAGE_TTL_MS, unsupportedPlanUsage, type AgentPlanUsage } from "@concors/protocol";
 import { normalizeCommandExecutionCommand } from "./codex/command-display.ts";
 import { randomUUID } from "node:crypto";
+import { homedir } from "node:os";
 import { stat } from "node:fs/promises";
 import { z } from "zod";
 import {
@@ -123,9 +124,11 @@ export class AgentManager {
       // An empty conversation created before authentication may never have been persisted by
       // the provider. Start it afresh with the new credentials instead of resuming a phantom ID.
       // Conversations with provider history and explicitly imported native sessions are durable.
+      // A provider-scoped sign-in (Settings → Subscriptions) refreshes every directory's sessions.
+      const providerScoped = info.id.startsWith("provider-account:");
       for (const current of this.#store.agents()) {
         if (
-          current.directory !== info.directory ||
+          (!providerScoped && current.directory !== info.directory) ||
           current.provider !== info.provider ||
           ["starting", "working", "needs_input"].includes(current.status)
         )
@@ -414,6 +417,43 @@ export class AgentManager {
       return provider;
     })();
     return runtime.ready;
+  }
+  /**
+   * Sign-in state for a provider configuration itself, so Settings can connect a subscription
+   * before any session exists. Runs the same account backends as session-scoped sign-in; the
+   * flow stays socket-scoped and credentials stay with the CLI on this machine.
+   */
+  async providerAccount(owner: string, request: ProviderRequest): Promise<ProviderResult> {
+    try {
+      const op = request.operation;
+      if (op.kind !== "account") throw new Error("Expected an account operation");
+      const config = this.registry.config(op.id);
+      if (!config.enabled) throw new Error("This provider is disabled in Settings → Providers.");
+      const account = await this.accounts.request(
+        owner,
+        { id: `provider-account:${op.id}`, provider: op.id, directory: homedir() },
+        op.action,
+      );
+      return {
+        type: "provider.result",
+        requestId: request.requestId,
+        outcome: {
+          status: "ok",
+          revision: this.registry.revision,
+          providers: this.registry.statuses(),
+          account,
+        },
+      };
+    } catch (error) {
+      return {
+        type: "provider.result",
+        requestId: request.requestId,
+        outcome: {
+          status: "error",
+          message: error instanceof Error ? error.message : "Could not check this account",
+        },
+      };
+    }
   }
   async discoverSessions(request: ProviderRequest): Promise<ProviderResult> {
     try {
