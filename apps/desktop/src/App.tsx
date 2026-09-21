@@ -388,12 +388,12 @@ function AppContent() {
     setView("projects");
     command({ kind: "selection.set", projectId, tabId });
   };
-  const selectMachine = (host: Host) => {
+  const selectMachine = (host: Host, destination: View = "projects") => {
     if (beforeLeaveFiles.current?.() === false) return;
     saveHost(hostScope, host);
     saveSelectedMachineId(hostScope, host.machineId);
     setSelectionHost({ scope: hostScope, host });
-    setView("projects");
+    setView(destination);
     setError(null);
     setAddingProject(null);
   };
@@ -538,6 +538,22 @@ function AppContent() {
                               onSelectLocal: () => selectMachine(LOCAL_HOST),
                               localSelected: selectedHost.machineId === "local",
                               focusedMachineId: focusedCloudMachineId,
+                            }}
+                            subscriptions={{
+                              selectedMachineId,
+                              connected: connection.state.status === "ready",
+                              onSelectMachine: (machine) =>
+                                selectMachine(
+                                  machine
+                                    ? machineHost(
+                                        machine,
+                                        loadHosts(hostScope).find(
+                                          (host) => host.machineId === machine.id,
+                                        ),
+                                      )
+                                    : LOCAL_HOST,
+                                  "settings",
+                                ),
                             }}
                             endpoint={endpoint}
                             state={connection.state}

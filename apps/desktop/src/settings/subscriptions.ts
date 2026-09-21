@@ -42,16 +42,36 @@ export function subscriptionId(
 /** The provider configuration behind a new subscription; the daemon adds its credential home. */
 export function subscriptionConfig(
   engine: SubscriptionEngine,
-  nickname: string,
+  nickname: string | undefined,
   base: Pick<ProviderStatus, "command"> | undefined,
   random: string = crypto.randomUUID().slice(0, 8),
 ): ProviderConfig {
+  const chosenName = nickname?.trim();
+  const internalName = chosenName || "Account";
   return ProviderConfigSchema.parse({
-    id: subscriptionId(engine, nickname, random),
-    label: `${subscriptionEngineLabels[engine]} — ${nickname.trim()}`,
+    id: subscriptionId(engine, internalName, random),
+    label: `${subscriptionEngineLabels[engine]} — ${internalName}`,
     engine,
     command: base?.command ?? [engine],
     enabled: true,
-    subscription: { nickname: nickname.trim() },
+    subscription: { nickname: internalName },
+    ...(chosenName ? { accountNickname: chosenName } : {}),
+  });
+}
+
+/** Saveable public fields for changing an account name; the daemon preserves private settings. */
+export function renamedAccountConfig(
+  provider: ProviderStatus,
+  accountNickname: string | undefined,
+): ProviderConfig {
+  return ProviderConfigSchema.parse({
+    id: provider.id,
+    label: provider.label,
+    engine: provider.engine,
+    command: provider.command,
+    enabled: provider.enabled,
+    models: provider.models,
+    subscription: provider.subscription,
+    ...(accountNickname ? { accountNickname } : {}),
   });
 }
