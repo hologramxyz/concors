@@ -78,7 +78,11 @@ export class AgentManager {
   readonly #workspaceChanged: () => void;
   readonly #factory: AgentProviderFactory;
   readonly #runtimes = new Map<string, Runtime>();
-  /** Plan limits belong to an account, so every session of a provider shares one lookup. */
+  /**
+   * Plan limits belong to an account, so every session of a provider shares one lookup. Keyed by
+   * the provider configuration, not the engine: two Claude configurations can sign in to
+   * different accounts.
+   */
   readonly #usage = new Map<string, { at: number; usage: Promise<AgentPlanUsage> }>();
   #closed = false;
   private mutations = new Set<string>();
@@ -260,18 +264,19 @@ export class AgentManager {
    */
   private async planUsage(info: AgentInfo): Promise<AgentPlanUsage> {
     const engine = info.engine ?? info.provider;
+    const key = info.provider;
     const provider = this.#runtimes.get(info.id)?.provider;
     if (!provider) return unsupportedPlanUsage(engine, "Open this agent to see its plan usage.");
     if (!provider.planUsage)
       return unsupportedPlanUsage(engine, "This provider does not report plan limits.");
-    const cached = this.#usage.get(engine);
+    const cached = this.#usage.get(key);
     if (cached && Date.now() - cached.at < AGENT_USAGE_TTL_MS) return cached.usage;
     const read = provider.planUsage();
     const entry = { at: Date.now(), usage: read };
-    this.#usage.set(engine, entry);
+    this.#usage.set(key, entry);
     // A failure is reported to whoever asked and retried by the next request, never cached.
     read.catch(() => {
-      if (this.#usage.get(engine) === entry) this.#usage.delete(engine);
+      if (this.#usage.get(key) === entry) this.#usage.delete(key);
     });
     return read;
   }
