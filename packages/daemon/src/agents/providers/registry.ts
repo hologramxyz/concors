@@ -1,7 +1,17 @@
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+  type Dirent,
+} from "node:fs";
 import { join, dirname, delimiter } from "node:path";
 import { homedir } from "node:os";
 import { randomUUID } from "node:crypto";
+import { DatabaseSync } from "node:sqlite";
 import spawn from "cross-spawn";
 import { z } from "zod";
 import {
@@ -106,6 +116,95 @@ export class ProviderRegistry {
     const key = ProviderRegistry.credentialEnvKey(config.engine);
     if (!key) return undefined;
     return this.credentialOverlay(config)[key] ?? config.env?.[key];
+  }
+  /**
+   * Codex keeps authentication and conversation metadata under CODEX_HOME by default. Concors
+   * changes CODEX_HOME when the active account changes, so pin SQLite-backed conversation state
+   * separately. Existing conversations are recovered from whichever legacy account home contains
+   * their thread before new conversations settle in the machine's shared state directory.
+   */
+  conversationEnvironment(providerId: string, threadId?: string | null): NodeJS.ProcessEnv {
+    const config = this.config(providerId);
+    if (config.engine !== "codex") return {};
+    const preferred =
+      config.env?.["CODEX_SQLITE_HOME"] ??
+      process.env["CODEX_SQLITE_HOME"] ??
+      join(dirname(this.directory), "codex-state");
+    mkdirSync(preferred, { recursive: true, mode: 0o700 });
+    if (!threadId) return { CODEX_SQLITE_HOME: preferred };
+    const found = this.codexStateCandidates(config).find((home) =>
+      this.codexHomeContainsThread(home, threadId),
+    );
+    return { CODEX_SQLITE_HOME: found ?? preferred };
+  }
+  private codexStateCandidates(config: ProviderConfig): string[] {
+    const homes = new Set<string>();
+    const add = (home?: string) => {
+      if (home) homes.add(home);
+    };
+    add(config.env?.["CODEX_SQLITE_HOME"]);
+    add(process.env["CODEX_SQLITE_HOME"]);
+    add(join(dirname(this.directory), "codex-state"));
+    add(this.credentialDir(config));
+    add(config.env?.["CODEX_HOME"]);
+    add(process.env["CODEX_HOME"]);
+    add(join(homedir(), ".codex"));
+    for (const candidate of this.configs())
+      if (candidate.engine === "codex") {
+        add(candidate.env?.["CODEX_SQLITE_HOME"]);
+        add(candidate.env?.["CODEX_HOME"]);
+        if (candidate.subscription) add(this.credentialHome(candidate));
+      }
+    // Removed subscriptions retain non-credential state so their conversations stay recoverable.
+    const accounts = join(dirname(this.directory), "accounts", "codex");
+    try {
+      for (const entry of readdirSync(accounts, { withFileTypes: true }))
+        if (entry.isDirectory()) add(join(accounts, entry.name));
+    } catch {
+      // A machine with no saved Codex accounts has no legacy account homes to inspect.
+    }
+    return [...homes];
+  }
+  private codexHomeContainsThread(home: string, threadId: string): boolean {
+    let entries: Dirent<string>[];
+    try {
+      entries = readdirSync(home, { withFileTypes: true });
+    } catch {
+      return false;
+    }
+    for (const entry of entries) {
+      if (!entry.isFile() || !/^state(?:_\d+)?\.sqlite$/.test(entry.name)) continue;
+      let database: DatabaseSync | undefined;
+      try {
+        database = new DatabaseSync(join(home, entry.name), { readOnly: true });
+        if (database.prepare("SELECT 1 FROM threads WHERE id = ? LIMIT 1").get(threadId))
+          return true;
+      } catch {
+        // Older, busy, or partially initialized databases are not recovery candidates.
+      } finally {
+        database?.close();
+      }
+    }
+    return this.legacyCodexSessionsContainThread(join(home, "sessions"), threadId);
+  }
+  private legacyCodexSessionsContainThread(root: string, threadId: string): boolean {
+    const pending = [{ path: root, depth: 0 }];
+    let inspected = 0;
+    while (pending.length && inspected < 10_000) {
+      const current = pending.pop();
+      if (!current) break;
+      try {
+        for (const entry of readdirSync(current.path, { withFileTypes: true })) {
+          inspected++;
+          if (entry.isFile() && entry.name.includes(threadId)) return true;
+          if (entry.isDirectory() && current.depth < 8)
+            pending.push({ path: join(current.path, entry.name), depth: current.depth + 1 });
+        }
+      } catch {
+        // Missing/unreadable legacy session trees are simply not candidates.
+      }
+    }
+    return false;
   }
   private env(config: ProviderConfig): NodeJS.ProcessEnv {
     const bin = join(this.directory, this.baseId(config), "node_modules", ".bin");
@@ -214,7 +313,7 @@ export class ProviderRegistry {
     if (op.kind !== "list" && this.receipts.has(request.requestId))
       return this.receipts.get(request.requestId) as ProviderResult;
     let result: ProviderResult;
-    let cleanup: string | undefined;
+    let cleanup: { path: string; authOnly: boolean } | undefined;
     const savedBefore = structuredClone(this.saved);
     try {
       if (op.kind === "sessions-list") throw new Error("Use the session discovery service");
@@ -278,12 +377,21 @@ export class ProviderRegistry {
             ? ProviderRegistry.credentialEnvKey(removed.engine)
             : undefined;
           if (removed && key && removed.env?.[key] === this.credentialHome(removed))
-            cleanup = this.credentialHome(removed);
+            cleanup = {
+              path: this.credentialHome(removed),
+              // Codex historically stored conversation state beside auth.json. Preserve that
+              // state for old chats while still removing the account credential.
+              authOnly: removed.engine === "codex",
+            };
         }
         this.saved.revision++;
         this.persist();
         // Removing a subscription is its sign-out: saved credentials must not linger on disk.
-        if (cleanup) rmSync(cleanup, { recursive: true, force: true });
+        if (cleanup)
+          rmSync(cleanup.authOnly ? join(cleanup.path, "auth.json") : cleanup.path, {
+            recursive: !cleanup.authOnly,
+            force: true,
+          });
       }
       if (op.kind === "install") this.install(op.id);
       result = {
