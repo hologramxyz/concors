@@ -68,6 +68,20 @@ export type ProviderPreset = ProviderConfig & {
   install?: { kind: "npm" | "npx"; package: string; bin?: string };
   installLink: string;
 };
+/**
+ * The installed CLI's version against its newest published release. `updateCommand` is what
+ * "Update" runs on the machine; without one the CLI was installed in a way the daemon cannot
+ * update safely, and the user updates it themselves.
+ */
+export const ProviderVersionSchema = z.object({
+  installed: z.string().max(100).optional(),
+  latest: z.string().max(100).optional(),
+  updateAvailable: z.boolean(),
+  updateCommand: z.string().max(1000).optional(),
+  updating: z.boolean().optional(),
+  updateError: z.string().max(2000).optional(),
+});
+export type ProviderVersion = z.infer<typeof ProviderVersionSchema>;
 export const ProviderStatusSchema = ProviderConfigSchema.omit({ env: true, params: true }).extend({
   /** Whether this account is the one every chat on the machine uses for its engine. */
   active: z.boolean().optional(),
@@ -80,6 +94,7 @@ export const ProviderStatusSchema = ProviderConfigSchema.omit({ env: true, param
   installLink: z.string().optional(),
   installStatus: z.enum(["idle", "installing", "installed", "failed"]),
   error: z.string().optional(),
+  version: ProviderVersionSchema.optional(),
 });
 export type ProviderStatus = z.infer<typeof ProviderStatusSchema>;
 export const ProviderRequestSchema = z.object({
@@ -95,7 +110,8 @@ export const ProviderRequestSchema = z.object({
       query: z.string().max(200).optional(),
       refresh: z.boolean().optional(),
     }),
-    z.object({ kind: z.literal("list") }),
+    /** `checkVersions` also re-reads installed CLI versions and their latest releases now. */
+    z.object({ kind: z.literal("list"), checkVersions: z.boolean().optional() }),
     z.object({
       kind: z.literal("save"),
       config: ProviderConfigSchema,
@@ -108,6 +124,8 @@ export const ProviderRequestSchema = z.object({
       expectedRevision: z.number().int().nonnegative(),
     }),
     z.object({ kind: z.literal("install"), id: ProviderIdSchema }),
+    /** Updates an installed CLI to its latest release with the version's `updateCommand`. */
+    z.object({ kind: z.literal("update"), id: ProviderIdSchema }),
     /** Plan limits for the account behind a provider configuration, without an open session. */
     z.object({ kind: z.literal("usage"), id: ProviderIdSchema }),
     /** Sign-in state of the account behind a provider configuration, without an open session. */

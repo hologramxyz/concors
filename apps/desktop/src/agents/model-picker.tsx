@@ -4,6 +4,7 @@ import { agentProviderName, type AgentInfo } from "@concors/protocol";
 import { ControlPicker } from "./control-picker";
 import { ProviderIcon } from "./provider-icon";
 import { useAgentModelSelection } from "./use-model-selection";
+import { ProviderUpdateNotice } from "./provider-update";
 
 export function AgentModelPicker({
   agent,
@@ -21,6 +22,7 @@ export function AgentModelPicker({
     onSelect,
     !disabled && agent.status !== "starting",
   );
+  const currentUpdate = providers.find((p) => p.id === agent.provider)?.version;
   return (
     <>
       <ControlPicker
@@ -32,7 +34,15 @@ export function AgentModelPicker({
           agent.status === "starting" || switching ? (
             <LoaderCircle className="size-4 animate-spin" />
           ) : (
-            <ProviderIcon provider={agent.provider} />
+            <span className="relative inline-flex">
+              <ProviderIcon provider={agent.provider} />
+              {currentUpdate?.updateAvailable && (
+                <span
+                  aria-hidden
+                  className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-primary ring-2 ring-background"
+                />
+              )}
+            </span>
           )
         }
         disabled={disabled || agent.status === "starting" || switching}
@@ -43,7 +53,7 @@ export function AgentModelPicker({
         groups={providers.map((p) => ({
           id: p.id,
           label: p.label ?? agentProviderName(p.id),
-          description: p.id === agent.provider ? "Current conversation" : "Use in this pane",
+          description: `${p.id === agent.provider ? "Current conversation" : "Use in this pane"}${p.version?.updateAvailable ? ` · Update available (${p.version.latest})` : ""}`,
           icon: <ProviderIcon provider={p.id} />,
           emptyMessage:
             p.error ??
@@ -51,6 +61,13 @@ export function AgentModelPicker({
               ? "No models reported. Check this provider in Settings."
               : "Models are being discovered. They will appear here automatically."),
           status: p.error,
+          footer: p.version && (
+            <ProviderUpdateNotice
+              provider={p.id}
+              label={p.label ?? agentProviderName(p.id)}
+              version={p.version}
+            />
+          ),
           options: [
             // An empty catalog must still allow opening a provider to sign in.
             ...(!p.models.length

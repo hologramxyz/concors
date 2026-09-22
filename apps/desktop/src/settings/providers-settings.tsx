@@ -30,6 +30,7 @@ export function ProvidersSettings() {
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<ProviderStatus | "new" | null>(null);
   const mounted = useRef(true);
+  const updating = useRef(new Set<string>());
   const supported =
     state?.status === "ready" && state.daemon.capabilities?.includes("provider-settings");
   const request = useCallback(
@@ -37,7 +38,13 @@ export function ProvidersSettings() {
       if (!connection) throw new Error("Reconnect to the machine first.");
       const result = await connection.requestProvider(operation, crypto.randomUUID());
       if (result.outcome.status === "error") throw new Error(result.outcome.message);
-      if (operation.kind !== "list") invalidateModelCatalogs(connection);
+      // A finished CLI update can bring new models, so rediscover them as well.
+      const nowUpdating = new Set(
+        result.outcome.providers.filter((p) => p.version?.updating).map((p) => p.id),
+      );
+      const finished = [...updating.current].some((id) => !nowUpdating.has(id));
+      updating.current = nowUpdating;
+      if (operation.kind !== "list" || finished) invalidateModelCatalogs(connection);
       if (mounted.current && active()) {
         setData(result.outcome);
         if (operation.kind === "list") setRefreshError(null);
@@ -91,10 +98,10 @@ export function ProvidersSettings() {
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label="Check provider installations"
+            aria-label="Check provider installations and updates"
             disabled={!supported || busy}
             onClick={() =>
-              void execute({ kind: "list" }).catch(() => {
+              void execute({ kind: "list", checkVersions: true }).catch(() => {
                 /* The operation already displayed its error. */
               })
             }
@@ -149,7 +156,25 @@ export function ProvidersSettings() {
                             ? "Installed · Enabled"
                             : "Installed · Disabled"}
                       {p.engine === "acp" ? " · ACP" : ""}
+                      {p.version?.installed ? ` · ${p.version.installed}` : ""}
+                      {p.version?.updating
+                        ? " · Updating…"
+                        : p.version?.updateAvailable
+                          ? ` · ${p.version.latest} available`
+                          : ""}
                     </p>
+                    {p.version?.updateAvailable &&
+                      !p.version.updating &&
+                      !p.version.updateCommand && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Update it the way you installed it.
+                        </p>
+                      )}
+                    {p.version?.updateError && (
+                      <p role="alert" className="mt-1 text-xs text-destructive">
+                        {p.version.updateError}
+                      </p>
+                    )}
                     {p.error && (
                       <p role="alert" className="mt-1 text-xs text-destructive">
                         {p.error}
@@ -174,6 +199,26 @@ export function ProvidersSettings() {
                           <Download />
                         )}{" "}
                         Install
+                      </Button>
+                    )}
+                    {p.version?.updateAvailable && p.version.updateCommand && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        title={`Runs on this machine: ${p.version.updateCommand}`}
+                        disabled={busy || !!p.version.updating}
+                        onClick={() =>
+                          void execute({ kind: "update", id: p.id }).catch(() => {
+                            /* The operation already displayed its error. */
+                          })
+                        }
+                      >
+                        {p.version.updating ? (
+                          <LoaderCircle className="animate-spin" />
+                        ) : (
+                          <Download />
+                        )}{" "}
+                        Update
                       </Button>
                     )}
                     {p.installLink && (

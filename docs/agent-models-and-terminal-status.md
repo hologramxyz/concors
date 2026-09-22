@@ -48,6 +48,32 @@ that selection immediately.
 “Fresh” means the installed provider's current catalog, subject to its own account,
 configuration, and network availability, not a guarantee of access to every model.
 
+## CLI versions and updates
+
+Vendors gate new models on the CLI version: Claude Code's remote catalog carries a
+minimum Claude Code version per model, and Codex's model list depends on the client
+version it reports. An outdated CLI therefore hides the newest models without any error.
+
+The serving daemon checks every npm-published provider every 30 minutes (and when
+Settings → Providers is refreshed): it runs the CLI's `--version` and reads the
+package's `latest` release from the npm registry. Only the package name is sent.
+Provider statuses and model-picker catalog rows carry the result as `version`; the
+picker marks an outdated current provider with a dot and explains the update inside
+the provider's menu.
+
+"Update" runs a command scoped to the install that owns the CLI, inferred from where
+the executable really lives (symlinks and mise shims/wrappers followed): Concors'
+own install prefix (`npm install --prefix`), a mise tool (`mise upgrade <tool>`), a
+global npm prefix, Homebrew, or the CLI's own updater for Claude Code's and
+OpenCode's native installs. Anything else gets no command, and the user updates it
+the way they installed it. The daemon never updates on its own. If an update exits
+cleanly but the version does not move (a minimum release age, a pin), the error says
+so. On Windows, versions are shown but the install method is not inferred.
+
+When an installed version changes, the daemon drops its catalogs and restarts idle
+runtimes of that provider on the new binary; running turns finish first. Chats keep
+their threads. Test daemons with injected providers do not run version checks.
+
 ## Terminal completion
 
 A detected working turn followed by a live idle prompt records

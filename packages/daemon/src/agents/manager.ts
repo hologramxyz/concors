@@ -103,6 +103,7 @@ export class AgentManager {
     }
   >();
   private readonly tools: ((info: AgentInfo) => AgentToolContext) | undefined;
+  private readonly stopVersionWatch: () => void;
   constructor(
     store: WorkspaceStore,
     emit: (event: AgentEvent) => void,
@@ -128,6 +129,17 @@ export class AgentManager {
           current.provider === info.provider,
       );
     });
+    // A new CLI version can bring new models: rediscover them, and let idle chats restart on the
+    // new binary. Conversations keep their threads; only credentials changes restart empty ones.
+    this.stopVersionWatch = registry.onVersionChange((ids) =>
+      this.refreshSessions((current) => {
+        try {
+          return ids.includes(this.registry.baseId(this.registry.config(current.provider)));
+        } catch {
+          return false;
+        }
+      }, false),
+    );
     for (const info of store.agents())
       if (["starting", "working", "needs_input"].includes(info.status)) {
         store.saveAgent({
@@ -419,7 +431,7 @@ export class AgentManager {
    * Conversations with provider history and explicitly imported native sessions are durable.
    * Idle runtimes are dropped so the next send reloads the freshly selected credentials.
    */
-  private refreshSessions(matches: (info: AgentInfo) => boolean): void {
+  private refreshSessions(matches: (info: AgentInfo) => boolean, resetEmptyThreads = true): void {
     this.catalogs.clear();
     this.catalogGeneration++;
     this.#usage.clear();
@@ -431,6 +443,7 @@ export class AgentManager {
         continue;
       }
       if (
+        resetEmptyThreads &&
         current.threadId &&
         !current.nativeImport &&
         !this.#store.hasAgentProviderHistory(current.id)
@@ -760,7 +773,11 @@ export class AgentManager {
       }
       if (op.kind === "provider-catalog") {
         const info = this.#store.agent(op.sessionId);
-        const providers = await this.catalog(info, op.provider);
+        // Versions are read per request, not cached with the models, so an update shows at once.
+        const providers = (await this.catalog(info, op.provider)).map((row) => {
+          const version = this.registry.version(this.registry.config(row.id));
+          return version ? { ...row, version } : row;
+        });
         return {
           type: "agent.result",
           requestId: request.requestId,
@@ -2102,6 +2119,7 @@ export class AgentManager {
   async close(): Promise<void> {
     if (this.#closed) return;
     this.#closed = true;
+    this.stopVersionWatch();
     await this.nativeSessions.close();
     await this.accounts.close();
     await Promise.all(
