@@ -25,6 +25,7 @@ import {
 } from "@concors/protocol";
 import { resolveTerminalCommand } from "../../terminal/profiles.ts";
 import type { launch } from "./launch.ts";
+import { ProviderVersions, type VersionTarget } from "./versions.ts";
 
 const Saved = z.object({
   revision: z.number().int().nonnegative(),
@@ -44,6 +45,8 @@ export class ProviderRegistry {
     }
   >();
   private receipts = new Map<string, ProviderResult>();
+  private versions: ProviderVersions | undefined;
+  private versionListeners = new Set<(ids: string[]) => void>();
   readonly directory: string;
   constructor(
     directory = join(process.env["CONCORS_DATA_DIR"] ?? join(homedir(), ".concors"), "providers"),
@@ -84,8 +87,60 @@ export class ProviderRegistry {
     return { ...process.env, PATH: [...bins, process.env["PATH"] ?? ""].join(delimiter) };
   }
   /** A subscription runs its engine's regular CLI; resolve binaries from the base configuration. */
-  private baseId(config: ProviderConfig): string {
+  baseId(config: ProviderConfig): string {
     return config.subscription ? config.engine : config.id;
+  }
+  /**
+   * Starts periodic version checks of the npm-published CLIs. Only the serving daemon opts in, so
+   * tests and short-lived registries never spawn CLIs or reach the network.
+   */
+  startVersionChecks() {
+    this.versions ??= new ProviderVersions(
+      () => this.versionTargets(),
+      (ids) => {
+        for (const listener of this.versionListeners) listener(ids);
+      },
+    );
+    this.versions.start();
+  }
+  /** Notified with base provider ids whose installed CLI changed version. */
+  onVersionChange(listener: (ids: string[]) => void): () => void {
+    this.versionListeners.add(listener);
+    return () => this.versionListeners.delete(listener);
+  }
+  version(config: ProviderConfig) {
+    return this.versions?.get(this.baseId(config));
+  }
+  private versionTargets(): VersionTarget[] {
+    return this.configs().flatMap((config): VersionTarget[] => {
+      const preset = providerPresets.find((p) => p.id === config.id);
+      if (config.subscription || preset?.install?.kind !== "npm") return [];
+      return [
+        {
+          id: config.id,
+          label: config.label,
+          engine: config.engine,
+          package: preset.install.package.replace(/@[^@/]+$/, ""),
+          prefix: join(this.directory, config.id),
+          executable: () => {
+            try {
+              const [command = "", ...args] = this.argv(config);
+              const env = this.env(config);
+              // Windows launches through cross-spawn by name; its .cmd shims hide the real path,
+              // so versions are shown there but the install method is not inferred.
+              if (process.platform === "win32") return { command, args, env };
+              return {
+                command: resolveTerminalCommand(command, [], process.platform, env).command,
+                args,
+                env,
+              };
+            } catch {
+              return undefined;
+            }
+          },
+        },
+      ];
+    });
   }
   static credentialEnvKey(engine: string): "CLAUDE_CONFIG_DIR" | "CODEX_HOME" | undefined {
     if (!(SUBSCRIPTION_ENGINES as readonly string[]).includes(engine)) return undefined;
@@ -283,7 +338,8 @@ export class ProviderRegistry {
     return this.configs().map((config) => {
       const { env, params, ...publicConfig } = config;
       const preset = providerPresets.find((p) => p.id === config.id),
-        job = this.jobs.get(config.id);
+        job = this.jobs.get(config.id),
+        version = this.version(config);
       const subscribable = ProviderRegistry.credentialEnvKey(config.engine) !== undefined;
       return {
         ...publicConfig,
@@ -305,6 +361,7 @@ export class ProviderRegistry {
         installLink: preset?.installLink,
         installStatus: job?.status ?? "idle",
         ...(job?.error ? { error: job.error } : {}),
+        ...(version ? { version } : {}),
       };
     });
   }
@@ -394,6 +451,14 @@ export class ProviderRegistry {
           });
       }
       if (op.kind === "install") this.install(op.id);
+      if (op.kind === "update") {
+        const config = this.config(op.id);
+        const target = this.versionTargets().find((t) => t.id === this.baseId(config));
+        if (!this.versions || !target)
+          throw new Error(`${config.label} can't be updated from Concors.`);
+        this.versions.update(target);
+      }
+      if (op.kind === "list" && op.checkVersions) void this.versions?.check();
       result = {
         type: "provider.result",
         requestId: request.requestId,
@@ -481,6 +546,7 @@ export class ProviderRegistry {
     });
   }
   close() {
+    this.versions?.close();
     for (const job of this.jobs.values()) if (job.status === "installing") job.child?.kill();
   }
 }

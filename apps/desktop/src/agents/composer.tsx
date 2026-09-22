@@ -32,6 +32,7 @@ import { ContextMeter } from "./context-meter";
 import { usageView } from "./context-window";
 import { usePlanUsage } from "./use-plan-usage";
 import { AgentModelPicker } from "./model-picker";
+import { ProviderUpdateLabel } from "./provider-update";
 import { findAgentModel } from "@concors/protocol";
 import { useAgentModelSelection } from "./use-model-selection";
 import { useDictation } from "./dictation";
@@ -579,6 +580,7 @@ export function AgentComposer({
   );
   const utilityControls = (
     <>
+      <ProviderUpdateLabel agent={agent} compact={!!compact} />
       <ContextMeter agent={agent} />
       <button
         type="button"
