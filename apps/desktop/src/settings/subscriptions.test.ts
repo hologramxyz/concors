@@ -23,7 +23,7 @@ const status = (overrides: Partial<ProviderStatus>): ProviderStatus => ({
 });
 
 describe("subscriptionGroups", () => {
-  it("pairs each engine's built-in sign-in with its extra subscriptions, sorted by label", () => {
+  it("pairs each engine's built-in sign-in with its extra subscriptions, oldest first", () => {
     const providers = [
       status({}),
       status({ id: "codex", label: "Codex", engine: "codex", command: ["codex"] }),
@@ -43,8 +43,8 @@ describe("subscriptionGroups", () => {
     expect(groups.map((g) => g.engine)).toEqual(["claude", "codex"]);
     expect(groups[0]?.base?.id).toBe("claude");
     expect(groups[0]?.subscriptions.map((s) => s.id)).toEqual([
-      "claude-personal-1",
       "claude-work-1",
+      "claude-personal-1",
     ]);
     expect(groups[1]?.base?.id).toBe("codex");
     expect(groups[1]?.subscriptions).toEqual([]);

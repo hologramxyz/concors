@@ -22,9 +22,8 @@ export function subscriptionGroups(providers: ProviderStatus[]): SubscriptionGro
     engine,
     label: subscriptionEngineLabels[engine],
     base: providers.find((p) => p.id === engine && !p.subscription),
-    subscriptions: providers
-      .filter((p) => p.subscription && p.engine === engine)
-      .sort((a, b) => a.label.localeCompare(b.label)),
+    // The registry preserves creation order: oldest first, newly added accounts last.
+    subscriptions: providers.filter((p) => p.subscription && p.engine === engine),
   }));
 }
 export function subscriptionId(

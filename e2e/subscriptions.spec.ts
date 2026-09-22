@@ -47,13 +47,28 @@ test("adds accounts to a library and assigns one per provider to each machine", 
     await expect(
       section.getByRole("button", { name: "Rename fixture-account@example.test" }),
     ).toBeVisible();
+    const claudeAccount = section.getByRole("group", {
+      name: "Claude subscription fixture-account@example.test",
+    });
+    await expect(claudeAccount.getByRole("progressbar", { name: "Session" })).toHaveAttribute(
+      "aria-valuenow",
+      "42",
+    );
+    await expect(claudeAccount).toContainText("42%");
+    await expect(claudeAccount).toContainText(/resets in/);
+    await expect(
+      claudeAccount
+        .getByRole("progressbar", { name: "Weekly · Fable" })
+        .locator('[data-usage-tone="danger"]'),
+    ).toBeVisible();
 
     const localClaude = local.getByLabel("This computer Claude subscription");
-    await localClaude.selectOption({ label: "fixture-account@example.test" });
+    await expect(localClaude).toContainText("Weekly · Fable 91%");
+    await localClaude.selectOption({ index: 1 });
     await expect(local.getByText("Signed in", { exact: true })).toBeVisible();
 
     const secondClaude = second.getByLabel("Second machine Claude subscription");
-    await secondClaude.selectOption({ label: "fixture-account@example.test" });
+    await secondClaude.selectOption({ index: 1 });
     await expect(second.getByText("Needs sign-in", { exact: true })).toBeVisible();
     await second.getByRole("button", { name: "Connect Claude on Second machine" }).click();
     connectDialog = page.getByRole("dialog", { name: "Claude — Account" });
@@ -66,7 +81,7 @@ test("adds accounts to a library and assigns one per provider to each machine", 
     // Codex device-code sign-in must survive the page's background provider refresh.
     await section.getByRole("button", { name: "Add subscription", exact: true }).click();
     addDialog = page.getByRole("dialog", { name: "Add a subscription" });
-    await addDialog.getByLabel("Provider").selectOption("codex");
+    await addDialog.getByRole("radio", { name: /ChatGPT/ }).check();
     await addDialog.getByRole("button", { name: "Add subscription", exact: true }).click();
     connectDialog = page.getByRole("dialog", { name: "ChatGPT — Account" });
     await connectDialog.getByRole("button", { name: "Sign in with ChatGPT", exact: true }).click();
@@ -75,6 +90,14 @@ test("adds accounts to a library and assigns one per provider to each machine", 
       timeout: 10_000,
     });
     await connectDialog.getByRole("button", { name: "Done", exact: true }).click();
+
+    const subscriptionRows = section.getByRole("group", { name: /subscription / });
+    await expect(subscriptionRows.nth(0)).toHaveAccessibleName(
+      "Claude subscription fixture-account@example.test",
+    );
+    await expect(subscriptionRows.nth(1)).toHaveAccessibleName(
+      "ChatGPT subscription fixture-account@example.test",
+    );
 
     const chatGptAccount = section.getByRole("group", {
       name: "ChatGPT subscription fixture-account@example.test",
@@ -85,6 +108,10 @@ test("adds accounts to a library and assigns one per provider to each machine", 
     const renameDialog = page.getByRole("dialog", { name: "Rename account" });
     await renameDialog.getByLabel("Account name").fill("Work ChatGPT");
     await renameDialog.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(subscriptionRows.nth(0)).toHaveAccessibleName(
+      "Claude subscription fixture-account@example.test",
+    );
+    await expect(subscriptionRows.nth(1)).toHaveAccessibleName("ChatGPT subscription Work ChatGPT");
     await expect(local.getByLabel("This computer ChatGPT subscription")).toContainText(
       "Work ChatGPT",
     );

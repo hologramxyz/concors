@@ -1,9 +1,12 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Check, Copy, ExternalLink, LoaderCircle, Pencil, Plus, Trash2, X } from "lucide-react";
 import {
+  AGENT_USAGE_TTL_MS,
   PROVIDER_SUBSCRIPTIONS_CAPABILITY,
+  PROVIDER_USAGE_CAPABILITY,
   type AgentAccount,
   type AgentAccountAction,
+  type AgentPlanUsage,
   type ProviderOperation,
   type ProviderStatus,
 } from "@concors/protocol";
@@ -33,6 +36,8 @@ import { invalidateModelCatalogs } from "@/agents/model-catalog";
 import { copyText } from "@/lib/clipboard";
 import { openExternal } from "@/tauri/open-external";
 import { Section, SettingsCard } from "@/views/settings-primitives";
+import { percentLabel, resetLabel, usageTone } from "@/agents/usage-labels";
+import { cn } from "cn";
 import {
   subscriptionConfig,
   portableSubscriptionConfig,
@@ -90,13 +95,19 @@ export function SubscriptionsSettings({
   const machineList = useMachineList(organization?.id, !!auth);
   const [machineData, setMachineData] = useState<Record<string, ProviderSnapshot | null>>({});
   const [accountLabels, setAccountLabels] = useState<Record<string, string>>({});
+  const [accounts, setAccounts] = useState<Record<string, AgentAccount>>({});
   const [pageError, setPageError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [accountEpoch, setAccountEpoch] = useState(0);
-  const subscriptions = (local.data?.providers ?? [])
-    .filter((provider) => provider.subscription)
-    .sort((a, b) => a.label.localeCompare(b.label));
+  const subscriptions = (local.data?.providers ?? []).filter((provider) => provider.subscription);
+  const connectedIds = subscriptions
+    .filter((provider) => accounts[provider.id]?.status === "connected")
+    .map((provider) => provider.id);
+  const usageSupported =
+    localState?.status === "ready" &&
+    !!localState.daemon.capabilities?.includes(PROVIDER_USAGE_CAPABILITY);
+  const usages = useSubscriptionUsages(localConnection, connectedIds, usageSupported);
   const availableMachines =
     machineList.data?.filter((machine) => machine.status !== "deleted") ?? [];
   const reportMachine = useCallback((machineId: string, data: ProviderSnapshot | null) => {
@@ -108,6 +119,13 @@ export function SubscriptionsSettings({
     if (!label) return;
     setAccountLabels((current) => (current[id] === label ? current : { ...current, [id]: label }));
   }, []);
+  const reportAccount = useCallback(
+    (id: string, account: AgentAccount) => {
+      reportAccountLabel(id, account.label);
+      setAccounts((current) => (current[id] === account ? current : { ...current, [id]: account }));
+    },
+    [reportAccountLabel],
+  );
   const accountChanged = useCallback(() => setAccountEpoch((epoch) => epoch + 1), []);
   const usedOn = (id: string) =>
     [local.data, ...Object.values(machineData)].filter((snapshot) =>
@@ -144,6 +162,7 @@ export function SubscriptionsSettings({
             machine={local}
             subscriptions={subscriptions}
             accountLabels={accountLabels}
+            usages={usages}
           />
           {availableMachines.map((machine) => (
             <RemoteMachineAssignment
@@ -152,6 +171,7 @@ export function SubscriptionsSettings({
               hostScope={hostScope}
               subscriptions={subscriptions}
               accountLabels={accountLabels}
+              usages={usages}
               onSnapshot={reportMachine}
             />
           ))}
@@ -189,7 +209,9 @@ export function SubscriptionsSettings({
               epoch={accountEpoch}
               busy={local.busy}
               usedOn={usedOn(provider.id)}
-              onAccountLabel={reportAccountLabel}
+              usage={usages[provider.id]}
+              usageSupported={usageSupported}
+              onAccount={reportAccount}
               onConnect={() => setConnecting(provider.id)}
               onRename={(current, accountNickname) =>
                 local.execute({
@@ -260,6 +282,86 @@ interface ProviderMachineState {
   supported: boolean;
   state: ConnectionState | undefined;
   execute(operation: ProviderOperation): Promise<ProviderSnapshot>;
+}
+
+interface SubscriptionUsageState {
+  usage: AgentPlanUsage | null;
+  loading: boolean;
+  error: string | null;
+}
+
+/** Account limits are read only while this page is open and refreshed at the daemon's cache TTL. */
+function useSubscriptionUsages(
+  connection: DaemonConnection | null,
+  providerIds: string[],
+  supported: boolean,
+) {
+  const [snapshot, setSnapshot] = useState<{
+    connection: DaemonConnection;
+    usages: Record<string, SubscriptionUsageState>;
+  } | null>(null);
+  const ids = providerIds.join("\n");
+  useEffect(() => {
+    if (!connection || !supported || !ids) return;
+    let cancelled = false;
+    const update = (id: string, state: SubscriptionUsageState) => {
+      if (cancelled) return;
+      setSnapshot((current) => ({
+        connection,
+        usages: {
+          ...(current?.connection === connection ? current.usages : {}),
+          [id]: state,
+        },
+      }));
+    };
+    const markLoading = (id: string) => {
+      if (cancelled) return;
+      setSnapshot((current) => ({
+        connection,
+        usages: {
+          ...(current?.connection === connection ? current.usages : {}),
+          [id]: {
+            usage: current?.connection === connection ? (current.usages[id]?.usage ?? null) : null,
+            loading: true,
+            error: null,
+          },
+        },
+      }));
+    };
+    const refresh = () => {
+      for (const id of ids.split("\n")) {
+        markLoading(id);
+        void connection.requestProvider({ kind: "usage", id }, crypto.randomUUID()).then(
+          ({ outcome }) => {
+            if (outcome.status === "error")
+              update(id, { usage: null, loading: false, error: outcome.message });
+            else
+              update(id, {
+                usage: outcome.usage ?? null,
+                loading: false,
+                error: outcome.usage ? null : "This machine did not report plan usage.",
+              });
+          },
+          (cause: unknown) =>
+            update(id, {
+              usage: null,
+              loading: false,
+              error: cause instanceof Error ? cause.message : "Could not read plan usage.",
+            }),
+        );
+      }
+    };
+    refresh();
+    const timer = setInterval(refresh, AGENT_USAGE_TTL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [connection, ids, supported]);
+  if (!supported || snapshot?.connection !== connection) return {};
+  return Object.fromEntries(
+    providerIds.flatMap((id) => (snapshot.usages[id] ? [[id, snapshot.usages[id]]] : [])),
+  );
 }
 
 function useConnectionState(connection: DaemonConnection | null) {
@@ -355,12 +457,14 @@ function RemoteMachineAssignment({
   hostScope,
   subscriptions,
   accountLabels,
+  usages,
   onSnapshot,
 }: {
   machine: Machine;
   hostScope: string;
   subscriptions: ProviderStatus[];
   accountLabels: Record<string, string>;
+  usages: Record<string, SubscriptionUsageState>;
   onSnapshot: (machineId: string, data: ProviderSnapshot | null) => void;
 }) {
   const endpoint = useMemo(
@@ -385,6 +489,7 @@ function RemoteMachineAssignment({
       machine={providerMachine}
       subscriptions={subscriptions}
       accountLabels={accountLabels}
+      usages={usages}
       unavailable={!endpoint}
     />
   );
@@ -399,6 +504,7 @@ function MachineAssignmentCard({
   machine,
   subscriptions,
   accountLabels,
+  usages,
   unavailable = false,
 }: {
   machineId: string;
@@ -409,6 +515,7 @@ function MachineAssignmentCard({
   machine: ProviderMachineState;
   subscriptions: ProviderStatus[];
   accountLabels: Record<string, string>;
+  usages: Record<string, SubscriptionUsageState>;
   unavailable?: boolean;
 }) {
   const [connecting, setConnecting] = useState<string | null>(null);
@@ -445,6 +552,7 @@ function MachineAssignmentCard({
               machine={machine}
               subscriptions={subscriptions}
               accountLabels={accountLabels}
+              usages={usages}
               epoch={accountEpoch}
               onConnect={setConnecting}
             />
@@ -475,6 +583,7 @@ function ProviderAssignment({
   machine,
   subscriptions,
   accountLabels,
+  usages,
   epoch,
   onConnect,
 }: {
@@ -485,6 +594,7 @@ function ProviderAssignment({
   machine: ProviderMachineState;
   subscriptions: ProviderStatus[];
   accountLabels: Record<string, string>;
+  usages: Record<string, SubscriptionUsageState>;
   epoch: number;
   onConnect: (id: string) => void;
 }) {
@@ -568,6 +678,7 @@ function ProviderAssignment({
           {choices.map((provider) => (
             <option key={provider.id} value={provider.id}>
               {accountName(provider, accountLabels)}
+              {usageOptionLabel(usages[provider.id]?.usage)}
             </option>
           ))}
         </select>
@@ -599,13 +710,26 @@ function accountName(provider: ProviderStatus, labels: Record<string, string>) {
   );
 }
 
+function usageOptionLabel(usage: AgentPlanUsage | null | undefined) {
+  if (usage?.status !== "available") return "";
+  const windows = usage.windows
+    .filter((window) => window.usedPercent !== null)
+    .sort((a, b) => (b.usedPercent ?? 0) - (a.usedPercent ?? 0))
+    .slice(0, 2);
+  if (windows.length)
+    return ` · ${windows.map((window) => `${window.label} ${percentLabel(window.usedPercent)}`).join(" · ")}`;
+  return usage.planLabel ? ` · ${usage.planLabel}` : "";
+}
+
 function SubscriptionLibraryRow({
   connection,
   provider,
   epoch,
   busy,
   usedOn,
-  onAccountLabel,
+  usage,
+  usageSupported,
+  onAccount,
   onConnect,
   onRename,
   onRemove,
@@ -615,7 +739,9 @@ function SubscriptionLibraryRow({
   epoch: number;
   busy: boolean;
   usedOn: number;
-  onAccountLabel: (id: string, label: string | undefined) => void;
+  usage: SubscriptionUsageState | undefined;
+  usageSupported: boolean;
+  onAccount: (id: string, account: AgentAccount) => void;
   onConnect: () => void;
   onRename: (provider: ProviderStatus, name: string | undefined) => Promise<unknown>;
   onRemove: () => void;
@@ -631,7 +757,7 @@ function SubscriptionLibraryRow({
       (next) => {
         if (cancelled) return;
         setAccount(next);
-        onAccountLabel(provider.id, next.label);
+        onAccount(provider.id, next);
         setFailed(false);
       },
       () => {
@@ -641,7 +767,7 @@ function SubscriptionLibraryRow({
     return () => {
       cancelled = true;
     };
-  }, [connection, provider.id, provider.installed, provider.enabled, epoch, onAccountLabel]);
+  }, [connection, provider.id, provider.installed, provider.enabled, epoch, onAccount]);
   const connected = account?.status === "connected";
   const providerFallback = provider.subscription?.nickname;
   const name =
@@ -663,15 +789,21 @@ function SubscriptionLibraryRow({
     <div
       role="group"
       aria-label={`${subscriptionEngineLabels[provider.engine as SubscriptionEngine]} subscription ${name}`}
-      className="flex flex-wrap items-center gap-3 px-4 py-3"
+      className="flex flex-wrap items-start gap-3 px-4 py-3"
     >
       <ProviderIcon provider={provider.engine} />
       <div className="min-w-0 flex-1 basis-32">
-        <p className="font-medium">{name}</p>
+        <div className="flex flex-wrap items-baseline gap-x-2">
+          <p className="font-medium">{name}</p>
+          {usage?.usage?.planLabel && (
+            <span className="text-xs text-muted-foreground">{usage.usage.planLabel}</span>
+          )}
+        </div>
         <p className="mt-1 text-xs text-muted-foreground">
           {status}
           {usedOn ? ` · Used on ${usedOn} machine${usedOn === 1 ? "" : "s"}` : ""}
         </p>
+        {connected && usageSupported && <SubscriptionUsage usage={usage} />}
       </div>
       <div className="flex shrink-0 items-center gap-1">
         {provider.installed && provider.enabled && (
@@ -731,6 +863,67 @@ function SubscriptionLibraryRow({
         />
       )}
     </div>
+  );
+}
+
+const usageBarColors = {
+  ok: "bg-foreground/65",
+  warning: "bg-amber-500",
+  danger: "bg-destructive",
+} as const;
+
+function SubscriptionUsage({ usage: state }: { usage: SubscriptionUsageState | undefined }) {
+  if (!state || (!state.usage && state.loading))
+    return <p className="mt-2 text-xs text-muted-foreground">Reading usage…</p>;
+  if (state.error)
+    return (
+      <p className="mt-2 text-xs text-muted-foreground" title={state.error}>
+        Usage unavailable
+      </p>
+    );
+  const usage = state.usage;
+  if (!usage) return null;
+  if (usage.status !== "available" || !usage.windows.length)
+    return usage.message ? (
+      <p className="mt-2 text-xs text-muted-foreground">{usage.message}</p>
+    ) : null;
+  return (
+    <ul aria-label="Plan usage" className="mt-2.5 flex flex-wrap gap-x-4 gap-y-2.5">
+      {usage.windows.map((window) => {
+        const tone = usageTone(window.usedPercent);
+        const reset = resetLabel(window.resetsAt);
+        return (
+          <li key={window.id} className="w-44 max-w-full">
+            <p className="flex items-baseline justify-between gap-2 text-[11px]">
+              <span className="min-w-0 truncate font-medium">{window.label}</span>
+              <span className="shrink-0 text-muted-foreground tabular-nums">
+                {percentLabel(window.usedPercent)}
+              </span>
+            </p>
+            <div
+              role="progressbar"
+              aria-label={window.label}
+              aria-valuenow={window.usedPercent ?? undefined}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              className="mt-1 h-1 overflow-hidden rounded-full bg-muted"
+            >
+              <div
+                data-usage-tone={tone ?? "unknown"}
+                className={cn(
+                  "h-full rounded-full",
+                  tone ? usageBarColors[tone] : "bg-transparent",
+                )}
+                style={{ width: `${Math.min(100, Math.max(0, window.usedPercent ?? 0))}%` }}
+              />
+            </div>
+            {reset && (
+              <p className="mt-1 text-[10px] text-muted-foreground tabular-nums">{reset}</p>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -849,17 +1042,43 @@ function AddSubscriptionDialog({
             void submit();
           }}
         >
-          <label className="block space-y-1 text-sm">
-            Provider
-            <select
-              className="h-9 w-full rounded border bg-background px-3"
-              value={engine}
-              onChange={(e) => setEngine(e.target.value as SubscriptionEngine)}
-            >
-              <option value="claude">Claude</option>
-              <option value="codex">ChatGPT (Codex)</option>
-            </select>
-          </label>
+          <fieldset>
+            <legend className="mb-2 text-sm font-medium">Provider</legend>
+            <div className="grid grid-cols-2 gap-2">
+              {(["claude", "codex"] as const).map((provider) => {
+                const selected = engine === provider;
+                return (
+                  <label
+                    key={provider}
+                    className={cn(
+                      "relative flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-3 transition-colors focus-within:ring-1 focus-within:ring-ring",
+                      selected ? "border-foreground/40 bg-muted/60" : "hover:bg-muted/35",
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="provider"
+                      value={provider}
+                      checked={selected}
+                      className="absolute inset-0 z-10 cursor-pointer opacity-0"
+                      onChange={() => setEngine(provider)}
+                    />
+                    <span className="pointer-events-none flex size-9 shrink-0 items-center justify-center rounded-full border bg-background">
+                      <ProviderIcon provider={provider} />
+                    </span>
+                    <span className="pointer-events-none min-w-0">
+                      <span className="block text-sm font-medium">
+                        {subscriptionEngineLabels[provider]}
+                      </span>
+                      <span className="block text-xs text-muted-foreground">
+                        {provider === "codex" ? "Codex" : "Claude Code"}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
           <label className="block space-y-1 text-sm">
             Name <span className="text-muted-foreground">(optional)</span>
             <Input
