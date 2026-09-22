@@ -64,13 +64,32 @@ test("adds accounts to a library and assigns one per provider to each machine", 
         .locator('[data-usage-tone="danger"]'),
     ).toBeVisible();
 
-    const localClaude = local.getByLabel("This computer Claude subscription");
-    await expect(localClaude).toContainText("Weekly · Fable 91%");
-    await localClaude.selectOption({ index: 1 });
+    const localClaude = local.getByRole("button", {
+      name: "This computer Claude subscription",
+    });
+    await localClaude.click();
+    const localClaudeOption = page.getByRole("menuitemradio", {
+      name: "Use fixture-account@example.test",
+    });
+    await expect(localClaudeOption).toContainText("Weekly · Fable");
+    await expect(localClaudeOption).toContainText("91%");
+    await localClaudeOption.click();
     await expect(local.getByText("Signed in", { exact: true })).toBeVisible();
+    await expect(localClaude).toContainText("Weekly · Fable");
+    await expect(localClaude).toContainText("91%");
 
-    const secondClaude = second.getByLabel("Second machine Claude subscription");
-    await secondClaude.selectOption({ index: 1 });
+    const assignmentSummary = claudeAccount.getByRole("button", {
+      name: "Used on 1 machine: This computer",
+    });
+    await assignmentSummary.hover();
+    await expect(page.getByText("Assigned machines", { exact: true })).toBeVisible();
+    await expect(page.getByText("This computer", { exact: true }).last()).toBeVisible();
+
+    const secondClaude = second.getByRole("button", {
+      name: "Second machine Claude subscription",
+    });
+    await secondClaude.click();
+    await page.getByRole("menuitemradio", { name: "Use fixture-account@example.test" }).click();
     await expect(second.getByText("Needs sign-in", { exact: true })).toBeVisible();
     await second.getByRole("button", { name: "Connect Claude on Second machine" }).click();
     connectDialog = page.getByRole("dialog", { name: "Claude — Account" });
@@ -114,9 +133,9 @@ test("adds accounts to a library and assigns one per provider to each machine", 
       "Claude subscription fixture-account@example.test",
     );
     await expect(subscriptionRows.nth(1)).toHaveAccessibleName("ChatGPT subscription Work ChatGPT");
-    await expect(local.getByLabel("This computer ChatGPT subscription")).toContainText(
-      "Work ChatGPT",
-    );
+    await local.getByLabel("This computer ChatGPT subscription").click();
+    await expect(page.getByRole("menuitemradio", { name: "Use Work ChatGPT" })).toBeVisible();
+    await page.keyboard.press("Escape");
 
     await settingsNavigation.getByRole("button", { name: "Appearance", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Appearance", exact: true })).toBeVisible();
