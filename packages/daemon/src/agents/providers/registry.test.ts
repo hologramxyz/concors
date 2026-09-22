@@ -66,6 +66,37 @@ it("persists private credentials without returning them and rejects stale edits"
   });
   expect(await readFile(join(root, "config.json"), "utf8")).not.toContain("private-test-value");
 });
+it("keeps subscriptions in creation order when an older account is renamed", async () => {
+  const root = await mkdtemp(join(tmpdir(), "concors-provider-order-"));
+  directories.push(root);
+  const registry = new ProviderRegistry(root);
+  const save = (id: string, nickname: string, revision: number) =>
+    registry.request({
+      type: "provider.request",
+      requestId: randomUUID(),
+      operation: {
+        kind: "save",
+        expectedRevision: revision,
+        config: {
+          id,
+          label: `Claude — ${nickname}`,
+          engine: "claude",
+          enabled: true,
+          command: ["claude"],
+          subscription: { nickname },
+        },
+      },
+    });
+  expect(save("claude-old", "Old", 0).outcome.status).toBe("ok");
+  expect(save("claude-new", "New", 1).outcome.status).toBe("ok");
+  expect(save("claude-old", "Renamed", 2).outcome.status).toBe("ok");
+  expect(
+    registry
+      .statuses()
+      .filter((provider) => provider.subscription)
+      .map((provider) => provider.id),
+  ).toEqual(["claude-old", "claude-new"]);
+});
 it("does not execute npx or download a preset while checking installed providers", async () => {
   const root = await mkdtemp(join(tmpdir(), "concors-provider-discovery-"));
   directories.push(root);

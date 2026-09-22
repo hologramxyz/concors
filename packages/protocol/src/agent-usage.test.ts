@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import { AgentPlanUsageSchema, unsupportedPlanUsage } from "./agent-usage.ts";
 import { AgentResultSchema } from "./agents.ts";
 import { parseClientMessage, parseDaemonMessage } from "./messages.ts";
+import { ProviderResultSchema } from "./providers.ts";
 
 const id = "11111111-1111-4111-8111-111111111111";
 
@@ -60,6 +61,23 @@ it("carries plan windows from the machine to its clients", () => {
       type: "agent.result",
       requestId: id,
       outcome: { status: "ok", conversation, usage },
+    }).success,
+  ).toBe(true);
+});
+
+it("carries a saved subscription's plan windows without an open chat", () => {
+  expect(
+    parseClientMessage({
+      type: "provider.request",
+      requestId: id,
+      operation: { kind: "usage", id: "claude-work" },
+    }).success,
+  ).toBe(true);
+  expect(
+    ProviderResultSchema.safeParse({
+      type: "provider.result",
+      requestId: id,
+      outcome: { status: "ok", revision: 1, providers: [], usage },
     }).success,
   ).toBe(true);
 });

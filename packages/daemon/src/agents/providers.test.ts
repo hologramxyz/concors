@@ -584,6 +584,20 @@ it("connects a subscription's account from settings without an open session", as
   if (after.outcome.status !== "ok") throw new Error(after.outcome.message);
   expect(after.outcome.account?.status).toBe("connected");
   expect(after.outcome.account?.label).toBe("fixture-account@example.test");
+  const usage = await provider({ kind: "usage", id: "claude-work" });
+  if (usage.outcome.status !== "ok") throw new Error(usage.outcome.message);
+  expect(usage.outcome.usage).toMatchObject({
+    status: "available",
+    planLabel: "Max 20x",
+    windows: expect.arrayContaining([
+      expect.objectContaining({ id: "five-hour", usedPercent: 42 }),
+      expect.objectContaining({ id: "weekly-fable", usedPercent: 91 }),
+    ]),
+  });
+  expect(instances.at(-1)?.runtime.closed).toBe(true);
+  const instanceCount = instances.length;
+  await provider({ kind: "usage", id: "claude-work" });
+  expect(instances).toHaveLength(instanceCount);
   // Activation is a machine-wide choice, and subscriptions never join the per-chat catalog.
   const activated = await provider({
     kind: "activate",

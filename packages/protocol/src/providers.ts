@@ -1,9 +1,12 @@
 import { z } from "zod";
+import { AgentPlanUsageSchema } from "./agent-usage.ts";
 import { NativeSessionPageSchema } from "./native-sessions.ts";
 import { AgentAccountActionSchema, AgentAccountSchema } from "./agent-accounts.ts";
 
 /** Daemons that manage per-subscription credential homes and provider-level account flows. */
 export const PROVIDER_SUBSCRIPTIONS_CAPABILITY = "provider-subscriptions";
+/** Daemons that can read plan limits for a provider configuration without an open chat. */
+export const PROVIDER_USAGE_CAPABILITY = "provider-plan-usage";
 /** Engines whose CLIs support an isolated credential home per provider configuration. */
 export const SUBSCRIPTION_ENGINES = ["claude", "codex"] as const;
 
@@ -105,6 +108,8 @@ export const ProviderRequestSchema = z.object({
       expectedRevision: z.number().int().nonnegative(),
     }),
     z.object({ kind: z.literal("install"), id: ProviderIdSchema }),
+    /** Plan limits for the account behind a provider configuration, without an open session. */
+    z.object({ kind: z.literal("usage"), id: ProviderIdSchema }),
     /** Sign-in state of the account behind a provider configuration, without an open session. */
     z.object({
       kind: z.literal("account"),
@@ -132,6 +137,7 @@ export const ProviderResultSchema = z.object({
       providers: z.array(ProviderStatusSchema).max(128),
       sessions: NativeSessionPageSchema.optional(),
       account: AgentAccountSchema.optional(),
+      usage: AgentPlanUsageSchema.optional(),
     }),
     z.object({ status: z.literal("error"), message: z.string() }),
   ]),

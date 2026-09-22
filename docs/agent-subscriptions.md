@@ -53,11 +53,12 @@ subscriptions is instant and local.
 The desktop settings page (`apps/desktop/src/settings/subscriptions-settings.tsx`, also reachable
 from the mobile settings drawer) separates the subscription library from machine assignments.
 Built-in CLI sign-ins are not library entries: only accounts explicitly added as subscriptions are
-shown. Each local or cloud machine has one Claude selector and one ChatGPT selector, and selecting
-an account copies its public provider configuration to that machine before activating it. Its
-credentials are still created independently on that machine, so an assignment that has not signed
-in there shows a Connect action. The page opens live management connections while visible; machine
-status reflects those connections instead of the control plane's last heartbeat timestamp.
+shown, oldest first and newly added accounts at the bottom. Each local or cloud machine has one
+Claude selector and one ChatGPT selector, and selecting an account copies its public provider
+configuration to that machine before activating it. Its credentials are still created
+independently on that machine, so an assignment that has not signed in there shows a Connect
+action. The page opens live management connections while visible; machine status reflects those
+connections instead of the control plane's last heartbeat timestamp.
 
 The local daemon holds the library's public account definitions. An account displays its signed-in
 email by default; `accountNickname` stores an optional override. Sign-in state
@@ -65,6 +66,13 @@ without an open session uses the provider-level `account` operation on `provider
 (`AgentManager.providerAccount`), which reuses the session account backends and their privacy
 rules: flows are socket-scoped, transient, and never enter receipts or broadcasts. A successful
 provider-scoped sign-in refreshes idle sessions of that configuration in every directory.
+
+Connected library accounts also use the provider-level `usage` operation. The daemon starts a
+short-lived provider without creating a chat, asks the CLI for its native plan windows, caches the
+answer for `AGENT_USAGE_TTL_MS`, and closes it. The UI renders the returned windows and reset times
+without assuming fixed plan names, models, or window counts; assignment selectors include the two
+most-used windows so an account near a limit is visible while choosing it. This requires the
+daemon's `provider-plan-usage` capability (`PROVIDER_USAGE_CAPABILITY`).
 
 The page requires the daemon's `provider-subscriptions` capability
 (`PROVIDER_SUBSCRIPTIONS_CAPABILITY`); older daemons show an update hint. Release and install the
