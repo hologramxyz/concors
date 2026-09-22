@@ -2,7 +2,7 @@
  * Presentation helpers for cloud machines, kept free of React so they can be unit-tested and
  * reused by the settings sections.
  */
-import type { Machine, MachineStatus, Money } from "@concors/api-client";
+import type { Machine, MachineSize, MachineStatus, Money } from "@concors/api-client";
 
 /** Same rule as the server's `machineNameSchema`: lowercase DNS label, up to 63 characters. */
 export const MACHINE_NAME_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
@@ -95,4 +95,33 @@ export function sshCommand(
 /** Double quotes only when needed; they work in POSIX shells, PowerShell and cmd alike. */
 function quotePath(path: string): string {
   return /^[\w./:~\\-]+$/.test(path) ? path : `"${path.replace(/"/g, '\\"')}"`;
+}
+
+/** The provider has none of this size left in the region right now. */
+export function isSoldOut(size: MachineSize | undefined, region: string): boolean {
+  return size?.soldOutRegions.includes(region) ?? false;
+}
+
+/** Nothing at all can be ordered in the region right now. */
+export function isRegionSoldOut(sizes: readonly MachineSize[], region: string): boolean {
+  return sizes.length > 0 && sizes.every((size) => isSoldOut(size, region));
+}
+
+/**
+ * `current` when it can be ordered in `region`, otherwise the first size that can, so switching
+ * region never leaves a sold-out size picked. Keeps `current` when every size is sold out.
+ */
+export function orderableSize(
+  sizes: readonly MachineSize[],
+  region: string,
+  current: string,
+): string {
+  if (
+    !isSoldOut(
+      sizes.find((size) => size.id === current),
+      region,
+    )
+  )
+    return current;
+  return sizes.find((size) => !isSoldOut(size, region))?.id ?? current;
 }

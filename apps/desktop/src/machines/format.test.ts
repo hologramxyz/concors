@@ -6,7 +6,10 @@ import {
   formatMoney,
   formatMonthly,
   isSettling,
+  isRegionSoldOut,
+  isSoldOut,
   isValidMachineName,
+  orderableSize,
   sshCommand,
 } from "./format.ts";
 
@@ -104,5 +107,43 @@ describe("sshCommand", () => {
     );
     expect(sshCommand({ ...READY, accessReadyAt: null }, "/k")).toBeNull();
     expect(sshCommand({ ...READY, status: "stopped" })).toBe("ssh ubuntu@147.135.1.2");
+  });
+});
+
+describe("sold-out sizes", () => {
+  const size = (id: string, soldOutRegions: string[]) => ({
+    id,
+    vcpus: 2,
+    ramGb: 4,
+    diskGb: 40,
+    monthlyPrice: null,
+    soldOutRegions,
+  });
+  const sizes = [
+    size("small", []),
+    size("large", ["US-WEST-OR"]),
+    size("xlarge", ["US-WEST-OR", "US-EAST-VA"]),
+  ];
+
+  it("is sold out only in the listed regions", () => {
+    expect(isSoldOut(sizes[1], "US-WEST-OR")).toBe(true);
+    expect(isSoldOut(sizes[1], "US-EAST-VA")).toBe(false);
+    expect(isSoldOut(undefined, "US-WEST-OR")).toBe(false);
+  });
+
+  it("calls a region sold out only when no size is left", () => {
+    expect(isRegionSoldOut(sizes, "US-WEST-OR")).toBe(false);
+    expect(isRegionSoldOut([sizes[2]!], "US-WEST-OR")).toBe(true);
+    expect(isRegionSoldOut([], "US-WEST-OR")).toBe(false);
+  });
+
+  it("keeps an orderable size and replaces a sold-out one", () => {
+    expect(orderableSize(sizes, "US-EAST-VA", "large")).toBe("large");
+    expect(orderableSize(sizes, "US-WEST-OR", "large")).toBe("small");
+    expect(orderableSize(sizes, "US-EAST-VA", "xlarge")).toBe("small");
+  });
+
+  it("keeps the choice when nothing can be ordered", () => {
+    expect(orderableSize([sizes[2]!], "US-WEST-OR", "xlarge")).toBe("xlarge");
   });
 });
