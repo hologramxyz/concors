@@ -13,7 +13,9 @@ test("adds accounts to a library and assigns one per provider to each machine", 
   const directory = await mkdtemp(join(tmpdir(), "concors-subscriptions-ui-"));
   try {
     await signedIn(page);
-    await managedHost(page, true);
+    // The daemon handshake becomes ready before its workspace snapshot. Keep that real ordering
+    // visible long enough to catch provider requests that accidentally run in the gap.
+    await managedHost(page, true, 250);
     await page.goto("/");
     await seedProject(page, "Subscriptions", directory);
 
@@ -115,6 +117,18 @@ test("adds accounts to a library and assigns one per provider to each machine", 
     await expect(local.getByLabel("This computer ChatGPT subscription")).toContainText(
       "Work ChatGPT",
     );
+
+    await settingsNavigation.getByRole("button", { name: "Appearance", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Appearance", exact: true })).toBeVisible();
+    await settingsNavigation.getByRole("button", { name: "Subscriptions", exact: true }).click();
+
+    const restored = page.getByRole("region", { name: "Subscriptions" });
+    const restoredSecond = restored.getByRole("group", { name: "Second machine assignments" });
+    await expect(restoredSecond.getByText("Online", { exact: true })).toBeVisible();
+    await page.evaluate(() => new Promise(requestAnimationFrame));
+    await expect(restored.getByText("Workspace is disconnected", { exact: true })).toHaveCount(0);
+    // Cached limits render with the page; reconnecting only refreshes them in the background.
+    expect(await restored.getByRole("progressbar").count()).toBeGreaterThanOrEqual(2);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
