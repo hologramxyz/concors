@@ -1,6 +1,6 @@
 {
   "name": "@concors/daemon",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "private": true,
   "description": "Concors daemon: the long-lived runtime that hosts coding-agent sessions, locally or on a VPS.",
   "license": "MIT",
