@@ -60,6 +60,14 @@ export function describeStatus(machine: Pick<Machine, "status" | "ovhState" | "s
   }
 }
 
+/**
+ * The order failed before the provider took it: no server was ever created and nothing is billed.
+ * Same rule as the server's `neverOrdered`, which lets these be removed outright.
+ */
+export function isUndeployed(machine: Pick<Machine, "status" | "orderId" | "serviceName">) {
+  return machine.status === "error" && machine.orderId === null && machine.serviceName === null;
+}
+
 /** Machines the server may still change on its own; the list keeps polling while any exist. */
 export function isSettling(machine: Pick<Machine, "status">): boolean {
   return machine.status === "provisioning" || machine.status === "unknown";
