@@ -485,10 +485,13 @@ export class DaemonConnection {
     if (this.#providerRequests.has(requestId))
       return Promise.reject(new Error("Request is already pending"));
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.#providerRequests.delete(requestId);
-        reject(new Error("Provider request timed out. Reload settings before retrying."));
-      }, 10000);
+      const timer = setTimeout(
+        () => {
+          this.#providerRequests.delete(requestId);
+          reject(new Error("Provider request timed out. Reload settings before retrying."));
+        },
+        operation.kind === "usage" ? 20000 : 10000,
+      );
       this.#providerRequests.set(requestId, { resolve, reject, timer });
       try {
         this.#socket?.send(JSON.stringify(request));

@@ -8,6 +8,7 @@ import {
   PULL_REQUEST_STATES_CAPABILITY,
   AGENT_USAGE_CAPABILITY,
   PROVIDER_SUBSCRIPTIONS_CAPABILITY,
+  PROVIDER_USAGE_CAPABILITY,
   PROTOCOL_VERSION,
 } from "@concors/protocol";
 
@@ -58,6 +59,7 @@ export class DaemonState {
         "agent-providers",
         "provider-settings",
         PROVIDER_SUBSCRIPTIONS_CAPABILITY,
+        PROVIDER_USAGE_CAPABILITY,
         "agent-native-controls",
         "agent-plan-implementation",
         "pane-rearrangement",

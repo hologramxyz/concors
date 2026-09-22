@@ -247,21 +247,23 @@ export class AgentManager {
    */
   private async planUsage(info: AgentInfo): Promise<AgentPlanUsage> {
     const engine = info.engine ?? info.provider;
-    const key = info.provider;
     const provider = this.#runtimes.get(info.id)?.provider;
     if (!provider) return unsupportedPlanUsage(engine, "Open this agent to see its plan usage.");
-    if (!provider.planUsage)
-      return unsupportedPlanUsage(engine, "This provider does not report plan limits.");
+    const read = provider.planUsage?.bind(provider);
+    if (!read) return unsupportedPlanUsage(engine, "This provider does not report plan limits.");
+    return this.cachedPlanUsage(`session:${info.provider}`, read);
+  }
+  private cachedPlanUsage(key: string, read: () => Promise<AgentPlanUsage>) {
     const cached = this.#usage.get(key);
     if (cached && Date.now() - cached.at < AGENT_USAGE_TTL_MS) return cached.usage;
-    const read = provider.planUsage();
-    const entry = { at: Date.now(), usage: read };
+    const usage = read();
+    const entry = { at: Date.now(), usage };
     this.#usage.set(key, entry);
     // A failure is reported to whoever asked and retried by the next request, never cached.
-    read.catch(() => {
+    usage.catch(() => {
       if (this.#usage.get(key) === entry) this.#usage.delete(key);
     });
-    return read;
+    return usage;
   }
 
   private provider(id: string): Promise<AgentProvider> {
@@ -474,6 +476,53 @@ export class AgentManager {
           message: error instanceof Error ? error.message : "Could not check this account",
         },
       };
+    }
+  }
+  /**
+   * Reads one saved account's native plan windows for Settings. This is an explicit usage lookup,
+   * so starting a short-lived provider here does not create a chat or persist a conversation.
+   */
+  async providerUsage(request: ProviderRequest): Promise<ProviderResult> {
+    const op = request.operation;
+    if (op.kind !== "usage") throw new Error("Expected a usage operation");
+    let provider: AgentProvider | undefined;
+    try {
+      const config = this.registry.config(op.id);
+      if (!config.enabled) throw new Error("This provider is disabled in Settings → Providers.");
+      const usage = await this.cachedPlanUsage(`provider:${op.id}`, async () => {
+        provider = this.#factory(
+          homedir(),
+          async () => {
+            throw new Error("Usage checks cannot approve agent tools");
+          },
+          op.id,
+        );
+        await provider.initialize();
+        if (!provider.planUsage)
+          return unsupportedPlanUsage(config.engine, "This provider does not report plan limits.");
+        return provider.planUsage();
+      });
+      return {
+        type: "provider.result",
+        requestId: request.requestId,
+        outcome: {
+          status: "ok",
+          revision: this.registry.revision,
+          providers: this.registry.statuses(),
+          usage,
+        },
+      };
+    } catch (error) {
+      return {
+        type: "provider.result",
+        requestId: request.requestId,
+        outcome: {
+          status: "error",
+          message: error instanceof Error ? error.message : "Could not read plan usage",
+        },
+      };
+    } finally {
+      await provider?.close().catch(() => undefined);
     }
   }
   async discoverSessions(request: ProviderRequest): Promise<ProviderResult> {

@@ -219,6 +219,7 @@ export class ProviderRegistry {
     try {
       if (op.kind === "sessions-list") throw new Error("Use the session discovery service");
       if (op.kind === "account") throw new Error("Use the account service");
+      if (op.kind === "usage") throw new Error("Use the plan usage service");
       if (op.kind === "save" || op.kind === "remove" || op.kind === "activate") {
         if (op.expectedRevision !== this.saved.revision)
           throw new Error("Provider settings changed on another client. Reload before saving.");
@@ -259,10 +260,13 @@ export class ProviderRegistry {
             }
           }
           if (!previous && this.configs().length >= 128) throw new Error("Provider limit reached");
-          this.saved.providers = [
-            ...this.saved.providers.filter((p) => p.id !== config.id),
-            config,
-          ];
+          const savedIndex = this.saved.providers.findIndex((p) => p.id === config.id);
+          this.saved.providers =
+            savedIndex === -1
+              ? [...this.saved.providers, config]
+              : this.saved.providers.map((provider, index) =>
+                  index === savedIndex ? config : provider,
+                );
         } else {
           const removed = this.saved.providers.find((p) => p.id === op.id);
           this.saved.providers = this.saved.providers.filter((p) => p.id !== op.id);
