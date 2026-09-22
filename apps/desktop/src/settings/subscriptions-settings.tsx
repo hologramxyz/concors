@@ -1,5 +1,16 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Check, Copy, ExternalLink, LoaderCircle, Pencil, Plus, Trash2, X } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  CircleOff,
+  Copy,
+  ExternalLink,
+  LoaderCircle,
+  Pencil,
+  Plus,
+  Trash2,
+  X,
+} from "lucide-react";
 import {
   AGENT_USAGE_TTL_MS,
   PROVIDER_SUBSCRIPTIONS_CAPABILITY,
@@ -20,6 +31,14 @@ import type { Machine } from "@concors/api-client";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import {
   Dialog,
   DialogContent,
@@ -176,10 +195,23 @@ export function SubscriptionsSettings({
     [localCacheKey],
   );
   const accountChanged = useCallback(() => setAccountEpoch((epoch) => epoch + 1), []);
-  const usedOn = (id: string) =>
-    [local.data, ...Object.values(machineData)].filter((snapshot) =>
-      snapshot?.providers.some((provider) => provider.id === id && provider.active),
-    ).length;
+  const assignedMachines = (id: string): AssignedMachine[] => [
+    ...(local.data?.providers.some((provider) => provider.id === id && provider.active)
+      ? [{ id: "local", name: "This computer", local: true }]
+      : []),
+    ...availableMachines.flatMap((machine) =>
+      machineData[machine.id]?.providers.some((provider) => provider.id === id && provider.active)
+        ? [
+            {
+              id: machine.id,
+              name: machine.name,
+              local: false,
+              icon: machine.icon ?? null,
+            },
+          ]
+        : [],
+    ),
+  ];
   const connectingProvider = connecting
     ? local.data?.providers.find((provider) => provider.id === connecting)
     : undefined;
@@ -260,7 +292,7 @@ export function SubscriptionsSettings({
               epoch={accountEpoch}
               busy={local.busy}
               workspaceReady={local.workspaceReady}
-              usedOn={usedOn(provider.id)}
+              usedOn={assignedMachines(provider.id)}
               usage={usages[provider.id]}
               usageSupported={usageSupported}
               onAccount={reportAccount}
@@ -273,7 +305,7 @@ export function SubscriptionsSettings({
                 })
               }
               onRemove={() => {
-                const count = usedOn(provider.id);
+                const count = assignedMachines(provider.id).length;
                 if (count) {
                   setPageError(
                     `Unassign ${accountName(provider, accountLabels)} before removing it.`,
@@ -325,6 +357,13 @@ export function SubscriptionsSettings({
 interface ProviderSnapshot {
   revision: number;
   providers: ProviderStatus[];
+}
+
+interface AssignedMachine {
+  id: string;
+  name: string;
+  local: boolean;
+  icon?: string | null;
 }
 
 interface ProviderMachineState {
@@ -780,22 +819,17 @@ function ProviderAssignment({
         {subscriptionEngineLabels[engine]}
       </div>
       <div className="min-w-0">
-        <select
-          aria-label={`${machineName} ${subscriptionEngineLabels[engine]} subscription`}
-          className="h-9 w-full min-w-0 rounded-md border bg-background px-2.5 text-sm outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
-          value={active?.id ?? ""}
+        <SubscriptionPicker
+          label={`${machineName} ${subscriptionEngineLabels[engine]} subscription`}
+          engine={engine}
+          active={active}
+          managed={!!managed}
+          choices={choices}
+          accountLabels={accountLabels}
+          usages={usages}
           disabled={!machine.supported || !machine.data || machine.busy}
-          onChange={(event) => void assign(event.target.value).catch(() => undefined)}
-        >
-          <option value="">Not assigned</option>
-          {active && !managed && <option value={active.id}>Unavailable subscription</option>}
-          {choices.map((provider) => (
-            <option key={provider.id} value={provider.id}>
-              {accountName(provider, accountLabels)}
-              {usageOptionLabel(usages[provider.id]?.usage)}
-            </option>
-          ))}
-        </select>
+          onChange={(id) => void assign(id).catch(() => undefined)}
+        />
         <p className="mt-1 text-xs text-muted-foreground">{status}</p>
       </div>
       <div className="sm:w-24 sm:text-right">
@@ -824,15 +858,201 @@ function accountName(provider: ProviderStatus, labels: Record<string, string>) {
   );
 }
 
-function usageOptionLabel(usage: AgentPlanUsage | null | undefined) {
-  if (usage?.status !== "available") return "";
-  const windows = usage.windows
-    .filter((window) => window.usedPercent !== null)
-    .sort((a, b) => (b.usedPercent ?? 0) - (a.usedPercent ?? 0))
-    .slice(0, 2);
-  if (windows.length)
-    return ` · ${windows.map((window) => `${window.label} ${percentLabel(window.usedPercent)}`).join(" · ")}`;
-  return usage.planLabel ? ` · ${usage.planLabel}` : "";
+function SubscriptionPicker({
+  label,
+  engine,
+  active,
+  managed,
+  choices,
+  accountLabels,
+  usages,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  engine: SubscriptionEngine;
+  active: ProviderStatus | undefined;
+  managed: boolean;
+  choices: ProviderStatus[];
+  accountLabels: Record<string, string>;
+  usages: Record<string, SubscriptionUsageState>;
+  disabled: boolean;
+  onChange: (id: string) => void;
+}) {
+  const selected = managed ? choices.find((provider) => provider.id === active?.id) : undefined;
+  const selectedName = selected ? accountName(selected, accountLabels) : null;
+  const selectedUsage = selected ? usages[selected.id]?.usage : null;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label={label}
+          disabled={disabled}
+          className="group/picker flex min-h-10 w-full min-w-0 items-center gap-2.5 rounded-md border bg-background px-2.5 py-1.5 text-left text-sm transition-colors outline-none hover:bg-muted/35 focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 data-[state=open]:bg-muted/45"
+        >
+          <span className="flex size-6 shrink-0 items-center justify-center rounded-full border bg-background">
+            {active && !managed ? (
+              <CircleOff className="size-3.5 text-muted-foreground" />
+            ) : (
+              <ProviderIcon provider={engine} />
+            )}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="flex min-w-0 items-baseline gap-2">
+              <span className="truncate font-medium">
+                {active && !managed ? "Unavailable subscription" : (selectedName ?? "Not assigned")}
+              </span>
+              {selectedUsage?.planLabel && (
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {selectedUsage.planLabel}
+                </span>
+              )}
+            </span>
+          </span>
+          {selectedUsage && <SelectedUsageSummary usage={selectedUsage} />}
+          <ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]/picker:rotate-180 motion-reduce:transition-none" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        sideOffset={6}
+        className="w-[28rem] max-w-[calc(100vw-2rem)] p-1.5"
+      >
+        <DropdownMenuRadioGroup
+          value={active?.id ?? "not-assigned"}
+          onValueChange={(value) => onChange(value === "not-assigned" ? "" : value)}
+        >
+          <DropdownMenuRadioItem value="not-assigned" className="gap-3 px-2 py-2.5 pr-8">
+            <span className="flex size-7 shrink-0 items-center justify-center rounded-full border bg-background">
+              <CircleOff className="size-3.5 text-muted-foreground" />
+            </span>
+            <span className="font-medium">Not assigned</span>
+          </DropdownMenuRadioItem>
+          {active && !managed && (
+            <DropdownMenuRadioItem value={active.id} disabled className="gap-3 px-2 py-2.5 pr-8">
+              <span className="flex size-7 shrink-0 items-center justify-center rounded-full border bg-background">
+                <CircleOff className="size-3.5 text-muted-foreground" />
+              </span>
+              <span>
+                <span className="block font-medium">Unavailable subscription</span>
+                <span className="block text-xs text-muted-foreground">
+                  This account is no longer in your library
+                </span>
+              </span>
+            </DropdownMenuRadioItem>
+          )}
+          {choices.map((provider) => (
+            <DropdownMenuRadioItem
+              key={provider.id}
+              value={provider.id}
+              className="items-start gap-3 px-2 py-2.5 pr-8"
+              aria-label={`Use ${accountName(provider, accountLabels)}`}
+            >
+              <span className="flex size-7 shrink-0 items-center justify-center rounded-full border bg-background">
+                <ProviderIcon provider={engine} />
+              </span>
+              <PickerAccountDetails
+                provider={provider}
+                accountLabels={accountLabels}
+                usage={usages[provider.id]}
+              />
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function SelectedUsageSummary({ usage }: { usage: AgentPlanUsage }) {
+  if (usage.status !== "available") return null;
+  const window = [...usage.windows]
+    .filter((candidate) => candidate.usedPercent !== null)
+    .sort((a, b) => (b.usedPercent ?? 0) - (a.usedPercent ?? 0))[0];
+  if (!window) return null;
+  const tone = usageTone(window.usedPercent);
+  return (
+    <span className="hidden w-28 shrink-0 sm:block">
+      <span className="flex items-baseline justify-between gap-1 text-[10px] text-muted-foreground">
+        <span className="truncate">{window.label}</span>
+        <span className="tabular-nums">{percentLabel(window.usedPercent)}</span>
+      </span>
+      <span className="mt-1 block h-1 overflow-hidden rounded-full bg-muted">
+        <span
+          className={cn(
+            "block h-full rounded-full",
+            tone ? usageBarColors[tone] : "bg-transparent",
+          )}
+          style={{ width: `${Math.min(100, Math.max(0, window.usedPercent ?? 0))}%` }}
+        />
+      </span>
+    </span>
+  );
+}
+
+function PickerAccountDetails({
+  provider,
+  accountLabels,
+  usage: state,
+}: {
+  provider: ProviderStatus;
+  accountLabels: Record<string, string>;
+  usage: SubscriptionUsageState | undefined;
+}) {
+  const name = accountName(provider, accountLabels);
+  const accountLabel = accountLabels[provider.id];
+  const detail = accountLabel && !name.includes(accountLabel) ? accountLabel : null;
+  const usage = state?.usage;
+  return (
+    <span className="min-w-0 flex-1">
+      <span className="flex min-w-0 items-baseline gap-2">
+        <span className="truncate font-medium">{name}</span>
+        {usage?.planLabel && (
+          <span className="shrink-0 text-xs text-muted-foreground">{usage.planLabel}</span>
+        )}
+      </span>
+      {detail && (
+        <span className="mt-0.5 block truncate text-xs text-muted-foreground">{detail}</span>
+      )}
+      <PickerUsage usage={state} />
+    </span>
+  );
+}
+
+function PickerUsage({ usage: state }: { usage: SubscriptionUsageState | undefined }) {
+  if (!state || (!state.usage && state.loading))
+    return <span className="mt-2 block h-5 rounded bg-muted/60 motion-safe:animate-pulse" />;
+  const usage = state.usage;
+  if (!usage || usage.status !== "available" || !usage.windows.length) return null;
+  return (
+    <span className="mt-2 grid grid-cols-[repeat(auto-fit,minmax(7rem,1fr))] gap-2">
+      {usage.windows.map((window) => {
+        const tone = usageTone(window.usedPercent);
+        const reset = resetLabel(window.resetsAt);
+        return (
+          <span key={window.id} className="min-w-0">
+            <span className="flex items-baseline justify-between gap-1 text-[10px]">
+              <span className="truncate text-muted-foreground">{window.label}</span>
+              <span className="shrink-0 tabular-nums">{percentLabel(window.usedPercent)}</span>
+            </span>
+            <span className="mt-1 block h-1 overflow-hidden rounded-full bg-muted">
+              <span
+                className={cn(
+                  "block h-full rounded-full",
+                  tone ? usageBarColors[tone] : "bg-transparent",
+                )}
+                style={{ width: `${Math.min(100, Math.max(0, window.usedPercent ?? 0))}%` }}
+              />
+            </span>
+            {reset && (
+              <span className="mt-1 block truncate text-[9px] text-muted-foreground">{reset}</span>
+            )}
+          </span>
+        );
+      })}
+    </span>
+  );
 }
 
 function SubscriptionLibraryRow({
@@ -856,7 +1076,7 @@ function SubscriptionLibraryRow({
   epoch: number;
   busy: boolean;
   workspaceReady: boolean;
-  usedOn: number;
+  usedOn: AssignedMachine[];
   usage: SubscriptionUsageState | undefined;
   usageSupported: boolean;
   onAccount: (id: string, account: AgentAccount) => void;
@@ -937,10 +1157,15 @@ function SubscriptionLibraryRow({
             <span className="text-xs text-muted-foreground">{usage.usage.planLabel}</span>
           )}
         </div>
-        <p className="mt-1 text-xs text-muted-foreground">
-          {status}
-          {usedOn ? ` · Used on ${usedOn} machine${usedOn === 1 ? "" : "s"}` : ""}
-        </p>
+        <div className="mt-1 flex flex-wrap items-center gap-x-1 text-xs text-muted-foreground">
+          <span>{status}</span>
+          {!!usedOn.length && (
+            <>
+              <span aria-hidden="true">·</span>
+              <MachineAssignmentsHover machines={usedOn} />
+            </>
+          )}
+        </div>
         {usageSupported && (connected || checkingAccount) && (
           <SubscriptionUsage usage={connected ? usage : undefined} />
         )}
@@ -1003,6 +1228,38 @@ function SubscriptionLibraryRow({
         />
       )}
     </div>
+  );
+}
+
+function MachineAssignmentsHover({ machines }: { machines: AssignedMachine[] }) {
+  const label = `Used on ${machines.length} machine${machines.length === 1 ? "" : "s"}`;
+  return (
+    <HoverCard openDelay={180} closeDelay={100}>
+      <HoverCardTrigger asChild>
+        <button
+          type="button"
+          aria-label={`${label}: ${machines.map((machine) => machine.name).join(", ")}`}
+          className="rounded-sm underline decoration-dotted underline-offset-2 transition-colors hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
+        >
+          {label}
+        </button>
+      </HoverCardTrigger>
+      <HoverCardContent align="start" side="top" sideOffset={6} className="w-60 p-2">
+        <p className="px-1 pb-1.5 text-xs font-medium">Assigned machines</p>
+        <ul className="space-y-0.5">
+          {machines.map((machine) => (
+            <li key={machine.id} className="flex items-center gap-2 rounded-md px-1 py-1.5 text-sm">
+              <MachineIcon
+                local={machine.local}
+                icon={machine.icon}
+                className="size-4 text-muted-foreground"
+              />
+              <span className="min-w-0 truncate">{machine.name}</span>
+            </li>
+          ))}
+        </ul>
+      </HoverCardContent>
+    </HoverCard>
   );
 }
 
