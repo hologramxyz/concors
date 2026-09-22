@@ -71,6 +71,7 @@ interface Runtime {
   pending: Map<string, PendingResolver>;
   closed: boolean;
   cancelledTurn: string | null;
+  reloadWhenIdle: boolean;
 }
 
 export class AgentManager {
@@ -197,6 +198,12 @@ export class AgentManager {
     else if (!["done", "needs_input"].includes(next.status)) next.attention = null;
     this.#store.saveAgent(next);
     this.#emit({ type: "agent.state", agent: next });
+    const runtime = this.#runtimes.get(id);
+    if (runtime?.reloadWhenIdle && !["starting", "working", "needs_input"].includes(next.status)) {
+      runtime.closed = true;
+      this.#runtimes.delete(id);
+      void runtime.provider.close().catch(() => undefined);
+    }
     if (["idle", "done"].includes(next.status) && next.queue?.length && !next.queuePaused)
       queueMicrotask(() => {
         void this.drain(id).catch((error) => this.fail(id, error));
@@ -292,6 +299,7 @@ export class AgentManager {
       pending: new Map(),
       closed: false,
       cancelledTurn: null,
+      reloadWhenIdle: false,
     };
     this.#runtimes.set(id, runtime);
     provider.onNotification((method, params) => {
@@ -411,8 +419,12 @@ export class AgentManager {
     this.catalogGeneration++;
     this.#usage.clear();
     for (const current of this.#store.agents()) {
-      if (!matches(current) || ["starting", "working", "needs_input"].includes(current.status))
+      if (!matches(current)) continue;
+      if (["starting", "working", "needs_input"].includes(current.status)) {
+        const runtime = this.#runtimes.get(current.id);
+        if (runtime) runtime.reloadWhenIdle = true;
         continue;
+      }
       if (
         current.threadId &&
         !current.nativeImport &&

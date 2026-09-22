@@ -613,3 +613,42 @@ it("connects a subscription's account from settings without an open session", as
   expect(catalog.outcome.providers?.some((p) => p.id === "claude-work")).toBe(false);
   expect(catalog.outcome.providers?.some((p) => p.id === "claude")).toBe(true);
 });
+it("finishes a running turn before reloading a newly activated subscription", async () => {
+  const { c, id } = await setup();
+  const provider = (operation: Parameters<typeof c.requestProvider>[0]) =>
+    c.requestProvider(operation, randomUUID());
+  const saved = await provider({
+    kind: "save",
+    config: {
+      id: "codex-work",
+      label: "Codex — Work",
+      engine: "codex",
+      enabled: true,
+      command: ["codex"],
+      subscription: { nickname: "Work" },
+    },
+    expectedRevision: 0,
+  });
+  if (saved.outcome.status !== "ok") throw new Error(saved.outcome.message);
+
+  const running = instances[0]!.runtime;
+  await c.requestAgent({ kind: "send", sessionId: id, text: "hold" }, randomUUID());
+  await expect.poll(() => c.agents[0]?.status).toBe("working");
+  const activated = await provider({
+    kind: "activate",
+    engine: "codex",
+    id: "codex-work",
+    expectedRevision: saved.outcome.revision,
+  });
+  if (activated.outcome.status !== "ok") throw new Error(activated.outcome.message);
+
+  expect(running.closed).toBe(false);
+  expect(c.agents[0]?.status).toBe("working");
+  running.finish();
+  await expect.poll(() => c.agents[0]?.status).toBe("done");
+  await expect.poll(() => running.closed).toBe(true);
+
+  await c.requestAgent({ kind: "send", sessionId: id, text: "next turn" }, randomUUID());
+  await expect.poll(() => instances).toHaveLength(2);
+  await expect.poll(() => c.agents[0]?.status).toBe("done");
+});
