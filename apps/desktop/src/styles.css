@@ -194,8 +194,10 @@
     cursor: pointer;
   }
 
+  /* WebKit (Tauri's webview) rewrites an opaque selection color into a translucent one tuned for
+     white pages, which paints almost black on dark surfaces. A barely translucent color is kept as-is. */
   ::selection {
-    background: var(--selection);
+    background: color-mix(in srgb, var(--selection) 99%, transparent);
     color: var(--foreground);
   }
 }
