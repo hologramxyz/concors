@@ -1,7 +1,11 @@
 import type { Page } from "@playwright/test";
 
 /** Real second daemon, discovered and authorized through a mocked control plane. */
-export async function managedHost(page: Page, includeUnavailable = false) {
+export async function managedHost(
+  page: Page,
+  includeUnavailable = false,
+  workspaceSnapshotDelayMs = 0,
+) {
   let tokens = 0;
   await page.route("**/api/v1/machines**", async (route) => {
     const request = route.request();
@@ -81,7 +85,13 @@ export async function managedHost(page: Page, includeUnavailable = false) {
     server.addEventListener("open", () => {
       for (const message of pending) server.send(message);
     });
-    server.addEventListener("message", (event) => client.send(String(event.data)));
+    server.addEventListener("message", (event) => {
+      const message = String(event.data);
+      const parsed = JSON.parse(message) as { type?: string };
+      if (parsed.type === "workspace.snapshot" && workspaceSnapshotDelayMs)
+        setTimeout(() => client.send(message), workspaceSnapshotDelayMs);
+      else client.send(message);
+    });
     server.addEventListener("close", () => client.close());
     client.onClose(() => server.close());
   });

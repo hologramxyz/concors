@@ -51,6 +51,22 @@ import {
  * same owner, so a status check and a sign-in dialog must take turns, not race.
  */
 const accountQueues = new Map<string, Promise<unknown>>();
+/** Settings pages unmount during navigation; keep successful reads in memory and refresh them quietly. */
+const providerSnapshots = new Map<string, ProviderSnapshot>();
+const accountSnapshots = new Map<string, Record<string, AgentAccount>>();
+const usageSnapshots = new Map<string, Record<string, SubscriptionUsageState>>();
+const usageCapabilities = new Map<string, boolean>();
+
+function machineCacheKey(hostScope: string, machineId: string, endpointUrl: string | undefined) {
+  return `${hostScope || endpointUrl || "unscoped"}:${machineId}`;
+}
+
+function rememberAccount(cacheKey: string, id: string, account: AgentAccount) {
+  const accounts = { ...(accountSnapshots.get(cacheKey) ?? {}), [id]: account };
+  accountSnapshots.set(cacheKey, accounts);
+  return accounts;
+}
+
 function requestAccount(connection: DaemonConnection, id: string, action: AgentAccountAction) {
   const key = `${connection.endpoint.url}:${id}`;
   const task = async () => {
@@ -90,24 +106,59 @@ export function SubscriptionsSettings({
   const localHandle = useDaemonConnection(localEndpoint ?? null, "local", hostScope);
   const localConnection = localEndpoint ? localHandle.transport : selectedConnection;
   const localState = localEndpoint ? localHandle.state : selectedState;
-  const local = useProviderMachine(localConnection, localState);
+  const localCacheKey = machineCacheKey(
+    hostScope,
+    "local",
+    localEndpoint?.url ?? localConnection?.endpoint.url,
+  );
+  const local = useProviderMachine(localConnection, localState, localCacheKey);
   const organization = auth ? activeOrganization(auth) : undefined;
   const machineList = useMachineList(organization?.id, !!auth);
   const [machineData, setMachineData] = useState<Record<string, ProviderSnapshot | null>>({});
-  const [accountLabels, setAccountLabels] = useState<Record<string, string>>({});
-  const [accounts, setAccounts] = useState<Record<string, AgentAccount>>({});
+  const [accountState, setAccountState] = useState(() => ({
+    cacheKey: localCacheKey,
+    accounts: accountSnapshots.get(localCacheKey) ?? {},
+  }));
   const [pageError, setPageError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [accountEpoch, setAccountEpoch] = useState(0);
   const subscriptions = (local.data?.providers ?? []).filter((provider) => provider.subscription);
+  const accounts = useMemo(
+    () =>
+      accountState.cacheKey === localCacheKey
+        ? accountState.accounts
+        : (accountSnapshots.get(localCacheKey) ?? {}),
+    [accountState, localCacheKey],
+  );
+  const accountLabels = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(accounts).flatMap(([id, account]) =>
+          account.label ? [[id, account.label]] : [],
+        ),
+      ),
+    [accounts],
+  );
   const connectedIds = subscriptions
     .filter((provider) => accounts[provider.id]?.status === "connected")
     .map((provider) => provider.id);
-  const usageSupported =
-    localState?.status === "ready" &&
-    !!localState.daemon.capabilities?.includes(PROVIDER_USAGE_CAPABILITY);
-  const usages = useSubscriptionUsages(localConnection, connectedIds, usageSupported);
+  const reportedUsageSupport =
+    localState?.status === "ready"
+      ? !!localState.daemon.capabilities?.includes(PROVIDER_USAGE_CAPABILITY)
+      : undefined;
+  const usageSupported = useCachedCapability(
+    localCacheKey,
+    reportedUsageSupport,
+    usageCapabilities,
+  );
+  const usages = useSubscriptionUsages(
+    localConnection,
+    connectedIds,
+    usageSupported,
+    local.workspaceReady,
+    localCacheKey,
+  );
   const availableMachines =
     machineList.data?.filter((machine) => machine.status !== "deleted") ?? [];
   const reportMachine = useCallback((machineId: string, data: ProviderSnapshot | null) => {
@@ -115,16 +166,14 @@ export function SubscriptionsSettings({
       current[machineId] === data ? current : { ...current, [machineId]: data },
     );
   }, []);
-  const reportAccountLabel = useCallback((id: string, label: string | undefined) => {
-    if (!label) return;
-    setAccountLabels((current) => (current[id] === label ? current : { ...current, [id]: label }));
-  }, []);
   const reportAccount = useCallback(
     (id: string, account: AgentAccount) => {
-      reportAccountLabel(id, account.label);
-      setAccounts((current) => (current[id] === account ? current : { ...current, [id]: account }));
+      setAccountState({
+        cacheKey: localCacheKey,
+        accounts: rememberAccount(localCacheKey, id, account),
+      });
     },
-    [reportAccountLabel],
+    [localCacheKey],
   );
   const accountChanged = useCallback(() => setAccountEpoch((epoch) => epoch + 1), []);
   const usedOn = (id: string) =>
@@ -160,6 +209,7 @@ export function SubscriptionsSettings({
             local
             connection={localConnection}
             machine={local}
+            cacheKey={localCacheKey}
             subscriptions={subscriptions}
             accountLabels={accountLabels}
             usages={usages}
@@ -206,8 +256,10 @@ export function SubscriptionsSettings({
               key={provider.id}
               connection={localConnection}
               provider={provider}
+              account={accounts[provider.id]}
               epoch={accountEpoch}
               busy={local.busy}
+              workspaceReady={local.workspaceReady}
               usedOn={usedOn(provider.id)}
               usage={usages[provider.id]}
               usageSupported={usageSupported}
@@ -280,6 +332,7 @@ interface ProviderMachineState {
   error: string | null;
   busy: boolean;
   supported: boolean;
+  workspaceReady: boolean;
   state: ConnectionState | undefined;
   execute(operation: ProviderOperation): Promise<ProviderSnapshot>;
 }
@@ -290,51 +343,67 @@ interface SubscriptionUsageState {
   error: string | null;
 }
 
-/** Account limits are read only while this page is open and refreshed at the daemon's cache TTL. */
+/** Limits refresh while this page is open; the last read prevents a reflow when the user returns. */
 function useSubscriptionUsages(
   connection: DaemonConnection | null,
   providerIds: string[],
   supported: boolean,
+  workspaceReady: boolean,
+  cacheKey: string,
 ) {
   const [snapshot, setSnapshot] = useState<{
-    connection: DaemonConnection;
+    cacheKey: string;
     usages: Record<string, SubscriptionUsageState>;
-  } | null>(null);
+  }>(() => ({ cacheKey, usages: usageSnapshots.get(cacheKey) ?? {} }));
   const ids = providerIds.join("\n");
   useEffect(() => {
-    if (!connection || !supported || !ids) return;
+    if (!connection || !supported || !workspaceReady || !ids) return;
     let cancelled = false;
     const update = (id: string, state: SubscriptionUsageState) => {
       if (cancelled) return;
-      setSnapshot((current) => ({
-        connection,
-        usages: {
-          ...(current?.connection === connection ? current.usages : {}),
+      setSnapshot((current) => {
+        const usages = {
+          ...(current.cacheKey === cacheKey
+            ? current.usages
+            : (usageSnapshots.get(cacheKey) ?? {})),
           [id]: state,
-        },
-      }));
+        };
+        usageSnapshots.set(cacheKey, usages);
+        return { cacheKey, usages };
+      });
     };
     const markLoading = (id: string) => {
       if (cancelled) return;
-      setSnapshot((current) => ({
-        connection,
-        usages: {
-          ...(current?.connection === connection ? current.usages : {}),
-          [id]: {
-            usage: current?.connection === connection ? (current.usages[id]?.usage ?? null) : null,
-            loading: true,
-            error: null,
+      setSnapshot((current) => {
+        const usages =
+          current.cacheKey === cacheKey ? current.usages : (usageSnapshots.get(cacheKey) ?? {});
+        return {
+          cacheKey,
+          usages: {
+            ...usages,
+            [id]: {
+              usage: usages[id]?.usage ?? null,
+              loading: true,
+              error: null,
+            },
           },
-        },
-      }));
+        };
+      });
+    };
+    const failed = (id: string, message: string) => {
+      const previous = usageSnapshots.get(cacheKey)?.[id];
+      update(id, {
+        usage: previous?.usage ?? null,
+        loading: false,
+        error: message,
+      });
     };
     const refresh = () => {
       for (const id of ids.split("\n")) {
         markLoading(id);
         void connection.requestProvider({ kind: "usage", id }, crypto.randomUUID()).then(
           ({ outcome }) => {
-            if (outcome.status === "error")
-              update(id, { usage: null, loading: false, error: outcome.message });
+            if (outcome.status === "error") failed(id, outcome.message);
             else
               update(id, {
                 usage: outcome.usage ?? null,
@@ -343,11 +412,7 @@ function useSubscriptionUsages(
               });
           },
           (cause: unknown) =>
-            update(id, {
-              usage: null,
-              loading: false,
-              error: cause instanceof Error ? cause.message : "Could not read plan usage.",
-            }),
+            failed(id, cause instanceof Error ? cause.message : "Could not read plan usage."),
         );
       }
     };
@@ -357,11 +422,23 @@ function useSubscriptionUsages(
       cancelled = true;
       clearInterval(timer);
     };
-  }, [connection, ids, supported]);
-  if (!supported || snapshot?.connection !== connection) return {};
-  return Object.fromEntries(
-    providerIds.flatMap((id) => (snapshot.usages[id] ? [[id, snapshot.usages[id]]] : [])),
-  );
+  }, [cacheKey, connection, ids, supported, workspaceReady]);
+  if (!supported) return {};
+  const usages =
+    snapshot.cacheKey === cacheKey ? snapshot.usages : (usageSnapshots.get(cacheKey) ?? {});
+  return Object.fromEntries(providerIds.flatMap((id) => (usages[id] ? [[id, usages[id]]] : [])));
+}
+
+function useCachedCapability(
+  cacheKey: string,
+  reported: boolean | undefined,
+  cache: Map<string, boolean>,
+) {
+  useEffect(() => {
+    if (reported === undefined) return;
+    cache.set(cacheKey, reported);
+  }, [cache, cacheKey, reported]);
+  return reported ?? cache.get(cacheKey) ?? false;
 }
 
 function useConnectionState(connection: DaemonConnection | null) {
@@ -379,20 +456,34 @@ function useConnectionState(connection: DaemonConnection | null) {
   return observed?.connection === connection ? observed.state : connection?.state;
 }
 
+function useWorkspaceReady(connection: DaemonConnection | null) {
+  const [, rerender] = useState(0);
+  useEffect(
+    () => connection?.subscribeWorkspace(() => rerender((revision) => revision + 1)),
+    [connection],
+  );
+  return connection?.workspace !== null && connection?.workspace !== undefined;
+}
+
 function useProviderMachine(
   connection: DaemonConnection | null,
   state: ConnectionState | undefined,
+  cacheKey: string,
 ): ProviderMachineState {
   const [snapshot, setSnapshot] = useState<{
-    connection: DaemonConnection;
+    cacheKey: string;
     data: ProviderSnapshot;
-  } | null>(null);
+  } | null>(() => {
+    const data = providerSnapshots.get(cacheKey);
+    return data ? { cacheKey, data } : null;
+  });
   const [machineError, setMachineError] = useState<{
-    connection: DaemonConnection | null;
+    cacheKey: string;
     message: string | null;
   } | null>(null);
   const [busy, setBusy] = useState(false);
   const mounted = useRef(true);
+  const workspaceReady = useWorkspaceReady(connection);
   const supported =
     state?.status === "ready" &&
     !!state.daemon.capabilities?.includes(PROVIDER_SUBSCRIPTIONS_CAPABILITY);
@@ -402,10 +493,11 @@ function useProviderMachine(
       const result = await connection.requestProvider(operation, crypto.randomUUID());
       if (result.outcome.status === "error") throw new Error(result.outcome.message);
       if (operation.kind !== "list") invalidateModelCatalogs(connection);
-      if (mounted.current) setSnapshot({ connection, data: result.outcome });
+      providerSnapshots.set(cacheKey, result.outcome);
+      if (mounted.current) setSnapshot({ cacheKey, data: result.outcome });
       return result.outcome;
     },
-    [connection],
+    [cacheKey, connection],
   );
   useEffect(() => {
     mounted.current = true;
@@ -414,12 +506,15 @@ function useProviderMachine(
     };
   }, [connection]);
   useEffect(() => {
-    if (!supported) return;
+    if (!supported || !workspaceReady) return;
     let cancelled = false;
     const refresh = () => {
       void request({ kind: "list" }).then(
-        () => !cancelled && setMachineError({ connection, message: null }),
-        (cause: Error) => !cancelled && setMachineError({ connection, message: cause.message }),
+        () => !cancelled && setMachineError({ cacheKey, message: null }),
+        (cause: Error) => {
+          if (!cancelled && !providerSnapshots.has(cacheKey))
+            setMachineError({ cacheKey, message: cause.message });
+        },
       );
     };
     refresh();
@@ -428,16 +523,16 @@ function useProviderMachine(
       cancelled = true;
       clearInterval(timer);
     };
-  }, [connection, request, supported]);
+  }, [cacheKey, request, supported, workspaceReady]);
   const execute = useCallback(
     async (operation: ProviderOperation) => {
       setBusy(true);
-      setMachineError({ connection, message: null });
+      setMachineError({ cacheKey, message: null });
       try {
         return await request(operation);
       } catch (cause) {
         setMachineError({
-          connection,
+          cacheKey,
           message: cause instanceof Error ? cause.message : "Could not update subscriptions",
         });
         throw cause;
@@ -445,11 +540,12 @@ function useProviderMachine(
         setBusy(false);
       }
     },
-    [connection, request],
+    [cacheKey, request],
   );
-  const data = snapshot?.connection === connection ? snapshot.data : null;
-  const error = machineError?.connection === connection ? machineError.message : null;
-  return { data, error, busy, supported, state, execute };
+  const data =
+    snapshot?.cacheKey === cacheKey ? snapshot.data : (providerSnapshots.get(cacheKey) ?? null);
+  const error = machineError?.cacheKey === cacheKey ? machineError.message : null;
+  return { data, error, busy, supported, workspaceReady, state, execute };
 }
 
 function RemoteMachineAssignment({
@@ -475,7 +571,8 @@ function RemoteMachineAssignment({
     [machine.hostname, machine.name, machine.status],
   );
   const handle = useDaemonConnection(endpoint, machine.id, hostScope);
-  const providerMachine = useProviderMachine(handle.transport, handle.state);
+  const cacheKey = machineCacheKey(hostScope, machine.id, endpoint?.url);
+  const providerMachine = useProviderMachine(handle.transport, handle.state, cacheKey);
   useEffect(
     () => onSnapshot(machine.id, providerMachine.data),
     [machine.id, onSnapshot, providerMachine.data],
@@ -487,6 +584,7 @@ function RemoteMachineAssignment({
       {...(machine.icon === undefined ? {} : { icon: machine.icon })}
       connection={handle.transport}
       machine={providerMachine}
+      cacheKey={cacheKey}
       subscriptions={subscriptions}
       accountLabels={accountLabels}
       usages={usages}
@@ -502,6 +600,7 @@ function MachineAssignmentCard({
   local = false,
   connection,
   machine,
+  cacheKey,
   subscriptions,
   accountLabels,
   usages,
@@ -513,6 +612,7 @@ function MachineAssignmentCard({
   local?: boolean;
   connection: DaemonConnection | null;
   machine: ProviderMachineState;
+  cacheKey: string;
   subscriptions: ProviderStatus[];
   accountLabels: Record<string, string>;
   usages: Record<string, SubscriptionUsageState>;
@@ -550,6 +650,7 @@ function MachineAssignmentCard({
               engine={engine}
               connection={connection}
               machine={machine}
+              cacheKey={cacheKey}
               subscriptions={subscriptions}
               accountLabels={accountLabels}
               usages={usages}
@@ -581,6 +682,7 @@ function ProviderAssignment({
   engine,
   connection,
   machine,
+  cacheKey,
   subscriptions,
   accountLabels,
   usages,
@@ -592,6 +694,7 @@ function ProviderAssignment({
   engine: SubscriptionEngine;
   connection: DaemonConnection | null;
   machine: ProviderMachineState;
+  cacheKey: string;
   subscriptions: ProviderStatus[];
   accountLabels: Record<string, string>;
   usages: Record<string, SubscriptionUsageState>;
@@ -609,21 +712,24 @@ function ProviderAssignment({
     account: AgentAccount | null;
     failed: boolean;
   } | null>(null);
+  const cachedAccount = active ? (accountSnapshots.get(cacheKey)?.[active.id] ?? null) : null;
   const account =
     accountResult?.connection === connection && accountResult.providerId === active?.id
-      ? accountResult.account
-      : null;
+      ? (accountResult.account ?? cachedAccount)
+      : cachedAccount;
   const checkingFailed =
     accountResult?.connection === connection && accountResult.providerId === active?.id
-      ? accountResult.failed
+      ? accountResult.failed && !account
       : false;
   useEffect(() => {
-    if (!connection || !active?.installed || !active.enabled) return;
+    if (!connection || !machine.workspaceReady || !active?.installed || !active.enabled) return;
     let cancelled = false;
     requestAccount(connection, active.id, { type: "read" }).then(
-      (next) =>
-        !cancelled &&
-        setAccountResult({ connection, providerId: active.id, account: next, failed: false }),
+      (next) => {
+        if (cancelled) return;
+        rememberAccount(cacheKey, active.id, next);
+        setAccountResult({ connection, providerId: active.id, account: next, failed: false });
+      },
       () =>
         !cancelled &&
         setAccountResult({ connection, providerId: active.id, account: null, failed: true }),
@@ -631,7 +737,15 @@ function ProviderAssignment({
     return () => {
       cancelled = true;
     };
-  }, [active?.enabled, active?.id, active?.installed, connection, epoch]);
+  }, [
+    active?.enabled,
+    active?.id,
+    active?.installed,
+    cacheKey,
+    connection,
+    epoch,
+    machine.workspaceReady,
+  ]);
   const assign = async (id: string) => {
     if (!machine.data) throw new Error("This machine is unavailable.");
     let revision = machine.data.revision;
@@ -724,8 +838,10 @@ function usageOptionLabel(usage: AgentPlanUsage | null | undefined) {
 function SubscriptionLibraryRow({
   connection,
   provider,
+  account,
   epoch,
   busy,
+  workspaceReady,
   usedOn,
   usage,
   usageSupported,
@@ -736,8 +852,10 @@ function SubscriptionLibraryRow({
 }: {
   connection: DaemonConnection | null;
   provider: ProviderStatus;
+  account: AgentAccount | undefined;
   epoch: number;
   busy: boolean;
+  workspaceReady: boolean;
   usedOn: number;
   usage: SubscriptionUsageState | undefined;
   usageSupported: boolean;
@@ -746,28 +864,47 @@ function SubscriptionLibraryRow({
   onRename: (provider: ProviderStatus, name: string | undefined) => Promise<unknown>;
   onRemove: () => void;
 }) {
-  const [account, setAccount] = useState<AgentAccount | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<{
+    connection: DaemonConnection;
+    providerId: string;
+    epoch: number;
+  } | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [renaming, setRenaming] = useState(false);
+  const accountRef = useRef(account);
   useEffect(() => {
-    if (!connection || !provider.installed || !provider.enabled) return;
+    accountRef.current = account;
+  }, [account]);
+  useEffect(() => {
+    if (!connection || !workspaceReady || !provider.installed || !provider.enabled) return;
     let cancelled = false;
     requestAccount(connection, provider.id, { type: "read" }).then(
       (next) => {
         if (cancelled) return;
-        setAccount(next);
         onAccount(provider.id, next);
-        setFailed(false);
+        setFailure(null);
       },
       () => {
-        if (!cancelled) setFailed(true);
+        if (!cancelled && !accountRef.current)
+          setFailure({ connection, providerId: provider.id, epoch });
       },
     );
     return () => {
       cancelled = true;
     };
-  }, [connection, provider.id, provider.installed, provider.enabled, epoch, onAccount]);
+  }, [
+    connection,
+    provider.id,
+    provider.installed,
+    provider.enabled,
+    epoch,
+    onAccount,
+    workspaceReady,
+  ]);
+  const failed =
+    failure?.connection === connection &&
+    failure.providerId === provider.id &&
+    failure.epoch === epoch;
   const connected = account?.status === "connected";
   const providerFallback = provider.subscription?.nickname;
   const name =
@@ -785,6 +922,7 @@ function SubscriptionLibraryRow({
           : connected
             ? `Connected${account.label && account.label !== name ? ` · ${account.label}` : ""}`
             : "Not connected";
+  const checkingAccount = provider.installed && provider.enabled && !account && !failed;
   return (
     <div
       role="group"
@@ -803,7 +941,9 @@ function SubscriptionLibraryRow({
           {status}
           {usedOn ? ` · Used on ${usedOn} machine${usedOn === 1 ? "" : "s"}` : ""}
         </p>
-        {connected && usageSupported && <SubscriptionUsage usage={usage} />}
+        {usageSupported && (connected || checkingAccount) && (
+          <SubscriptionUsage usage={connected ? usage : undefined} />
+        )}
       </div>
       <div className="flex shrink-0 items-center gap-1">
         {provider.installed && provider.enabled && (
@@ -874,10 +1014,25 @@ const usageBarColors = {
 
 function SubscriptionUsage({ usage: state }: { usage: SubscriptionUsageState | undefined }) {
   if (!state || (!state.usage && state.loading))
-    return <p className="mt-2 text-xs text-muted-foreground">Reading usage…</p>;
-  if (state.error)
     return (
-      <p className="mt-2 text-xs text-muted-foreground" title={state.error}>
+      <div
+        role="status"
+        aria-label="Reading usage"
+        className="mt-2.5 flex min-h-11 flex-wrap gap-x-4 gap-y-2.5"
+      >
+        <span className="sr-only">Reading usage…</span>
+        {["primary", "secondary"].map((slot) => (
+          <div key={slot} className="w-44 max-w-full motion-safe:animate-pulse">
+            <div className="h-3 w-24 rounded bg-muted/70" />
+            <div className="mt-1.5 h-1 rounded-full bg-muted" />
+            <div className="mt-1.5 h-2 w-16 rounded bg-muted/60" />
+          </div>
+        ))}
+      </div>
+    );
+  if (state.error && !state.usage)
+    return (
+      <p className="mt-2.5 min-h-11 text-xs text-muted-foreground" title={state.error}>
         Usage unavailable
       </p>
     );
@@ -885,10 +1040,10 @@ function SubscriptionUsage({ usage: state }: { usage: SubscriptionUsageState | u
   if (!usage) return null;
   if (usage.status !== "available" || !usage.windows.length)
     return usage.message ? (
-      <p className="mt-2 text-xs text-muted-foreground">{usage.message}</p>
+      <p className="mt-2.5 min-h-11 text-xs text-muted-foreground">{usage.message}</p>
     ) : null;
   return (
-    <ul aria-label="Plan usage" className="mt-2.5 flex flex-wrap gap-x-4 gap-y-2.5">
+    <ul aria-label="Plan usage" className="mt-2.5 flex min-h-11 flex-wrap gap-x-4 gap-y-2.5">
       {usage.windows.map((window) => {
         const tone = usageTone(window.usedPercent);
         const reset = resetLabel(window.resetsAt);
