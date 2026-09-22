@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { machineAvailability, machineStatusLabel, type MobileState } from "@concors/client-core";
 import { Button } from "@/components/ui/button";
+import { DaemonDetails, type DaemonConnectionInfo } from "@/machines/daemon-details";
 import { Section } from "@/views/settings-primitives";
 import { hostAction } from "./bridge";
 import { api } from "@/auth/api";
@@ -10,9 +11,12 @@ import { RenameMachineDialog } from "@/machines/rename-machine-dialog";
 /** Companion v1: access existing machines; no commerce or provisioning entry points. */
 export function ExistingMachines({
   host,
+  connection,
   onConnected,
 }: {
   host: MobileState;
+  /** The daemon of `host.machineId`, the machine this device is connected to. */
+  connection: DaemonConnectionInfo;
   onConnected(): void;
 }) {
   const [busy, setBusy] = useState(false);
@@ -29,6 +33,7 @@ export function ExistingMachines({
       setBusy(false);
     }
   };
+  const connected = host.machines.find((machine) => machine.id === host.machineId);
   return (
     <div className="space-y-4 p-4">
       <Section title="Machines" description="Existing machines in your active organization.">
@@ -85,6 +90,16 @@ export function ExistingMachines({
             </li>
           ))}
         </ul>
+        {connected && (
+          <div className="border-t py-4">
+            <p className="mb-3 text-sm font-medium">{connected.name} daemon</p>
+            <DaemonDetails
+              connection={connection}
+              reportedVersion={connected.agentVersion}
+              error={connected.agentError}
+            />
+          </div>
+        )}
         <Button variant="outline" disabled={busy} onClick={() => void run()}>
           Refresh machines
         </Button>

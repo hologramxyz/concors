@@ -255,7 +255,7 @@ test("beta sign-in stays interactive and diagnostics reports the phone's backend
   await profile.getByRole("button", { name: "Settings", exact: true }).click();
   const settings = sheet(ui, "Settings");
   await settings.getByRole("combobox", { name: "Settings section" }).click();
-  await ui.locator('[role="option"][data-value="advanced"]').click();
+  await ui.locator('[role="option"][data-value="about"]').click();
   await expect(settings).toContainText("https://control-plane.example");
   await expect(settings).toContainText("Build number");
   await expect(settings).toContainText("Development / browser preview");

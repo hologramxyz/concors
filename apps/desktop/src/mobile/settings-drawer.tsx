@@ -21,7 +21,7 @@ import { MachinesSettings } from "./machines-settings";
 import { MobileSelect } from "./select";
 import { AppearanceSettings } from "@/settings/appearance-settings";
 import { ShortcutSettings } from "@/settings/shortcut-settings";
-import { AdvancedSettings } from "@/settings/advanced-settings";
+import { AboutSettings } from "@/settings/about-settings";
 
 export function SettingsDrawer({
   open,
@@ -91,7 +91,7 @@ export function SettingsDrawer({
                     [
                       "appearance",
                       "shortcuts",
-                      "advanced",
+                      "about",
                       "providers",
                       "subscriptions",
                       "machines",
@@ -117,7 +117,15 @@ export function SettingsDrawer({
             </p>
           )}
           {page === "machines" ? (
-            <MachinesSettings host={host} onConnected={() => onOpenChange(false)} />
+            <MachinesSettings
+              host={host}
+              connection={{
+                endpoint: null,
+                endpointLabel: host.endpointLabel,
+                state: connectionState,
+              }}
+              onConnected={() => onOpenChange(false)}
+            />
           ) : page === "providers" ? (
             <div className="p-4">
               <ProvidersSettings />
@@ -154,14 +162,11 @@ export function SettingsDrawer({
                   }
                 />
               ) : (
-                <AdvancedSettings
-                  endpoint={null}
-                  endpointLabel={host.endpointLabel}
+                <AboutSettings
                   apiUrl={host.apiUrl}
                   {...(host.app
                     ? { clientVersion: host.app.version, buildVersion: host.app.build }
                     : {})}
-                  state={connectionState}
                 />
               )}
             </div>
@@ -204,13 +209,10 @@ export function SettingsDrawer({
           ) : host.me ? (
             <SettingsView
               page={page === "billing" ? "account" : page}
-              endpoint={null}
               apiUrl={host.apiUrl}
-              endpointLabel={host.endpointLabel}
               {...(host.app
                 ? { clientVersion: host.app.version, buildVersion: host.app.build }
                 : {})}
-              state={connectionState}
               theme={host.preferences.theme}
               cornerStyle={host.preferences.corners}
               onSetTheme={(theme) =>
