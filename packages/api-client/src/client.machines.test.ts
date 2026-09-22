@@ -112,7 +112,9 @@ describe("ApiClient machines", () => {
           ramGb: 4,
           diskGb: 40,
           monthlyPrice: { amount: 6.99, currency: "USD" },
+          soldOutRegions: ["US-EAST-VA"],
         },
+        // Servers that predate stock reporting omit `soldOutRegions`.
         { id: "medium", vcpus: 4, ramGb: 8, diskGb: 75, monthlyPrice: null },
       ],
       image: "Ubuntu 24.04",
@@ -120,7 +122,9 @@ describe("ApiClient machines", () => {
     };
     const fetch = vi.fn(async () => json(catalog));
 
-    await expect(client(fetch).getMachineCatalog()).resolves.toEqual(catalog);
+    const read = await client(fetch).getMachineCatalog();
+    expect(read.sizes.map((size) => size.soldOutRegions)).toEqual([["US-EAST-VA"], []]);
+    expect(read).toMatchObject(catalog);
     expect(lastCall(fetch).url).toBe("https://api.example/api/v1/machines/catalog");
   });
 
