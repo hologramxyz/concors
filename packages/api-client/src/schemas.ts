@@ -223,6 +223,8 @@ export const MachineSizeSchema = z.object({
   ramGb: z.number(),
   diskGb: z.number(),
   monthlyPrice: MoneySchema.nullable(),
+  /** Region ids where this size is sold out right now; absent from servers that predate it. */
+  soldOutRegions: z.array(z.string()).default([]),
 });
 export type MachineSize = z.infer<typeof MachineSizeSchema>;
 
