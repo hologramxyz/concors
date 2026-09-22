@@ -163,11 +163,17 @@ test("an outdated agent CLI is flagged in the picker and can be updated from it"
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
+    const notice = page.getByText("Codex 0.156.0 is available.", { exact: false });
+    const label = page.getByRole("button", { name: "Codex 0.156.0 available", exact: true });
+    await expect(label).toBeVisible();
+    await page.screenshot({ path: test.info().outputPath("provider-update-label.png") });
+    await label.click();
+    await expect(notice).toBeVisible();
+    await page.screenshot({ path: test.info().outputPath("provider-update-popover.png") });
+    await page.keyboard.press("Escape");
     const picker = page.getByRole("button", { name: "Agent and model", exact: true });
     await picker.click();
-    const notice = page.getByText("Codex 0.156.0 is available.", { exact: false });
     await expect(notice).toBeVisible();
-    await page.screenshot({ path: test.info().outputPath("provider-update-available.png") });
     await page.getByRole("button", { name: "Back to providers", exact: true }).click();
     await expect(
       page.getByRole("option", {
@@ -180,6 +186,8 @@ test("an outdated agent CLI is flagged in the picker and can be updated from it"
     await expect(page.getByText("Updating Codex…", { exact: true })).toBeVisible();
     await expect(notice).toHaveCount(0);
     await expect(page.getByText("Updating Codex…", { exact: true })).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(label).toHaveCount(0);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

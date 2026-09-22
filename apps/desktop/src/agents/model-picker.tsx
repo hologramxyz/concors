@@ -22,7 +22,6 @@ export function AgentModelPicker({
     onSelect,
     !disabled && agent.status !== "starting",
   );
-  const currentUpdate = providers.find((p) => p.id === agent.provider)?.version;
   return (
     <>
       <ControlPicker
@@ -34,15 +33,7 @@ export function AgentModelPicker({
           agent.status === "starting" || switching ? (
             <LoaderCircle className="size-4 animate-spin" />
           ) : (
-            <span className="relative inline-flex">
-              <ProviderIcon provider={agent.provider} />
-              {currentUpdate?.updateAvailable && (
-                <span
-                  aria-hidden
-                  className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-primary ring-2 ring-background"
-                />
-              )}
-            </span>
+            <ProviderIcon provider={agent.provider} />
           )
         }
         disabled={disabled || agent.status === "starting" || switching}

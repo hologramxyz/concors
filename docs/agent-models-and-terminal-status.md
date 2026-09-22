@@ -58,8 +58,9 @@ The serving daemon checks every npm-published provider every 30 minutes (and whe
 Settings → Providers is refreshed): it runs the CLI's `--version` and reads the
 package's `latest` release from the npm registry. Only the package name is sent.
 Provider statuses and model-picker catalog rows carry the result as `version`; the
-picker marks an outdated current provider with a dot and explains the update inside
-the provider's menu.
+composer shows a quiet "Codex x.y.z available" label beside its send controls for
+an outdated current provider (like Claude Code's own update hint), which opens the
+update; the model picker's provider menu offers the same update.
 
 "Update" runs a command scoped to the install that owns the CLI, inferred from where
 the executable really lives (symlinks and mise shims/wrappers followed): Concors'
