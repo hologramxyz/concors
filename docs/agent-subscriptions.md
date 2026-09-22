@@ -12,14 +12,18 @@ the machine uses it.
 
 Only the Claude and Codex engines support subscriptions (`SUBSCRIPTION_ENGINES` in
 `packages/protocol/src/providers.ts`), because their CLIs accept an isolated credential home:
-`CLAUDE_CONFIG_DIR` for Claude Code and `CODEX_HOME` for Codex. When a subscription configuration
-is saved, the daemon's provider registry creates
+`CLAUDE_CONFIG_DIR` for Claude Code and `CODEX_HOME` for Codex. Codex also receives a stable
+`CODEX_SQLITE_HOME`, keeping conversation state independent from the selected account. Existing
+threads created before that split are discovered in their original account home and resumed there,
+so switching accounts does not hide their rollout. When a subscription configuration is saved, the
+daemon's provider registry creates
 `<data-dir>/accounts/<engine>/<config-id>` (mode `0700`) and pins it into the configuration's
 `env` unless the caller supplied its own directory. Every CLI process behind that configuration —
 conversations, sign-in commands, the Codex app server — inherits that env, so each subscription
 keeps its own OAuth tokens side by side with the others on the same machine. Removing a
-subscription deletes the registry-created credential home, which is its sign-out; a user-supplied
-credential directory is never deleted.
+subscription deletes the registry-created Claude credential home. For Codex, it deletes
+`auth.json` but retains non-credential legacy conversation state so old chats remain recoverable;
+a user-supplied credential directory is never deleted.
 
 Subscriptions run their engine's regular CLI: binary resolution falls back to the base
 configuration's install directory (`ProviderRegistry.baseId`), so a subscription is "installed"

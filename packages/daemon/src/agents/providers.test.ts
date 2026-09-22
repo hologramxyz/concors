@@ -18,7 +18,11 @@ import { TestAgentProvider } from "./testing/provider.ts";
 let directory = "";
 let server: DaemonServer | undefined;
 let client: DaemonConnection | undefined;
-const instances: { provider: AgentProviderId; runtime: TestAgentProvider }[] = [];
+const instances: {
+  provider: AgentProviderId;
+  runtime: TestAgentProvider;
+  env: NodeJS.ProcessEnv | undefined;
+}[] = [];
 afterEach(async () => {
   client?.disconnect();
   await server?.close();
@@ -37,9 +41,9 @@ async function setup() {
   server = createDaemonServer(loadDaemonConfig({ port: 0, logLevel: "silent" }, {}), {
     workspacePath: join(directory, "state.db"),
     accountBackendFactory: (info) => new TestAccountBackend(info),
-    agentProviderFactory: (_cwd, onInput, provider = "codex") => {
+    agentProviderFactory: (_cwd, onInput, provider = "codex", tools) => {
       const runtime = new TestAgentProvider(onInput, provider);
-      instances.push({ provider, runtime });
+      instances.push({ provider, runtime, env: tools?.env });
       return runtime;
     },
   });
@@ -651,4 +655,41 @@ it("finishes a running turn before reloading a newly activated subscription", as
   await c.requestAgent({ kind: "send", sessionId: id, text: "next turn" }, randomUUID());
   await expect.poll(() => instances).toHaveLength(2);
   await expect.poll(() => c.agents[0]?.status).toBe("done");
+});
+it("resumes a Codex thread from its legacy state home after switching subscriptions", async () => {
+  const { c, id } = await setup();
+  await expect.poll(() => c.agents[0]?.threadId).toBe("fixture-thread");
+  await c.requestAgent({ kind: "send", sessionId: id, text: "before switch" }, randomUUID());
+  await expect.poll(() => c.agents[0]?.status).toBe("done");
+  const provider = (operation: Parameters<typeof c.requestProvider>[0]) =>
+    c.requestProvider(operation, randomUUID());
+  const saved = await provider({
+    kind: "save",
+    config: {
+      id: "codex-work",
+      label: "Codex — Work",
+      engine: "codex",
+      enabled: true,
+      command: ["codex"],
+      subscription: { nickname: "Work" },
+    },
+    expectedRevision: 0,
+  });
+  if (saved.outcome.status !== "ok") throw new Error(saved.outcome.message);
+  const legacyHome = join(directory, "accounts", "codex", "codex-work");
+  const database = new DatabaseSync(join(legacyHome, "state_5.sqlite"));
+  database.exec("CREATE TABLE threads (id TEXT PRIMARY KEY)");
+  database.prepare("INSERT INTO threads (id) VALUES (?)").run("fixture-thread");
+  database.close();
+
+  const activated = await provider({
+    kind: "activate",
+    engine: "codex",
+    id: "codex-work",
+    expectedRevision: saved.outcome.revision,
+  });
+  if (activated.outcome.status !== "ok") throw new Error(activated.outcome.message);
+  await c.requestAgent({ kind: "send", sessionId: id, text: "continue" }, randomUUID());
+  await expect.poll(() => instances).toHaveLength(2);
+  expect(instances.at(-1)?.env?.["CODEX_SQLITE_HOME"]).toBe(legacyHome);
 });

@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
+import { DatabaseSync } from "node:sqlite";
 import { afterEach, expect, it, vi } from "vitest";
 import { providerPresets, ProviderRequestSchema } from "@concors/protocol";
 import { ProviderRegistry } from "./registry.ts";
@@ -10,6 +11,7 @@ const directories: string[] = [];
 afterEach(async () => {
   await Promise.all(directories.map((p) => rm(p, { recursive: true, force: true })));
   directories.length = 0;
+  vi.unstubAllEnvs();
 });
 it("includes the audited six native providers and 38 opt-in ACP presets", () => {
   expect(providerPresets).toHaveLength(44);
@@ -301,6 +303,61 @@ it("gives Codex subscriptions their own CODEX_HOME and rejects unsupported engin
   );
   expect(builtin.outcome.status).toBe("error");
   expect(registry.revision).toBe(1);
+});
+it("keeps Codex conversation state stable and recovers threads from legacy account homes", async () => {
+  const root = await mkdtemp(join(tmpdir(), "concors-subscriptions-codex-state-"));
+  directories.push(root);
+  const shared = join(root, "shared-codex-state");
+  vi.stubEnv("CODEX_SQLITE_HOME", shared);
+  const registry = new ProviderRegistry(join(root, "providers"));
+  const saved = registry.request(
+    ProviderRequestSchema.parse({
+      type: "provider.request",
+      requestId: randomUUID(),
+      operation: {
+        kind: "save",
+        expectedRevision: 0,
+        config: {
+          id: "codex-work",
+          label: "Codex — Work",
+          engine: "codex",
+          enabled: true,
+          command: ["codex"],
+          subscription: { nickname: "Work" },
+        },
+      },
+    }),
+  );
+  expect(saved.outcome.status).toBe("ok");
+  const legacyHome = join(root, "accounts", "codex", "codex-work");
+  const threadId = randomUUID();
+  const database = new DatabaseSync(join(legacyHome, "state_5.sqlite"));
+  database.exec("CREATE TABLE threads (id TEXT PRIMARY KEY)");
+  database.prepare("INSERT INTO threads (id) VALUES (?)").run(threadId);
+  database.close();
+
+  expect(registry.conversationEnvironment("codex")).toEqual({ CODEX_SQLITE_HOME: shared });
+  expect(registry.conversationEnvironment("codex", randomUUID())).toEqual({
+    CODEX_SQLITE_HOME: shared,
+  });
+  expect(registry.conversationEnvironment("codex", threadId)).toEqual({
+    CODEX_SQLITE_HOME: legacyHome,
+  });
+
+  await writeFile(join(legacyHome, "auth.json"), "fixture-secret");
+  const removed = registry.request(
+    ProviderRequestSchema.parse({
+      type: "provider.request",
+      requestId: randomUUID(),
+      operation: { kind: "remove", id: "codex-work", expectedRevision: 1 },
+    }),
+  );
+  expect(removed.outcome.status).toBe("ok");
+  await expect(stat(join(legacyHome, "auth.json"))).rejects.toThrow();
+  expect((await stat(join(legacyHome, "state_5.sqlite"))).isFile()).toBe(true);
+  expect(registry.conversationEnvironment("codex", threadId)).toEqual({
+    CODEX_SQLITE_HOME: legacyHome,
+  });
 });
 it("resolves a subscription's binaries from its engine's base installation", async () => {
   const root = await mkdtemp(join(tmpdir(), "concors-subscription-bin-"));
