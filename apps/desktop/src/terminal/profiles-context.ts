@@ -1,12 +1,9 @@
 import { createContext, useContext } from "react";
-import type { SavedTerminalProfile, WorkspaceOperation } from "@concors/protocol";
+import type { SavedTerminalProfile } from "@concors/protocol";
 
 export interface TerminalProfilesContextValue {
   profiles: readonly SavedTerminalProfile[];
   supported: boolean;
-  canEdit: boolean;
-  execute: (operation: WorkspaceOperation) => Promise<void>;
-  openSettings: (add?: boolean) => void;
 }
 export const TerminalProfilesContext = createContext<TerminalProfilesContextValue | null>(null);
 export function useTerminalProfiles() {

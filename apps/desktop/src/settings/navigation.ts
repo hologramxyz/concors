@@ -6,7 +6,6 @@ import {
   Palette,
   Settings2,
   UserRound,
-  Terminal,
   Bot,
   Cloud,
   Users,
@@ -18,7 +17,6 @@ export type SettingsPage =
   | "appearance"
   | "shortcuts"
   | "notifications"
-  | "terminals"
   | "providers"
   | "subscriptions"
   | "machines"
@@ -59,7 +57,6 @@ export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
       { page: "machines", label: "Machines", icon: Cloud },
       { page: "providers", label: "Providers", icon: Bot },
       { page: "subscriptions", label: "Subscriptions", icon: Users },
-      { page: "terminals", label: "Terminals", icon: Terminal },
       { page: "billing", label: "Billing", icon: CreditCard },
       { page: "ssh-keys", label: "SSH keys", icon: KeyRound },
     ],
