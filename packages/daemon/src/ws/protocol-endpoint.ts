@@ -159,6 +159,8 @@ export function registerProtocolEndpoint(
     },
   );
   app.addHook("onReady", async () => {
+    // Injected providers (tests) never run the real CLIs, so there are no versions to check.
+    if (!options.agentProviderFactory) providers.startVersionChecks();
     await scheduleTools.start(schedules);
     schedules.start();
   });

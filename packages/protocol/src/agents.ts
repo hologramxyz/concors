@@ -2,7 +2,7 @@ import { AgentAccountActionSchema, AgentAccountSchema } from "./agent-accounts.t
 import { z } from "zod";
 import { AgentPlanUsageSchema } from "./agent-usage.ts";
 import { AgentControlsSchema, AgentFeatureValueSchema } from "./agent-controls.ts";
-import { ProviderIdSchema, ProviderEngineSchema } from "./providers.ts";
+import { ProviderIdSchema, ProviderEngineSchema, ProviderVersionSchema } from "./providers.ts";
 import { providerPresets } from "./provider-presets.ts";
 import { NativeSessionSchema } from "./native-sessions.ts";
 export { NativeSessionSchema, type NativeSession } from "./native-sessions.ts";
@@ -45,6 +45,8 @@ export const AgentProviderCatalogSchema = z.object({
   label: z.string().optional(),
   loaded: z.boolean().optional(),
   error: z.string().optional(),
+  /** New models often need a newer CLI, so the picker surfaces pending updates. */
+  version: ProviderVersionSchema.optional(),
 });
 export type AgentProviderCatalog = z.infer<typeof AgentProviderCatalogSchema>;
 export const AgentQuestionSchema = z.object({
