@@ -4,6 +4,7 @@ import { agentProviderName, type AgentInfo } from "@concors/protocol";
 import { ControlPicker } from "./control-picker";
 import { ProviderIcon } from "./provider-icon";
 import { useAgentModelSelection } from "./use-model-selection";
+import { ProviderUpdateNotice } from "./provider-update";
 
 export function AgentModelPicker({
   agent,
@@ -43,7 +44,7 @@ export function AgentModelPicker({
         groups={providers.map((p) => ({
           id: p.id,
           label: p.label ?? agentProviderName(p.id),
-          description: p.id === agent.provider ? "Current conversation" : "Use in this pane",
+          description: `${p.id === agent.provider ? "Current conversation" : "Use in this pane"}${p.version?.updateAvailable ? ` · Update available (${p.version.latest})` : ""}`,
           icon: <ProviderIcon provider={p.id} />,
           emptyMessage:
             p.error ??
@@ -51,6 +52,13 @@ export function AgentModelPicker({
               ? "No models reported. Check this provider in Settings."
               : "Models are being discovered. They will appear here automatically."),
           status: p.error,
+          footer: p.version && (
+            <ProviderUpdateNotice
+              provider={p.id}
+              label={p.label ?? agentProviderName(p.id)}
+              version={p.version}
+            />
+          ),
           options: [
             // An empty catalog must still allow opening a provider to sign in.
             ...(!p.models.length

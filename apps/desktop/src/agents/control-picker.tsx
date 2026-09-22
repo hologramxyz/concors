@@ -13,6 +13,8 @@ export interface ControlGroup extends ControlOption {
   options: ControlOption[];
   emptyMessage?: string | undefined;
   status?: string | undefined;
+  /** Shown under the group's options, e.g. an available CLI update. */
+  footer?: ReactNode;
 }
 export function ControlPicker({
   label,
@@ -212,6 +214,7 @@ export function ControlPicker({
               </p>
             )}
           </div>
+          {group?.footer}
           {statusText && (
             <p role="status" className="border-t px-2 py-2 text-xs text-muted-foreground">
               {statusText}
