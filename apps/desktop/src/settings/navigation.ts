@@ -1,10 +1,10 @@
 import {
   Bell,
+  Info,
   CreditCard,
   KeyRound,
   Keyboard,
   Palette,
-  Settings2,
   UserRound,
   Bot,
   Cloud,
@@ -22,7 +22,7 @@ export type SettingsPage =
   | "machines"
   | "billing"
   | "ssh-keys"
-  | "advanced";
+  | "about";
 
 export interface SettingsNavItem {
   readonly page: SettingsPage;
@@ -62,8 +62,8 @@ export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
     ],
   },
   {
-    label: "Developer",
-    items: [{ page: "advanced", label: "Advanced", icon: Settings2 }],
+    label: "App",
+    items: [{ page: "about", label: "About", icon: Info }],
   },
 ];
 

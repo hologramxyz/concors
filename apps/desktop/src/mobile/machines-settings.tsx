@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Plus } from "lucide-react";
 import type { MobileState } from "@concors/client-core";
 import { Button } from "@/components/ui/button";
+import { DaemonDetails, type DaemonConnectionInfo } from "@/machines/daemon-details";
 import { Section } from "@/views/settings-primitives";
 import { AddMachineDrawer } from "./add-machine-drawer";
 import { ExistingMachines } from "./existing-machines";
@@ -10,9 +11,11 @@ import { hostAction } from "./bridge";
 /** Machine management stays in Settings in both cloud and direct-preview modes. */
 export function MachinesSettings({
   host,
+  connection,
   onConnected,
 }: {
   host: MobileState;
+  connection: DaemonConnectionInfo;
   onConnected(): void;
 }) {
   const [adding, setAdding] = useState(false);
@@ -39,6 +42,9 @@ export function MachinesSettings({
             <p className="py-3 text-xs break-all text-muted-foreground">
               Machine ID: {host.machineId ?? "Waiting for daemon…"}
             </p>
+            <div className="pb-4">
+              <DaemonDetails connection={connection} />
+            </div>
             {error && (
               <p role="alert" className="pb-3 text-sm text-destructive">
                 {error}
@@ -58,7 +64,7 @@ export function MachinesSettings({
           </Section>
         </div>
       ) : (
-        <ExistingMachines host={host} onConnected={onConnected} />
+        <ExistingMachines host={host} connection={connection} onConnected={onConnected} />
       )}
       <div className="px-4 pb-4">
         <Button variant="outline" onClick={() => setAdding(true)}>
