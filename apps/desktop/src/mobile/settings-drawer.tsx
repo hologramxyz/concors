@@ -10,7 +10,6 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { TerminalsSettings } from "@/settings/terminals-settings";
 import { SettingsView } from "@/views/settings-view";
 import { SETTINGS_NAV_GROUPS, type SettingsPage } from "@/settings/navigation";
 import { Section } from "@/views/settings-primitives";
@@ -25,8 +24,6 @@ import { ShortcutSettings } from "@/settings/shortcut-settings";
 import { AdvancedSettings } from "@/settings/advanced-settings";
 
 export function SettingsDrawer({
-  creatingTerminalProfile,
-  onCreatingTerminalProfileChange,
   open,
   onOpenChange,
   host,
@@ -34,8 +31,6 @@ export function SettingsDrawer({
   page,
   onPageChange,
 }: {
-  creatingTerminalProfile: boolean;
-  onCreatingTerminalProfileChange(creating: boolean): void;
   open: boolean;
   onOpenChange(open: boolean): void;
   host: MobileState;
@@ -97,7 +92,6 @@ export function SettingsDrawer({
                       "appearance",
                       "shortcuts",
                       "advanced",
-                      "terminals",
                       "providers",
                       "subscriptions",
                       "machines",
@@ -131,13 +125,6 @@ export function SettingsDrawer({
           ) : page === "subscriptions" ? (
             <div className="p-4">
               <SubscriptionsSettings />
-            </div>
-          ) : page === "terminals" ? (
-            <div className="p-4">
-              <TerminalsSettings
-                creating={creatingTerminalProfile}
-                onCreatingChange={onCreatingTerminalProfileChange}
-              />
             </div>
           ) : page === "shortcuts" ? (
             <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
@@ -216,8 +203,6 @@ export function SettingsDrawer({
             </div>
           ) : host.me ? (
             <SettingsView
-              creatingTerminalProfile={creatingTerminalProfile}
-              onCreatingTerminalProfileChange={onCreatingTerminalProfileChange}
               page={page === "billing" ? "account" : page}
               endpoint={null}
               apiUrl={host.apiUrl}

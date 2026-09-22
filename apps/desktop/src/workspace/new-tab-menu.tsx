@@ -5,14 +5,13 @@ import { paneProfiles } from "./tab-profiles";
 import { useTerminalProfiles } from "@/terminal/profiles-context";
 import { useContext, useRef, useState, type ReactNode } from "react";
 import { CompactLayoutContext } from "@/components/compact-layout";
-import { Plus, Settings2 } from "lucide-react";
+import { Plus } from "lucide-react";
 import type { PaneProfile } from "@concors/protocol";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import {
   Dialog,
@@ -122,18 +121,6 @@ export function NewTabMenu({
                       </span>
                     </button>
                   ))}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOpen(false);
-                    profiles.openSettings();
-                  }}
-                >
-                  <span className="mobile-session-icon">
-                    <Settings2 />
-                  </span>
-                  <span>Edit pane profiles</span>
-                </button>
               </div>
             </DialogContent>
           </Dialog>
@@ -156,7 +143,7 @@ export function NewTabMenu({
           <DropdownMenuContent
             className="w-72 max-w-[calc(100vw-16px)]"
             onCloseAutoFocus={(event) => {
-              // The selected pane or settings page owns focus after selection.
+              // The selected pane owns focus after selection.
               if (menuTransfersFocus.current) event.preventDefault();
               menuTransfersFocus.current = false;
             }}
@@ -176,16 +163,6 @@ export function NewTabMenu({
                 </DropdownMenuItem>
               ),
             )}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="whitespace-nowrap"
-              onSelect={() => {
-                menuTransfersFocus.current = true;
-                profiles.openSettings();
-              }}
-            >
-              <Settings2 /> Edit pane profiles
-            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       )}

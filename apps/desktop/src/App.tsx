@@ -100,7 +100,6 @@ function AppContent() {
   );
   const [pullRequestsView, setPullRequestsView] = useState<PullRequestsView>(allPullRequests);
   const [focusedCloudMachineId, setFocusedCloudMachineId] = useState<string | null>(null);
-  const [creatingTerminalProfile, setCreatingTerminalProfile] = useState(false);
   const [settingsPage, setSettingsPage] = useState<SettingsPage>(() =>
     window.location.pathname === "/settings/billing" ? "billing" : "account",
   );
@@ -415,17 +414,6 @@ function AppContent() {
             supported:
               connection.state.status === "ready" &&
               !!connection.state.daemon.capabilities?.includes("terminal-profiles"),
-            canEdit:
-              canEdit &&
-              connection.state.status === "ready" &&
-              !!connection.state.daemon.capabilities?.includes("terminal-profiles"),
-            execute,
-            openSettings: (add = false) => {
-              if (view !== "settings") settingsReturnView.current = view;
-              setCreatingTerminalProfile(add);
-              setSettingsPage("terminals");
-              setView("settings");
-            },
           }}
         >
           <FilesProvider beforeLeaveRef={beforeLeaveFiles}>
@@ -531,8 +519,6 @@ function AppContent() {
                         {view === "settings" ? (
                           <SettingsView
                             key={workspace?.machineId ?? endpoint?.url}
-                            creatingTerminalProfile={creatingTerminalProfile}
-                            onCreatingTerminalProfileChange={setCreatingTerminalProfile}
                             page={settingsPage}
                             machines={{
                               onSelectLocal: () => selectMachine(LOCAL_HOST),
