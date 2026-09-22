@@ -42,6 +42,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/h
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogDescription,
@@ -142,6 +143,11 @@ export function SubscriptionsSettings({
   const [adding, setAdding] = useState(false);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [accountEpoch, setAccountEpoch] = useState(0);
+  const [assignmentDrafts, setAssignmentDrafts] = useState<Record<string, AssignmentChange>>({});
+  const [confirmingAssignments, setConfirmingAssignments] = useState(false);
+  const [savingAssignments, setSavingAssignments] = useState(false);
+  const [assignmentError, setAssignmentError] = useState<string | null>(null);
+  const assignmentTargets = useRef(new Map<string, AssignmentTarget>());
   const subscriptions = (local.data?.providers ?? []).filter((provider) => provider.subscription);
   const accounts = useMemo(
     () =>
@@ -195,6 +201,72 @@ export function SubscriptionsSettings({
     [localCacheKey],
   );
   const accountChanged = useCallback(() => setAccountEpoch((epoch) => epoch + 1), []);
+  const stageAssignment = useCallback(
+    (
+      machineId: string,
+      machineName: string,
+      engine: SubscriptionEngine,
+      currentId: string,
+      id: string,
+    ) => {
+      const key = `${machineId}:${engine}`;
+      setAssignmentDrafts((current) => {
+        if (id === currentId) {
+          const { [key]: _, ...rest } = current;
+          return rest;
+        }
+        return { ...current, [key]: { key, machineId, machineName, engine, id } };
+      });
+      setAssignmentError(null);
+    },
+    [],
+  );
+  const registerAssignmentTarget = useCallback(
+    (machineId: string, target: AssignmentTarget | null) => {
+      if (target) assignmentTargets.current.set(machineId, target);
+      else assignmentTargets.current.delete(machineId);
+    },
+    [],
+  );
+  const saveAssignments = async () => {
+    const changes = Object.values(assignmentDrafts);
+    if (!changes.length) return;
+    setSavingAssignments(true);
+    setAssignmentError(null);
+    const groups = new Map<string, AssignmentChange[]>();
+    for (const change of changes)
+      groups.set(change.machineId, [...(groups.get(change.machineId) ?? []), change]);
+    const results = await Promise.all(
+      [...groups.entries()].map(async ([machineId, machineChanges]) => {
+        const target = assignmentTargets.current.get(machineId);
+        if (!target)
+          return {
+            changes: machineChanges,
+            error: `${machineChanges[0]?.machineName ?? "Machine"} is unavailable.`,
+          };
+        try {
+          await target(machineChanges);
+          return { changes: machineChanges, error: null };
+        } catch (cause) {
+          return {
+            changes: machineChanges,
+            error: cause instanceof Error ? cause.message : "Could not save subscription changes.",
+          };
+        }
+      }),
+    );
+    const saved = new Set(
+      results.flatMap((result) => (result.error ? [] : result.changes.map((change) => change.key))),
+    );
+    setAssignmentDrafts((current) =>
+      Object.fromEntries(Object.entries(current).filter(([key]) => !saved.has(key))),
+    );
+    const failures = results.flatMap((result) => (result.error ? [result.error] : []));
+    setSavingAssignments(false);
+    if (failures.length) setAssignmentError(failures.join(" "));
+    else setConfirmingAssignments(false);
+  };
+  const pendingAssignmentCount = Object.keys(assignmentDrafts).length;
   const assignedMachines = (id: string): AssignedMachine[] => [
     ...(local.data?.providers.some((provider) => provider.id === id && provider.active)
       ? [{ id: "local", name: "This computer", local: true }]
@@ -233,6 +305,16 @@ export function SubscriptionsSettings({
             <h3 className="text-sm font-medium">Machine assignments</h3>
             <p className="mt-0.5 text-xs text-muted-foreground">One account per provider.</p>
           </div>
+          <Button
+            size="sm"
+            disabled={!pendingAssignmentCount || savingAssignments}
+            onClick={() => {
+              setAssignmentError(null);
+              setConfirmingAssignments(true);
+            }}
+          >
+            Save changes
+          </Button>
         </div>
         <div className="space-y-3">
           <MachineAssignmentCard
@@ -245,6 +327,9 @@ export function SubscriptionsSettings({
             subscriptions={subscriptions}
             accountLabels={accountLabels}
             usages={usages}
+            drafts={assignmentDrafts}
+            onDraft={stageAssignment}
+            onRegister={registerAssignmentTarget}
           />
           {availableMachines.map((machine) => (
             <RemoteMachineAssignment
@@ -254,6 +339,9 @@ export function SubscriptionsSettings({
               subscriptions={subscriptions}
               accountLabels={accountLabels}
               usages={usages}
+              drafts={assignmentDrafts}
+              onDraft={stageAssignment}
+              onRegister={registerAssignmentTarget}
               onSnapshot={reportMachine}
             />
           ))}
@@ -350,6 +438,37 @@ export function SubscriptionsSettings({
           onClose={() => setConnecting(null)}
         />
       )}
+      <Dialog
+        open={confirmingAssignments}
+        onOpenChange={(open) => !savingAssignments && setConfirmingAssignments(open)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Save subscription changes?</DialogTitle>
+            <DialogDescription>
+              Running tasks will finish with their current account. New tasks will use the selected
+              accounts.
+            </DialogDescription>
+          </DialogHeader>
+          {assignmentError && (
+            <p role="alert" className="text-sm text-destructive">
+              {assignmentError}
+            </p>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={savingAssignments}
+              onClick={() => setConfirmingAssignments(false)}
+            >
+              Cancel
+            </Button>
+            <Button disabled={savingAssignments} onClick={() => void saveAssignments()}>
+              {savingAssignments ? "Saving…" : "Save changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Section>
   );
 }
@@ -365,6 +484,16 @@ interface AssignedMachine {
   local: boolean;
   icon?: string | null;
 }
+
+interface AssignmentChange {
+  key: string;
+  machineId: string;
+  machineName: string;
+  engine: SubscriptionEngine;
+  id: string;
+}
+
+type AssignmentTarget = (changes: AssignmentChange[]) => Promise<void>;
 
 interface ProviderMachineState {
   data: ProviderSnapshot | null;
@@ -593,6 +722,9 @@ function RemoteMachineAssignment({
   subscriptions,
   accountLabels,
   usages,
+  drafts,
+  onDraft,
+  onRegister,
   onSnapshot,
 }: {
   machine: Machine;
@@ -600,6 +732,15 @@ function RemoteMachineAssignment({
   subscriptions: ProviderStatus[];
   accountLabels: Record<string, string>;
   usages: Record<string, SubscriptionUsageState>;
+  drafts: Record<string, AssignmentChange>;
+  onDraft: (
+    machineId: string,
+    machineName: string,
+    engine: SubscriptionEngine,
+    currentId: string,
+    id: string,
+  ) => void;
+  onRegister: (machineId: string, target: AssignmentTarget | null) => void;
   onSnapshot: (machineId: string, data: ProviderSnapshot | null) => void;
 }) {
   const endpoint = useMemo(
@@ -627,6 +768,9 @@ function RemoteMachineAssignment({
       subscriptions={subscriptions}
       accountLabels={accountLabels}
       usages={usages}
+      drafts={drafts}
+      onDraft={onDraft}
+      onRegister={onRegister}
       unavailable={!endpoint}
     />
   );
@@ -643,6 +787,9 @@ function MachineAssignmentCard({
   subscriptions,
   accountLabels,
   usages,
+  drafts,
+  onDraft,
+  onRegister,
   unavailable = false,
 }: {
   machineId: string;
@@ -655,6 +802,15 @@ function MachineAssignmentCard({
   subscriptions: ProviderStatus[];
   accountLabels: Record<string, string>;
   usages: Record<string, SubscriptionUsageState>;
+  drafts: Record<string, AssignmentChange>;
+  onDraft: (
+    machineId: string,
+    machineName: string,
+    engine: SubscriptionEngine,
+    currentId: string,
+    id: string,
+  ) => void;
+  onRegister: (machineId: string, target: AssignmentTarget | null) => void;
   unavailable?: boolean;
 }) {
   const [connecting, setConnecting] = useState<string | null>(null);
@@ -663,6 +819,42 @@ function MachineAssignmentCard({
   const connectingProvider = connecting
     ? machine.data?.providers.find((provider) => provider.id === connecting)
     : undefined;
+  const applyAssignments = useCallback<AssignmentTarget>(
+    async (changes) => {
+      if (!machine.data) throw new Error(`${name} is unavailable.`);
+      let snapshot = machine.data;
+      for (const change of changes) {
+        const activeId =
+          snapshot.providers.find(
+            (provider) =>
+              provider.engine === change.engine && provider.subscription && provider.active,
+          )?.id ?? "";
+        if (activeId === change.id) continue;
+        if (change.id && !snapshot.providers.some((provider) => provider.id === change.id)) {
+          const source = subscriptions.find(
+            (provider) => provider.id === change.id && provider.engine === change.engine,
+          );
+          if (!source) throw new Error("Choose an available subscription.");
+          snapshot = await machine.execute({
+            kind: "save",
+            config: portableSubscriptionConfig(source),
+            expectedRevision: snapshot.revision,
+          });
+        }
+        snapshot = await machine.execute({
+          kind: "activate",
+          engine: change.engine,
+          id: change.id || null,
+          expectedRevision: snapshot.revision,
+        });
+      }
+    },
+    [machine, name, subscriptions],
+  );
+  useEffect(() => {
+    onRegister(machineId, applyAssignments);
+    return () => onRegister(machineId, null);
+  }, [applyAssignments, machineId, onRegister]);
   const status = unavailable
     ? "Provisioning"
     : machine.state?.status === "ready"
@@ -693,8 +885,10 @@ function MachineAssignmentCard({
               subscriptions={subscriptions}
               accountLabels={accountLabels}
               usages={usages}
+              draftId={drafts[`${machineId}:${engine}`]?.id}
               epoch={accountEpoch}
               onConnect={setConnecting}
+              onDraft={onDraft}
             />
           ))}
         </div>
@@ -717,6 +911,7 @@ function MachineAssignmentCard({
 }
 
 function ProviderAssignment({
+  machineId,
   machineName,
   engine,
   connection,
@@ -725,8 +920,10 @@ function ProviderAssignment({
   subscriptions,
   accountLabels,
   usages,
+  draftId,
   epoch,
   onConnect,
+  onDraft,
 }: {
   machineId: string;
   machineName: string;
@@ -737,8 +934,16 @@ function ProviderAssignment({
   subscriptions: ProviderStatus[];
   accountLabels: Record<string, string>;
   usages: Record<string, SubscriptionUsageState>;
+  draftId: string | undefined;
   epoch: number;
   onConnect: (id: string) => void;
+  onDraft: (
+    machineId: string,
+    machineName: string,
+    engine: SubscriptionEngine,
+    currentId: string,
+    id: string,
+  ) => void;
 }) {
   const choices = subscriptions.filter((provider) => provider.engine === engine);
   const active = machine.data?.providers.find(
@@ -760,6 +965,8 @@ function ProviderAssignment({
     accountResult?.connection === connection && accountResult.providerId === active?.id
       ? accountResult.failed && !account
       : false;
+  const currentId = active?.id ?? "";
+  const selectedId = draftId ?? currentId;
   useEffect(() => {
     if (!connection || !machine.workspaceReady || !active?.installed || !active.enabled) return;
     let cancelled = false;
@@ -785,33 +992,15 @@ function ProviderAssignment({
     epoch,
     machine.workspaceReady,
   ]);
-  const assign = async (id: string) => {
-    if (!machine.data) throw new Error("This machine is unavailable.");
-    let revision = machine.data.revision;
-    if (id && !machine.data.providers.some((provider) => provider.id === id)) {
-      const source = choices.find((provider) => provider.id === id);
-      if (!source) throw new Error("Choose an available subscription.");
-      revision = (
-        await machine.execute({
-          kind: "save",
-          config: portableSubscriptionConfig(source),
-          expectedRevision: revision,
-        })
-      ).revision;
-    }
-    await machine.execute({ kind: "activate", engine, id: id || null, expectedRevision: revision });
-  };
   const status = !active
-    ? "Not assigned"
+    ? null
     : !managed
       ? "Subscription is no longer in your library"
       : checkingFailed
         ? "Could not check sign-in"
-        : !account
-          ? "Checking sign-in…"
-          : account.status === "connected"
-            ? "Signed in"
-            : "Needs sign-in";
+        : account?.status === "disconnected"
+          ? "Needs sign-in"
+          : null;
   return (
     <div className="grid gap-2 px-4 py-3 sm:grid-cols-[8rem_minmax(0,1fr)_auto] sm:items-center">
       <div className="flex items-center gap-2 text-sm font-medium">
@@ -822,18 +1011,19 @@ function ProviderAssignment({
         <SubscriptionPicker
           label={`${machineName} ${subscriptionEngineLabels[engine]} subscription`}
           engine={engine}
-          active={active}
-          managed={!!managed}
+          selectedId={selectedId}
           choices={choices}
           accountLabels={accountLabels}
           usages={usages}
           disabled={!machine.supported || !machine.data || machine.busy}
-          onChange={(id) => void assign(id).catch(() => undefined)}
+          onChange={(id) => onDraft(machineId, machineName, engine, currentId, id)}
         />
-        <p className="mt-1 text-xs text-muted-foreground">{status}</p>
+        {status && draftId === undefined && (
+          <p className="mt-1 text-xs text-muted-foreground">{status}</p>
+        )}
       </div>
       <div className="sm:w-24 sm:text-right">
-        {active && managed && account?.status !== "connected" && (
+        {draftId === undefined && active && managed && account?.status === "disconnected" && (
           <Button
             variant="outline"
             size="sm"
@@ -861,8 +1051,7 @@ function accountName(provider: ProviderStatus, labels: Record<string, string>) {
 function SubscriptionPicker({
   label,
   engine,
-  active,
-  managed,
+  selectedId,
   choices,
   accountLabels,
   usages,
@@ -871,15 +1060,15 @@ function SubscriptionPicker({
 }: {
   label: string;
   engine: SubscriptionEngine;
-  active: ProviderStatus | undefined;
-  managed: boolean;
+  selectedId: string;
   choices: ProviderStatus[];
   accountLabels: Record<string, string>;
   usages: Record<string, SubscriptionUsageState>;
   disabled: boolean;
   onChange: (id: string) => void;
 }) {
-  const selected = managed ? choices.find((provider) => provider.id === active?.id) : undefined;
+  const selected = choices.find((provider) => provider.id === selectedId);
+  const unavailable = !!selectedId && !selected;
   const selectedName = selected ? accountName(selected, accountLabels) : null;
   const selectedUsage = selected ? usages[selected.id]?.usage : null;
   return (
@@ -892,7 +1081,7 @@ function SubscriptionPicker({
           className="group/picker flex min-h-10 w-full min-w-0 items-center gap-2.5 rounded-md border bg-background px-2.5 py-1.5 text-left text-sm transition-colors outline-none hover:bg-muted/35 focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 data-[state=open]:bg-muted/45"
         >
           <span className="flex size-6 shrink-0 items-center justify-center rounded-full border bg-background">
-            {active && !managed ? (
+            {unavailable ? (
               <CircleOff className="size-3.5 text-muted-foreground" />
             ) : (
               <ProviderIcon provider={engine} />
@@ -901,7 +1090,7 @@ function SubscriptionPicker({
           <span className="min-w-0 flex-1">
             <span className="flex min-w-0 items-baseline gap-2">
               <span className="truncate font-medium">
-                {active && !managed ? "Unavailable subscription" : (selectedName ?? "Not assigned")}
+                {unavailable ? "Unavailable subscription" : (selectedName ?? "Not assigned")}
               </span>
               {selectedUsage?.planLabel && (
                 <span className="shrink-0 text-xs text-muted-foreground">
@@ -920,7 +1109,7 @@ function SubscriptionPicker({
         className="w-[28rem] max-w-[calc(100vw-2rem)] p-1.5"
       >
         <DropdownMenuRadioGroup
-          value={active?.id ?? "not-assigned"}
+          value={selectedId || "not-assigned"}
           onValueChange={(value) => onChange(value === "not-assigned" ? "" : value)}
         >
           <DropdownMenuRadioItem value="not-assigned" className="gap-3 px-2 py-2.5 pr-8">
@@ -929,8 +1118,8 @@ function SubscriptionPicker({
             </span>
             <span className="font-medium">Not assigned</span>
           </DropdownMenuRadioItem>
-          {active && !managed && (
-            <DropdownMenuRadioItem value={active.id} disabled className="gap-3 px-2 py-2.5 pr-8">
+          {unavailable && (
+            <DropdownMenuRadioItem value={selectedId} disabled className="gap-3 px-2 py-2.5 pr-8">
               <span className="flex size-7 shrink-0 items-center justify-center rounded-full border bg-background">
                 <CircleOff className="size-3.5 text-muted-foreground" />
               </span>
@@ -973,10 +1162,12 @@ function SelectedUsageSummary({ usage }: { usage: AgentPlanUsage }) {
   if (!window) return null;
   const tone = usageTone(window.usedPercent);
   return (
-    <span className="hidden w-28 shrink-0 sm:block">
+    <span className="hidden w-36 shrink-0 md:block">
       <span className="flex items-baseline justify-between gap-1 text-[10px] text-muted-foreground">
         <span className="truncate">{window.label}</span>
-        <span className="tabular-nums">{percentLabel(window.usedPercent)}</span>
+        <span className="shrink-0 whitespace-nowrap tabular-nums">
+          {percentLabel(window.usedPercent)}
+        </span>
       </span>
       <span className="mt-1 block h-1 overflow-hidden rounded-full bg-muted">
         <span
