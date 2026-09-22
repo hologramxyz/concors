@@ -133,7 +133,6 @@ function MobileWorkspaceContent({
 }) {
   const files = useFiles();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [creatingTerminalProfile, setCreatingTerminalProfile] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   /** A full-height page over the workspace; Pull requests may show one workspace. */
   const [page, setPage] = useState<
@@ -493,17 +492,6 @@ function MobileWorkspaceContent({
           supported:
             connection?.state.status === "ready" &&
             !!connection.state.daemon.capabilities?.includes("terminal-profiles"),
-          canEdit:
-            canEdit &&
-            connection?.state.status === "ready" &&
-            !!connection.state.daemon.capabilities?.includes("terminal-profiles"),
-          execute,
-          openSettings: (add = false) => {
-            setSidebarOpen(false);
-            setCreatingTerminalProfile(add);
-            setSettingsPage("terminals");
-            setSettingsOpen(true);
-          },
         }}
       >
         <AgentDraftScopeContext value={draftScope}>
@@ -891,8 +879,6 @@ function MobileWorkspaceContent({
               </Dialog>
               <SettingsDrawer
                 key={host.machineId}
-                creatingTerminalProfile={creatingTerminalProfile}
-                onCreatingTerminalProfileChange={setCreatingTerminalProfile}
                 open={settingsOpen}
                 onOpenChange={setSettingsOpen}
                 host={host}

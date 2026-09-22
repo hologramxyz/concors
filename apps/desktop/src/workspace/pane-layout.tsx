@@ -22,7 +22,7 @@ import { TerminalPane } from "@/terminal/terminal-pane";
 import { useContext, useEffect, useRef, useState } from "react";
 import { AgentPaneIcon } from "@/agents/activity";
 import { useAgents } from "@/agents/context";
-import { Columns2, Rows2, Ellipsis, Settings2, Terminal, X } from "lucide-react";
+import { Columns2, Rows2, Ellipsis, Terminal, X } from "lucide-react";
 import type {
   LayoutNode,
   PaneProfile,
@@ -451,10 +451,6 @@ function Pane({
                 </DropdownMenuRadioItem>
               ))}
             </DropdownMenuRadioGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => profiles.openSettings()}>
-              <Settings2 /> Edit pane profiles
-            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
         <button

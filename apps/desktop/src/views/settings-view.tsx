@@ -16,13 +16,10 @@ import { BillingSection } from "@/settings/billing-section";
 import type { SettingsPage } from "@/settings/navigation";
 import { SshKeysSection } from "@/settings/ssh-keys-section";
 import { ShortcutSettings } from "@/settings/shortcut-settings";
-import { TerminalsSettings } from "@/settings/terminals-settings";
 import type { ThemePreference } from "@/theme/use-theme";
 import type { CornerStyle } from "@/theme/use-corner-style";
 
 interface SettingsViewProps {
-  readonly creatingTerminalProfile: boolean;
-  readonly onCreatingTerminalProfileChange: (creating: boolean) => void;
   readonly page: SettingsPage;
   readonly machines?: Omit<MachinesViewProps, "auth">;
   readonly subscriptions?: Omit<SubscriptionsSettingsProps, "auth">;
@@ -41,8 +38,6 @@ interface SettingsViewProps {
 }
 
 export function SettingsView({
-  creatingTerminalProfile,
-  onCreatingTerminalProfileChange,
   page,
   machines,
   subscriptions,
@@ -71,14 +66,6 @@ export function SettingsView({
       break;
     case "subscriptions":
       content = <SubscriptionsSettings auth={auth} {...subscriptions} />;
-      break;
-    case "terminals":
-      content = (
-        <TerminalsSettings
-          creating={creatingTerminalProfile}
-          onCreatingChange={onCreatingTerminalProfileChange}
-        />
-      );
       break;
     case "account":
       content = <AccountSettings auth={auth} onSetActiveOrganization={onSetActiveOrganization} />;
