@@ -20,7 +20,7 @@ import {
   Trash2,
   Undo2,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { activeOrganization, type SignedInAuth } from "@/auth/auth-state";
 import { useBillingStatus } from "@/billing/use-billing";
@@ -38,6 +38,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
+import { DaemonDetails, type DaemonConnectionInfo } from "./daemon-details.tsx";
 import { MachineUsage } from "./machine-usage.tsx";
 import { RenameMachineDialog } from "./rename-machine-dialog.tsx";
 import { CreateMachineDialog, type MachineDraft } from "./create-machine-dialog.tsx";
@@ -59,6 +60,9 @@ export interface MachinesViewProps {
   readonly onSelectLocal?: () => void;
   readonly localSelected?: boolean;
   readonly focusedMachineId?: string | null;
+  /** The machine the app is connected to (`local` for this computer) and that connection. */
+  readonly selectedMachineId?: string;
+  readonly connection?: DaemonConnectionInfo;
 }
 
 /** Cloud machines of the active organization: list, create, rename, cancel, and how to connect. */
@@ -67,6 +71,8 @@ export function MachinesView({
   onSelectLocal,
   localSelected = false,
   focusedMachineId,
+  selectedMachineId,
+  connection,
 }: MachinesViewProps) {
   const organization = activeOrganization(auth);
   const state = useMachines(organization?.id);
@@ -166,26 +172,32 @@ export function MachinesView({
 
       {onSelectLocal && (
         <div
-          className="mb-5 flex flex-col items-start justify-between gap-4 rounded-xl border bg-card/40 p-5 md:flex-row md:items-center md:p-6"
+          className="mb-5 overflow-hidden rounded-xl border bg-card/40"
           aria-label="Local machine"
         >
-          <div className="flex min-w-0 items-center gap-3">
-            <MachineIcon local className="size-6 text-muted-foreground" />
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2.5">
-                <h3 className="text-base font-semibold">This computer</h3>
-                <Badge variant="outline" className={BADGE_TONE_CLASS.info}>
-                  Local
-                </Badge>
+          <div className="flex flex-col items-start justify-between gap-4 p-5 md:flex-row md:items-center md:p-6">
+            <div className="flex min-w-0 items-center gap-3">
+              <MachineIcon local className="size-6 text-muted-foreground" />
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <h3 className="text-base font-semibold">This computer</h3>
+                  <Badge variant="outline" className={BADGE_TONE_CLASS.info}>
+                    Local
+                  </Badge>
+                  {localSelected && <Badge variant="secondary">Current</Badge>}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Your local files, terminals, and agents.
+                </p>
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Your local files, terminals, and agents.
-              </p>
             </div>
+            <Button variant="outline" size="sm" className="shrink-0" onClick={onSelectLocal}>
+              {localSelected ? "Open workspace" : "Use this computer"}
+            </Button>
           </div>
-          <Button variant="outline" size="sm" className="shrink-0" onClick={onSelectLocal}>
-            {localSelected ? "Open workspace" : "Use this computer"}
-          </Button>
+          <AdvancedDetails>
+            <DaemonDetails connection={localSelected ? connection : undefined} />
+          </AdvancedDetails>
         </div>
       )}
 
@@ -219,6 +231,7 @@ export function MachinesView({
               <MachineCard
                 machine={machine}
                 ssh={ssh}
+                connection={selectedMachineId === machine.id ? connection : undefined}
                 paymentFailed={billing.data?.paymentFailedAt != null}
                 onRename={(name) => state.rename(machine.id, name)}
                 onIconChange={(icon) => state.setIcon(machine.id, icon)}
@@ -300,6 +313,7 @@ const BADGE_TONE_CLASS: Record<StatusTone | "info", string> = {
 function MachineCard({
   machine,
   ssh,
+  connection,
   paymentFailed,
   location,
   onRename,
@@ -313,6 +327,8 @@ function MachineCard({
 }: {
   readonly machine: Machine;
   readonly ssh: DeviceSsh;
+  /** Set only while this is the machine the app is connected to. */
+  readonly connection: DaemonConnectionInfo | undefined;
   /** The organization's card is failing, so this machine is on Stripe's retry clock. */
   readonly paymentFailed: boolean;
   readonly location: string;
@@ -350,6 +366,7 @@ function MachineCard({
               <Badge variant="outline" className={BADGE_TONE_CLASS[tone]}>
                 {undeployed ? "Not deployed" : describeStatus(machine)}
               </Badge>
+              {connection && <Badge variant="secondary">Current</Badge>}
               {ending && <Badge variant="secondary">{ending}</Badge>}
               {paymentFailed && !ending && !undeployed && machine.status !== "deleted" && (
                 <Tooltip>
@@ -487,26 +504,43 @@ function MachineCard({
         </div>
       )}
       {!undeployed && (
-        <details className="group border-t">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 text-xs text-muted-foreground transition-colors select-none hover:bg-muted/30 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-inset sm:px-6 [&::-webkit-details-marker]:hidden">
-            <span className="inline-flex items-center gap-2">
-              <Settings2 className="size-3.5" aria-hidden="true" />
-              Advanced
-            </span>
-            <ChevronDown
-              className="size-4 shrink-0 transition-transform duration-150 group-open:rotate-180"
-              aria-hidden="true"
+        <AdvancedDetails>
+          <div className="space-y-4">
+            <DaemonDetails
+              connection={connection}
+              reportedVersion={machine.agentVersion}
+              seenAt={machine.agentSeenAt}
+              error={machine.agentError}
             />
-          </summary>
-          <div className="border-t bg-muted/10 px-5 py-4 sm:px-6">
-            <p className="mb-3 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              SSH access
-            </p>
-            <SshAccess machine={machine} ssh={ssh} />
+            <div>
+              <p className="mb-3 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                SSH access
+              </p>
+              <SshAccess machine={machine} ssh={ssh} />
+            </div>
           </div>
-        </details>
+        </AdvancedDetails>
       )}
     </div>
+  );
+}
+
+/** The collapsed footer of a machine card: the daemon behind it and how to reach it. */
+function AdvancedDetails({ children }: { readonly children: ReactNode }) {
+  return (
+    <details className="group border-t">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 text-xs text-muted-foreground transition-colors select-none hover:bg-muted/30 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-inset sm:px-6 [&::-webkit-details-marker]:hidden">
+        <span className="inline-flex items-center gap-2">
+          <Settings2 className="size-3.5" aria-hidden="true" />
+          Advanced
+        </span>
+        <ChevronDown
+          className="size-4 shrink-0 transition-transform duration-150 group-open:rotate-180"
+          aria-hidden="true"
+        />
+      </summary>
+      <div className="border-t bg-muted/10 px-5 py-4 sm:px-6">{children}</div>
+    </details>
   );
 }
 

@@ -4,13 +4,12 @@ import {
   type SubscriptionsSettingsProps,
 } from "@/settings/subscriptions-settings";
 import { NotificationSettings } from "@/notifications/settings";
-import type { ConnectionState, DaemonEndpoint } from "@concors/daemon-client";
 import type { ReactNode } from "react";
 
 import { activeOrganization, type SignedInAuth } from "@/auth/auth-state";
 import { AccountSettings } from "@/settings/account-settings";
 import { MachinesView, type MachinesViewProps } from "@/machines/machines-view";
-import { AdvancedSettings } from "@/settings/advanced-settings";
+import { AboutSettings } from "@/settings/about-settings";
 import { AppearanceSettings } from "@/settings/appearance-settings";
 import { BillingSection } from "@/settings/billing-section";
 import type { SettingsPage } from "@/settings/navigation";
@@ -23,10 +22,7 @@ interface SettingsViewProps {
   readonly page: SettingsPage;
   readonly machines?: Omit<MachinesViewProps, "auth">;
   readonly subscriptions?: Omit<SubscriptionsSettingsProps, "auth">;
-  readonly endpoint: DaemonEndpoint | null;
-  readonly state: ConnectionState;
   readonly apiUrl?: string;
-  readonly endpointLabel?: string;
   readonly clientVersion?: string;
   readonly buildVersion?: string | null;
   readonly theme: ThemePreference;
@@ -41,10 +37,7 @@ export function SettingsView({
   page,
   machines,
   subscriptions,
-  endpoint,
-  state,
   apiUrl,
-  endpointLabel,
   clientVersion,
   buildVersion,
   theme,
@@ -96,13 +89,10 @@ export function SettingsView({
         <SshKeysSection key={`keys-${organization?.id ?? ""}`} organization={organization} />
       );
       break;
-    case "advanced":
+    case "about":
       content = (
-        <AdvancedSettings
-          endpoint={endpoint}
-          state={state}
+        <AboutSettings
           {...(apiUrl ? { apiUrl } : {})}
-          {...(endpointLabel ? { endpointLabel } : {})}
           {...(clientVersion ? { clientVersion } : {})}
           {...(buildVersion !== undefined ? { buildVersion } : {})}
         />

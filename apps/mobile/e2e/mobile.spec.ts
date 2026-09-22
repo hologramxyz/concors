@@ -445,8 +445,8 @@ test("folder workspaces and shared settings remain available from the sidebar", 
   await ui.getByRole("option").first().press("Escape");
   await choose(ui, "Settings section", "ssh-keys");
   await expect(ui.getByRole("dialog", { name: "Settings", exact: true })).toContainText("SSH");
-  await choose(ui, "Settings section", "advanced");
-  await expect(ui.getByText("In-memory demo", { exact: true })).toBeVisible();
+  await choose(ui, "Settings section", "about");
+  await expect(ui.getByText("Client version", { exact: true })).toBeVisible();
 });
 test("new workspace completion opens its own project and closes the sidebar", async ({ page }) => {
   const ui = await enter(page);
