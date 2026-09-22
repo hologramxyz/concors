@@ -8,6 +8,7 @@ import {
   isSettling,
   isRegionSoldOut,
   isSoldOut,
+  isUndeployed,
   isValidMachineName,
   orderableSize,
   sshCommand,
@@ -145,5 +146,16 @@ describe("sold-out sizes", () => {
 
   it("keeps the choice when nothing can be ordered", () => {
     expect(orderableSize([sizes[2]!], "US-WEST-OR", "xlarge")).toBe("xlarge");
+  });
+});
+
+describe("isUndeployed", () => {
+  const failed = { status: "error", orderId: null, serviceName: null } as const;
+
+  it("only matches failed machines that never got an order or a server", () => {
+    expect(isUndeployed(failed)).toBe(true);
+    expect(isUndeployed({ ...failed, orderId: "777" })).toBe(false);
+    expect(isUndeployed({ ...failed, serviceName: "vps-1.vps.ovh.us" })).toBe(false);
+    expect(isUndeployed({ ...failed, status: "provisioning" })).toBe(false);
   });
 });
