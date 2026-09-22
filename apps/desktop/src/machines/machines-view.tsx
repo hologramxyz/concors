@@ -5,6 +5,7 @@ import { cn } from "cn";
 import {
   CalendarX,
   Check,
+  CircleAlert,
   ChevronDown,
   Cloud,
   Copy,
@@ -14,7 +15,9 @@ import {
   Plus,
   RefreshCw,
   Server,
+  RotateCcw,
   Settings2,
+  Trash2,
   Undo2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -37,11 +40,12 @@ import {
 
 import { MachineUsage } from "./machine-usage.tsx";
 import { RenameMachineDialog } from "./rename-machine-dialog.tsx";
-import { CreateMachineDialog } from "./create-machine-dialog.tsx";
+import { CreateMachineDialog, type MachineDraft } from "./create-machine-dialog.tsx";
 import {
   describeEnding,
   describeStatus,
   formatMonthly,
+  isUndeployed,
   sshCommand,
   STATUS_TONE,
   type StatusTone,
@@ -69,6 +73,8 @@ export function MachinesView({
   const ssh = useDeviceSsh(organization?.id);
   const billing = useBillingStatus(organization?.id ?? "");
   const [creating, setCreating] = useState(false);
+  const [draft, setDraft] = useState<MachineDraft | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState<Machine | null>(null);
   const [resuming, setResuming] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -84,6 +90,20 @@ export function MachinesView({
   const empty = state.machines !== null && machines.length === 0;
   // Every machine is its own subscription on the same card, so a failed payment puts all of the
   // ones still running at risk. `null` while the list is loading keeps the warning plural.
+  const remove = (machine: Machine) => {
+    setRemoving(machine.id);
+    setActionError(null);
+    return state
+      .cancel(machine.id)
+      .then(
+        () => true,
+        (cause: unknown) => {
+          setActionError(describeMachinesError(cause));
+          return false;
+        },
+      )
+      .finally(() => setRemoving(null));
+  };
   const atRisk =
     state.machines === null
       ? null
@@ -112,7 +132,10 @@ export function MachinesView({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setCreating(true)}
+              onClick={() => {
+                setDraft(null);
+                setCreating(true);
+              }}
               disabled={state.catalog === null || !organization}
             >
               <Plus data-icon="inline-start" aria-hidden="true" />
@@ -151,7 +174,9 @@ export function MachinesView({
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2.5">
                 <h3 className="text-base font-semibold">This computer</h3>
-                <Badge variant="outline">Local</Badge>
+                <Badge variant="outline" className={BADGE_TONE_CLASS.info}>
+                  Local
+                </Badge>
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
                 Your local files, terminals, and agents.
@@ -202,6 +227,15 @@ export function MachinesView({
                   readableRegion(machine.region)
                 }
                 onCancel={() => setCancelling(machine)}
+                removing={removing === machine.id}
+                onRemove={() => void remove(machine)}
+                onRetry={() => {
+                  void remove(machine).then((removed) => {
+                    if (!removed) return;
+                    setDraft({ name: machine.name, region: machine.region, size: machine.size });
+                    setCreating(true);
+                  });
+                }}
                 resuming={resuming === machine.id}
                 onResume={() => {
                   setResuming(machine.id);
@@ -222,6 +256,7 @@ export function MachinesView({
           organizationId={organization.id}
           organizationName={organization.name}
           catalog={state.catalog}
+          initial={draft}
           onCreate={async (input) => {
             await state.create(input).catch((cause: unknown) => {
               throw new Error(describeMachinesError(cause));
@@ -253,6 +288,15 @@ const TONE_CLASS: Record<StatusTone, string> = {
   danger: "bg-destructive",
 };
 
+/** Same palette as invoice statuses in Settings → Billing. */
+const BADGE_TONE_CLASS: Record<StatusTone | "info", string> = {
+  neutral: "border-border bg-muted/50 text-muted-foreground",
+  pending: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  success: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  danger: "border-destructive/30 bg-destructive/10 text-destructive",
+  info: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-400",
+};
+
 function MachineCard({
   machine,
   ssh,
@@ -263,6 +307,9 @@ function MachineCard({
   onCancel,
   onResume,
   resuming,
+  onRemove,
+  onRetry,
+  removing,
 }: {
   readonly machine: Machine;
   readonly ssh: DeviceSsh;
@@ -274,9 +321,15 @@ function MachineCard({
   readonly onCancel: () => void;
   readonly onResume: () => void;
   readonly resuming: boolean;
+  /** Only offered for machines that were never deployed. */
+  readonly onRemove: () => void;
+  readonly onRetry: () => void;
+  readonly removing: boolean;
 }) {
   const tone = STATUS_TONE[machine.status];
-  const ending = describeEnding(machine);
+  // No server and no bill: nothing ends, renews or can be connected to.
+  const undeployed = isUndeployed(machine);
+  const ending = undeployed ? null : describeEnding(machine);
   return (
     <div className="overflow-hidden rounded-xl border bg-card/40">
       <div className="p-5 sm:p-6">
@@ -293,10 +346,12 @@ function MachineCard({
                 aria-hidden="true"
               />
               <h3 className="min-w-0 text-base font-semibold break-all">{machine.name}</h3>
-              <RenameMachineDialog machine={machine} onRename={onRename} />
-              <Badge variant="outline">{describeStatus(machine)}</Badge>
+              {!undeployed && <RenameMachineDialog machine={machine} onRename={onRename} />}
+              <Badge variant="outline" className={BADGE_TONE_CLASS[tone]}>
+                {undeployed ? "Not deployed" : describeStatus(machine)}
+              </Badge>
               {ending && <Badge variant="secondary">{ending}</Badge>}
-              {paymentFailed && !ending && machine.status !== "deleted" && (
+              {paymentFailed && !ending && !undeployed && machine.status !== "deleted" && (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Badge variant="destructive">At risk</Badge>
@@ -316,10 +371,21 @@ function MachineCard({
                 <Server className="size-3.5 shrink-0" aria-hidden="true" />
                 {machine.size}
               </span>
-              <span>{formatMonthly(machine.monthlyPrice)}</span>
+              {!undeployed && <span>{formatMonthly(machine.monthlyPrice)}</span>}
             </div>
           </div>
-          {ending ? (
+          {undeployed ? (
+            <div className="flex shrink-0 flex-wrap justify-end gap-2">
+              <Button variant="ghost" size="sm" onClick={onRemove} disabled={removing}>
+                <Trash2 data-icon="inline-start" aria-hidden="true" />
+                Remove
+              </Button>
+              <Button variant="outline" size="sm" onClick={onRetry} disabled={removing}>
+                <RotateCcw data-icon="inline-start" aria-hidden="true" />
+                Try again
+              </Button>
+            </div>
+          ) : ending ? (
             <Button variant="outline" size="sm" onClick={onResume} disabled={resuming}>
               <Undo2 data-icon="inline-start" aria-hidden="true" />
               {resuming ? "Resuming…" : "Keep machine"}
@@ -337,13 +403,27 @@ function MachineCard({
         </div>
       </div>
 
-      {machine.lastError && (
+      {machine.lastError && !undeployed && (
         <p role="alert" className="selectable mx-5 mb-5 text-xs text-destructive sm:mx-6 sm:mb-6">
           {machine.lastError}
         </p>
       )}
 
-      {machine.status === "provisioning" ? (
+      {undeployed ? (
+        <div className="border-t p-5 sm:p-6">
+          <div role="status" className="flex items-start gap-3 rounded-lg bg-destructive/5 p-4">
+            <CircleAlert className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" />
+            <div className="min-w-0 space-y-1">
+              <p className="text-sm font-medium">This machine couldn't be deployed</p>
+              <p className="text-sm text-muted-foreground">
+                The order didn't go through, so no server was created
+                {machine.monthlyPrice ? " and its payment was refunded" : ""}. Try again to pick
+                another region or size, or remove it.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : machine.status === "provisioning" ? (
         <div className="border-t p-5 sm:p-6">
           <div role="status" className="flex items-start gap-3 rounded-lg bg-muted/30 p-4">
             <LoaderCircle
@@ -406,24 +486,26 @@ function MachineCard({
           <MachineUsage machine={machine} />
         </div>
       )}
-      <details className="group border-t">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 text-xs text-muted-foreground transition-colors select-none hover:bg-muted/30 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-inset sm:px-6 [&::-webkit-details-marker]:hidden">
-          <span className="inline-flex items-center gap-2">
-            <Settings2 className="size-3.5" aria-hidden="true" />
-            Advanced
-          </span>
-          <ChevronDown
-            className="size-4 shrink-0 transition-transform duration-150 group-open:rotate-180"
-            aria-hidden="true"
-          />
-        </summary>
-        <div className="border-t bg-muted/10 px-5 py-4 sm:px-6">
-          <p className="mb-3 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            SSH access
-          </p>
-          <SshAccess machine={machine} ssh={ssh} />
-        </div>
-      </details>
+      {!undeployed && (
+        <details className="group border-t">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 text-xs text-muted-foreground transition-colors select-none hover:bg-muted/30 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-inset sm:px-6 [&::-webkit-details-marker]:hidden">
+            <span className="inline-flex items-center gap-2">
+              <Settings2 className="size-3.5" aria-hidden="true" />
+              Advanced
+            </span>
+            <ChevronDown
+              className="size-4 shrink-0 transition-transform duration-150 group-open:rotate-180"
+              aria-hidden="true"
+            />
+          </summary>
+          <div className="border-t bg-muted/10 px-5 py-4 sm:px-6">
+            <p className="mb-3 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              SSH access
+            </p>
+            <SshAccess machine={machine} ssh={ssh} />
+          </div>
+        </details>
+      )}
     </div>
   );
 }
