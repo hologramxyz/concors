@@ -1,9 +1,11 @@
-import { useContext, useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { LoaderCircle } from "lucide-react";
-import type { ProviderVersion } from "@concors/protocol";
+import { Popover } from "radix-ui";
+import { agentProviderName, type AgentInfo, type ProviderVersion } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { Button } from "@/components/ui/button";
-import { invalidateModelCatalogs } from "./model-catalog";
+import { invalidateModelCatalogs, modelCatalog } from "./model-catalog";
+import { ComposerSurfaceContext } from "./composer-expansion";
 
 /** Whether a provider row should advertise an update, including one still in progress. */
 function providerUpdatePending(version: ProviderVersion | undefined): boolean {
@@ -19,10 +21,12 @@ export function ProviderUpdateNotice({
   provider,
   label,
   version,
+  className = "border-t",
 }: {
   provider: string;
   label: string;
   version: ProviderVersion;
+  className?: string;
 }) {
   const connection = useContext(TerminalConnectionContext);
   const [live, setLive] = useState<ProviderVersion | null>(null),
@@ -55,7 +59,7 @@ export function ProviderUpdateNotice({
     }
   };
   return (
-    <div role="status" className="border-t px-2 py-2 text-xs text-muted-foreground">
+    <div role="status" className={`${className} px-2 py-2 text-xs text-muted-foreground`}>
       {current.updating ? (
         <p className="flex items-center gap-1.5">
           <LoaderCircle className="size-3.5 animate-spin" /> Updating {label}…
@@ -86,5 +90,63 @@ export function ProviderUpdateNotice({
         </p>
       )}
     </div>
+  );
+}
+
+const noProviders = () => [];
+const noSubscription = () => () => undefined;
+
+/**
+ * A quiet label beside the composer's send controls while the conversation's CLI is outdated,
+ * like Claude Code's own "update available" hint. It reads the catalog the model picker already
+ * keeps warm, so it never starts discovery itself.
+ */
+export function ProviderUpdateLabel({ agent, compact }: { agent: AgentInfo; compact: boolean }) {
+  const connection = useContext(TerminalConnectionContext);
+  const composerSurface = useContext(ComposerSurfaceContext);
+  const epoch = connection?.workspace?.epoch;
+  const catalog = useMemo(
+    () => (connection ? modelCatalog(connection, agent.directory, epoch) : null),
+    [connection, agent.directory, epoch],
+  );
+  const snapshot = useSyncExternalStore(
+    catalog?.subscribe ?? noSubscription,
+    catalog ? () => catalog.getSnapshot().providers : noProviders,
+  );
+  const row = snapshot.find((p) => p.id === agent.provider);
+  const version = row?.version;
+  if (!version?.updateAvailable && !version?.updating) return null;
+  const label = agent.providerLabel ?? row?.label ?? agentProviderName(agent.provider);
+  return (
+    <Popover.Root>
+      <Popover.Trigger
+        type="button"
+        title={`${label} ${version.latest} is available`}
+        className="rounded px-1.5 py-1 text-xs whitespace-nowrap text-muted-foreground hover:bg-muted hover:text-foreground"
+      >
+        {version.updating
+          ? `Updating ${label}…`
+          : compact
+            ? "Update available"
+            : `${label} ${version.latest} available`}
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          data-composer-surface={composerSurface}
+          side="top"
+          align="end"
+          sideOffset={8}
+          collisionPadding={12}
+          className="z-50 w-64 rounded-xl border bg-popover p-1 text-popover-foreground shadow-lg"
+        >
+          <ProviderUpdateNotice
+            provider={agent.provider}
+            label={label}
+            version={version}
+            className=""
+          />
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }
