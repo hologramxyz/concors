@@ -524,13 +524,13 @@ function AppContent() {
                               onSelectLocal: () => selectMachine(LOCAL_HOST),
                               localSelected: selectedHost.machineId === "local",
                               focusedMachineId: focusedCloudMachineId,
+                              selectedMachineId,
+                              connection: { endpoint, state: connection.state },
                             }}
                             subscriptions={{
                               localEndpoint,
                               hostScope,
                             }}
-                            endpoint={endpoint}
-                            state={connection.state}
                             theme={theme.preference}
                             onSetTheme={theme.setPreference}
                             cornerStyle={corners.preference}
