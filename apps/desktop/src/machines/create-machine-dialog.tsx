@@ -33,10 +33,18 @@ import {
   orderableSize,
 } from "./format.ts";
 
+/** What a retried machine was created with; the dialog opens on it. */
+export interface MachineDraft {
+  readonly name: string;
+  readonly region: string;
+  readonly size: string;
+}
+
 interface CreateMachineDialogProps {
   readonly organizationId: string;
   readonly organizationName: string;
   readonly catalog: MachineCatalog;
+  readonly initial?: MachineDraft | null;
   readonly onCreate: (input: Omit<CreateMachineInput, "organizationId">) => Promise<void>;
   readonly onClose: () => void;
 }
@@ -45,6 +53,7 @@ export function CreateMachineDialog({
   organizationId,
   organizationName,
   catalog,
+  initial,
   onCreate,
   onClose,
 }: CreateMachineDialogProps) {
@@ -60,10 +69,20 @@ export function CreateMachineDialog({
     }
   }, [step]);
   const [tools, setTools] = useState<DevelopmentTools>({ node: "lts", docker: false });
-  const [name, setName] = useState("");
-  const [region, setRegion] = useState(catalog.regions[0]?.id ?? "");
+  const [name, setName] = useState(initial?.name ?? "");
+  const [region, setRegion] = useState(() =>
+    catalog.regions.some((candidate) => candidate.id === initial?.region)
+      ? (initial?.region ?? "")
+      : (catalog.regions[0]?.id ?? ""),
+  );
   const [size, setSize] = useState(() =>
-    orderableSize(catalog.sizes, catalog.regions[0]?.id ?? "", catalog.sizes[0]?.id ?? ""),
+    orderableSize(
+      catalog.sizes,
+      region,
+      catalog.sizes.some((candidate) => candidate.id === initial?.size)
+        ? (initial?.size ?? "")
+        : (catalog.sizes[0]?.id ?? ""),
+    ),
   );
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
