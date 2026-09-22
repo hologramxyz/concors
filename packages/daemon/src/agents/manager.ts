@@ -287,11 +287,16 @@ export class AgentManager {
       void idle[1].provider.close();
     }
     const info = this.#store.agent(id);
+    const tools = this.tools?.(info);
+    const conversationEnv = this.registry.conversationEnvironment(info.provider, info.threadId);
     const provider = this.#factory(
       info.directory,
       (method, params, requestId) => this.approval(id, method, params, requestId),
       info.provider,
-      this.tools?.(info),
+      {
+        ...tools,
+        env: { ...tools?.env, ...conversationEnv },
+      },
     );
     const runtime: Runtime = {
       provider,
