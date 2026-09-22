@@ -26,8 +26,11 @@ import {
 import {
   formatMoney,
   formatMonthly,
+  isRegionSoldOut,
+  isSoldOut,
   isValidMachineName,
   MACHINE_NAME_MAX_LENGTH,
+  orderableSize,
 } from "./format.ts";
 
 interface CreateMachineDialogProps {
@@ -59,26 +62,30 @@ export function CreateMachineDialog({
   const [tools, setTools] = useState<DevelopmentTools>({ node: "lts", docker: false });
   const [name, setName] = useState("");
   const [region, setRegion] = useState(catalog.regions[0]?.id ?? "");
-  const [size, setSize] = useState(catalog.sizes[0]?.id ?? "");
+  const [size, setSize] = useState(() =>
+    orderableSize(catalog.sizes, catalog.regions[0]?.id ?? "", catalog.sizes[0]?.id ?? ""),
+  );
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const chosenRegion = catalog.regions.find((candidate) => candidate.id === region);
   const chosenSize = catalog.sizes.find((candidate) => candidate.id === size);
+  const regionSoldOut = isRegionSoldOut(catalog.sizes, region);
+  const orderable = chosenSize !== undefined && !isSoldOut(chosenSize, region);
   const nameOk = isValidMachineName(name);
   const billed = billing.status?.configured === true;
   const price = billing.status?.prices.find((candidate) => candidate.size === size)?.monthlyPrice;
   const ready =
     nameOk &&
     region !== "" &&
-    chosenSize !== undefined &&
+    orderable &&
     billing.status !== null &&
     (!billed || (price !== undefined && billing.status.hasPaymentMethod));
 
   const serverReady =
     nameOk &&
     chosenRegion !== undefined &&
-    chosenSize !== undefined &&
+    orderable &&
     billing.status !== null &&
     (!billed || price !== undefined);
   const busy = pending || billing.opening || billing.checkout !== null;
@@ -204,7 +211,10 @@ export function CreateMachineDialog({
                         <DropdownMenuRadioGroup
                           aria-label="Region"
                           value={region}
-                          onValueChange={setRegion}
+                          onValueChange={(next) => {
+                            setRegion(next);
+                            setSize((current) => orderableSize(catalog.sizes, next, current));
+                          }}
                         >
                           {catalog.regions.map((candidate) => (
                             <DropdownMenuRadioItem
@@ -218,7 +228,14 @@ export function CreateMachineDialog({
                               >
                                 {candidate.countryCode}
                               </span>
-                              <span className="min-w-0 break-words">{candidate.location}</span>
+                              <span className="min-w-0 flex-1 break-words">
+                                {candidate.location}
+                              </span>
+                              {isRegionSoldOut(catalog.sizes, candidate.id) && (
+                                <span className="shrink-0 text-xs text-muted-foreground">
+                                  Out of stock
+                                </span>
+                              )}
                             </DropdownMenuRadioItem>
                           ))}
                         </DropdownMenuRadioGroup>
@@ -234,7 +251,8 @@ export function CreateMachineDialog({
                       const candidatePrice = billing.status?.prices.find(
                         (price) => price.size === candidate.id,
                       )?.monthlyPrice;
-                      const unavailable = billed && !candidatePrice;
+                      const soldOut = isSoldOut(candidate, region);
+                      const unavailable = soldOut || (billed && !candidatePrice);
                       return (
                         <label
                           key={candidate.id}
@@ -254,13 +272,15 @@ export function CreateMachineDialog({
                               <span className="font-medium capitalize">{candidate.id}</span>
                             </span>
                             <span className="text-xs font-medium tabular-nums">
-                              {billing.status === null
-                                ? "Loading price…"
-                                : billed
-                                  ? candidatePrice
-                                    ? formatMonthly(candidatePrice)
-                                    : "Unavailable"
-                                  : "Free"}
+                              {soldOut
+                                ? "Out of stock"
+                                : billing.status === null
+                                  ? "Loading price…"
+                                  : billed
+                                    ? candidatePrice
+                                      ? formatMonthly(candidatePrice)
+                                      : "Unavailable"
+                                    : "Free"}
                             </span>
                           </div>
                           <span className="flex min-w-0 items-start gap-2 text-xs leading-relaxed text-muted-foreground">
@@ -274,6 +294,12 @@ export function CreateMachineDialog({
                       );
                     })}
                   </div>
+                  {regionSoldOut && (
+                    <p role="status" className="text-xs text-muted-foreground">
+                      Every size is out of stock in {chosenRegion?.location ?? "this region"} right
+                      now. Pick another region or try again later.
+                    </p>
+                  )}
                 </fieldset>
               </>
             )}
