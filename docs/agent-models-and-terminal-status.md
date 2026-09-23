@@ -66,8 +66,10 @@ update; the model picker's provider menu offers the same update.
 the executable really lives (symlinks and mise shims/wrappers followed): Concors'
 own install prefix (`npm install --prefix`), a mise tool (`mise upgrade <tool>`), a
 global npm prefix, Homebrew, or the CLI's own updater for Claude Code's and
-OpenCode's native installs. Anything else gets no command, and the user updates it
-the way they installed it. The daemon never updates on its own. If an update exits
+OpenCode's native installs. Managed VPSs start with Codex, Claude Code and OpenCode
+in Concors' own prefix, and packaged daemons bundle npm, so Update works there without
+a system Node. Anything else gets no command, and the user updates it the way they
+installed it. The daemon never updates on its own. If an update exits
 cleanly but the version does not move (a minimum release age, a pin), the error says
 so. On Windows, versions are shown but the install method is not inferred.
 
