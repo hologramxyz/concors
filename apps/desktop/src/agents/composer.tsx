@@ -864,7 +864,8 @@ export function AgentComposer({
                   if (command && !e.nativeEvent.isComposing) {
                     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
                       e.preventDefault();
-                      const step = e.key === "ArrowDown" ? 1 : -1;
+                      // The list stacks upward from the best match, so Up reaches further ones.
+                      const step = e.key === "ArrowUp" ? 1 : -1;
                       setSlashActive(
                         (slashIndex + step + slashCommands.length) % slashCommands.length,
                       );

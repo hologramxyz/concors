@@ -21,8 +21,25 @@ test("typing a slash lists the provider's commands and choosing compact compacts
     await composer.fill("/");
     await expect(commands.getByRole("option")).toHaveText([
       /\/compact.*Summarize earlier context/,
-      /\/review.*<target>.*Review a change/,
+      /\/review.*Review a change/,
     ]);
+    // The best match sits next to the composer, and Up moves away from it.
+    const top = (name: string) =>
+      commands
+        .getByRole("option", { name: new RegExp(`^/${name}`) })
+        .boundingBox()
+        .then((box) => box?.y ?? NaN);
+    expect(await top("compact")).toBeGreaterThan(await top("review"));
+    const details = page.locator("[data-slash-details]");
+    await expect(details).toContainText("/compact");
+    await composer.press("ArrowUp");
+    await expect(commands.getByRole("option", { selected: true })).toContainText("/review");
+    await expect(details).toContainText("<target>");
+    const [menu, field] = await Promise.all([
+      commands.boundingBox(),
+      page.locator("form").filter({ has: composer }).boundingBox(),
+    ]);
+    expect(Math.abs((menu?.width ?? 0) - (field?.width ?? NaN))).toBeLessThan(2);
     await composer.press("Escape");
     await expect(commands).toHaveCount(0);
     await expect(composer).toHaveValue("/");
