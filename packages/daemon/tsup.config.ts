@@ -9,7 +9,7 @@ const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
   version: string;
 };
 
-/** JS dependencies are inlined; only the current platform's native PTY package stays external. */
+/** JS dependencies are inlined; only the current platform's native PTY and speech packages stay external. */
 export default defineConfig({
   entry: { cli: "src/cli.ts" },
   format: ["esm"],

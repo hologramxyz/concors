@@ -7,6 +7,15 @@ import {
 } from "@concors/protocol";
 import { ThemeRequestSchema, type ThemeResult } from "@concors/protocol";
 import {
+  DICTATION_CAPABILITY,
+  DictationAudioSchema,
+  DictationRequestSchema,
+  type DictationEvent,
+  type DictationModel,
+  type DictationOperation,
+  type DictationResult,
+} from "@concors/protocol";
+import {
   RESOURCES_CAPABILITY,
   ResourceRequestSchema,
   type ProcessPreview,
@@ -226,6 +235,72 @@ export class DaemonConnection {
       }
     });
   }
+  readonly #dictationRequests = new Map<
+    string,
+    {
+      resolve: (result: DictationResult) => void;
+      reject: (error: Error) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
+  >();
+  readonly #dictationListeners = new Set<(event: DictationEvent) => void>();
+  #dictationModel: DictationModel | null = null;
+
+  /** Whether this daemon transcribes dictation itself (older daemons do not). */
+  get dictation(): boolean {
+    return (
+      this.#state.status === "ready" &&
+      !!this.#state.daemon.capabilities?.includes(DICTATION_CAPABILITY)
+    );
+  }
+
+  /** The latest speech-model state the daemon reported, or null before it has said. */
+  get dictationModel(): DictationModel | null {
+    return this.#dictationModel;
+  }
+
+  onDictation(listener: (event: DictationEvent) => void): () => void {
+    this.#dictationListeners.add(listener);
+    return () => {
+      this.#dictationListeners.delete(listener);
+    };
+  }
+
+  requestDictation(operation: DictationOperation, requestId: string): Promise<DictationResult> {
+    if (!this.dictation) return Promise.reject(new Error("Dictation is not available here"));
+    if (this.#dictationRequests.has(requestId))
+      return Promise.reject(new Error("Request is already pending"));
+    const request = DictationRequestSchema.parse({
+      type: "dictation.request",
+      requestId,
+      operation,
+    });
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.#dictationRequests.delete(requestId);
+        reject(new Error("The machine did not answer. Try dictating again."));
+      }, 10_000);
+      this.#dictationRequests.set(requestId, { resolve, reject, timer });
+      try {
+        this.#socket?.send(JSON.stringify(request));
+      } catch (error) {
+        clearTimeout(timer);
+        this.#dictationRequests.delete(requestId);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
+  }
+
+  /** Fire-and-forget: a lost chunk surfaces as a `dictation.error` for that recording. */
+  sendDictationAudio(dictationId: string, seq: number, pcm: string): void {
+    if (!this.dictation) throw new Error("Dictation is not available here");
+    this.#socket?.send(
+      JSON.stringify(
+        DictationAudioSchema.parse({ type: "dictation.audio", dictationId, seq, pcm }),
+      ),
+    );
+  }
+
   #hostUsage: HostUsage | null = null;
   readonly #hostUsageListeners = new Set<(usage: HostUsage | null) => void>();
 
@@ -707,7 +782,7 @@ export class DaemonConnection {
         this.#setState({ status: "handshaking" });
         const hello: ClientHelloMessage = {
           type: "client.hello",
-          capabilities: ["agent-providers-v2", SCHEDULES_CAPABILITY],
+          capabilities: ["agent-providers-v2", SCHEDULES_CAPABILITY, DICTATION_CAPABILITY],
           protocolVersion: this.#protocolVersion,
           client: this.#client,
         };
@@ -805,6 +880,23 @@ export class DaemonConnection {
             }
             break;
           }
+          case "dictation.result": {
+            const pending = this.#dictationRequests.get(message.requestId);
+            if (pending) {
+              clearTimeout(pending.timer);
+              this.#dictationRequests.delete(message.requestId);
+              if (message.outcome.status === "ok") this.#dictationModel = message.outcome.model;
+              pending.resolve(message);
+            }
+            break;
+          }
+          case "dictation.model":
+          case "dictation.transcript":
+          case "dictation.error":
+            if (this.#state.status !== "ready") break;
+            if (message.type === "dictation.model") this.#dictationModel = message.model;
+            for (const listener of this.#dictationListeners) listener(message);
+            break;
           case "project.setups":
             if (this.#state.status === "ready") {
               this.#projectSetups = message.setups;
@@ -1054,6 +1146,12 @@ export class DaemonConnection {
         );
       }
       this.#pullRequestRequests.clear();
+      for (const pending of this.#dictationRequests.values()) {
+        clearTimeout(pending.timer);
+        pending.reject(new Error("Machine disconnected. Dictation stopped."));
+      }
+      this.#dictationRequests.clear();
+      this.#dictationModel = null;
     }
     for (const listener of this.#listeners) {
       listener(state);

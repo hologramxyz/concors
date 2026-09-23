@@ -1,4 +1,15 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useReducer,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import type { DaemonConnection } from "@concors/daemon-client";
+import type { DictationModel } from "@concors/protocol";
+import { DaemonRecognition } from "./dictation-daemon";
 import {
   DictationSession,
   emptyDictation,
@@ -10,6 +21,47 @@ type SpeechWindow = Window & {
   SpeechRecognition?: new () => Recognition;
   webkitSpeechRecognition?: new () => Recognition;
 };
+
+/** Daemon transcription of a long last utterance can outlast a browser service's final result. */
+const DAEMON_FINISH_TIMEOUT_MS = 30_000;
+
+/** Why the microphone is unavailable while the daemon's speech model is not ready, if it is not. */
+export function dictationPreparing(model: DictationModel | null): string | null {
+  if (!model || model.state === "ready" || model.state === "failed") return null;
+  if (model.state === "missing")
+    return "Dictation is getting ready on this machine: downloading its speech model.";
+  return `Dictation is getting ready on this machine: downloading its speech model (${Math.floor(
+    (model.receivedBytes / model.totalBytes) * 100,
+  )}%).`;
+}
+
+/**
+ * Transcription runs on the daemon hosting the agent when it offers dictation, so webviews
+ * without a speech service (Linux, Windows) can dictate. Older daemons fall back to the
+ * webview's own SpeechRecognition where it exists.
+ */
+function useDaemonDictation(connection: DaemonConnection | null | undefined) {
+  const available = !!connection?.dictation;
+  const [, refresh] = useReducer((count: number) => count + 1, 0);
+  const subscribe = useCallback(
+    (changed: () => void) => (available && connection ? connection.onDictation(changed) : noop),
+    [available, connection],
+  );
+  const model = useSyncExternalStore(subscribe, () =>
+    available && connection ? connection.dictationModel : null,
+  );
+  useEffect(() => {
+    if (!available || !connection) return;
+    // The connection records the answer; the refresh re-reads it.
+    void connection
+      .requestDictation({ kind: "status" }, crypto.randomUUID())
+      .then(refresh)
+      .catch(() => undefined);
+  }, [available, connection]);
+  return { available, model };
+}
+const noop = () => undefined;
+
 export function useDictation(
   callbacks: {
     onTranscript: (text: string) => void;
@@ -17,6 +69,7 @@ export function useDictation(
     onCancel: () => void;
   },
   enabled: boolean,
+  connection?: DaemonConnection | null,
 ) {
   const current = useRef(callbacks);
   useLayoutEffect(() => {
@@ -24,6 +77,7 @@ export function useDictation(
   });
   const session = useRef<DictationSession | null>(null);
   const [state, setState] = useState(emptyDictation);
+  const daemon = useDaemonDictation(connection);
   useEffect(() => {
     if (!enabled) session.current?.suspend();
   }, [enabled]);
@@ -44,17 +98,28 @@ export function useDictation(
   }, []);
   return {
     ...state,
-    supported: !!Constructor,
+    supported: daemon.available || !!Constructor,
+    /** Set while the daemon downloads its speech model; the microphone waits for it. */
+    preparing: daemon.available ? dictationPreparing(daemon.model) : null,
     active: state.phase !== "idle",
     start: () => {
-      if (!Constructor || (session.current && session.current.state.phase !== "idle")) return;
+      if (session.current && session.current.state.phase !== "idle") return;
+      const speech =
+        daemon.available && connection
+          ? () => new DaemonRecognition(connection)
+          : Constructor && (() => new Constructor());
+      if (!speech) return;
       session.current?.dispose();
       try {
-        session.current = new DictationSession(new Constructor(), {
-          change: setState,
-          transcript: (text) => current.current.onTranscript(text),
-          finish: (text, action) => current.current.onFinish(text, action),
-        });
+        session.current = new DictationSession(
+          speech(),
+          {
+            change: setState,
+            transcript: (text) => current.current.onTranscript(text),
+            finish: (text, action) => current.current.onFinish(text, action),
+          },
+          daemon.available ? DAEMON_FINISH_TIMEOUT_MS : undefined,
+        );
         session.current.start(navigator.language);
       } catch {
         setState({ ...emptyDictation, error: "Could not start dictation in this browser." });
