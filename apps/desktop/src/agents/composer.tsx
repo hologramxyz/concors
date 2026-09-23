@@ -150,8 +150,13 @@ export function AgentComposer({
   useLayoutEffect(() => {
     const el = textarea.current;
     if (el) {
+      // Hold the box's size while measuring: collapsing it for one layout grew the chat above,
+      // which clamped its scroll up and left it there.
+      const box = el.parentElement;
+      if (box) box.style.minHeight = `${box.offsetHeight}px`;
       el.style.height = "auto";
       el.style.height = Math.min(el.scrollHeight, 192) + "px";
+      if (box) box.style.minHeight = "";
     }
   }, [draft, expanded, dictation.active]);
   useComposerMotion(form, compact && !native, expanded);

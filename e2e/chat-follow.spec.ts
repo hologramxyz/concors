@@ -47,6 +47,13 @@ test("chat stays pinned to the bottom until the user scrolls up, and sending ret
       await expect(latest).toHaveCount(0);
       await expect.poll(distance).toBeLessThanOrEqual(2);
     }
+    // Typing a tall prompt resizes the composer on every keystroke without moving the chat.
+    const input = page.getByRole("textbox", { name: "Message Codex" });
+    await input.fill("A prompt\nthat spans\nseveral\nlines\nof text");
+    await input.pressSequentially(" and grows", { delay: 20 });
+    await expect(latest).toHaveCount(0);
+    await expect.poll(distance).toBeLessThanOrEqual(2);
+    await input.fill("");
     history.append();
     await expect(timeline.getByText("History 0 message 640", { exact: true })).toBeVisible();
     await expect.poll(distance).toBeLessThanOrEqual(2);
@@ -67,7 +74,6 @@ test("chat stays pinned to the bottom until the user scrolls up, and sending ret
     // Sending from the composer while scrolled up jumps back to the bottom.
     await page.mouse.wheel(0, -600);
     await expect(latest).toBeVisible();
-    const input = page.getByRole("textbox", { name: "Message Codex" });
     await expect(input).toBeEnabled();
     await input.fill("Take me back down");
     await input.press("Enter");
