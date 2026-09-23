@@ -26,7 +26,10 @@ Source provenance, adaptation notes, and license locations are recorded in
 - Model catalogs load on demand. Qualified model IDs and image-input capabilities
   are preserved. The native mobile bridge accepts the same bounded catalog as
   desktop. There is no manual **Refresh models** action in the model picker.
-- Native commands and skills appear when reported by the provider. `/compact`
+- Native commands and skills appear when reported by the provider: typing `/` at
+  the start of a message lists them above the composer. Up/Down moves, Enter runs
+  the command (or fills it in when it needs an argument), Tab fills it in to add
+  arguments, and Escape hides the list. `/compact`
   calls the provider's actual compaction operation and shows running, completed,
   interrupted, or failed activity. Concors never presents an ordinary prompt as
   successful compaction.
