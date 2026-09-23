@@ -38,8 +38,10 @@ credential home (`ProviderRegistry.credentialOverlay`), so every chat on the mac
 existing panes — runs on that account; activating drops idle runtimes and clears catalog and
 plan-usage caches so the switch takes effect on the next turn. Subscription configurations
 themselves, and any configuration with an explicitly set credential directory, are never
-redirected. Account sign-in flows also bypass the overlay, so connecting the default account or a
-specific subscription always addresses that credential home. Subscriptions are excluded from the
+redirected. Sign-in from Settings bypasses the overlay, so connecting the default account or a
+specific subscription always addresses that credential home. A chat's account prompt does not: it
+checks (and, if the login expired, renews) the account the chat actually runs under, so a chat on a
+machine with an active subscription is not asked to sign in to the unused default account. Subscriptions are excluded from the
 per-chat provider catalog: the composer keeps offering "Claude Code" / "Codex", never an account
 choice. Removing the active subscription reverts the machine to the default account.
 
