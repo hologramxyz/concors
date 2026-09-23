@@ -2,7 +2,7 @@
 //!
 //! This crate is deliberately thin. It owns only what genuinely needs to be native:
 //!
-//! - application lifecycle and window integration
+//! - application lifecycle and window integration, including microphone access for dictation
 //! - starting/stopping the bundled `concors-daemon` process
 //! - (later) notifications, auto-updates, secure local storage
 //!
@@ -10,6 +10,7 @@
 //! over the Concors protocol. No product or agent-orchestration logic belongs here.
 
 mod daemon;
+mod microphone;
 mod notifications;
 mod sign_in;
 mod ssh_key;
@@ -28,6 +29,12 @@ pub fn run() {
         .manage(daemon::LocalDaemon::default())
         .manage(notifications::Notifications::default())
         .manage(sign_in::SignInListener::default())
+        .setup(|app| {
+            for window in app.webview_windows().values() {
+                microphone::allow(window);
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             notifications::show_agent_notification,
             notifications::dismiss_agent_notification,

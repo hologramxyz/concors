@@ -53,6 +53,21 @@ try {
     }).trim(),
     manifest.version,
   );
+  // Dictation's native addon must load with the shipped Node on the target system (glibc, rpath).
+  assert.equal(
+    execFileSync(
+      release ? join(isolated, "bin", "node") : process.execPath,
+      [
+        "--input-type=module",
+        "-e",
+        `import { createRequire } from "node:module";
+         const sherpa = createRequire(${JSON.stringify(join(lib, "cli.js"))})("sherpa-onnx-node");
+         process.stdout.write(typeof sherpa.OfflineRecognizer.createAsync);`,
+      ],
+      { env: environment, cwd: temporary, encoding: "utf8" },
+    ),
+    "function",
+  );
 
   child = spawn(command, [...args, "serve", "--ephemeral", "--port", "0"], {
     env: environment,
@@ -175,7 +190,7 @@ try {
   );
   await terminal({ kind: "stop", sessionId: session.id });
   process.stdout.write(
-    `Isolated bundle ${manifest.version}: version, health, workspace, PTY input/output/resize/stop passed (${process.platform}-${process.arch})\n`,
+    `Isolated bundle ${manifest.version}: version, speech addon, health, workspace, PTY input/output/resize/stop passed (${process.platform}-${process.arch})\n`,
   );
 } finally {
   socket?.close();

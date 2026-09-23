@@ -24,6 +24,22 @@ export async function copyNativePackage(outDir: string): Promise<void> {
   await cp(source, target, { recursive: true, dereference: true });
   if (process.platform === "darwin")
     await chmod(join(target, "prebuilds", `darwin-${process.arch}`, "spawn-helper"), 0o755);
+  await copySpeechPackages(outDir);
+}
+
+/**
+ * Dictation's sherpa-onnx wrapper and this platform's addon, side by side as the wrapper expects
+ * (`../sherpa-onnx-<platform>-<arch>`). The addon finds ONNX Runtime through its `$ORIGIN` rpath.
+ */
+async function copySpeechPackages(outDir: string): Promise<void> {
+  const wrapper = packageDirectory(require.resolve("sherpa-onnx-node"));
+  const platform = `sherpa-onnx-${process.platform === "win32" ? "win" : process.platform}-${process.arch}`;
+  const addon = packageDirectory(createRequire(join(wrapper, "package.json")).resolve(platform));
+  for (const [name, source] of [
+    ["sherpa-onnx-node", wrapper],
+    [platform, addon],
+  ] as const)
+    await cp(source, join(outDir, "node_modules", name), { recursive: true, dereference: true });
 }
 
 /** Preserve redistribution notices for the dependency graph whose JS is now bundled. */

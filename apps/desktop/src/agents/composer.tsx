@@ -137,6 +137,7 @@ export function AgentComposer({
       onCancel: () => setDraft(dictationBase.current),
     },
     connected && visible,
+    connection,
   );
   useLayoutEffect(() => {
     if (wasDictating.current && !dictation.active && visible && !document.hidden)
@@ -588,12 +589,13 @@ export function AgentComposer({
         title={
           compact
             ? "Use dictation on your phone's keyboard."
-            : dictation.supported
-              ? "Dictate a message. Stop to review, edit, or press Enter to send. Uses your browser's speech service."
-              : "Dictation is not supported by this browser."
+            : (dictation.preparing ??
+              (dictation.supported
+                ? "Dictate a message. Stop to review, edit, or press Enter to send."
+                : "Dictation is not supported by this browser."))
         }
         disabled={
-          (!compact && !dictation.supported) ||
+          (!compact && (!dictation.supported || !!dictation.preparing)) ||
           !connected ||
           busy ||
           uncertain ||

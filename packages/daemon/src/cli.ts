@@ -15,6 +15,7 @@ import { createLogger } from "./managed/log.ts";
 import { DAEMON_VERSION } from "./version.ts";
 import { applyResolvedDataDir, ProfileError, resolveDataDir } from "./profile.ts";
 import { adoptLegacyData } from "./profile-migration.ts";
+import { runSpeechWorker } from "./dictation/engine.ts";
 
 const USAGE = `concors-daemon ${DAEMON_VERSION}
 
@@ -190,6 +191,10 @@ export async function main(argv: readonly string[]): Promise<number> {
         resolveDataDir(profileEnv(cli)),
         loadDaemonConfig({ logLevel: cli.logLevel }),
       );
+      return 0;
+    case "speech-worker":
+      // Internal: spawned by the session host to transcribe dictation out of process.
+      await runSpeechWorker();
       return 0;
     case "stop-host":
       await stopSessionHost(resolveDataDir(profileEnv(cli)));

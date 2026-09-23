@@ -10,6 +10,7 @@ import {
   PROVIDER_SUBSCRIPTIONS_CAPABILITY,
   PROVIDER_USAGE_CAPABILITY,
   PROTOCOL_VERSION,
+  DICTATION_CAPABILITY,
 } from "@concors/protocol";
 
 import { DAEMON_VERSION } from "./version.ts";
@@ -20,6 +21,12 @@ import { DAEMON_VERSION } from "./version.ts";
  */
 export class DaemonState {
   #status: DaemonStatus = "starting";
+  readonly #dictation: boolean;
+
+  /** Dictation is advertised only where the daemon has somewhere durable to keep its model. */
+  constructor(options: { dictation?: boolean } = {}) {
+    this.#dictation = options.dictation ?? false;
+  }
 
   get status(): DaemonStatus {
     return this.#status;
@@ -66,6 +73,7 @@ export class DaemonState {
         "workspace-pane-rearrangement",
         "directional-pane-split",
         "terminal-recovery",
+        ...(this.#dictation ? [DICTATION_CAPABILITY] : []),
       ],
     };
   }
