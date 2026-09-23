@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, expect, it, vi } from "vitest";
@@ -392,6 +392,37 @@ it("resolves a subscription's binaries from its engine's base installation", asy
   } finally {
     vi.unstubAllEnvs();
   }
+});
+
+it("falls back to the daemon's own node and npm when the machine has none", async () => {
+  const root = await mkdtemp(join(tmpdir(), "concors-runtime-path-"));
+  directories.push(root);
+  vi.stubEnv("PATH", root);
+  const registry = new ProviderRegistry(join(root, "providers"));
+  const result = registry.request(
+    ProviderRequestSchema.parse({
+      type: "provider.request",
+      requestId: randomUUID(),
+      operation: {
+        kind: "save",
+        config: {
+          id: "custom-node",
+          label: "Node",
+          engine: "acp",
+          enabled: true,
+          command: ["node", "--version"],
+        },
+        expectedRevision: 0,
+      },
+    }),
+  );
+  if (result.outcome.status !== "ok") throw new Error(result.outcome.message);
+  expect(result.outcome.providers.find((p) => p.id === "custom-node")?.installed).toBe(true);
+  // The machine's own tools come first; the bundled runtime is only a fallback.
+  expect(registry.terminalEnvironment()["PATH"]?.split(delimiter)).toEqual([
+    root,
+    dirname(process.execPath),
+  ]);
 });
 
 it("activates one subscription machine-wide and falls back to the default on removal", async () => {

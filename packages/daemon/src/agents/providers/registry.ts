@@ -27,6 +27,15 @@ import { resolveTerminalCommand } from "../../terminal/profiles.ts";
 import type { launch } from "./launch.ts";
 import { ProviderVersions, type VersionTarget } from "./versions.ts";
 
+/**
+ * Appends the daemon's own runtime directory to a PATH. A packaged daemon ships node and npm
+ * there, so npm-published CLIs install, run and update on machines without Node of their own;
+ * the machine's own tools still win.
+ */
+function withRuntime(path: string | undefined): string {
+  return [path, dirname(process.execPath)].filter(Boolean).join(delimiter);
+}
+
 const Saved = z.object({
   revision: z.number().int().nonnegative(),
   providers: z.array(ProviderConfigSchema).max(128),
@@ -84,7 +93,7 @@ export class ProviderRegistry {
       .filter((c) => c.enabled)
       .map((c) => join(this.directory, c.id, "node_modules", ".bin"))
       .filter((path) => existsSync(path));
-    return { ...process.env, PATH: [...bins, process.env["PATH"] ?? ""].join(delimiter) };
+    return { ...process.env, PATH: [...bins, withRuntime(process.env["PATH"])].join(delimiter) };
   }
   /** A subscription runs its engine's regular CLI; resolve binaries from the base configuration. */
   baseId(config: ProviderConfig): string {
@@ -266,7 +275,7 @@ export class ProviderRegistry {
     return {
       ...process.env,
       ...config.env,
-      PATH: bin + delimiter + (config.env?.["PATH"] ?? process.env["PATH"] ?? ""),
+      PATH: bin + delimiter + withRuntime(config.env?.["PATH"] ?? process.env["PATH"]),
     };
   }
   private argv(config: ProviderConfig): string[] {
@@ -488,7 +497,7 @@ export class ProviderRegistry {
     const preset = providerPresets.find((p) => p.id === id);
     if (!preset?.install)
       throw new Error("Use the provider's installation guide, then configure its executable here.");
-    const env = { ...process.env };
+    const env = { ...process.env, PATH: withRuntime(process.env["PATH"]) };
     const npm = resolveTerminalCommand("npm", [], process.platform, env);
     const prefix = join(this.directory, id);
     mkdirSync(prefix, { recursive: true, mode: 0o700 });
