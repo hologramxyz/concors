@@ -6,7 +6,6 @@ const EDGE = 200;
 /** How long after a wheel or key press its scroll (smooth or kinetic) is still the user's. */
 const INPUT = 400;
 const UP_KEYS = new Set(["ArrowUp", "PageUp", "Home"]);
-const DOWN_KEYS = new Set(["ArrowDown", "PageDown", "End"]);
 /** Anchor a visible message, not total height: either edge may be trimmed as pages move. */
 export function useConversationScroll(
   conversation: ReturnType<typeof useConversation>,
@@ -80,13 +79,15 @@ export function useConversationScroll(
     else if (distance < 2) following.current = true;
     else if (user && viewport.scrollTop < lastTop.current - 1) following.current = false;
     else if (user && distance < 80) following.current = true;
+    // Anything else that moved a follower (the composer resizing, a clamp) snaps back before paint.
+    if (following.current && !hasNewer && !user && distance >= 2) pin();
     lastTop.current = viewport.scrollTop;
     setFollowing(following.current);
     setAtBottom(following.current);
     // A follower is pinned to the bottom, so skip measuring every message on each scroll event.
     if (!following.current) remember();
     edges();
-  }, [hasNewer, setFollowing, remember, edges, userScrolling]);
+  }, [hasNewer, setFollowing, remember, edges, userScrolling, pin]);
   useLayoutEffect(() => {
     newer.current = hasNewer;
     const viewport = scroll.current;
@@ -145,8 +146,8 @@ export function useConversationScroll(
     };
     const key = (event: KeyboardEvent) => {
       if ((event.target as Element).closest("input, textarea, [contenteditable]")) return;
-      const up = UP_KEYS.has(event.key) || (event.key === " " && event.shiftKey);
-      if (up || DOWN_KEYS.has(event.key) || event.key === " ") intend(up);
+      // Any key counts: Tab can scroll a focused message into view too.
+      intend(UP_KEYS.has(event.key) || (event.key === " " && event.shiftKey));
     };
     // Dragging the scrollbar, selecting text past the edge, or panning a touch screen.
     const press = (event: PointerEvent) => {
