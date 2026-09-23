@@ -29,6 +29,8 @@ for (const width of [1360, 390]) {
       );
       const scrollToEdge = (edge: "top" | "bottom") =>
         timeline.evaluate((viewport, edge) => {
+          // Only user input may leave the bottom; a bare scrollTop write reads as layout churn.
+          viewport.dispatchEvent(new WheelEvent("wheel", { deltaY: edge === "top" ? -1 : 1 }));
           viewport.scrollTop = edge === "top" ? 1 : viewport.scrollHeight;
           const top = viewport.getBoundingClientRect().top;
           const item = [...viewport.querySelectorAll<HTMLElement>("[data-message-id]")].find(
