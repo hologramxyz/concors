@@ -22,6 +22,7 @@ export function useConversationScroll(
   const scroll = useRef<HTMLDivElement>(null);
   const anchor = useRef<{ id: string; top: number } | null>(null);
   const following = useRef(true);
+  const lastTop = useRef(0);
   const jumping = useRef(false);
   const reset = useRef(-1);
   const [atBottom, setAtBottom] = useState(true);
@@ -49,11 +50,18 @@ export function useConversationScroll(
   const onScroll = useCallback(() => {
     const viewport = scroll.current;
     if (!viewport?.clientHeight || jumping.current) return;
-    following.current =
-      !hasNewer && viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 80;
+    const distance = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+    // Growth below the fold never lowers scrollTop, so only an upward scroll leaves the bottom.
+    // Judging by distance alone let a tall block that landed between our scroll and its event
+    // (a code highlight, an image, a tool result) read as the user scrolling away.
+    if (hasNewer) following.current = false;
+    else if (distance < 80) following.current = true;
+    else if (viewport.scrollTop < lastTop.current - 1) following.current = false;
+    lastTop.current = viewport.scrollTop;
     setFollowing(following.current);
     setAtBottom(following.current);
-    remember();
+    // A follower is pinned to the bottom, so skip measuring every message on each scroll event.
+    if (!following.current) remember();
     edges();
   }, [hasNewer, setFollowing, remember, edges]);
   useLayoutEffect(() => {

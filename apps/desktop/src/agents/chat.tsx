@@ -5,7 +5,7 @@ import { AgentComposer } from "./composer";
 import { TimelineItem } from "./timeline-item";
 import { useViewedAgent } from "@/notifications/context";
 import { CompactLayoutContext, PaneVisibilityContext } from "@/components/compact-layout";
-import { useContext, useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown } from "lucide-react";
 import type { AgentOperation, LayoutNode, WorkspaceProject, WorkspaceTab } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { NATIVE_SESSIONS_CAPABILITY } from "@concors/protocol";
 import { AgentDraftScopeContext, useAgentDraft } from "./draft";
 import { ResumeSession } from "./resume-session";
+import { timelineView } from "./thinking";
 
 export function ChatPane({
   project,
@@ -134,7 +135,11 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
     conversation.ready,
     conversation.items,
   );
-  const footers = completedTurnFooters(conversation.items);
+  const footers = useMemo(() => completedTurnFooters(conversation.items), [conversation.items]);
+  const view = useMemo(
+    () => timelineView(conversation.items, footers.hidden),
+    [conversation.items, footers.hidden],
+  );
   const latestPlan = conversation.items.findLast((item) => item.kind === "plan");
   const proposal = conversation.items.findLast(
     (item) => item.kind === "plan" && item.text.trim() && !item.presentation?.steps?.length,
@@ -213,7 +218,7 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
           role="log"
           aria-label="Chat timeline"
           aria-live="off"
-          className="chat-scroll min-h-0 min-w-0 flex-1 overflow-y-auto px-3 py-4 [overflow-anchor:none]"
+          className="chat-scroll selectable min-h-0 min-w-0 flex-1 overflow-y-auto px-3 py-4 [overflow-anchor:none]"
           onScroll={onScroll}
         >
           <div className="mx-auto max-w-5xl space-y-5">
@@ -243,20 +248,22 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
                 onRetry={() => void conversation.load(conversation.error?.direction ?? "latest")}
               />
             )}
-            {conversation.items
-              .filter((item) => !footers.hidden.has(item.id))
-              .map((item) => (
-                <div
-                  key={item.id}
-                  data-message-id={item.id}
-                  data-message-position={item.position}
-                  data-user-message={item.kind === "user" ? item.id : undefined}
-                  tabIndex={item.kind === "user" ? -1 : undefined}
-                  className="outline-none"
-                >
-                  <TimelineItem item={item} workedFor={footers.durations.get(item.id)} />
-                </div>
-              ))}
+            {view.map((item) => (
+              <div
+                key={item.id}
+                data-message-id={item.id}
+                data-message-position={item.position}
+                data-user-message={item.kind === "user" ? item.id : undefined}
+                tabIndex={item.kind === "user" ? -1 : undefined}
+                className="outline-none"
+              >
+                <TimelineItem
+                  item={item}
+                  workedFor={footers.durations.get(item.id)}
+                  live={!!active && item.turnId === agent.turnId}
+                />
+              </div>
+            ))}
             {conversation.hasNewer && (
               <div className="h-5 text-center text-xs text-muted-foreground" role="status">
                 {conversation.loading === "newer" ? "Loading newer messages…" : ""}

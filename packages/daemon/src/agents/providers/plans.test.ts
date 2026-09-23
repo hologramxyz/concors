@@ -126,6 +126,20 @@ it("keeps read content distinct from diffs and restores emitted thinking without
   });
   expect(JSON.stringify(turns)).not.toContain("not-for-display");
   expect(JSON.stringify(turns)).not.toContain("private-opaque");
+  // Claude Code writes one block per entry; the stream numbered only the readable ones.
+  const split = claudeHistory([
+    { type: "user", uuid: "u", message: { content: "Check" } },
+    {
+      type: "assistant",
+      message: { id: "b", content: [{ type: "thinking", thinking: "", signature: "s" }] },
+    },
+    { type: "assistant", message: { id: "b", content: [{ type: "thinking", thinking: "First" }] } },
+    { type: "assistant", message: { id: "b", content: [{ type: "thinking", thinking: "Then" }] } },
+  ]);
+  expect(split[0]?.items.slice(1).map((item) => item["id"])).toEqual([
+    "b:thinking:0",
+    "b:thinking:1",
+  ]);
 });
 it("continues updating ID-based tasks restored from native history", () => {
   const state = new TaskState();

@@ -172,6 +172,26 @@ it("maps Claude streaming and tool decisions, interrupts, and resumes the native
   expect(notifications.some((n) => JSON.stringify(n.params).includes("Checking results"))).toBe(
     true,
   );
+  // Block 1 streamed; Claude Code then sends it alone, where it is block 0 of that entry.
+  emit({
+    type: "assistant",
+    message: { id: "a", content: [{ type: "thinking", thinking: "Checking results" }] },
+  });
+  await expect
+    .poll(() =>
+      notifications.some(
+        (n) => n.method === "item/completed" && object(n.params["item"])["type"] === "reasoning",
+      ),
+    )
+    .toBe(true);
+  expect(
+    new Set(
+      notifications
+        .map((n) => object(n.params["item"] ?? {}))
+        .filter((item) => item["type"] === "reasoning")
+        .map((item) => item["id"]),
+    ),
+  ).toEqual(new Set(["a:thinking:0"]));
   const decision = await options!.canUseTool!(
     "Bash",
     { command: "echo test" },
