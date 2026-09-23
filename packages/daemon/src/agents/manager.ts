@@ -8,6 +8,7 @@ import {
   type AccountBackendFactory,
 } from "./accounts/manager.ts";
 import { defaultSettings, parseModels, turnControls } from "./controls.ts";
+import { initialSettings, rememberable, supportedSettings } from "./remembered-settings.ts";
 import { saveAttachments } from "./attachments.ts";
 import type { AgentAttachment } from "@concors/protocol";
 import { AGENT_USAGE_TTL_MS, unsupportedPlanUsage, type AgentPlanUsage } from "@concors/protocol";
@@ -26,6 +27,7 @@ import {
   type AgentPending,
   type AgentRequest,
   type AgentResult,
+  type AgentSettings,
 } from "@concors/protocol";
 import type { WorkspaceStore } from "../workspace/store.ts";
 import { ProviderRegistry } from "./providers/registry.ts";
@@ -80,6 +82,8 @@ export class AgentManager {
   readonly #workspaceChanged: () => void;
   readonly #factory: AgentProviderFactory;
   readonly #runtimes = new Map<string, Runtime>();
+  /** New chats started from remembered settings, checked once their provider reports its options. */
+  readonly #remembered = new Map<string, AgentSettings>();
   /**
    * Plan limits belong to an account, so every session of a provider shares one lookup. Keyed by
    * the provider configuration, not the engine: two Claude configurations can sign in to
@@ -240,6 +244,18 @@ export class AgentManager {
       createdAt: previous?.createdAt ?? new Date().toISOString(),
     });
     this.#emit({ type: "agent.item", item });
+  }
+  /** New chats open with the provider last chosen on this machine, while it is still usable. */
+  private newChatProvider(): string {
+    for (const id of this.#store.agentDefaultProviders()) {
+      try {
+        const config = this.registry.config(id);
+        if (config.enabled && this.registry.installed(config)) return id;
+      } catch {
+        // Removed from Settings → Providers since it was chosen.
+      }
+    }
+    return "codex";
   }
   private fail(id: string, error: unknown): void {
     if (this.#closed) return;
@@ -407,6 +423,16 @@ export class AgentManager {
         });
       } catch {
         // Older transports have no capability contract. They do not receive new controls.
+      }
+      const remembered = this.#remembered.get(id);
+      if (remembered) {
+        this.#remembered.delete(id);
+        // Restores what startup notifications (such as a provider's own current mode) replaced.
+        const current = this.#store.agent(id);
+        this.update(id, {
+          settings: supportedSettings(remembered, current),
+          updatedAt: current.updatedAt,
+        });
       }
       // Rehydrate provider history after restart using stable item and turn identities.
       for (const turn of response.thread.turns)
@@ -900,6 +926,9 @@ export class AgentManager {
         if (!config.enabled || !this.registry.installed(config))
           throw new Error("Provider is unavailable");
         const now = new Date().toISOString();
+        const remembered = this.#store.agentDefaults(op.provider);
+        // The native session keeps its own model; the rest of the remembered choices apply.
+        const settings = { ...initialSettings(remembered), model: null };
         const next: AgentInfo = {
           id: randomUUID(),
           projectId: previous.projectId,
@@ -909,7 +938,7 @@ export class AgentManager {
           providerLabel: config.label,
           name: selected.title.trim().slice(0, 100) || "Resumed session",
           model: null,
-          settings: { ...defaultSettings },
+          settings,
           threadId: selected.id,
           nativeImport: true,
           turnId: null,
@@ -942,10 +971,12 @@ export class AgentManager {
         }
         this.#workspaceChanged();
         this.#emit({ type: "agent.state", agent: reserved });
-        if (reserved.id === next.id)
+        if (reserved.id === next.id) {
+          if (remembered) this.#remembered.set(next.id, settings);
           void this.provider(next.id)
             .then(() => this.update(next.id, { status: "idle" }))
             .catch((error) => this.fail(next.id, error));
+        }
         return this.result(request, reserved.id);
       }
       if (op.kind === "import-session" || op.kind === "fork-session") {
@@ -1043,16 +1074,19 @@ export class AgentManager {
         if (repeated) return this.result(request, repeated);
         if (this.#closed) throw new Error("Daemon is shutting down");
         const now = new Date().toISOString();
+        const providerId = op.provider ?? this.newChatProvider();
+        const remembered = this.#store.agentDefaults(providerId);
+        const settings = initialSettings(remembered, op.model ?? null);
         const info: AgentInfo = {
           id: randomUUID(),
           projectId: project.id,
-          name: this.registry.config(op.provider ?? "codex").label,
-          engine: this.registry.config(op.provider ?? "codex").engine,
-          providerLabel: this.registry.config(op.provider ?? "codex").label,
+          name: this.registry.config(providerId).label,
+          engine: this.registry.config(providerId).engine,
+          providerLabel: this.registry.config(providerId).label,
           directory,
-          provider: op.provider ?? "codex",
+          provider: providerId,
           model: op.model ?? null,
-          settings: { ...defaultSettings, model: op.model ?? null },
+          settings,
           context: null,
           threadId: null,
           turnId: null,
@@ -1068,6 +1102,17 @@ export class AgentManager {
         const reserved = this.#store.reserveAgent(request, info);
         this.#workspaceChanged();
         this.#emit({ type: "agent.state", agent: reserved });
+        // Switching back can restore that provider's earlier session instead of starting one.
+        if (op.kind === "switch-provider")
+          this.#store.saveAgentDefaults(
+            providerId,
+            rememberable(
+              reserved.id === info.id
+                ? settings
+                : (remembered ?? reserved.settings ?? defaultSettings),
+            ),
+          );
+        if (reserved.id === info.id && remembered) this.#remembered.set(info.id, settings);
         if (reserved.id === info.id)
           void Promise.resolve()
             .then(() => this.provider(info.id))
@@ -1256,6 +1301,9 @@ export class AgentManager {
           settings: op.settings,
           revision: info.revision + 1,
         });
+        // The user's choice wins over remembered settings still waiting for the provider.
+        this.#remembered.delete(info.id);
+        this.#store.saveAgentDefaults(info.provider, rememberable(op.settings));
         this.#emit({ type: "agent.state", agent: this.#store.agent(info.id) });
         return this.result(request, info.id);
       }

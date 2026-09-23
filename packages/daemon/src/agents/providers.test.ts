@@ -11,6 +11,7 @@ import {
   builtinAgentProviders,
   type AgentOperation,
   type AgentProviderId,
+  type AgentSettings,
 } from "@concors/protocol";
 import { createDaemonServer, type DaemonServer } from "../server.ts";
 import { loadDaemonConfig } from "../config.ts";
@@ -692,4 +693,96 @@ it("resumes a Codex thread from its legacy state home after switching subscripti
   await c.requestAgent({ kind: "send", sessionId: id, text: "continue" }, randomUUID());
   await expect.poll(() => instances).toHaveLength(2);
   expect(instances.at(-1)?.env?.["CODEX_SQLITE_HOME"]).toBe(legacyHome);
+});
+it("opens new chats with the provider and settings last chosen on this machine", async () => {
+  const { c, id, projectId } = await setup();
+  const agent = (sessionId: string) => c.agents.find((a) => a.id === sessionId);
+  const configure = async (sessionId: string, settings: AgentSettings) => {
+    await expect.poll(() => agent(sessionId)?.status).toBe("idle");
+    const result = await c.requestAgent(
+      { kind: "configure", sessionId, settings, expectedRevision: agent(sessionId)!.revision },
+      randomUUID(),
+    );
+    expect(result.outcome).toMatchObject({ status: "ok" });
+  };
+  const newChat = async () => {
+    const tabId = randomUUID(),
+      paneId = randomUUID();
+    const project = () => c.workspace!.projects.find((p) => p.id === projectId)!;
+    const created = await c.executeWorkspace({
+      type: "workspace.command",
+      commandId: randomUUID(),
+      epoch: c.workspace!.epoch,
+      operation: {
+        kind: "tab.create",
+        projectId,
+        expectedVersion: project().version,
+        tabId,
+        paneId,
+        name: "Chat",
+        profile: "chat",
+      },
+    });
+    expect(created.outcome.status).toBe("accepted");
+    const started = await c.requestAgent(
+      {
+        kind: "start",
+        epoch: c.workspace!.epoch,
+        projectId,
+        tabId,
+        paneId,
+        expectedVersion: project().version,
+      },
+      randomUUID(),
+    );
+    if (started.outcome.status !== "ok") throw new Error(started.outcome.message);
+    const next = started.outcome.conversation.agent.id;
+    await expect.poll(() => agent(next)?.status).toBe("idle");
+    return agent(next)!;
+  };
+
+  const codex = { model: "fixture", effort: "low", mode: "full-access" as const };
+  await configure(id, { ...codex, planMode: true });
+  const second = await newChat();
+  expect(second).toMatchObject({ provider: "codex", settings: codex });
+  expect(second.settings?.planMode).toBeUndefined();
+  await c.requestAgent({ kind: "send", sessionId: second.id, text: "hold" }, randomUUID());
+  const runtime = instances.findLast((i) => i.provider === "codex")!.runtime;
+  await expect
+    .poll(() => runtime.requests.find((r) => r.method === "turn/start")?.params)
+    .toMatchObject({
+      model: "fixture",
+      effort: "low",
+      sandboxPolicy: { type: "dangerFullAccess" },
+    });
+
+  const switched = await c.requestAgent(
+    {
+      kind: "switch-provider",
+      sessionId: id,
+      provider: "claude",
+      model: "fixture-claude",
+      expectedRevision: agent(id)!.revision,
+    },
+    randomUUID(),
+  );
+  if (switched.outcome.status !== "ok") throw new Error(switched.outcome.message);
+  const claude = switched.outcome.conversation.agent.id;
+  await configure(claude, { model: "fixture-claude", effort: "high", mode: "default" });
+  const third = await newChat();
+  expect(third).toMatchObject({
+    provider: "claude",
+    settings: { model: "fixture-claude", effort: "high", mode: "default" },
+  });
+
+  c.disconnect();
+  await server!.close();
+  server = undefined;
+  const store = new WorkspaceStore(join(directory, "state.db"));
+  try {
+    expect(store.agentDefaultProviders()).toEqual(["claude", "codex"]);
+    expect(store.agentDefaults("codex")).toEqual(codex);
+  } finally {
+    store.close();
+  }
 });
