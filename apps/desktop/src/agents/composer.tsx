@@ -23,6 +23,7 @@ import {
   type AgentAttachment,
   type AgentProviderId,
   type AgentOperation,
+  type AgentCommand,
 } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { submitAgentInput } from "./paseo/submit";
@@ -43,6 +44,8 @@ import { CompactLayoutContext } from "@/components/compact-layout";
 import { ComposerSurfaceContext, useComposerExpansion } from "./composer-expansion";
 import { useComposerMotion } from "./composer-motion";
 import { NativeSurfaceContext, useNativeSurface } from "@/components/native-surface";
+import { matchCommands, needsArguments, slashQuery } from "./slash-commands";
+import { SlashCommandMenu } from "./slash-menu";
 const defaults: AgentSettings = { model: null, effort: null, mode: "default" };
 const nativeProviderIcons: Record<string, "model" | "claude" | "opencode" | "pi"> = {
   codex: "model",
@@ -241,6 +244,29 @@ export function AgentComposer({
     } finally {
       sendingRef.current = false;
     }
+  };
+  // Escape hides the list for the exact draft it was pressed on; typing brings it back.
+  const [slashDismissed, setSlashDismissed] = useState<string | null>(null);
+  const [slashActive, setSlashActive] = useState(0);
+  const slashTyped = slashQuery(draft);
+  const slashCommands =
+    slashTyped === null ||
+    native ||
+    dictation.active ||
+    slashDismissed === draft ||
+    !connected ||
+    busy ||
+    uncertain ||
+    !agent.threadId
+      ? []
+      : matchCommands(agent.controls?.commands ?? [], slashTyped);
+  const slashIndex = Math.min(slashActive, slashCommands.length - 1);
+  const chooseCommand = (command: AgentCommand, complete = false) => {
+    setSlashActive(0);
+    if (complete || needsArguments(command)) {
+      setDraft(`/${command.name} `);
+      textarea.current?.focus();
+    } else void submit({ message: `/${command.name}`, attachments });
   };
   const queueHead = queue[0];
   useEffect(() => {
@@ -823,7 +849,10 @@ export function AgentComposer({
                 enterKeyHint={compact ? "enter" : "send"}
                 maxLength={16000}
                 disabled={!connected || busy || uncertain || !agent.threadId}
-                onChange={(e) => setDraft(e.target.value)}
+                onChange={(e) => {
+                  setDraft(e.target.value);
+                  setSlashActive(0);
+                }}
                 onPaste={(e) => {
                   if (e.clipboardData.files.length) {
                     e.preventDefault();
@@ -831,6 +860,28 @@ export function AgentComposer({
                   }
                 }}
                 onKeyDown={(e) => {
+                  const command = slashCommands[slashIndex];
+                  if (command && !e.nativeEvent.isComposing) {
+                    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                      e.preventDefault();
+                      const step = e.key === "ArrowDown" ? 1 : -1;
+                      setSlashActive(
+                        (slashIndex + step + slashCommands.length) % slashCommands.length,
+                      );
+                      return;
+                    }
+                    if ((e.key === "Enter" && !e.shiftKey) || (e.key === "Tab" && !e.shiftKey)) {
+                      e.preventDefault();
+                      if (!uncertain) chooseCommand(command, e.key === "Tab");
+                      return;
+                    }
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setSlashDismissed(draft);
+                      return;
+                    }
+                  }
                   if (
                     e.key === "Tab" &&
                     e.shiftKey &&
@@ -1074,6 +1125,15 @@ export function AgentComposer({
             </>
           )}
         </form>
+        <SlashCommandMenu
+          anchor={form}
+          commands={slashCommands}
+          active={slashIndex}
+          surface={owner}
+          onActive={setSlashActive}
+          onChoose={(command) => chooseCommand(command)}
+          onDismiss={() => setSlashDismissed(draft)}
+        />
         {compact && expanded && keyboardHelp && (
           <p role="status" className="px-2 text-xs text-muted-foreground">
             Use the microphone on your phone’s keyboard to dictate. Review your message before
