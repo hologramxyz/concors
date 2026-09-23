@@ -63,29 +63,28 @@ test("directional pane sequences, tab cycling, project memory and immediate Agen
     await expect.poll(() => focusedPane(page)).toBe(upperId);
     await page.keyboard.press("Control+Shift+ArrowLeft");
     await expect.poll(() => focusedPane(page)).toBe(left);
-    // A terminal -> Agent -> terminal round-trip must keep navigating, not enter text selection.
+    // Navigating into an Agent pane focuses its composer, where Ctrl+Shift+Arrow selects words.
     await upper.getByRole("button", { name: "Pane actions" }).click();
     await page.getByRole("menuitemradio", { name: "Agent", exact: true }).click();
-    await expect(upper.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
+    const composer = upper.getByRole("textbox", { name: "Message Codex" });
+    await expect(composer).toBeEnabled();
     await panes.first().locator("textarea").focus();
-    for (let i = 0; i < 3; i++) {
-      await page.keyboard.press("Control+Shift+ArrowRight");
-      await expect.poll(() => focusedPane(page)).toBe(upperId);
-      await expect(upper.getByRole("textbox", { name: "Message Codex" })).toBeFocused();
-      await page.keyboard.press("Control+Shift+ArrowLeft");
-      await expect.poll(() => focusedPane(page)).toBe(left);
-    }
-    await upper
-      .getByRole("textbox", { name: "Message Codex" })
-      .fill("draft stays while navigating");
-    await page.keyboard.press("Control+Shift+ArrowLeft");
-    await expect.poll(() => focusedPane(page)).toBe(left);
     await page.keyboard.press("Control+Shift+ArrowRight");
-    await expect(upper.getByRole("textbox", { name: "Message Codex" })).toBeFocused();
-    await expect(upper.getByRole("textbox", { name: "Message Codex" })).toHaveValue(
-      "draft stays while navigating",
-    );
+    await expect.poll(() => focusedPane(page)).toBe(upperId);
+    await expect(composer).toBeFocused();
+    await composer.fill("draft stays while navigating");
     await page.keyboard.press("Control+Shift+ArrowLeft");
+    await expect(composer).toBeFocused();
+    expect(
+      await composer.evaluate(
+        (node: HTMLTextAreaElement) => node.selectionEnd - node.selectionStart,
+      ),
+    ).toBeGreaterThan(0);
+    await panes.first().locator("textarea").focus();
+    await page.keyboard.press("Control+Shift+ArrowRight");
+    await expect(composer).toBeFocused();
+    await expect(composer).toHaveValue("draft stays while navigating");
+    await panes.first().locator("textarea").focus();
     // Held directional keys may repeat; creation/close sequences may not.
     await page.evaluate(() =>
       window.dispatchEvent(
@@ -100,7 +99,7 @@ test("directional pane sequences, tab cycling, project memory and immediate Agen
       ),
     );
     await expect.poll(() => focusedPane(page)).toBe(upperId);
-    await page.keyboard.press("Control+Shift+ArrowLeft");
+    await panes.first().locator("textarea").focus();
     await expect.poll(() => focusedPane(page)).toBe(left);
     // At the outside edge, focus stays in the current pane.
     await page.keyboard.press("Control+Shift+ArrowLeft");
@@ -115,7 +114,7 @@ test("directional pane sequences, tab cycling, project memory and immediate Agen
     await expect(input).toHaveValue("keep these words");
     expect(
       await input.evaluate((node: HTMLTextAreaElement) => node.selectionEnd - node.selectionStart),
-    ).toBe(0);
+    ).toBeGreaterThan(0);
     await expect(page.getByRole("dialog", { name: "Pane shortcuts", exact: true })).toHaveCount(0);
     // P/T sequences work directly in the composer without inserting their follow-up keys.
     await sequence(page, "p", "Escape");

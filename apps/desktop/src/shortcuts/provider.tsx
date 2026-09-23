@@ -14,6 +14,7 @@ import { type CommandId } from "./bindings";
 import {
   bindingLabel,
   eventStroke,
+  isTextNavigation,
   matchContinuation,
   matchKeymap,
   strokeId,
@@ -119,8 +120,13 @@ function ShortcutHandler({ children }: { children: ReactNode }) {
       const first = matches[0];
       if (!first) return;
       const id = first.id;
-      // Agent inputs participate in workspace navigation; ordinary form fields retain editing keys.
-      if (editing && id !== "search" && !composer) {
+      // Agent inputs participate in workspace commands but keep native word selection;
+      // ordinary form fields retain editing keys.
+      if (
+        editing &&
+        id !== "search" &&
+        (!composer || (id.startsWith("focus-") && isTextNavigation(event, mac)))
+      ) {
         if (!id.startsWith("focus-")) event.preventDefault();
         return;
       }
@@ -147,7 +153,7 @@ function ShortcutHandler({ children }: { children: ReactNode }) {
       window.removeEventListener("keydown", keydown, true);
       window.removeEventListener("blur", cancel);
     };
-  }, [commands, keymap]);
+  }, [commands, keymap, mac]);
   useEffect(() => {
     armed.current = null;
     action.current = null;
