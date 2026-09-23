@@ -311,6 +311,11 @@ export function matchContinuation(
     );
   });
 }
+/** Arrow chords a text field uses to move the caret or extend the selection. */
+export function isTextNavigation(event: ShortcutEvent, mac: boolean): boolean {
+  if (!event.key.startsWith("Arrow")) return false;
+  return mac ? !event.ctrlKey : !event.altKey && !event.metaKey;
+}
 export function browserWarning(binding: Shortcut, mac: boolean): string | null {
   const first = binding.keys[0];
   if (!first || binding.context === "native") return null;

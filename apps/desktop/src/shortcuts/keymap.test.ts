@@ -7,6 +7,7 @@ import {
   conflictsFor,
   defaultKeymap,
   eventStroke,
+  isTextNavigation,
   matchContinuation,
   matchKeymap,
   parseOverrides,
@@ -121,5 +122,17 @@ describe("custom keymaps", () => {
     expect(browserWarning(shortcut("Ctrl+Shift+W"), false)).toMatch(/reserve/);
     expect(browserWarning({ ...shortcut("Ctrl+Tab"), context: "native" }, false)).toBeNull();
     expect(browserWarning(shortcut("Ctrl+Alt+S"), false)).toBeNull();
+  });
+  it("recognizes the platform's caret and selection arrow chords", () => {
+    const arrow = (overrides: Partial<ShortcutEvent>) =>
+      event({ key: "ArrowLeft", code: "ArrowLeft", altKey: false, ...overrides });
+    expect(isTextNavigation(arrow({ shiftKey: true }), false)).toBe(true);
+    expect(isTextNavigation(arrow({ altKey: true, shiftKey: true }), false)).toBe(false);
+    expect(isTextNavigation(arrow({ ctrlKey: false, metaKey: true }), false)).toBe(false);
+    expect(isTextNavigation(arrow({ ctrlKey: false, metaKey: true, shiftKey: true }), true)).toBe(
+      true,
+    );
+    expect(isTextNavigation(arrow({ shiftKey: true }), true)).toBe(false);
+    expect(isTextNavigation(event({ key: "Home", code: "Home" }), false)).toBe(false);
   });
 });
