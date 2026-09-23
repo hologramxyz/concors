@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { useAgents } from "./context";
-import { useContext } from "react";
+import { memo, useContext } from "react";
 import { FileLinkContext } from "@/files/context";
 import { formatDuration } from "./duration";
 import { extractToolCallFilePath } from "./paseo/extract-tool-call-file-path";
@@ -27,17 +27,24 @@ import type { AgentItem } from "@concors/protocol";
 import { buildToolCallDisplayModel } from "./paseo/tool-call-display";
 import type { ToolCallDetail } from "./paseo/agent-types";
 import { hasMeaningfulToolCallDetail } from "./paseo/tool-call-detail-state";
+import { thinkingExpandable, thinkingPreview, thinkingText } from "./thinking";
 
-export function TimelineItem({
+/** Memoized: merges keep unchanged items' identity, so a streamed delta re-renders one row
+ * instead of re-parsing every message's Markdown while the user scrolls. */
+export const TimelineItem = memo(function TimelineItem({
   item,
   workedFor,
+  live,
 }: {
   item: AgentItem;
   workedFor?: string | undefined;
+  /** Whether the item's turn is still in progress; a finished turn has nothing left running. */
+  live: boolean;
 }) {
   const openFile = useContext(FileLinkContext);
   const [open, setOpen] = useState(false);
   const data = item.presentation;
+  const running = live && item.status === "running";
   if (item.kind === "user" || item.kind === "assistant")
     return (
       <article
@@ -55,7 +62,7 @@ export function TimelineItem({
         {item.attachments?.map((attachment, index) => (
           <AttachmentPreview key={index} item={item} attachment={attachment} index={index} />
         ))}
-        {item.kind === "assistant" && item.status !== "running" && (
+        {item.kind === "assistant" && !running && (
           <div className="mt-2 flex items-center gap-2">
             <CopyButton text={item.text} />
             {workedFor && (
@@ -66,6 +73,7 @@ export function TimelineItem({
       </article>
     );
   if (data?.type === "plan" || item.kind === "plan") return <PlanProgress item={item} />;
+  if (data?.type === "thinking") return <Thinking item={item} running={running} />;
   if (item.kind === "system")
     return (
       <article className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -89,34 +97,34 @@ export function TimelineItem({
   if (data?.type === "sub_agent")
     detail = { type: "sub_agent", description: item.text, log: item.detail };
   if (data?.type === "search") detail = { type: "search", query: item.text };
-  if (data?.type === "thinking")
-    detail = { type: "plain_text", label: "Thinking", text: item.text };
   const display = buildToolCallDisplayModel({
     name: item.title,
-    status: item.status === "interrupted" ? "canceled" : item.status,
+    status:
+      item.status === "interrupted"
+        ? "canceled"
+        : item.status === "running" && !running
+          ? "completed"
+          : item.status,
     error: item.status === "failed" ? item.detail : null,
     detail,
   });
   const iconName = resolveToolCallIconName(item.title, detail);
   const Icon =
-    data?.type === "thinking"
-      ? Brain
-      : data?.type === "search"
-        ? Search
-        : iconName === "eye"
-          ? Eye
-          : iconName === "pencil"
-            ? Pencil
-            : iconName === "globe"
-              ? Globe
-              : data?.type === "shell"
-                ? Terminal
-                : data?.type === "files"
-                  ? FileCode
-                  : data?.type === "sub_agent"
-                    ? Bot
-                    : Wrench;
-  const running = item.status === "running";
+    data?.type === "search"
+      ? Search
+      : iconName === "eye"
+        ? Eye
+        : iconName === "pencil"
+          ? Pencil
+          : iconName === "globe"
+            ? Globe
+            : data?.type === "shell"
+              ? Terminal
+              : data?.type === "files"
+                ? FileCode
+                : data?.type === "sub_agent"
+                  ? Bot
+                  : Wrench;
   const hasDetails = hasMeaningfulToolCallDetail(detail);
   const filePath = extractToolCallFilePath(detail);
   return (
@@ -124,13 +132,7 @@ export function TimelineItem({
       data-tool-status={item.status}
       aria-busy={running}
       className="overflow-hidden rounded-xl border border-transparent bg-muted/20"
-      aria-label={
-        data?.type === "sub_agent"
-          ? "Sub-agent activity"
-          : data?.type === "thinking"
-            ? "Thinking summary"
-            : "Tool call"
-      }
+      aria-label={data?.type === "sub_agent" ? "Sub-agent activity" : "Tool call"}
     >
       <button
         type="button"
@@ -264,10 +266,6 @@ export function TimelineItem({
                 </pre>
               </section>
             </div>
-          ) : data?.type === "thinking" ? (
-            <div className="chat-markdown">
-              <AgentMarkdown>{item.text || "Preparing a response…"}</AgentMarkdown>
-            </div>
           ) : (
             <pre className="font-mono break-words whitespace-pre-wrap">
               {item.detail || item.text || "Waiting for tool output…"}
@@ -276,6 +274,45 @@ export function TimelineItem({
           {data?.type === "shell" && data.exitCode !== null && data.exitCode !== undefined && (
             <p className="mt-2 text-muted-foreground">Exit code {data.exitCode}</p>
           )}
+        </div>
+      )}
+    </article>
+  );
+});
+
+/** Reasoning is context, not output: one quiet line that opens to the full summary. */
+function Thinking({ item, running }: { item: AgentItem; running: boolean }) {
+  const [open, setOpen] = useState(false);
+  const preview = thinkingPreview(item.text);
+  const expandable = thinkingExpandable(item.text);
+  return (
+    <article
+      aria-label="Thinking summary"
+      aria-busy={running}
+      data-tool-status={item.status}
+      className="agent-thinking text-sm text-muted-foreground"
+    >
+      <button
+        type="button"
+        disabled={!expandable}
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={expandable ? open : undefined}
+        className="flex max-w-full items-center gap-2 py-0.5 text-left transition-colors enabled:hover:text-foreground"
+      >
+        <Brain className="size-3.5 shrink-0" />
+        <span className={`shrink-0 ${running ? "agent-shimmer" : ""}`}>
+          {running ? "Thinking" : "Thought"}
+        </span>
+        {!open && preview && <span className="min-w-0 truncate opacity-75">{preview}</span>}
+        {expandable && (
+          <ChevronRight
+            className={`size-3 shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
+          />
+        )}
+      </button>
+      {open && expandable && (
+        <div className="mt-1 ml-[7px] border-l pl-4">
+          <AgentMarkdown>{thinkingText(item.text)}</AgentMarkdown>
         </div>
       )}
     </article>

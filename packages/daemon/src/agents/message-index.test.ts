@@ -79,3 +79,36 @@ it("indexes only sent messages across pages, isolates sessions, bounds previews 
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+it("finds a turn's prompt after a long turn has pushed it out of the latest page", () => {
+  const directory = mkdtempSync(join(tmpdir(), "concors-turn-prompt-"));
+  const store = new WorkspaceStore(join(directory, "state.db"));
+  const sessionId = randomUUID();
+  const now = new Date().toISOString();
+  try {
+    const save = (id: string, kind: AgentItem["kind"], turnId: string) =>
+      store.saveAgentItem({
+        id,
+        sessionId,
+        turnId,
+        position: 0,
+        revision: 0,
+        kind,
+        title: "",
+        text: "",
+        detail: "",
+        status: "completed",
+        createdAt: now,
+      });
+    save("prompt:request", "user", "turn");
+    // More than the 80-item page the replay dedupe used to consult.
+    for (let i = 0; i < 100; i++) save(`tool:${i}`, "tool", "turn");
+    save("tool:other", "tool", "other");
+    expect(store.hasAgentTurnPrompt(sessionId, "turn")).toBe(true);
+    expect(store.hasAgentTurnPrompt(sessionId, "other")).toBe(false);
+    expect(store.hasAgentTurnPrompt(randomUUID(), "turn")).toBe(false);
+  } finally {
+    store.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

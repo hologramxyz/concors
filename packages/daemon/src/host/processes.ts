@@ -244,9 +244,11 @@ export class ProcessInventory {
     ];
     const previewCandidates = allPreviewCandidates.slice(0, 128);
     const now = Date.now();
+    // A confirmed preview stays confirmed while its port keeps listening: every probe lands in the
+    // server's request log, which an agent streaming that server's output shows as new activity.
     const refreshPreviews = previewCandidates.filter((port) => {
       const cached = this.#previewProtocols.get(port);
-      return !cached || now - cached.checkedAt >= 10_000;
+      return !cached || (!cached.protocol && now - cached.checkedAt >= 10_000);
     });
     for (const [port, protocol] of await concurrentMap(
       refreshPreviews,
