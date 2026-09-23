@@ -63,7 +63,7 @@ export function mapCodexItem(
         ...base,
         kind: "tool",
         title: "Thinking",
-        text: z.array(z.string()).catch([]).parse(item["summary"]).join("\n"),
+        text: z.array(z.string()).catch([]).parse(item["summary"]).join("\n\n"),
         presentation: { type: "thinking" },
       }; // Provider-authored summaries only; never raw reasoning content.
     case "commandExecution":

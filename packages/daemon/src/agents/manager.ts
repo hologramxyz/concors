@@ -1633,12 +1633,9 @@ export class AgentManager {
     }
     const mapped = mapCodexItem(raw, completed);
     if (!mapped) return;
-    // Locally submitted prompts are reserved before dispatch; replace their turn identity, not their text.
-    if (
-      mapped.kind === "user" &&
-      this.#store.agentConversation(id).items.some((i) => i.kind === "user" && i.turnId === turnId)
-    )
-      return;
+    // Locally submitted prompts are reserved before dispatch; replace their turn identity, not their
+    // text. Replayed history carries its own prompt id, so a second copy would sort to the bottom.
+    if (mapped.kind === "user" && this.#store.hasAgentTurnPrompt(id, turnId)) return;
     this.item(id, turnId, {
       ...mapped,
       ...(mapped.kind === "assistant"
@@ -1867,8 +1864,14 @@ export class AgentManager {
               : agentProviderName(info.provider)),
         text: tool ? (prior?.text ?? "") : (prior?.text ?? "") + event.delta,
         detail: tool ? (prior?.detail ?? "") + event.delta : (prior?.detail ?? ""),
-        status: "running",
+        // A server left running keeps writing after its turn settled it; output must not revive it.
+        status: prior?.status ?? "running",
       });
+    } else if (method === "item/reasoning/summaryPartAdded") {
+      // Each summary part opens with its own bold heading; without a break it runs into the last.
+      const event = z.object({ itemId: z.string(), turnId: z.string() }).parse(params);
+      const prior = this.#store.agentItem(id, event.itemId);
+      if (prior?.text.trim()) this.item(id, event.turnId, { ...prior, text: `${prior.text}\n\n` });
     } else if (method === "turn/plan/updated") {
       const plan = z
         .array(z.object({ step: z.string(), status: z.string() }))

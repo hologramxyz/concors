@@ -94,6 +94,8 @@
   --border: #d3d3cb;
   --input: #d3d3cb;
   --ring: var(--foreground);
+  /* Concors blue: links are the one place prose gets color, so they read as clickable. */
+  --link: #335dce;
   --success: oklch(0.7 0.17 150);
   --warning: oklch(0.78 0.16 75);
 
@@ -136,6 +138,8 @@
   --border: oklch(1 0 0 / 8%);
   --input: oklch(1 0 0 / 10%);
   --ring: var(--foreground);
+  /* Concors blue lifted for dark surfaces; the base shade is too dim to read as body text. */
+  --link: #7d98e3;
   --success: oklch(0.72 0.16 150);
   --warning: oklch(0.8 0.15 75);
 
@@ -297,8 +301,13 @@
   list-style: decimal;
 }
 .chat-markdown a {
-  color: var(--primary);
+  color: var(--link);
   text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--link) 40%, transparent);
+  text-underline-offset: 2px;
+}
+.chat-markdown a:hover {
+  text-decoration-color: currentColor;
 }
 .chat-markdown h1,
 .chat-markdown h2,
@@ -485,6 +494,18 @@
 }
 .chat-markdown h3 {
   font-size: 1.1em;
+}
+/* Reasoning reads as an aside to the reply, so it sits a step smaller and in the muted color. */
+.agent-thinking .chat-markdown {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted-foreground);
+}
+.agent-thinking .chat-markdown > * + * {
+  margin-top: 0.5rem;
+}
+.agent-thinking .chat-markdown strong {
+  font-weight: 500;
 }
 @media (prefers-reduced-motion: reduce) {
   .agent-shimmer {
