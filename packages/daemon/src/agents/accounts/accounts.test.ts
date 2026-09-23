@@ -1,13 +1,18 @@
 import { EventEmitter } from "node:events";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { randomUUID } from "node:crypto";
 import { PassThrough } from "node:stream";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentInfo } from "@concors/protocol";
-import { AgentAccountSchema } from "@concors/protocol";
+import { AgentAccountSchema, ProviderRequestSchema } from "@concors/protocol";
 import { CodexAccount } from "./codex.ts";
 import { ClaudeAccount } from "./claude.ts";
 import { OpenCodeAccount } from "./opencode.ts";
-import { AgentAccounts } from "./manager.ts";
+import { accountBackendFactory, AgentAccounts } from "./manager.ts";
+import { ProviderRegistry } from "../providers/registry.ts";
 import type { AccountBackend } from "./backend.ts";
 import type { ConversationProvider } from "../providers/contract.ts";
 import type { launch } from "../providers/launch.ts";
@@ -288,3 +293,67 @@ it("serializes overlapping account starts while an earlier backend is closing", 
   expect(factory).toHaveBeenCalledTimes(2);
   await accounts.close();
 });
+
+it.skipIf(process.platform === "win32")(
+  "checks a chat's account under the active subscription and Settings' under its own home",
+  async () => {
+    const root = await mkdtemp(join(tmpdir(), "concors-account-credentials-"));
+    try {
+      // Reports which credential home it was started with as the signed-in account.
+      const bin = join(root, "providers", "claude", "node_modules", ".bin");
+      await mkdir(bin, { recursive: true });
+      await writeFile(
+        join(bin, "claude"),
+        `#!/bin/sh\nprintf '{"loggedIn":true,"email":"%s"}' "\${CLAUDE_CONFIG_DIR:-default}"\n`,
+        { mode: 0o755 },
+      );
+      const registry = new ProviderRegistry(join(root, "providers"));
+      for (const operation of [
+        {
+          kind: "save",
+          expectedRevision: 0,
+          config: {
+            id: "claude-work",
+            label: "Claude — Work",
+            engine: "claude",
+            enabled: true,
+            command: ["claude"],
+            subscription: { nickname: "Work" },
+          },
+        },
+        { kind: "activate", engine: "claude", id: "claude-work", expectedRevision: 1 },
+      ]) {
+        const result = registry.request(
+          ProviderRequestSchema.parse({
+            type: "provider.request",
+            requestId: randomUUID(),
+            operation,
+          }),
+        );
+        if (result.outcome.status !== "ok") throw new Error(result.outcome.message);
+      }
+      const work = join(root, "accounts", "claude", "claude-work");
+      const factory = accountBackendFactory(registry);
+      const label = async (target: Parameters<typeof factory>[0]) => {
+        const account = factory(target);
+        try {
+          return (await account.read()).label;
+        } finally {
+          await account.close();
+        }
+      };
+      // A chat runs under the active subscription, so its prompt must not ask to sign in again.
+      expect(await label({ id: "agent", provider: "claude", directory: root })).toBe(work);
+      // Settings keeps addressing each configuration's own home.
+      const settings = { directory: root, ownCredentials: true };
+      expect(await label({ id: "provider-account:claude", provider: "claude", ...settings })).toBe(
+        "default",
+      );
+      expect(
+        await label({ id: "provider-account:claude-work", provider: "claude-work", ...settings }),
+      ).toBe(work);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+);
