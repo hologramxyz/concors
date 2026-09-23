@@ -20,7 +20,7 @@ import { AgentControlsSchema } from "@concors/protocol";
 import { claudeMcp } from "./mcp.ts";
 import type { McpServer } from "@concors/protocol";
 import { claudeStore } from "./claude-store.ts";
-import { claudeHistory } from "./history.ts";
+import { claudeHistory, claudeThinkingItems } from "./history.ts";
 import { launch } from "./launch.ts";
 import { resolveProfile } from "../../terminal/profiles.ts";
 import {
@@ -70,6 +70,7 @@ export class ClaudeProvider extends EventProvider {
   private messageId = "";
   private text = "";
   private thinking = new Map<number, string>();
+  private completedThinking = new Map<string, number>();
   private models: ModelInfo[] = [];
   private currentModel = "";
   private currentUsed = 0;
@@ -615,8 +616,10 @@ export class ClaudeProvider extends EventProvider {
           const index = Number(e["index"] ?? 0),
             value = (this.thinking.get(index) ?? "") + string(d["thinking"]);
           this.thinking.set(index, value);
+          // Numbered like claudeThinkingItems so the completed block replaces this one, not joins it.
+          const ordinal = [...this.thinking.keys()].indexOf(index);
           this.item(
-            { id: `${this.messageId}:thinking:${index}`, type: "reasoning", summary: [value] },
+            { id: `${this.messageId}:thinking:${ordinal}`, type: "reasoning", summary: [value] },
             false,
           );
         }
@@ -641,15 +644,9 @@ export class ClaudeProvider extends EventProvider {
       }
       const id = string(message["id"]);
       const content = array(message["content"]);
-      content.forEach((raw, index) => {
-        const block = object(raw);
-        if (block["type"] === "thinking" && string(block["thinking"]))
-          this.item({
-            id: `${id}:thinking:${index}`,
-            type: "reasoning",
-            summary: [string(block["thinking"])],
-          });
-      });
+      if (!this.completedThinking.has(id)) this.completedThinking = new Map([[id, 0]]);
+      for (const item of claudeThinkingItems(content.map(object), id, this.completedThinking))
+        this.item(item);
       const text = textContent(content.filter((v) => object(v)["type"] === "text"));
       if (text) this.item({ id, type: "agentMessage", text });
       for (const value of content) {

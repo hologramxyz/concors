@@ -34,11 +34,32 @@ function thinkingItems(content: Record<string, unknown>[], id: string) {
       : [],
   );
 }
+/**
+ * Claude Code splits one API message into an entry per block, so a block's index within an entry
+ * says nothing about its place in the message. Number the readable thinking blocks of a message in
+ * order instead: the stream sees the same sequence, since signature-only blocks carry no deltas,
+ * and a live block then keeps its id when it completes or is replayed.
+ */
+export function claudeThinkingItems(
+  content: Record<string, unknown>[],
+  id: string,
+  counts: Map<string, number>,
+) {
+  return content.flatMap((part) => {
+    if (part["type"] !== "thinking" || !string(part["thinking"])) return [];
+    const ordinal = counts.get(id) ?? 0;
+    counts.set(id, ordinal + 1);
+    return [
+      { id: `${id}:thinking:${ordinal}`, type: "reasoning", summary: [string(part["thinking"])] },
+    ];
+  });
+}
 
 export function claudeHistory(messages: unknown[]): NativeTurn[] {
   const tasks = new TaskState();
   const turns: NativeTurn[] = [];
   const tools = new Map<string, { name: string; input: unknown }>();
+  const thinking = new Map<string, number>();
   let turn: NativeTurn | undefined;
   for (const raw of messages) {
     const entry = object(raw),
@@ -47,7 +68,21 @@ export function claudeHistory(messages: unknown[]): NativeTurn[] {
         typeof message["content"] === "string"
           ? [{ type: "text", text: message["content"] }]
           : array(message["content"]).map(object);
-    if (entry["parent_tool_use_id"] || entry["isMeta"]) continue;
+    // Compaction summaries and interrupt markers are transcript bookkeeping, not prompts.
+    if (
+      entry["parent_tool_use_id"] ||
+      entry["isMeta"] ||
+      entry["isCompactSummary"] ||
+      entry["isVisibleInTranscriptOnly"]
+    )
+      continue;
+    if (
+      entry["type"] === "user" &&
+      /^\[Request interrupted by user/.test(
+        textContent(content.filter((c) => c["type"] === "text")),
+      )
+    )
+      continue;
     if (
       entry["type"] === "user" &&
       typeof message["content"] === "string" &&
@@ -71,7 +106,9 @@ export function claudeHistory(messages: unknown[]): NativeTurn[] {
           type: "agentMessage",
           text,
         });
-      turn.items.push(...thinkingItems(content, string(message["id"]) || string(entry["uuid"])));
+      turn.items.push(
+        ...claudeThinkingItems(content, string(message["id"]) || string(entry["uuid"]), thinking),
+      );
       for (const c of content)
         if (c["type"] === "tool_use") {
           const tool = { name: string(c["name"]), input: c["input"] };

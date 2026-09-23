@@ -784,6 +784,14 @@ export class WorkspaceStore {
         }),
       );
   }
+  hasAgentTurnPrompt(sessionId: string, turnId: string): boolean {
+    // A long turn pushes its prompt out of the latest page, so look across the whole session.
+    return !!this.#db
+      .prepare(
+        "SELECT 1 FROM agent_items WHERE session_id = ? AND json_extract(item, '$.kind') = 'user' AND json_extract(item, '$.turnId') = ? LIMIT 1",
+      )
+      .get(sessionId, turnId);
+  }
   hasAgentProviderHistory(sessionId: string): boolean {
     // Check all history, not just the most recent page. Pending user prompts are reserved
     // locally before reaching a provider; every other item is evidence of provider activity.

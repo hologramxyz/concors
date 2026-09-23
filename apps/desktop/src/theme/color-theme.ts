@@ -39,6 +39,7 @@ export function colorThemeTokens(
     border: c.border,
     input: c.border,
     ring: c.accent,
+    link: c.accent,
     sidebar: c.sidebar,
     "sidebar-foreground": c.foreground,
     "sidebar-primary": c.accent,
