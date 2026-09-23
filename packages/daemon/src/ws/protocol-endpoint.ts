@@ -1,7 +1,8 @@
 import { ScheduleManager } from "../schedules/manager.ts";
 import { ScheduleStore } from "../schedules/store.ts";
 import { ScheduleTools } from "../schedules/tools.ts";
-import { SCHEDULES_CAPABILITY } from "@concors/protocol";
+import { DICTATION_CAPABILITY, SCHEDULES_CAPABILITY } from "@concors/protocol";
+import { DictationService } from "../dictation/service.ts";
 import { ThemeRegistry } from "../themes/registry.ts";
 import { dirname, join, basename } from "node:path";
 import { ProviderRegistry } from "../agents/providers/registry.ts";
@@ -37,6 +38,7 @@ export interface ProtocolEndpointOptions {
   readonly agentProviderFactory?: AgentProviderFactory;
   readonly accountBackendFactory?: AccountBackendFactory;
   readonly gitHub?: GitHubSource;
+  readonly speechModelsDirectory?: string;
   readonly state: DaemonState;
   readonly workspace: WorkspaceStore;
   /** How long a freshly-opened socket may stay silent before we drop it. */
@@ -67,6 +69,7 @@ export function registerProtocolEndpoint(
   const subscribers = new Set<WebSocket>();
   const agentV2 = new WeakSet<WebSocket>();
   const scheduleClients = new WeakSet<WebSocket>();
+  const dictationClients = new Set<WebSocket>();
   const hostUsage = createHostUsageMonitor();
   const send = (socket: WebSocket, message: DaemonMessage): void => {
     if (socket.readyState !== socket.OPEN) return;
@@ -90,6 +93,12 @@ export function registerProtocolEndpoint(
     socket.send(JSON.stringify(message));
   };
 
+  const dictation = options.speechModelsDirectory
+    ? new DictationService(options.speechModelsDirectory)
+    : undefined;
+  dictation?.onModel((model) => {
+    for (const target of dictationClients) send(target, { type: "dictation.model", model });
+  });
   const files = new ProjectFiles(options.workspace);
   const resources = new MachineResources(options.workspace);
   const pullRequests = options.gitHub
@@ -161,6 +170,7 @@ export function registerProtocolEndpoint(
   app.addHook("onReady", async () => {
     // Injected providers (tests) never run the real CLIs, so there are no versions to check.
     if (!options.agentProviderFactory) providers.startVersionChecks();
+    dictation?.start();
     await scheduleTools.start(schedules);
     schedules.start();
   });
@@ -169,6 +179,7 @@ export function registerProtocolEndpoint(
     await scheduleTools.close();
     providers.close();
     hostUsage.close();
+    dictation?.close();
     await agents.close();
     await closingSchedules;
     projects.close();
@@ -203,6 +214,8 @@ export function registerProtocolEndpoint(
       unsubscribeUsage?.();
       connections.delete(socket);
       subscribers.delete(socket);
+      dictationClients.delete(socket);
+      dictation?.detach(viewer.id);
       terminals.detach(viewer.id);
       void agents.accounts.detach(viewer.id);
     });
@@ -211,6 +224,25 @@ export function registerProtocolEndpoint(
       if (message.type === "client.hello") {
         if (message.capabilities?.includes("agent-providers-v2")) agentV2.add(socket);
         if (message.capabilities?.includes(SCHEDULES_CAPABILITY)) scheduleClients.add(socket);
+        if (dictation && message.capabilities?.includes(DICTATION_CAPABILITY))
+          dictationClients.add(socket);
+        return;
+      }
+      if (message.type === "dictation.request" || message.type === "dictation.audio") {
+        if (!dictation || !dictationClients.has(socket)) {
+          if (message.type === "dictation.request")
+            send(socket, {
+              type: "error",
+              error: createProtocolError("INVALID_MESSAGE", "Dictation is not available"),
+            });
+          return;
+        }
+        if (message.type === "dictation.audio") dictation.audio(viewer.id, message);
+        else
+          send(
+            socket,
+            dictation.request(viewer.id, message, (event) => send(socket, event)),
+          );
         return;
       }
       if (message.type === "agent.request" && !agentV2.has(socket)) {
@@ -335,6 +367,7 @@ export function registerProtocolEndpoint(
   return async () => {
     providers.close();
     hostUsage.close();
+    dictation?.close();
     await agents.close();
     projects.close();
     terminals.close();

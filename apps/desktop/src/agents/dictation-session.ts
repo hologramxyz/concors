@@ -10,7 +10,8 @@ export interface Recognition {
   interimResults: boolean;
   lang: string;
   onresult: ((event: SpeechEvent) => void) | null;
-  onerror: ((event: { error: string }) => void) | null;
+  /** `message` is shown as-is when present, e.g. the daemon explaining why it cannot dictate. */
+  onerror: ((event: { error: string; message?: string }) => void) | null;
   onend: (() => void) | null;
   start(): void;
   stop(): void;
@@ -44,9 +45,11 @@ export class DictationSession {
   #closed = false;
   private speech: Recognition;
   private callbacks: DictationCallbacks;
-  constructor(speech: Recognition, callbacks: DictationCallbacks) {
+  private finishTimeoutMs: number;
+  constructor(speech: Recognition, callbacks: DictationCallbacks, finishTimeoutMs = 5000) {
     this.speech = speech;
     this.callbacks = callbacks;
+    this.finishTimeoutMs = finishTimeoutMs;
   }
 
   start(language: string): void {
@@ -63,14 +66,18 @@ export class DictationSession {
       this.callbacks.transcript(transcript);
       this.#update({ transcript });
     };
-    this.speech.onerror = ({ error }) => {
+    this.speech.onerror = ({ error, message: detail }) => {
       if (this.#closed || !["recording", "stopping"].includes(this.state.phase)) return;
       const message =
         error === "not-allowed" || error === "service-not-allowed"
           ? "Allow microphone access to use dictation."
           : error === "no-speech"
             ? "No speech was detected. Try again or type your message."
-            : "Dictation stopped unexpectedly. You can edit the words captured so far.";
+            : error === "audio-capture"
+              ? "No microphone is available. Check that one is connected and try again."
+              : error === "daemon" && detail
+                ? detail
+                : "Dictation stopped unexpectedly. You can edit the words captured so far.";
       this.#fail(message);
     };
     this.speech.onend = () => {
@@ -98,7 +105,7 @@ export class DictationSession {
     // Never send an uncertain transcript on recognition failure or timeout.
     this.#timer = setTimeout(
       () => this.#fail("Dictation could not finish. Review the captured text before sending."),
-      5000,
+      this.finishTimeoutMs,
     );
     try {
       this.speech.stop();
