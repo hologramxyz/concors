@@ -37,7 +37,29 @@ export class TestAgentProvider implements AgentProvider {
   async request(method: string, params: unknown = {}): Promise<unknown> {
     this.requests.push({ method, params });
     if (method === "session/controls")
-      return { importSessions: true, fork: true, rewind: ["conversation"], steer: true };
+      return {
+        importSessions: true,
+        fork: true,
+        rewind: ["conversation"],
+        steer: true,
+        compact: true,
+        commands: [
+          { name: "compact", description: "Summarize earlier context" },
+          { name: "review", description: "Review a change", argumentHint: "<target>" },
+        ],
+      };
+    if (method === "command/execute") {
+      // Mirrors a native compaction: a turn whose only item is the compaction's running/result.
+      this.turnId = `turn-${++TestAgentProvider.turns}`;
+      const item = { id: `compact-${this.turnId}`, type: "contextCompaction" };
+      this.emit("turn/started", { turn: { id: this.turnId, status: "inProgress", items: [] } });
+      this.emit("item/started", { item: { ...item, status: "inProgress" } });
+      setTimeout(() => {
+        this.emit("item/completed", { item: { ...item, status: "completed" } });
+        this.finish();
+      }, 150);
+      return { turn: { id: this.turnId, status: "inProgress", items: [] } };
+    }
     if (method === "session/list") {
       const offset = Number((params as { cursor?: string }).cursor ?? 0);
       return {
