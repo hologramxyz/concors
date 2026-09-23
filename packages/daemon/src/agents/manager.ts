@@ -484,7 +484,12 @@ export class AgentManager {
       if (!config.enabled) throw new Error("This provider is disabled in Settings → Providers.");
       const account = await this.accounts.request(
         owner,
-        { id: `provider-account:${op.id}`, provider: op.id, directory: homedir() },
+        {
+          id: `provider-account:${op.id}`,
+          provider: op.id,
+          directory: homedir(),
+          ownCredentials: true,
+        },
         op.action,
       );
       return {
