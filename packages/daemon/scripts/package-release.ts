@@ -86,6 +86,10 @@ async function main(): Promise<void> {
       });
     const nodeDirectory = join(temporary, nodeArchive.replace(/\.tar\.(gz|xz)$/, ""));
     await cp(join(nodeDirectory, "bin", "node"), join(directory, "bin", "node"));
+    // npm lets the daemon install and update npm-published agent CLIs on machines without Node.
+    await cp(join(nodeDirectory, "lib", "node_modules", "npm"), join(directory, "npm"), {
+      recursive: true,
+    });
     await cp(join(nodeDirectory, "LICENSE"), join(directory, "NODE_LICENSE"));
     await cp(join(root, "..", "..", "LICENSE"), join(directory, "LICENSE"));
     await writeFile(
@@ -96,7 +100,18 @@ DAEMON_BIN_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 exec "$DAEMON_BIN_DIR/node" "$DAEMON_BIN_DIR/../lib/cli.js" "$@"
 `,
     );
+    await writeFile(
+      join(directory, "bin", "npm"),
+      `#!/bin/sh
+set -eu
+DAEMON_BIN_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+# Package scripts run \`node\`: give them the bundled one, like npm's own runtime. The bundled
+# npm moves with daemon releases, so its own upgrade notice does not apply.
+PATH="$DAEMON_BIN_DIR:$PATH" NPM_CONFIG_UPDATE_NOTIFIER=false exec "$DAEMON_BIN_DIR/node" "$DAEMON_BIN_DIR/../npm/bin/npm-cli.js" "$@"
+`,
+    );
     await chmod(join(directory, "bin", "concors-daemon"), 0o755);
+    await chmod(join(directory, "bin", "npm"), 0o755);
     await chmod(join(directory, "bin", "node"), 0o755);
     const manifest = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as {
       version: string;

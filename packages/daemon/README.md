@@ -176,7 +176,8 @@ It extracts into exactly one relocatable directory:
 concors-daemon/
 ├── bin/
 │   ├── concors-daemon          executable POSIX launcher; execs the bundled Node
-│   └── node                   official Node runtime
+│   ├── node                   official Node runtime
+│   └── npm                    POSIX launcher for the bundled npm
 ├── lib/
 │   ├── cli.js
 │   ├── package.json
@@ -186,6 +187,7 @@ concors-daemon/
 │       ├── prebuilds/linux-x64/pty.node
 │       ├── package.json
 │       └── LICENSE
+├── npm/                       npm from the same Node release
 ├── release.json               daemon version, Node version, platform and architecture
 ├── LICENSE
 └── NODE_LICENSE
@@ -200,6 +202,9 @@ bundled Node and `lib/cli.js`. Source maps and build tooling are excluded from t
 The target needs only the normal Ubuntu 24.04 x86_64 runtime libraries and shell: no installed
 Node, npm, pnpm, Python, compiler, or network access is needed to start the daemon. Local mode
 still binds loopback. Providers such as Codex/Claude and project tools are installed separately.
+The bundled `npm` exists for them: provider processes, provider installs and terminals get
+`bin/` appended to `PATH`, so npm-published CLIs install, run and update on machines without
+Node, while a machine's own Node and npm still take precedence.
 CI unpacks the tarball in a fresh `ubuntu:24.04` container with networking disabled and verifies
 `--version`, `serve --ephemeral`, HTTP health, and actual terminal operations.
 
