@@ -54,10 +54,13 @@ export function AgentComposer({
   agent,
   connected,
   onInterrupt,
+  onSend,
 }: {
   agent: AgentInfo;
   connected: boolean;
   onInterrupt: () => void;
+  /** The user sent or queued a message: show the bottom of the chat. */
+  onSend?: () => void;
 }) {
   const connection = useContext(TerminalConnectionContext);
   const compact = useContext(CompactLayoutContext);
@@ -213,11 +216,13 @@ export function AgentComposer({
   ) => {
     if (sendingRef.current) return;
     sendingRef.current = true;
+    const canSubmit = connected && !busy && !uploading && !configuring && !!agent.threadId;
+    if (canSubmit && !queued && (input.message.trim() || input.attachments.length)) onSend?.();
     try {
       return await submitAgentInput({
         message: input.message,
         attachments: input.attachments,
-        canSubmit: connected && !busy && !uploading && !configuring && !!agent.threadId,
+        canSubmit,
         isAgentRunning: active && !durableQueue,
         forceSend: attemptRef.current !== null || steering,
         submitBehavior: "preserve-and-lock",
