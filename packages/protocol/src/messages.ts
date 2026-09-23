@@ -1,3 +1,9 @@
+import {
+  DictationAudioSchema,
+  DictationEventSchema,
+  DictationRequestSchema,
+  DictationResultSchema,
+} from "./dictation.ts";
 import { ScheduleRequestSchema, ScheduleResultSchema, ScheduleListSchema } from "./schedules.ts";
 import { ThemeRequestSchema, ThemeResultSchema } from "./themes.ts";
 import { ResourceRequestSchema, ResourceResultSchema } from "./resources.ts";
@@ -65,6 +71,8 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
   ScheduleRequestSchema,
   ResourceRequestSchema,
   PullRequestRequestSchema,
+  DictationRequestSchema,
+  DictationAudioSchema,
 ]);
 export type ClientMessage = z.infer<typeof ClientMessageSchema>;
 
@@ -100,6 +108,8 @@ export const DaemonMessageSchema = z.discriminatedUnion("type", [
   PullRequestResultSchema,
   AgentResultSchema,
   ...AgentEventSchema.options,
+  DictationResultSchema,
+  ...DictationEventSchema.options,
 ]);
 export type DaemonMessage = z.infer<typeof DaemonMessageSchema>;
 

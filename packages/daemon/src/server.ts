@@ -22,6 +22,8 @@ export interface DaemonServerOptions {
   readonly handshakeTimeoutMs?: number;
   /** In-memory by default for embedded/test servers. The CLI supplies a durable file. */
   readonly workspacePath?: string;
+  /** Where dictation keeps its speech model. Without it, dictation is not offered. */
+  readonly speechModelsDirectory?: string;
 }
 
 export interface DaemonServer {
@@ -47,7 +49,7 @@ export function createDaemonServer(
     throw new Error(
       "Terminal-enabled daemons must bind to loopback until authenticated remote access is configured. Use an SSH tunnel for remote development.",
     );
-  const state = new DaemonState();
+  const state = new DaemonState({ dictation: options.speechModelsDirectory !== undefined });
   const workspace = new WorkspaceStore(options.workspacePath);
 
   const app = Fastify({
@@ -84,6 +86,9 @@ export function createDaemonServer(
         ? { agentProviderFactory: options.agentProviderFactory }
         : {}),
       ...(options.gitHub ? { gitHub: options.gitHub } : {}),
+      ...(options.speechModelsDirectory
+        ? { speechModelsDirectory: options.speechModelsDirectory }
+        : {}),
       ...(options.handshakeTimeoutMs === undefined
         ? {}
         : { handshakeTimeoutMs: options.handshakeTimeoutMs }),

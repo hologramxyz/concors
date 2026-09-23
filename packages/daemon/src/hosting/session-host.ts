@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
 import { mkdir, readFile, writeFile, rm, stat, open, realpath, rename } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { z } from "zod";
 import { createDaemonServer, type DaemonServerOptions } from "../server.ts";
@@ -90,6 +90,15 @@ async function claim(directory: string): Promise<boolean> {
   return claim(directory);
 }
 
+/** The speech model is not account data, so every profile on a machine shares one download. */
+export function speechModelsDirectory(dataDirectory: string): string {
+  const shared =
+    basename(dirname(dataDirectory)) === "profiles"
+      ? dirname(dirname(dataDirectory))
+      : dataDirectory;
+  return join(shared, "models", "speech");
+}
+
 export async function runSessionHost(
   directory: string,
   config: DaemonConfig,
@@ -104,6 +113,7 @@ export async function runSessionHost(
     {
       ...options,
       workspacePath: join(directory, "workspace.sqlite"),
+      speechModelsDirectory: speechModelsDirectory(directory),
       internalToken: token,
     },
   );
