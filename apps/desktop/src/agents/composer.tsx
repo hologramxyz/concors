@@ -54,10 +54,13 @@ export function AgentComposer({
   agent,
   connected,
   onInterrupt,
+  onSend,
 }: {
   agent: AgentInfo;
   connected: boolean;
   onInterrupt: () => void;
+  /** The user sent or queued a message: show the bottom of the chat. */
+  onSend?: () => void;
 }) {
   const connection = useContext(TerminalConnectionContext);
   const compact = useContext(CompactLayoutContext);
@@ -147,8 +150,13 @@ export function AgentComposer({
   useLayoutEffect(() => {
     const el = textarea.current;
     if (el) {
+      // Hold the box's size while measuring: collapsing it for one layout grew the chat above,
+      // which clamped its scroll up and left it there.
+      const box = el.parentElement;
+      if (box) box.style.minHeight = `${box.offsetHeight}px`;
       el.style.height = "auto";
       el.style.height = Math.min(el.scrollHeight, 192) + "px";
+      if (box) box.style.minHeight = "";
     }
   }, [draft, expanded, dictation.active]);
   useComposerMotion(form, compact && !native, expanded);
@@ -213,11 +221,13 @@ export function AgentComposer({
   ) => {
     if (sendingRef.current) return;
     sendingRef.current = true;
+    const canSubmit = connected && !busy && !uploading && !configuring && !!agent.threadId;
+    if (canSubmit && !queued && (input.message.trim() || input.attachments.length)) onSend?.();
     try {
       return await submitAgentInput({
         message: input.message,
         attachments: input.attachments,
-        canSubmit: connected && !busy && !uploading && !configuring && !!agent.threadId,
+        canSubmit,
         isAgentRunning: active && !durableQueue,
         forceSend: attemptRef.current !== null || steering,
         submitBehavior: "preserve-and-lock",

@@ -298,13 +298,18 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
           }
           hasNewer={conversation.hasNewer}
         />
+        {/* Floats so showing it never resizes the timeline under a pinned reader. */}
+        {!atBottom && (
+          <Button
+            variant="outline"
+            className="absolute bottom-2 left-1/2 z-10 -translate-x-1/2 shadow"
+            onClick={latest}
+          >
+            <ArrowDown className="size-3" />
+            Latest
+          </Button>
+        )}
       </div>
-      {!atBottom && (
-        <Button variant="outline" className="z-10 mx-auto -mt-9 mb-2 shadow" onClick={latest}>
-          <ArrowDown className="size-3" />
-          Latest
-        </Button>
-      )}
       <div
         data-chat-footer
         className={`${compact ? "" : "max-h-[55%] overflow-y-auto"} shrink-0 px-3 pt-2 pb-3`}
@@ -336,6 +341,7 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
               key={agent.id}
               agent={agent}
               connected={!!connected && !busy && !resuming}
+              onSend={latest}
               onInterrupt={() => {
                 if (agent.turnId)
                   void run(() =>
