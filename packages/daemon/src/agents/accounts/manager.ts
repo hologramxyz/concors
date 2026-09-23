@@ -14,7 +14,13 @@ import { OpenCodeAccount } from "./opencode.ts";
 import type { AccountBackend } from "./backend.ts";
 
 /** What an account flow needs to address a backend; sessions and provider configs both qualify. */
-export type AccountTarget = Pick<AgentInfo, "id" | "provider" | "directory">;
+export type AccountTarget = Pick<AgentInfo, "id" | "provider" | "directory"> & {
+  /**
+   * Address the configuration's own credential home instead of the one its chats run under.
+   * Settings sign-in sets it, so connecting the default account never touches the active one.
+   */
+  ownCredentials?: boolean;
+};
 export type AccountBackendFactory = (info: AccountTarget) => AccountBackend;
 export const accountBackendFactory =
   (registry: ProviderRegistry): AccountBackendFactory =>
@@ -23,26 +29,20 @@ export const accountBackendFactory =
     const refuse = async () => {
       throw new Error("Sign-in cannot approve agent tools");
     };
-    // Sign-in addresses this configuration's own credential home, never the machine-wide
-    // active subscription: connecting the default account must not touch the active one.
-    if (config.engine === "claude")
-      return new ClaudeAccount(info.directory, registry.launcher(config, false));
+    if (!["claude", "codex", "opencode"].includes(config.engine))
+      throw new Error("Sign in through this agent's CLI on the machine.");
+    // A chat checks and renews the account it runs under, the machine-wide active subscription
+    // included; Settings addresses each configuration's own credential home.
+    const launcher = registry.launcher(config, !info.ownCredentials);
+    if (config.engine === "claude") return new ClaudeAccount(info.directory, launcher);
     if (config.engine === "codex")
       return new CodexAccount(
         new CodexAppServer(
-          registry.launcher(config, false)(
-            "codex",
-            ["app-server", "--listen", "stdio://"],
-            info.directory,
-          ),
+          launcher("codex", ["app-server", "--listen", "stdio://"], info.directory),
           refuse,
         ),
       );
-    if (config.engine === "opencode")
-      return new OpenCodeAccount(
-        new OpenCodeProvider(info.directory, refuse, registry.launcher(config, false)),
-      );
-    throw new Error("Sign in through this agent's CLI on the machine.");
+    return new OpenCodeAccount(new OpenCodeProvider(info.directory, refuse, launcher));
   };
 const createAccountBackend = accountBackendFactory(new ProviderRegistry());
 interface Entry {
