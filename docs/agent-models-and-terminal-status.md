@@ -23,6 +23,21 @@ versions without session model metadata, an automatically selected model becomes
 known when the provider reports its first response. Choosing a catalog model shows
 that selection immediately.
 
+## Remembered settings
+
+Each machine's daemon remembers, per provider configuration, the last model, thinking
+effort, approvals (Codex's Default / Auto-review / Full access), speed, native mode
+(Claude's permission modes, for example) and features chosen in any chat. A new chat on
+that machine opens with the provider last chosen there and that provider's remembered
+settings. Resumed native sessions get the same settings but keep their own model. Plan
+mode is per conversation and is not carried over.
+
+This lives in the daemon's workspace database, not in the client, so every VPS and the
+local machine keep their own, and every device connected to a machine sees the same
+defaults. Once the provider reports its catalog and controls, choices it no longer offers
+(a retired model, an effort the model lacks) are dropped instead of failing the first turn.
+If the remembered provider was removed, disabled or uninstalled, new chats fall back to Codex.
+
 ## Catalog lifecycle
 
 - The client keeps bounded, memory-only catalogs per daemon connection, workspace

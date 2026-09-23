@@ -4,7 +4,9 @@ import {
   AgentAttachmentSchema,
   AgentInfoSchema,
   AgentItemSchema,
+  AgentSettingsSchema,
   type AgentInfo,
+  type AgentSettings,
   type AgentItem,
   type AgentRequest,
   type AgentConversation,
@@ -60,6 +62,7 @@ export class WorkspaceStore {
         CREATE TABLE IF NOT EXISTS agent_request_errors (id TEXT PRIMARY KEY, message TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS agent_queue (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, request TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS agent_requests (id TEXT PRIMARY KEY, request TEXT NOT NULL, session_id TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS agent_defaults (provider TEXT PRIMARY KEY, settings TEXT NOT NULL, used_at INTEGER NOT NULL);
         PRAGMA user_version = 4;
       `);
       const initial: WorkspaceSnapshot = {
@@ -403,6 +406,30 @@ export class WorkspaceStore {
       .get(sessionId, nativeId);
     return row ? String(row["turn_id"]) : nativeId;
   }
+  /** The settings last chosen for a provider on this machine, if any are still readable. */
+  agentDefaults(provider: string): AgentSettings | null {
+    const row = this.#db
+      .prepare("SELECT settings FROM agent_defaults WHERE provider = ?")
+      .get(provider);
+    if (!row) return null;
+    const parsed = AgentSettingsSchema.safeParse(JSON.parse(String(row["settings"])));
+    return parsed.success ? parsed.data : null;
+  }
+  /** Providers by most recent choice, newest first. */
+  agentDefaultProviders(): string[] {
+    return this.#db
+      .prepare("SELECT provider FROM agent_defaults ORDER BY used_at DESC, rowid DESC")
+      .all()
+      .map((row) => String(row["provider"]));
+  }
+  saveAgentDefaults(provider: string, settings: AgentSettings): void {
+    this.#db
+      .prepare(
+        "INSERT INTO agent_defaults (provider, settings, used_at) VALUES (?, ?, ?) ON CONFLICT(provider) DO UPDATE SET settings = excluded.settings, used_at = excluded.used_at",
+      )
+      .run(provider, JSON.stringify(AgentSettingsSchema.parse(settings)), Date.now());
+  }
+
   createBackgroundAgent(info: AgentInfo): void {
     if (!this.snapshot().projects.some((p) => p.id === info.projectId))
       throw new Error("Project no longer exists");
