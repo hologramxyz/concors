@@ -7,9 +7,11 @@ interface SettingsSidebarProps {
   readonly page: SettingsPage;
   readonly onBack: () => void;
   readonly onNavigate: (page: SettingsPage) => void;
+  /** Pages with nothing to show for this organization, e.g. Billing when nothing is charged. */
+  readonly hidden?: ReadonlySet<SettingsPage>;
 }
 
-export function SettingsSidebar({ page, onBack, onNavigate }: SettingsSidebarProps) {
+export function SettingsSidebar({ page, onBack, onNavigate, hidden }: SettingsSidebarProps) {
   return (
     <div className="sidebar-shell">
       <nav
@@ -33,7 +35,10 @@ export function SettingsSidebar({ page, onBack, onNavigate }: SettingsSidebarPro
         </div>
 
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-2 py-2">
-          {SETTINGS_NAV_GROUPS.map((group) => (
+          {SETTINGS_NAV_GROUPS.map((group) => ({
+            ...group,
+            items: group.items.filter((item) => !hidden?.has(item.page)),
+          })).map((group) => (
             <section key={group.label} aria-labelledby={`settings-group-${group.label}`}>
               <h2
                 id={`settings-group-${group.label}`}

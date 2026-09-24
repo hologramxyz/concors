@@ -11,9 +11,11 @@ import { openExternal } from "@/tauri";
  * `paymentFailedAt` without dragging in the card-setup machinery below. One definition of the
  * cache key keeps those callers sharing a single request with the settings page.
  */
-export function useBillingStatus(organizationId: string) {
-  return useApiResource(`billing:${organizationId}`, () =>
-    api.getBillingStatus({ organizationId }),
+export function useBillingStatus(organizationId: string, enabled = true) {
+  return useApiResource(
+    `billing:${organizationId}`,
+    () => api.getBillingStatus({ organizationId }),
+    { enabled },
   );
 }
 
