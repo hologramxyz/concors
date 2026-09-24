@@ -1,4 +1,5 @@
 import type { AgentInfo, TerminalInfo, WorkspaceSnapshot } from "@concors/protocol";
+import { isLiveTerminalAgent } from "./agent-status";
 
 /** The sidebar navigates to panes; saved, detached sessions are not active entries. */
 export function visibleAgentSessions(
@@ -16,10 +17,7 @@ export function visibleAgentSessions(
   return {
     chats: chats.filter((agent) => chatIds.has(agent.id)),
     terminals: terminals.filter(
-      (session) =>
-        terminalIds.has(session.id) &&
-        (session.profile !== "shell" || !!session.detectedAgent) &&
-        (session.status === "running" || session.status === "starting"),
+      (session) => terminalIds.has(session.id) && isLiveTerminalAgent(session),
     ),
   };
 }

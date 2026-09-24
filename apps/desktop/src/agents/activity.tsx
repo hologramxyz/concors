@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { ProviderIcon } from "./provider-icon";
 import { agentProviderName } from "@concors/protocol";
 import { useAgents, AGENT_STATUS } from "./context";
+import type { AgentStatus } from "./agent-status";
 
 export function AgentLoadingIcon({ className = "size-4" }: { className?: string }) {
   return (
@@ -36,6 +37,46 @@ export function AgentPaneIcon({ sessionId }: { sessionId: string | null }) {
           <AgentLoadingIcon className="size-3" />
         </span>
       )}
+    </span>
+  );
+}
+
+/** Provider logo with a status corner badge, as in the Agents sidebar. */
+export function AgentStatusIcon({
+  agent,
+  label = `Agent status: ${agent.status}`,
+  surface = "bg-sidebar ring-sidebar",
+}: {
+  agent: Pick<AgentStatus, "provider" | "status" | "running" | "color" | "unread">;
+  label?: string;
+  /** Background of whatever the icon sits on, so the badge cuts cleanly into the logo. */
+  surface?: string;
+}) {
+  return (
+    <span
+      role="img"
+      aria-label={label}
+      className="relative flex size-5 shrink-0 items-center justify-center"
+    >
+      <span aria-hidden="true" data-provider={agent.provider}>
+        <ProviderIcon provider={agent.provider} />
+      </span>
+      {agent.unread && (
+        <span
+          aria-label="Unread agent update"
+          className={`absolute -top-1 -left-1 size-1.5 rounded-full bg-primary ring-2 ${surface}`}
+        />
+      )}
+      <span
+        data-agent-status-badge
+        className={`absolute -right-1 -bottom-1 flex size-3 items-center justify-center rounded-full ring-1 ${surface}`}
+      >
+        {agent.running ? (
+          <AgentLoadingIcon className="size-3" />
+        ) : (
+          <span className={`size-2 rounded-full ${agent.color}`} />
+        )}
+      </span>
     </span>
   );
 }
