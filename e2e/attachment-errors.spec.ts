@@ -36,7 +36,9 @@ test("damaged text attachments show a recoverable error without crashing the con
     });
     await composer.fill("Read these notes");
     await page.getByRole("button", { name: "Send message", exact: true }).click();
-    await expect(page.getByLabel("Agent status: Done").first()).toBeVisible();
+    // The open chat has seen its finished turn, so it reads as Ready rather than Done.
+    await expect(page.getByText(/^Worked for /)).toHaveCount(1);
+    await expect(page.getByLabel("Agent status: Ready").first()).toBeVisible();
     const attachment = page.getByRole("button", { name: "notes.txt", exact: true });
     await attachment.click();
     await expect(page.getByRole("dialog").getByRole("alert")).toContainText(
