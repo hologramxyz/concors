@@ -39,6 +39,39 @@ function fixture() {
 }
 
 describe("workspace commands", () => {
+  it("names a pane, keeps the name through a profile change and clears it", () => {
+    const { state, projectId, tabId, paneId } = fixture();
+    const pane = (snapshot: WorkspaceSnapshot) =>
+      snapshot.projects[0]!.tabs[0]!.nodes.find((node) => node.id === paneId);
+    let next = applyWorkspaceOperation(state, {
+      kind: "pane.rename",
+      projectId,
+      tabId,
+      expectedVersion: 1,
+      paneId,
+      name: "Dev server",
+    });
+    expect(pane(next)).toMatchObject({ name: "Dev server" });
+    next = applyWorkspaceOperation(next, {
+      kind: "pane.configure",
+      projectId,
+      tabId,
+      expectedVersion: 2,
+      paneId,
+      profile: "chat",
+    });
+    expect(pane(next)).toMatchObject({ name: "Dev server", profile: "chat" });
+    next = applyWorkspaceOperation(next, {
+      kind: "pane.rename",
+      projectId,
+      tabId,
+      expectedVersion: 3,
+      paneId,
+      name: null,
+    });
+    expect(pane(next)).not.toHaveProperty("name");
+  });
+
   it("splits, resizes and collapses a nested tree without changing the input", () => {
     const { state, projectId, tabId, paneId } = fixture();
     const second = id(),

@@ -14,8 +14,8 @@ export const TAB_PROFILES: {
   label: string;
   icon: ComponentType<{ className?: string }>;
 }[] = [
-  { profile: "shell", label: "Terminal", icon: Terminal },
   { profile: "chat", label: "Agent", icon: MessageSquare },
+  { profile: "shell", label: "Terminal", icon: Terminal },
   { profile: "codex", label: "Codex", icon: CodexIcon },
   { profile: "claude", label: "Claude Code", icon: ClaudeIcon },
   { profile: "opencode", label: "OpenCode", icon: OpenCodeIcon },

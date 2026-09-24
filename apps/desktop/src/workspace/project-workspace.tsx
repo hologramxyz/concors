@@ -17,6 +17,7 @@ import type { PaneProfile, WorkspaceOperation, WorkspaceSnapshot } from "@concor
 import { Button } from "@/components/ui/button";
 import { PaneLayout } from "./pane-layout";
 import { VisitedTab } from "./visited-tab";
+import { TabButton } from "./tab-button";
 
 export function ProjectWorkspace({
   workspace,
@@ -292,9 +293,9 @@ export function ProjectWorkspace({
                         className="max-w-44 rounded bg-background px-2 py-0.5 text-ui ring-1 ring-ring outline-none"
                       />
                     ) : (
-                      <button
-                        type="button"
-                        aria-pressed={!activeFile && selected?.id === tab.id}
+                      <TabButton
+                        tab={tab}
+                        selected={!activeFile && selected?.id === tab.id}
                         data-shortcut-tab-id={tab.id}
                         title={`Drag to reorder. Double-click to rename. Rename: ${shortcutLabel("rename-tab")}. Move left: ${shortcutLabel("move-tab-left")}. Move right: ${shortcutLabel("move-tab-right")}.`}
                         onDoubleClick={() => startRename(tab)}
@@ -308,10 +309,7 @@ export function ProjectWorkspace({
                             tabId: tab.id,
                           });
                         }}
-                        className="max-w-44 truncate px-2 py-0.5 text-ui"
-                      >
-                        {tab.name}
-                      </button>
+                      />
                     )}
                     <button
                       type="button"

@@ -22,3 +22,15 @@ export function usageSummary(usage: HostUsage) {
     highMemory: memoryPercent >= HIGH_USAGE_PERCENT,
   };
 }
+
+/** The dot before the machine name: whether the daemon is reachable right now. */
+export function connectionIndicator(
+  status: "disconnected" | "connecting" | "handshaking" | "ready" | "error",
+  reconnecting: boolean,
+) {
+  if (status === "ready") return { label: "Online", color: "bg-emerald-500" };
+  if (reconnecting) return { label: "Reconnecting", color: "bg-amber-500" };
+  if (status === "connecting" || status === "handshaking")
+    return { label: "Connecting", color: "bg-amber-500" };
+  return { label: "Offline", color: "bg-red-500" };
+}

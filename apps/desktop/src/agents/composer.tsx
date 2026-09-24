@@ -46,6 +46,8 @@ import { useComposerMotion } from "./composer-motion";
 import { NativeSurfaceContext, useNativeSurface } from "@/components/native-surface";
 import { matchCommands, needsArguments, slashQuery } from "./slash-commands";
 import { SlashCommandMenu } from "./slash-menu";
+import { readClipboardImage } from "@/tauri";
+import { fitImage, fitImageFile } from "./image-attachment";
 const defaults: AgentSettings = { model: null, effort: null, mode: "default" };
 const nativeProviderIcons: Record<string, "model" | "claude" | "opencode" | "pi"> = {
   codex: "model",
@@ -303,15 +305,17 @@ export function AgentComposer({
       setError(error instanceof Error ? error.message : "Could not update the queue");
     }
   };
-  const addFiles = async (files: FileList | File[]) => {
+  const attachFiles = async (load: () => Promise<File[]>) => {
     if (uploading || !advanced) return;
     setUploading(true);
     setError(null);
     try {
+      const files = await load();
       if (attachments.length + files.length > 3)
         throw new Error("Attach up to three files per message.");
       const incoming: AgentAttachment[] = [];
-      for (const file of Array.from(files)) {
+      for (const original of files) {
+        const file = await fitImageFile(original);
         if (file.size > 1024 * 1024) throw new Error(`${file.name} is larger than 1 MB.`);
         const data = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
@@ -328,6 +332,13 @@ export function AgentComposer({
       setUploading(false);
     }
   };
+  const addFiles = (files: FileList | File[]) => attachFiles(async () => Array.from(files));
+  // Only when the paste event carried nothing: see readClipboardImage for why.
+  const pasteNativeImage = () =>
+    attachFiles(async () => {
+      const image = await readClipboardImage();
+      return image ? [await fitImage(image, "Pasted image")] : [];
+    });
   const nativeModels = useAgentModelSelection(
     agent,
     (model) =>
@@ -867,7 +878,7 @@ export function AgentComposer({
                   if (e.clipboardData.files.length) {
                     e.preventDefault();
                     void addFiles(e.clipboardData.files);
-                  }
+                  } else if (!e.clipboardData.types.length) void pasteNativeImage();
                 }}
                 onKeyDown={(e) => {
                   const command = slashCommands[slashIndex];
