@@ -190,7 +190,7 @@ it("keeps the last catalog on a failed refresh and retries after a short backoff
   if (retried.outcome.status !== "ok") throw new Error("Retry failed");
   expect(retried.outcome.providers?.find((p) => p.id === "codex")?.error).toBeUndefined();
 });
-it.each(["claude", "opencode", "pi"] as const)(
+it.each(["claude", "opencode"] as const)(
   "switches to %s in the same pane and restores provider histories without replay",
   async (provider) => {
     const { c, id } = await setup();
@@ -203,13 +203,8 @@ it.each(["claude", "opencode", "pi"] as const)(
     const catalog = await c.requestAgent({ kind: "provider-catalog", sessionId: id }, randomUUID());
     expect(catalog.outcome.status).toBe("ok");
     if (catalog.outcome.status !== "ok") throw new Error("Catalog failed");
-    expect(catalog.outcome.providers?.map((p) => p.id)).toEqual([
-      "codex",
-      "claude",
-      "opencode",
-      "pi",
-      "copilot",
-    ]);
+    // Only the three agents a machine is set up with are offered until others are enabled.
+    expect(catalog.outcome.providers?.map((p) => p.id)).toEqual(["codex", "claude", "opencode"]);
     expect(instances).toHaveLength(1);
     expect(catalog.outcome.providers?.find((p) => p.id === provider)?.loaded).toBe(false);
     expect(c.agents).toHaveLength(1);

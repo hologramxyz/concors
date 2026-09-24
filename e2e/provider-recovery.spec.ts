@@ -1,6 +1,8 @@
 import { test, expect, signedIn } from "./signed-in.ts";
 
-test("provider polling clears recovered read errors without concealing failed saves", async ({
+// The Providers settings page is hidden while only Codex, Claude Code and OpenCode are supported;
+// restore this with its navigation entry.
+test.skip("provider polling clears recovered read errors without concealing failed saves", async ({
   page,
 }) => {
   let failLists = true;
