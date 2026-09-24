@@ -301,6 +301,11 @@ export type CardSummary = z.infer<typeof CardSummarySchema>;
 export const BillingStatusSchema = z.object({
   /** False when the server runs without Stripe: machines are then free. */
   configured: z.boolean(),
+  /**
+   * This organization is not charged although the server has Stripe: no card is needed, and
+   * `prices` still says what a machine would cost.
+   */
+  waived: z.boolean().default(false),
   testMode: z.boolean().default(false),
   hasPaymentMethod: z.boolean(),
   card: CardSummarySchema.nullable(),
