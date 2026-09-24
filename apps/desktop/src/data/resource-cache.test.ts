@@ -130,3 +130,24 @@ it("explicit refresh bypasses freshness and invalidation only affects its resour
   expect(repos.getSnapshot().data).toBeNull();
   expect(machines.getSnapshot().data).toEqual(["VPS"]);
 });
+
+it("remembers when the data was read, not when it was last asked for", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(1_000);
+  const refresh = deferred<string[]>();
+  const request = vi
+    .fn<() => Promise<string[]>>()
+    .mockResolvedValueOnce(["old"])
+    .mockImplementationOnce(() => refresh.promise);
+  const resource = new Resource(request);
+  await resource.load();
+  expect(resource.getSnapshot().fetchedAt).toBe(1_000);
+  vi.setSystemTime(120_000);
+  const job = resource.load();
+  expect(resource.getSnapshot()).toMatchObject({ data: ["old"], fetchedAt: 1_000 });
+  refresh.reject(new Error("offline"));
+  await job;
+  expect(resource.getSnapshot()).toMatchObject({ data: ["old"], fetchedAt: 1_000 });
+  resource.set(["mutated"]);
+  expect(resource.getSnapshot().fetchedAt).toBe(120_000);
+});
