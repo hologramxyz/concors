@@ -92,7 +92,8 @@ export function CreateMachineDialog({
   const regionSoldOut = isRegionSoldOut(catalog.sizes, region);
   const orderable = chosenSize !== undefined && !isSoldOut(chosenSize, region);
   const nameOk = isValidMachineName(name);
-  const billed = billing.status?.configured === true;
+  // A waived organization sees prices but never a card step.
+  const billed = billing.status?.configured === true && !billing.status.waived;
   const price = billing.status?.prices.find((candidate) => candidate.size === size)?.monthlyPrice;
   const ready =
     nameOk &&
@@ -295,11 +296,11 @@ export function CreateMachineDialog({
                                 ? "Out of stock"
                                 : billing.status === null
                                   ? "Loading price…"
-                                  : billed
-                                    ? candidatePrice
-                                      ? formatMonthly(candidatePrice)
-                                      : "Unavailable"
-                                    : "Free"}
+                                  : candidatePrice
+                                    ? formatMonthly(candidatePrice)
+                                    : billed
+                                      ? "Unavailable"
+                                      : "Free"}
                             </span>
                           </div>
                           <span className="flex min-w-0 items-start gap-2 text-xs leading-relaxed text-muted-foreground">
@@ -416,8 +417,6 @@ export function CreateMachineDialog({
                         <span role="status" className="text-xs text-muted-foreground">
                           Loading price…
                         </span>
-                      ) : !billed ? (
-                        <span className="text-xl font-semibold">Free</span>
                       ) : price ? (
                         <p className="whitespace-nowrap">
                           <span className="text-xl font-semibold tracking-tight tabular-nums">
@@ -425,6 +424,8 @@ export function CreateMachineDialog({
                           </span>
                           <span className="ml-1 text-xs text-muted-foreground">/ month</span>
                         </p>
+                      ) : !billed ? (
+                        <span className="text-xl font-semibold">Free</span>
                       ) : (
                         <span className="text-xs text-muted-foreground">Unavailable</span>
                       )}
