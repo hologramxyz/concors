@@ -256,8 +256,24 @@ describe("ApiClient billing", () => {
     };
     const fetch = vi.fn(async () => json(status));
 
-    await expect(client(fetch).getBillingStatus()).resolves.toEqual(status);
+    // Servers from before waivers charge everyone.
+    await expect(client(fetch).getBillingStatus()).resolves.toEqual({ ...status, waived: false });
     expect(lastCall(fetch).url).toBe("https://api.example/api/v1/billing");
+  });
+
+  it("reads an organization whose machines are not charged", async () => {
+    const status = {
+      configured: true,
+      waived: true,
+      testMode: false,
+      hasPaymentMethod: false,
+      card: null,
+      paymentFailedAt: null,
+      prices: [{ size: "small", monthlyPrice: { amount: 19, currency: "USD" } }],
+    };
+    const fetch = vi.fn(async () => json(status));
+
+    await expect(client(fetch).getBillingStatus()).resolves.toEqual(status);
   });
 
   it("hands out the Checkout and portal URLs", async () => {
