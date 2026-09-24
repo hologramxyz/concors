@@ -8,12 +8,14 @@ import { HOST_USAGE_STALE_MS, usageSummary } from "./usage-display";
 export function ResourceStatus({
   connection,
   state,
+  reconnecting = false,
   machine,
   compact = false,
   onOpenResources,
 }: {
   connection: DaemonConnection | null;
   state: ConnectionState;
+  reconnecting?: boolean;
   machine: string;
   compact?: boolean;
   onOpenResources?: () => void;
@@ -29,18 +31,23 @@ export function ResourceStatus({
     if (!connection) return;
     const unsubscribe = connection.subscribeHostUsage((usage) => {
       const receivedAt = Date.now();
-      setReading((previous) => ({
-        connection,
-        usage,
-        receivedAt,
-        // Only the initial subscription needs a grace period. Repeated null samples
-        // must not restart it, and losing a real reading is immediately unavailable.
-        checkingSince: usage
-          ? null
-          : previous?.connection === connection
-            ? previous.checkingSince
-            : receivedAt,
-      }));
+      setReading((previous) =>
+        // A dropped connection clears usage; keep the last reading for a quick reconnect.
+        !usage && connection.state.status !== "ready" && previous?.connection === connection
+          ? previous
+          : {
+              connection,
+              usage,
+              receivedAt,
+              // Only the initial subscription needs a grace period. Repeated null samples
+              // must not restart it, and losing a real reading is immediately unavailable.
+              checkingSince: usage
+                ? null
+                : previous?.connection === connection
+                  ? previous.checkingSince
+                  : receivedAt,
+            },
+      );
       setNow(receivedAt);
     });
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -54,9 +61,13 @@ export function ResourceStatus({
   const stale = !!current?.usage && now - current.receivedAt >= HOST_USAGE_STALE_MS;
   const status =
     state.status !== "ready"
-      ? state.status === "connecting" || state.status === "handshaking"
-        ? "Connecting…"
-        : "Offline"
+      ? reconnecting
+        ? "Reconnecting…"
+        : current?.usage && !stale
+          ? null
+          : state.status === "connecting" || state.status === "handshaking"
+            ? "Connecting…"
+            : "Offline"
       : !state.daemon.capabilities?.includes(HOST_USAGE_CAPABILITY)
         ? "Update daemon for usage"
         : stale

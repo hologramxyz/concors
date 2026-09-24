@@ -112,9 +112,18 @@ JWT, `alg: EdDSA`, header `kid`. Claims: `iss` = `controlPlaneUrl`, `sub` = user
 
 The gateway must bound authenticated HTTP and WebSocket lifetimes by `exp`, not just
 validate expiry at upgrade. The mobile PR adds this enforcement; it is not in the
-original `daemon-v0.2.0` artifact. Expiry detaches the client transport without stopping
-the session host. Reconnects request a fresh token; revocation is bounded by the last
-issued token's expiry, not immediate.
+original `daemon-v0.2.0` artifact. Expiry closes the client socket with 4401 and detaches
+it without stopping the session host. Reconnects request a fresh token; revocation is
+bounded by the last issued token's expiry, not immediate.
+
+Managed `/ws` sockets are relayed message by message, and the gateway adds `auth-refresh`
+to `daemon.ready`. A client may then send `{ "type": "auth.refresh", "token" }` on the live
+socket, and the gateway answers `auth.refreshed`. The gateway verifies the token exactly
+like an upgrade token, and it must name the same user, login session and organization as
+the socket. On success the deadline moves to the new `exp`. The desktop client does this
+two minutes before expiry, so routine rotation never drops the connection. The message
+is never forwarded to the session host. A refused or missing renewal still expires the
+socket, so revocation keeps the same bound.
 
 The token audience is the **control-plane machine ID**. `workspace.machineId` is an
 independently generated persistent daemon namespace and is not expected to equal that

@@ -94,14 +94,18 @@ export class AttentionEngine {
   viewed(sessionId: string): void {
     this.#sink.clear(sessionId);
   }
+  /**
+   * Stops pending alerts while disconnected. Shown notices and known attention stay, so the
+   * resync after a reconnect neither clears nor replays them.
+   */
   suspend(): void {
     for (const timer of this.#timers.values()) clearTimeout(timer);
-    for (const id of this.#known.keys()) this.#sink.clear(id);
     this.#timers.clear();
-    this.#known.clear();
   }
   dispose(): void {
     this.suspend();
+    for (const id of this.#known.keys()) this.#sink.clear(id);
+    this.#known.clear();
     this.#disposed = true;
   }
 }

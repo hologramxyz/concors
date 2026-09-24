@@ -10,7 +10,17 @@ export function useSchedules() {
     schedules: AgentSchedule[] | null;
   } | null>(null);
   useEffect(
-    () => connection?.onSchedules((schedules) => setReplica({ connection, schedules })),
+    () =>
+      connection?.onSchedules((schedules) =>
+        // A dropped connection clears the client's list; keep showing it until the machine resyncs.
+        setReplica((previous) =>
+          schedules === null &&
+          connection.state.status !== "ready" &&
+          previous?.connection === connection
+            ? previous
+            : { connection, schedules },
+        ),
+      ),
     [connection],
   );
   return {

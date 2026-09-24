@@ -375,6 +375,65 @@ describe("DaemonConnection", () => {
     await expect(second).resolves.toMatchObject({ daemonVersion: "0.1.0" });
     expect(states.filter((s) => s === "ready")).toHaveLength(2);
   });
+
+  it("reconnects the same instance with a fresh token after the socket drops", async () => {
+    const sockets: FakeWebSocket[] = [];
+    const factory = vi.fn((url: string) => {
+      const socket = new FakeWebSocket(url);
+      sockets.push(socket);
+      return socket;
+    });
+    const connection = new DaemonConnection({
+      endpoint: describeDaemonEndpoint("wss://daemon.example/ws"),
+      client,
+      protocols: ["concors.bearer.first"],
+      webSocketFactory: factory,
+    });
+    const first = connection.connect();
+    sockets[0]!.serverOpen();
+    sockets[0]!.serverSend(READY);
+    await first;
+    expect(connection.lastMessageAt).toBeGreaterThan(0);
+    sockets[0]!.serverClose(1006);
+
+    const second = connection.connect(["concors.bearer.second"]);
+    expect(factory).toHaveBeenLastCalledWith("wss://daemon.example/ws", ["concors.bearer.second"]);
+    sockets[1]!.serverOpen();
+    sockets[1]!.serverSend(READY);
+    await second;
+    expect(connection.previewUrl({ protocol: "http", port: 3000 })).toContain(
+      "access_token=second",
+    );
+  });
+});
+
+describe("in-place access renewal", () => {
+  it("renews only through a gateway that offers it and uses the new token for previews", async () => {
+    const { connection, socket, ready } = startConnection();
+    socket.serverOpen();
+    socket.serverSend({ ...READY, capabilities: ["auth-refresh"] });
+    await ready;
+    const renewed = connection.refreshAuthorization("fresh");
+    expect(JSON.parse(socket.sent.at(-1)!)).toEqual({ type: "auth.refresh", token: "fresh" });
+    socket.serverSend({ type: "auth.refreshed", ok: true, expiresAt: Date.now() + 900_000 });
+    await expect(renewed).resolves.toBe(true);
+    expect(connection.previewUrl({ protocol: "http", port: 3000 })).toContain("access_token=fresh");
+    const refused = connection.refreshAuthorization("other");
+    socket.serverSend({ type: "auth.refreshed", ok: false });
+    await expect(refused).resolves.toBe(false);
+    const cut = connection.refreshAuthorization("late");
+    socket.serverClose(1006);
+    await expect(cut).resolves.toBe(false);
+  });
+
+  it("never sends a renewal to a daemon that does not advertise it", async () => {
+    const { connection, socket, ready } = startConnection();
+    socket.serverOpen();
+    socket.serverSend(READY);
+    await ready;
+    await expect(connection.refreshAuthorization("fresh")).resolves.toBe(false);
+    expect(socket.sent.some((raw) => raw.includes("auth.refresh"))).toBe(false);
+  });
 });
 
 describe("workspace replica lifecycle", () => {
@@ -386,6 +445,83 @@ describe("workspace replica lifecycle", () => {
     projects: [],
     selection: null,
   };
+
+  it("keeps agents and terminals listed through a reconnect until the daemon resyncs", async () => {
+    const { connection, socket, sockets, ready } = startConnection();
+    connection.subscribeWorkspace(() => undefined);
+    const lists: number[] = [];
+    connection.onAgent((event) => {
+      if (event.type === "agent.list") lists.push(event.agents.length);
+    });
+    const at = "2026-09-23T00:00:00.000Z";
+    const agent = (id: string, revision: number) =>
+      ({
+        type: "agent.state",
+        agent: {
+          id,
+          projectId: "00000000-0000-4000-8000-000000000010",
+          provider: "codex",
+          name: "Agent",
+          directory: "/project",
+          model: null,
+          threadId: null,
+          turnId: null,
+          status: "idle",
+          error: null,
+          startedAt: at,
+          turnStartedAt: null,
+          updatedAt: at,
+          revision,
+          pending: [],
+          attention: null,
+        },
+      }) as DaemonMessage;
+    const terminal = (id: string) =>
+      ({
+        type: "terminal.state",
+        session: {
+          id,
+          projectId: "00000000-0000-4000-8000-000000000010",
+          profile: "shell",
+          directory: "/project",
+          status: "running",
+          exitCode: null,
+          error: null,
+          startedAt: at,
+          cols: 80,
+          rows: 24,
+        },
+      }) as DaemonMessage;
+    const kept = "00000000-0000-4000-8000-000000000011";
+    const gone = "00000000-0000-4000-8000-000000000012";
+    const sync = (target: FakeWebSocket, revision: number, ids: string[]) => {
+      target.serverSend({ type: "agent.list", agents: [] });
+      for (const id of ids) target.serverSend(terminal(id));
+      for (const id of ids) target.serverSend(agent(id, revision));
+    };
+    socket.serverOpen();
+    socket.serverSend(READY);
+    await ready;
+    sync(socket, 9, [kept, gone]);
+    socket.serverSend({ type: "workspace.snapshot", snapshot });
+    expect(connection.agents.map((a) => a.id)).toEqual([kept, gone]);
+    socket.serverClose(1006);
+
+    const again = connection.connect();
+    sockets[1]!.serverOpen();
+    sockets[1]!.serverSend(READY);
+    await again;
+    lists.length = 0;
+    sync(sockets[1]!, 1, [kept]);
+    // Mid-resync: nothing has been emptied, and a restarted daemon's lower revision still applies.
+    expect(lists).toEqual([]);
+    expect(connection.terminals).toHaveLength(2);
+    expect(connection.agents.find((a) => a.id === kept)?.revision).toBe(1);
+    sockets[1]!.serverSend({ type: "workspace.snapshot", snapshot });
+    expect(lists).toEqual([1]);
+    expect(connection.agents.map((a) => a.id)).toEqual([kept]);
+    expect(connection.terminals.map((t) => t.id)).toEqual([kept]);
+  });
 
   it("gates resource requests and rejects uncertain mutations on disconnect", async () => {
     const { connection, socket, ready } = startConnection();

@@ -61,14 +61,14 @@ const LISTED_TTL_MS = 60_000;
 const RETRY_TTL_MS = 20_000;
 
 export class PullRequestStore {
-  #connection: Pick<DaemonConnection, "state" | "requestPullRequests">;
+  #connection: Pick<DaemonConnection, "state" | "workspace" | "requestPullRequests">;
   #state: PullRequestState = unavailablePullRequests;
   #listeners = new Set<() => void>();
   #pending: { keys: string } | null = null;
   #settled: { keys: string; expires: number } | null = null;
   readonly state: ListedState;
   constructor(
-    connection: Pick<DaemonConnection, "state" | "requestPullRequests">,
+    connection: Pick<DaemonConnection, "state" | "workspace" | "requestPullRequests">,
     state: ListedState = "open",
   ) {
     this.#connection = connection;
@@ -92,6 +92,13 @@ export class PullRequestStore {
   }
 
   refresh(workspace: WorkspaceSnapshot, force = false) {
+    if (this.#connection.state.status !== "ready" || !this.#connection.workspace) {
+      // A reconnect keeps the last listing; the next workspace snapshot asks again.
+      this.#pending = null;
+      this.#settled = null;
+      if (this.#state.refreshing) this.#publish({ ...this.#state, refreshing: false });
+      return;
+    }
     const capabilities =
       this.#connection.state.status === "ready" ? this.#connection.state.daemon.capabilities : [];
     if (

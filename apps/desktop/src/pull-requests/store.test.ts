@@ -52,6 +52,7 @@ function setup(capabilities = ["workspace-pull-requests"]) {
       status: "ready",
       daemon: { protocolVersion: "v1", daemonVersion: "0.4.0", status: "ready", capabilities },
     } as DaemonConnection["state"],
+    workspace,
     requestPullRequests: vi
       .fn<DaemonConnection["requestPullRequests"]>()
       .mockResolvedValue(listed()),
@@ -158,4 +159,25 @@ it("lists merged pull requests separately, only from daemons that support them",
   history.refresh(workspace);
   expect(older.connection.requestPullRequests).not.toHaveBeenCalled();
   expect(history.getSnapshot()).toBe(unavailablePullRequests);
+});
+it("keeps the listing through a reconnect and asks again once the workspace is back", async () => {
+  const { store, connection } = setup();
+  store.refresh(workspace);
+  await vi.waitFor(() => expect(store.getSnapshot().status).toBe("listed"));
+  const ready = connection.state;
+  let cutOff!: (cause: Error) => void;
+  connection.requestPullRequests.mockReturnValueOnce(
+    new Promise((_, reject) => {
+      cutOff = reject;
+    }),
+  );
+  store.refresh(workspace, true);
+  Object.assign(connection, { state: { status: "disconnected" }, workspace: null });
+  store.refresh(workspace);
+  cutOff(new Error("Connection lost"));
+  await Promise.resolve();
+  expect(store.getSnapshot()).toMatchObject({ status: "listed", message: null, refreshing: false });
+  Object.assign(connection, { state: ready, workspace });
+  store.refresh(workspace);
+  expect(connection.requestPullRequests).toHaveBeenCalledTimes(3);
 });

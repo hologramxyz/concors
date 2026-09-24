@@ -150,6 +150,21 @@ export class ConversationHistory {
       (!this.bidirectional || !current.hasNewer || !current.items.length)
     )
       return;
+    return this.fetch(direction);
+  };
+  /**
+   * After a reconnect: fetch only what arrived while disconnected, keeping the reader's window
+   * and scroll position. Older daemons cannot page forward, so they reload the latest page.
+   */
+  resume = async (): Promise<void> => {
+    const current = this.snapshot;
+    if (!this.bidirectional || !current.ready || !current.items.length) return this.load("latest");
+    // A reader paged away from the tail keeps paging forward from where they are.
+    if (current.hasNewer) return;
+    return this.fetch("newer");
+  };
+  private fetch = async (direction: HistoryDirection): Promise<void> => {
+    const current = this.snapshot;
     const generation = ++this.generation;
     const first = current.items[0],
       last = current.items.at(-1);
