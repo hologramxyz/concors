@@ -30,8 +30,8 @@ async function boot(resumeError?: string) {
   server = createDaemonServer(loadDaemonConfig({ port: 0, logLevel: "silent" }, {}), {
     workspacePath: join(directory, "state.db"),
     accountBackendFactory: (info) => new TestAccountBackend(info),
-    agentProviderFactory: (_cwd, handler) => {
-      const provider = new TestAgentProvider(handler);
+    agentProviderFactory: (_cwd, handler, id) => {
+      const provider = new TestAgentProvider(handler, id);
       provider.cwd = _cwd;
       if (resumeError) {
         provider.threadId = `fixture-thread-${providers.length}`;
@@ -39,10 +39,13 @@ async function boot(resumeError?: string) {
         vi.spyOn(provider, "request").mockImplementation(async (method, params) => {
           if (method === "thread/resume") {
             provider.requests.push({ method, params });
+            const threadId = (params as { threadId: string }).threadId;
             throw new Error(
-              resumeError === "missing"
-                ? `no rollout found for thread id ${(params as { threadId: string }).threadId}`
-                : resumeError,
+              resumeError !== "missing"
+                ? resumeError
+                : id === "claude"
+                  ? `Claude Code returned an error result: No conversation found with session ID: ${threadId}`
+                  : `no rollout found for thread id ${threadId}`,
             );
           }
           return request(method, params);
@@ -1000,6 +1003,36 @@ it("preserves a signed-in conversation that already has provider history", async
   expect(
     providers[1]!.requests.filter((r) => r.method.startsWith("thread/")).map((r) => r.method),
   ).toEqual(["thread/resume"]);
+});
+
+it("replaces an empty Claude conversation that was never saved after restart", async () => {
+  vi.spyOn(ProviderRegistry.prototype, "installed").mockReturnValue(true);
+  const { a, b, id } = await setup("missing");
+  const switched = await action(a, {
+    kind: "switch-provider",
+    sessionId: id,
+    provider: "claude",
+    model: null,
+    expectedRevision: a.agents[0]!.revision,
+  });
+  if (switched.outcome.status !== "ok") throw new Error("Switch failed");
+  const claude = switched.outcome.conversation.agent.id;
+  await expect.poll(() => a.agents.find((agent) => agent.id === claude)?.status).toBe("idle");
+  const oldThread = a.agents.find((agent) => agent.id === claude)!.threadId;
+  a.disconnect();
+  b.disconnect();
+  await server!.close();
+  providers.length = 0;
+  const c = await open(await boot("missing"));
+  const sent = await action(c, { kind: "send", sessionId: claude, text: "hello after restart" });
+  if (sent.outcome.status === "error") throw new Error(sent.outcome.message);
+  const agent = () => c.agents.find((item) => item.id === claude);
+  await expect.poll(() => agent()?.status).toBe("done");
+  expect(agent()!.error).toBeNull();
+  expect(agent()!.threadId).not.toBe(oldThread);
+  expect(
+    providers[0]!.requests.filter((r) => r.method.startsWith("thread/")).map((r) => r.method),
+  ).toEqual(["thread/resume", "thread/start"]);
 });
 
 it("does not replace a missing Codex thread that has provider history", async () => {

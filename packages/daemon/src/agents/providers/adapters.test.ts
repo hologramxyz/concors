@@ -262,6 +262,46 @@ it("maps Claude streaming and tool decisions, interrupts, and resumes the native
   expect(failures).toEqual([]);
 });
 
+it("leaves an unsaved Claude conversation to the caller and starts afresh after it", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-claude-missing-"));
+  cleanup.push(() => rm(directory, { recursive: true, force: true }));
+  await writeFile(join(directory, process.platform === "win32" ? "claude.cmd" : "claude"), "", {
+    mode: 0o755,
+  });
+  vi.stubEnv("PATH", directory);
+  const opened: Options[] = [];
+  const createQuery = vi.fn(({ options }: Parameters<typeof query>[0]) => {
+    opened.push(options!);
+    const messages = new PassThrough({ objectMode: true });
+    const missing = new Error(
+      `Claude Code returned an error result: No conversation found with session ID: ${options!.resume}`,
+    );
+    // Like the SDK, the stream fails before initialization is rejected.
+    if (options!.resume) messages.destroy(missing);
+    return Object.assign(messages, {
+      initializationResult: async () => {
+        if (options!.resume) throw missing;
+        return { models: [{ value: "default", displayName: "Default" }] };
+      },
+      getContextUsage: async () => ({ model: "claude-sonnet-5" }),
+      close: () => {
+        messages.end();
+      },
+    }) as unknown as Query;
+  });
+  const provider = new ClaudeProvider(directory, vi.fn(), createQuery);
+  const { failures } = observe(provider);
+  await provider.initialize();
+  await expect(provider.request("thread/resume", { threadId: "unsaved" })).rejects.toThrow(
+    "No conversation found with session ID: unsaved",
+  );
+  const thread = object(object(await provider.request("thread/start"))["thread"]);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  expect(failures).toEqual([]);
+  expect(opened.map((o) => o.resume ?? null)).toEqual([null, "unsaved", null]);
+  expect(thread["id"]).toBe(opened[2]!.sessionId);
+  expect(thread["id"]).not.toBe("unsaved");
+});
 it("reads OpenCode SSE deltas, scopes events, forwards decisions, and interrupts", async () => {
   let stream: ServerResponse;
   const requests: { path: string; body: unknown; auth: string | undefined }[] = [];
