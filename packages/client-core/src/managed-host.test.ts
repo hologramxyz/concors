@@ -174,7 +174,10 @@ it.each([
   [{ agentSeenAt: null }, "provisioning"],
   [{ agentSeenAt: new Date(now - 90_000).toISOString() }, "connectable"],
   [{ agentSeenAt: new Date(now - 90_001).toISOString() }, "offline"],
-  [{ agentSeenAt: new Date(now + 1).toISOString() }, "offline"],
+  // A device clock behind the server's must not turn a fresh heartbeat into "offline".
+  [{ agentSeenAt: new Date(now + 5_000).toISOString() }, "connectable"],
+  [{ agentSeenAt: new Date(now + 5 * 60_000).toISOString() }, "connectable"],
+  [{ agentSeenAt: new Date(now + 5 * 60_000 + 1).toISOString() }, "offline"],
   [{ certificateExpiresAt: null, agentVersion: null }, "connectable"],
 ] as const)("uses C1 availability for %j", (overrides, expected) => {
   expect(machineAvailability({ ...machine, ...overrides }, now)).toBe(expected);

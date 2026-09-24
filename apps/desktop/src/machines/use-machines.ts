@@ -9,12 +9,12 @@ import { useCallback, useEffect } from "react";
 import { api } from "@/auth/api";
 import { describeAuthError } from "@/auth/auth-state";
 
-import { useApiResource } from "@/data/api-resource";
+import { apiCache, useApiResource } from "@/data/api-resource";
 
 import { isSettling } from "./format.ts";
 
 /** How often the list is re-read while a machine is still being set up or torn down. */
-const SETTLING_POLL_MS = 15_000;
+export const SETTLING_POLL_MS = 15_000;
 const RESOURCE_POLL_MS = 30_000;
 
 export interface MachinesState {
@@ -104,11 +104,19 @@ export function describeMachinesError(cause: unknown): string {
   return describeAuthError(cause);
 }
 
+const machineListKey = (organizationId: string | undefined) => `machines:${organizationId ?? ""}`;
+const listMachines = (organizationId: string | undefined) => () =>
+  api.listMachines(organizationId === undefined ? {} : { organizationId });
+
 /** Shared by the Machines page and switcher, including successful mutations. */
 export function useMachineList(organizationId: string | undefined, enabled = true) {
-  return useApiResource(
-    `machines:${organizationId ?? ""}`,
-    () => api.listMachines(organizationId === undefined ? {} : { organizationId }),
-    { enabled, staleTime: SETTLING_POLL_MS },
-  );
+  return useApiResource(machineListKey(organizationId), listMachines(organizationId), {
+    enabled,
+    staleTime: SETTLING_POLL_MS,
+  });
+}
+
+/** The same list outside React, e.g. to restore the last machine at startup. */
+export function machineListResource(organizationId: string | undefined) {
+  return apiCache().resource(machineListKey(organizationId), listMachines(organizationId));
 }

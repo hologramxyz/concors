@@ -3,11 +3,19 @@ export interface ResourceSnapshot<T> {
   error: unknown;
   pending: boolean;
   revision: number;
+  /** When `data` was read or written; time-sensitive fields must be judged against this. */
+  fetchedAt: number | null;
 }
 
 /** In-memory stale-while-revalidate data. A mutation supersedes any older read. */
 export class Resource<T> {
-  private snapshot: ResourceSnapshot<T> = { data: null, error: null, pending: false, revision: 0 };
+  private snapshot: ResourceSnapshot<T> = {
+    data: null,
+    error: null,
+    pending: false,
+    revision: 0,
+    fetchedAt: null,
+  };
   private listeners = new Set<() => void>();
   private pending: Promise<void> | null = null;
   private generation = 0;
@@ -43,13 +51,13 @@ export class Resource<T> {
         (data) => {
           if (generation !== this.generation) return;
           this.updatedAt = Date.now();
-          this.publish({ data, error: null, pending: false });
+          this.publish({ data, error: null, pending: false, fetchedAt: this.updatedAt });
         },
         (error: unknown) => {
           if (generation === this.generation) {
             this.updatedAt = -Infinity;
             this.publish({
-              ...(this.discardOnError(error) ? { data: null } : {}),
+              ...(this.discardOnError(error) ? { data: null, fetchedAt: null } : {}),
               error,
               pending: false,
             });
@@ -73,13 +81,14 @@ export class Resource<T> {
           : update,
       error: null,
       pending: false,
+      fetchedAt: this.updatedAt,
     });
   };
   dispose() {
     this.generation++;
     this.pending = null;
     this.updatedAt = -Infinity;
-    this.snapshot = { data: null, error: null, pending: false, revision: 0 };
+    this.snapshot = { data: null, error: null, pending: false, revision: 0, fetchedAt: null };
     this.listeners.clear();
   }
 
@@ -88,7 +97,7 @@ export class Resource<T> {
     this.pending = null;
     this.updatedAt = -Infinity;
     this.publish({
-      ...(clear ? { data: null } : {}),
+      ...(clear ? { data: null, fetchedAt: null } : {}),
       error: null,
       pending: false,
       revision: this.snapshot.revision + 1,
