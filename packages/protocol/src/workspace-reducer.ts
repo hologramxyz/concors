@@ -270,6 +270,17 @@ export function applyWorkspaceOperation(
             }
             break;
           }
+          case "pane.rename": {
+            const pane = requireValue(
+              tab.nodes.find((n) => n.id === op.paneId),
+              "Pane",
+            );
+            if (pane.kind !== "pane")
+              throw new WorkspaceOperationError("INVALID_OPERATION", "Target is not a pane");
+            if (op.name === null) delete pane.name;
+            else pane.name = op.name;
+            break;
+          }
           case "pane.configure":
           case "pane.split":
           case "pane.close": {

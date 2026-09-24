@@ -5,6 +5,9 @@ import {
   TerminalProfileIdSchema,
 } from "./terminal-profiles.ts";
 
+/** The daemon accepts `pane.rename` and keeps pane names. */
+export const PANE_RENAME_CAPABILITY = "pane-rename";
+
 const Id = z.string().uuid();
 const Name = z.string().trim().min(1).max(120);
 const Version = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
@@ -15,6 +18,8 @@ export const LayoutNodeSchema = z.discriminatedUnion("kind", [
   z.object({
     id: Id,
     kind: z.literal("pane"),
+    /** Set by the user; without it the pane is titled after its agent or profile. */
+    name: Name.optional(),
     profile: PaneProfileSchema,
     terminalProfile: SavedTerminalProfileSchema.optional(),
     sessionId: Id.nullable(),
@@ -105,6 +110,8 @@ export const WorkspaceOperationSchema = z.discriminatedUnion("kind", [
     profile: PaneProfileSchema,
   }),
   z.object({ kind: z.literal("pane.close"), ...TabTarget, paneId: Id }),
+  // `null` clears a custom name. Daemons without the "pane-rename" capability reject this.
+  z.object({ kind: z.literal("pane.rename"), ...TabTarget, paneId: Id, name: Name.nullable() }),
   z.object({
     kind: z.literal("pane.move"),
     ...TabTarget,

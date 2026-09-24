@@ -44,7 +44,7 @@ export function workspaceEntries(
         const agent = candidate?.projectId === project.id ? candidate : undefined;
         const label = pane.terminalProfile?.name ?? profileNames[pane.profile];
         const title = panes.length > 1 ? `${tab.name} · ${index + 1}` : tab.name;
-        const context = [project.name, agent?.name ?? label];
+        const context = [project.name, pane.name ?? agent?.name ?? label];
         if (agent && agent.name !== (agent.providerLabel ?? agent.provider))
           context.push(agent.providerLabel ?? agent.provider);
         return {
@@ -54,6 +54,7 @@ export function workspaceEntries(
           detail: context.join(" · "),
           keywords: [
             "tab pane",
+            pane.name,
             label,
             pane.directory ?? project.directory,
             agent?.directory,
