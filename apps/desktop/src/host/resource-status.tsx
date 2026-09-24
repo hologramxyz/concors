@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { Activity, TriangleAlert } from "lucide-react";
+import { TriangleAlert } from "lucide-react";
 import type { ConnectionState, DaemonConnection } from "@concors/daemon-client";
 import { HOST_USAGE_CAPABILITY, type HostUsage } from "@concors/protocol";
-import { HOST_USAGE_STALE_MS, usageSummary } from "./usage-display";
+import { connectionIndicator, HOST_USAGE_STALE_MS, usageSummary } from "./usage-display";
 
 /** Kept outside the scrolling workspace so usage stays visible across app views and collapsed layouts. */
 export function ResourceStatus({
@@ -81,6 +81,7 @@ export function ResourceStatus({
   const usage = status ? null : current?.usage;
   const summary = usage ? usageSummary(usage) : null;
   const high = summary?.highCpu || summary?.highMemory;
+  const indicator = connectionIndicator(state.status, reconnecting);
 
   return (
     <div
@@ -94,7 +95,12 @@ export function ResourceStatus({
       }
     >
       <span className={compact ? "sr-only" : "flex max-w-40 min-w-0 items-center gap-1.5"}>
-        <Activity className="size-3 shrink-0" aria-hidden="true" />
+        <span
+          role="img"
+          aria-label={indicator.label}
+          data-connection={indicator.label.toLowerCase()}
+          className={`size-1.5 shrink-0 rounded-full ${indicator.color}`}
+        />
         <span className="truncate">{machine}</span>
       </span>
       <span className={`shrink-0 tabular-nums ${summary?.highCpu ? "text-destructive" : ""}`}>
