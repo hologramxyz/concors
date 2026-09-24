@@ -1,4 +1,4 @@
-import { AgentsContext, AgentStartedContext, AGENT_STATUS } from "./context";
+import { AgentsContext, AgentStartedContext, AGENT_STATUS, agentDisplayStatus } from "./context";
 import { useEffect, useState } from "react";
 import type { DaemonConnection } from "@concors/daemon-client";
 import type { AgentInfo } from "@concors/protocol";
@@ -30,6 +30,7 @@ export function AgentsProvider({
 }
 export function AgentStatus({ agent }: { agent: AgentInfo }) {
   const active = ["starting", "working", "needs_input"].includes(agent.status);
+  const status = agentDisplayStatus(agent);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!active) return;
@@ -47,12 +48,12 @@ export function AgentStatus({ agent }: { agent: AgentInfo }) {
   return (
     <span
       className="inline-flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground"
-      aria-label={`Agent status: ${AGENT_STATUS[agent.status]}`}
+      aria-label={`Agent status: ${AGENT_STATUS[status]}`}
     >
       <span
-        className={`size-1.5 rounded-full ${agent.status === "needs_input" ? "bg-amber-500" : agent.status === "failed" ? "bg-destructive" : agent.status === "working" || agent.status === "starting" ? "animate-pulse bg-primary" : agent.status === "done" ? "bg-emerald-500" : "bg-muted-foreground"}`}
+        className={`size-1.5 rounded-full ${agent.status === "needs_input" ? "bg-amber-500" : agent.status === "failed" ? "bg-destructive" : agent.status === "working" || agent.status === "starting" ? "animate-pulse bg-primary" : status === "done" ? "bg-emerald-500" : "bg-muted-foreground"}`}
       />
-      {AGENT_STATUS[agent.status]}
+      {AGENT_STATUS[status]}
       {agent.attention && !agent.attention.seen && (
         <span aria-label="Unread agent update" className="rounded bg-primary/15 px-1 text-primary">
           New

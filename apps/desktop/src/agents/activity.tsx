@@ -2,7 +2,7 @@ import { formatDuration } from "./duration";
 import { useEffect, useState } from "react";
 import { ProviderIcon } from "./provider-icon";
 import { agentProviderName } from "@concors/protocol";
-import { useAgents, AGENT_STATUS } from "./context";
+import { useAgents, AGENT_STATUS, agentDisplayStatus } from "./context";
 import type { AgentStatus } from "./agent-status";
 
 export function AgentLoadingIcon({ className = "size-4" }: { className?: string }) {
@@ -26,7 +26,7 @@ export function AgentPaneIcon({ sessionId }: { sessionId: string | null }) {
       title={
         agent?.settings?.model ?? agent?.model ?? agentProviderName(agent?.provider ?? "codex")
       }
-      aria-label={agent ? `Agent status: ${AGENT_STATUS[agent.status]}` : "Codex"}
+      aria-label={agent ? `Agent status: ${AGENT_STATUS[agentDisplayStatus(agent)]}` : "Codex"}
     >
       <ProviderIcon provider={agent?.engine ?? agent?.provider ?? "codex"} />
       {running && (

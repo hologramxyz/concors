@@ -55,3 +55,21 @@ it("drops panes whose agent has not started or whose CLI has exited", () => {
   };
   expect(tabAgentStatuses(tab, [], [terminal(22, { status: "exited" })])).toEqual([]);
 });
+
+it("shows a finished chat agent as Ready once its completion has been seen", () => {
+  const tab: WorkspaceTab = {
+    id: id(1),
+    name: "Build",
+    root: id(11),
+    nodes: [pane(11, "chat", id(21))],
+  };
+  const finished = (seen: boolean) =>
+    ({
+      ...chat(21, "done"),
+      attention: { id: id(31), kind: "done", createdAt: new Date(0).toISOString(), seen },
+    }) as AgentInfo;
+  const [unseen] = tabAgentStatuses(tab, [finished(false)], []);
+  expect(unseen).toMatchObject({ status: "Done", color: "bg-emerald-500", unread: true });
+  const [seen] = tabAgentStatuses(tab, [finished(true)], []);
+  expect(seen).toMatchObject({ status: "Ready", color: "bg-muted-foreground/60", unread: false });
+});

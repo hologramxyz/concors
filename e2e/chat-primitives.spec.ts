@@ -28,14 +28,15 @@ test("chat presents native forms, plan review, file content and durable attachme
     );
     await page.getByRole("textbox", { name: "Additional notes", exact: true }).fill("");
     await page.getByRole("button", { name: "Submit answers", exact: true }).click();
-    await expect(page.getByLabel("Agent status: Done").first()).toBeVisible();
+    // The open chat has seen its finished turn, so it reads as Ready rather than Done.
+    await expect(page.getByLabel("Agent status: Ready").first()).toBeVisible();
     await expect(page.getByRole("log")).toContainText("Unit tests, Type check");
     await send("primitive-plan");
     await expect(
       page.getByRole("heading", { name: "Implementation plan", exact: true }),
     ).toBeVisible();
     await page.getByRole("button", { name: "Request changes", exact: true }).click();
-    await expect(page.getByLabel("Agent status: Done").first()).toBeVisible();
+    await expect(page.getByLabel("Agent status: Ready").first()).toBeVisible();
     await send("primitive-read");
     await page
       .getByRole("article", { name: "Tool call", exact: true })
@@ -50,8 +51,10 @@ test("chat presents native forms, plan review, file content and durable attachme
       mimeType: "text/markdown",
       buffer: Buffer.from("# Durable attachment preview"),
     });
+    const turns = await page.getByText(/^Worked for /).count();
     await send("Read these notes");
-    await expect(page.getByLabel("Agent status: Done").first()).toBeVisible();
+    await expect(page.getByText(/^Worked for /)).toHaveCount(turns + 1);
+    await expect(page.getByLabel("Agent status: Ready").first()).toBeVisible();
     await page.reload();
     await page.getByRole("button", { name: "notes.md", exact: true }).click();
     await expect(page.getByRole("dialog")).toContainText("# Durable attachment preview");
