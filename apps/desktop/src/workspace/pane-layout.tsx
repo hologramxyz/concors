@@ -22,13 +22,14 @@ import { TerminalPane } from "@/terminal/terminal-pane";
 import { useContext, useEffect, useRef, useState } from "react";
 import { AgentPaneIcon } from "@/agents/activity";
 import { useAgents } from "@/agents/context";
-import { Columns2, Rows2, Ellipsis, Terminal, X } from "lucide-react";
-import type {
-  LayoutNode,
-  PaneProfile,
-  WorkspaceOperation,
-  WorkspaceProject,
-  WorkspaceTab,
+import { Columns2, Rows2, Ellipsis, Pencil, Terminal, X } from "lucide-react";
+import {
+  PANE_RENAME_CAPABILITY,
+  type LayoutNode,
+  type PaneProfile,
+  type WorkspaceOperation,
+  type WorkspaceProject,
+  type WorkspaceTab,
 } from "@concors/protocol";
 
 const PROFILE_LABELS: Record<PaneProfile, string> = {
@@ -332,6 +333,18 @@ function Pane({
     canEdit &&
     connection?.state.status === "ready" &&
     !!connection.state.daemon.capabilities?.includes("workspace-pane-rearrangement");
+  const canRename =
+    canEdit &&
+    connection?.state.status === "ready" &&
+    !!connection.state.daemon.capabilities?.includes(PANE_RENAME_CAPABILITY);
+  // Mirrors the tab rename: the ref stops blur after Enter/Escape from committing a second time.
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const renameRef = useRef<string | null>(null);
+  const renameInput = useRef<HTMLInputElement>(null);
+  const setRename = (value: string | null) => {
+    renameRef.current = value;
+    setRenaming(value);
+  };
   const agent = useAgents().find((agent) => agent.id === node.sessionId);
   const profiles = useTerminalProfiles();
   const options = paneProfiles(profiles.profiles);
@@ -339,12 +352,25 @@ function Pane({
     TAB_PROFILES.find((item) => item.profile === (node.terminalProfile?.id ?? node.profile))
       ?.icon ?? Terminal;
   const label = node.terminalProfile?.name ?? PROFILE_LABELS[node.profile];
-  const title = node.profile === "chat" ? (agent?.name ?? "Agent") : label;
+  const fallbackTitle = node.profile === "chat" ? (agent?.name ?? "Agent") : label;
+  const title = node.name ?? fallbackTitle;
   const target = {
     projectId: project.id,
     expectedVersion: project.version,
     tabId: tab.id,
     paneId: node.id,
+  };
+  const startRename = () => {
+    if (canRename) setRename(title);
+  };
+  const commitRename = () => {
+    const value = renameRef.current;
+    if (value === null) return;
+    setRename(null);
+    // Clearing the field, or typing the default back, returns to the automatic title.
+    const name = value.trim().slice(0, 120);
+    const next = name && name !== fallbackTitle ? name : null;
+    if (next !== (node.name ?? null)) onCommand({ kind: "pane.rename", ...target, name: next });
   };
   return (
     <section
@@ -355,10 +381,10 @@ function Pane({
     >
       <header
         tabIndex={0}
-        draggable={canDrag && tab.nodes.length > 1}
+        draggable={canDrag && tab.nodes.length > 1 && renaming === null}
         title="Drag to move pane"
         onDragStart={(event) => {
-          if ((event.target as HTMLElement).closest("button") || !canDrag) {
+          if ((event.target as HTMLElement).closest("button, input") || !canDrag) {
             event.preventDefault();
             return;
           }
@@ -374,9 +400,40 @@ function Pane({
         ) : (
           <PaneIcon className="size-4 shrink-0 text-muted-foreground" />
         )}
-        <span className="min-w-0 flex-1 truncate text-ui" title={title}>
-          {title}
-        </span>
+        {renaming !== null ? (
+          <input
+            ref={renameInput}
+            aria-label="Pane name"
+            autoFocus
+            value={renaming}
+            maxLength={120}
+            onFocus={(event) => event.currentTarget.select()}
+            onChange={(event) => setRename(event.target.value)}
+            onBlur={commitRename}
+            onKeyDown={(event) => {
+              // Keep Enter, Escape and pane shortcuts away from the pane's own handlers.
+              event.stopPropagation();
+              if (event.key === "Enter") {
+                event.preventDefault();
+                commitRename();
+              } else if (event.key === "Escape") {
+                event.preventDefault();
+                setRename(null);
+              }
+            }}
+            onPointerDown={(event) => event.stopPropagation()}
+            onDoubleClick={(event) => event.stopPropagation()}
+            className="min-w-0 flex-1 rounded bg-background px-1.5 py-0.5 text-ui text-foreground ring-1 ring-ring outline-none"
+          />
+        ) : (
+          <span
+            className="min-w-0 flex-1 truncate text-ui"
+            title={canRename ? `${title}. Double-click to rename.` : title}
+            onDoubleClick={startRename}
+          >
+            {title}
+          </span>
+        )}
         <DropdownMenu>
           <DropdownMenuTrigger
             aria-label="Pane actions"
@@ -384,7 +441,21 @@ function Pane({
           >
             <Ellipsis className="size-4" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-max max-w-[calc(100vw-16px)] min-w-[280px]">
+          <DropdownMenuContent
+            align="end"
+            className="w-max max-w-[calc(100vw-16px)] min-w-[280px]"
+            onCloseAutoFocus={(event) => {
+              // The menu's focus trap outlives the input's autoFocus, so hand focus over here
+              // instead of returning it to the trigger.
+              if (renameRef.current === null) return;
+              event.preventDefault();
+              renameInput.current?.focus();
+            }}
+          >
+            <DropdownMenuItem disabled={!canRename} onSelect={startRename}>
+              <Pencil /> <span className="whitespace-nowrap">Rename pane</span>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem
               disabled={!canEdit || tab.nodes.length >= 63}
               onSelect={() =>

@@ -11,6 +11,7 @@ import {
   PROVIDER_USAGE_CAPABILITY,
   PROTOCOL_VERSION,
   DICTATION_CAPABILITY,
+  PANE_RENAME_CAPABILITY,
 } from "@concors/protocol";
 
 import { DAEMON_VERSION } from "./version.ts";
@@ -72,6 +73,7 @@ export class DaemonState {
         "pane-rearrangement",
         "workspace-pane-rearrangement",
         "directional-pane-split",
+        PANE_RENAME_CAPABILITY,
         "terminal-recovery",
         ...(this.#dictation ? [DICTATION_CAPABILITY] : []),
       ],

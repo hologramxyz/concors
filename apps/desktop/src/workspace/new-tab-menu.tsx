@@ -93,9 +93,8 @@ export function NewTabMenu({
                 </p>
               )}
               <div className="mobile-session-list">
-                {paneProfiles(profiles.profiles)
-                  .sort((a, b) => Number(b.profile === "chat") - Number(a.profile === "chat"))
-                  .map(({ id, profile, label, terminalProfileId }) => (
+                {paneProfiles(profiles.profiles).map(
+                  ({ id, profile, label, terminalProfileId }) => (
                     <button
                       key={id}
                       type="button"
@@ -120,7 +119,8 @@ export function NewTabMenu({
                         </span>
                       </span>
                     </button>
-                  ))}
+                  ),
+                )}
               </div>
             </DialogContent>
           </Dialog>

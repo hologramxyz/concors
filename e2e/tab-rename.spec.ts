@@ -64,3 +64,41 @@ test("double-clicking a tab renames it inline, and the name persists and syncs",
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("a pane is renamed from its title or its menu, and clearing the name restores the default", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  const directory = await mkdtemp(join(tmpdir(), "concors-pane-rename-"));
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Renamable panes", directory);
+    const pane = page.locator("section[data-pane-id]").first();
+    const header = pane.locator("header");
+    const editor = pane.getByRole("textbox", { name: "Pane name", exact: true });
+    await expect(header).toContainText("Terminal");
+
+    await header.getByText("Terminal", { exact: true }).dblclick();
+    await expect(editor).toBeFocused();
+    await expect(editor).toHaveValue("Terminal");
+    await page.keyboard.type("Dev server");
+    await page.keyboard.press("Enter");
+    await expect(editor).toHaveCount(0);
+    await expect(header.getByText("Dev server", { exact: true })).toBeVisible();
+
+    // The name is shared workspace state, so it survives a reload.
+    await page.reload();
+    await expect(header.getByText("Dev server", { exact: true })).toBeVisible();
+
+    await pane.getByRole("button", { name: "Pane actions" }).click();
+    await page.getByRole("menuitem", { name: "Rename pane" }).click();
+    await expect(editor).toBeFocused();
+    await expect(editor).toHaveValue("Dev server");
+    await editor.fill("");
+    await page.keyboard.press("Enter");
+    await expect(header.getByText("Terminal", { exact: true })).toBeVisible();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
