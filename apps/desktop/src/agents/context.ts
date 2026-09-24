@@ -17,3 +17,12 @@ export const AGENT_STATUS: Record<AgentInfo["status"], string> = {
   failed: "Failed",
   interrupted: "Interrupted",
 };
+/**
+ * The status to show for a chat agent. "Done" works like a notification: once the finished turn has
+ * been seen, the agent reads as Ready again.
+ */
+export function agentDisplayStatus(agent: AgentInfo): AgentInfo["status"] {
+  return agent.status === "done" && agent.attention?.kind === "done" && agent.attention.seen
+    ? "idle"
+    : agent.status;
+}
