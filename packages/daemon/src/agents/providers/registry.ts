@@ -79,7 +79,7 @@ export class ProviderRegistry {
   }
   config(id: string): ProviderConfig {
     const config = this.configs().find((p) => p.id === id);
-    if (!config) throw new Error("Unknown provider. Add it in Settings → Providers.");
+    if (!config) throw new Error("This provider is not set up on this machine.");
     return config;
   }
   private persist() {
@@ -296,7 +296,7 @@ export class ProviderRegistry {
           : (meta.bin[meta.name.split("/").at(-1) ?? meta.name] ??
             (Object.values(meta.bin).length === 1 ? Object.values(meta.bin)[0] : undefined));
       if (!binary)
-        throw new Error("Package has multiple executables. Set its command in Providers settings.");
+        throw new Error("Package has multiple executables, so its command must be set explicitly.");
       return [process.execPath, join(root, binary), ...config.command.slice(3)];
     }
     return config.command;
@@ -311,11 +311,9 @@ export class ProviderRegistry {
     }
   }
   launcher(config: ProviderConfig, activeCredentials = true): typeof launch {
-    if (!config.enabled) throw new Error("This provider is disabled in Settings → Providers.");
+    if (!config.enabled) throw new Error("This provider is disabled on this machine.");
     if (!this.installed(config))
-      throw new Error(
-        `${config.label} is not installed. Open Settings → Providers on this machine.`,
-      );
+      throw new Error(`${config.label} is not installed on this machine.`);
     return (_provider, args, cwd, env) => {
       const [command, ...prefix] = this.argv(config);
       const merged = { ...env, ...this.env(config) };

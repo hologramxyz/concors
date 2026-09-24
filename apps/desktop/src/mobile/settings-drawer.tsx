@@ -88,14 +88,9 @@ export function SettingsDrawer({
                 .filter(
                   (item) =>
                     !host.direct ||
-                    [
-                      "appearance",
-                      "shortcuts",
-                      "about",
-                      "providers",
-                      "subscriptions",
-                      "machines",
-                    ].includes(item.page),
+                    ["appearance", "shortcuts", "about", "subscriptions", "machines"].includes(
+                      item.page,
+                    ),
                 )
                 .map(({ page, label, icon: Icon }) => ({
                   value: page,

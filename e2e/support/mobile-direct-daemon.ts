@@ -13,6 +13,7 @@ import { TestAccountBackend } from "../../packages/daemon/src/agents/testing/acc
 import { TestAgentProvider } from "../../packages/daemon/src/agents/testing/provider.ts";
 import { mobileDirectPort, mobileWebOrigin } from "./mobile-direct-ports.cjs";
 import { fixtureGitHub } from "./github-pull-requests.ts";
+import { enableProviders } from "./enable-providers.ts";
 const directory = await mkdtemp(join(tmpdir(), "concors-mobile-direct-daemon-"));
 // Provider discovery must find harmless fixture executables, never a developer's AI CLI.
 process.env["PATH"] = installTestCodexProfile(directory) + delimiter + (process.env["PATH"] ?? "");
@@ -24,6 +25,7 @@ for (const provider of ["opencode", "pi"]) {
     join(directory, "test-bin", provider + suffix),
   );
 }
+enableProviders(directory, ["pi"]);
 if (process.platform !== "win32") process.env["SHELL"] = "/bin/sh";
 const server = createDaemonServer(
   loadDaemonConfig({ port: mobileDirectPort, logLevel: "warn" }, {}),

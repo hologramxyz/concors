@@ -1323,9 +1323,9 @@ function SubscriptionLibraryRow({
     account?.label ??
     (providerFallback && providerFallback !== "Account" ? providerFallback : "Account");
   const status = !provider.installed
-    ? "Not installed · Install it in Providers settings"
+    ? "Not installed on this machine"
     : !provider.enabled
-      ? "Disabled in Providers settings"
+      ? "Disabled on this machine"
       : failed
         ? "Could not check the sign-in"
         : !account

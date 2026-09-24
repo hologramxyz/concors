@@ -55,7 +55,7 @@ export class JsonLines {
     child.stderr.on("data", (chunk: Buffer) => {
       if (chunk.toString().includes("No models available"))
         this.startupProblem =
-          "No models available. Sign in with this provider's CLI or add its credentials in Settings → Providers.";
+          "No models available. Sign in with this provider's CLI on this machine.";
     });
   }
   private fail(error: Error) {

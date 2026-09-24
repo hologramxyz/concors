@@ -268,7 +268,7 @@ export function ScheduleForm({
               </p>
             )}
             {!loading && !providers.length && target === "new" && (
-              <p role="status">Install and sign in to a provider in Settings → Providers first.</p>
+              <p role="status">Sign in to Codex, Claude Code or OpenCode on this machine first.</p>
             )}
             <label className="block space-y-1.5">
               <span>Prompt</span>
