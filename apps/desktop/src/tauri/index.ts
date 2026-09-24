@@ -34,4 +34,4 @@ export {
 
 export { nativeWindow, type WindowChromeState, type ResizeDirection } from "./window";
 
-export { readClipboardText, writeClipboardText } from "./clipboard";
+export { readClipboardImage, readClipboardText, writeClipboardText } from "./clipboard";
