@@ -456,7 +456,7 @@ function AppContent() {
                         onOpenFolder={openProjectDialog}
                         hostScope={hostScope}
                         selectedHost={selectedHost}
-                        machineConnected={connection.state.status === "ready"}
+                        machineConnected={connection.link === "connected"}
                         onSelectMachine={selectMachine}
                         onViewCloud={manageMachines}
                         auth={account}
@@ -495,24 +495,32 @@ function AppContent() {
                           </Button>
                         </div>
                       )}
-                      {connection.state.status === "error" && (
+                      {connection.error && (
                         <div
                           role="alert"
                           className="flex items-center justify-between gap-3 border-b bg-destructive/5 px-4 py-2 text-xs text-destructive"
                         >
-                          <span>{connection.state.error.message}</span>
+                          <span>{connection.error}</span>
                           <Button type="button" variant="outline" onClick={connection.reconnectNow}>
                             Retry connection
                           </Button>
                         </div>
                       )}
-                      {workspace && !connection.workspaceReady && (
+                      {connection.link === "reconnecting" && (
                         <div
                           role="status"
-                          className="border-b bg-muted px-4 py-2 text-xs text-muted-foreground"
+                          className="flex items-center gap-2 border-b bg-muted px-4 py-1 text-xs text-muted-foreground"
                         >
-                          Connection lost. Showing the last saved workspace. Editing resumes when
-                          connected.
+                          <span
+                            aria-hidden="true"
+                            className="size-1.5 shrink-0 animate-pulse rounded-full bg-warning"
+                          />
+                          <span className="min-w-0 flex-1 truncate">
+                            Reconnecting to {selectedHost.label}…
+                          </span>
+                          <Button type="button" variant="ghost" onClick={connection.reconnectNow}>
+                            Retry now
+                          </Button>
                         </div>
                       )}
                       <main className="min-h-0 flex-1 overflow-auto">
@@ -591,6 +599,7 @@ function AppContent() {
                         <ResourceStatus
                           connection={connection.transport}
                           state={connection.state}
+                          reconnecting={connection.link === "reconnecting"}
                           machine={selectedHost.label}
                           onOpenResources={() => setView("resources")}
                         />

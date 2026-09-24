@@ -6,6 +6,7 @@ import {
   type ScheduleResult,
 } from "@concors/protocol";
 import { ThemeRequestSchema, type ThemeResult } from "@concors/protocol";
+import { AUTH_REFRESH_CAPABILITY } from "@concors/protocol";
 import {
   DICTATION_CAPABILITY,
   DictationAudioSchema,
@@ -132,7 +133,8 @@ const DEFAULT_HANDSHAKE_TIMEOUT_MS = 5_000;
  * A single connection to one daemon, local or remote. Speaks only `@concors/protocol`.
  *
  * Lifecycle: `disconnected → connecting → handshaking → ready → disconnected`, with `error` as a
- * terminal state for a failed attempt. The class is deliberately single-shot: reconnection policy
+ * terminal state for a failed attempt. Once an attempt has ended, `connect()` may be called again
+ * on the same instance so subscribers stay attached across a reconnect; reconnection policy
  * (backoff, UI prompts) belongs to the host application.
  */
 export class DaemonConnection {
@@ -330,6 +332,14 @@ export class DaemonConnection {
 
   #state: ConnectionState = { status: "disconnected" };
   #socket: WebSocketLike | null = null;
+  #lastMessageAt = 0;
+  #authRefresh: ((ok: boolean) => void) | null = null;
+  /**
+   * Agents and terminals seen since the last `workspace.subscribe`. The daemon answers with
+   * `agent.list []`, per-item states, then the snapshot; replicas keep their previous contents
+   * until the snapshot so a resubscribe (reconnect) never shows empty lists in between.
+   */
+  #resync: { agents: Set<string>; terminals: Set<string> } | null = null;
   /** Rejects the in-flight `connect()` promise, if any. */
   #abortPending: ((error: ProtocolError) => void) | null = null;
   #workspace: WorkspaceSnapshot | null = null;
@@ -411,7 +421,7 @@ export class DaemonConnection {
   readonly #client: ClientInfo;
   readonly #protocolVersion: ProtocolVersion;
   readonly #handshakeTimeoutMs: number;
-  readonly #protocols: string | string[] | undefined;
+  #protocols: string | string[] | undefined;
   readonly #previewUrl: ((preview: ProcessPreview) => string | null) | undefined;
   readonly #createSocket: WebSocketFactory;
 
@@ -448,6 +458,42 @@ export class DaemonConnection {
     return this.#state;
   }
 
+  /** Whether this socket can renew its access in place (a managed gateway advertises it). */
+  get canRefreshAuthorization(): boolean {
+    return (
+      this.#state.status === "ready" &&
+      !!this.#state.daemon.capabilities?.includes(AUTH_REFRESH_CAPABILITY)
+    );
+  }
+
+  /**
+   * Hands a freshly minted token to the gateway on the live socket. Resolves `false` when the
+   * gateway refuses it, cannot be asked, or does not answer; the socket then expires as before.
+   */
+  refreshAuthorization(token: string): Promise<boolean> {
+    if (!this.canRefreshAuthorization || this.#authRefresh) return Promise.resolve(false);
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => settle(false), 10_000);
+      const settle = (ok: boolean) => {
+        clearTimeout(timer);
+        this.#authRefresh = null;
+        if (ok) this.#protocols = [`concors.bearer.${token}`];
+        resolve(ok);
+      };
+      this.#authRefresh = settle;
+      try {
+        this.#socket?.send(JSON.stringify({ type: "auth.refresh", token }));
+      } catch {
+        settle(false);
+      }
+    });
+  }
+
+  /** When the current socket last delivered anything; a liveness hint for flaky networks. */
+  get lastMessageAt(): number {
+    return this.#lastMessageAt;
+  }
+
   get terminals(): readonly TerminalInfo[] {
     return this.#terminals;
   }
@@ -473,8 +519,7 @@ export class DaemonConnection {
     const first = this.#workspaceListeners.size === 0;
     this.#workspaceListeners.add(listener);
     if (this.#workspace) listener(this.#workspace);
-    if (first && this.#state.status === "ready")
-      this.#socket?.send(JSON.stringify({ type: "workspace.subscribe" }));
+    if (first && this.#state.status === "ready") this.#subscribeWorkspace();
     return () => {
       this.#workspaceListeners.delete(listener);
     };
@@ -726,9 +771,10 @@ export class DaemonConnection {
 
   /**
    * Opens the socket and performs the handshake. Resolves with the daemon's self-description once
-   * `daemon.ready` is received; rejects with `DaemonConnectionError` otherwise.
+   * `daemon.ready` is received; rejects with `DaemonConnectionError` otherwise. `protocols`
+   * replaces the authentication subprotocols for this and later attempts (e.g. a fresh token).
    */
-  connect(): Promise<DaemonInfo> {
+  connect(protocols?: string | readonly string[]): Promise<DaemonInfo> {
     if (this.#socket !== null) {
       return Promise.reject(
         new DaemonConnectionError(
@@ -737,6 +783,8 @@ export class DaemonConnection {
       );
     }
 
+    if (protocols !== undefined)
+      this.#protocols = typeof protocols === "string" ? protocols : protocols.slice();
     this.#setState({ status: "connecting" });
 
     return new Promise<DaemonInfo>((resolve, reject) => {
@@ -799,6 +847,7 @@ export class DaemonConnection {
 
       socket.addEventListener("message", (event) => {
         if (!isCurrent()) return;
+        this.#lastMessageAt = Date.now();
         const parsed = parseDaemonMessage(event.data);
         if (!parsed.success) {
           if (this.#state.status === "handshaking") {
@@ -815,8 +864,6 @@ export class DaemonConnection {
         const message = parsed.data;
         switch (message.type) {
           case "daemon.ready": {
-            this.#terminals = [];
-            for (const listener of this.#terminalSessionListeners) listener();
             clearTimeout(handshakeTimer);
             const daemon: DaemonInfo = {
               protocolVersion: message.protocolVersion,
@@ -826,8 +873,8 @@ export class DaemonConnection {
             };
             this.#setState({ status: "ready", daemon });
             if (this.#hostUsageListeners.size > 0) this.#subscribeHostUsage(true);
-            if (this.#workspaceListeners.size > 0)
-              socket?.send(JSON.stringify({ type: "workspace.subscribe" }));
+            if (this.#workspaceListeners.size > 0) this.#subscribeWorkspace();
+            else this.#forgetSessions();
             if (!settled) {
               settled = true;
               this.#abortPending = null;
@@ -835,6 +882,9 @@ export class DaemonConnection {
             }
             break;
           }
+          case "auth.refreshed":
+            this.#authRefresh?.(message.ok);
+            break;
           case "host.usage":
             if (this.#state.status === "ready" && this.#hostUsageListeners.size > 0) {
               this.#hostUsage = message.usage;
@@ -860,10 +910,23 @@ export class DaemonConnection {
           case "agent.state":
           case "agent.item":
             if (this.#state.status !== "ready") break;
-            if (message.type === "agent.list") this.#agents = message.agents;
+            if (message.type === "agent.list") {
+              if (this.#resync) {
+                for (const agent of message.agents) this.#resync.agents.add(agent.id);
+                this.#agents = [
+                  ...this.#agents.filter((a) => !message.agents.some((b) => b.id === a.id)),
+                  ...message.agents,
+                ];
+                break;
+              }
+              this.#agents = message.agents;
+            }
             if (message.type === "agent.state") {
               const prior = this.#agents.find((a) => a.id === message.agent.id);
-              if (prior && prior.revision > message.agent.revision) break;
+              // A restarted daemon may count revisions from scratch; its resync is authoritative.
+              const resynced = this.#resync?.agents.has(message.agent.id) === false;
+              this.#resync?.agents.add(message.agent.id);
+              if (prior && !resynced && prior.revision > message.agent.revision) break;
               this.#agents = [
                 ...this.#agents.filter((a) => a.id !== message.agent.id),
                 message.agent,
@@ -974,8 +1037,10 @@ export class DaemonConnection {
           case "terminal.owner":
           case "terminal.error":
             if (this.#state.status === "ready") {
-              if (message.type === "terminal.state" || message.type === "terminal.snapshot")
+              if (message.type === "terminal.state" || message.type === "terminal.snapshot") {
+                this.#resync?.terminals.add(message.session.id);
                 this.updateTerminal(message.session);
+              }
               for (const listener of this.#terminalListeners) listener(message);
             }
             break;
@@ -987,6 +1052,7 @@ export class DaemonConnection {
             )
               break;
             this.#workspace = message.snapshot;
+            if (this.#resync) this.#finishResync(this.#resync);
             for (const listener of this.#workspaceListeners) listener(message.snapshot);
             break;
           case "workspace.result": {
@@ -1056,6 +1122,27 @@ export class DaemonConnection {
     );
   }
 
+  #subscribeWorkspace(): void {
+    this.#resync = { agents: new Set(), terminals: new Set() };
+    this.#socket?.send(JSON.stringify({ type: "workspace.subscribe" }));
+  }
+
+  /** Drops what the daemon no longer reports and publishes the settled lists at once. */
+  #finishResync(resync: { agents: Set<string>; terminals: Set<string> }): void {
+    this.#resync = null;
+    this.#terminals = this.#terminals.filter((session) => resync.terminals.has(session.id));
+    for (const listener of this.#terminalSessionListeners) listener();
+    this.#agents = this.#agents.filter((agent) => resync.agents.has(agent.id));
+    const list: AgentEvent = { type: "agent.list", agents: this.#agents };
+    for (const listener of this.#agentListeners) listener(list);
+  }
+
+  /** Without a workspace subscription nothing will refresh these, so they cannot be kept. */
+  #forgetSessions(): void {
+    this.#terminals = [];
+    for (const listener of this.#terminalSessionListeners) listener();
+  }
+
   #teardown(code: number, reason: string): void {
     const socket = this.#socket;
     this.#socket = null;
@@ -1071,6 +1158,8 @@ export class DaemonConnection {
   #setState(state: ConnectionState): void {
     this.#state = state;
     if (state.status !== "ready") {
+      this.#resync = null;
+      this.#authRefresh?.(false);
       this.#hostUsage = null;
       for (const listener of this.#hostUsageListeners) listener(null);
       this.#workspace = null;

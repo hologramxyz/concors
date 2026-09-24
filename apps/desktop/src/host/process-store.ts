@@ -26,6 +26,7 @@ export function createProcessStore(
   let state: ProcessState = EMPTY_PROCESSES;
   let generation = 0;
   let busy = false;
+  let stalled = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let unsubscribe: (() => void) | undefined;
   let unsubscribeWorkspace: (() => void) | undefined;
@@ -91,16 +92,25 @@ export function createProcessStore(
           if (connection.state.status !== "ready") {
             generation++;
             busy = false;
+            stalled = true;
             clearTimeout(timer);
-            update({
-              snapshot: null,
-              loading: false,
-              error: "Machine disconnected. Reconnect to inspect resources.",
-            });
+            // Keep the last list on screen through a reconnect; the workspace resync refreshes it.
+            update(
+              state.snapshot
+                ? { ...state, loading: false }
+                : {
+                    snapshot: null,
+                    loading: false,
+                    error: "Machine disconnected. Reconnect to inspect resources.",
+                  },
+            );
           } else void refresh();
         });
         unsubscribeWorkspace = connection.subscribeWorkspace(() => {
-          if (!state.snapshot) void refresh();
+          if (!state.snapshot || stalled) {
+            stalled = false;
+            void refresh();
+          }
         });
         void refresh();
       }

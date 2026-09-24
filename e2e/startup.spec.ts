@@ -195,6 +195,33 @@ test("an established workspace remains visible during reconnection", async ({ pa
   await expect(page.getByText("Start working on this machine", { exact: true })).toBeVisible();
 });
 
+test("a lasting drop shows a quiet reconnecting notice instead of clearing the workspace", async ({
+  page,
+}) => {
+  await signedIn(page);
+  let refuse = false;
+  let disconnect: () => void = () => undefined;
+  await page.routeWebSocket("**/ws", (client) => {
+    if (refuse) {
+      client.close({ code: 1011, reason: "Unavailable" });
+      return;
+    }
+    client.connectToServer();
+    disconnect = () => client.close({ code: 1001, reason: "Test reconnect" });
+  });
+  await page.goto("/");
+  const notice = page.getByRole("status").filter({ hasText: "Reconnecting to" });
+  await expect(page.getByText("Start working on this machine", { exact: true })).toBeVisible();
+  refuse = true;
+  disconnect();
+  await expect(notice).toBeVisible();
+  await expect(page.getByText("Start working on this machine", { exact: true })).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  refuse = false;
+  await notice.getByRole("button", { name: "Retry now" }).click();
+  await expect(notice).toHaveCount(0);
+});
+
 test("direct settings links can open without waiting for a workspace connection", async ({
   page,
 }) => {

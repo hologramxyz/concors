@@ -1,5 +1,6 @@
 import { createContext, useContext } from "react";
-import type { WorkspaceProject } from "@concors/protocol";
+import type { DaemonConnection } from "@concors/daemon-client";
+import type { WorkspaceProject, WorkspaceSnapshot } from "@concors/protocol";
 import type { FileSidebarState } from "./sidebar-state";
 import type { FileDocument } from "./document";
 import type { FileLocation } from "./links";
@@ -35,4 +36,16 @@ export function useFiles() {
 }
 export function fileScope(machineId: string, epoch: string, projectId: string) {
   return `${machineId}:${epoch}:${projectId}`;
+}
+
+const lastWorkspaces = new WeakMap<DaemonConnection, WorkspaceSnapshot>();
+/**
+ * The live workspace, or the last one seen while the connection is being restored, so file
+ * scopes (and the trees keyed by them) stay put through a reconnect.
+ */
+export function knownWorkspace(connection: DaemonConnection | null): WorkspaceSnapshot | null {
+  if (!connection) return null;
+  const live = connection.workspace;
+  if (live) lastWorkspaces.set(connection, live);
+  return live ?? lastWorkspaces.get(connection) ?? null;
 }

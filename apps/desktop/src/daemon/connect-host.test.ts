@@ -14,7 +14,7 @@ class Socket implements WebSocketLike {
   emit(type: string, event?: unknown) {
     for (const listener of this.listeners.get(type) ?? []) listener(event as never);
   }
-  ready() {
+  ready(capabilities?: string[]) {
     this.emit("open");
     this.emit("message", {
       data: JSON.stringify({
@@ -22,8 +22,14 @@ class Socket implements WebSocketLike {
         protocolVersion: "v1",
         daemonVersion: "0.2.0",
         status: "ready",
+        ...(capabilities ? { capabilities } : {}),
       }),
     });
+  }
+  sent() {
+    return this.send.mock.calls.map(
+      ([data]) => JSON.parse(String(data)) as Record<string, unknown>,
+    );
   }
 }
 const snapshot = {
@@ -45,11 +51,19 @@ function setup({
   status = 201,
   machineId = "machine/1",
   socketStatus,
-}: { status?: number; machineId?: string; socketStatus?: number } = {}) {
+  online = true,
+  token = (count: number) => `token-${count}`,
+}: {
+  status?: number;
+  machineId?: string;
+  socketStatus?: number;
+  online?: boolean;
+  token?: (count: number) => string;
+} = {}) {
   vi.useFakeTimers();
   const fetch = vi.fn(async () =>
     json(
-      status === 201 ? { token: `token-${fetch.mock.calls.length}` } : { message: "Unauthorized" },
+      status === 201 ? { token: token(fetch.mock.calls.length) } : { message: "Unauthorized" },
       status,
     ),
   );
@@ -73,6 +87,7 @@ function setup({
     }),
     client: { kind: "test", name: "test", version: "0.0.0" },
     webSocketFactory,
+    isOnline: () => online,
     onState,
     onTransport,
     onWorkspace,
@@ -81,6 +96,16 @@ function setup({
   return { session, fetch, sockets, webSocketFactory, onState, onTransport, onWorkspace };
 }
 const flush = () => vi.advanceTimersByTimeAsync(0);
+/** A 15-minute machine token as minted now; only its `exp` matters to the client. */
+const jwt = (count: number) =>
+  [
+    btoa(JSON.stringify({ alg: "EdDSA" })),
+    btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 15 * 60, n: count })).replace(
+      /=+$/,
+      "",
+    ),
+    "signature",
+  ].join(".");
 
 describe("managed host connection", () => {
   it("mints immediately before connecting, uses a bearer subprotocol, and subscribes to the workspace", async () => {
@@ -115,10 +140,10 @@ describe("managed host connection", () => {
         "concors.bearer.token-2",
       ]);
       t.sockets[1]!.emit("close", { code: 4401, reason: "revoked" });
-      expect(t.onState).toHaveBeenLastCalledWith({
-        status: "error",
-        error: { code: "INTERNAL_ERROR", message: "Access revoked" },
-      });
+      expect(t.onState).toHaveBeenLastCalledWith(
+        { status: "error", error: { code: "INTERNAL_ERROR", message: "Access revoked" } },
+        false,
+      );
       t.session.resume();
       await vi.advanceTimersByTimeAsync(60_000);
       expect(t.fetch).toHaveBeenCalledTimes(2);
@@ -130,6 +155,7 @@ describe("managed host connection", () => {
     expect(t.fetch).toHaveBeenCalledTimes(2);
     expect(t.onState).toHaveBeenLastCalledWith(
       expect.objectContaining({ error: expect.objectContaining({ message: "Access revoked" }) }),
+      false,
     );
     await vi.advanceTimersByTimeAsync(60_000);
     expect(t.fetch).toHaveBeenCalledTimes(2);
@@ -145,7 +171,7 @@ describe("managed host connection", () => {
     await flush();
     expect(t.fetch).toHaveBeenCalledTimes(3);
     t.sockets[2]!.ready();
-    expect(t.onState).toHaveBeenLastCalledWith(expect.objectContaining({ status: "ready" }));
+    expect(t.onState).toHaveBeenLastCalledWith(expect.objectContaining({ status: "ready" }), false);
   });
   it("allows an explicit user retry after access was revoked", async () => {
     const t = setup({ status: 401 });
@@ -169,6 +195,7 @@ describe("managed host connection", () => {
       expect.objectContaining({
         error: expect.objectContaining({ message: expect.stringContaining("access revoked") }),
       }),
+      false,
     );
   });
   it("reconnects normal drops with a fresh token and backoff", async () => {
@@ -180,6 +207,100 @@ describe("managed host connection", () => {
     expect(t.fetch).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(1);
     expect(t.fetch).toHaveBeenCalledTimes(2);
+  });
+  it("restores a long-lived connection at once on the same transport, flagged as reconnecting", async () => {
+    const t = setup();
+    await flush();
+    t.sockets[0]!.ready();
+    await vi.advanceTimersByTimeAsync(15 * 60_000);
+    t.sockets[0]!.emit("close", { code: 1006, reason: "" });
+    expect(t.onState).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: "disconnected" }),
+      true,
+    );
+    await flush();
+    expect(t.fetch).toHaveBeenCalledTimes(2);
+    t.sockets[1]!.ready();
+    expect(t.onState).toHaveBeenLastCalledWith(expect.objectContaining({ status: "ready" }), false);
+    expect(t.onTransport).toHaveBeenCalledTimes(1);
+  });
+  it("does not report a first connection that has never been ready as reconnecting", async () => {
+    const t = setup();
+    await flush();
+    t.sockets[0]!.emit("close", { code: 1006, reason: "" });
+    expect(t.onState.mock.calls.every(([, reconnecting]) => reconnecting === false)).toBe(true);
+  });
+  it("keeps a live socket through OS network events", async () => {
+    const t = setup({ online: false });
+    await flush();
+    t.sockets[0]!.ready();
+    t.session.offline();
+    t.session.resume();
+    t.session.offline();
+    await vi.advanceTimersByTimeAsync(5_000);
+    t.sockets[0]!.emit("message", {
+      data: JSON.stringify({ type: "workspace.snapshot", snapshot }),
+    });
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(t.webSocketFactory).toHaveBeenCalledTimes(1);
+    expect(t.sockets[0]!.close).not.toHaveBeenCalled();
+  });
+  it("replaces a socket that goes silent while the device stays offline", async () => {
+    const t = setup({ online: false });
+    await flush();
+    t.sockets[0]!.ready();
+    await vi.advanceTimersByTimeAsync(60_000);
+    t.session.offline();
+    await vi.advanceTimersByTimeAsync(9_999);
+    expect(t.sockets[0]!.close).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(t.sockets[0]!.close).toHaveBeenCalled();
+    expect(t.onState).toHaveBeenCalledWith(
+      { status: "disconnected", reason: "Device is offline" },
+      true,
+    );
+    await vi.advanceTimersByTimeAsync(1); // A 0ms timer set during a fake tick runs after 1ms.
+    expect(t.webSocketFactory).toHaveBeenCalledTimes(2);
+  });
+  it("renews access on the live socket before each token expires", async () => {
+    const t = setup({ token: jwt });
+    await flush();
+    t.sockets[0]!.ready(["auth-refresh"]);
+    await vi.advanceTimersByTimeAsync(12 * 60_000);
+    expect(t.fetch).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(60_000);
+    await flush();
+    expect(t.fetch).toHaveBeenCalledTimes(2);
+    const renewal = t.sockets[0]!.sent().at(-1);
+    expect(renewal).toMatchObject({ type: "auth.refresh" });
+    t.sockets[0]!.emit("message", {
+      data: JSON.stringify({ type: "auth.refreshed", ok: true, expiresAt: Date.now() + 900_000 }),
+    });
+    await flush();
+    await vi.advanceTimersByTimeAsync(13 * 60_000);
+    await flush();
+    expect(t.fetch).toHaveBeenCalledTimes(3);
+    expect(t.webSocketFactory).toHaveBeenCalledTimes(1);
+    expect(t.onState).toHaveBeenLastCalledWith(expect.objectContaining({ status: "ready" }), false);
+  });
+  it("retries a refused renewal and never renews through a gateway without support", async () => {
+    const t = setup({ token: jwt });
+    await flush();
+    t.sockets[0]!.ready(["auth-refresh"]);
+    await vi.advanceTimersByTimeAsync(13 * 60_000);
+    await flush();
+    t.sockets[0]!.emit("message", {
+      data: JSON.stringify({ type: "auth.refreshed", ok: false }),
+    });
+    await vi.advanceTimersByTimeAsync(30_000);
+    await flush();
+    expect(t.fetch).toHaveBeenCalledTimes(3);
+
+    const legacy = setup({ token: jwt });
+    await flush();
+    legacy.sockets[0]!.ready();
+    await vi.advanceTimersByTimeAsync(14 * 60_000);
+    expect(legacy.fetch).toHaveBeenCalledTimes(1);
   });
   it("does not open a socket after selection changes while a token is pending", async () => {
     const t = setup();

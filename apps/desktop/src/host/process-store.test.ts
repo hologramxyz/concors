@@ -5,6 +5,7 @@ import { createProcessStore } from "./process-store";
 afterEach(() => vi.useRealTimers());
 function fixture() {
   let stateListener: (state: ConnectionState) => void = () => undefined;
+  let workspaceListener: () => void = () => undefined;
   const connection: Parameters<typeof createProcessStore>[0] = {
     state: {
       status: "ready",
@@ -36,13 +37,22 @@ function fixture() {
       listener(connection.state);
       return () => undefined;
     },
-    subscribeWorkspace: () => () => undefined,
+    subscribeWorkspace: (listener) => {
+      workspaceListener = () => listener(connection.workspace!);
+      return () => undefined;
+    },
   };
+  const ready = connection.state;
   return {
     connection,
     disconnect: () => {
       Object.assign(connection, { state: { status: "disconnected" } });
       stateListener(connection.state);
+    },
+    reconnect: () => {
+      Object.assign(connection, { state: ready });
+      stateListener(connection.state);
+      workspaceListener();
     },
   };
 }
@@ -61,15 +71,22 @@ it("shares one polling loop and stops after the last observer", async () => {
   await vi.advanceTimersByTimeAsync(9000);
   expect(connection.requestResource).toHaveBeenCalledTimes(2);
 });
-it("clears readings on disconnect and ignores requests resolving after disposal", async () => {
+it("keeps readings through a reconnect and ignores requests resolving after disposal", async () => {
   vi.useFakeTimers();
-  const { connection, disconnect } = fixture();
+  const { connection, disconnect, reconnect } = fixture();
   const store = createProcessStore(connection);
   const off = store.subscribe(vi.fn());
   await vi.advanceTimersByTimeAsync(0);
   expect(store.getSnapshot().snapshot).not.toBeNull();
   disconnect();
-  expect(store.getSnapshot().snapshot).toBeNull();
+  expect(store.getSnapshot()).toMatchObject({ snapshot: expect.anything(), error: null });
+  await vi.advanceTimersByTimeAsync(9000);
+  expect(connection.requestResource).toHaveBeenCalledTimes(1);
+  reconnect();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(connection.requestResource).toHaveBeenCalledTimes(2);
+  await vi.advanceTimersByTimeAsync(3000);
+  expect(connection.requestResource).toHaveBeenCalledTimes(3);
   off();
   const next = fixture();
   let finish: (result: Awaited<ReturnType<DaemonConnection["requestResource"]>>) => void = () =>

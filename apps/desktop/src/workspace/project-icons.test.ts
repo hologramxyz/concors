@@ -110,3 +110,15 @@ it("does not send unsupported requests and ignores replies after disconnect", as
   cache.refresh(workspace);
   expect(connection.requestFile).toHaveBeenCalledTimes(1);
 });
+it("keeps loaded icons through a reconnect", async () => {
+  const { cache, connection } = setup();
+  cache.refresh(workspace);
+  await vi.waitFor(() => expect(cache.getSnapshot().size).toBe(1));
+  const ready = connection.state;
+  connection.state = { status: "disconnected" };
+  cache.refresh(workspace);
+  expect(cache.getSnapshot().size).toBe(1);
+  connection.state = ready;
+  cache.refresh(workspace);
+  expect(cache.getSnapshot().size).toBe(1);
+});
