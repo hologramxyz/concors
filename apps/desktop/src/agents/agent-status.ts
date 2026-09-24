@@ -6,7 +6,7 @@ import {
   type TerminalInfo,
   type WorkspaceTab,
 } from "@concors/protocol";
-import { AGENT_STATUS } from "./context";
+import { AGENT_STATUS, agentDisplayStatus } from "./context";
 
 /**
  * What the sidebar and the tab strip show for one agent: its provider and where its turn is. Chat
@@ -25,18 +25,19 @@ export interface AgentStatus {
 }
 
 export function chatAgentStatus(agent: AgentInfo): AgentStatus {
+  const status = agentDisplayStatus(agent);
   return {
     id: agent.id,
     provider: agent.engine ?? agent.provider,
     providerName: agent.providerLabel ?? agentProviderName(agent.provider),
     running: agent.status === "starting" || agent.status === "working",
-    status: AGENT_STATUS[agent.status],
+    status: AGENT_STATUS[status],
     color:
-      agent.status === "done"
+      status === "done"
         ? "bg-emerald-500"
-        : agent.status === "failed"
+        : status === "failed"
           ? "bg-red-500"
-          : agent.status === "needs_input"
+          : status === "needs_input"
             ? "bg-amber-500"
             : "bg-muted-foreground/60",
     unread: !!(agent.attention && !agent.attention.seen),
