@@ -515,7 +515,7 @@ export class AgentManager {
       const op = request.operation;
       if (op.kind !== "account") throw new Error("Expected an account operation");
       const config = this.registry.config(op.id);
-      if (!config.enabled) throw new Error("This provider is disabled in Settings → Providers.");
+      if (!config.enabled) throw new Error("This provider is disabled on this machine.");
       const account = await this.accounts.request(
         owner,
         {
@@ -557,7 +557,7 @@ export class AgentManager {
     let provider: AgentProvider | undefined;
     try {
       const config = this.registry.config(op.id);
-      if (!config.enabled) throw new Error("This provider is disabled in Settings → Providers.");
+      if (!config.enabled) throw new Error("This provider is disabled on this machine.");
       const usage = await this.cachedPlanUsage(`provider:${op.id}`, async () => {
         provider = this.#factory(
           homedir(),

@@ -296,26 +296,8 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await addMachine.getByRole("button", { name: "Close", exact: true }).click();
     await expect(settings.getByRole("button", { name: "Add machine", exact: true })).toBeFocused();
     await settings.getByRole("combobox", { name: "Settings section" }).click();
-    await ui.getByRole("option", { name: "Providers", exact: true }).click();
-    await expect(settings.getByRole("heading", { name: "Agent providers" })).toBeVisible();
-    await settings.getByRole("textbox", { name: "Search providers" }).fill("Copilot");
-    await expect(settings.getByText("GitHub Copilot", { exact: true })).toBeVisible();
-    await settings.getByRole("button", { name: "Configure GitHub Copilot" }).click();
-    const providerEditor = ui.getByRole("dialog", { name: "Configure GitHub Copilot" });
-    await providerEditor.getByLabel("Name", { exact: true }).fill("Mobile Copilot");
-    await providerEditor.getByRole("button", { name: "Save provider" }).click();
-    await expect(providerEditor).toHaveCount(0);
-    const savedProvider = await desktop.requestProvider({ kind: "list" }, crypto.randomUUID());
-    expect(savedProvider.outcome.status).toBe("ok");
-    if (savedProvider.outcome.status === "ok")
-      expect(savedProvider.outcome.providers.find((p) => p.id === "copilot")?.label).toBe(
-        "Mobile Copilot",
-      );
-    expect(await settings.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
-    await page.screenshot({ path: "/tmp/concors-mobile-providers.png", fullPage: true });
-
-    await settings.getByRole("combobox", { name: "Settings section" }).click();
     await expect(ui.getByRole("option", { name: "Billing", exact: true })).toHaveCount(0);
+    await expect(ui.getByRole("option", { name: "Providers", exact: true })).toHaveCount(0);
     await ui.getByRole("option", { name: "Shortcuts", exact: true }).click();
     await expect(settings.getByRole("heading", { name: "Tabs", exact: true })).toBeVisible();
     await expect(settings.getByRole("heading", { name: "Panes", exact: true })).toHaveCount(0);

@@ -88,7 +88,7 @@ export class ScheduleManager {
     } else {
       const config = this.providers.config(value.target.provider);
       if (!config.enabled || !this.providers.installed(config))
-        throw new Error("Install and enable this provider in Settings → Providers first");
+        throw new Error("This provider is not installed and enabled on this machine");
     }
   }
   request(raw: ScheduleRequest, source: "user" | "agent" = "user"): ScheduleResult {

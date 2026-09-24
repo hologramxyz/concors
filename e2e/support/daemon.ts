@@ -12,6 +12,7 @@ import { createDaemonServer } from "../../packages/daemon/src/server.ts";
 import { loadDaemonConfig } from "../../packages/daemon/src/config.ts";
 import { TestAgentProvider } from "../../packages/daemon/src/agents/testing/provider.ts";
 import { fixtureGitHub } from "./github-pull-requests.ts";
+import { enableProviders } from "./enable-providers.ts";
 const directory = process.env["CONCORS_DATA_DIR"];
 if (!directory) throw new Error("Set an isolated acceptance-test directory");
 await mkdir(directory, { recursive: true });
@@ -24,6 +25,7 @@ for (const provider of ["opencode", "pi"]) {
     join(directory, "test-bin", provider + suffix),
   );
 }
+enableProviders(directory, ["pi"]);
 // Keep shell startup files from replacing the harmless test executable in PATH.
 if (process.platform !== "win32") process.env["SHELL"] = "/bin/sh";
 const port = Number(process.env["CONCORS_E2E_DAEMON_PORT"] ?? 7429);

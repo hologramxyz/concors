@@ -6,7 +6,6 @@ import {
   Keyboard,
   Palette,
   UserRound,
-  Bot,
   Cloud,
   Users,
   type LucideIcon,
@@ -55,7 +54,10 @@ export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
     label: "Workspace",
     items: [
       { page: "machines", label: "Machines", icon: Cloud },
-      { page: "providers", label: "Providers", icon: Bot },
+      // Providers is hidden while Concors supports only Codex, Claude Code and OpenCode: they are
+      // installed when a machine is set up, and the page's own installs and updates diverge from
+      // that. The page and its daemon support remain, so restoring it is this one line.
+      // { page: "providers", label: "Providers", icon: Bot },
       { page: "subscriptions", label: "Subscriptions", icon: Users },
       { page: "billing", label: "Billing", icon: CreditCard },
       { page: "ssh-keys", label: "SSH keys", icon: KeyRound },

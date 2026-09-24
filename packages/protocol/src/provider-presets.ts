@@ -46,7 +46,7 @@ export const providerPresets: ProviderPreset[] = [
     label: "Pi",
     engine: "pi",
     command: ["pi"],
-    enabled: true,
+    enabled: false,
     install: {
       kind: "npm",
       package: "@earendil-works/pi-coding-agent@0.85.1",
@@ -59,7 +59,7 @@ export const providerPresets: ProviderPreset[] = [
     label: "GitHub Copilot",
     engine: "acp",
     command: ["copilot", "--acp"],
-    enabled: true,
+    enabled: false,
     install: {
       kind: "npm",
       package: "@github/copilot@1.0.83",
