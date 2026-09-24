@@ -76,6 +76,15 @@ interface Runtime {
   reloadWhenIdle: boolean;
 }
 
+/** Whether a resume failed only because the provider never saved the thread. */
+function missingThread(engine: string, threadId: string, error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  if (engine === "codex") return error.message === `no rollout found for thread id ${threadId}`;
+  if (engine === "claude")
+    return error.message.endsWith(`No conversation found with session ID: ${threadId}`);
+  return false;
+}
+
 export class AgentManager {
   readonly #store: WorkspaceStore;
   readonly #emit: (event: AgentEvent) => void;
@@ -363,14 +372,13 @@ export class AgentManager {
           }),
         );
       } catch (error) {
-        // Codex can discard a thread closed before its first turn (including on sign-in).
-        // Only replace that empty thread; never discard history or replay reserved prompts.
+        // Codex can discard a thread closed before its first turn (including on sign-in), and
+        // Claude only saves a conversation once it has a message. Only replace that empty
+        // thread; never discard history or replay reserved prompts.
         if (
-          this.registry.config(info.provider).engine !== "codex" ||
           !info.threadId ||
           info.nativeImport ||
-          !(error instanceof Error) ||
-          error.message !== `no rollout found for thread id ${info.threadId}` ||
+          !missingThread(this.registry.config(info.provider).engine, info.threadId, error) ||
           this.#store.hasAgentProviderHistory(id) ||
           runtime.closed ||
           this.#closed

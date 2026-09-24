@@ -66,6 +66,8 @@ export class ClaudeProvider extends EventProvider {
   private pending: SDKUserMessage[] = [];
   private wake: (() => void) | undefined;
   private generation = 0;
+  /** The open session was created by `thread/resume`, so `thread/start` must not reuse it. */
+  private resumed = false;
   private tools = new Map<string, { name: string; input: unknown }>();
   private messageId = "";
   private text = "";
@@ -109,6 +111,7 @@ export class ClaudeProvider extends EventProvider {
     this.wake?.();
     this.pending = [];
     this.threadId = resume ?? randomUUID();
+    this.resumed = !!resume;
     const generation = this.generation;
     const prompts = async function* (provider: ClaudeProvider): AsyncGenerator<SDKUserMessage> {
       while (!provider.closed && generation === provider.generation) {
@@ -266,7 +269,13 @@ export class ClaudeProvider extends EventProvider {
         if (generation === this.generation && this.turnId)
           this.finish("Claude Code stopped before completing the turn");
       } catch (error) {
-        if (generation === this.generation && !this.closed) {
+        // A session that never initialized is reported by `open`'s caller, which may recover
+        // (a missing empty conversation is started afresh); failing it here would end the agent.
+        const initialized = await session.initializationResult().then(
+          () => true,
+          () => false,
+        );
+        if (initialized && generation === this.generation && !this.closed) {
           if (this.interrupted) this.finish();
           else this.fail(error);
         }
@@ -413,6 +422,7 @@ export class ClaudeProvider extends EventProvider {
     }
     if (method === "collaborationMode/list") return { data: [] };
     if (method === "thread/resume") await this.open(string(p["threadId"]));
+    if (method === "thread/start" && this.resumed) await this.open();
     if ((method === "thread/start" || method === "thread/resume") && p["model"]) {
       await this.session?.setModel(string(p["model"]));
       this.currentModel = string(p["model"]);
