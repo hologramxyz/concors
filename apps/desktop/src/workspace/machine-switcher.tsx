@@ -1,9 +1,19 @@
 import { MachineIcon } from "@/machines/machine-icon";
 import { machineStatusLabel } from "@concors/client-core";
+import type { Machine } from "@concors/api-client";
 import { useMachineList } from "@/machines/use-machines";
-import { LOCAL_HOST, loadHosts, machineAvailability, machineHost, type Host } from "./machines";
-import { useEffect, useState } from "react";
-import { Activity, ChevronDown, Check, Settings2 } from "lucide-react";
+import { resolveHostEndpoint } from "@/daemon/resolve-endpoint";
+import { prewarmDaemonConnection, useReadyMachines } from "@/daemon/use-daemon-connection";
+import {
+  LOCAL_HOST,
+  loadHosts,
+  machineAvailability,
+  machineHost,
+  type Host,
+  type HostAvailability,
+} from "./machines";
+import { useEffect, useRef, useState } from "react";
+import { Activity, ChevronDown, Check, LoaderCircle, Settings2 } from "lucide-react";
 import { TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import {
@@ -33,18 +43,57 @@ export function MachineSwitcher({
   onOpenResources: () => void;
   compact?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-  const list = useMachineList(
-    organizationId,
-    (open || selected.machineId !== "local") && !!organizationId,
-  );
+  const [open, setMenuOpen] = useState(false);
+  const [checking, setChecking] = useState<string | null>(null);
+  const openRef = useRef(open);
+  const setOpen = (next: boolean) => {
+    openRef.current = next;
+    setMenuOpen(next);
+  };
+  // Loaded up front so the list is already there, and recent, when the menu opens.
+  const list = useMachineList(organizationId, !!organizationId);
   const cloudMachines = list.data?.filter((machine) => machine.status !== "deleted") ?? null;
   const loadError = !!list.error;
+  const ready = useReadyMachines(scope);
   useEffect(() => {
     if (!open || !organizationId) return;
+    void list.resource.load(15_000);
     const timer = setInterval(() => void list.resource.load(15_000), 15_000);
     return () => clearInterval(timer);
   }, [open, organizationId, list.resource]);
+  /**
+   * A cached list is judged as of when it was read, and a machine this device is connected to is
+   * up whatever its last heartbeat says: neither may make a live machine look offline.
+   */
+  const availability = (machine: Machine, fetchedAt: number | null): HostAvailability =>
+    ready.has(machine.id)
+      ? "connectable"
+      : // Always set alongside a list; without one there is nothing to judge.
+        machineAvailability(machine, fetchedAt ?? 0);
+  const hostFor = (machine: Machine) =>
+    machineHost(
+      machine,
+      loadHosts(scope).find((h) => h.machineId === machine.id),
+    );
+  const choose = async (machine: Machine) => {
+    if (availability(machine, list.fetchedAt) === "connectable") {
+      setOpen(false);
+      onSelect(hostFor(machine));
+      return;
+    }
+    // Only send someone to Machines once a fresh read agrees the machine is unreachable.
+    setChecking(machine.id);
+    await list.resource.load(0, true);
+    setChecking(null);
+    // Closing the menu meanwhile means they changed their mind.
+    if (!openRef.current) return;
+    const snapshot = list.resource.getSnapshot();
+    const fresh = snapshot.data?.find((candidate) => candidate.id === machine.id);
+    setOpen(false);
+    if (fresh && availability(fresh, snapshot.fetchedAt) === "connectable")
+      onSelect(hostFor(fresh));
+    else onViewCloud(machine.id);
+  };
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -106,23 +155,31 @@ export function MachineSwitcher({
           </span>
         </DropdownMenuItem>
         {cloudMachines?.map((machine) => {
-          const availability = machineAvailability(machine);
+          const machineState = availability(machine, list.fetchedAt);
           const isSelected = selected.machineId === machine.id;
-          const status = machineStatusLabel(availability, isSelected && connected);
+          const status =
+            checking === machine.id
+              ? "Checking…"
+              : machineStatusLabel(machineState, isSelected && connected);
           return (
             <DropdownMenuItem
               key={machine.id}
               className="min-h-[32px] gap-2 px-[8px]"
               aria-label={`${machine.name} ${status}${isSelected ? " Selected" : ""}`}
               title={`${machine.name} · ${status}${isSelected ? " · Selected" : ""}`}
-              onSelect={() => {
-                if (machineAvailability(machine) !== "connectable") return onViewCloud(machine.id);
-                onSelect(
-                  machineHost(
-                    machine,
-                    loadHosts(scope).find((h) => h.machineId === machine.id),
-                  ),
-                );
+              disabled={checking !== null}
+              onPointerEnter={() => {
+                if (!isSelected && machineState === "connectable")
+                  prewarmDaemonConnection(
+                    resolveHostEndpoint(hostFor(machine), null),
+                    machine.id,
+                    scope,
+                  );
+              }}
+              onSelect={(event) => {
+                // The menu stays open while an uncertain machine is rechecked.
+                event.preventDefault();
+                void choose(machine);
               }}
             >
               <MachineIcon
@@ -136,9 +193,13 @@ export function MachineSwitcher({
                 {machine.name}
               </span>
               <span className="flex w-9 shrink-0 items-center justify-end gap-2" aria-hidden="true">
-                <span
-                  className={`size-1.5 shrink-0 rounded-full ${(isSelected && connected) || availability === "connectable" ? "bg-emerald-500" : availability === "provisioning" ? "bg-amber-500" : "bg-muted-foreground/50"}`}
-                />
+                {checking === machine.id ? (
+                  <LoaderCircle className="size-3 shrink-0 animate-spin text-muted-foreground" />
+                ) : (
+                  <span
+                    className={`size-1.5 shrink-0 rounded-full ${(isSelected && connected) || machineState === "connectable" ? "bg-emerald-500" : machineState === "provisioning" ? "bg-amber-500" : "bg-muted-foreground/50"}`}
+                  />
+                )}
                 {isSelected ? (
                   <Check className="size-4 text-primary" />
                 ) : (

@@ -61,6 +61,17 @@ export function machineStatusLabel(availability: HostAvailability, connected = f
   if (connected) return "Connected";
   return { connectable: "Online", provisioning: "Provisioning", offline: "Offline" }[availability];
 }
+/** Three missed 30-second heartbeats. */
+const HEARTBEAT_GRACE_MS = 90_000;
+/**
+ * `agentSeenAt` is stamped by the server's clock and compared with this device's. A device a
+ * little behind sees a heartbeat that just arrived as "in the future"; that is still a live machine.
+ */
+const CLOCK_SKEW_MS = 5 * 60_000;
+/**
+ * `now` is when the machine record was read, not necessarily the current time: judging a cached
+ * list against the current time would call every machine offline once the list is old enough.
+ */
 export function machineAvailability(
   machine: Pick<Machine, "status" | "hostname" | "agentSeenAt">,
   now = Date.now(),
@@ -69,7 +80,7 @@ export function machineAvailability(
   if (machine.status !== "running") return "offline";
   if (!machine.hostname || !machine.agentSeenAt) return "provisioning";
   const age = now - Date.parse(machine.agentSeenAt);
-  return age >= 0 && age <= 90_000 ? "connectable" : "offline";
+  return age >= -CLOCK_SKEW_MS && age <= HEARTBEAT_GRACE_MS ? "connectable" : "offline";
 }
 
 /** URLs and labels are refreshed from the API, never trusted from persisted profiles. */
