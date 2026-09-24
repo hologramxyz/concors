@@ -38,6 +38,7 @@ import { useDaemonConnection } from "@/daemon/use-daemon-connection";
 import { navItemFor, type View } from "@/navigation";
 import { settingsNavItemFor, type SettingsPage } from "@/settings/navigation";
 import { SettingsSidebar } from "@/settings/settings-sidebar";
+import { useBillingStatus } from "@/billing/use-billing";
 import { useTheme } from "@/theme/use-theme";
 import { useCornerStyle } from "@/theme/use-corner-style";
 import { SettingsView } from "@/views/settings-view";
@@ -141,6 +142,15 @@ function AppContent() {
     auth.state.status === "signed-in" ? activeOrganization(auth.state)?.id : undefined;
   const hostScope =
     auth.state.status === "signed-in" ? `${auth.state.user.id}:${organizationId ?? ""}` : "";
+  // Nothing is charged to this organization, so there is no billing to show.
+  const billingStatus = useBillingStatus(organizationId ?? "", !!organizationId).data;
+  const hiddenSettings = useMemo(
+    () =>
+      new Set<SettingsPage>(
+        billingStatus?.waived || billingStatus?.configured === false ? ["billing"] : [],
+      ),
+    [billingStatus?.waived, billingStatus?.configured],
+  );
   // The bundled runtime partitions its data by account, so it cannot start before sign-in.
   const runtimeUser = auth.state.status === "signed-in" ? auth.state.user.id : "";
   // Tagged with the account it was started for, so a newly signed-in user can never read the
@@ -430,6 +440,7 @@ function AppContent() {
                         page={settingsPage}
                         onBack={() => setView(settingsReturnView.current)}
                         onNavigate={setSettingsPage}
+                        hidden={hiddenSettings}
                       />
                     ) : (
                       <AppSidebar
