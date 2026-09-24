@@ -103,3 +103,15 @@ it("honors delivery claimed elsewhere and current preferences", async () => {
   expect(sink.show).not.toHaveBeenCalled();
   expect(sink.sound).not.toHaveBeenCalled();
 });
+it("keeps a shown notice through a reconnect without replaying it", async () => {
+  const { sink, engine } = setup();
+  engine.observe(agent(), true, "");
+  await vi.runAllTimersAsync();
+  expect(sink.show).toHaveBeenCalledTimes(1);
+  vi.mocked(sink.clear).mockClear();
+  engine.suspend();
+  engine.observe(agent(), true, "");
+  await vi.runAllTimersAsync();
+  expect(sink.clear).not.toHaveBeenCalled();
+  expect(sink.show).toHaveBeenCalledTimes(1);
+});

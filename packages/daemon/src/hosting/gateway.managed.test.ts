@@ -2,6 +2,7 @@ import { once } from "node:events";
 import { createServer, request as httpRequest, type IncomingHttpHeaders } from "node:http";
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { WebSocket, WebSocketServer } from "ws";
+import { DaemonConnection, describeDaemonEndpoint } from "@concors/daemon-client";
 import { afterEach, expect, it, vi } from "vitest";
 import { createDaemonServer } from "../server.ts";
 import { DAEMON_VERSION } from "../version.ts";
@@ -58,14 +59,16 @@ async function fixture(ttl = "15m") {
     ...config,
     getKey: createLocalJWKSet({ keys: [{ ...(await exportJWK(publicKey)), kid: "k" }] }),
   });
-  const token = await new SignJWT({ sub: "user_1", sid: "session_1", org: "org_1" })
-    .setProtectedHeader({ alg: "EdDSA", kid: "k" })
-    .setIssuer(config.controlPlaneUrl)
-    .setAudience(config.machineId)
-    .setIssuedAt()
-    .setExpirationTime(ttl)
-    .setJti("j")
-    .sign(privateKey);
+  const sign = (lifetime: string, subject = "user_1") =>
+    new SignJWT({ sub: subject, sid: "session_1", org: "org_1" })
+      .setProtectedHeader({ alg: "EdDSA", kid: "k" })
+      .setIssuer(config.controlPlaneUrl)
+      .setAudience(config.machineId)
+      .setIssuedAt()
+      .setExpirationTime(lifetime)
+      .setJti(crypto.randomUUID())
+      .sign(privateKey);
+  const token = await sign(ttl);
   const logs: string[] = [];
   const heartbeatFetch = vi.fn<typeof fetch>(async () => new Response("{}"));
   const gateway = createPersistentGateway(local, "unused", launch, {
@@ -81,7 +84,7 @@ async function fixture(ttl = "15m") {
   await expect.poll(() => heartbeatFetch.mock.calls.length).toBe(1);
   forwarded.length = 0;
   vi.mocked(ensureSessionHost).mockClear();
-  return { gateway, url, headers, token, logs, forwarded, stop, heartbeatFetch };
+  return { gateway, url, headers, token, sign, logs, forwarded, stop, heartbeatFetch };
 }
 
 async function refused(
@@ -125,6 +128,79 @@ it("expires an already authenticated socket and keeps the private host alive", a
     await refused(f.url + "/ws", { host: f.headers.host }, [`concors.bearer.${f.token}`]),
   ).toBe(401);
 });
+
+async function handshake(f: Awaited<ReturnType<typeof fixture>>) {
+  const ws = new WebSocket(f.url.replace("http:", "ws:") + "/ws", [`concors.bearer.${f.token}`], {
+    headers: { host: f.headers.host },
+  });
+  cleanups.push(async () => {
+    ws.terminate();
+  });
+  const messages: { type: string; [key: string]: unknown }[] = [];
+  ws.on("message", (data) => messages.push(JSON.parse(String(data))));
+  await once(ws, "open");
+  expect(ws.protocol).toBe(`concors.bearer.${f.token}`);
+  ws.send(
+    JSON.stringify({
+      type: "client.hello",
+      protocolVersion: "v1",
+      client: { kind: "test", name: "gateway", version: "0.0.0" },
+    }),
+  );
+  await expect.poll(() => messages.some((m) => m.type === "daemon.ready")).toBe(true);
+  return { ws, messages };
+}
+
+it("advertises in-place renewal and extends a socket for the same device", async () => {
+  const f = await fixture("3s");
+  const { ws, messages } = await handshake(f);
+  expect(messages.find((m) => m.type === "daemon.ready")?.["capabilities"]).toContain(
+    "auth-refresh",
+  );
+  const closed = vi.fn();
+  ws.on("close", closed);
+  ws.send(JSON.stringify({ type: "auth.refresh", token: await f.sign("15m") }));
+  await expect
+    .poll(() => messages.find((m) => m.type === "auth.refreshed"))
+    .toMatchObject({ ok: true, expiresAt: expect.any(Number) });
+  await new Promise((resolve) => setTimeout(resolve, 3_500));
+  expect(closed).not.toHaveBeenCalled();
+  ws.send(JSON.stringify({ type: "workspace.subscribe" }));
+  await expect.poll(() => messages.some((m) => m.type === "workspace.snapshot")).toBe(true);
+}, 10_000);
+
+it("refuses to renew with another person's token and expires with 4401", async () => {
+  const f = await fixture("3s");
+  const { ws, messages } = await handshake(f);
+  const closed = once(ws, "close");
+  ws.send(JSON.stringify({ type: "auth.refresh", token: await f.sign("15m", "user_2") }));
+  await expect
+    .poll(() => messages.find((m) => m.type === "auth.refreshed"))
+    .toEqual({ type: "auth.refreshed", ok: false });
+  const [code] = await closed;
+  expect(code).toBe(4401);
+  expect(f.stop).not.toHaveBeenCalled();
+}, 10_000);
+
+it("lets the desktop client renew access without ever leaving the ready state", async () => {
+  const f = await fixture("3s");
+  const connection = new DaemonConnection({
+    endpoint: describeDaemonEndpoint("wss://m-test.concors.app/ws"),
+    client: { kind: "test", name: "gateway", version: "0.0.0" },
+    protocols: [`concors.bearer.${f.token}`],
+    webSocketFactory: (_url, protocols) =>
+      new WebSocket(f.url.replace("http:", "ws:") + "/ws", protocols, {
+        headers: { host: f.headers.host },
+      }) as never,
+  });
+  cleanups.push(async () => connection.disconnect());
+  const states: string[] = [];
+  connection.subscribe((state) => states.push(state.status));
+  await connection.connect();
+  expect(await connection.refreshAuthorization(await f.sign("15m"))).toBe(true);
+  await new Promise((resolve) => setTimeout(resolve, 3_500));
+  expect(states).toEqual(["connecting", "handshaking", "ready"]);
+}, 10_000);
 
 it("keeps health open with version and authenticates all other HTTP requests before routing or host discovery", async () => {
   const f = await fixture();

@@ -32,10 +32,12 @@ export class ProjectIconCache {
     for (const listener of this.listeners) listener();
   }
   refresh(workspace: WorkspaceSnapshot) {
-    if (
-      this.connection.state.status !== "ready" ||
-      !this.connection.state.daemon.capabilities?.includes(PROJECT_ICON_CAPABILITY)
-    ) {
+    if (this.connection.state.status !== "ready") {
+      // Keep the icons through a reconnect; only requests cut off by the drop are forgotten.
+      for (const [key, entry] of this.entries) if (entry.loading) this.entries.delete(key);
+      return;
+    }
+    if (!this.connection.state.daemon.capabilities?.includes(PROJECT_ICON_CAPABILITY)) {
       this.entries.clear();
       if (this.icons.size) this.publish(new Map());
       return;

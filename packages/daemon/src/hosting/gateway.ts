@@ -6,17 +6,13 @@ import {
 } from "node:http";
 import { createServer as createTlsServer } from "node:https";
 import type { Duplex } from "node:stream";
-import {
-  bearerProtocol,
-  tokenFromRequest,
-  type Principal,
-  type TokenVerifier,
-} from "../managed/auth.ts";
+import { tokenFromRequest, type Principal, type TokenVerifier } from "../managed/auth.ts";
 import type { ManagedConfig, TlsMaterial } from "../managed/config.ts";
 import type { Logger } from "../managed/log.ts";
 import { collectMachineResources } from "../managed/resources.ts";
 import { createHeartbeat } from "../managed/heartbeat.ts";
 import { countHostSessions } from "../managed/sessions.ts";
+import { relayManagedSocket } from "./managed-relay.ts";
 import { DAEMON_VERSION } from "../version.ts";
 import type { Socket } from "node:net";
 import type { DaemonConfig } from "../config.ts";
@@ -260,15 +256,6 @@ export function createPersistentGateway(
         rejectUpgrade(downstream, 403);
         return;
       }
-      // The private host owns the sessions. Expiring this network socket detaches the
-      // device without stopping terminals/agents; a reconnect must mint fresh access.
-      // Destroy the stream rather than injecting a WS frame into possibly partial frames.
-      const expiry = setTimeout(
-        () => downstream.destroy(),
-        Math.max(0, principal.expiresAt - Date.now()),
-      );
-      expiry.unref();
-      downstream.once("close", () => clearTimeout(expiry));
     }
     if (
       (managed ? new URL(req.url ?? "/", "http://daemon").pathname !== "/ws" : req.url !== "/ws") ||
@@ -281,18 +268,34 @@ export function createPersistentGateway(
     void host()
       .then((runtime) => {
         if (closing || downstream.destroyed) return;
+        if (managed && principal) {
+          // Message-level so access can expire with a close frame, or be renewed in place.
+          const authenticated = principal;
+          relayManagedSocket({
+            req,
+            downstream,
+            head,
+            host: runtime,
+            principal: authenticated,
+            verifier: managed.verifier,
+            track: (socket) => {
+              sockets.add(socket);
+              socket.once("close", () => sockets.delete(socket));
+            },
+            onConnected: () => logConnection(authenticated, downstream),
+          });
+          return;
+        }
         const upstream = httpRequest({
           host: "127.0.0.1",
           port: runtime.port,
           path: "/ws",
           method: "GET",
-          headers: managed
-            ? managedHeaders(req, runtime)
-            : {
-                ...req.headers,
-                host: `127.0.0.1:${runtime.port}`,
-                authorization: `Bearer ${runtime.token}`,
-              },
+          headers: {
+            ...req.headers,
+            host: `127.0.0.1:${runtime.port}`,
+            authorization: `Bearer ${runtime.token}`,
+          },
         });
         const timer = setTimeout(
           () => upstream.destroy(new Error("Session host connection timed out")),
@@ -323,19 +326,10 @@ export function createPersistentGateway(
           downstream.on("error", () => socket.destroy());
           downstream.once("close", () => socket.destroy());
           const headers = response.rawHeaders.reduce<string[]>((result, value, index, all) => {
-            if (
-              index % 2 === 0 &&
-              value.toLowerCase() !== "x-concors-host" &&
-              !(managed && value.toLowerCase() === "sec-websocket-protocol")
-            )
+            if (index % 2 === 0 && value.toLowerCase() !== "x-concors-host")
               result.push(`${value}: ${all[index + 1]}`);
             return result;
           }, []);
-          if (managed && principal) {
-            const protocol = bearerProtocol(req);
-            if (protocol) headers.push(`Sec-WebSocket-Protocol: ${protocol}`);
-            logConnection(principal, downstream);
-          }
           downstream.write(`HTTP/1.1 101 Switching Protocols\r\n${headers.join("\r\n")}\r\n\r\n`);
           if (upstreamHead.length) downstream.write(upstreamHead);
           if (head.length) socket.write(head);

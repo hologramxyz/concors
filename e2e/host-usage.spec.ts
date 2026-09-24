@@ -12,8 +12,13 @@ const reading = {
 test("CPU and RAM stay out of settings and remain correct in the workspace", async ({ page }) => {
   await signedIn(page);
   let paused = false;
+  let refuse = false;
   let client: WebSocketRoute | undefined;
   await page.routeWebSocket("ws://127.0.0.1:7429/ws", (socket) => {
+    if (refuse) {
+      socket.close({ code: 1011, reason: "Unavailable" });
+      return;
+    }
     client = socket;
     const server = socket.connectToServer();
     server.onMessage((raw) => {
@@ -76,7 +81,12 @@ test("CPU and RAM stay out of settings and remain correct in the workspace", asy
   );
   await expect(status).toContainText("CPU 12%");
   await expect(status).not.toContainText("High usage");
+  refuse = true;
   client.close();
+  // A quick reconnect keeps the last reading; only a lasting drop replaces it.
+  await expect(status).toContainText("CPU 12%");
+  await page.clock.runFor(2_500);
+  await expect(status).toContainText("Reconnecting…");
   await expect(status).not.toContainText("CPU 12%");
 });
 
