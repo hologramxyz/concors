@@ -644,7 +644,7 @@ export class AcpProvider extends EventProvider {
       } catch (error) {
         if (error instanceof Error && "code" in error && error.code === -32000)
           throw new Error(
-            `${this.config.label} requires authentication. Sign in with its CLI on this machine, or add its credentials in Providers settings.`,
+            `${this.config.label} requires authentication. Sign in with its CLI on this machine.`,
             { cause: error },
           );
         throw error;
