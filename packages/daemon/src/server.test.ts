@@ -98,6 +98,7 @@ describe("WebSocket handshake", () => {
           "pane-rearrangement",
           "workspace-pane-rearrangement",
           "directional-pane-split",
+          "pane-rename",
           "terminal-recovery",
         ],
       });
