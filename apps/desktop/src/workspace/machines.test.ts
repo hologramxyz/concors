@@ -74,12 +74,16 @@ describe("host profiles", () => {
 });
 
 describe("machine availability", () => {
-  it.each([0, 30_000, 90_000])("connects when the last heartbeat is %i ms old", (age) => {
-    expect(
-      machineAvailability({ ...machine, agentSeenAt: new Date(now - age).toISOString() }, now),
-    ).toBe("connectable");
-  });
-  it.each([90_001, 300_000, -1])(
+  // Negative ages are a device clock running behind the server that stamped the heartbeat.
+  it.each([0, 30_000, 90_000, -1, -300_000])(
+    "connects when the last heartbeat is %i ms old",
+    (age) => {
+      expect(
+        machineAvailability({ ...machine, agentSeenAt: new Date(now - age).toISOString() }, now),
+      ).toBe("connectable");
+    },
+  );
+  it.each([90_001, 300_000, -300_001])(
     "rejects a heartbeat outside the last 90 seconds (%i ms)",
     (age) => {
       expect(

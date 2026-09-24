@@ -54,6 +54,7 @@ import {
   type Host,
 } from "@/workspace/machines";
 import { ProjectWorkspace } from "@/workspace/project-workspace";
+import { machineListResource, SETTLING_POLL_MS } from "@/machines/use-machines";
 
 export function App() {
   const setup = new URLSearchParams(window.location.search).get("setup");
@@ -232,9 +233,12 @@ function AppContent() {
       let host = LOCAL_HOST;
       if (organizationId && machineId && machineId !== "local") {
         try {
-          const machines = await api.listMachines({ organizationId });
-          const machine = machines.find((m) => m.id === machineId);
-          if (machine && machineAvailability(machine) === "connectable")
+          // Through the shared cache, so the machine switcher starts with this list.
+          const list = machineListResource(organizationId);
+          await list.load(SETTLING_POLL_MS);
+          const { data, fetchedAt } = list.getSnapshot();
+          const machine = data?.find((m) => m.id === machineId);
+          if (machine && machineAvailability(machine, fetchedAt ?? Date.now()) === "connectable")
             host = machineHost(
               machine,
               loadHosts(hostScope).find((h) => h.machineId === machineId),

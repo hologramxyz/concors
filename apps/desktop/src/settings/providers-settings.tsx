@@ -20,10 +20,19 @@ import { ProviderIcon } from "@/agents/provider-icon";
 import { invalidateModelCatalogs } from "@/agents/model-catalog";
 import { Section, SettingsCard } from "@/views/settings-primitives";
 
+interface ProviderList {
+  revision: number;
+  providers: ProviderStatus[];
+}
+/** The last list each connection returned, shown straight away while the page re-checks. */
+const lastLists = new WeakMap<object, ProviderList>();
+
 export function ProvidersSettings() {
   const connection = useContext(TerminalConnectionContext);
   const [state, setState] = useState(connection?.state);
-  const [data, setData] = useState<{ revision: number; providers: ProviderStatus[] } | null>(null);
+  const [data, setData] = useState<ProviderList | null>(
+    () => (connection && lastLists.get(connection)) ?? null,
+  );
   const [error, setError] = useState<string | null>(null),
     [busy, setBusy] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
@@ -45,6 +54,7 @@ export function ProvidersSettings() {
       const finished = [...updating.current].some((id) => !nowUpdating.has(id));
       updating.current = nowUpdating;
       if (operation.kind !== "list" || finished) invalidateModelCatalogs(connection);
+      lastLists.set(connection, result.outcome);
       if (mounted.current && active()) {
         setData(result.outcome);
         if (operation.kind === "list") setRefreshError(null);

@@ -5,11 +5,12 @@ import {
   type DaemonEndpoint,
 } from "@concors/daemon-client";
 import type { ClientInfo, WorkspaceSnapshot, WorkspaceOperation } from "@concors/protocol";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 import { detectPlatform } from "@/lib/platform";
 import { api } from "@/auth/api";
 import { connectHost } from "./connect-host";
+import { DISCONNECTED, HostConnectionPool } from "./connection-pool";
 import { APP_VERSION } from "@/version";
 
 const CLIENT_INFO: ClientInfo = {
@@ -40,81 +41,92 @@ export interface DaemonConnectionHandle {
 const RECONNECT_NOTICE_MS = 2_000;
 
 /**
+ * A machine left behind stays connected this long, so switching back is instant. Idle sockets are
+ * cheap (a workspace subscription and a token renewal every few minutes); a handful is the cap.
+ */
+const pool = new HostConnectionPool({ idleMs: 10 * 60_000, maxIdle: 4 });
+if (typeof window !== "undefined") {
+  window.addEventListener("offline", () => pool.offline());
+  window.addEventListener("online", () => pool.resume());
+}
+
+function connectionKey(endpoint: DaemonEndpoint | null, machineId: string, scope: string) {
+  return `${scope}:${machineId}:${endpoint?.url}`;
+}
+
+function acquire(
+  endpoint: DaemonEndpoint,
+  machineId: string,
+  scope: string,
+  listener: () => void,
+): () => void {
+  return pool.acquire(
+    { key: connectionKey(endpoint, machineId, scope), scope, machineId },
+    (handlers) =>
+      connectHost({
+        endpoint,
+        machineId,
+        api,
+        client: CLIENT_INFO,
+        isOnline: () => navigator.onLine,
+        ...handlers,
+      }),
+    listener,
+  );
+}
+
+/** Starts connecting before the user commits (e.g. on hover), so selecting the machine is quicker. */
+export function prewarmDaemonConnection(
+  endpoint: DaemonEndpoint | null,
+  machineId: string,
+  scope: string,
+) {
+  if (endpoint && scope) acquire(endpoint, machineId, scope, () => undefined)();
+}
+
+/**
  * Keeps one `DaemonConnection` alive for the given endpoint, reconnecting with exponential backoff
  * when it drops. Backoff policy lives here (in the client app) on purpose: a bundled local daemon
  * and a remote VPS deserve different treatment, and that is a product decision, not a protocol one.
+ * Every caller asking for the same machine shares one connection, and it outlives them briefly.
  */
 export function useDaemonConnection(
   endpoint: DaemonEndpoint | null,
   machineId = "local",
   scope = "",
 ): DaemonConnectionHandle {
-  const key = `${scope}:${machineId}:${endpoint?.url}`;
-  const [transport, setTransport] = useState<DaemonConnection | null>(null);
-  const [state, setState] = useState<{ key: string; value: ConnectionState }>({
-    key,
-    value: { status: "disconnected" },
-  });
-  const [replica, setReplica] = useState<{ key: string; snapshot: WorkspaceSnapshot } | null>(null);
-  const [workspaceReady, setWorkspaceReady] = useState(false);
-  const [reconnecting, setReconnecting] = useState<{ key: string; since: number } | null>(null);
-  const [noticed, setNoticed] = useState<typeof reconnecting>(null);
-  const activeConnection = useRef<DaemonConnection | null>(null);
-  const retryNow = useRef<() => void>(() => undefined);
+  const key = connectionKey(endpoint, machineId, scope);
+  const subscribe = useCallback(
+    (listener: () => void) =>
+      endpoint === null ? () => undefined : acquire(endpoint, machineId, scope, listener),
+    [endpoint, machineId, scope],
+  );
+  const snapshot = useSyncExternalStore(subscribe, () =>
+    endpoint === null ? DISCONNECTED : (pool.peek(key) ?? DISCONNECTED),
+  );
+  // Runs after any connection released in the same commit, so those are closed, not kept.
+  useEffect(() => pool.setScope(scope), [scope]);
 
+  const [noticed, setNoticed] = useState<string | null>(null);
+  const restoring = snapshot.restoringSince === null ? null : `${key}:${snapshot.restoringSince}`;
   useEffect(() => {
-    if (endpoint === null) return;
-    const session = connectHost({
-      endpoint,
-      machineId,
-      api,
-      client: CLIENT_INFO,
-      isOnline: () => navigator.onLine,
-      onTransport: (next) => {
-        activeConnection.current = next;
-        setTransport(next);
-      },
-      onState: (value, restoring) => {
-        setState({ key, value });
-        if (value.status !== "ready") setWorkspaceReady(false);
-        setReconnecting((current) =>
-          !restoring ? null : current?.key === key ? current : { key, since: Date.now() },
-        );
-      },
-      onWorkspace: (snapshot) => {
-        setReplica({ key, snapshot });
-        setWorkspaceReady(true);
-      },
-    });
-    retryNow.current = session.reconnect;
-    window.addEventListener("offline", session.offline);
-    window.addEventListener("online", session.resume);
-    return () => {
-      window.removeEventListener("offline", session.offline);
-      window.removeEventListener("online", session.resume);
-      session.dispose();
-      retryNow.current = () => undefined;
-    };
-  }, [endpoint, machineId, key]);
-
-  useEffect(() => {
-    if (!reconnecting) return;
+    if (restoring === null || snapshot.restoringSince === null) return;
     const timer = setTimeout(
-      () => setNoticed(reconnecting),
-      Math.max(0, reconnecting.since + RECONNECT_NOTICE_MS - Date.now()),
+      () => setNoticed(restoring),
+      Math.max(0, snapshot.restoringSince + RECONNECT_NOTICE_MS - Date.now()),
     );
     return () => clearTimeout(timer);
-  }, [reconnecting]);
+  }, [restoring, snapshot.restoringSince]);
 
-  const current: ConnectionState = state.key === key ? state.value : { status: "disconnected" };
+  const { state: current, transport } = snapshot;
   return {
     state: current,
-    transport: state.key === key && transport?.endpoint.url === endpoint?.url ? transport : null,
-    workspace: replica?.key === key ? (replica?.snapshot ?? null) : null,
-    workspaceReady: workspaceReady && replica?.key === key,
+    transport: transport?.endpoint.url === endpoint?.url ? transport : null,
+    workspace: snapshot.workspace,
+    workspaceReady: snapshot.workspaceReady,
     execute: async (operation) => {
-      const connection = activeConnection.current;
-      if (state.key !== key || !connection?.workspace || connection.endpoint.url !== endpoint?.url)
+      const connection = pool.peek(key)?.transport;
+      if (!connection?.workspace || connection.endpoint.url !== endpoint?.url)
         throw new Error("Reconnect to edit this workspace");
       const result = await connection.executeWorkspace({
         type: "workspace.command",
@@ -127,12 +139,21 @@ export function useDaemonConnection(
     link:
       current.status === "ready"
         ? "connected"
-        : reconnecting?.key !== key
+        : restoring === null
           ? "offline"
-          : noticed === reconnecting
+          : noticed === restoring
             ? "reconnecting"
             : "connected",
-    error: current.status === "error" && reconnecting?.key !== key ? current.error.message : null,
-    reconnectNow: () => retryNow.current(),
+    error: current.status === "error" && restoring === null ? current.error.message : null,
+    reconnectNow: () => pool.reconnect(key),
   };
+}
+
+/** Machines this device currently holds a live connection to, whether shown or idle. */
+export function useReadyMachines(scope: string): ReadonlySet<string> {
+  const ids = useSyncExternalStore(
+    (listener) => pool.watch(listener),
+    () => [...pool.readyMachines(scope)].sort().join("\n"),
+  );
+  return useMemo(() => new Set(ids ? ids.split("\n") : []), [ids]);
 }
