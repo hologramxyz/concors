@@ -2,7 +2,7 @@ import { useContext, useRef, useState, type CSSProperties } from "react";
 import { FolderOpen } from "lucide-react";
 import type { WorkspaceProject } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
-import { useFiles, fileScope } from "./context";
+import { useFiles, fileScope, knownWorkspace } from "./context";
 import { FileTree } from "./tree";
 import { DEFAULT_FILE_SIDEBAR_WIDTH } from "./sidebar-state";
 import { preloadCodeEditor } from "./editor-loader";
@@ -49,7 +49,7 @@ export function FilesSidebar({ project }: { project: WorkspaceProject | undefine
   const open = sidebar.open && !!project;
   const [visited, setVisited] = useState(open);
   if (open && !visited) setVisited(true);
-  const workspace = connection?.workspace;
+  const workspace = knownWorkspace(connection);
   const scope =
     workspace && project ? fileScope(workspace.machineId, workspace.epoch, project.id) : "";
   return (

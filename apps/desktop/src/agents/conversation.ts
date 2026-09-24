@@ -42,7 +42,7 @@ export function useConversation(sessionId: string) {
     const off = connection.subscribeWorkspace(() => {
       if (!requested && connection.state.status === "ready") {
         requested = true;
-        void history.load("latest");
+        void history.resume();
       }
     });
     return () => {

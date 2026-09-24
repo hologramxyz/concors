@@ -25,9 +25,19 @@ export interface DaemonConnectionHandle {
   readonly workspace: WorkspaceSnapshot | null;
   readonly workspaceReady: boolean;
   readonly execute: (operation: WorkspaceOperation) => Promise<void>;
+  /**
+   * What to tell the user. A dropped connection that is being restored stays "connected" for
+   * `RECONNECT_NOTICE_MS` so routine blips (token rotation) never flash a notice, then turns
+   * "reconnecting". Gate edits on `state`, not on this.
+   */
+  readonly link: "connected" | "reconnecting" | "offline";
+  /** A failure that needs the user; transient errors while reconnecting are not reported. */
+  readonly error: string | null;
   /** Retry immediately instead of waiting for the current backoff. */
   readonly reconnectNow: () => void;
 }
+
+const RECONNECT_NOTICE_MS = 2_000;
 
 /**
  * Keeps one `DaemonConnection` alive for the given endpoint, reconnecting with exponential backoff
@@ -47,6 +57,8 @@ export function useDaemonConnection(
   });
   const [replica, setReplica] = useState<{ key: string; snapshot: WorkspaceSnapshot } | null>(null);
   const [workspaceReady, setWorkspaceReady] = useState(false);
+  const [reconnecting, setReconnecting] = useState<{ key: string; since: number } | null>(null);
+  const [noticed, setNoticed] = useState<typeof reconnecting>(null);
   const activeConnection = useRef<DaemonConnection | null>(null);
   const retryNow = useRef<() => void>(() => undefined);
 
@@ -62,9 +74,12 @@ export function useDaemonConnection(
         activeConnection.current = next;
         setTransport(next);
       },
-      onState: (value) => {
+      onState: (value, restoring) => {
         setState({ key, value });
         if (value.status !== "ready") setWorkspaceReady(false);
+        setReconnecting((current) =>
+          !restoring ? null : current?.key === key ? current : { key, since: Date.now() },
+        );
       },
       onWorkspace: (snapshot) => {
         setReplica({ key, snapshot });
@@ -82,8 +97,18 @@ export function useDaemonConnection(
     };
   }, [endpoint, machineId, key]);
 
+  useEffect(() => {
+    if (!reconnecting) return;
+    const timer = setTimeout(
+      () => setNoticed(reconnecting),
+      Math.max(0, reconnecting.since + RECONNECT_NOTICE_MS - Date.now()),
+    );
+    return () => clearTimeout(timer);
+  }, [reconnecting]);
+
+  const current: ConnectionState = state.key === key ? state.value : { status: "disconnected" };
   return {
-    state: state.key === key ? state.value : { status: "disconnected" },
+    state: current,
     transport: state.key === key && transport?.endpoint.url === endpoint?.url ? transport : null,
     workspace: replica?.key === key ? (replica?.snapshot ?? null) : null,
     workspaceReady: workspaceReady && replica?.key === key,
@@ -99,6 +124,15 @@ export function useDaemonConnection(
       });
       if (result.outcome.status === "rejected") throw new Error(result.outcome.message);
     },
+    link:
+      current.status === "ready"
+        ? "connected"
+        : reconnecting?.key !== key
+          ? "offline"
+          : noticed === reconnecting
+            ? "reconnecting"
+            : "connected",
+    error: current.status === "error" && reconnecting?.key !== key ? current.error.message : null,
     reconnectNow: () => retryNow.current(),
   };
 }

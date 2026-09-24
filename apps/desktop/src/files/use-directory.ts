@@ -1,7 +1,7 @@
 import { useContext, useEffect, useState } from "react";
 import type { WorkspaceProject } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
-import { useFiles } from "./context";
+import { knownWorkspace, useFiles } from "./context";
 import { directoryKey, type DirectoryCache, type DirectoryListing } from "./directory-cache";
 
 interface State {
@@ -16,8 +16,11 @@ export function useDirectory(project: WorkspaceProject, path: string, generation
   const connection = useContext(TerminalConnectionContext);
   const { directories: cache } = useFiles();
   const status = connection?.state.status;
-  const machineId = connection?.workspace?.machineId ?? "";
-  const epoch = connection?.workspace?.epoch ?? "";
+  const workspace = knownWorkspace(connection);
+  // Requests need the resynced workspace, which arrives just after the handshake.
+  const synced = !!connection?.workspace;
+  const machineId = workspace?.machineId ?? "";
+  const epoch = workspace?.epoch ?? "";
   const { id: projectId, directory } = project;
   const scope = { machineId, epoch, projectId, directory };
   const key = directoryKey(scope, path);
@@ -31,16 +34,20 @@ export function useDirectory(project: WorkspaceProject, path: string, generation
     const listing = cache.peek(target, path);
     const previousListing = (previous: State | null) =>
       listing ?? (previous?.cache === cache && previous.key === key ? previous.listing : undefined);
-    const ready = connection && status === "ready" && epoch;
+    const ready = connection && status === "ready" && synced && epoch;
     queueMicrotask(() => {
       if (!cancelled)
-        setState((previous) => ({
-          cache,
-          key,
-          listing: previousListing(previous),
-          error: ready ? null : "Reconnect to browse files.",
-          pending: Boolean(ready),
-        }));
+        setState((previous) => {
+          const kept = previousListing(previous);
+          return {
+            cache,
+            key,
+            listing: kept,
+            // While reconnecting, a folder already listed stays browsable without a warning.
+            error: ready || kept ? null : "Reconnect to browse files.",
+            pending: Boolean(ready),
+          };
+        });
     });
     if (ready)
       void cache.load(target, path).then(
@@ -66,6 +73,7 @@ export function useDirectory(project: WorkspaceProject, path: string, generation
     cache,
     connection,
     status,
+    synced,
     machineId,
     epoch,
     projectId,

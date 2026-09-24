@@ -265,3 +265,26 @@ it("keeps a contiguous tail when jumping on a backward-only daemon", async () =>
   expect(history.getSnapshot().hasEarlier).toBe(false);
   expect(read.mock.calls.every(([cursor]) => cursor.after === undefined)).toBe(true);
 });
+it("resumes after a reconnect with only the missed tail, keeping the reader's place", async () => {
+  const { all, history, read } = fixture(300);
+  await history.load("latest");
+  await history.load("earlier");
+  const { reset, items } = history.getSnapshot();
+  history.cancel();
+  all.push(item(300), item(301));
+  await history.resume();
+  expect(read.mock.calls.at(-1)?.[0]).toEqual({ after: 299 });
+  const next = history.getSnapshot();
+  expect(next.reset).toBe(reset);
+  expect(next.items[0]).toEqual(items[0]);
+  expect(next.items.at(-1)?.position).toBe(301);
+});
+it("does not fetch on resume while the reader is paged away from the tail", async () => {
+  const { history, read } = fixture();
+  await history.load("latest");
+  for (let i = 0; i < 4; i++) await history.load("earlier");
+  expect(history.getSnapshot().hasNewer).toBe(true);
+  const calls = read.mock.calls.length;
+  await history.resume();
+  expect(read).toHaveBeenCalledTimes(calls);
+});
