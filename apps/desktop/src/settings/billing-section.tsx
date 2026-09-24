@@ -50,7 +50,11 @@ export function BillingSection({ organization }: BillingSectionProps) {
   return (
     <Section
       title="Billing"
-      description="Each machine is a monthly subscription charged in advance to this organization’s card."
+      description={
+        status?.waived
+          ? "What machines cost this organization."
+          : "Each machine is a monthly subscription charged in advance to this organization’s card."
+      }
     >
       {(portal.error ??
         billing.error ??
@@ -68,6 +72,10 @@ export function BillingSection({ organization }: BillingSectionProps) {
       ) : status?.configured === false ? (
         <p className="py-2 text-sm text-muted-foreground">
           This Concors server runs without billing; machines are not charged.
+        </p>
+      ) : status?.waived ? (
+        <p className="py-2 text-sm text-muted-foreground">
+          Machines in this organization are not charged.
         </p>
       ) : status ? (
         <>
