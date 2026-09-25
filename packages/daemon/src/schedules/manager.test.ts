@@ -116,7 +116,7 @@ async function setup() {
   };
 }
 
-it("runs without clients, selects the model, reuses the session and opens it without restarting", async () => {
+it("runs without clients, selects the model, reuses the session and resumes it after its CLI stops", async () => {
   const f = await setup();
   f.create();
   f.setNow("2026-09-16T13:00:00Z");
@@ -130,6 +130,8 @@ it("runs without clients, selects the model, reuses the session and opens it wit
   expect(f.manager.list()[0]?.runs[0]?.status).toBe("done");
   expect(f.providers[0]?.requests.filter((r) => r.method === "turn/start")).toHaveLength(1);
   expect(f.workspace.snapshot().projects[0]?.tabs).toHaveLength(0);
+  // No pane shows the finished run, so its CLI does not idle until the next one.
+  await expect.poll(() => f.providers[0]?.closed).toBe(true);
   const open = await f.agents.request({
     type: "agent.request",
     requestId: randomUUID(),
@@ -146,8 +148,11 @@ it("runs without clients, selects the model, reuses the session and opens it wit
   f.setNow("2026-09-16T14:00:00Z");
   f.manager.tick();
   await expect
-    .poll(() => f.providers[0]?.requests.filter((r) => r.method === "turn/start").length)
-    .toBe(2);
+    .poll(() => f.providers[1]?.requests.filter((r) => r.method === "turn/start").length)
+    .toBe(1);
+  expect(f.providers[1]?.requests.find((r) => r.method === "thread/resume")?.params).toMatchObject({
+    threadId: session.threadId,
+  });
   expect(f.workspace.agents()).toHaveLength(1);
 });
 
