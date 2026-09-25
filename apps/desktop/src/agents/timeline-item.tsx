@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { AttachmentPreview } from "./attachment-preview";
+import { MessageAttachments } from "./attachment-preview";
 import {
   Dialog,
   DialogContent,
@@ -52,6 +52,7 @@ export const TimelineItem = memo(function TimelineItem({
           item.kind === "user" ? "ml-auto max-w-[90%] rounded-2xl bg-muted/65 px-4 py-3" : "py-1"
         }
       >
+        {item.kind === "user" && <MessageAttachments item={item} className="mb-2" />}
         <div className="chat-markdown break-words">
           {item.kind === "user" ? (
             <p className="whitespace-pre-wrap">{item.text}</p>
@@ -59,9 +60,7 @@ export const TimelineItem = memo(function TimelineItem({
             <AgentMarkdown>{item.text}</AgentMarkdown>
           )}
         </div>
-        {item.attachments?.map((attachment, index) => (
-          <AttachmentPreview key={index} item={item} attachment={attachment} index={index} />
-        ))}
+        {item.kind !== "user" && <MessageAttachments item={item} className="mt-2" />}
         {item.kind === "assistant" && !running && (
           <div className="mt-2 flex items-center gap-2">
             <CopyButton text={item.text} />

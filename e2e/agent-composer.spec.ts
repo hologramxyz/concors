@@ -85,8 +85,7 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     });
     await expect(page.getByRole("button", { name: "Remove notes.txt", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Start dictation", exact: true }).click();
-    await page.getByRole("button", { name: "Stop dictation", exact: true }).click();
-    await page.getByRole("button", { name: "Edit dictated message", exact: true }).click();
+    await page.getByRole("button", { name: "Finish dictation", exact: true }).click();
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toHaveValue(
       "dictated message",
     );

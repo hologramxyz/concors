@@ -15,6 +15,7 @@ import {
   ShieldOff,
   Square,
   X,
+  File as FileIcon,
 } from "lucide-react";
 import {
   agentProviderName,
@@ -48,6 +49,7 @@ import { matchCommands, needsArguments, slashQuery } from "./slash-commands";
 import { SlashCommandMenu } from "./slash-menu";
 import { readClipboardImage } from "@/tauri";
 import { fitImage, fitImageFile } from "./image-attachment";
+import { rememberSentAttachments } from "./attachment-cache";
 const defaults: AgentSettings = { model: null, effort: null, mode: "default" };
 const nativeProviderIcons: Record<string, "model" | "claude" | "opencode" | "pi"> = {
   codex: "model",
@@ -98,6 +100,8 @@ export function AgentComposer({
     agent.id,
     connection?.workspace?.machineId,
   );
+  // How many files are being read; they show as placeholder tiles until they are attached.
+  const [reading, setReading] = useState(0);
   const [uploading, setUploading] = useState(false),
     [configuring, setConfiguring] = useState(false),
     [error, setError] = useState<string | null>(null);
@@ -136,12 +140,8 @@ export function AgentComposer({
   const dictation = useDictation(
     {
       onTranscript: (text) => setDraft(appendDictation(dictationBase.current, text)),
-      onFinish: (text, action) => {
-        const message = appendDictation(dictationBase.current, text);
-        setDraft(message);
-        if (action === "send" && connected && visible && !uncertain && !document.hidden)
-          void submit({ message, attachments });
-      },
+      // The words go into the prompt box, to be read and sent like anything typed.
+      onFinish: (text) => setDraft(appendDictation(dictationBase.current, text)),
       onCancel: () => setDraft(dictationBase.current),
     },
     connected && visible,
@@ -204,6 +204,7 @@ export function AgentComposer({
       },
     };
     attemptRef.current = next;
+    rememberSentAttachments(agent.id, next.id, input.attachments);
     try {
       const result = await connection.requestAgent(next.operation, next.id);
       if (result.outcome.status === "error") {
@@ -308,11 +309,13 @@ export function AgentComposer({
   const attachFiles = async (load: () => Promise<File[]>) => {
     if (uploading || !advanced) return;
     setUploading(true);
+    setReading(1);
     setError(null);
     try {
       const files = await load();
       if (attachments.length + files.length > 3)
         throw new Error("Attach up to three files per message.");
+      setReading(files.length);
       const incoming: AgentAttachment[] = [];
       for (const original of files) {
         const file = await fitImageFile(original);
@@ -330,6 +333,7 @@ export function AgentComposer({
       setError(e instanceof Error ? e.message : "Could not attach files");
     } finally {
       setUploading(false);
+      setReading(0);
     }
   };
   const addFiles = (files: FileList | File[]) => attachFiles(async () => Array.from(files));
@@ -795,7 +799,7 @@ export function AgentComposer({
           onSubmit={(e) => {
             e.preventDefault();
             if (!uncertain) {
-              if (dictation.active) dictation.stop("send");
+              if (dictation.active) dictation.stop();
               else void submit();
             }
           }}
@@ -808,32 +812,49 @@ export function AgentComposer({
           }}
           className={`rounded-2xl border bg-background p-2 shadow-sm focus-within:border-primary/40 ${compact ? "mobile-composer" : ""}`}
         >
-          {attachments.length > 0 && (
-            <div
-              data-composer-attachments
-              className={`flex flex-wrap gap-2 px-2 py-1 ${compact ? "max-h-16 overflow-y-auto" : ""}`}
-            >
+          {(attachments.length > 0 || reading > 0) && (
+            <div data-composer-attachments className="flex flex-wrap gap-2 px-2 pt-1 pb-2">
               {attachments.map((file, i) => (
                 <div
                   key={i}
-                  className="flex max-w-52 items-center gap-2 rounded-lg border bg-muted/40 px-2 py-1 text-xs"
+                  data-composer-attachment
+                  title={file.name}
+                  className="group relative size-12 shrink-0"
                 >
-                  {file.mime.startsWith("image/") && (
-                    <img
-                      className="size-8 rounded object-cover"
-                      alt=""
-                      src={`data:${file.mime};base64,${file.data}`}
-                    />
-                  )}
-                  <span className="truncate">{file.name}</span>
+                  <div className="size-full overflow-hidden rounded-lg border bg-muted/40">
+                    {file.mime.startsWith("image/") ? (
+                      <img
+                        className="size-full object-cover"
+                        alt={file.name}
+                        src={`data:${file.mime};base64,${file.data}`}
+                      />
+                    ) : (
+                      <div className="flex size-full flex-col items-center justify-center gap-0.5 px-1 text-muted-foreground">
+                        <FileIcon className="size-4 shrink-0" aria-hidden="true" />
+                        <span className="w-full truncate text-center text-[9px]">{file.name}</span>
+                      </div>
+                    )}
+                  </div>
                   <button
                     type="button"
                     aria-label={`Remove ${file.name}`}
                     disabled={busy || uncertain}
                     onClick={() => setAttachments((a) => a.filter((_, index) => index !== i))}
+                    className={`absolute -top-1.5 -left-1.5 flex size-5 items-center justify-center rounded-full border bg-background text-foreground shadow-sm hover:bg-muted focus-visible:opacity-100 disabled:opacity-50 ${compact ? "" : "opacity-0 group-hover:opacity-100"}`}
                   >
                     <X className="size-3" />
                   </button>
+                </div>
+              ))}
+              {Array.from({ length: reading }, (_, i) => (
+                <div
+                  key={`reading-${i}`}
+                  role="status"
+                  aria-label="Reading attachment"
+                  data-composer-attachment-reading
+                  className="flex size-12 shrink-0 items-center justify-center rounded-lg border bg-muted/40 text-muted-foreground"
+                >
+                  <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
                 </div>
               ))}
             </div>
@@ -843,10 +864,6 @@ export function AgentComposer({
               state={dictation}
               onStop={dictation.stop}
               onCancel={dictation.cancel}
-              canSend={
-                connected && !busy && !uncertain && !uploading && !configuring && !!agent.threadId
-              }
-              queued={active}
             />
           ) : native ? (
             <div ref={nativeField} aria-hidden="true" style={{ height: nativeHeight }} />
@@ -1162,13 +1179,9 @@ export function AgentComposer({
             sending.
           </p>
         )}
-        {(uploading || (compact && (!connected || configuring))) && (
+        {compact && (!connected || configuring) && (
           <p role="status" className="px-2 text-xs text-muted-foreground">
-            {uploading
-              ? "Reading attachments…"
-              : !connected
-                ? "Reconnecting…"
-                : "Updating agent settings…"}
+            {!connected ? "Reconnecting…" : "Updating agent settings…"}
           </p>
         )}
       </div>

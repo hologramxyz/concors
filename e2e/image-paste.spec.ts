@@ -55,3 +55,58 @@ test("pasted images attach, and screenshots over 1 MB are shrunk instead of refu
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("sent images show as square thumbnails at once, after a reload, and open full size", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  const directory = await mkdtemp(join(tmpdir(), "concors-image-thumbnails-"));
+  // 2x2 PNGs: red and blue.
+  const png = (base64: string) => Buffer.from(base64, "base64");
+  const red = png(
+    "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGP4z8AARAwQCgAf7gP9i18U1AAAAABJRU5ErkJggg==",
+  );
+  const blue = png(
+    "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAD0lEQVR4nGNgYPgPRmAKABf2A/1+6zfzAAAAAElFTkSuQmCC",
+  );
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Image thumbnails", directory);
+    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    const composer = page.getByRole("textbox", { name: "Message Codex" });
+    await expect(composer).toBeEnabled();
+    await page.getByLabel("Upload files").setInputFiles([
+      { name: "red.png", mimeType: "image/png", buffer: red },
+      { name: "blue.png", mimeType: "image/png", buffer: blue },
+    ]);
+    const tray = page.locator("[data-composer-attachments]");
+    await expect(tray.locator("img")).toHaveCount(2);
+    await expect(page.getByRole("status", { name: "Reading attachment" })).toHaveCount(0);
+    await composer.fill("What colours are these?");
+    await page.getByRole("button", { name: "Send message", exact: true }).click();
+
+    const log = page.getByRole("log");
+    const thumbnails = log.locator('[data-image-attachment="ready"]');
+    await expect(thumbnails).toHaveCount(2);
+    await expect(log.locator("[data-image-attachment=loading]")).toHaveCount(0);
+    const size = await thumbnails.first().evaluate((element) => {
+      const box = element.getBoundingClientRect();
+      return [box.width, box.height];
+    });
+    expect(size[0]).toBe(size[1]);
+    await expect(log.getByRole("button", { name: "red.png", exact: true })).toHaveCount(0);
+
+    // After a reload the images come from the machine, not from what this client sent.
+    await page.reload();
+    await expect(page.getByRole("log").locator('[data-image-attachment="ready"]')).toHaveCount(2);
+    await page.getByRole("button", { name: "Open blue.png", exact: true }).click();
+    const viewer = page.getByRole("dialog", { name: "blue.png" });
+    await expect(viewer.getByRole("img", { name: "blue.png" })).toBeVisible();
+    await page.getByRole("button", { name: "Close image" }).click();
+    await expect(viewer).toHaveCount(0);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
