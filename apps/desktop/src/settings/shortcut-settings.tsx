@@ -27,6 +27,7 @@ const GROUPS: readonly {
       "Move through the flat Tabs list. Closing a tab closes only that view, not its desktop siblings.",
     commands: [
       "new-tab",
+      "resume-chat",
       "previous-tab",
       "next-tab",
       "close-tab",

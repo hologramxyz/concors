@@ -348,8 +348,8 @@ export function registerProtocolEndpoint(
               send(target, { type: "workspace.snapshot", snapshot });
           else send(socket, { type: "workspace.snapshot", snapshot });
           send(socket, result);
-          // Closing a tab or pane leaves its agent's CLI with nothing to show.
-          if (changed) agents.releaseHidden();
+          // Renaming or closing a chat's pane: keep its names, stop a CLI left with nothing to show.
+          if (changed) agents.workspaceEdited();
         } catch (error) {
           log.error({ err: error }, "workspace command failed");
           send(socket, {

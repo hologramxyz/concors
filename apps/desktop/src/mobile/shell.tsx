@@ -43,6 +43,7 @@ import { useProjectIcons } from "@/workspace/use-project-icons";
 import { projectIconKey } from "@/workspace/project-icons";
 import { SidebarEmpty, SidebarSection } from "@/components/sidebar-section";
 import { NewTabMenu } from "@/workspace/new-tab-menu";
+import { ResumeChatDialog } from "@/agents/resume-chat";
 import { nextWorkspaceTabName } from "@concors/protocol";
 import { WorkspaceSearch } from "@/search/workspace-search";
 import { MobileAccountMenu } from "@/components/account-menu";
@@ -141,6 +142,7 @@ function MobileWorkspaceContent({
   const [resourcesOpen, setResourcesOpen] = useState(false);
   const [settingsPage, setSettingsPage] = useState<SettingsPage>("account");
   const [searchOpen, setSearchOpen] = useState(false);
+  const [resumeOpen, setResumeOpen] = useState(false);
   const [addingProject, setAddingProject] = useState<"open" | "clone" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -465,6 +467,7 @@ function MobileWorkspaceContent({
   useCommand("settings", commandsAvailable, () => openSettings());
   useCommand("shortcuts", commandsAvailable, () => openSettings("shortcuts"));
   useCommand("new-project", commandsAvailable && canEdit, newWorkspace.start);
+  useCommand("resume-chat", commandsAvailable && canEdit && !!project, () => setResumeOpen(true));
   useCommand("previous-tab", commandsAvailable && !!tab, () => cycleTab(-1));
   useCommand("next-tab", commandsAvailable && !!tab, () => cycleTab(1));
   useCommand("focus-left", commandsAvailable && !!pane, () => cycleTab(-1));
@@ -699,6 +702,7 @@ function MobileWorkspaceContent({
                           disabled={!canEdit}
                           tabLimitReached={project.tabs.length >= 32}
                           onCreate={createTab}
+                          onResume={() => setResumeOpen(true)}
                           renderTrigger={(open) => (
                             <WorkspacePicker
                               project={project}
@@ -826,7 +830,12 @@ function MobileWorkspaceContent({
                                       : "Open a project from the sidebar or add one to get started."}
                               </p>
                               {project ? (
-                                <NewTabMenu empty disabled={!canEdit} onCreate={createTab} />
+                                <NewTabMenu
+                                  empty
+                                  disabled={!canEdit}
+                                  onCreate={createTab}
+                                  onResume={() => setResumeOpen(true)}
+                                />
                               ) : !host.direct && !host.machines.length ? (
                                 <Button onClick={() => openSettings("machines")}>
                                   Manage machines
@@ -909,6 +918,12 @@ function MobileWorkspaceContent({
                   {newWorkspace.error}
                 </p>
               )}
+              <ResumeChatDialog
+                open={resumeOpen && canEdit}
+                onOpenChange={setResumeOpen}
+                workspace={workspace}
+                projectId={project?.id}
+              />
               <WorkspaceSearch
                 key={`${host.machineId}:${workspace?.epoch}`}
                 machine={

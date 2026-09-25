@@ -9,6 +9,7 @@ import { useShortcutLabels } from "@/shortcuts/preferences-context";
 import type { PaneFocusRequest } from "./session-pane";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { NewTabMenu } from "./new-tab-menu";
+import { ResumeChatDialog } from "@/agents/resume-chat";
 import { nextWorkspaceTabName } from "@concors/protocol";
 import { ContextMenu } from "radix-ui";
 import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
@@ -132,6 +133,9 @@ export function ProjectWorkspace({
   });
   useCommand("move-tab-left", !!project && canEdit && !activeFile, () => moveTab(-1));
   useCommand("move-tab-right", !!project && canEdit && !activeFile, () => moveTab(1));
+  const [resuming, setResuming] = useState(false);
+  const canResume = !!project && canEdit && !launching && project.tabs.length < 32;
+  useCommand("resume-chat", canResume, () => setResuming(true));
   if (!project)
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
@@ -372,6 +376,7 @@ export function ProjectWorkspace({
               keyboard
               disabled={!canEdit || launching || project.tabs.length >= 32}
               onCreate={createTab}
+              onResume={() => setResuming(true)}
             />
           </div>
           {windowChrome.enabled && <div data-tauri-drag-region className="h-7 w-8 shrink-0" />}
@@ -417,12 +422,23 @@ export function ProjectWorkspace({
             {!activeFile && !selected && (
               <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
                 <p>No tabs in this project yet.</p>
-                <NewTabMenu empty disabled={!canEdit || launching} onCreate={createTab} />
+                <NewTabMenu
+                  empty
+                  disabled={!canEdit || launching}
+                  onCreate={createTab}
+                  onResume={() => setResuming(true)}
+                />
               </div>
             )}
           </div>
         </div>
       </div>
+      <ResumeChatDialog
+        open={resuming && canResume}
+        onOpenChange={setResuming}
+        workspace={workspace}
+        projectId={project.id}
+      />
     </ProjectFileLinks>
   );
 }
