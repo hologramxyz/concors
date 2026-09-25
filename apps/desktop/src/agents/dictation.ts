@@ -10,12 +10,7 @@ import {
 import type { DaemonConnection } from "@concors/daemon-client";
 import type { DictationModel } from "@concors/protocol";
 import { DaemonRecognition } from "./dictation-daemon";
-import {
-  DictationSession,
-  emptyDictation,
-  type DictationAction,
-  type Recognition,
-} from "./dictation-session";
+import { DictationSession, emptyDictation, type Recognition } from "./dictation-session";
 
 type SpeechWindow = Window & {
   SpeechRecognition?: new () => Recognition;
@@ -65,7 +60,7 @@ const noop = () => undefined;
 export function useDictation(
   callbacks: {
     onTranscript: (text: string) => void;
-    onFinish: (text: string, action: "edit" | "send") => void;
+    onFinish: (text: string) => void;
     onCancel: () => void;
   },
   enabled: boolean,
@@ -116,7 +111,7 @@ export function useDictation(
           {
             change: setState,
             transcript: (text) => current.current.onTranscript(text),
-            finish: (text, action) => current.current.onFinish(text, action),
+            finish: (text) => current.current.onFinish(text),
           },
           daemon.available ? DAEMON_FINISH_TIMEOUT_MS : undefined,
         );
@@ -125,7 +120,7 @@ export function useDictation(
         setState({ ...emptyDictation, error: "Could not start dictation in this browser." });
       }
     },
-    stop: (action: DictationAction) => session.current?.stop(action),
+    stop: () => session.current?.stop(),
     suspend: () => session.current?.suspend(),
     cancel: () => {
       session.current?.dispose();
