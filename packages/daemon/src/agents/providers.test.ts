@@ -781,3 +781,56 @@ it("opens new chats with the provider and settings last chosen on this machine",
     store.close();
   }
 });
+it("stops a closed chat's CLI once its turn settles and resumes the thread when reopened", async () => {
+  const { c, id, projectId, tabId } = await setup();
+  const runtime = instances[0]!.runtime;
+  await c.requestAgent({ kind: "send", sessionId: id, text: "hold" }, randomUUID());
+  await expect.poll(() => c.agents.find((a) => a.id === id)?.status).toBe("working");
+  const closed = await c.executeWorkspace({
+    type: "workspace.command",
+    commandId: randomUUID(),
+    epoch: c.workspace!.epoch,
+    operation: {
+      kind: "tab.close",
+      projectId,
+      tabId,
+      expectedVersion: c.workspace!.projects.find((p) => p.id === projectId)!.version,
+    },
+  });
+  expect(closed.outcome.status).toBe("accepted");
+  // A running turn is never cut short by closing its tab.
+  expect(runtime.closed).toBe(false);
+  runtime.finish();
+  await expect.poll(() => runtime.closed).toBe(true);
+  await expect.poll(() => c.agents.find((a) => a.id === id)?.status).toBe("done");
+  const threadId = c.agents.find((a) => a.id === id)!.threadId;
+
+  const open = await c.requestAgent({ kind: "open-session", sessionId: id }, randomUUID());
+  expect(open.outcome.status).toBe("ok");
+  await c.requestAgent({ kind: "send", sessionId: id, text: "hello again" }, randomUUID());
+  await expect.poll(() => instances.length).toBe(2);
+  const resumed = instances[1]!.runtime;
+  expect(resumed.requests.find((r) => r.method === "thread/resume")?.params).toMatchObject({
+    threadId,
+  });
+  await expect.poll(() => c.agents.find((a) => a.id === id)?.status).toBe("done");
+  expect(resumed.closed).toBe(false);
+});
+it("stops an idle chat's CLI as soon as its pane closes", async () => {
+  const { c, id, projectId, tabId } = await setup();
+  const runtime = instances[0]!.runtime;
+  const closed = await c.executeWorkspace({
+    type: "workspace.command",
+    commandId: randomUUID(),
+    epoch: c.workspace!.epoch,
+    operation: {
+      kind: "tab.close",
+      projectId,
+      tabId,
+      expectedVersion: c.workspace!.projects.find((p) => p.id === projectId)!.version,
+    },
+  });
+  expect(closed.outcome.status).toBe("accepted");
+  expect(runtime.closed).toBe(true);
+  expect(c.agents.find((a) => a.id === id)?.status).toBe("idle");
+});
