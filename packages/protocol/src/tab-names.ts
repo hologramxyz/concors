@@ -4,6 +4,11 @@ import type { WorkspaceTab } from "./workspace.ts";
  * Existing names are never rewritten. Count custom/legacy tabs and skip every
  * numbered name still in use, independently of tab order and pane profiles.
  */
+/** Whether a tab still has the numbered name it was created with. */
+export function isDefaultTabName(name: string): boolean {
+  return /^Tab [1-9]\d*$/i.test(name);
+}
+
 export function nextWorkspaceTabName(tabs: readonly Pick<WorkspaceTab, "name">[]): string {
   let next = tabs.length + 1;
   for (const tab of tabs) {

@@ -28,6 +28,8 @@ import {
   type AgentRequest,
   type AgentResult,
   type AgentSettings,
+  isDefaultTabName,
+  type WorkspaceSnapshot,
 } from "@concors/protocol";
 import type { WorkspaceStore } from "../workspace/store.ts";
 import { ProviderRegistry } from "./providers/registry.ts";
@@ -130,10 +132,11 @@ export class AgentManager {
     this.registry = registry;
     this.#store = store;
     this.#emit = emit;
-    // Switching provider or resuming another session can leave the pane's old agent hidden.
+    // Switching provider or resuming another session can leave the pane's old agent hidden. It
+    // runs after the change's own agent events, so those never overwrite the names it records.
     this.#workspaceChanged = () => {
       workspaceChanged();
-      this.releaseHidden();
+      queueMicrotask(() => this.workspaceEdited());
     };
     this.#factory = factory;
     this.nativeSessions = new NativeSessions(factory, registry);
@@ -2191,6 +2194,36 @@ export class AgentManager {
       }),
     );
   }
+  /** Follows a workspace edit: records chat names, then stops CLIs no pane shows any more. */
+  workspaceEdited(): void {
+    if (this.#closed) return;
+    const snapshot = this.#store.snapshot();
+    this.rememberNames(snapshot);
+    this.releaseHidden(snapshot);
+  }
+  /**
+   * Copies each chat pane's custom name, and its tab's when the pane is alone in a renamed tab,
+   * onto the agent. Closing the pane discards both; reopening the chat restores them.
+   */
+  private rememberNames(snapshot: WorkspaceSnapshot): void {
+    const agents = new Map(this.#store.agents().map((agent) => [agent.id, agent]));
+    for (const tab of snapshot.projects.flatMap((project) => project.tabs)) {
+      const panes = tab.nodes.flatMap((node) => (node.kind === "pane" ? [node] : []));
+      for (const pane of panes) {
+        const info = pane.profile === "chat" && pane.sessionId && agents.get(pane.sessionId);
+        if (!info) continue;
+        const tabName = panes.length === 1 && !isDefaultTabName(tab.name) ? tab.name : undefined;
+        if (info.paneName === pane.name && info.tabName === tabName) continue;
+        const next: AgentInfo = { ...info, revision: info.revision + 1 };
+        delete next.paneName;
+        delete next.tabName;
+        if (pane.name) next.paneName = pane.name;
+        if (tabName) next.tabName = tabName;
+        this.#store.saveAgent(next);
+        this.#emit({ type: "agent.state", agent: next });
+      }
+    }
+  }
   /**
    * Stops the CLI behind every agent that no pane shows any more, once it has nothing left to do.
    * Closing a tab only edits the workspace, so without this each closed chat kept its CLI (often
@@ -2198,12 +2231,11 @@ export class AgentManager {
    * resumes the thread in a fresh process, as after any other eviction. A turn still running, a
    * pending question or queued messages keep the CLI until they settle.
    */
-  releaseHidden(): void {
+  releaseHidden(snapshot: WorkspaceSnapshot = this.#store.snapshot()): void {
     if (this.#closed || !this.#runtimes.size) return;
     const shown = new Set(
-      this.#store
-        .snapshot()
-        .projects.flatMap((project) => project.tabs.flatMap((tab) => tab.nodes))
+      snapshot.projects
+        .flatMap((project) => project.tabs.flatMap((tab) => tab.nodes))
         .flatMap((node) => (node.kind === "pane" && node.sessionId ? [node.sessionId] : [])),
     );
     for (const [id, runtime] of this.#runtimes) {

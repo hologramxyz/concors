@@ -5,13 +5,14 @@ import { paneProfiles } from "./tab-profiles";
 import { useTerminalProfiles } from "@/terminal/profiles-context";
 import { useContext, useRef, useState, type ReactNode } from "react";
 import { CompactLayoutContext } from "@/components/compact-layout";
-import { Plus } from "lucide-react";
+import { History, Plus } from "lucide-react";
 import type { PaneProfile } from "@concors/protocol";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import {
   Dialog,
@@ -24,6 +25,7 @@ import {
 export function NewTabMenu({
   disabled,
   onCreate,
+  onResume,
   empty = false,
   keyboard = false,
   tabLimitReached = false,
@@ -31,6 +33,8 @@ export function NewTabMenu({
 }: {
   disabled: boolean;
   onCreate: (profile: PaneProfile, terminalProfileId?: string) => void;
+  /** Offers the closed chats of this workspace next to the new ones. */
+  onResume?: () => void;
   empty?: boolean;
   keyboard?: boolean;
   tabLimitReached?: boolean;
@@ -121,6 +125,27 @@ export function NewTabMenu({
                     </button>
                   ),
                 )}
+                {onResume && (
+                  <button
+                    type="button"
+                    aria-label="Resume a closed chat"
+                    disabled={createDisabled}
+                    onClick={() => {
+                      setOpen(false);
+                      onResume();
+                    }}
+                  >
+                    <span className="mobile-session-icon">
+                      <History className="size-5" aria-hidden="true" />
+                    </span>
+                    <span>
+                      <span className="block font-medium">Resume a closed chat</span>
+                      <span className="mobile-select-description">
+                        Reopen a chat with its name, settings and history
+                      </span>
+                    </span>
+                  </button>
+                )}
               </div>
             </DialogContent>
           </Dialog>
@@ -162,6 +187,21 @@ export function NewTabMenu({
                   <span className="truncate">{label}</span>
                 </DropdownMenuItem>
               ),
+            )}
+            {onResume && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  disabled={createDisabled}
+                  onSelect={() => {
+                    menuTransfersFocus.current = true;
+                    onResume();
+                  }}
+                >
+                  <History className="size-4 shrink-0" aria-hidden="true" />
+                  <span className="truncate">Resume a chat…</span>
+                </DropdownMenuItem>
+              </>
             )}
           </DropdownMenuContent>
         </DropdownMenu>
