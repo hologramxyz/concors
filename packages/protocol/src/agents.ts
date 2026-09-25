@@ -158,6 +158,9 @@ export const AgentInfoSchema = z.object({
   engine: ProviderEngineSchema.optional(),
   providerLabel: z.string().max(100).optional(),
   name: z.string(),
+  // The custom names of its pane, and of its tab when alone in it, so a closed chat reopens as it was.
+  paneName: z.string().max(120).optional(),
+  tabName: z.string().max(120).optional(),
   directory: z.string(),
   model: z.string().nullable(),
   settings: AgentSettingsSchema.optional(),

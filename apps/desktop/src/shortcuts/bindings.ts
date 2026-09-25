@@ -2,6 +2,7 @@ export const BINDINGS = [
   { id: "search", label: "Search workspaces, agents and tabs", key: "k" },
   { id: "new-project", label: "New workspace", key: "n" },
   { id: "new-tab", label: "New tab…", key: "t", then: "Enter" },
+  { id: "resume-chat", label: "Resume a closed chat…", key: "t", then: "r" },
   { id: "previous-tab", label: "Previous tab", key: "t", then: "ArrowLeft" },
   { id: "next-tab", label: "Next tab", key: "t", then: "ArrowRight" },
   { id: "new-pane", label: "New pane beside current", key: "p", then: "Enter" },
