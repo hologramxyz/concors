@@ -834,3 +834,41 @@ it("stops an idle chat's CLI as soon as its pane closes", async () => {
   expect(runtime.closed).toBe(true);
   expect(c.agents.find((a) => a.id === id)?.status).toBe("idle");
 });
+it("reopens a closed chat under its pane and tab names with its settings and history", async () => {
+  const { c, id, projectId, tabId, paneId } = await setup();
+  await c.requestAgent({ kind: "send", sessionId: id, text: "hello" }, randomUUID());
+  await expect.poll(() => c.agents.find((a) => a.id === id)?.status).toBe("done");
+  const edit = async (operation: Record<string, unknown>) => {
+    const result = await c.executeWorkspace({
+      type: "workspace.command",
+      commandId: randomUUID(),
+      epoch: c.workspace!.epoch,
+      operation: {
+        ...operation,
+        projectId,
+        expectedVersion: c.workspace!.projects.find((p) => p.id === projectId)!.version,
+      } as never,
+    });
+    expect(result.outcome.status).toBe("accepted");
+  };
+  await edit({ kind: "pane.rename", tabId, paneId, name: "Hello world" });
+  await edit({ kind: "tab.rename", tabId, name: "Release" });
+  await expect
+    .poll(() => c.agents.find((a) => a.id === id))
+    .toMatchObject({ paneName: "Hello world", tabName: "Release" });
+  const before = c.agents.find((a) => a.id === id)!;
+  await edit({ kind: "tab.close", tabId });
+
+  const open = await c.requestAgent({ kind: "open-session", sessionId: id }, randomUUID());
+  expect(open.outcome.status).toBe("ok");
+  const tab = c.workspace!.projects.find((p) => p.id === projectId)!.tabs[0]!;
+  expect(tab.name).toBe("Release");
+  expect(tab.nodes[0]).toMatchObject({ kind: "pane", sessionId: id, name: "Hello world" });
+  expect(c.agents.find((a) => a.id === id)).toMatchObject({
+    provider: before.provider,
+    settings: before.settings,
+    threadId: before.threadId,
+  });
+  const history = await c.requestAgent({ kind: "read", sessionId: id }, randomUUID());
+  expect(JSON.stringify(history.outcome)).toContain("hello");
+});

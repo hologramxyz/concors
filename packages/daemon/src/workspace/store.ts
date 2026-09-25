@@ -603,7 +603,7 @@ export class WorkspaceStore {
           expectedVersion: project.version,
           tabId,
           paneId,
-          name: nextWorkspaceTabName(project.tabs),
+          name: info.tabName ?? nextWorkspaceTabName(project.tabs),
           profile: "chat",
         });
         const pane = state.projects
@@ -613,6 +613,8 @@ export class WorkspaceStore {
         if (!pane || pane.kind !== "pane") throw new Error("Could not open agent tab");
         pane.sessionId = info.id;
         pane.directory = info.directory;
+        // A closed chat comes back under the names it was given.
+        if (info.paneName) pane.name = info.paneName;
         this.#db.prepare("UPDATE workspace SET snapshot=? WHERE id=1").run(JSON.stringify(state));
       }
       this.#db
