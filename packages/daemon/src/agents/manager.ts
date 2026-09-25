@@ -130,7 +130,11 @@ export class AgentManager {
     this.registry = registry;
     this.#store = store;
     this.#emit = emit;
-    this.#workspaceChanged = workspaceChanged;
+    // Switching provider or resuming another session can leave the pane's old agent hidden.
+    this.#workspaceChanged = () => {
+      workspaceChanged();
+      this.releaseHidden();
+    };
     this.#factory = factory;
     this.nativeSessions = new NativeSessions(factory, registry);
     this.accounts = new AgentAccounts(accountFactory ?? accountBackendFactory(registry), (info) => {
@@ -229,6 +233,13 @@ export class AgentManager {
       this.#runtimes.delete(id);
       void runtime.provider.close().catch(() => undefined);
     }
+    // A turn that finishes after its pane was closed has nobody left to show it to.
+    else if (
+      runtime &&
+      ["working", "needs_input"].includes(prior.status) &&
+      !["starting", "working", "needs_input"].includes(next.status)
+    )
+      queueMicrotask(() => this.releaseHidden());
     if (["idle", "done"].includes(next.status) && next.queue?.length && !next.queuePaused)
       queueMicrotask(() => {
         void this.drain(id).catch((error) => this.fail(id, error));
@@ -2179,6 +2190,32 @@ export class AgentManager {
         return (await value)[0] ?? { id, label, models: [], loaded: false };
       }),
     );
+  }
+  /**
+   * Stops the CLI behind every agent that no pane shows any more, once it has nothing left to do.
+   * Closing a tab only edits the workspace, so without this each closed chat kept its CLI (often
+   * hundreds of MB) running until eight had piled up. The conversation stays saved: reopening it
+   * resumes the thread in a fresh process, as after any other eviction. A turn still running, a
+   * pending question or queued messages keep the CLI until they settle.
+   */
+  releaseHidden(): void {
+    if (this.#closed || !this.#runtimes.size) return;
+    const shown = new Set(
+      this.#store
+        .snapshot()
+        .projects.flatMap((project) => project.tabs.flatMap((tab) => tab.nodes))
+        .flatMap((node) => (node.kind === "pane" && node.sessionId ? [node.sessionId] : [])),
+    );
+    for (const [id, runtime] of this.#runtimes) {
+      if (shown.has(id) || runtime.pending.size) continue;
+      if (this.draining.has(id) || this.mutations.has(id)) continue;
+      const info = this.#store.agent(id);
+      if (["starting", "working", "needs_input"].includes(info.status)) continue;
+      if (info.pending.length || (info.queue?.length && !info.queuePaused)) continue;
+      runtime.closed = true;
+      this.#runtimes.delete(id);
+      void runtime.provider.close().catch(() => undefined);
+    }
   }
   async close(): Promise<void> {
     if (this.#closed) return;
