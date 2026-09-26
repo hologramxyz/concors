@@ -10,12 +10,14 @@ const LIMIT = 256;
 
 /** Printable, single-line and short enough for the sidebar; empty when nothing is left. */
 export function cleanPreviewName(value: string): string {
-  return value
-    // eslint-disable-next-line no-control-regex
-    .replace(/[\u0000-\u001f\u007f]+/g, " ")
-    .trim()
-    .slice(0, PREVIEW_NAME_MAX)
-    .trim();
+  return (
+    value
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\u0000-\u001f\u007f]+/g, " ")
+      .trim()
+      .slice(0, PREVIEW_NAME_MAX)
+      .trim()
+  );
 }
 
 /** The name an agent gave the server in its environment (`/proc/<pid>/environ`), if any. */
