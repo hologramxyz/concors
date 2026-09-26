@@ -124,6 +124,22 @@ test("detected previews stay separate from the process inventory and Resources o
   await page.screenshot({ path: "test-results/resources-processes.png" });
 });
 
+test("detected previews stop from the sidebar after a confirmation", async ({ page }) => {
+  const operations = await resources(page);
+  const sidebar = page.getByRole("navigation", { name: "Primary" });
+  await sidebar.getByRole("button", { name: "Open preview: Vite preview", exact: true }).hover();
+  await sidebar.getByRole("button", { name: "Stop Vite preview", exact: true }).click();
+  const stop = page.getByRole("dialog", { name: "Stop process?" });
+  await expect(stop).toContainText("Vite preview · PID 11");
+  await stop.getByRole("button", { name: "Cancel" }).click();
+  expect(operations.some((op) => op.kind === "stop")).toBe(false);
+  await sidebar.getByRole("button", { name: "Stop Vite preview", exact: true }).click();
+  await stop.getByRole("button", { name: "Stop process", exact: true }).click();
+  await expect(stop).toHaveCount(0);
+  expect(operations).toContainEqual({ kind: "stop", id: "11:100" });
+  await expect(sidebar).toContainText("No previews detected.");
+});
+
 test("automatically detected previews open directly with rail-only tooltips and no manual controls", async ({
   page,
   context,
