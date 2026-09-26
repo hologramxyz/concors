@@ -100,7 +100,7 @@ describe("DaemonRecognition", () => {
 
     // Audio shorter than a chunk is still delivered when the recording stops.
     speak(4096);
-    session.stop();
+    session.stop("send");
     await flush();
     expect(tracks[0]!.stop).toHaveBeenCalled();
     expect(fake.audio.map((chunk) => chunk.seq)).toEqual([0, 1]);
@@ -112,7 +112,7 @@ describe("DaemonRecognition", () => {
       text: "Fix the login bug.",
       final: true,
     });
-    expect(callbacks.finish).toHaveBeenCalledExactlyOnceWith("Fix the login bug.");
+    expect(callbacks.finish).toHaveBeenCalledExactlyOnceWith("Fix the login bug.", "send");
     expect(fake.listeners.size).toBe(0);
   });
 

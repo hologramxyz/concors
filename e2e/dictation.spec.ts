@@ -83,7 +83,7 @@ test("Done appends dictation to a focused draft; Cancel preserves the original d
     await expect(page.getByRole("button", { name: "Remove notes.txt" })).toBeVisible();
     await page.getByRole("button", { name: "Start dictation", exact: true }).click();
     await page.evaluate(() => window.testDictation.result("some words"));
-    await page.getByRole("button", { name: "Finish dictation" }).click();
+    await page.getByRole("button", { name: "Edit dictated message" }).click();
     await page.evaluate(() => {
       window.testDictation.result("some final words.", true);
       window.testDictation.end();
@@ -117,7 +117,7 @@ test("the recording bar fits a narrow pane and Done keeps the words for sending 
     const box = page.getByRole("group", { name: "Dictation", exact: true });
     expect(await box.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
     await page.screenshot({ path: test.info().outputPath("dictation-narrow.png") });
-    await page.getByRole("button", { name: "Finish dictation", exact: true }).click();
+    await page.getByRole("button", { name: "Edit dictated message", exact: true }).click();
     await page.evaluate(() => window.testDictation.end());
     await expect(composer).toHaveValue("Read before sending");
     await expect.poll(() => page.evaluate(() => window.testDictation.capture.tracks)).toBe(0);
@@ -163,6 +163,61 @@ test("changing tabs stops capture and preserves dictated words for editing", asy
     await agentTab.click();
     await expect(composer).toHaveValue("Save my words");
     await expect(page.getByRole("group", { name: "Dictation", exact: true })).toHaveCount(0);
+  } finally {
+    await dispose();
+  }
+});
+
+test("Send submits the dictated words, and Ctrl+Enter does too", async ({ page }) => {
+  const { composer, dispose } = await workspace(page);
+  try {
+    const log = page.getByRole("log");
+    await page.getByRole("button", { name: "Start dictation", exact: true }).click();
+    await page.evaluate(() => window.testDictation.result("Send this one", true));
+    await page.getByRole("button", { name: "Send dictated message", exact: true }).click();
+    await page.evaluate(() => window.testDictation.end());
+    await expect(composer).toHaveValue("");
+    await expect(log.getByText("Send this one", { exact: true })).toHaveCount(1);
+    await expect(page.getByText(/^Worked for /)).toHaveCount(1);
+
+    await page.getByRole("button", { name: "Start dictation", exact: true }).click();
+    await page.evaluate(() => window.testDictation.result("And this one", true));
+    await page.keyboard.press("Control+Enter");
+    await page.evaluate(() => window.testDictation.end());
+    await expect(log.getByText("And this one", { exact: true })).toHaveCount(1);
+  } finally {
+    await dispose();
+  }
+});
+
+test("recording carries on while the window is out of view", async ({ page }) => {
+  const { composer, dispose } = await workspace(page);
+  try {
+    await page.getByRole("button", { name: "Start dictation", exact: true }).click();
+    await page.evaluate(() => window.testDictation.result("Before switching", true));
+    await page.evaluate(() => {
+      Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        get: () => "hidden",
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    const recording = page.getByRole("group", { name: "Dictation", exact: true });
+    await expect(recording).toHaveAttribute("data-dictation-phase", "recording");
+    await expect.poll(() => page.evaluate(() => window.testDictation.capture.tracks)).toBe(1);
+    await page.evaluate(() => {
+      Object.defineProperty(document, "hidden", { configurable: true, get: () => false });
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        get: () => "visible",
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+      window.testDictation.result("Before switching and after", true);
+    });
+    await page.getByRole("button", { name: "Edit dictated message", exact: true }).click();
+    await page.evaluate(() => window.testDictation.end());
+    await expect(composer).toHaveValue("Before switching and after");
   } finally {
     await dispose();
   }
