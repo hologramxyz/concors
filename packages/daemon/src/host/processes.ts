@@ -12,6 +12,8 @@ import type {
   WorkspaceProject,
 } from "@concors/protocol";
 
+import { environmentPreviewName, PreviewNames } from "./preview-names.ts";
+
 const execute = promisify(execFile);
 export const within = (path: string, root: string) => path === root || path.startsWith(root + sep);
 
@@ -66,16 +68,24 @@ export function parseProcessStat(value: string) {
   };
 }
 
+const RUNTIMES = ["node", "nodejs", "bun", "deno", "python", "python3"];
+
 /** No command arguments or environment variables are sent to clients. */
 export function processLabel(name: string, args: string[]) {
-  if (["node", "nodejs", "bun", "deno", "python", "python3"].includes(name)) {
+  // Node renames its main thread, so a dev server's name is often "MainThread"; the executable
+  // it was started as says what it is.
+  const runtime = RUNTIMES.includes(name)
+    ? name
+    : RUNTIMES.find((r) => r === basename(args[0] ?? ""));
+  if (runtime) {
     const entry = args[1];
     if (
       entry &&
       !entry.startsWith("-") &&
       /(?:\.[cm]?[jt]s|\.py|\/vite|\/next|\/vitest|\/tsup)$/.test(entry)
     )
-      return `${name} · ${basename(entry)}`.slice(0, 160);
+      return `${runtime} · ${basename(entry)}`.slice(0, 160);
+    return runtime;
   }
   return name.slice(0, 160);
 }
@@ -179,11 +189,13 @@ export class ProcessInventory {
   #previewProtocols = new Map<number, { protocol: PreviewProtocol | null; checkedAt: number }>();
   #identities = new Map<
     string,
-    { pid: number; started: string; uid: number; blocked: string | null }
+    { pid: number; started: string; uid: number; blocked: string | null; directory: string | null }
   >();
   private readonly projects: () => readonly WorkspaceProject[];
-  constructor(projects: () => readonly WorkspaceProject[]) {
+  readonly #names: PreviewNames;
+  constructor(projects: () => readonly WorkspaceProject[], names = new PreviewNames(null)) {
     this.projects = projects;
+    this.#names = names;
   }
 
   async snapshot(force = false): Promise<ProcessSnapshot> {
@@ -286,6 +298,20 @@ export class ProcessInventory {
         entry.protocol ? [[port, entry.protocol] as const] : [],
       ),
     );
+    // Only the one variable is read, and only for servers with a preview.
+    const agentNames = new Map(
+      await concurrentMap(
+        found.filter((p) => (ports.get(p.pid) ?? []).some((port) => previewProtocols.has(port))),
+        16,
+        async (p) =>
+          [
+            p.pid,
+            await readFile(`/proc/${p.pid}/environ`, "utf8")
+              .then(environmentPreviewName)
+              .catch(() => undefined),
+          ] as const,
+      ),
+    );
     if (allPreviewCandidates.length > previewCandidates.length)
       warnings.push("Preview discovery limited to the first 128 listening ports.");
     const processes: MachineProcess[] = found.slice(0, 4096).map((p) => {
@@ -301,7 +327,13 @@ export class ProcessInventory {
           : p.state === "Z"
             ? "A zombie process must be reaped by its parent."
             : null;
-      this.#identities.set(id, { pid: p.pid, started: p.started, uid, blocked });
+      this.#identities.set(id, {
+        pid: p.pid,
+        started: p.started,
+        uid,
+        blocked,
+        directory: p.directory,
+      });
       return {
         id,
         pid: p.pid,
@@ -329,7 +361,9 @@ export class ProcessInventory {
         ports: ports.get(p.pid) ?? [],
         previews: (ports.get(p.pid) ?? []).flatMap((port) => {
           const protocol = previewProtocols.get(port);
-          return protocol ? [{ port, protocol }] : [];
+          if (!protocol) return [];
+          const name = this.#names.get(p.directory, port) ?? agentNames.get(p.pid);
+          return [name ? { port, protocol, name } : { port, protocol }];
         }),
         stopBlocked: blocked,
       };
@@ -338,6 +372,14 @@ export class ProcessInventory {
     this.#previous = next;
     this.#total = cpu;
     return { sampledAt: Date.now(), processes, warnings };
+  }
+
+  async renamePreview(id: string, port: number, name: string): Promise<void> {
+    await this.snapshot();
+    const target = this.#identities.get(id);
+    if (!target) throw new Error("This preview stopped or restarted. Refresh and try again.");
+    this.#names.set(target.directory, port, name);
+    this.#snapshot = null;
   }
 
   async stop(id: string): Promise<void> {
