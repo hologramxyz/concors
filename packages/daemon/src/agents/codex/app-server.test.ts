@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { afterEach, expect, it } from "vitest";
 import { CodexAppServer } from "./app-server.ts";
+import { AGENT_INSTRUCTIONS } from "../instructions.ts";
 
 const fixture = `
 const readline = require('node:readline');
@@ -28,6 +29,7 @@ readline.createInterface({input:process.stdin}).on('line', line => {
       send({method:'thread/compacted',params:{threadId:frame.params.threadId,turnId:'compact-turn'}});
       break;
     }
+    case 'thread/start': case 'thread/resume': case 'thread/fork':send({id:frame.id,result:frame.params});break;
     case 'echo':setTimeout(()=>send({id:frame.id,result:frame.params}),frame.params.delay || 0);break;
     case 'notify': {
       const data=Buffer.from(JSON.stringify({method:'item/agentMessage/delta',params:{delta:'hello 🌍'}})+'\\n');
@@ -69,6 +71,15 @@ it("initializes once, correlates out-of-order replies and decodes split UTF-8 no
   client.onNotification((_method, params) => events.push(params));
   await client.request("notify");
   expect(events).toContainEqual({ delta: "hello 🌍" });
+});
+it("gives every Codex thread Concors's instructions alongside its MCP servers", async () => {
+  const client = open();
+  await client.initialize();
+  for (const method of ["thread/start", "thread/resume", "session/fork"])
+    expect(await client.request(method, { cwd: "/repo" })).toEqual({
+      cwd: "/repo",
+      developerInstructions: AGENT_INSTRUCTIONS,
+    });
 });
 it("loads every visible Codex model page", async () => {
   const client = open();

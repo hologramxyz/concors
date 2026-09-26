@@ -2,6 +2,7 @@ import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import type { AgentPlanUsage } from "@concors/protocol";
 import { object } from "../providers/contract.ts";
 import { readCodexPlanUsage } from "../usage/codex-usage.ts";
+import { AGENT_INSTRUCTIONS } from "../instructions.ts";
 import { z } from "zod";
 import { codexMcp } from "../providers/mcp.ts";
 import type { McpServer } from "@concors/protocol";
@@ -108,10 +109,11 @@ export class CodexAppServer {
 
   request(method: string, params: unknown = {}, timeoutMs = 30000): Promise<unknown> {
     if (!this.#ready) return Promise.reject(new Error("Initialize the Codex app server first"));
-    if (this.mcp.length && ["thread/start", "thread/resume", "session/fork"].includes(method))
+    if (["thread/start", "thread/resume", "session/fork"].includes(method))
       params = {
         ...(params as Record<string, unknown>),
-        config: { mcp_servers: codexMcp(this.mcp) },
+        developerInstructions: AGENT_INSTRUCTIONS,
+        ...(this.mcp.length ? { config: { mcp_servers: codexMcp(this.mcp) } } : {}),
       };
     if (method === "mcp/status")
       return this.rpc("mcpServerStatus/list", { limit: 100 }).then((raw) => ({
