@@ -48,7 +48,7 @@ import { NativeSurfaceContext, useNativeSurface } from "@/components/native-surf
 import { matchCommands, needsArguments, slashQuery } from "./slash-commands";
 import { SlashCommandMenu } from "./slash-menu";
 import { readClipboardImage } from "@/tauri";
-import { fitImage, fitImageFile } from "./image-attachment";
+import { fileBase64, fitImage, fitImageFile } from "./image-attachment";
 import { rememberSentAttachments } from "./attachment-cache";
 const defaults: AgentSettings = { model: null, effort: null, mode: "default" };
 const nativeProviderIcons: Record<string, "model" | "claude" | "opencode" | "pi"> = {
@@ -325,12 +325,7 @@ export function AgentComposer({
       for (const original of files) {
         const file = await fitImageFile(original);
         if (file.size > 1024 * 1024) throw new Error(`${file.name} is larger than 1 MB.`);
-        const data = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
-          reader.onerror = () => reject(new Error("Could not read attachment"));
-          reader.readAsDataURL(file);
-        });
+        const data = await fileBase64(file);
         incoming.push({ name: file.name, mime: file.type || "application/octet-stream", data });
       }
       setAttachments((value) => [...value, ...incoming].slice(0, 3));

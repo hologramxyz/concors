@@ -1,5 +1,12 @@
 import { z } from "zod";
 import { SavedTerminalProfileSchema } from "./terminal-profiles.ts";
+import { AgentAttachmentSchema } from "./agents.ts";
+
+/**
+ * The daemon stores an image pasted into a terminal and answers with its path. A CLI agent on a
+ * headless machine cannot read the viewer's clipboard, but it attaches an image path pasted as text.
+ */
+export const TERMINAL_IMAGE_PASTE_CAPABILITY = "terminal-image-paste";
 
 const Id = z.string().uuid();
 const Size = { cols: z.number().int().min(10).max(240), rows: z.number().int().min(2).max(100) };
@@ -41,6 +48,7 @@ export const TerminalOperationSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("resize"), sessionId: Id, ...Size }),
   z.object({ kind: z.literal("stop"), sessionId: Id }),
   z.object({ kind: z.literal("list") }),
+  z.object({ kind: z.literal("paste-image"), sessionId: Id, image: AgentAttachmentSchema }),
   z.object({
     kind: z.literal("bind"),
     projectId: Id,
@@ -66,7 +74,12 @@ export const TerminalResultSchema = z.object({
   type: z.literal("terminal.result"),
   requestId: Id,
   outcome: z.discriminatedUnion("status", [
-    z.object({ status: z.literal("ok"), sessions: z.array(TerminalInfoSchema).max(256) }),
+    z.object({
+      status: z.literal("ok"),
+      sessions: z.array(TerminalInfoSchema).max(256),
+      /** Where a pasted image was stored on the machine. */
+      path: z.string().max(4096).optional(),
+    }),
     z.object({ status: z.literal("error"), message: z.string() }),
   ]),
 });

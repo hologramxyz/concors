@@ -38,7 +38,9 @@ credential home (`ProviderRegistry.credentialOverlay`), so every chat on the mac
 existing panes — runs on that account; activating drops idle runtimes and clears catalog and
 plan-usage caches so the switch takes effect on the next turn. Subscription configurations
 themselves, and any configuration with an explicitly set credential directory, are never
-redirected. Sign-in from Settings bypasses the overlay, so connecting the default account or a
+redirected. Terminals get the same overlay (`ProviderRegistry.terminalEnvironment`), so `claude`
+or `codex` typed into a terminal started after the switch signs in with the active account rather
+than the machine's empty `~/.claude` or `~/.codex`. Sign-in from Settings bypasses the overlay, so connecting the default account or a
 specific subscription always addresses that credential home. A chat's account prompt does not: it
 checks (and, if the login expired, renews) the account the chat actually runs under, so a chat on a
 machine with an active subscription is not asked to sign in to the unused default account. Subscriptions are excluded from the

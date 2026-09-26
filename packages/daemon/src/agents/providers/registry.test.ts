@@ -477,6 +477,9 @@ it("activates one subscription machine-wide and falls back to the default on rem
   expect(flags(activated)).toEqual({ claude: false, "claude-work": true });
   const home = join(root, "accounts", "claude", "claude-work");
   expect(registry.credentialDir(registry.config("claude"))).toBe(home);
+  // `claude` typed into a terminal signs in with the same account as chats.
+  expect(registry.terminalEnvironment()["CLAUDE_CONFIG_DIR"]).toBe(home);
+  expect(registry.terminalEnvironment()["CODEX_HOME"]).toBe(process.env["CODEX_HOME"]);
   // The subscription itself and explicitly configured credential homes are never redirected.
   expect(registry.credentialDir(registry.config("claude-work"))).toBe(home);
   expect(
@@ -492,4 +495,7 @@ it("activates one subscription machine-wide and falls back to the default on rem
   if (removal.outcome.status !== "ok") throw new Error(removal.outcome.message);
   expect(removal.outcome.providers.find((p) => p.id === "claude")?.active).toBe(true);
   expect(registry.credentialDir(registry.config("claude"))).toBeUndefined();
+  expect(registry.terminalEnvironment()["CLAUDE_CONFIG_DIR"]).toBe(
+    process.env["CLAUDE_CONFIG_DIR"],
+  );
 });
