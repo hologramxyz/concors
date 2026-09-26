@@ -1,11 +1,16 @@
 import { terminalClipboardHandler } from "./clipboard";
-import { readClipboardText, writeClipboardText } from "@/tauri";
+import { readClipboardImage, readClipboardText, writeClipboardText } from "@/tauri";
+import { fileBase64, fitImage } from "@/agents/image-attachment";
 import { terminalTheme } from "./theme";
 import { useContext, useLayoutEffect, useRef, useState } from "react";
 import { useTabVisible } from "@/workspace/tab-visibility";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
-import type { TerminalInfo, TerminalOperation } from "@concors/protocol";
+import {
+  TERMINAL_IMAGE_PASTE_CAPABILITY,
+  type TerminalInfo,
+  type TerminalOperation,
+} from "@concors/protocol";
 import { TerminalConnectionContext } from "./connection-context";
 import "@xterm/xterm/css/xterm.css";
 import { CompactLayoutContext } from "@/components/compact-layout";
@@ -48,7 +53,8 @@ export function TerminalSurface({
       sequence = -1,
       viewerId = "",
       snapshotPending = false,
-      running = false;
+      running = false,
+      agent = false;
     let claiming: Promise<void> | null = null;
     let activateAfterClaim = false;
     let queuedInput = "";
@@ -88,17 +94,47 @@ export function TerminalSurface({
       if (!disposed && connection.state.status === "ready")
         setError(cause instanceof Error ? cause.message : "Terminal request failed");
     };
+    const canPaste = () =>
+      !disposed &&
+      running &&
+      connection.state.status === "ready" &&
+      isVisible() &&
+      document.activeElement === terminal.textarea;
+    // The CLI agent may run on another machine, so its own clipboard is not the viewer's. Store the
+    // image there and paste its path, which Claude Code, Codex and OpenCode all attach as an image.
+    const pasteImage = async () => {
+      const image = await readClipboardImage();
+      if (!image) return false;
+      try {
+        const file = await fitImage(image, "Pasted image");
+        const result = await connection.requestTerminal(
+          {
+            kind: "paste-image",
+            sessionId,
+            image: { name: file.name, mime: file.type, data: await fileBase64(file) },
+          },
+          crypto.randomUUID(),
+        );
+        if (result.outcome.status === "error") throw new Error(result.outcome.message);
+        if (result.outcome.path && canPaste()) terminal.paste(result.outcome.path);
+      } catch (cause) {
+        report(cause);
+      }
+      return true;
+    };
     terminal.attachCustomKeyEventHandler(
       terminalClipboardHandler({
         terminal,
         read: readClipboardText,
         write: writeClipboardText,
-        canPaste: () =>
-          !disposed &&
-          running &&
-          connection.state.status === "ready" &&
-          isVisible() &&
-          document.activeElement === terminal.textarea,
+        canPaste,
+        pasteImage: {
+          enabled: () =>
+            agent &&
+            connection.state.status === "ready" &&
+            !!connection.state.daemon.capabilities?.includes(TERMINAL_IMAGE_PASTE_CAPABILITY),
+          paste: pasteImage,
+        },
         report,
       }),
     );
@@ -198,6 +234,7 @@ export function TerminalSurface({
         const scrollFromBottom = terminal.buffer.active.baseY - terminal.buffer.active.viewportY;
         sequence = event.sequence;
         running = event.session.status === "running";
+        agent = (event.session.detectedAgent ?? event.session.profile) !== "shell";
         viewerId = event.viewerId;
         owner = event.ownerId === viewerId;
         terminal.resize(event.session.cols, event.session.rows);
@@ -227,6 +264,7 @@ export function TerminalSurface({
       } else if (event.type === "terminal.state" && event.session.id === sessionId) {
         setSession(event.session);
         running = event.session.status === "running";
+        agent = (event.session.detectedAgent ?? event.session.profile) !== "shell";
         if (!running) terminal.options.disableStdin = true;
       } else if (event.type === "terminal.error" && event.sessionId === sessionId)
         setError(event.message);

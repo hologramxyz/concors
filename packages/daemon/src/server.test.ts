@@ -72,6 +72,7 @@ describe("WebSocket handshake", () => {
           "agent-schedules-v1",
           "host-usage",
           "machine-resources",
+          "preview-names",
           "terminal-profiles",
           "color-themes",
           "project-files",
@@ -100,6 +101,7 @@ describe("WebSocket handshake", () => {
           "directional-pane-split",
           "pane-rename",
           "terminal-recovery",
+          "terminal-image-paste",
         ],
       });
       expect(connection.state.status).toBe("ready");

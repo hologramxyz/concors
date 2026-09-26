@@ -17,6 +17,30 @@ import {
   type InputHandler,
 } from "./contract.ts";
 import { launch } from "./launch.ts";
+/**
+ * The sessions worth offering to resume in `directory`. Sub-agent sessions belong to their
+ * parent, and a session nothing was ever sent to (OpenCode stamps both times at creation and
+ * bumps `updated` with every message) holds no conversation.
+ */
+export function resumableOpenCodeSessions(raw: unknown[], directory: string) {
+  return raw
+    .map(object)
+    .filter((s) => {
+      const time = object(s["time"]);
+      return (
+        s["directory"] === directory &&
+        !s["parentID"] &&
+        Number(time["updated"]) > Number(time["created"])
+      );
+    })
+    .map((s) => ({
+      id: string(s["id"]),
+      title: string(s["title"]).slice(0, 4000),
+      directory,
+      updatedAt: new Date(Number(object(s["time"])["updated"])).toISOString(),
+    }));
+}
+
 export class OpenCodeProvider extends EventProvider {
   private child: ChildProcessWithoutNullStreams | undefined;
   private url = "";
@@ -175,16 +199,7 @@ export class OpenCodeProvider extends EventProvider {
       const sessions = array(await this.call(`/session?limit=${offset + 101}`));
       return {
         nextCursor: sessions.length > offset + 100 ? String(offset + 100) : null,
-        sessions: sessions
-          .slice(offset, offset + 100)
-          .map(object)
-          .filter((s) => s["directory"] === this.cwd)
-          .map((s) => ({
-            id: string(s["id"]),
-            title: string(s["title"]).slice(0, 4000),
-            directory: this.cwd,
-            updatedAt: new Date(Number(object(s["time"])["updated"])).toISOString(),
-          })),
+        sessions: resumableOpenCodeSessions(sessions.slice(offset, offset + 100), this.cwd),
       };
     }
     if (method === "session/fork") {
@@ -274,7 +289,8 @@ export class OpenCodeProvider extends EventProvider {
             ? "/session"
             : "/session/" + encodeURIComponent(string(p["threadId"])),
           method === "thread/start"
-            ? { title: "Concors", permission: [{ permission: "*", pattern: "*", action: "ask" }] }
+            ? // Untitled, so OpenCode names the session after its first message.
+              { permission: [{ permission: "*", pattern: "*", action: "ask" }] }
             : undefined,
         ),
       );

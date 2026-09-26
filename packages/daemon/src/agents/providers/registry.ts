@@ -93,7 +93,17 @@ export class ProviderRegistry {
       .filter((c) => c.enabled)
       .map((c) => join(this.directory, c.id, "node_modules", ".bin"))
       .filter((path) => existsSync(path));
-    return { ...process.env, PATH: [...bins, withRuntime(process.env["PATH"])].join(delimiter) };
+    // `claude` or `codex` typed into a terminal is the regular CLI, so it signs in with the
+    // machine's active subscription exactly as chats do instead of looking in ~/.claude.
+    const credentials = SUBSCRIPTION_ENGINES.flatMap((engine) => {
+      const base = this.configs().find((c) => c.id === engine && c.engine === engine);
+      return base ? Object.entries(this.credentialOverlay(base)) : [];
+    });
+    return {
+      ...process.env,
+      ...Object.fromEntries(credentials),
+      PATH: [...bins, withRuntime(process.env["PATH"])].join(delimiter),
+    };
   }
   /** A subscription runs its engine's regular CLI; resolve binaries from the base configuration. */
   baseId(config: ProviderConfig): string {

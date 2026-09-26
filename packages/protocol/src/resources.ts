@@ -1,6 +1,9 @@
 import { z } from "zod";
 
 export const RESOURCES_CAPABILITY = "machine-resources";
+/** Previews carry a chosen name, and the `rename-preview` operation sets one. */
+export const PREVIEW_NAMES_CAPABILITY = "preview-names";
+export const PREVIEW_NAME_MAX = 80;
 const Bytes = z.number().int().nonnegative();
 const Path = z.string().max(4096);
 export const PreviewProtocolSchema = z.enum(["http", "https"]);
@@ -8,6 +11,8 @@ export type PreviewProtocol = z.infer<typeof PreviewProtocolSchema>;
 export const ProcessPreviewSchema = z.object({
   port: z.number().int().min(1).max(65535),
   protocol: PreviewProtocolSchema,
+  /** Given by the person, or by the agent that started the server; absent when unnamed. */
+  name: z.string().max(PREVIEW_NAME_MAX).optional(),
 });
 export type ProcessPreview = z.infer<typeof ProcessPreviewSchema>;
 
@@ -38,6 +43,13 @@ export type ProcessSnapshot = z.infer<typeof ProcessSnapshotSchema>;
 export const ResourceOperationSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("processes") }),
   z.object({ kind: z.literal("stop"), id: z.string().max(120) }),
+  /** A blank name clears the person's choice, falling back to the agent's name or the process. */
+  z.object({
+    kind: z.literal("rename-preview"),
+    id: z.string().max(120),
+    port: z.number().int().min(1).max(65535),
+    name: z.string().max(PREVIEW_NAME_MAX),
+  }),
 ]);
 export type ResourceOperation = z.infer<typeof ResourceOperationSchema>;
 export const ResourceRequestSchema = z.object({

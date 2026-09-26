@@ -2,6 +2,7 @@ import type { DaemonInfo, DaemonStatus } from "@concors/protocol";
 import {
   HOST_USAGE_CAPABILITY,
   RESOURCES_CAPABILITY,
+  PREVIEW_NAMES_CAPABILITY,
   PROJECT_ICON_CAPABILITY,
   PULL_REQUESTS_CAPABILITY,
   PULL_REQUEST_ACTIONS_CAPABILITY,
@@ -12,6 +13,7 @@ import {
   PROTOCOL_VERSION,
   DICTATION_CAPABILITY,
   PANE_RENAME_CAPABILITY,
+  TERMINAL_IMAGE_PASTE_CAPABILITY,
 } from "@concors/protocol";
 
 import { DAEMON_VERSION } from "./version.ts";
@@ -47,6 +49,7 @@ export class DaemonState {
         "agent-schedules-v1",
         HOST_USAGE_CAPABILITY,
         RESOURCES_CAPABILITY,
+        PREVIEW_NAMES_CAPABILITY,
         "terminal-profiles",
         "color-themes",
         "project-files",
@@ -75,6 +78,7 @@ export class DaemonState {
         "directional-pane-split",
         PANE_RENAME_CAPABILITY,
         "terminal-recovery",
+        TERMINAL_IMAGE_PASTE_CAPABILITY,
         ...(this.#dictation ? [DICTATION_CAPABILITY] : []),
       ],
     };

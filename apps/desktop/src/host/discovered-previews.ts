@@ -25,7 +25,9 @@ export function discoveredPreviews(
       if (!url) continue;
       items.set(preview.port, {
         id: `${process.id}:${preview.port}`,
-        name: process.previews.length > 1 ? `${process.name} · :${preview.port}` : process.name,
+        name:
+          preview.name ??
+          (process.previews.length > 1 ? `${process.name} · :${preview.port}` : process.name),
         port: preview.port,
         preview,
         url,
