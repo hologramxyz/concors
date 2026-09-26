@@ -11,6 +11,9 @@ export async function showNativeNotification(
     body: body.slice(0, 240),
   });
 }
+export async function playNativeSound(kind: "done" | "needs_input"): Promise<void> {
+  await invoke("play_agent_sound", { kind });
+}
 export async function dismissNativeNotification(token: string): Promise<void> {
   await invoke("dismiss_agent_notification", { token });
 }

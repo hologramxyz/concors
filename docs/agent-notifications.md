@@ -14,8 +14,9 @@ inside the existing agent JSON record.
 ## Delivery policy
 
 - Settings enables sound and desktop notifications independently, per browser profile or app
-  installation. Both default off. Browser permission is requested only after the user enables
-  desktop notifications. Test buttons exercise both sounds and desktop delivery.
+  installation. Sound defaults on, as in Herdr; desktop notifications default off, and browser
+  permission is requested only after the user enables them. Test buttons exercise both sounds
+  and desktop delivery.
 - Completion is silent while viewing that conversation. Requests for input use their distinct
   sound even in the focused conversation; neither produces a redundant desktop banner there.
 - Background events wait briefly, then recheck authoritative attention and focus. Reading on
@@ -30,8 +31,27 @@ inside the existing agent JSON record.
   Switching machines or resuming work invalidates old click targets. Dismissing a card closes
   its browser notification but does not mark the conversation read.
 
+## Agent CLIs in terminals
+
+Claude, Codex and OpenCode running in a terminal have no attention records; the daemon only
+detects their activity (below). The client follows Herdr's `notification_sound_for_state_change`
+on those broadcast transitions: moving to `needs_input` plays the request sound even in the
+focused terminal, and a completed turn (`idle` with `agentTurnCompleted`) plays the completion
+sound unless that terminal pane is visible in a focused window. Snapshots, reconnects, newly
+detected agents and exited sessions stay silent, and each sound waits 300 ms and rechecks the
+latest activity. Terminals get sounds only: no desktop banners or unread badges, and no
+cross-window claim, so two open browser windows can each play the same sound.
+
+## Playback
+
+The desktop app plays sounds through the OS like Herdr (`src-tauri/src/sound.rs`): the embedded
+mp3 goes to a temp file played by `afplay` on macOS, PowerShell's MediaPlayer on Windows, or the
+first of `paplay`, `pw-play`, `ffplay`, `mpg123` and `mpv` on Linux. WebKitGTK's Web Audio needed a
+user gesture after every launch and GStreamer codecs, so background alerts were often silent.
+
 Browser notifications use the browser's permission API and silent delivery; Web Audio supplies
-the selected sound. Audio needs a user gesture after loading; Settings test buttons unlock it.
+the selected sound. Browser audio needs a user gesture after loading; Settings test buttons
+unlock it.
 OS permissions, focus modes, and browser background throttling can affect delivery.
 
 Tauri uses a small Rust bridge around `notify-rust` for Linux/macOS/Windows delivery and click
@@ -46,9 +66,13 @@ app testing. This does not implement launching a closed app from a notification.
 
 The completion/input policy follows [Herdr](https://github.com/herdrdev/herdr), revision
 `b99002ac99b09e00b4ca692436cb15a6b0d676f1`, particularly `src/app/actions.rs` and
-`src/sound.rs`. Unmodified `assets/sounds/done.mp3` and `request.mp3` are included under
-`apps/desktop/src/notifications/sounds/`. These assets are Apache-2.0 licensed; the upstream
-license is preserved in [third-party/herdr-LICENSE](../third-party/herdr-LICENSE).
+`src/sound.rs`; the upstream license is preserved in
+[third-party/herdr-LICENSE](../third-party/herdr-LICENSE).
+
+The sounds themselves are Google's Material Design product sounds (CC BY 4.0), not Herdr's:
+`done.mp3` is `notification_high-intensity` and `request.mp3` is `notification_decorative-02`,
+each trimmed of its near-silent tail. See
+[third-party/source-notices.md](../third-party/source-notices.md#agent-notification-sounds).
 The shared daemon acknowledgement protocol and React/native integration are Concors code.
 
 Terminal activity detection also adapts Herdr's `src/detect/manifests/claude.toml`

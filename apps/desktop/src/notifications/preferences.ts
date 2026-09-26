@@ -4,7 +4,8 @@ export interface NotificationPreferences {
   desktop: boolean;
 }
 export const PREFERENCES_KEY = "concors.notifications.v1";
-const defaults: NotificationPreferences = { sound: false, desktop: false };
+// Sound is on by default, as in Herdr; desktop banners need an explicit browser permission.
+const defaults: NotificationPreferences = { sound: true, desktop: false };
 let current: NotificationPreferences = read();
 const listeners = new Set<() => void>();
 function read(): NotificationPreferences {

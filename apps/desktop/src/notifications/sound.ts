@@ -1,14 +1,17 @@
-// Herdr's Apache-2.0 sound assets, revision b99002ac99b09e00b4ca692436cb15a6b0d676f1.
-// See third-party/herdr-LICENSE and docs/agent-notifications.md.
+// Google Material Design product sounds, CC BY 4.0, trimmed. See third-party/source-notices.md.
 import doneUrl from "./sounds/done.mp3";
 import requestUrl from "./sounds/request.mp3";
+import { isTauri, playNativeSound } from "@/tauri";
 let context: AudioContext | null = null;
 const buffers = new Map<string, Promise<AudioBuffer>>();
+/** The desktop app plays through the OS like Herdr; browsers need a gesture to unlock Web Audio. */
 export async function unlockAudio(): Promise<void> {
+  if (isTauri()) return;
   context ??= new AudioContext();
   await context.resume();
 }
 export async function playAgentSound(kind: "done" | "needs_input"): Promise<void> {
+  if (isTauri()) return playNativeSound(kind);
   if (!context || context.state !== "running") return;
   const audio = context;
   const url = kind === "done" ? doneUrl : requestUrl;

@@ -2,6 +2,9 @@ import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { WorkspaceProject, WorkspaceTab, LayoutNode } from "@concors/protocol";
 import { LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PaneVisibilityContext } from "@/components/compact-layout";
+import { useViewedAgent } from "@/notifications/context";
+import { useTabVisible } from "@/workspace/tab-visibility";
 import { TerminalConnectionContext } from "./connection-context";
 import { TerminalSurface } from "./terminal-surface";
 import { useTerminalSessions } from "./use-terminal-sessions";
@@ -23,6 +26,11 @@ export function TerminalPane({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const attempted = useRef<string | null>(null);
+  // Lets the finished-turn sound stay quiet for the terminal being watched, as for chats.
+  const tabVisible = useTabVisible();
+  const paneVisible = useContext(PaneVisibilityContext);
+  const visible = tabVisible && paneVisible;
+  useViewedAgent(node.sessionId ?? "", visible && !!node.sessionId);
   const start = useCallback(
     async (recover = false) => {
       if (!connection?.workspace || busy) return;
