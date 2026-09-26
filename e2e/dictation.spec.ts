@@ -22,7 +22,7 @@ async function workspace(page: Page) {
   return { composer, dispose: () => rm(directory, { recursive: true, force: true }) };
 }
 
-test("live waveform replaces input and Enter waits for final words before sending once", async ({
+test("live waveform replaces input and Enter puts the final words in the prompt box without sending", async ({
   page,
 }) => {
   const { composer, dispose } = await workspace(page);
@@ -54,10 +54,11 @@ test("live waveform replaces input and Enter waits for final words before sendin
       window.testDictation.end();
     });
     await expect(recording).toHaveCount(0);
-    await expect(composer).toHaveValue("");
+    await expect(composer).toHaveValue("Fix the login bug.");
+    await expect(composer).toBeFocused();
     await expect(
       page.getByRole("log").getByText("Fix the login bug.", { exact: true }),
-    ).toHaveCount(1);
+    ).toHaveCount(0);
     await expect.poll(() => page.evaluate(() => window.testDictation.capture.tracks)).toBe(0);
     await expect.poll(() => page.evaluate(() => window.testDictation.capture.contexts)).toBe(0);
   } finally {
@@ -65,7 +66,7 @@ test("live waveform replaces input and Enter waits for final words before sendin
   }
 });
 
-test("Edit finishes dictation into a focused draft; Cancel preserves the original draft and attachment", async ({
+test("Done appends dictation to a focused draft; Cancel preserves the original draft and attachment", async ({
   page,
 }) => {
   const { composer, dispose } = await workspace(page);
@@ -82,7 +83,7 @@ test("Edit finishes dictation into a focused draft; Cancel preserves the origina
     await expect(page.getByRole("button", { name: "Remove notes.txt" })).toBeVisible();
     await page.getByRole("button", { name: "Start dictation", exact: true }).click();
     await page.evaluate(() => window.testDictation.result("some words"));
-    await page.getByRole("button", { name: "Edit dictated message" }).click();
+    await page.getByRole("button", { name: "Finish dictation" }).click();
     await page.evaluate(() => {
       window.testDictation.result("some final words.", true);
       window.testDictation.end();
@@ -102,26 +103,28 @@ test("Edit finishes dictation into a focused draft; Cancel preserves the origina
   }
 });
 
-test("Stop shows a review and click Send uses the normal message path", async ({ page }) => {
+test("the recording bar fits a narrow pane and Done keeps the words for sending as usual", async ({
+  page,
+}) => {
   const { composer, dispose } = await workspace(page);
   try {
     await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.setViewportSize({ width: 520, height: 850 });
     await page.getByRole("button", { name: "Start dictation", exact: true }).click();
-    await page.evaluate(() => window.testDictation.result("Review before sending", true));
+    await page.evaluate(() => window.testDictation.result("Read before sending", true));
     await expect(page.locator("[data-dictation-waveform]")).toHaveCSS("visibility", "hidden");
     await expect(page.getByRole("meter", { name: "Microphone volume" })).toBeVisible();
-    await page.getByRole("button", { name: "Stop dictation", exact: true }).click();
-    await page.evaluate(() => window.testDictation.end());
-    await expect(page.getByLabel("Dictation transcript")).toHaveText("Review before sending");
-    await expect.poll(() => page.evaluate(() => window.testDictation.capture.tracks)).toBe(0);
-    await page.setViewportSize({ width: 520, height: 850 });
     const box = page.getByRole("group", { name: "Dictation", exact: true });
     expect(await box.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
-    await page.screenshot({ path: test.info().outputPath("dictation-review-narrow.png") });
-    await page.getByRole("button", { name: "Send dictated message" }).click();
+    await page.screenshot({ path: test.info().outputPath("dictation-narrow.png") });
+    await page.getByRole("button", { name: "Finish dictation", exact: true }).click();
+    await page.evaluate(() => window.testDictation.end());
+    await expect(composer).toHaveValue("Read before sending");
+    await expect.poll(() => page.evaluate(() => window.testDictation.capture.tracks)).toBe(0);
+    await page.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(composer).toHaveValue("");
     await expect(
-      page.getByRole("log").getByText("Review before sending", { exact: true }),
+      page.getByRole("log").getByText("Read before sending", { exact: true }),
     ).toHaveCount(1);
   } finally {
     await dispose();

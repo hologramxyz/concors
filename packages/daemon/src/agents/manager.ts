@@ -757,7 +757,8 @@ export class AgentManager {
           requestId: request.requestId,
           outcome: {
             status: "ok",
-            conversation: this.#store.agentConversation(info.id),
+            // Every image thumbnail reads its data this way; the history is not what it asked for.
+            conversation: { agent: info, items: [], hasMore: false },
             attachment: this.#store.agentAttachment(info.id, op.itemId, op.index),
           },
         };
