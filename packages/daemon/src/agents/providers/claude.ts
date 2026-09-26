@@ -23,6 +23,7 @@ import type { McpServer } from "@concors/protocol";
 import { claudeStore } from "./claude-store.ts";
 import { claudeHistory, claudeThinkingItems } from "./history.ts";
 import { launch } from "./launch.ts";
+import { AGENT_INSTRUCTIONS } from "../instructions.ts";
 import { resolveProfile } from "../../terminal/profiles.ts";
 import {
   EventProvider,
@@ -143,6 +144,8 @@ export class ClaudeProvider extends EventProvider {
       enableFileCheckpointing: true,
       ...(this.mcp.length ? { mcpServers: claudeMcp(this.mcp) } : {}),
       settingSources: ["user", "project", "local"],
+      // Left unset, the SDK uses its minimal agent prompt, without Claude Code's own instructions.
+      systemPrompt: { type: "preset", preset: "claude_code", append: AGENT_INSTRUCTIONS },
       permissionMode: "default",
       hooks: {
         PostCompact: [

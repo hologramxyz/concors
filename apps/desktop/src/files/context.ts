@@ -26,8 +26,9 @@ interface FilesState {
   close(file: OpenFile): void;
 }
 export const FilesContext = createContext<FilesState | null>(null);
+/** Resolves a link to an opener for a file in the current project, or null when it has none. */
 export const FileLinkContext = createContext<
-  ((href: string, sourcePath?: string) => boolean) | null
+  ((href: string, sourcePath?: string) => (() => void) | null) | null
 >(null);
 export function useFiles() {
   const state = useContext(FilesContext);

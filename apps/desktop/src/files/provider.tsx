@@ -157,9 +157,7 @@ export function ProjectFileLinks({
     <FileLinkContext
       value={(href, sourcePath) => {
         const location = resolveFileLink(href, project.directory, sourcePath);
-        if (!location) return false;
-        files.open(project, location);
-        return true;
+        return location ? () => files.open(project, location) : null;
       }}
     >
       {children}
