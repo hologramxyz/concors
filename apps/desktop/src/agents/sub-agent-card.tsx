@@ -1,5 +1,5 @@
 import { useContext, useEffect, useState } from "react";
-import { Bot, Check, ChevronRight, X, XCircle } from "lucide-react";
+import { Bot, Check, ChevronRight, X } from "lucide-react";
 import type { AgentActivityStep, AgentItem } from "@concors/protocol";
 import { Button } from "@/components/ui/button";
 import {
@@ -65,14 +65,15 @@ export function SubAgentCard({ item, running }: { item: AgentItem; running: bool
         aria-expanded={open}
         className="flex w-full items-start gap-2.5 px-3 py-2.5 text-left"
       >
-        <span className="flex h-5 shrink-0 items-center">
-          {running ? (
-            <BrailleSpinner />
-          ) : failed ? (
-            <XCircle className="size-4 text-destructive" />
-          ) : (
-            <Bot className="size-4 text-muted-foreground" />
-          )}
+        {/* A robot badge sets sub-agents apart from the tool calls around them. */}
+        <span
+          data-sub-agent-badge
+          aria-hidden="true"
+          className={`flex size-5 shrink-0 items-center justify-center rounded-md shadow-sm ${
+            failed ? "bg-destructive text-white" : "bg-primary text-primary-foreground"
+          } ${running ? "animate-pulse" : ""}`}
+        >
+          <Bot className="size-3.5" />
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="flex min-w-0 items-center gap-2 text-sm">
