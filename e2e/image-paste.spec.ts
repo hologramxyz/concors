@@ -51,6 +51,15 @@ test("pasted images attach, and screenshots over 1 MB are shrunk instead of refu
     expect(await paste("icon.png", 64)).toBeLessThan(1024 * 1024);
     await expect(page.getByRole("button", { name: "Remove icon.png" })).toBeVisible();
     await expect(page.getByText(/larger than 1 MB|too large to attach/)).toHaveCount(0);
+    // Before sending, a pasted image can be opened at full size.
+    const thumbnail = page.getByRole("button", { name: "Open icon.png" });
+    await expect(thumbnail).toHaveCSS("cursor", "pointer");
+    await thumbnail.click();
+    const viewer = page.getByRole("dialog", { name: "icon.png" });
+    await expect(viewer.getByRole("img", { name: "icon.png" })).toBeVisible();
+    await viewer.getByRole("button", { name: "Close image" }).click();
+    await expect(viewer).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Remove icon.png" })).toBeAttached();
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
