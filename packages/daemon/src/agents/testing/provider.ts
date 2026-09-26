@@ -305,6 +305,25 @@ export class TestAgentProvider implements AgentProvider {
             prompt: "Check the test coverage",
           },
         });
+        // The sub-agent's own steps arrive on its thread, as Codex reports them.
+        this.emit("item/completed", {
+          threadId: "child-thread",
+          item: {
+            id: "child-read",
+            type: "commandExecution",
+            command: "rg --files tests",
+            status: "completed",
+          },
+        });
+        this.emit("item/started", {
+          threadId: "child-thread",
+          item: {
+            id: "child-run",
+            type: "commandExecution",
+            command: "pnpm test --coverage",
+            status: "inProgress",
+          },
+        });
         this.emit("thread/tokenUsage/updated", {
           tokenUsage: {
             last: { totalTokens: 32000 },

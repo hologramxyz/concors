@@ -20,6 +20,7 @@ import { z } from "zod";
 import {
   AgentControlsSchema,
   type AgentControls,
+  SUB_AGENT_STEPS,
   parseAgentCommand,
   AgentQuestionSchema,
   type AgentInfo,
@@ -1808,12 +1809,36 @@ export class AgentManager {
             .safeParse(params["item"]);
           if (output.success) message = output.data.text.slice(0, 4000);
         }
-        if (status || message)
+        // The child's own tool calls become steps on the row that started it.
+        let activity = item.presentation?.activity;
+        if (method === "item/started" || method === "item/completed") {
+          const step = mapCodexItem(params["item"], method === "item/completed");
+          if (step?.kind === "tool") {
+            const next = {
+              id: step.id.slice(0, 200),
+              title: step.title.slice(0, 100),
+              text: ((step.presentation?.command ?? step.text).split("\n")[0] ?? "").slice(0, 300),
+              status:
+                step.status === "failed"
+                  ? ("failed" as const)
+                  : step.status === "running"
+                    ? ("running" as const)
+                    : ("completed" as const),
+              childId: String(params["threadId"]).slice(0, 200),
+            };
+            activity = [
+              ...(activity ?? []).filter((existing) => existing.id !== next.id),
+              next,
+            ].slice(-SUB_AGENT_STEPS);
+          }
+        }
+        if (status || message || activity !== item.presentation?.activity)
           this.item(id, item.turnId, {
             ...item,
             presentation: {
               ...item.presentation,
               type: "sub_agent",
+              ...(activity ? { activity } : {}),
               children: children.map((child) =>
                 child.id === params["threadId"]
                   ? { ...child, status: status ?? child.status, message: message ?? child.message }

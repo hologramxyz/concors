@@ -870,3 +870,93 @@ it("recovers ACP turns with stable chunk identities instead of appending duplica
   expect(turns.map((t) => t.items.length)).toEqual([2, 2]);
   expect(turns.map((t) => t.items[1]?.text)).toEqual(["Hello again", "Hello again"]);
 });
+it("shows a Claude sub-agent's tool calls as steps of the call that started it", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-claude-subagent-"));
+  cleanup.push(() => rm(directory, { recursive: true, force: true }));
+  await writeFile(join(directory, process.platform === "win32" ? "claude.cmd" : "claude"), "", {
+    mode: 0o755,
+  });
+  vi.stubEnv("PATH", directory);
+  let emit: (value: unknown) => void = () => undefined;
+  const createQuery = vi.fn(() => {
+    const messages = new PassThrough({ objectMode: true });
+    emit = (value) => messages.write(value);
+    return Object.assign(messages, {
+      initializationResult: async () => ({
+        models: [{ value: "default", displayName: "Default" }],
+      }),
+      getContextUsage: async () => ({ model: "claude-sonnet-5" }),
+      setModel: async () => undefined,
+      setPermissionMode: async () => undefined,
+      close: () => {
+        messages.end();
+      },
+    }) as unknown as Query;
+  });
+  const provider = new ClaudeProvider(directory, vi.fn(), createQuery);
+  const { notifications } = observe(provider);
+  await provider.initialize();
+  await provider.request("thread/start");
+  await provider.request("turn/start", turn);
+  emit({
+    type: "assistant",
+    message: {
+      id: "a",
+      content: [
+        {
+          type: "tool_use",
+          id: "task",
+          name: "Agent",
+          input: { description: "Survey the tests", subagent_type: "Explore", prompt: "Look" },
+        },
+      ],
+    },
+  });
+  emit({
+    type: "assistant",
+    parent_tool_use_id: "task",
+    message: {
+      id: "nested",
+      content: [
+        { type: "text", text: "Reading the suite" },
+        { type: "tool_use", id: "read", name: "Read", input: { file_path: "/repo/a.test.ts" } },
+        { type: "tool_use", id: "grep", name: "Grep", input: { pattern: "describe\\(" } },
+      ],
+    },
+  });
+  emit({
+    type: "user",
+    parent_tool_use_id: "task",
+    message: { content: [{ type: "tool_result", tool_use_id: "read", content: "ok" }] },
+  });
+  const items = () =>
+    notifications.filter((n) => n.method.startsWith("item/")).map((n) => object(n.params["item"]));
+  const latest = () =>
+    items()
+      .filter((item) => item["id"] === "task")
+      .at(-1);
+  await expect
+    .poll(() => latest())
+    .toMatchObject({
+      type: "collabAgentToolCall",
+      agentType: "Explore",
+      prompt: "Survey the tests",
+      status: "inProgress",
+      activity: [
+        { id: "read", title: "Read", text: "/repo/a.test.ts", status: "completed" },
+        { id: "grep", title: "Grep", text: "describe\\(", status: "running" },
+      ],
+    });
+  // Nothing the sub-agent did joins the main conversation as its own item.
+  const ids = items().map((item) => item["id"]);
+  expect(ids).not.toContain("read");
+  expect(ids).not.toContain("grep");
+  expect(items().some((item) => item["type"] === "subAgentActivity")).toBe(false);
+
+  emit({
+    type: "user",
+    message: { content: [{ type: "tool_result", tool_use_id: "task", content: "Found 12 tests" }] },
+  });
+  await expect.poll(() => latest()?.["status"]).toBe("completed");
+  expect(latest()?.["activity"]).toHaveLength(2);
+});
