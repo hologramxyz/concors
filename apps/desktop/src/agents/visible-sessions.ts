@@ -21,3 +21,17 @@ export function visibleAgentSessions(
     ),
   };
 }
+
+/**
+ * Names the user gave panes, by the session shown in them. Agents cannot be renamed themselves, so a
+ * renamed pane is how someone names an agent, and every list of agents should say the same thing.
+ */
+export function paneNames(workspace: WorkspaceSnapshot | null): Map<string, string> {
+  const names = new Map<string, string>();
+  for (const project of workspace?.projects ?? [])
+    for (const tab of project.tabs)
+      for (const node of tab.nodes)
+        if (node.kind === "pane" && node.sessionId && node.name)
+          names.set(node.sessionId, node.name);
+  return names;
+}
