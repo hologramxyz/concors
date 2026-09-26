@@ -4,7 +4,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip
 import { SidebarEmpty } from "@/components/sidebar-section";
 import { useContext } from "react";
 import { CompactLayoutContext } from "@/components/compact-layout";
-import { visibleAgentSessions } from "./visible-sessions";
+import { paneNames, visibleAgentSessions } from "./visible-sessions";
 import { AgentStatusIcon } from "./activity";
 import { chatAgentStatus, terminalAgentStatus } from "./agent-status";
 import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
@@ -25,6 +25,7 @@ export function AgentSidebar({
   const chats = useAgents();
   const terminals = useTerminalSessions();
   const visible = visibleAgentSessions(workspace, chats, terminals);
+  const names = paneNames(workspace);
   const scheduled = new Set(
     schedules
       ?.filter(
@@ -40,13 +41,14 @@ export function AgentSidebar({
     ...activeChats.map((agent) => ({
       ...chatAgentStatus(agent),
       projectId: agent.projectId,
-      name: agent.name,
+      name: names.get(agent.id) ?? agent.name,
       updatedAt: agent.updatedAt,
     })),
     ...visible.terminals.map((session) => ({
       ...terminalAgentStatus(session),
       projectId: session.projectId,
       name:
+        names.get(session.id) ??
         TAB_PROFILES.find(
           (profile) => profile.profile === (session.detectedAgent ?? session.profile),
         )?.label ??

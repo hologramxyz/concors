@@ -7,6 +7,7 @@ import { desktopNotice } from "./platform";
 import { Button } from "@/components/ui/button";
 import { playAgentSound, unlockAudio } from "./sound";
 import { terminalAgentSound } from "./terminal";
+import { paneNames } from "@/agents/visible-sessions";
 
 export function NotificationProvider({
   connection,
@@ -120,9 +121,11 @@ export function NotificationProvider({
     const offAgent = connection.onAgent((event) => {
       if (event.type === "agent.item") return;
       const agents = event.type === "agent.list" ? event.agents : [event.agent];
+      const names = paneNames(connection.workspace);
       for (const agent of agents)
         engine.observe(
-          agent,
+          // Notifications name an agent the way its renamed pane and the sidebar do.
+          { ...agent, name: names.get(agent.id) ?? agent.name },
           live,
           connection.workspace?.projects.find((p) => p.id === agent.projectId)?.name ?? "",
         );
