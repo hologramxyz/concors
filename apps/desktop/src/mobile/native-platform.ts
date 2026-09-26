@@ -12,6 +12,9 @@ export async function dismissNativeNotification() {
 export async function onNativeNotificationClick() {
   return () => undefined;
 }
+export async function playNativeSound() {
+  /* isTauri() is false, so mobile plays through Web Audio. */
+}
 
 export { readText as readClipboardText, copyText as writeClipboardText } from "@/lib/clipboard";
 // Mobile paste events carry images as files, so there is nothing to read natively.
