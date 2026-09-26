@@ -63,6 +63,33 @@ it("discovers browser previews without promoting JSON APIs", async () => {
     );
   }
 });
+it("asks for the page when HEAD does not say what it serves", async () => {
+  let head: "untyped" | "unsupported" = "untyped",
+    page = "text/html";
+  const methods: string[] = [];
+  const server = createServer((request, response) => {
+    methods.push(request.method ?? "");
+    // React Router's dev server answers HEAD with 200 and no content type.
+    if (request.method === "HEAD") response.writeHead(head === "untyped" ? 200 : 405);
+    else response.writeHead(200, { "content-type": page });
+    response.end();
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Test server did not listen");
+  try {
+    await expect(previewProtocol(address.port)).resolves.toBe("http");
+    expect(methods).toEqual(["HEAD", "GET"]);
+    head = "unsupported";
+    await expect(previewProtocol(address.port)).resolves.toBe("http");
+    page = "application/json";
+    await expect(previewProtocol(address.port)).resolves.toBeNull();
+  } finally {
+    await new Promise<void>((resolve, reject) =>
+      server.close((error) => (error ? reject(error) : resolve())),
+    );
+  }
+});
 it.skipIf(process.platform !== "linux")(
   "protects this daemon and rejects a stale process identity",
   async () => {
