@@ -6,6 +6,7 @@ import { claimNotification, getNotificationPreferences } from "./preferences";
 import { desktopNotice } from "./platform";
 import { Button } from "@/components/ui/button";
 import { playAgentSound, unlockAudio } from "./sound";
+import { terminalAgentSound } from "./terminal";
 
 export function NotificationProvider({
   connection,
@@ -46,6 +47,12 @@ export function NotificationProvider({
       setNotices((current) => current.filter((n) => n.sessionId !== id));
     };
     dismiss.current = clear;
+    const sound = (kind: Notice["kind"]) => {
+      void playAgentSound(kind).catch(() => {
+        if (!disposed)
+          setProblem("Sound could not play. Use Test sound in Settings to enable audio.");
+      });
+    };
     const engine = new AttentionEngine({
       focused,
       preferences: () => ({
@@ -58,12 +65,7 @@ export function NotificationProvider({
           id,
         ),
       clear,
-      sound: (kind) => {
-        void playAgentSound(kind).catch(() => {
-          if (!disposed)
-            setProblem("Sound could not play. Use Test sound in Settings to enable audio.");
-        });
-      },
+      sound,
       show: (notice) => {
         setNotices((current) =>
           [...current.filter((n) => n.sessionId !== notice.sessionId), notice].slice(-5),
@@ -130,10 +132,41 @@ export function NotificationProvider({
       live = true;
       seen();
     });
+    // Agent CLIs in terminals get sounds only; a short settle rides out detection flicker.
+    const terminals = new Map(connection.terminals.map((session) => [session.id, session]));
+    const terminalSounds = new Map<string, ReturnType<typeof setTimeout>>();
+    const offTerminal = connection.onTerminal((event) => {
+      if (event.type !== "terminal.state" && event.type !== "terminal.snapshot") return;
+      const session = event.session;
+      const previous = terminals.get(session.id);
+      terminals.set(session.id, session);
+      if (previous?.agentActivity === session.agentActivity) return;
+      clearTimeout(terminalSounds.get(session.id));
+      terminalSounds.delete(session.id);
+      const kind =
+        live && event.type === "terminal.state"
+          ? terminalAgentSound(previous, session, focused(session.id))
+          : null;
+      if (!kind) return;
+      terminalSounds.set(
+        session.id,
+        setTimeout(() => {
+          terminalSounds.delete(session.id);
+          if (terminals.get(session.id)?.agentActivity !== session.agentActivity) return;
+          if (kind === "done" && focused(session.id)) return;
+          if (getNotificationPreferences().sound) sound(kind);
+        }, 300),
+      );
+    });
+    const stopTerminalSounds = () => {
+      for (const timer of terminalSounds.values()) clearTimeout(timer);
+      terminalSounds.clear();
+    };
     const offState = connection.subscribe((state) => {
       if (state.status !== "ready") {
         live = false;
         engine.suspend();
+        stopTerminalSounds();
       }
     });
     document.addEventListener("visibilitychange", seen);
@@ -148,6 +181,8 @@ export function NotificationProvider({
       acknowledge.current = () => undefined;
       dismiss.current = () => undefined;
       engine.dispose();
+      stopTerminalSounds();
+      offTerminal();
       offAgent();
       offWorkspace();
       offState();

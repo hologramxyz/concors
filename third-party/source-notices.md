@@ -42,3 +42,12 @@ File trees and open-file tabs use `@react-symbols/icons@1.4.1`
 Solorio's Symbols editor icons. The package is bundled locally for desktop and the offline mobile
 renderer. Its MIT notice is retained in `third-party/react-symbols-LICENSE`. Concors adds filename
 normalization, common extension aliases, consistent sizing, and theme-aware brightness.
+
+## Agent notification sounds
+
+`apps/desktop/src/notifications/sounds/done.mp3` and `request.mp3` are "notification_high-intensity"
+and "notification_decorative-02" from Google's
+[Material Design product sounds](https://m2.material.io/design/sound/sound-resources.html),
+© Google, available under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Concors
+removed each file's near-silent reverb tail (trimmed to 0.85 s with a short fade-out) and re-encoded
+it as MP3. The license text is retained in `third-party/CC-BY-4.0.txt`.
