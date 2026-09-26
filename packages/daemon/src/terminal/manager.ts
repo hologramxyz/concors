@@ -1,12 +1,24 @@
 import { directoryIdentity, shellDirectory } from "./working-directory.ts";
 import { detectTerminalAgent, readTerminalProcesses } from "./agent-process.ts";
 import { randomUUID } from "node:crypto";
-import { realpath, stat } from "node:fs/promises";
-import { isAbsolute } from "node:path";
-import type { TerminalRequest, TerminalResult, TerminalInfo } from "@concors/protocol";
+import { mkdir, realpath, stat, writeFile } from "node:fs/promises";
+import { isAbsolute, join } from "node:path";
+import type {
+  AgentAttachment,
+  TerminalRequest,
+  TerminalResult,
+  TerminalInfo,
+} from "@concors/protocol";
 import type { WorkspaceStore } from "../workspace/store.ts";
 import { resolveProfile, resolveTerminalCommand } from "./profiles.ts";
 import { TerminalRuntime, type TerminalViewer } from "./runtime.ts";
+
+const TERMINAL_IMAGE_TYPES: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+  "image/gif": "gif",
+};
 
 /** One runtime registry per machine, independent of every connected UI. */
 export class TerminalManager {
@@ -112,11 +124,11 @@ export class TerminalManager {
     const operation = this.#queue.then(async (): Promise<TerminalResult> => {
       try {
         if (this.#closed || !viewer.active()) throw new Error("Connection is closed");
-        const sessions = await this.handle(viewer, request);
+        const result = await this.handle(viewer, request);
         return {
           type: "terminal.result",
           requestId: request.requestId,
-          outcome: { status: "ok", sessions },
+          outcome: { status: "ok", ...result },
         };
       } catch (error) {
         return {
@@ -133,20 +145,25 @@ export class TerminalManager {
     return operation;
   }
 
-  private async handle(viewer: TerminalViewer, request: TerminalRequest): Promise<TerminalInfo[]> {
+  private async handle(
+    viewer: TerminalViewer,
+    request: TerminalRequest,
+  ): Promise<{ sessions: TerminalInfo[]; path?: string }> {
     const op = request.operation;
-    if (op.kind === "list") return this.#store.terminals();
-    if (op.kind === "start") return [await this.start(request, viewer)];
+    if (op.kind === "list") return { sessions: this.#store.terminals() };
+    if (op.kind === "start") return { sessions: [await this.start(request, viewer)] };
     if (op.kind === "bind") {
       this.#store.bindTerminal(request);
       this.#workspaceChanged();
-      return [this.#store.terminal(op.sessionId)];
+      return { sessions: [this.#store.terminal(op.sessionId)] };
     }
     const info = this.#store.terminal(op.sessionId);
+    if (op.kind === "paste-image")
+      return { sessions: [info], path: await this.pasteImage(op.sessionId, op.image) };
     const runtime = this.#runtimes.get(op.sessionId);
     if (op.kind === "detach") {
       runtime?.detach(viewer.id);
-      return [info];
+      return { sessions: [info] };
     }
     if (op.kind === "attach") {
       if (runtime) await runtime.attach(viewer);
@@ -159,11 +176,11 @@ export class TerminalManager {
           ownerId: null,
           viewerId: viewer.id,
         });
-      return [runtime?.info ?? info];
+      return { sessions: [runtime?.info ?? info] };
     }
     if (op.kind === "stop") {
       await runtime?.stop();
-      return [runtime?.info ?? info];
+      return { sessions: [runtime?.info ?? info] };
     }
     if (!runtime) throw new Error("Terminal process is no longer running");
     runtime.resize(
@@ -173,7 +190,23 @@ export class TerminalManager {
       op.kind === "claim",
       op.kind === "claim" && op.ifUnowned === true,
     );
-    return [runtime.info];
+    return { sessions: [runtime.info] };
+  }
+
+  /** Keeps a pasted image beside chat attachments, where the terminal's CLI agent can read it. */
+  private async pasteImage(sessionId: string, image: AgentAttachment): Promise<string> {
+    if (this.#runtimes.get(sessionId)?.info.status !== "running")
+      throw new Error("Terminal process is no longer running");
+    const extension = TERMINAL_IMAGE_TYPES[image.mime];
+    if (!extension) throw new Error("Only PNG, JPEG, WebP and GIF images can be pasted");
+    const bytes = Buffer.from(image.data, "base64");
+    if (bytes.length > 1024 * 1024) throw new Error("Pasted images must be 1 MB or smaller");
+    const directory = join(this.#store.attachmentsDirectory, `terminal-${sessionId}`);
+    await mkdir(directory, { recursive: true, mode: 0o700 });
+    // No spaces or quotes, so every CLI recognises the pasted text as one image path.
+    const path = join(directory, `${randomUUID()}.${extension}`);
+    await writeFile(path, bytes, { flag: "wx", mode: 0o600 });
+    return path;
   }
 
   private async start(request: TerminalRequest, viewer: TerminalViewer): Promise<TerminalInfo> {

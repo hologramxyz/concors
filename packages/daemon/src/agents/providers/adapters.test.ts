@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 import type { query, Query, Options } from "@anthropic-ai/claude-agent-sdk";
 import { ClaudeProvider } from "./claude.ts";
-import { OpenCodeProvider } from "./opencode.ts";
+import { OpenCodeProvider, resumableOpenCodeSessions } from "./opencode.ts";
 import { PiProvider } from "./pi.ts";
 import { launch } from "./launch.ts";
 import { object, type ConversationProvider } from "./contract.ts";
@@ -305,6 +305,28 @@ it("leaves an unsaved Claude conversation to the caller and starts afresh after 
   );
   expect(thread["id"]).toBe(opened[2]!.sessionId);
   expect(thread["id"]).not.toBe("unsaved");
+});
+it("offers only OpenCode conversations someone wrote in, in this directory", () => {
+  const session = (id: string, extra: object = {}) => ({
+    id,
+    title: id,
+    directory: "/repo",
+    time: { created: 1000, updated: 2000 },
+    ...extra,
+  });
+  expect(
+    resumableOpenCodeSessions(
+      [
+        session("talked"),
+        session("never-used", { time: { created: 1000, updated: 1000 } }),
+        session("sub-agent", { parentID: "talked" }),
+        session("elsewhere", { directory: "/other" }),
+      ],
+      "/repo",
+    ),
+  ).toEqual([
+    { id: "talked", title: "talked", directory: "/repo", updatedAt: new Date(2000).toISOString() },
+  ]);
 });
 it("reads OpenCode SSE deltas, scopes events, forwards decisions, and interrupts", async () => {
   let stream: ServerResponse;

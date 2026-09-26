@@ -119,4 +119,32 @@ describe("terminal clipboard shortcuts", () => {
       expect(f.terminal.paste).not.toHaveBeenCalled();
     },
   );
+
+  it("pastes an image only when the clipboard has no text, and Ctrl+V only for agents", async () => {
+    const f = fixture();
+    let agent = true;
+    const paste = vi.fn(async () => true);
+    const handle = terminalClipboardHandler({
+      ...f,
+      pasteImage: { enabled: () => agent, paste },
+    });
+    expect(handle(key({ key: "v", metaKey: true }))).toBe(false);
+    await vi.waitFor(() => expect(f.terminal.paste).toHaveBeenCalledExactlyOnceWith("one\ntwo"));
+    expect(paste).not.toHaveBeenCalled();
+
+    f.read.mockRejectedValue(new Error("No text on the clipboard"));
+    const controlV = key({ key: "v", ctrlKey: true });
+    expect(handle(controlV)).toBe(false);
+    expect(controlV.preventDefault).toHaveBeenCalled();
+    await vi.waitFor(() => expect(paste).toHaveBeenCalledTimes(1));
+    expect(f.report).not.toHaveBeenCalled();
+
+    // Neither text nor an image: the original failure is reported.
+    paste.mockResolvedValue(false);
+    handle(key({ key: "v", ctrlKey: true }));
+    await vi.waitFor(() => expect(f.report).toHaveBeenCalledTimes(1));
+
+    agent = false;
+    expect(handle(key({ key: "v", ctrlKey: true }))).toBe(true);
+  });
 });

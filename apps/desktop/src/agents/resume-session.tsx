@@ -1,4 +1,12 @@
-import { useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useContext,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { History, LoaderCircle, RefreshCw } from "lucide-react";
 import type { AgentInfo } from "@concors/protocol";
 import type { DaemonConnection } from "@concors/daemon-client";
@@ -39,7 +47,8 @@ export function ResumeSession({
   const [revision, setRevision] = useState(0);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [search, setSearch] = useState("");
+  // Searching filters what is already loaded, so typing never waits on the machine.
+  const search = useDeferredValue(query.trim());
   const [refresh, setRefresh] = useState(0);
   const [busy, setBusy] = useState(false);
   const [uncertain, setUncertain] = useState(false);
@@ -49,17 +58,12 @@ export function ResumeSession({
     if (busy) return;
     if (next && !attempt.current) {
       setQuery("");
-      setSearch("");
       setFilter("all");
     }
     setOpen(next);
     onOpenChange(next);
   };
   useEffect(() => () => onOpenChange(false), [onOpenChange]);
-  useEffect(() => {
-    const timer = setTimeout(() => setSearch(query.trim()), 250);
-    return () => clearTimeout(timer);
-  }, [query]);
   useEffect(() => {
     if (!open || !connection) return;
     let current = true;
@@ -69,9 +73,11 @@ export function ResumeSession({
         if (!current) return;
         if (result.outcome.status === "error") throw new Error(result.outcome.message);
         setCatalogError(null);
+        // Subscriptions share their engine's conversations, which the base provider already
+        // lists; sessions are grouped by harness, never by account.
         setProviders(
           result.outcome.providers
-            .filter((p) => p.enabled && p.installed)
+            .filter((p) => p.enabled && p.installed && !p.subscription)
             .map((p) => ({ id: p.id, label: p.label })),
         );
         setRevision(result.outcome.revision);
@@ -127,7 +133,6 @@ export function ResumeSession({
     agent.directory,
     providers,
     revision,
-    search,
     refresh,
   ]);
   return (
@@ -238,7 +243,7 @@ export function ResumeSession({
             query={search}
             scope={scope}
             refresh={refresh > 0}
-            disabled={disabled || busy || uncertain || query.trim() !== search}
+            disabled={disabled || busy || uncertain}
             onSelect={(session) => void resume(session)}
           />
         )}
@@ -273,7 +278,7 @@ function SessionResults({
   disabled: boolean;
   onSelect: (session: ProviderSession) => void;
 }) {
-  // The keyed component owns one search generation; filter changes keep its loaded pages.
+  // The keyed component owns one load generation; filter and search changes keep its pages.
   const [catalog] = useState(() => {
     const key = (provider: string, cursor?: string) => JSON.stringify([scope, provider, cursor]);
     return new SessionCatalog(
@@ -287,7 +292,6 @@ function SessionResults({
             projectId: agent.projectId,
             directory: agent.directory,
             provider,
-            query,
             refresh,
             ...(cursor ? { cursor } : {}),
           },
@@ -347,11 +351,32 @@ function SessionList({
   const providers = snapshot.providers.filter((p) => filter === "all" || filter === p.id);
   const loading = providers.some((p) => p.loading);
   const more = providers.some((p) => p.hasMore && !p.error);
-  const rows = snapshot.sessions.filter(
-    (session) =>
-      (filter === "all" || session.provider === filter) &&
-      (session.provider !== agent.provider || session.id !== agent.threadId),
-  );
+  const rows = useMemo(() => {
+    const needle = query.toLocaleLowerCase();
+    return snapshot.sessions.filter(
+      (session) =>
+        (filter === "all" || session.provider === filter) &&
+        (session.provider !== agent.provider || session.id !== agent.threadId) &&
+        (!needle || `${session.title} ${session.id}`.toLocaleLowerCase().includes(needle)),
+    );
+  }, [snapshot, filter, agent.provider, agent.threadId, query]);
+  // Conversations already bound to a pane, looked up once rather than per row.
+  const opened = useMemo(() => {
+    const panes = new Set(
+      connection.workspace?.projects.flatMap((project) =>
+        project.tabs.flatMap((tab) =>
+          tab.nodes.flatMap((pane) =>
+            pane.kind === "pane" && pane.sessionId ? [pane.sessionId] : [],
+          ),
+        ),
+      ),
+    );
+    return new Set(
+      connection.agents
+        .filter((a) => a.threadId && panes.has(a.id))
+        .map((a) => JSON.stringify([a.provider, a.threadId])),
+    );
+  }, [connection.agents, connection.workspace]);
   useEffect(() => {
     if (limit >= rows.length && (loading || !more)) return;
     const observer = new IntersectionObserver(
@@ -390,16 +415,7 @@ function SessionList({
         ))}
       <div className="space-y-1">
         {rows.slice(0, limit).map((session) => {
-          const existing = connection.agents.find(
-            (a) => a.provider === session.provider && a.threadId === session.id,
-          );
-          const open =
-            existing &&
-            connection.workspace?.projects.some((p) =>
-              p.tabs.some((tab) =>
-                tab.nodes.some((pane) => pane.kind === "pane" && pane.sessionId === existing.id),
-              ),
-            );
+          const open = opened.has(JSON.stringify([session.provider, session.id]));
           return (
             <button
               key={JSON.stringify([session.provider, session.id])}

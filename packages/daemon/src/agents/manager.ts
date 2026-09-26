@@ -2259,11 +2259,14 @@ export class AgentManager {
                       ));
                 if (provider) {
                   await current.initialize();
-                  await current.request("thread/start", {
-                    cwd: info.directory,
-                    approvalPolicy: "on-request",
-                    sandbox: "workspace-write",
-                  });
+                  // OpenCode lists models without a session, and every session it starts is saved
+                  // and would show up among the conversations to resume.
+                  if (config.engine !== "opencode")
+                    await current.request("thread/start", {
+                      cwd: info.directory,
+                      approvalPolicy: "on-request",
+                      sandbox: "workspace-write",
+                    });
                 }
                 return parseModels(await current.request("model/list", {}), config.models);
               })(),
