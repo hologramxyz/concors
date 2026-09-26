@@ -575,7 +575,7 @@ dependencies = [
 
 [[package]]
 name = "concors-desktop"
-version = "0.6.9"
+version = "0.6.10"
 dependencies = [
  "env_logger",
  "log",
