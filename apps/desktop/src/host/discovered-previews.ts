@@ -7,6 +7,8 @@ export interface DiscoveredPreview {
   port: number;
   preview: ProcessPreview;
   url: string;
+  /** The listener, which stopping the preview stops. */
+  process: MachineProcess;
 }
 
 type PreviewConnection = Pick<DaemonConnection, "previewUrl">;
@@ -27,6 +29,7 @@ export function discoveredPreviews(
         port: preview.port,
         preview,
         url,
+        process,
       });
     }
   }

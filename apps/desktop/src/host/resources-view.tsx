@@ -1,23 +1,15 @@
-import { useContext, useEffect, useRef, useState } from "react";
-import { newRequestId } from "@concors/client-core";
+import { useContext, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { RESOURCES_CAPABILITY, type MachineProcess } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import { openPreview as openDetectedPreview } from "@/tauri/open-external";
 import { useProcesses } from "./use-processes";
 import { processStore } from "./process-store";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import { ResourceProcessRow } from "./process-row";
+import { StopProcessDialog } from "./stop-process-dialog";
 
 export function ResourcesView() {
   const connection = useContext(TerminalConnectionContext);
@@ -31,47 +23,12 @@ function ResourceContent() {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState("memory");
   const [processLimit, setProcessLimit] = useState(100);
-  const [busy, setBusy] = useState(false);
-  const busyRef = useRef(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [action, setAction] = useState<MachineProcess | null>(null);
-  const alive = useRef(true);
-  useEffect(() => {
-    alive.current = true;
-    return () => {
-      alive.current = false;
-    };
-  }, []);
   const supported =
     connection?.state.status === "ready" &&
     connection.state.daemon.capabilities?.includes(RESOURCES_CAPABILITY);
-  const stop = async (item: MachineProcess) => {
-    if (!connection || busyRef.current) return;
-    busyRef.current = true;
-    setBusy(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const result = await connection.requestResource(
-        { kind: "stop", id: item.id },
-        newRequestId(),
-      );
-      if (!alive.current) return;
-      if (result.outcome.status === "error") throw new Error(result.outcome.message);
-      if (result.outcome.status === "done") {
-        setMessage(result.outcome.message);
-        setAction(null);
-        void refresh();
-      }
-    } catch (cause) {
-      if (alive.current)
-        setError(cause instanceof Error ? cause.message : "Could not stop process.");
-    } finally {
-      busyRef.current = false;
-      if (alive.current) setBusy(false);
-    }
-  };
   const filtered = (snapshot?.processes ?? [])
     .filter((item) =>
       [item.name, item.pid, item.directory ?? ""]
@@ -125,7 +82,7 @@ function ResourceContent() {
           variant="ghost"
           size="icon"
           aria-label="Refresh"
-          disabled={!supported || busy || loading}
+          disabled={!supported || loading}
           onClick={() => void refresh()}
         >
           <RefreshCw className={loading ? "animate-spin" : ""} />
@@ -151,7 +108,7 @@ function ResourceContent() {
           <ResourceProcessRow
             key={item.id}
             item={item}
-            canStop={!!supported && !busy}
+            canStop={!!supported}
             onPreview={() => openPreview(item)}
             onStop={() => {
               setAction(item);
@@ -182,48 +139,17 @@ function ResourceContent() {
           Container and other-user usage may not be fully attributed.
         </p>
       </details>
-      <Dialog
-        open={!!action}
-        onOpenChange={(open) => {
-          if (!open && !busy) setAction(null);
+      <StopProcessDialog
+        connection={connection}
+        process={action}
+        supported={!!supported}
+        onClose={() => setAction(null)}
+        onStopped={(stopped) => {
+          setMessage(stopped);
+          setAction(null);
+          void refresh();
         }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Stop process?</DialogTitle>
-            <DialogDescription>
-              Send a graceful termination request to this process only. Unsaved in-memory work may
-              be lost. Child processes can remain; no force-kill is sent.
-            </DialogDescription>
-          </DialogHeader>
-          {action && (
-            <p className="text-sm break-all">
-              {action.name} · PID {action.pid}
-              <br />
-              {action.directory}
-            </p>
-          )}
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
-          <DialogFooter>
-            <Button variant="outline" disabled={busy} onClick={() => setAction(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={!supported || busy}
-              onClick={() => {
-                if (action) void stop(action);
-              }}
-            >
-              {busy ? "Working…" : "Stop process"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      />
     </div>
   );
 }
