@@ -1,23 +1,34 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Check, LoaderCircle, Mic, X } from "lucide-react";
+import { ArrowUp, LoaderCircle, Mic, Pencil, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { observeMicrophone } from "./dictation-audio";
-import type { DictationState } from "./dictation-session";
+import type { DictationAction, DictationState } from "./dictation-session";
 import "./dictation.css";
 
 /**
- * Stands in for the prompt box while you speak. Done (or Enter) puts the words into the prompt
- * box to read over and send; nothing is sent from here and no recording is kept.
+ * Stands in for the prompt box while you speak. Edit (or Enter) puts the words into the prompt
+ * box to read over; Send (or Ctrl+Enter) sends them as a message. No recording is kept.
  */
 export function DictationRecording({
   state,
   onStop,
   onCancel,
+  canSend,
+  queued,
 }: {
   state: DictationState;
-  onStop: () => void;
+  onStop: (action: DictationAction) => void;
   onCancel: () => void;
+  canSend: boolean;
+  /** A turn is running, so a sent message waits in the queue. */
+  queued: boolean;
 }) {
+  // The button that ended the recording shows the wait for the last words.
+  const [chosen, setChosen] = useState<DictationAction | null>(null);
+  const stop = (action: DictationAction) => {
+    setChosen(action);
+    onStop(action);
+  };
   const root = useRef<HTMLDivElement>(null);
   const recording = state.phase === "recording";
   const stopping = state.phase === "stopping";
@@ -58,14 +69,15 @@ export function DictationRecording({
         } else if (
           event.key === "Enter" &&
           !event.shiftKey &&
-          !event.ctrlKey &&
-          !event.metaKey &&
           !event.altKey &&
           !(event.target instanceof HTMLButtonElement)
         ) {
           event.preventDefault();
           event.stopPropagation();
-          onStop();
+          // Plain Enter only fills the prompt box, so a stray key never sends a message.
+          if (event.ctrlKey || event.metaKey) {
+            if (canSend) stop("send");
+          } else stop("insert");
         }
       }}
     >
@@ -135,16 +147,33 @@ export function DictationRecording({
         </span>
         <Button
           type="button"
+          variant="secondary"
           size="icon"
-          aria-label="Finish dictation"
-          title="Put the words in the message (Enter)"
+          className="rounded-full"
+          aria-label="Edit dictated message"
+          title="Put the words in the message to edit (Enter)"
           disabled={stopping}
-          onClick={onStop}
+          onClick={() => stop("insert")}
         >
-          {stopping ? (
+          {stopping && chosen === "insert" ? (
             <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
           ) : (
-            <Check className="size-4" />
+            <Pencil className="size-4" />
+          )}
+        </Button>
+        <Button
+          type="button"
+          size="icon"
+          className="rounded-full"
+          aria-label={queued ? "Queue dictated message" : "Send dictated message"}
+          title={queued ? "Queue the message (Ctrl+Enter)" : "Send the message (Ctrl+Enter)"}
+          disabled={stopping || !canSend}
+          onClick={() => stop("send")}
+        >
+          {stopping && chosen === "send" ? (
+            <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <ArrowUp className="size-4" />
           )}
         </Button>
       </div>

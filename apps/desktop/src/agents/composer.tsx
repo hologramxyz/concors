@@ -140,11 +140,16 @@ export function AgentComposer({
   const dictation = useDictation(
     {
       onTranscript: (text) => setDraft(appendDictation(dictationBase.current, text)),
-      // The words go into the prompt box, to be read and sent like anything typed.
-      onFinish: (text) => setDraft(appendDictation(dictationBase.current, text)),
+      onFinish: (text, action) => {
+        const message = appendDictation(dictationBase.current, text);
+        setDraft(message);
+        // Send goes the normal way, queueing behind a running turn; Edit leaves it to review.
+        if (action === "send" && connected && !uncertain) void submit({ message, attachments });
+      },
       onCancel: () => setDraft(dictationBase.current),
     },
-    connected && visible,
+    visible,
+    connected,
     connection,
   );
   useLayoutEffect(() => {
@@ -864,6 +869,10 @@ export function AgentComposer({
               state={dictation}
               onStop={dictation.stop}
               onCancel={dictation.cancel}
+              canSend={
+                connected && !busy && !uncertain && !uploading && !configuring && !!agent.threadId
+              }
+              queued={active}
             />
           ) : native ? (
             <div ref={nativeField} aria-hidden="true" style={{ height: nativeHeight }} />
