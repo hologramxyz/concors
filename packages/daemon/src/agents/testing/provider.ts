@@ -249,7 +249,7 @@ export class TestAgentProvider implements AgentProvider {
           item: {
             id: `files-link-${this.turnId}`,
             type: "agentMessage",
-            text: "Read [the README](README.md) or [the code](src/main.ts#L2).",
+            text: "Read [the README](README.md) or [the code](src/main.ts#L2), not [the screenshot](/tmp/concors-shot.png).",
           },
         });
       }
