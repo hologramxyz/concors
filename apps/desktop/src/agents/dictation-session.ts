@@ -17,9 +17,8 @@ export interface Recognition {
   stop(): void;
   abort(): void;
 }
-export type DictationAction = "review" | "edit" | "send";
 export interface DictationState {
-  phase: "idle" | "recording" | "stopping" | "review";
+  phase: "idle" | "recording" | "stopping";
   transcript: string;
   error: string | null;
 }
@@ -27,7 +26,8 @@ export const emptyDictation: DictationState = { phase: "idle", transcript: "", e
 interface DictationCallbacks {
   change: (state: DictationState) => void;
   transcript: (text: string) => void;
-  finish: (text: string, action: "edit" | "send") => void;
+  /** The dictated words, for the prompt box; dictation never sends anything itself. */
+  finish: (text: string) => void;
 }
 
 export function appendDictation(draft: string, transcript: string): string {
@@ -37,10 +37,12 @@ export function appendDictation(draft: string, transcript: string): string {
   );
 }
 
-/** One recognition run owns its final results and exactly one explicit completion intent. */
+/**
+ * One recognition run, ending exactly once by handing its words to the prompt box: when stopped,
+ * when the service ends on its own, and on a failure, which keeps the words captured so far.
+ */
 export class DictationSession {
   state: DictationState = { ...emptyDictation, phase: "recording" };
-  #action: DictationAction = "review";
   #timer: ReturnType<typeof setTimeout> | undefined;
   #closed = false;
   private speech: Recognition;
@@ -83,8 +85,7 @@ export class DictationSession {
     this.speech.onend = () => {
       if (this.#closed || !["recording", "stopping"].includes(this.state.phase)) return;
       clearTimeout(this.#timer);
-      if (this.#action === "review") this.#review();
-      else this.#finish(this.#action);
+      this.#finish();
     };
     this.#update({});
     try {
@@ -94,29 +95,24 @@ export class DictationSession {
     }
   }
 
-  stop(action: DictationAction): void {
-    if (this.#closed || this.state.phase === "stopping" || this.state.phase === "idle") return;
-    if (this.state.phase === "review") {
-      if (action !== "review") this.#finish(action);
-      return;
-    }
-    this.#action = action;
+  /** Waits for the last words, which the service delivers as it ends. */
+  stop(): void {
+    if (this.#closed || this.state.phase !== "recording") return;
     this.#update({ phase: "stopping" });
-    // Never send an uncertain transcript on recognition failure or timeout.
     this.#timer = setTimeout(
-      () => this.#fail("Dictation could not finish. Review the captured text before sending."),
+      () => this.#fail("Dictation could not finish. Check the words it captured."),
       this.finishTimeoutMs,
     );
     try {
       this.speech.stop();
     } catch {
-      this.#fail("Dictation could not finish. Review the captured text before sending.");
+      this.#fail("Dictation could not finish. Check the words it captured.");
     }
   }
 
-  /** Leaving the pane/disconnecting cancels a pending Send, preserving the editable draft. */
+  /** Leaving the pane or disconnecting keeps the words captured so far. */
   suspend(): void {
-    if (!this.#closed && this.state.phase !== "idle") this.#finish("edit");
+    if (!this.#closed && this.state.phase !== "idle") this.#finish();
   }
 
   dispose(): void {
@@ -131,27 +127,14 @@ export class DictationSession {
     }
   }
 
-  #finish(action: "edit" | "send"): void {
+  #finish(error: string | null = null): void {
     const text = this.state.transcript;
     this.dispose();
-    this.#update({ phase: "idle", error: null });
-    this.callbacks.finish(text, text.trim() ? action : "edit");
-  }
-  #review(): void {
-    this.speech.onresult = this.speech.onerror = this.speech.onend = null;
-    this.#update({ phase: this.state.transcript ? "review" : "idle" });
+    this.#update({ phase: "idle", error });
+    this.callbacks.finish(text);
   }
   #fail(error: string): void {
-    clearTimeout(this.#timer);
-    this.#action = "review";
-    this.speech.onresult = this.speech.onerror = this.speech.onend = null;
-    try {
-      this.speech.abort();
-    } catch {
-      // The service may already have stopped.
-    }
-    this.#update({ error });
-    this.#review();
+    this.#finish(error);
   }
   #update(change: Partial<DictationState>): void {
     this.state = { ...this.state, ...change };

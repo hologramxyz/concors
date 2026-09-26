@@ -1,22 +1,22 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowUp, Mic, Pencil, Square, X } from "lucide-react";
+import { Check, LoaderCircle, Mic, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { observeMicrophone } from "./dictation-audio";
-import type { DictationAction, DictationState } from "./dictation-session";
+import type { DictationState } from "./dictation-session";
 import "./dictation.css";
 
+/**
+ * Stands in for the prompt box while you speak. Done (or Enter) puts the words into the prompt
+ * box to read over and send; nothing is sent from here and no recording is kept.
+ */
 export function DictationRecording({
   state,
   onStop,
   onCancel,
-  canSend,
-  queued,
 }: {
   state: DictationState;
-  onStop: (action: DictationAction) => void;
+  onStop: () => void;
   onCancel: () => void;
-  canSend: boolean;
-  queued: boolean;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const recording = state.phase === "recording";
@@ -41,7 +41,6 @@ export function DictationRecording({
     };
   }, [recording]);
   const volume = Math.round((levels.at(-1) ?? 0) * 100);
-  const status = recording ? "Listening" : stopping ? "Finishing dictation…" : "Ready to send";
   return (
     <div
       ref={root}
@@ -66,7 +65,7 @@ export function DictationRecording({
         ) {
           event.preventDefault();
           event.stopPropagation();
-          if (canSend && !stopping) onStop("send");
+          onStop();
         }
       }}
     >
@@ -131,51 +130,22 @@ export function DictationRecording({
         >
           {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}
         </time>
-      </div>
-      {state.phase === "review" && state.transcript && (
-        <p
-          aria-label="Dictation transcript"
-          className="chat-markdown max-h-28 overflow-y-auto px-2 py-2 break-words whitespace-pre-wrap"
-        >
-          {state.transcript}
-        </p>
-      )}
-      <div className="flex flex-wrap items-center gap-2 px-1 pt-2">
-        <span role="status" className="mr-auto text-xs text-muted-foreground">
-          {status}
+        <span role="status" className="sr-only">
+          {stopping ? "Finishing dictation…" : "Listening"}
         </span>
         <Button
           type="button"
-          variant="ghost"
-          disabled={stopping}
-          onClick={() => onStop("edit")}
-          aria-label="Edit dictated message"
-        >
-          <Pencil className="size-3.5" /> Edit
-        </Button>
-        {recording && (
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            aria-label="Stop dictation"
-            title="Stop and review dictation"
-            onClick={() => onStop("review")}
-          >
-            <Square className="size-3.5" />
-          </Button>
-        )}
-        <Button
-          type="button"
           size="icon"
-          aria-label={queued ? "Queue dictated message" : "Send dictated message"}
-          title={
-            queued ? "Stop dictation and queue message (Enter)" : "Stop dictation and send (Enter)"
-          }
-          disabled={!canSend || stopping || (state.phase === "review" && !state.transcript.trim())}
-          onClick={() => onStop("send")}
+          aria-label="Finish dictation"
+          title="Put the words in the message (Enter)"
+          disabled={stopping}
+          onClick={onStop}
         >
-          <ArrowUp className="size-4" />
+          {stopping ? (
+            <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <Check className="size-4" />
+          )}
         </Button>
       </div>
     </div>
