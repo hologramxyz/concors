@@ -1,6 +1,6 @@
 import { readFile, readlink, readdir, stat } from "node:fs/promises";
 import { readFileSync, statSync } from "node:fs";
-import { request as httpRequest, type IncomingHttpHeaders } from "node:http";
+import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { basename, sep } from "node:path";
 import { execFile } from "node:child_process";
@@ -96,8 +96,12 @@ export function listeningPorts(output: string) {
   return result;
 }
 
-function previewResponse(status: number, headers: IncomingHttpHeaders) {
-  const contentType = headers["content-type"]?.toLowerCase() ?? "";
+interface ProbeResponse {
+  status: number;
+  contentType: string;
+}
+
+function previewResponse({ status, contentType }: ProbeResponse) {
   return (
     (status >= 300 && status < 400) ||
     contentType.includes("text/html") ||
@@ -105,10 +109,15 @@ function previewResponse(status: number, headers: IncomingHttpHeaders) {
   );
 }
 
-function probe(port: number, protocol: PreviewProtocol): Promise<boolean> {
+/** One request to the root, answered with its status and content type; the body is never read. */
+function probe(
+  port: number,
+  protocol: PreviewProtocol,
+  method: "HEAD" | "GET",
+): Promise<ProbeResponse | null> {
   return new Promise((resolve) => {
     let settled = false;
-    const finish = (value: boolean) => {
+    const finish = (value: ProbeResponse | null) => {
       if (settled) return;
       settled = true;
       resolve(value);
@@ -117,28 +126,42 @@ function probe(port: number, protocol: PreviewProtocol): Promise<boolean> {
       {
         host: "127.0.0.1",
         port,
-        method: "HEAD",
+        method,
         path: "/",
         headers: { host: `localhost:${port}`, "user-agent": "Concors preview discovery" },
         ...(protocol === "https" ? { rejectUnauthorized: false } : {}),
       },
       (response) => {
-        response.resume();
-        finish(previewResponse(response.statusCode ?? 0, response.headers));
+        finish({
+          status: response.statusCode ?? 0,
+          contentType: response.headers["content-type"]?.toLowerCase() ?? "",
+        });
+        response.destroy();
         request.destroy();
       },
     );
     request.setTimeout(500, () => request.destroy());
-    request.on("error", () => finish(false));
-    request.on("close", () => finish(false));
+    request.on("error", () => finish(null));
+    request.on("close", () => finish(null));
     request.end();
   });
 }
 
+async function servesBrowserContent(port: number, protocol: PreviewProtocol) {
+  const head = await probe(port, protocol, "HEAD");
+  if (!head) return false;
+  if (previewResponse(head)) return true;
+  // Some servers answer HEAD without a content type (React Router's dev server, for one) or do
+  // not support it; then ask for the page itself, reading only its headers.
+  if (head.contentType && head.status !== 405 && head.status !== 501) return false;
+  const get = await probe(port, protocol, "GET");
+  return !!get && previewResponse(get);
+}
+
 /** Confirm that a listener serves browser content without sending it a state-changing request. */
 export async function previewProtocol(port: number): Promise<PreviewProtocol | null> {
-  if (await probe(port, "http")) return "http";
-  if (await probe(port, "https")) return "https";
+  if (await servesBrowserContent(port, "http")) return "http";
+  if (await servesBrowserContent(port, "https")) return "https";
   return null;
 }
 
