@@ -276,6 +276,11 @@ test("agent file links open Markdown and code tabs without leaving the workspace
     await expect(page.getByLabel("Message Codex")).toBeEnabled();
     await page.getByLabel("Message Codex").fill("file-links");
     await page.getByLabel("Message Codex").press("Enter");
+    await expect(page.getByText("the screenshot", { exact: true })).toHaveAttribute(
+      "title",
+      "Outside this project: /tmp/concors-shot.png",
+    );
+    await expect(page.getByRole("link", { name: "the screenshot" })).toHaveCount(0);
     await page.getByRole("link", { name: "the README", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Project files", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Edit source", exact: true }).click();

@@ -5,6 +5,9 @@ import Markdown, { defaultUrlTransform } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Check, Copy } from "lucide-react";
 import { copyText } from "@/lib/clipboard";
+import { TerminalConnectionContext } from "@/terminal/connection-context";
+import { openPreview } from "@/tauri/open-external";
+import { isFileLink, localPreviewLink, previewLinkUrl } from "./preview-links";
 const HighlightedCode = lazy(() => import("./highlighted-code"));
 
 export function CopyButton({ text, label = "Copy message" }: { text: string; label?: string }) {
@@ -69,6 +72,7 @@ function CodeBlock({ children }: { children?: ReactNode }) {
 }
 export function AgentMarkdown({ children, sourcePath }: { children: string; sourcePath?: string }) {
   const openFile = useContext(FileLinkContext);
+  const connection = useContext(TerminalConnectionContext);
   return (
     <div className="chat-markdown min-w-0 break-words">
       <Markdown
@@ -84,28 +88,59 @@ export function AgentMarkdown({ children, sourcePath }: { children: string; sour
         components={{
           pre: CodeBlock,
           img: () => null,
-          a: ({ children: content, ...props }) => (
-            <a
-              {...props}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(event) => {
-                if (!props.href || !openFile) return;
-                if (openFile(props.href, sourcePath)) event.preventDefault();
-                else if (
-                  /^file:\/\//i.test(props.href) ||
-                  !/^(?:[a-z][a-z\d+.-]*:|#|\/\/)/i.test(props.href)
-                ) {
+          a: ({ children: content, href, ...props }) => {
+            const preview = href && connection ? localPreviewLink(href) : null;
+            const previewUrl =
+              preview && connection?.endpoint.kind === "remote"
+                ? connection.previewUrl(preview.preview)
+                : null;
+            // The preview address carries access in its fragment, so it is only used on click and
+            // never lands in the DOM. A preview that stopped listening simply does not open.
+            if (previewUrl && preview)
+              return (
+                <a
+                  {...props}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    void openPreview(preview.preview, previewLinkUrl(preview, previewUrl)).catch(
+                      () => undefined,
+                    );
+                  }}
+                >
+                  {content}
+                </a>
+              );
+            const open = href && openFile ? openFile(href, sourcePath) : null;
+            // A file the chat cannot open (outside the project, or no project at all) reads as
+            // plain text: following it would only land on a broken page inside the app.
+            if (!href || (!open && isFileLink(href)))
+              return (
+                <span
+                  className="underline decoration-dotted underline-offset-2"
+                  title={href ? `Outside this project: ${href}` : undefined}
+                >
+                  {content}
+                </span>
+              );
+            return (
+              <a
+                {...props}
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(event) => {
+                  if (!open) return;
                   event.preventDefault();
-                  window.alert(
-                    "This file link is outside the current project or cannot be opened.",
-                  );
-                }
-              }}
-            >
-              {content}
-            </a>
-          ),
+                  open();
+                }}
+              >
+                {content}
+              </a>
+            );
+          },
         }}
       >
         {children}

@@ -15,6 +15,7 @@ import { OpenCodeProvider } from "./opencode.ts";
 import { PiProvider } from "./pi.ts";
 import { launch } from "./launch.ts";
 import { object, type ConversationProvider } from "./contract.ts";
+import { AGENT_INSTRUCTIONS } from "../instructions.ts";
 
 vi.mock("./launch.ts", () => ({ launch: vi.fn() }));
 const cleanup: (() => Promise<unknown>)[] = [];
@@ -299,6 +300,9 @@ it("leaves an unsaved Claude conversation to the caller and starts afresh after 
   await new Promise((resolve) => setTimeout(resolve, 10));
   expect(failures).toEqual([]);
   expect(opened.map((o) => o.resume ?? null)).toEqual([null, "unsaved", null]);
+  expect(opened.map((o) => o.systemPrompt)).toEqual(
+    Array(3).fill({ type: "preset", preset: "claude_code", append: AGENT_INSTRUCTIONS }),
+  );
   expect(thread["id"]).toBe(opened[2]!.sessionId);
   expect(thread["id"]).not.toBe("unsaved");
 });

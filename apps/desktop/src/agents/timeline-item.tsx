@@ -158,7 +158,7 @@ export const TimelineItem = memo(function TimelineItem({
             <button
               type="button"
               className="mb-2 block max-w-full truncate font-mono text-muted-foreground hover:underline"
-              onClick={() => openFile?.(filePath)}
+              onClick={() => openFile?.(filePath)?.()}
             >
               {filePath}
             </button>
@@ -174,7 +174,7 @@ export const TimelineItem = memo(function TimelineItem({
                   <button
                     type="button"
                     className="min-w-0 flex-1 truncate text-left font-mono font-medium hover:underline"
-                    onClick={() => openFile?.(file.path)}
+                    onClick={() => openFile?.(file.path)?.()}
                   >
                     {file.path}
                   </button>
