@@ -12,6 +12,7 @@ import {
   PROTOCOL_VERSION,
   DICTATION_CAPABILITY,
   PANE_RENAME_CAPABILITY,
+  TERMINAL_IMAGE_PASTE_CAPABILITY,
 } from "@concors/protocol";
 
 import { DAEMON_VERSION } from "./version.ts";
@@ -75,6 +76,7 @@ export class DaemonState {
         "directional-pane-split",
         PANE_RENAME_CAPABILITY,
         "terminal-recovery",
+        TERMINAL_IMAGE_PASTE_CAPABILITY,
         ...(this.#dictation ? [DICTATION_CAPABILITY] : []),
       ],
     };

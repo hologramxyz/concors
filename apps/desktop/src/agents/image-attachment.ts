@@ -75,3 +75,13 @@ export async function fitImageFile(file: File, limit = ATTACHMENT_LIMIT_BYTES): 
     bitmap.close();
   }
 }
+
+/** A file's bytes as base64, the encoding attachments travel in. */
+export function fileBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+    reader.onerror = () => reject(new Error("Could not read attachment"));
+    reader.readAsDataURL(file);
+  });
+}

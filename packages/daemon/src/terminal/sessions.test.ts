@@ -1,6 +1,6 @@
 import { installTestCodexProfile, installTestClaudeProfile } from "./testing/profile.ts";
 import { randomUUID } from "node:crypto";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
@@ -115,6 +115,26 @@ it("shares a real PTY, transfers control, replays its screen, rebinds and record
         .join(""),
     )
     .toContain("concors-pty-alive");
+  // A pasted image lands on the machine as a file whose path the terminal's CLI can attach.
+  const png = Buffer.from("89504e470d0a1a0a", "hex");
+  const pasted = await first.connection.requestTerminal(
+    {
+      kind: "paste-image",
+      sessionId,
+      image: { name: "Pasted image.png", mime: "image/png", data: png.toString("base64") },
+    },
+    randomUUID(),
+  );
+  if (pasted.outcome.status !== "ok") throw new Error(pasted.outcome.message);
+  expect(pasted.outcome.path).toMatch(/\/terminal-[0-9a-f-]+\/[0-9a-f-]+\.png$/);
+  expect(readFileSync(pasted.outcome.path!)).toEqual(png);
+  await expect(
+    request(first.connection, {
+      kind: "paste-image",
+      sessionId,
+      image: { name: "notes.txt", mime: "text/plain", data: "" },
+    }),
+  ).rejects.toThrow("Only PNG");
   await request(second.connection, { kind: "claim", sessionId, cols: 80, rows: 24 });
   first.connection.sendTerminalInput(sessionId, "echo forbidden\r");
   await expect
