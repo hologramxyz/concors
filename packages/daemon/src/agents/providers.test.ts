@@ -872,3 +872,76 @@ it("reopens a closed chat under its pane and tab names with its settings and his
   const history = await c.requestAgent({ kind: "read", sessionId: id }, randomUUID());
   expect(JSON.stringify(history.outcome)).toContain("hello");
 });
+it("/clear starts a new conversation in the pane and keeps the old one to resume", async () => {
+  const { c, id, projectId } = await setup();
+  const runtime = instances[0]!.runtime;
+  expect(c.agents.find((a) => a.id === id)?.controls?.commands.at(-1)?.name).toBe("clear");
+  await c.requestAgent(
+    { kind: "send", sessionId: id, text: "remember the old plan" },
+    randomUUID(),
+  );
+  await expect.poll(() => c.agents.find((a) => a.id === id)?.status).toBe("done");
+  const before = c.agents.find((a) => a.id === id)!;
+  const busy = await c.requestAgent({ kind: "send", sessionId: id, text: "hold" }, randomUUID());
+  expect(busy.outcome.status).toBe("ok");
+  await expect.poll(() => c.agents.find((a) => a.id === id)?.status).toBe("working");
+  const refused = await c.requestAgent(
+    { kind: "send", sessionId: id, text: "/clear" },
+    randomUUID(),
+  );
+  expect(refused.outcome.status).toBe("error");
+  runtime.finish();
+  await expect.poll(() => c.agents.find((a) => a.id === id)?.status).toBe("done");
+
+  const requestId = randomUUID();
+  const cleared = await c.requestAgent({ kind: "send", sessionId: id, text: "/clear" }, requestId);
+  if (cleared.outcome.status !== "ok") throw new Error("Clear failed");
+  const next = cleared.outcome.conversation.agent.id;
+  expect(next).not.toBe(id);
+  const again = await c.requestAgent({ kind: "send", sessionId: id, text: "/clear" }, requestId);
+  expect(again.outcome.status === "ok" && again.outcome.conversation.agent.id).toBe(next);
+  const pane = () =>
+    c
+      .workspace!.projects.find((p) => p.id === projectId)!
+      .tabs[0]!.nodes.find((n) => n.kind === "pane");
+  await expect.poll(() => pane()?.sessionId).toBe(next);
+  await expect.poll(() => c.agents.find((a) => a.id === next)?.status).toBe("idle");
+  expect(c.agents.find((a) => a.id === next)).toMatchObject({
+    provider: before.provider,
+    settings: before.settings,
+    turnId: null,
+  });
+  const started = instances.at(-1)!.runtime.requests.map((r) => r.method);
+  expect(started).toContain("thread/start");
+  expect(started).not.toContain("thread/resume");
+  const fresh = await c.requestAgent({ kind: "read", sessionId: next }, randomUUID());
+  expect(fresh.outcome.status === "ok" && fresh.outcome.conversation.items).toEqual([]);
+
+  // The old conversation is kept whole, and its CLI stops now that no pane shows it.
+  await expect.poll(() => runtime.closed).toBe(true);
+  const old = await c.requestAgent({ kind: "read", sessionId: id }, randomUUID());
+  expect(JSON.stringify(old.outcome)).toContain("remember the old plan");
+  const open = await c.requestAgent({ kind: "open-session", sessionId: id }, randomUUID());
+  expect(open.outcome.status).toBe("ok");
+  expect(c.workspace!.projects.find((p) => p.id === projectId)!.tabs).toHaveLength(2);
+});
+it("/clear queued behind a running turn runs once the turn ends", async () => {
+  const { c, id, projectId } = await setup();
+  const runtime = instances[0]!.runtime;
+  await c.requestAgent({ kind: "send", sessionId: id, text: "hold" }, randomUUID());
+  await expect.poll(() => c.agents.find((a) => a.id === id)?.status).toBe("working");
+  const queued = await c.requestAgent(
+    { kind: "queue-add", sessionId: id, text: "/clear" },
+    randomUUID(),
+  );
+  expect(queued.outcome.status).toBe("ok");
+  runtime.finish();
+  const pane = () =>
+    c
+      .workspace!.projects.find((p) => p.id === projectId)!
+      .tabs[0]!.nodes.find((n) => n.kind === "pane");
+  await expect.poll(() => pane()?.sessionId).not.toBe(id);
+  await expect.poll(() => c.agents.find((a) => a.id === id)?.queue ?? []).toEqual([]);
+  expect(c.agents.find((a) => a.id === id)?.queuePaused).not.toBe(true);
+  await expect.poll(() => runtime.closed).toBe(true);
+});

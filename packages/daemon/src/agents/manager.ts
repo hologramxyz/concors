@@ -19,6 +19,7 @@ import { stat } from "node:fs/promises";
 import { z } from "zod";
 import {
   AgentControlsSchema,
+  type AgentControls,
   parseAgentCommand,
   AgentQuestionSchema,
   type AgentInfo,
@@ -63,6 +64,26 @@ const ThreadResponse = z.object({
   model: z.string().optional(),
 });
 const Scope = z.object({ threadId: z.string(), turnId: z.string() });
+
+/**
+ * Concors runs `/clear` itself for these agents, whatever the CLI offers: the pane starts a new
+ * conversation and the old one is kept to resume, as Codex and Claude Code keep a cleared session.
+ */
+const CLEARABLE_ENGINES = ["codex", "claude", "opencode"];
+function withClear(controls: AgentControls, engine: string): AgentControls {
+  if (!CLEARABLE_ENGINES.includes(engine)) return controls;
+  return {
+    ...controls,
+    commands: [
+      ...controls.commands.filter((command) => command.name !== "clear"),
+      {
+        name: "clear",
+        description: "Start a new conversation here; this one stays in Resume a chat",
+        kind: "command",
+      },
+    ],
+  };
+}
 interface PendingResolver {
   nativeDecisions?: Map<string, unknown>;
   providerId: string | number;
@@ -205,6 +226,8 @@ export class AgentManager {
       this.draining.delete(id);
       queueMicrotask(() => {
         void this.drain(id).catch((error) => this.fail(id, error));
+        // A delivered /clear leaves this agent hidden; its CLI was kept only for the delivery.
+        this.releaseHidden();
       });
     }
   }
@@ -441,7 +464,10 @@ export class AgentManager {
       }
       try {
         this.update(id, {
-          controls: AgentControlsSchema.parse(await provider.request("session/controls")),
+          controls: withClear(
+            AgentControlsSchema.parse(await provider.request("session/controls")),
+            info.engine ?? info.provider,
+          ),
         });
       } catch {
         // Older transports have no capability contract. They do not receive new controls.
@@ -1354,6 +1380,8 @@ export class AgentManager {
             );
           if (op.attachments?.length)
             throw new Error("Send attachments in a message, separately from a command.");
+          if (command.name === "clear" && CLEARABLE_ENGINES.includes(info.engine ?? info.provider))
+            return this.clear(request, info);
         }
         const turnId = `pending:${request.requestId}`;
         const next = {
@@ -1585,6 +1613,53 @@ export class AgentManager {
     void this.drain(info.id).catch((error) => this.fail(info.id, error));
     return this.result(request, info.id);
   }
+  /**
+   * The pane moves to a new conversation with the same agent, model and settings. The old one
+   * keeps its history and names and, no longer shown, is listed in Resume a chat, while its CLI
+   * stops like any closed chat's.
+   */
+  private clear(request: AgentRequest, previous: AgentInfo): AgentResult {
+    // Queued behind a turn, it runs once the turn ends, leaving nothing queued behind it.
+    const queued = this.deliveries.get(request.requestId);
+    const queue = (previous.queue ?? []).filter((entry) => entry.id !== queued);
+    if (previous.pending.length || queue.length)
+      throw new Error("Answer pending questions and remove queued messages before /clear.");
+    const now = new Date().toISOString();
+    const label = previous.providerLabel ?? agentProviderName(previous.provider);
+    const info: AgentInfo = {
+      id: randomUUID(),
+      projectId: previous.projectId,
+      name: label,
+      ...(previous.engine ? { engine: previous.engine } : {}),
+      providerLabel: label,
+      directory: previous.directory,
+      provider: previous.provider,
+      model: previous.model,
+      settings: previous.settings ?? defaultSettings,
+      context: null,
+      threadId: null,
+      turnId: null,
+      status: "starting",
+      pending: [],
+      attention: null,
+      error: null,
+      startedAt: now,
+      updatedAt: now,
+      turnStartedAt: null,
+      revision: 0,
+    };
+    const reserved = this.#store.replaceAgentInPane(request, previous, info, queued);
+    if (queued) this.update(previous.id, { queue: [] });
+    // Startup notifications (a provider's own current mode) must not undo the carried settings.
+    this.#remembered.set(reserved.id, info.settings ?? defaultSettings);
+    this.#workspaceChanged();
+    this.#emit({ type: "agent.state", agent: reserved });
+    void Promise.resolve()
+      .then(() => this.provider(reserved.id))
+      .then(() => this.update(reserved.id, { status: "idle" }))
+      .catch((error) => this.fail(reserved.id, error));
+    return this.result(request, reserved.id);
+  }
   private result(request: AgentRequest, id: string, before?: number, after?: number): AgentResult {
     return {
       type: "agent.result",
@@ -1775,7 +1850,10 @@ export class AgentManager {
       return;
     }
     if (method === "session/controls/updated") {
-      const controls = AgentControlsSchema.parse(params["controls"]);
+      const controls = withClear(
+        AgentControlsSchema.parse(params["controls"]),
+        info.engine ?? info.provider,
+      );
       this.update(id, {
         controls,
         ...(controls.currentMode
