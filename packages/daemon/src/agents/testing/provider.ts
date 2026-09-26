@@ -253,6 +253,15 @@ export class TestAgentProvider implements AgentProvider {
           },
         });
       }
+      if (text.includes("show-image")) {
+        this.emit("item/completed", {
+          item: {
+            id: `image-${this.turnId}`,
+            type: "agentMessage",
+            text: "Here is the page:\n\n![The pricing page](shot.png)\n\nAnd ![a missing one](gone.png).",
+          },
+        });
+      }
       if (text.includes("rich")) {
         this.emit("item/completed", {
           item: {

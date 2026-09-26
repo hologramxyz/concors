@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdtemp, rm, readFile } from "node:fs/promises";
+import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DaemonConnection, describeDaemonEndpoint } from "@concors/daemon-client";
@@ -1203,6 +1203,51 @@ it("preserves explicit permission actions and lets a question cancel the whole t
   expect(await question).toMatchObject({ decision: "cancel" });
   await expect.poll(() => a.agents[0]?.status).toBe("interrupted");
   expect(a.agents[0]?.pending).toEqual([]);
+});
+
+it("keeps the images an agent shows, serving them once the file is gone and after restart", async () => {
+  const { a, b, id } = await setup();
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 7, 7, 7]);
+  await writeFile(join(directory, "shot.png"), png);
+  await action(a, { kind: "send", sessionId: id, text: "hold" });
+  const provider = providers[0]!;
+  provider.emit("item/completed", {
+    item: {
+      id: "shown",
+      type: "agentMessage",
+      text: "Done.\n\n![Desktop](shot.png)\n\n![Gone](missing.png)",
+    },
+  });
+  provider.finish();
+  await expect.poll(() => a.agents[0]?.status).toBe("done");
+  const read = await action(b, { kind: "read", sessionId: id });
+  expect(
+    read.outcome.status === "ok" && read.outcome.conversation.items.find((i) => i.id === "shown"),
+  ).toMatchObject({
+    kind: "assistant",
+    attachments: [{ name: "shot.png", mime: "image/png", source: "shot.png" }],
+  });
+  expect(JSON.stringify(read)).not.toContain(png.toString("base64"));
+  await rm(join(directory, "shot.png"));
+  a.disconnect();
+  b.disconnect();
+  await server!.close();
+  const c = await open(await boot());
+  const image = await action(c, {
+    kind: "read-attachment",
+    sessionId: id,
+    itemId: "shown",
+    index: 0,
+  });
+  expect(image.outcome.status === "ok" && image.outcome.attachment).toEqual({
+    name: "shot.png",
+    mime: "image/png",
+    data: png.toString("base64"),
+  });
+  expect(
+    (await action(c, { kind: "read-attachment", sessionId: id, itemId: "shown", index: 1 })).outcome
+      .status,
+  ).toBe("error");
 });
 
 it("keeps async questions across turns and restart, and durably resolves answers once", async () => {

@@ -111,6 +111,8 @@ export const AgentSettingsSchema = z.object({
   features: z.record(z.string().max(128), AgentFeatureValueSchema).optional(),
 });
 export type AgentSettings = z.infer<typeof AgentSettingsSchema>;
+/** Images an agent can show in one reply; a sent prompt still carries at most three files. */
+export const MAX_MESSAGE_IMAGES = 8;
 export const AgentAttachmentSchema = z.object({
   name: z.string().min(1).max(200),
   mime: z.string().max(100),
@@ -239,8 +241,15 @@ export const AgentItemSchema = z.object({
   detail: z.string(),
   presentation: AgentPresentationSchema.optional(),
   attachments: z
-    .array(z.object({ name: z.string().max(200), mime: z.string().max(100) }))
-    .max(3)
+    .array(
+      z.object({
+        name: z.string().max(200),
+        mime: z.string().max(100),
+        /** For an image the agent showed, the destination written in its Markdown. */
+        source: z.string().max(4096).optional(),
+      }),
+    )
+    .max(MAX_MESSAGE_IMAGES)
     .optional(),
   status: z.enum(["running", "completed", "failed", "interrupted"]),
   createdAt: z.string().datetime(),
@@ -283,7 +292,11 @@ export const AgentOperationSchema = z.discriminatedUnion("kind", [
     kind: z.literal("read-attachment"),
     sessionId: Id,
     itemId: z.string().max(4096),
-    index: z.number().int().min(0).max(2),
+    index: z
+      .number()
+      .int()
+      .min(0)
+      .max(MAX_MESSAGE_IMAGES - 1),
   }),
   z.object({
     kind: z.literal("implement-plan"),
