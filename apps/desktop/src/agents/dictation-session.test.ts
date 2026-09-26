@@ -26,31 +26,38 @@ function recording() {
 afterEach(() => vi.useRealTimers());
 
 describe("dictation completion", () => {
-  it("waits for the final words and hands them to the prompt box exactly once", () => {
+  it("waits for the final words and sends them exactly once when asked to", () => {
     const { speech, callbacks, session, result } = recording();
     result(["Fix the", true], ["old", false]);
-    session.stop();
-    session.stop();
+    session.stop("send");
+    session.stop("send");
     expect(callbacks.finish).not.toHaveBeenCalled();
     result(["Fix the", true], ["old login bug.", true]);
     const end = speech.onend;
     end?.();
     end?.();
     expect(speech.stop).toHaveBeenCalledTimes(1);
-    expect(callbacks.finish).toHaveBeenCalledExactlyOnceWith("Fix the old login bug.");
+    expect(callbacks.finish).toHaveBeenCalledExactlyOnceWith("Fix the old login bug.", "send");
     expect(session.state).toMatchObject({ phase: "idle", error: null });
   });
-  it("puts the words in the prompt box when the service ends on its own", () => {
+  it("Edit hands the words over for editing without sending", () => {
+    const { speech, callbacks, session, result } = recording();
+    result(["First sentence.", true]);
+    session.stop("insert");
+    speech.onend?.();
+    expect(callbacks.finish).toHaveBeenCalledExactlyOnceWith("First sentence.", "insert");
+  });
+  it("never sends when the service ends on its own", () => {
     const { speech, session, callbacks, result } = recording();
     result(["Keep this draft", true]);
     speech.onend?.();
     expect(session.state.phase).toBe("idle");
-    expect(callbacks.finish).toHaveBeenCalledExactlyOnceWith("Keep this draft");
+    expect(callbacks.finish).toHaveBeenCalledExactlyOnceWith("Keep this draft", "insert");
   });
   it("cancel/unmount ignores late results, errors and completion", () => {
     const { speech, session, callbacks, result } = recording();
     result(["Keep this draft", false]);
-    session.stop();
+    session.stop("send");
     const { onend, onresult, onerror } = speech;
     session.dispose();
     onresult?.({ resultIndex: 0, results: [{ isFinal: true, 0: { transcript: "stale" } }] });
@@ -60,47 +67,48 @@ describe("dictation completion", () => {
     expect(callbacks.transcript).toHaveBeenCalledExactlyOnceWith("Keep this draft");
     expect(speech.abort).toHaveBeenCalledOnce();
   });
-  it("leaving the pane while finishing keeps the words once", () => {
+  it("losing the pane or the connection during Send keeps the words and never sends", () => {
     const { speech, session, callbacks, result } = recording();
     result(["Please wait", false]);
-    session.stop();
+    session.stop("send");
     const end = speech.onend;
-    session.suspend();
+    session.suspend("The connection dropped.");
     end?.();
-    expect(callbacks.finish).toHaveBeenCalledExactlyOnceWith("Please wait");
+    expect(callbacks.finish).toHaveBeenCalledExactlyOnceWith("Please wait", "insert");
+    expect(session.state.error).toBe("The connection dropped.");
   });
   it.each(["network", "not-allowed", "no-speech"])(
-    "%s errors keep the words captured so far and explain what happened",
+    "%s errors keep the words captured so far and cancel a pending Send",
     (error) => {
       const { speech, session, callbacks, result } = recording();
       result(["Recovered words", false]);
-      session.stop();
+      session.stop("send");
       const end = speech.onend;
       speech.onerror?.({ error });
       end?.();
       expect(session.state.phase).toBe("idle");
       expect(session.state.error).toBeTruthy();
-      expect(callbacks.finish).toHaveBeenCalledExactlyOnceWith("Recovered words");
+      expect(callbacks.finish).toHaveBeenCalledExactlyOnceWith("Recovered words", "insert");
     },
   );
-  it("a stalled service times out, keeps the words and ignores late finalization", () => {
+  it("a stalled service times out, keeps the words, never sends and ignores late finalization", () => {
     vi.useFakeTimers();
     const { speech, session, callbacks, result } = recording();
     result(["Recovered words", false]);
-    session.stop();
+    session.stop("send");
     const end = speech.onend;
     vi.advanceTimersByTime(5000);
     end?.();
     expect(session.state).toMatchObject({ phase: "idle" });
     expect(session.state.error).toBeTruthy();
-    expect(callbacks.finish).toHaveBeenCalledExactlyOnceWith("Recovered words");
+    expect(callbacks.finish).toHaveBeenCalledExactlyOnceWith("Recovered words", "insert");
     expect(speech.abort).toHaveBeenCalledOnce();
   });
-  it("empty dictation leaves the draft alone", () => {
+  it("empty dictation never sends an existing draft or attachments", () => {
     const { speech, session, callbacks } = recording();
-    session.stop();
+    session.stop("send");
     speech.onend?.();
-    expect(callbacks.finish).toHaveBeenCalledExactlyOnceWith("");
+    expect(callbacks.finish).toHaveBeenCalledExactlyOnceWith("", "insert");
   });
   it("ignores queued result callbacks after permission denial", () => {
     const { speech, session, callbacks } = recording();

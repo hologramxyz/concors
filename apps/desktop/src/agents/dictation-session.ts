@@ -17,6 +17,8 @@ export interface Recognition {
   stop(): void;
   abort(): void;
 }
+/** Put the words in the prompt box, or put them there and send them. */
+export type DictationAction = "insert" | "send";
 export interface DictationState {
   phase: "idle" | "recording" | "stopping";
   transcript: string;
@@ -26,8 +28,11 @@ export const emptyDictation: DictationState = { phase: "idle", transcript: "", e
 interface DictationCallbacks {
   change: (state: DictationState) => void;
   transcript: (text: string) => void;
-  /** The dictated words, for the prompt box; dictation never sends anything itself. */
-  finish: (text: string) => void;
+  /**
+   * The dictated words, with what to do with them. Only a clean stop the user chose to send
+   * sends; a failure, a timeout or leaving the pane always hands the words over to edit.
+   */
+  finish: (text: string, action: DictationAction) => void;
 }
 
 export function appendDictation(draft: string, transcript: string): string {
@@ -38,11 +43,12 @@ export function appendDictation(draft: string, transcript: string): string {
 }
 
 /**
- * One recognition run, ending exactly once by handing its words to the prompt box: when stopped,
- * when the service ends on its own, and on a failure, which keeps the words captured so far.
+ * One recognition run, ending exactly once by handing its words over: when stopped, when the
+ * service ends on its own, and on a failure, which keeps the words captured so far.
  */
 export class DictationSession {
   state: DictationState = { ...emptyDictation, phase: "recording" };
+  #action: DictationAction = "insert";
   #timer: ReturnType<typeof setTimeout> | undefined;
   #closed = false;
   private speech: Recognition;
@@ -96,8 +102,9 @@ export class DictationSession {
   }
 
   /** Waits for the last words, which the service delivers as it ends. */
-  stop(): void {
+  stop(action: DictationAction = "insert"): void {
     if (this.#closed || this.state.phase !== "recording") return;
+    this.#action = action;
     this.#update({ phase: "stopping" });
     this.#timer = setTimeout(
       () => this.#fail("Dictation could not finish. Check the words it captured."),
@@ -110,9 +117,14 @@ export class DictationSession {
     }
   }
 
-  /** Leaving the pane or disconnecting keeps the words captured so far. */
-  suspend(): void {
-    if (!this.#closed && this.state.phase !== "idle") this.#finish();
+  /**
+   * Leaving the pane or losing the connection keeps the words captured so far, never sending
+   * them; `reason` explains an ending the user did not choose.
+   */
+  suspend(reason: string | null = null): void {
+    if (this.#closed || this.state.phase === "idle") return;
+    this.#action = "insert";
+    this.#finish(reason);
   }
 
   dispose(): void {
@@ -131,9 +143,10 @@ export class DictationSession {
     const text = this.state.transcript;
     this.dispose();
     this.#update({ phase: "idle", error });
-    this.callbacks.finish(text);
+    this.callbacks.finish(text, error || !text.trim() ? "insert" : this.#action);
   }
   #fail(error: string): void {
+    this.#action = "insert";
     this.#finish(error);
   }
   #update(change: Partial<DictationState>): void {
