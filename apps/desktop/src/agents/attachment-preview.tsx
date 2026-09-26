@@ -70,7 +70,8 @@ function useAttachmentImage(item: AgentItem, index: number) {
   return { source: value && `data:${value.mime};base64,${value.data}`, error };
 }
 
-function ImageViewer({
+/** Opens `source` at full size when `children`, the trigger, is clicked. */
+export function ImageViewer({
   source,
   name,
   description,
@@ -124,7 +125,7 @@ export function InlineImage({ item, index, alt }: { item: AgentItem; index: numb
         data-inline-image="ready"
         aria-label={`Open ${name}`}
         title={name}
-        className="my-2 block max-w-full cursor-zoom-in overflow-hidden rounded-lg border hover:opacity-95 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        className="my-2 block max-w-full cursor-pointer overflow-hidden rounded-lg border hover:opacity-95 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       >
         <img className="block max-h-[28rem] max-w-full object-contain" src={source} alt={name} />
       </button>
@@ -167,7 +168,7 @@ function ImageThumbnail({
         data-image-attachment="ready"
         aria-label={`Open ${attachment.name}`}
         title={attachment.name}
-        className={`${tile} cursor-zoom-in hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none`}
+        className={`${tile} cursor-pointer hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none`}
       >
         <img className="size-full object-cover" src={source} alt={attachment.name} />
       </button>

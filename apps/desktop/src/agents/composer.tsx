@@ -49,6 +49,7 @@ import { matchCommands, needsArguments, slashQuery } from "./slash-commands";
 import { SlashCommandMenu } from "./slash-menu";
 import { readClipboardImage } from "@/tauri";
 import { fileBase64, fitImage, fitImageFile } from "./image-attachment";
+import { ImageViewer } from "./attachment-preview";
 import { rememberSentAttachments } from "./attachment-cache";
 const defaults: AgentSettings = { model: null, effort: null, mode: "default" };
 const nativeProviderIcons: Record<string, "model" | "claude" | "opencode" | "pi"> = {
@@ -823,11 +824,23 @@ export function AgentComposer({
                 >
                   <div className="size-full overflow-hidden rounded-lg border bg-muted/40">
                     {file.mime.startsWith("image/") ? (
-                      <img
-                        className="size-full object-cover"
-                        alt={file.name}
-                        src={`data:${file.mime};base64,${file.data}`}
-                      />
+                      <ImageViewer
+                        source={`data:${file.mime};base64,${file.data}`}
+                        name={file.name}
+                        description="Image attached to the message you are writing."
+                      >
+                        <button
+                          type="button"
+                          aria-label={`Open ${file.name}`}
+                          className="block size-full cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                        >
+                          <img
+                            className="size-full object-cover"
+                            alt={file.name}
+                            src={`data:${file.mime};base64,${file.data}`}
+                          />
+                        </button>
+                      </ImageViewer>
                     ) : (
                       <div className="flex size-full flex-col items-center justify-center gap-0.5 px-1 text-muted-foreground">
                         <FileIcon className="size-4 shrink-0" aria-hidden="true" />
