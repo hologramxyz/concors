@@ -299,6 +299,36 @@ test("agent file links open Markdown and code tabs without leaving the workspace
   }
 });
 
+test("agent replies show the images they embed inline and open them full size", async ({
+  page,
+}) => {
+  const root = await project(page);
+  try {
+    writeFileSync(
+      join(root, "shot.png"),
+      Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        "base64",
+      ),
+    );
+    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await expect(page.getByLabel("Message Codex")).toBeEnabled();
+    await page.getByLabel("Message Codex").fill("show-image");
+    await page.getByLabel("Message Codex").press("Enter");
+    const image = page.getByRole("button", { name: "Open The pricing page", exact: true });
+    await expect(image).toHaveAttribute("data-inline-image", "ready");
+    await expect(page.getByText("a missing one", { exact: true })).toHaveAttribute(
+      "title",
+      "Image not available: gone.png",
+    );
+    await image.click();
+    await expect(page.getByRole("dialog", { name: "The pricing page" })).toBeVisible();
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("files behave as a full-height resizable sidebar with readable type", async ({ page }) => {
   const root = await project(page);
   try {

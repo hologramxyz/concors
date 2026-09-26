@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useState, type ReactNode } from "react";
 import {
   Dialog,
   DialogContent,
@@ -45,19 +45,8 @@ export function MessageAttachments({
   );
 }
 
-/**
- * Shows the image itself, loaded as soon as the message is on screen; the one this client just
- * sent is already in memory. Clicking opens it at full size.
- */
-function ImageThumbnail({
-  item,
-  attachment,
-  index,
-}: {
-  item: AgentItem;
-  attachment: { name: string; mime: string };
-  index: number;
-}) {
+/** An attachment's image as a data URL, loaded once the message is on screen. */
+function useAttachmentImage(item: AgentItem, index: number) {
   const connection = useContext(TerminalConnectionContext);
   const [value, setValue] = useState<AgentAttachment | null>(() =>
     cachedAttachment(item.sessionId, item.id, index),
@@ -78,7 +67,85 @@ function ImageThumbnail({
       current = false;
     };
   }, [connection, item.sessionId, item.id, index, value]);
-  const source = value && `data:${value.mime};base64,${value.data}`;
+  return { source: value && `data:${value.mime};base64,${value.data}`, error };
+}
+
+function ImageViewer({
+  source,
+  name,
+  description,
+  children,
+}: {
+  source: string;
+  name: string;
+  description: string;
+  children: ReactNode;
+}) {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>{children}</DialogTrigger>
+      <DialogContent size="wide" closeLabel="Close image" className="overflow-hidden">
+        <DialogHeader>
+          <DialogTitle>{name}</DialogTitle>
+          <DialogDescription className="sr-only">{description}</DialogDescription>
+        </DialogHeader>
+        <DialogBody>
+          <img className="mx-auto max-w-full" src={source} alt={name} />
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * An image the agent showed, drawn where it put it in the message, at a readable size. Clicking
+ * opens it at full size.
+ */
+export function InlineImage({ item, index, alt }: { item: AgentItem; index: number; alt: string }) {
+  const attachment = item.attachments?.[index];
+  const { source, error } = useAttachmentImage(item, index);
+  const name = alt || attachment?.name || "Image";
+  if (!source)
+    return (
+      <span
+        data-inline-image={error ? "failed" : "loading"}
+        role="img"
+        aria-label={error ? `${name}: ${error}` : `Loading ${name}`}
+        title={error ?? name}
+        className={`my-2 flex h-40 w-full max-w-md items-center justify-center rounded-lg border bg-muted/60 text-muted-foreground ${error ? "" : "animate-pulse"}`}
+      >
+        {error && <ImageOff className="size-5" aria-hidden="true" />}
+      </span>
+    );
+  return (
+    <ImageViewer source={source} name={name} description="Image the agent showed in its reply.">
+      <button
+        type="button"
+        data-inline-image="ready"
+        aria-label={`Open ${name}`}
+        title={name}
+        className="my-2 block max-w-full cursor-zoom-in overflow-hidden rounded-lg border hover:opacity-95 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      >
+        <img className="block max-h-[28rem] max-w-full object-contain" src={source} alt={name} />
+      </button>
+    </ImageViewer>
+  );
+}
+
+/**
+ * Shows the image itself, loaded as soon as the message is on screen; the one this client just
+ * sent is already in memory. Clicking opens it at full size.
+ */
+function ImageThumbnail({
+  item,
+  attachment,
+  index,
+}: {
+  item: AgentItem;
+  attachment: { name: string; mime: string };
+  index: number;
+}) {
+  const { source, error } = useAttachmentImage(item, index);
   const tile =
     "relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted/60";
   if (!source)
@@ -94,28 +161,17 @@ function ImageThumbnail({
       </div>
     );
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <button
-          type="button"
-          data-image-attachment="ready"
-          aria-label={`Open ${attachment.name}`}
-          title={attachment.name}
-          className={`${tile} cursor-zoom-in hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none`}
-        >
-          <img className="size-full object-cover" src={source} alt={attachment.name} />
-        </button>
-      </DialogTrigger>
-      <DialogContent size="wide" closeLabel="Close image" className="overflow-hidden">
-        <DialogHeader>
-          <DialogTitle>{attachment.name}</DialogTitle>
-          <DialogDescription className="sr-only">Image sent with this message.</DialogDescription>
-        </DialogHeader>
-        <DialogBody>
-          <img className="mx-auto max-w-full" src={source} alt={attachment.name} />
-        </DialogBody>
-      </DialogContent>
-    </Dialog>
+    <ImageViewer source={source} name={attachment.name} description="Image sent with this message.">
+      <button
+        type="button"
+        data-image-attachment="ready"
+        aria-label={`Open ${attachment.name}`}
+        title={attachment.name}
+        className={`${tile} cursor-zoom-in hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none`}
+      >
+        <img className="size-full object-cover" src={source} alt={attachment.name} />
+      </button>
+    </ImageViewer>
   );
 }
 

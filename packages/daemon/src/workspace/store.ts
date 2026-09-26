@@ -5,6 +5,7 @@ import {
   AgentInfoSchema,
   AgentItemSchema,
   AgentSettingsSchema,
+  type AgentAttachment,
   type AgentInfo,
   type AgentSettings,
   type AgentItem,
@@ -62,6 +63,7 @@ export class WorkspaceStore {
         CREATE TABLE IF NOT EXISTS agent_request_errors (id TEXT PRIMARY KEY, message TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS agent_queue (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, request TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS agent_requests (id TEXT PRIMARY KEY, request TEXT NOT NULL, session_id TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS agent_item_images (session_id TEXT NOT NULL, item_id TEXT NOT NULL, position INTEGER NOT NULL, attachment TEXT NOT NULL, PRIMARY KEY (session_id, item_id, position));
         CREATE TABLE IF NOT EXISTS agent_defaults (provider TEXT PRIMARY KEY, settings TEXT NOT NULL, used_at INTEGER NOT NULL);
         PRAGMA user_version = 4;
       `);
@@ -399,6 +401,11 @@ export class WorkspaceStore {
     this.#db
       .prepare("DELETE FROM agent_items WHERE session_id = ? AND position >= ?")
       .run(sessionId, prompt.position);
+    this.#db
+      .prepare(
+        "DELETE FROM agent_item_images WHERE session_id = ? AND item_id NOT IN (SELECT item_id FROM agent_items WHERE session_id = ?)",
+      )
+      .run(sessionId, sessionId);
   }
   nativeTurn(sessionId: string, nativeId: string): string {
     const row = this.#db
@@ -810,9 +817,36 @@ export class WorkspaceStore {
         })
       : null;
   }
+  /** Keeps the images an agent showed in a message, replacing any kept for it before. */
+  saveAgentItemImages(sessionId: string, itemId: string, images: readonly AgentAttachment[]) {
+    this.#db.exec("BEGIN IMMEDIATE");
+    try {
+      this.#db
+        .prepare("DELETE FROM agent_item_images WHERE session_id = ? AND item_id = ?")
+        .run(sessionId, itemId);
+      const insert = this.#db.prepare(
+        "INSERT INTO agent_item_images (session_id, item_id, position, attachment) VALUES (?, ?, ?, ?)",
+      );
+      images.forEach((image, index) =>
+        insert.run(sessionId, itemId, index, JSON.stringify(AgentAttachmentSchema.parse(image))),
+      );
+      this.#db.exec("COMMIT");
+    } catch (error) {
+      this.#db.exec("ROLLBACK");
+      throw error;
+    }
+  }
   agentAttachment(sessionId: string, itemId: string, index: number) {
-    if (!this.agentItem(sessionId, itemId) || !itemId.startsWith("prompt:"))
-      throw new Error("Attachment is unavailable");
+    if (!this.agentItem(sessionId, itemId)) throw new Error("Attachment is unavailable");
+    if (!itemId.startsWith("prompt:")) {
+      const image = this.#db
+        .prepare(
+          "SELECT attachment FROM agent_item_images WHERE session_id = ? AND item_id = ? AND position = ?",
+        )
+        .get(sessionId, itemId, index);
+      if (!image) throw new Error("Attachment is unavailable");
+      return AgentAttachmentSchema.parse(JSON.parse(String(image["attachment"])));
+    }
     const row = this.#db
       .prepare("SELECT request FROM agent_requests WHERE id = ? AND session_id = ?")
       .get(itemId.slice(7), sessionId);

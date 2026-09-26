@@ -45,10 +45,9 @@ export const TimelineItem = memo(function TimelineItem({
           {item.kind === "user" ? (
             <p className="whitespace-pre-wrap">{item.text}</p>
           ) : (
-            <AgentMarkdown>{item.text}</AgentMarkdown>
+            <AgentMarkdown item={item}>{item.text}</AgentMarkdown>
           )}
         </div>
-        {item.kind !== "user" && <MessageAttachments item={item} className="mt-2" />}
         {item.kind === "assistant" && !running && (
           <div className="mt-2 flex items-center gap-2">
             <CopyButton text={item.text} />
