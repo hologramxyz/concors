@@ -1,6 +1,6 @@
 import { planSteps } from "../providers/plans.ts";
 import { z } from "zod";
-import type { AgentItem } from "@concors/protocol";
+import { AgentActivityStepSchema, SUB_AGENT_STEPS, type AgentItem } from "@concors/protocol";
 import { normalizeCommandExecutionCommand } from "./command-display.ts";
 
 const Item = z
@@ -139,6 +139,12 @@ export function mapCodexItem(
         .catch({})
         .parse(item["agentsStates"]);
       const ids = z.array(z.string()).catch([]).parse(item["receiverThreadIds"]);
+      const activity = (Array.isArray(item["activity"]) ? item["activity"] : [])
+        .flatMap((step) => {
+          const parsed = AgentActivityStepSchema.safeParse(step);
+          return parsed.success ? [parsed.data] : [];
+        })
+        .slice(-SUB_AGENT_STEPS);
       return {
         ...base,
         kind: "tool",
@@ -152,6 +158,8 @@ export function mapCodexItem(
             status: states[id]?.status ?? "running",
             message: states[id]?.message?.slice(0, 4000) ?? null,
           })),
+          ...(text(item["agentType"]) ? { agentType: text(item["agentType"]).slice(0, 100) } : {}),
+          ...(activity.length ? { activity } : {}),
         },
       };
     }

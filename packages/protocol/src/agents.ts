@@ -120,6 +120,19 @@ export const AgentAttachmentSchema = z.object({
     .regex(/^[A-Za-z0-9+/]*={0,2}$/),
 });
 export type AgentAttachment = z.infer<typeof AgentAttachmentSchema>;
+/** The latest steps a sub-agent row keeps; its full conversation stays with the CLI. */
+export const SUB_AGENT_STEPS = 40;
+export const AgentActivityStepSchema = z.object({
+  id: z.string().max(200),
+  /** The tool it ran, as the CLI names it. */
+  title: z.string().max(100),
+  /** What it ran on: a file, a command, a search. */
+  text: z.string().max(300),
+  status: z.enum(["running", "completed", "failed"]),
+  /** Which of several sub-agents one tool call started took the step. */
+  childId: z.string().max(200).optional(),
+});
+export type AgentActivityStep = z.infer<typeof AgentActivityStepSchema>;
 const AgentPresentationSchema = z.object({
   type: z.enum(["shell", "files", "mcp", "search", "sub_agent", "plan", "thinking"]),
   command: z.string().max(16000).optional(),
@@ -147,6 +160,10 @@ const AgentPresentationSchema = z.object({
     .array(z.object({ id: z.string(), status: z.string(), message: z.string().nullable() }))
     .max(100)
     .optional(),
+  /** A sub-agent's kind as its CLI names it, such as Claude Code's "Explore". */
+  agentType: z.string().max(100).optional(),
+  /** What a sub-agent has done so far, oldest first; only the latest steps are kept. */
+  activity: z.array(AgentActivityStepSchema).max(SUB_AGENT_STEPS).optional(),
 });
 export type AgentPresentation = z.infer<typeof AgentPresentationSchema>;
 export const AgentInfoSchema = z.object({

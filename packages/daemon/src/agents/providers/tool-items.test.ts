@@ -69,3 +69,35 @@ it("preserves unknown tool payloads and only links child IDs actually supplied b
     agentsStates: { "child-1": { status: "completed", message: "Complete" } },
   });
 });
+
+it("reads an OpenCode task's sub-agent steps and type from its metadata", () => {
+  expect(
+    nativeToolItem(
+      "task",
+      "task",
+      { description: "Map the routes", subagent_type: "general" },
+      {
+        details: {
+          sessionId: "child",
+          summary: [
+            { id: "p1", tool: "read", state: { status: "completed", title: "src/routes.ts" } },
+            { id: "p2", tool: "bash", state: { status: "running", input: { command: "ls" } } },
+            { id: "p3", tool: "grep", state: { status: "error", title: "router" } },
+          ],
+        },
+      },
+      false,
+      false,
+    ),
+  ).toMatchObject({
+    type: "collabAgentToolCall",
+    agentType: "general",
+    prompt: "Map the routes",
+    receiverThreadIds: ["child"],
+    activity: [
+      { id: "p1", title: "read", text: "src/routes.ts", status: "completed" },
+      { id: "p2", title: "bash", text: "ls", status: "running" },
+      { id: "p3", title: "grep", text: "router", status: "failed" },
+    ],
+  });
+});
