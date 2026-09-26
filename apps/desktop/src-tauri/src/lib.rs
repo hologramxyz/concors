@@ -13,6 +13,7 @@ mod daemon;
 mod microphone;
 mod notifications;
 mod sign_in;
+mod sound;
 mod ssh_key;
 mod update;
 
@@ -38,6 +39,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             notifications::show_agent_notification,
             notifications::dismiss_agent_notification,
+            sound::play_agent_sound,
             daemon::local_daemon_status,
             daemon::start_local_daemon,
             daemon::stop_local_daemon,
