@@ -3,7 +3,12 @@ import { nativeToolItem } from "./tool-items.ts";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { AgentPlanUsage } from "@concors/protocol";
-import { AgentControlsSchema, type AgentControls } from "@concors/protocol";
+import {
+  AgentControlsSchema,
+  SUB_AGENT_STEPS,
+  type AgentActivityStep,
+  type AgentControls,
+} from "@concors/protocol";
 
 export type InputHandler = (
   method: string,
@@ -66,6 +71,8 @@ export abstract class EventProvider implements ConversationProvider {
   protected closed = false;
   protected interrupted = false;
   protected tasks = new TaskState();
+  /** The steps each running sub-agent has taken, by the tool call that started it. */
+  private subAgentSteps = new Map<string, AgentActivityStep[]>();
   protected controls: AgentControls = AgentControlsSchema.parse({});
   protected compactionId: string | null = null;
   private ended = new Set<() => void>();
@@ -194,7 +201,26 @@ export abstract class EventProvider implements ConversationProvider {
         return;
       }
     }
-    this.item(nativeToolItem(id, name, input, output, done, failed), done);
+    const item = nativeToolItem(id, name, input, output, done, failed);
+    const steps = this.subAgentSteps.get(id);
+    if (item["type"] === "collabAgentToolCall" && steps && !item["activity"])
+      item["activity"] = steps;
+    if (done) this.subAgentSteps.delete(id);
+    this.item(item, done);
+  }
+  /**
+   * Records a step the sub-agent under `parentId` took, or a change to one it already took, so
+   * its row can show what it is doing instead of its tool calls joining the main conversation.
+   */
+  protected subAgentStep(
+    parentId: string,
+    step: Pick<AgentActivityStep, "id"> & Partial<AgentActivityStep>,
+  ) {
+    const steps = this.subAgentSteps.get(parentId) ?? [];
+    const existing = steps.find((known) => known.id === step.id);
+    if (existing) Object.assign(existing, step);
+    else steps.push({ title: "Tool", text: "", status: "running", ...step });
+    this.subAgentSteps.set(parentId, steps.slice(-SUB_AGENT_STEPS));
   }
   protected async permission(title: string, input: unknown): Promise<boolean> {
     const result = object(

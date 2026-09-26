@@ -1,3 +1,4 @@
+import { toolSummary } from "./tool-items.ts";
 import { randomUUID } from "node:crypto";
 import { unsupportedPlanUsage, type AgentPlanUsage } from "@concors/protocol";
 import { readClaudePlanUsage } from "../usage/claude-usage.ts";
@@ -548,44 +549,32 @@ export class ClaudeProvider extends EventProvider {
     if (!this.turnId) return;
     const parent = string(m["parent_tool_use_id"]);
     if (parent) {
-      // Nested messages belong to their parent tool, not the root assistant reply.
-      if (m["type"] === "assistant") {
-        const message = object(m["message"]),
-          content = array(message["content"]);
-        const response = textContent(content.filter((c) => object(c)["type"] === "text"));
-        if (response)
-          this.item({
-            id: `child:${parent}:${string(message["id"])}`,
-            type: "subAgentActivity",
-            agentPath: this.tools.get(parent)?.name ?? "Agent",
-            agentThreadId: parent,
-            kind: "working",
-            message: response,
-          });
-        for (const value of content) {
+      // A sub-agent's own tool calls are steps of the tool call that started it, shown on its
+      // row rather than as the main conversation's. Its final report is that call's result.
+      const owner = this.tools.get(parent);
+      if (m["type"] === "assistant")
+        for (const value of array(object(m["message"])["content"])) {
           const c = object(value);
-          if (c["type"] === "tool_use") {
-            const tool = { name: string(c["name"]), input: c["input"] };
-            this.tools.set(string(c["id"]), tool);
-            this.tool(string(c["id"]), tool.name, tool.input, null, false);
-          }
+          if (c["type"] !== "tool_use") continue;
+          const id = string(c["id"]);
+          this.tools.set(id, { name: string(c["name"]), input: c["input"] });
+          this.subAgentStep(parent, {
+            id,
+            title: string(c["name"]).slice(0, 100) || "Tool",
+            text: toolSummary(c["input"]),
+            status: "running",
+          });
         }
-      }
       if (m["type"] === "user")
         for (const value of array(object(m["message"])["content"])) {
-          const c = object(value),
-            id = string(c["tool_use_id"]),
-            tool = this.tools.get(id);
-          if (c["type"] === "tool_result" && tool)
-            this.tool(
-              id,
-              tool.name,
-              tool.input,
-              { content: c["content"], details: m["tool_use_result"] },
-              true,
-              c["is_error"] === true,
-            );
+          const c = object(value);
+          if (c["type"] === "tool_result" && this.tools.has(string(c["tool_use_id"])))
+            this.subAgentStep(parent, {
+              id: string(c["tool_use_id"]),
+              status: c["is_error"] === true ? "failed" : "completed",
+            });
         }
+      if (owner) this.tool(parent, owner.name, owner.input, null, false);
       return;
     }
     if (m["type"] === "system") {

@@ -450,6 +450,14 @@ it("streams structured plans, thinking summaries, child activity and context usa
       prompt: "Inspect tests",
     },
   });
+  provider.emit("item/started", {
+    threadId: "child",
+    item: { id: "child-ls", type: "commandExecution", command: "ls tests", status: "inProgress" },
+  });
+  provider.emit("item/completed", {
+    threadId: "child",
+    item: { id: "child-ls", type: "commandExecution", command: "ls tests", status: "completed" },
+  });
   provider.emit("turn/completed", {
     threadId: "child",
     turn: { id: "child-turn", status: "completed", items: [], error: null },
@@ -469,6 +477,19 @@ it("streams structured plans, thinking summaries, child activity and context usa
     result.outcome.conversation.items.find((i) => i.id === "children")?.presentation?.children?.[0]
       ?.status,
   ).toBe("completed");
+  // The child's own tool calls are steps on the row that started it, not items of their own.
+  expect(
+    result.outcome.conversation.items.find((i) => i.id === "children")?.presentation?.activity,
+  ).toEqual([
+    {
+      id: "child-ls",
+      title: expect.any(String),
+      text: "ls tests",
+      status: "completed",
+      childId: "child",
+    },
+  ]);
+  expect(result.outcome.conversation.items.some((i) => i.id === "child-ls")).toBe(false);
   expect(result.outcome.conversation.items.find((i) => i.id === "reasoning")?.text).toBe(
     "Reviewing the files",
   );
