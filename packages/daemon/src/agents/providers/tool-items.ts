@@ -1,3 +1,4 @@
+import { SUB_AGENT_STEPS } from "@concors/protocol";
 const record = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -9,6 +10,49 @@ const outputText = (value: unknown): string => {
   const item = record(value);
   return text(item["text"]) || outputText(item["content"] ?? item["output"] ?? "");
 };
+
+/** What a tool call ran on, in a few words: its file, command, search or task. */
+export function toolSummary(input: unknown): string {
+  const args = record(input);
+  for (const key of [
+    "description",
+    "command",
+    "cmd",
+    "file_path",
+    "filePath",
+    "path",
+    "pattern",
+    "query",
+    "url",
+    "prompt",
+  ]) {
+    const value = text(args[key]).trim();
+    if (value) return (value.split("\n")[0] ?? "").slice(0, 300);
+  }
+  return "";
+}
+
+interface Step {
+  id: string;
+  title: string;
+  text: string;
+  status: "running" | "completed" | "failed";
+}
+/** OpenCode's task tool reports its sub-agent's tool calls in its own metadata. */
+function openCodeSteps(summary: unknown): Step[] | undefined {
+  if (!Array.isArray(summary)) return undefined;
+  return summary.slice(-SUB_AGENT_STEPS).map((raw, index) => {
+    const part = record(raw),
+      state = record(part["state"]);
+    const status = text(state["status"]);
+    return {
+      id: text(part["id"]) || String(index),
+      title: text(part["tool"]).slice(0, 100) || "Tool",
+      text: (text(state["title"]) || toolSummary(state["input"])).slice(0, 300),
+      status: status === "completed" ? "completed" : status === "error" ? "failed" : "running",
+    };
+  });
+}
 
 /** Preserve native tool semantics without assuming every tool is an MCP call. */
 export function nativeToolItem(
@@ -116,10 +160,13 @@ export function nativeToolItem(
         result["sessionID"] ??
         result["agentId"],
     );
+    const activity = openCodeSteps(details["summary"]);
     return {
       ...base,
       type: "collabAgentToolCall",
       tool: name,
+      agentType: text(args["subagent_type"] ?? args["subagentType"] ?? args["agent"]),
+      ...(activity ? { activity } : {}),
       prompt: text(args["description"] ?? args["prompt"] ?? args["task"]),
       receiverThreadIds: child ? [child] : [],
       agentsStates: child

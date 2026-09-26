@@ -131,8 +131,20 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
       "15px",
     );
     await expect(page.getByLabel("Agent plan")).toContainText("Implement the change");
-    await page.getByLabel("Sub-agent activity").getByText("Agent update", { exact: true }).click();
-    await expect(page.getByLabel("Sub-agent activity")).toContainText("Inspecting tests");
+    const subAgent = page.getByLabel("Sub-agent activity");
+    // While it works, the row names its task and the step it is on.
+    await expect(subAgent).toContainText("Check the test coverage");
+    await expect(subAgent.locator("[data-sub-agent-current]")).toContainText(
+      "pnpm test --coverage",
+    );
+    await subAgent.getByRole("button", { expanded: false }).click();
+    const steps = subAgent.getByRole("list", { name: "Steps" });
+    await expect(steps.getByRole("listitem")).toHaveCount(2);
+    await expect(steps.getByRole("listitem").first()).toHaveAttribute(
+      "data-step-status",
+      "completed",
+    );
+    await expect(subAgent).toContainText("Inspecting tests");
     await expect(page.getByLabel("Context window")).toContainText("25%");
     await expect(page.getByLabel("Permission mode")).toBeEnabled();
     await page.getByRole("button", { name: "Thinking effort", exact: true }).click();
