@@ -626,6 +626,48 @@ export class WorkspaceStore {
       throw error;
     }
   }
+  /** Shows a new agent in the pane that showed `previous`, which is kept, no longer shown. */
+  replaceAgentInPane(
+    request: AgentRequest,
+    previous: AgentInfo,
+    info: AgentInfo,
+    /** The queued message this request delivers, which is done with once it runs. */
+    queued?: string,
+  ): AgentInfo {
+    this.#db.exec("BEGIN IMMEDIATE");
+    try {
+      const state = this.snapshot();
+      const project = state.projects.find((p) => p.id === previous.projectId);
+      const pane = project?.tabs
+        .flatMap((tab) => tab.nodes)
+        .find(
+          (node) =>
+            node.kind === "pane" && node.profile === "chat" && node.sessionId === previous.id,
+        );
+      if (!project || !pane || pane.kind !== "pane")
+        throw new Error("This agent's pane has been closed or changed.");
+      if (this.agents().length >= 128) throw new Error("Agent session limit reached (128)");
+      pane.sessionId = info.id;
+      project.version++;
+      state.revision++;
+      this.#db
+        .prepare("INSERT INTO agents (id, info) VALUES (?, ?)")
+        .run(info.id, JSON.stringify(AgentInfoSchema.parse(info)));
+      this.#db
+        .prepare("INSERT INTO agent_requests (id, request, session_id) VALUES (?, ?, ?)")
+        .run(request.requestId, JSON.stringify(request), info.id);
+      if (queued)
+        this.#db
+          .prepare("DELETE FROM agent_queue WHERE id = ? AND session_id = ?")
+          .run(queued, previous.id);
+      this.#db.prepare("UPDATE workspace SET snapshot = ? WHERE id = 1").run(JSON.stringify(state));
+      this.#db.exec("COMMIT");
+      return info;
+    } catch (error) {
+      this.#db.exec("ROLLBACK");
+      throw error;
+    }
+  }
   reserveAgent(request: AgentRequest, info: AgentInfo): AgentInfo {
     const op = request.operation;
     if (
