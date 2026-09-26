@@ -10,6 +10,7 @@ import {
 import { defaultSettings, parseModels, turnControls } from "./controls.ts";
 import { initialSettings, rememberable, supportedSettings } from "./remembered-settings.ts";
 import { saveAttachments } from "./attachments.ts";
+import { readMessageImages } from "./images.ts";
 import type { AgentAttachment } from "@concors/protocol";
 import { AGENT_USAGE_TTL_MS, unsupportedPlanUsage, type AgentPlanUsage } from "@concors/protocol";
 import { normalizeCommandExecutionCommand } from "./codex/command-display.ts";
@@ -1783,12 +1784,33 @@ export class AgentManager {
     // Locally submitted prompts are reserved before dispatch; replace their turn identity, not their
     // text. Replayed history carries its own prompt id, so a second copy would sort to the bottom.
     if (mapped.kind === "user" && this.#store.hasAgentTurnPrompt(id, turnId)) return;
+    const attachments =
+      mapped.kind === "assistant" && completed
+        ? this.messageImages(id, mapped.id, mapped.text)
+        : undefined;
     this.item(id, turnId, {
       ...mapped,
       ...(mapped.kind === "assistant"
         ? { title: agentProviderName(this.#store.agent(id).provider) }
         : {}),
+      ...(attachments ? { attachments } : {}),
     });
+  }
+  /**
+   * Copies the images an agent showed in a message once it completes, since the files are often
+   * temporary. A replayed message keeps the copy taken the first time.
+   */
+  private messageImages(id: string, itemId: string, text: string): AgentItem["attachments"] {
+    const previous = this.#store.agentItem(id, itemId)?.attachments;
+    if (previous?.some((attachment) => attachment.source)) return previous;
+    const images = readMessageImages(text, this.#store.agent(id).directory);
+    if (!images.length) return undefined;
+    this.#store.saveAgentItemImages(
+      id,
+      itemId,
+      images.map((image) => image.attachment),
+    );
+    return images.map(({ source, attachment: { name, mime } }) => ({ name, mime, source }));
   }
   private notification(id: string, method: string, raw: unknown): void {
     const params = ObjectValue.parse(raw);
