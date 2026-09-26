@@ -1,5 +1,10 @@
 import { expect, it } from "vitest";
 import { createServer } from "node:http";
+import { spawn } from "node:child_process";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { environmentPreviewName, PreviewNames } from "./preview-names.ts";
 import {
   parseProcessStat,
   processLabel,
@@ -30,6 +35,35 @@ it("does not expose command arguments or environment secrets in process labels",
     processLabel("node", ["node", "/repo/node_modules/vite/bin/vite.js", "--token=secret"]),
   ).toBe("node · vite.js");
   expect(processLabel("node", ["node", "--eval", "secret"])).toBe("node");
+  // Node renames its main thread; the executable still says what the server is.
+  expect(processLabel("MainThread", ["/usr/bin/node", "/repo/node_modules/.bin/vite"])).toBe(
+    "node · vite",
+  );
+  expect(processLabel("MainThread", ["node", "--watch", "secret"])).toBe("node");
+  expect(processLabel("MainThread", ["python3", "-m", "http.server"])).toBe("python3");
+});
+it("reads only an agent's preview name from a server's environment", () => {
+  expect(
+    environmentPreviewName("PATH=/bin\0CONCORS_PREVIEW_NAME=  Pricing\tsite \0TOKEN=secret"),
+  ).toBe("Pricing site");
+  expect(environmentPreviewName("CONCORS_PREVIEW_NAME=\0TOKEN=secret")).toBeUndefined();
+  expect(environmentPreviewName("X_CONCORS_PREVIEW_NAME=Nope")).toBeUndefined();
+});
+it("remembers preview names per directory and port across restarts", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-preview-names-"));
+  try {
+    const path = join(directory, "preview-names.json");
+    const names = new PreviewNames(path);
+    names.set("/repo/landing", 5173, " Landing ");
+    names.set("/repo/docs", 5173, "Docs");
+    expect(new PreviewNames(path).get("/repo/landing", 5173)).toBe("Landing");
+    expect(new PreviewNames(path).get("/repo/landing", 3000)).toBeUndefined();
+    names.set("/repo/landing", 5173, "  ");
+    expect(new PreviewNames(path).get("/repo/landing", 5173)).toBeUndefined();
+    expect(new PreviewNames(path).get("/repo/docs", 5173)).toBe("Docs");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 it("maps listening ports only to explicitly reported PIDs", () => {
   const ports = listeningPorts(
@@ -90,6 +124,41 @@ it("asks for the page when HEAD does not say what it serves", async () => {
     );
   }
 });
+it.skipIf(process.platform !== "linux")(
+  "names a preview from its server's environment until the person renames it",
+  async () => {
+    const server = spawn(
+      process.execPath,
+      [
+        "-e",
+        `require("node:http").createServer((q, r) => { r.writeHead(200, { "content-type": "text/html" }); r.end(); }).listen(0, "127.0.0.1", function () { console.log(this.address().port); });`,
+      ],
+      { env: { ...process.env, CONCORS_PREVIEW_NAME: "Pricing site" }, stdio: "pipe" },
+    );
+    try {
+      const port = Number(
+        await new Promise<string>((resolve) =>
+          server.stdout.once("data", (data) => resolve(String(data))),
+        ),
+      );
+      const inventory = new ProcessInventory(() => []);
+      const preview = async () => {
+        const snapshot = await inventory.snapshot(true);
+        const item = snapshot.processes.find((p) => p.pid === server.pid);
+        return { id: item?.id ?? "", preview: item?.previews.find((p) => p.port === port) };
+      };
+      await expect.poll(async () => (await preview()).preview?.name).toBe("Pricing site");
+      const { id } = await preview();
+      await inventory.renamePreview(id, port, "Landing");
+      expect((await preview()).preview?.name).toBe("Landing");
+      await inventory.renamePreview(id, port, "");
+      expect((await preview()).preview?.name).toBe("Pricing site");
+    } finally {
+      server.kill();
+    }
+  },
+  15_000,
+);
 it.skipIf(process.platform !== "linux")(
   "protects this daemon and rejects a stale process identity",
   async () => {

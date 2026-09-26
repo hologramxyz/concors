@@ -45,6 +45,16 @@ it("deduplicates shared ports and labels processes with multiple previews", () =
   ]);
 });
 
+it("prefers the name a person or agent gave the preview", () => {
+  const named = {
+    ...process,
+    previews: [{ port: 5173, protocol: "http" as const, name: "Landing" }],
+  };
+  expect(
+    discoveredPreviews([named], { previewUrl: () => "http://127.0.0.1:5173/" }).map((p) => p.name),
+  ).toEqual(["Landing"]);
+});
+
 it("omits listeners when the selected connection cannot route their previews", () => {
   expect(discoveredPreviews([process], { previewUrl: () => null })).toEqual([]);
 });

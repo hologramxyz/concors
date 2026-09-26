@@ -1,12 +1,22 @@
 import type { ResourceRequest, ResourceResult } from "@concors/protocol";
 import type { WorkspaceStore } from "../workspace/store.ts";
+import { basename, dirname, join } from "node:path";
 import { ProcessInventory } from "./processes.ts";
+import { PreviewNames } from "./preview-names.ts";
 
 export class MachineResources {
   readonly processes: ProcessInventory;
   constructor(workspace: WorkspaceStore) {
     const projects = () => workspace.snapshot().projects;
-    this.processes = new ProcessInventory(projects);
+    const attachments = workspace.attachmentsDirectory;
+    this.processes = new ProcessInventory(
+      projects,
+      new PreviewNames(
+        basename(attachments) === "attachments"
+          ? join(dirname(attachments), "preview-names.json")
+          : attachments + "-preview-names.json",
+      ),
+    );
   }
   async request(request: ResourceRequest): Promise<ResourceResult> {
     let outcome: ResourceResult["outcome"];
@@ -15,6 +25,10 @@ export class MachineResources {
       switch (operation.kind) {
         case "processes":
           outcome = { status: "processes", snapshot: await this.processes.snapshot() };
+          break;
+        case "rename-preview":
+          await this.processes.renamePreview(operation.id, operation.port, operation.name);
+          outcome = { status: "done", message: "Preview renamed." };
           break;
         case "stop":
           await this.processes.stop(operation.id);
