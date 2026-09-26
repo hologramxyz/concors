@@ -10,7 +10,12 @@ import {
 import type { DaemonConnection } from "@concors/daemon-client";
 import type { DictationModel } from "@concors/protocol";
 import { DaemonRecognition } from "./dictation-daemon";
-import { DictationSession, emptyDictation, type Recognition } from "./dictation-session";
+import {
+  DictationSession,
+  emptyDictation,
+  type DictationAction,
+  type Recognition,
+} from "./dictation-session";
 
 type SpeechWindow = Window & {
   SpeechRecognition?: new () => Recognition;
@@ -60,10 +65,13 @@ const noop = () => undefined;
 export function useDictation(
   callbacks: {
     onTranscript: (text: string) => void;
-    onFinish: (text: string) => void;
+    onFinish: (text: string, action: DictationAction) => void;
     onCancel: () => void;
   },
-  enabled: boolean,
+  /** The pane is on screen; switching away stops dictation on purpose. */
+  visible: boolean,
+  /** The machine is reachable; the recording streams to it, so it cannot outlive the connection. */
+  connected: boolean,
   connection?: DaemonConnection | null,
 ) {
   const current = useRef(callbacks);
@@ -74,23 +82,22 @@ export function useDictation(
   const [state, setState] = useState(emptyDictation);
   const daemon = useDaemonDictation(connection);
   useEffect(() => {
-    if (!enabled) session.current?.suspend();
-  }, [enabled]);
+    if (!visible) session.current?.suspend();
+  }, [visible]);
+  useEffect(() => {
+    if (!connected)
+      session.current?.suspend(
+        "Dictation stopped because the connection to this machine dropped. Your words so far are in the message.",
+      );
+  }, [connected]);
   const Constructor =
     typeof window === "undefined"
       ? undefined
       : ((window as SpeechWindow).SpeechRecognition ??
         (window as SpeechWindow).webkitSpeechRecognition);
-  useEffect(() => {
-    const hidden = () => {
-      if (document.hidden) session.current?.suspend();
-    };
-    document.addEventListener("visibilitychange", hidden);
-    return () => {
-      document.removeEventListener("visibilitychange", hidden);
-      session.current?.dispose();
-    };
-  }, []);
+  // Keeps recording while the window is out of view: switching to read something mid-sentence
+  // must not end it. Only unmounting the composer does.
+  useEffect(() => () => session.current?.dispose(), []);
   return {
     ...state,
     supported: daemon.available || !!Constructor,
@@ -111,7 +118,7 @@ export function useDictation(
           {
             change: setState,
             transcript: (text) => current.current.onTranscript(text),
-            finish: (text) => current.current.onFinish(text),
+            finish: (text, action) => current.current.onFinish(text, action),
           },
           daemon.available ? DAEMON_FINISH_TIMEOUT_MS : undefined,
         );
@@ -120,7 +127,7 @@ export function useDictation(
         setState({ ...emptyDictation, error: "Could not start dictation in this browser." });
       }
     },
-    stop: () => session.current?.stop(),
+    stop: (action?: DictationAction) => session.current?.stop(action),
     suspend: () => session.current?.suspend(),
     cancel: () => {
       session.current?.dispose();
