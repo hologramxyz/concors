@@ -154,11 +154,6 @@ export function AgentComposer({
     connection,
   );
   useLayoutEffect(() => {
-    if (wasDictating.current && !dictation.active && visible && !document.hidden)
-      textarea.current?.focus();
-    wasDictating.current = dictation.active;
-  }, [dictation.active, visible]);
-  useLayoutEffect(() => {
     const el = textarea.current;
     if (el) {
       // Hold the box's size while measuring: collapsing it for one layout grew the chat above,
@@ -166,10 +161,21 @@ export function AgentComposer({
       const box = el.parentElement;
       if (box) box.style.minHeight = `${box.offsetHeight}px`;
       el.style.height = "auto";
-      el.style.height = Math.min(el.scrollHeight, 192) + "px";
+      // The class's max-height caps the growth; past it the text scrolls.
+      el.style.height = el.scrollHeight + "px";
       if (box) box.style.minHeight = "";
     }
   }, [draft, expanded, dictation.active]);
+  // Runs after the box is sized: the dictated words were added at the end, so show the end.
+  useLayoutEffect(() => {
+    const el = textarea.current;
+    if (wasDictating.current && !dictation.active && visible && !document.hidden && el) {
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+      el.scrollTop = el.scrollHeight;
+    }
+    wasDictating.current = dictation.active;
+  }, [dictation.active, visible]);
   useComposerMotion(form, compact && !native, expanded);
   const configure = async (next: AgentSettings) => {
     if (!connection || !advanced) return;
@@ -966,7 +972,7 @@ export function AgentComposer({
                     if (!uncertain) void submit();
                   }
                 }}
-                className="agent-composer-input max-h-48 min-h-16 w-full resize-none bg-transparent px-3 py-3 outline-none disabled:opacity-50"
+                className={`agent-composer-input ${compact ? "max-h-48" : "max-h-[min(40vh,26rem)]"} min-h-16 w-full resize-none bg-transparent px-3 py-3 outline-none disabled:opacity-50`}
               />
               <div
                 className={`flex items-center gap-1 px-1 ${compact ? "mobile-composer-toolbar" : "flex-wrap"}`}
