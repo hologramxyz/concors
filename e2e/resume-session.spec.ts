@@ -140,3 +140,45 @@ test("resume focuses an already open session instead of making a duplicate", asy
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("a renamed session is listed and resumed under its pane name", async ({ page }) => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-resume-named-"));
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Named resume", directory);
+    const pane = page.getByRole("region", { name: "Agent pane", exact: true });
+    const dialog = page.getByRole("dialog", { name: "Resume session", exact: true });
+    // Session 42 is used by no other test; the daemon is shared and a session has one workspace.
+    const pick = async (search: string, name: RegExp) => {
+      await page.getByRole("button", { name: "New tab", exact: true }).click();
+      await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+      await expect(page.getByRole("textbox", { name: "Message Codex", exact: true })).toBeEnabled();
+      await page.getByRole("button", { name: "Resume session", exact: true }).click();
+      await dialog
+        .getByRole("group", { name: "Filter sessions by provider" })
+        .getByRole("button", { name: "Codex", exact: true })
+        .click();
+      await dialog.getByRole("textbox", { name: "Search sessions" }).fill(search);
+      await expect(dialog.locator("[data-session-provider]")).toHaveCount(1);
+      await dialog.getByRole("button", { name }).click();
+      await expect(dialog).toHaveCount(0);
+      await expect(page.getByRole("log")).toContainText("Saved CLI response");
+    };
+    await pick("session 42", /^Older CLI session 42 /);
+    await pane.getByRole("button", { name: "Pane actions" }).click();
+    await page.getByRole("menuitem", { name: "Rename pane" }).click();
+    await pane.getByRole("textbox", { name: "Pane name", exact: true }).fill("Hello world");
+    await page.keyboard.press("Enter");
+    await expect(pane.locator("header").getByText("Hello world", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Close Tab 2 tab", exact: true }).click();
+    await expect(pane).toHaveCount(0);
+
+    // Found by the name given to it, not only by the CLI's title.
+    await pick("hello", /^Hello world /);
+    await expect(pane.locator("header").getByText("Hello world", { exact: true })).toBeVisible();
+    await expect(page.getByText("Loading conversation…")).toHaveCount(0);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

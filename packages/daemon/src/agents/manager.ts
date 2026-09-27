@@ -116,6 +116,8 @@ export class AgentManager {
   readonly #workspaceChanged: () => void;
   readonly #factory: AgentProviderFactory;
   readonly #runtimes = new Map<string, Runtime>();
+  /** Agents replaying a whole history, whose items clients load as a page rather than one by one. */
+  readonly #quiet = new Set<string>();
   /** New chats started from remembered settings, checked once their provider reports its options. */
   readonly #remembered = new Map<string, AgentSettings>();
   /**
@@ -291,7 +293,7 @@ export class AgentManager {
       revision: previous?.revision ?? 0,
       createdAt: previous?.createdAt ?? new Date().toISOString(),
     });
-    this.#emit({ type: "agent.item", item });
+    if (!this.#quiet.has(id)) this.#emit({ type: "agent.item", item });
   }
   /** New chats open with the provider last chosen on this machine, while it is still usable. */
   private newChatProvider(): string {
@@ -484,10 +486,28 @@ export class AgentManager {
           updatedAt: current.updatedAt,
         });
       }
-      // Rehydrate provider history after restart using stable item and turn identities.
-      for (const turn of response.thread.turns)
-        for (const raw of turn.items)
-          this.lifecycle(id, this.#store.nativeTurn(id, turn.id), raw, true);
+      // Rehydrate provider history after restart using stable item and turn identities. The
+      // first replay of a resumed session is its whole history: save it in one commit and have
+      // clients load its latest page, rather than streaming every item, which drew the chat from
+      // the top down (and took seconds of disk flushes on a long session).
+      const fresh = !this.#store.hasAgentProviderHistory(id);
+      if (fresh) this.#quiet.add(id);
+      try {
+        this.#store.transaction(() => {
+          for (const turn of response.thread.turns)
+            for (const raw of turn.items)
+              this.lifecycle(id, this.#store.nativeTurn(id, turn.id), raw, true);
+        });
+      } finally {
+        this.#quiet.delete(id);
+      }
+      if (fresh && response.thread.turns.some((turn) => turn.items.length)) {
+        const current = this.#store.agent(id);
+        this.update(id, {
+          historyRevision: (current.historyRevision ?? 0) + 1,
+          updatedAt: current.updatedAt,
+        });
+      }
       if (info.threadId) {
         const active = response.thread.turns.findLast((t) => t.status === "inProgress");
         if (active) {
