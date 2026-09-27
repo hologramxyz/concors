@@ -610,7 +610,8 @@ export class DaemonConnection {
           this.#providerRequests.delete(requestId);
           reject(new Error("Provider request timed out. Reload settings before retrying."));
         },
-        operation.kind === "usage" ? 20000 : 10000,
+        // Session discovery may start a CLI; the daemon gives it 15 seconds before answering.
+        operation.kind === "usage" || operation.kind === "sessions-list" ? 20000 : 10000,
       );
       this.#providerRequests.set(requestId, { resolve, reject, timer });
       try {

@@ -743,6 +743,10 @@ it("resumes once into an empty pane with native history and settings, without re
     { kind: "sessions-list", projectId: project.id, directory, provider: "codex" },
     randomUUID(),
   );
+  const streamed: string[] = [];
+  b.onAgent((event) => {
+    if (event.type === "agent.item") streamed.push(event.item.sessionId);
+  });
   const requestId = randomUUID();
   const op = {
     kind: "resume-session" as const,
@@ -760,6 +764,9 @@ it("resumes once into an empty pane with native history and settings, without re
     conversation: { agent: { id: resumed } },
   });
   await expect.poll(() => a.agents.find((agent) => agent.id === resumed)?.status).toBe("idle");
+  // The replayed history is one page for clients to load, not a stream of items.
+  expect(streamed.filter((session) => session === resumed)).toEqual([]);
+  expect(b.agents.find((agent) => agent.id === resumed)?.historyRevision).toBe(1);
   expect(a.workspace!.projects[0]!.tabs).toHaveLength(1);
   expect(a.workspace!.projects[0]!.tabs[0]!.nodes[0]).toMatchObject({ sessionId: resumed });
   const read = await action(a, { kind: "read", sessionId: resumed });
@@ -776,6 +783,77 @@ it("resumes once into an empty pane with native history and settings, without re
   expect(
     providers.flatMap((p) => p.requests).filter((r) => r.method === "turn/start"),
   ).toHaveLength(0);
+});
+
+it("resuming a session again brings back the pane and tab names it was given", async () => {
+  vi.spyOn(ProviderRegistry.prototype, "installed").mockReturnValue(true);
+  const { a, id } = await setup();
+  const projectId = a.workspace!.projects[0]!.id;
+  const list = () =>
+    a.requestProvider(
+      { kind: "sessions-list", projectId, directory, provider: "codex" },
+      randomUUID(),
+    );
+  const edit = async (operation: Record<string, unknown>) => {
+    const result = await a.executeWorkspace({
+      type: "workspace.command",
+      commandId: randomUUID(),
+      epoch: a.workspace!.epoch,
+      operation: {
+        ...operation,
+        projectId,
+        expectedVersion: a.workspace!.projects.find((p) => p.id === projectId)!.version,
+      } as never,
+    });
+    expect(result.outcome.status).toBe("accepted");
+  };
+  const resume = async (sessionId: string) => {
+    await list();
+    const result = await action(a, {
+      kind: "resume-session",
+      sessionId,
+      nativeSessionId: "external-thread",
+      provider: "codex",
+      expectedRevision: a.agents.find((agent) => agent.id === sessionId)!.revision,
+    });
+    if (result.outcome.status !== "ok") throw new Error(result.outcome.message);
+    return result.outcome.conversation.agent.id;
+  };
+  const resumed = await resume(id);
+  await expect.poll(() => a.agents.find((agent) => agent.id === resumed)?.status).toBe("idle");
+  const first = a.workspace!.projects[0]!.tabs[0]!;
+  await edit({ kind: "pane.rename", tabId: first.id, paneId: first.nodes[0]!.id, name: "Hello" });
+  await edit({ kind: "tab.rename", tabId: first.id, name: "Release" });
+  await expect
+    .poll(() => a.agents.find((agent) => agent.id === resumed))
+    .toMatchObject({ paneName: "Hello", tabName: "Release" });
+  await edit({ kind: "tab.close", tabId: first.id });
+
+  const tabId = randomUUID(),
+    paneId = randomUUID();
+  await edit({ kind: "tab.create", tabId, paneId, name: "Tab 1", profile: "chat" });
+  const started = await action(a, {
+    kind: "start",
+    epoch: a.workspace!.epoch,
+    projectId,
+    tabId,
+    paneId,
+    expectedVersion: a.workspace!.projects[0]!.version,
+  });
+  if (started.outcome.status !== "ok") throw new Error(started.outcome.message);
+  const empty = started.outcome.conversation.agent.id;
+  await expect.poll(() => a.agents.find((agent) => agent.id === empty)?.status).toBe("idle");
+
+  expect(await resume(empty)).toBe(resumed);
+  const tab = a.workspace!.projects[0]!.tabs.find((t) => t.id === tabId)!;
+  expect(tab.name).toBe("Release");
+  expect(tab.nodes[0]).toMatchObject({ sessionId: resumed, name: "Hello" });
+  // The next workspace edit keeps the names on the agent instead of clearing them.
+  await edit({ kind: "tab.move", tabId, index: 0 });
+  expect(a.agents.find((agent) => agent.id === resumed)).toMatchObject({
+    paneName: "Hello",
+    tabName: "Release",
+  });
 });
 
 it("rejects unlisted native IDs and protects conversations when a stale picker is submitted", async () => {

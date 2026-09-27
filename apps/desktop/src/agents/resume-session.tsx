@@ -22,13 +22,16 @@ import {
 } from "@/components/ui/dialog";
 import { AgentStartedContext } from "./context";
 import { ProviderIcon } from "./provider-icon";
-import { cachedSessions, cacheSessions } from "./session-cache";
+import { cachedSessions, cacheSessions, sessionsFresh } from "./session-cache";
 import {
   SessionCatalog,
   type ProviderSession,
   type SessionProvider,
   type SessionCatalogSnapshot,
 } from "./session-catalog";
+
+/** The machine's session providers from the last visit, so reopening lists sessions at once. */
+const knownProviders = new WeakMap<object, { providers: SessionProvider[]; revision: number }>();
 
 export function ResumeSession({
   agent,
@@ -60,6 +63,16 @@ export function ResumeSession({
       setQuery("");
       setFilter("all");
     }
+    // Lists sessions at once from the providers seen last time, by this chat or another.
+    const known = next && connection ? knownProviders.get(connection) : undefined;
+    if (known) {
+      setProviders((value) =>
+        JSON.stringify(value) === JSON.stringify(known.providers) ? value : known.providers,
+      );
+      setRevision(known.revision);
+    }
+    // A refresh asked for last time must not skip the caches on every later visit.
+    if (!next) setRefresh(0);
     setOpen(next);
     onOpenChange(next);
   };
@@ -75,11 +88,12 @@ export function ResumeSession({
         setCatalogError(null);
         // Subscriptions share their engine's conversations, which the base provider already
         // lists; sessions are grouped by harness, never by account.
-        setProviders(
-          result.outcome.providers
-            .filter((p) => p.enabled && p.installed && !p.subscription)
-            .map((p) => ({ id: p.id, label: p.label })),
-        );
+        const next = result.outcome.providers
+          .filter((p) => p.enabled && p.installed && !p.subscription)
+          .map((p) => ({ id: p.id, label: p.label }));
+        knownProviders.set(connection, { providers: next, revision: result.outcome.revision });
+        // Unchanged providers keep the list mounted instead of starting it over.
+        setProviders((value) => (JSON.stringify(value) === JSON.stringify(next) ? value : next));
         setRevision(result.outcome.revision);
       })
       .catch((cause: unknown) => {
@@ -133,7 +147,6 @@ export function ResumeSession({
     agent.directory,
     providers,
     revision,
-    refresh,
   ]);
   return (
     <Dialog open={open} onOpenChange={changeOpen}>
@@ -235,7 +248,7 @@ export function ResumeSession({
         )}
         {connection && open && !!providers?.length && (
           <SessionResults
-            key={scope}
+            key={`${scope}:${refresh}`}
             connection={connection}
             agent={agent}
             providers={providers}
@@ -284,7 +297,7 @@ function SessionResults({
     return new SessionCatalog(
       providers,
       async (provider, cursor) => {
-        const cached = cachedSessions(connection, key(provider, cursor));
+        const cached = !refresh && cachedSessions(connection, key(provider, cursor));
         if (cached) return cached;
         const result = await connection.requestProvider(
           {
@@ -303,7 +316,11 @@ function SessionResults({
         cacheSessions(connection, key(provider, cursor), page);
         return page;
       },
-      (provider) => cachedSessions(connection, key(provider)),
+      (provider) => {
+        // Refresh was asked for, so it shows as loading rather than as the old list.
+        const page = !refresh && cachedSessions(connection, key(provider), true);
+        return page ? { page, stale: !sessionsFresh(connection, key(provider)) } : undefined;
+      },
     );
   });
   const snapshot = useSyncExternalStore(catalog.subscribe, catalog.getSnapshot);
@@ -351,15 +368,29 @@ function SessionList({
   const providers = snapshot.providers.filter((p) => filter === "all" || filter === p.id);
   const loading = providers.some((p) => p.loading);
   const more = providers.some((p) => p.hasMore && !p.error);
+  // A session already chatted with here is listed under the name its pane or tab was given.
+  const names = useMemo(
+    () =>
+      new Map(
+        connection.agents.flatMap((a) => {
+          const name = a.paneName ?? a.tabName;
+          return a.threadId && name ? [[JSON.stringify([a.provider, a.threadId]), name]] : [];
+        }),
+      ),
+    [connection.agents],
+  );
   const rows = useMemo(() => {
     const needle = query.toLocaleLowerCase();
-    return snapshot.sessions.filter(
-      (session) =>
+    return snapshot.sessions.flatMap((session) => {
+      const name = names.get(JSON.stringify([session.provider, session.id]));
+      const shown =
         (filter === "all" || session.provider === filter) &&
         (session.provider !== agent.provider || session.id !== agent.threadId) &&
-        (!needle || `${session.title} ${session.id}`.toLocaleLowerCase().includes(needle)),
-    );
-  }, [snapshot, filter, agent.provider, agent.threadId, query]);
+        (!needle ||
+          `${name ?? ""} ${session.title} ${session.id}`.toLocaleLowerCase().includes(needle));
+      return !shown ? [] : name ? [{ ...session, title: name }] : [session];
+    });
+  }, [snapshot, names, filter, agent.provider, agent.threadId, query]);
   // Conversations already bound to a pane, looked up once rather than per row.
   const opened = useMemo(() => {
     const panes = new Set(

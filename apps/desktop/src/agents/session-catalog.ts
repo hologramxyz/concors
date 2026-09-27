@@ -15,6 +15,9 @@ interface Entry {
   cursor: string | null | undefined;
   loaded: boolean;
   loading: boolean;
+  /** Shown from an earlier visit while its first page is fetched again, without a spinner. */
+  stale: boolean;
+  revalidating: boolean;
   error: string | null;
 }
 export interface SessionCatalogSnapshot {
@@ -22,7 +25,10 @@ export interface SessionCatalogSnapshot {
   providers: (SessionProvider & { loading: boolean; hasMore: boolean; error: string | null })[];
 }
 
-/** Independent provider pages, with bounded parallelism and no all-or-nothing loading state. */
+/**
+ * Independent provider pages, with bounded parallelism and no all-or-nothing loading state. A
+ * list seen before shows at once and refreshes quietly: listing can mean starting a CLI.
+ */
 export class SessionCatalog {
   private entries: Entry[];
   private listeners = new Set<() => void>();
@@ -35,17 +41,19 @@ export class SessionCatalog {
   constructor(
     providers: SessionProvider[],
     read: SessionCatalog["read"],
-    initial: (provider: string) => NativeSessionPage | undefined,
+    initial: (provider: string) => { page: NativeSessionPage; stale: boolean } | undefined,
   ) {
     this.read = read;
     this.entries = providers.map((provider) => {
-      const page = initial(provider.id);
+      const cached = initial(provider.id);
       return {
         provider,
-        sessions: page?.sessions ?? [],
-        cursor: page?.nextCursor,
-        loaded: !!page,
+        sessions: cached?.page.sessions ?? [],
+        cursor: cached?.page.nextCursor,
+        loaded: !!cached,
         loading: false,
+        stale: !!cached?.stale,
+        revalidating: false,
         error: null,
       };
     });
@@ -88,6 +96,11 @@ export class SessionCatalog {
   }
   start = () => {
     this.active = true;
+    for (const entry of this.entries)
+      if (entry.stale && !entry.revalidating) {
+        entry.revalidating = true;
+        this.queue.push(entry);
+      }
     this.enqueue(this.entries.filter((entry) => !entry.loaded));
   };
   stop = () => {
@@ -95,7 +108,7 @@ export class SessionCatalog {
     this.generation++;
     this.queue = [];
     this.running = 0;
-    for (const entry of this.entries) entry.loading = false;
+    for (const entry of this.entries) entry.loading = entry.revalidating = false;
   };
   loadMore = (provider?: string) => {
     this.enqueue(
@@ -111,7 +124,8 @@ export class SessionCatalog {
   private enqueue(entries: Entry[]) {
     if (!this.active) return;
     for (const entry of entries) {
-      if (entry.loading || entry.cursor === null) continue;
+      // A page fetched past a list being refreshed would be dropped when the refresh lands.
+      if (entry.loading || entry.revalidating || entry.cursor === null) continue;
       entry.loading = true;
       this.queue.push(entry);
     }
@@ -124,22 +138,31 @@ export class SessionCatalog {
       const entry = this.queue.shift();
       if (!entry) return;
       this.running++;
-      void this.read(entry.provider.id, entry.cursor ?? undefined)
+      const revalidating = entry.revalidating;
+      void this.read(entry.provider.id, revalidating ? undefined : (entry.cursor ?? undefined))
         .then(
           (page) => {
             if (!this.active || generation !== this.generation) return;
+            if (revalidating) {
+              entry.sessions = mergeSessions([], page.sessions);
+              entry.cursor = page.nextCursor;
+              entry.stale = false;
+              return;
+            }
             entry.sessions = mergeSessions(entry.sessions, page.sessions);
             entry.cursor = page.nextCursor === entry.cursor ? null : page.nextCursor;
             entry.loaded = true;
           },
           (cause: unknown) => {
             if (!this.active || generation !== this.generation) return;
-            entry.error = cause instanceof Error ? cause.message : "Could not load sessions";
+            // The earlier list stays up; only a list never shown reports the failure.
+            if (!revalidating)
+              entry.error = cause instanceof Error ? cause.message : "Could not load sessions";
           },
         )
         .finally(() => {
           if (!this.active || generation !== this.generation) return;
-          entry.loading = false;
+          entry.loading = entry.revalidating = false;
           this.running--;
           this.publish();
           this.pump();
