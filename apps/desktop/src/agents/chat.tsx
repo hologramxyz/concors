@@ -233,6 +233,15 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
                   />
                 </div>
               )}
+            {agent?.nativeImport &&
+              agent.status === "starting" &&
+              !conversation.items.length &&
+              !conversation.loading && (
+                // A resumed session's history arrives once its CLI has loaded it, as one page.
+                <p className="py-6 text-center text-xs text-muted-foreground" role="status">
+                  Loading conversation…
+                </p>
+              )}
             {(conversation.hasEarlier || conversation.loading === "latest") && (
               <div className="h-5 text-center text-xs text-muted-foreground" role="status">
                 {conversation.loading === "earlier"
