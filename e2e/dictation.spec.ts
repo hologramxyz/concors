@@ -190,6 +190,42 @@ test("Send submits the dictated words, and Ctrl+Enter does too", async ({ page }
   }
 });
 
+test("dictating into a long draft adds the words at its end, grows the box and shows the end", async ({
+  page,
+}) => {
+  const { composer, dispose } = await workspace(page);
+  try {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const draft = Array.from({ length: 40 }, (_, i) => `Line ${i + 1} of the prompt.`).join("\n");
+    await composer.fill(draft);
+    // Taller than the old 192px cap, yet capped: the rest scrolls.
+    const height = await composer.evaluate((element) => element.getBoundingClientRect().height);
+    expect(height).toBeGreaterThan(300);
+    expect(height).toBeLessThanOrEqual(416);
+    await page.getByRole("button", { name: "Start dictation", exact: true }).click();
+    await page.evaluate(() => window.testDictation.result("Dictated ending.", true));
+    await page.getByRole("button", { name: "Edit dictated message", exact: true }).click();
+    await page.evaluate(() => window.testDictation.end());
+    await expect(composer).toHaveValue(`${draft} Dictated ending.`);
+    await expect(composer).toBeFocused();
+    expect(
+      await composer.evaluate((element: HTMLTextAreaElement) => ({
+        caret: element.selectionStart === element.value.length,
+        bottom: element.scrollHeight - element.clientHeight - element.scrollTop <= 1,
+      })),
+    ).toEqual({ caret: true, bottom: true });
+
+    await page.getByRole("button", { name: "Start dictation", exact: true }).click();
+    await page.evaluate(() => window.testDictation.result("Sent too.", true));
+    await page.getByRole("button", { name: "Send dictated message", exact: true }).click();
+    await page.evaluate(() => window.testDictation.end());
+    await expect(composer).toHaveValue("");
+    await expect(page.getByRole("log").getByText(/Dictated ending\. Sent too\.$/)).toHaveCount(1);
+  } finally {
+    await dispose();
+  }
+});
+
 test("recording carries on while the window is out of view", async ({ page }) => {
   const { composer, dispose } = await workspace(page);
   try {
