@@ -22,6 +22,7 @@ import {
   type TerminalInfo,
   type TerminalRequest,
   applyWorkspaceOperation,
+  isDefaultTabName,
   nextWorkspaceTabName,
   WorkspaceOperationError,
   WorkspaceSnapshotSchema,
@@ -522,12 +523,15 @@ export class WorkspaceStore {
       const previous = this.agent(op.sessionId);
       const state = this.snapshot();
       const project = state.projects.find((p) => p.id === previous.projectId);
-      const bound = project?.tabs
-        .flatMap((tab) => tab.nodes)
-        .find(
+      const tab = project?.tabs.find((tab) =>
+        tab.nodes.some(
           (pane) =>
             pane.kind === "pane" && pane.profile === "chat" && pane.sessionId === previous.id,
-        );
+        ),
+      );
+      const bound = tab?.nodes.find(
+        (pane) => pane.kind === "pane" && pane.profile === "chat" && pane.sessionId === previous.id,
+      );
       if (!project || !bound || bound.kind !== "pane" || previous.revision !== op.expectedRevision)
         throw new Error("The chat pane changed. Reopen Resume session and try again.");
       if (
@@ -567,6 +571,16 @@ export class WorkspaceStore {
         if (!existing && this.agents().length >= 128)
           throw new Error("Agent session limit reached (128)");
         bound.sessionId = info.id;
+        // A chat resumed from its session comes back under the names it was given, unless this
+        // pane or tab was named since. Without this the next workspace edit forgot them.
+        if (existing?.paneName && !bound.name) bound.name = existing.paneName;
+        if (
+          existing?.tabName &&
+          tab &&
+          isDefaultTabName(tab.name) &&
+          tab.nodes.filter((node) => node.kind === "pane").length === 1
+        )
+          tab.name = existing.tabName;
         this.saveAgent({ ...previous, revision: previous.revision + 1 });
         if (!existing)
           this.#db
@@ -817,10 +831,25 @@ export class WorkspaceStore {
         })
       : null;
   }
-  /** Keeps the images an agent showed in a message, replacing any kept for it before. */
-  saveAgentItemImages(sessionId: string, itemId: string, images: readonly AgentAttachment[]) {
+  /**
+   * Runs `work` in one transaction, or inside the one already open. Each commit waits for the
+   * disk, so a batch of writes (a replayed history) commits once instead of once per write.
+   */
+  transaction<T>(work: () => T): T {
+    if (this.#db.isTransaction) return work();
     this.#db.exec("BEGIN IMMEDIATE");
     try {
+      const result = work();
+      this.#db.exec("COMMIT");
+      return result;
+    } catch (error) {
+      this.#db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+  /** Keeps the images an agent showed in a message, replacing any kept for it before. */
+  saveAgentItemImages(sessionId: string, itemId: string, images: readonly AgentAttachment[]) {
+    this.transaction(() => {
       this.#db
         .prepare("DELETE FROM agent_item_images WHERE session_id = ? AND item_id = ?")
         .run(sessionId, itemId);
@@ -830,11 +859,7 @@ export class WorkspaceStore {
       images.forEach((image, index) =>
         insert.run(sessionId, itemId, index, JSON.stringify(AgentAttachmentSchema.parse(image))),
       );
-      this.#db.exec("COMMIT");
-    } catch (error) {
-      this.#db.exec("ROLLBACK");
-      throw error;
-    }
+    });
   }
   agentAttachment(sessionId: string, itemId: string, index: number) {
     if (!this.agentItem(sessionId, itemId)) throw new Error("Attachment is unavailable");

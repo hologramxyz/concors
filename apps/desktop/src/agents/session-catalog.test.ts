@@ -34,8 +34,11 @@ const deferred = () => {
 it("combines cached providers by recency without conflating identical native session IDs", () => {
   const read = vi.fn();
   const catalog = new SessionCatalog(providers, read, (provider) => ({
-    sessions: [session("same-id", provider === "claude" ? "13" : "12")],
-    nextCursor: null,
+    page: {
+      sessions: [session("same-id", provider === "claude" ? "13" : "12")],
+      nextCursor: null,
+    },
+    stale: false,
   }));
   catalog.start();
   expect(catalog.getSnapshot().sessions.map((row) => [row.provider, row.id])).toEqual([
@@ -44,6 +47,38 @@ it("combines cached providers by recency without conflating identical native ses
   ]);
   expect(catalog.getSnapshot().sessions[0]?.providerLabel).toBe("Claude Code");
   expect(read).not.toHaveBeenCalled();
+  catalog.stop();
+});
+
+it("shows a stale list at once, replaces it quietly, and keeps it if the refresh fails", async () => {
+  const fetched = deferred();
+  const read = vi.fn((provider: string) =>
+    provider === "codex" ? fetched.promise : Promise.reject(new Error("offline")),
+  );
+  const catalog = new SessionCatalog(providers, read, (provider) => ({
+    page: { sessions: [session(`old-${provider}`)], nextCursor: "cursor" },
+    stale: true,
+  }));
+  catalog.start();
+  const snapshot = catalog.getSnapshot();
+  expect(snapshot.sessions.map((row) => row.id).sort()).toEqual(["old-claude", "old-codex"]);
+  // Refreshing is not loading: no spinner, and no second page while the first is replaced.
+  expect(snapshot.providers.every((provider) => !provider.loading)).toBe(true);
+  catalog.loadMore();
+  expect(read.mock.calls).toEqual([
+    ["codex", undefined],
+    ["claude", undefined],
+  ]);
+  fetched.resolve(page("new-codex"));
+  await vi.waitFor(() => {
+    expect(
+      catalog
+        .getSnapshot()
+        .sessions.map((row) => row.id)
+        .sort(),
+    ).toEqual(["new-codex", "old-claude"]);
+  });
+  expect(catalog.getSnapshot().providers.map((provider) => provider.error)).toEqual([null, null]);
   catalog.stop();
 });
 
@@ -98,7 +133,10 @@ it("paginates a filtered provider independently and then loads the remaining all
     expect(cursor).toBe("next");
     return page(`${provider}-older`);
   });
-  const catalog = new SessionCatalog(providers, read, (provider) => page(provider, "next"));
+  const catalog = new SessionCatalog(providers, read, (provider) => ({
+    page: page(provider, "next"),
+    stale: false,
+  }));
   catalog.start();
   catalog.loadMore("codex");
   await settled(catalog);
@@ -121,7 +159,10 @@ it("deduplicates shifting pages and stops repeated cursors from loading forever"
     sessions: [session("same", "13"), session("older")],
     nextCursor: "repeated",
   }));
-  const catalog = new SessionCatalog([providers[0]!], read, () => page("same", "repeated"));
+  const catalog = new SessionCatalog([providers[0]!], read, () => ({
+    page: page("same", "repeated"),
+    stale: false,
+  }));
   catalog.start();
   catalog.loadMore();
   await settled(catalog);
