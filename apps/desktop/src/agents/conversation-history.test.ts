@@ -288,3 +288,20 @@ it("does not fetch on resume while the reader is paged away from the tail", asyn
   await history.resume();
   expect(read).toHaveBeenCalledTimes(calls);
 });
+
+it("ignores a replayed history streamed before the first page, then opens at its latest", async () => {
+  const { all, history, read } = fixture();
+  const page = deferred<AgentConversation>();
+  read.mockReturnValueOnce(page.promise);
+  const loading = history.load("latest");
+  // An older daemon starts the provider for this read and streams every saved item first.
+  for (const replayed of all) history.receive(replayed);
+  expect(history.getSnapshot().items).toEqual([]);
+  page.resolve({ agent, items: all.slice(-80), hasMore: true, hasNewer: false });
+  await loading;
+  expect(history.getSnapshot().items.map((item) => item.position)).toEqual(
+    all.slice(-80).map((item) => item.position),
+  );
+  history.receive(item(800));
+  expect(history.getSnapshot().items.at(-1)?.position).toBe(800);
+});
