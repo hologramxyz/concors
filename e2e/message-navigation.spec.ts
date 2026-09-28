@@ -129,3 +129,72 @@ test("sent-message rail previews and jumps through paginated history, with a nar
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("the sent-message index reloads cleanly when a reconnect's workspace trails ready", async ({
+  page,
+}) => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-message-nav-reconnect-"));
+  const connection = new DaemonConnection({
+    endpoint: describeDaemonEndpoint("ws://127.0.0.1:7429/ws"),
+    client: { kind: "test", name: "navigation", version: "0.0.0" },
+  });
+  const off = connection.subscribeWorkspace(() => undefined);
+  let sockets = 0;
+  let refuse = false;
+  let drop: () => void = () => undefined;
+  // After a reconnect the daemon's workspace snapshot lands a moment after `daemon.ready`.
+  await page.routeWebSocket("**/ws", (client) => {
+    if (refuse) {
+      client.close({ code: 1011, reason: "Unavailable" });
+      return;
+    }
+    const reconnect = sockets++ > 0;
+    const server = client.connectToServer();
+    server.onMessage((message) => {
+      if (reconnect && typeof message === "string" && message.includes('"workspace.snapshot"'))
+        setTimeout(() => client.send(message), 1_000);
+      else client.send(message);
+    });
+    drop = () => client.close({ code: 1001, reason: "Test reconnect" });
+  });
+  try {
+    await connection.connect();
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Message navigation reconnect", directory);
+    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
+    await expect
+      .poll(() => connection.agents.find((a) => a.directory === directory)?.status)
+      .toBe("idle");
+    const sessionId = connection.agents.find((a) => a.directory === directory)?.id ?? "";
+    for (const text of ["First prompt", "Second prompt"]) {
+      const result = await connection.requestAgent(
+        { kind: "send", sessionId, text },
+        crypto.randomUUID(),
+      );
+      expect(result.outcome.status).toBe("ok");
+      await expect
+        .poll(() => connection.agents.find((a) => a.id === sessionId)?.status)
+        .toBe("done");
+    }
+    const nav = page.getByRole("navigation", { name: "Your messages", exact: true });
+    await expect(nav.getByRole("button")).toHaveCount(2);
+    // A lasting drop, long enough for the app to show it, then the machine comes back.
+    refuse = true;
+    drop();
+    await expect(page.getByRole("status").filter({ hasText: "Reconnecting to" })).toBeVisible();
+    refuse = false;
+    await expect(page.getByRole("status").filter({ hasText: "Reconnecting to" })).toHaveCount(0, {
+      timeout: 15_000,
+    });
+    await page.waitForTimeout(3_000);
+    await expect(page.getByText("Could not load messages · Retry")).toHaveCount(0);
+    await expect(nav.getByRole("button")).toHaveCount(2);
+  } finally {
+    off();
+    connection.disconnect();
+    await rm(directory, { recursive: true, force: true });
+  }
+});

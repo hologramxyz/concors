@@ -39,6 +39,9 @@ export interface DaemonConnectionHandle {
 }
 
 const RECONNECT_NOTICE_MS = 2_000;
+/** A tick this late means the device slept or the app was suspended, even with the window up. */
+const WAKE_TICK_MS = 10_000;
+const WAKE_GAP_MS = 30_000;
 
 /**
  * A machine left behind stays connected this long, so switching back is instant. Idle sockets are
@@ -48,6 +51,18 @@ const pool = new HostConnectionPool({ idleMs: 10 * 60_000, maxIdle: 4 });
 if (typeof window !== "undefined") {
   window.addEventListener("offline", () => pool.offline());
   window.addEventListener("online", () => pool.resume());
+  // Sleep and App Nap hold timers back, so token renewal can miss its window unnoticed; the
+  // gateway then cuts the socket while the device cannot hear it. Catch up when the app returns.
+  window.addEventListener("focus", () => pool.wake());
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") pool.wake();
+  });
+  let tick = Date.now();
+  setInterval(() => {
+    const now = Date.now();
+    if (now - tick > WAKE_GAP_MS) pool.wake();
+    tick = now;
+  }, WAKE_TICK_MS);
 }
 
 function connectionKey(endpoint: DaemonEndpoint | null, machineId: string, scope: string) {
