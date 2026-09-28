@@ -182,3 +182,59 @@ test("a renamed session is listed and resumed under its pane name", async ({ pag
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("a long resumed session opens at its latest messages without scrolling down", async ({
+  page,
+}) => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-resume-long-"));
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Long resume", directory);
+    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await expect(page.getByRole("textbox", { name: "Message Codex", exact: true })).toBeEnabled();
+    // Record every painted frame from the moment the session is picked.
+    await page.evaluate(() => {
+      const frames: { items: number; fromBottom: number; first: string | null }[] = [];
+      (window as unknown as { frames_: typeof frames }).frames_ = frames;
+      const sample = () => {
+        const log = document.querySelector<HTMLElement>('[role="log"]');
+        if (log)
+          frames.push({
+            items: log.querySelectorAll("[data-message-id]").length,
+            fromBottom: log.scrollHeight - log.scrollTop - log.clientHeight,
+            first: log.querySelector<HTMLElement>("[data-message-id]")?.dataset.messageId ?? null,
+          });
+        requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    });
+    await page.getByRole("button", { name: "Resume session", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Resume session", exact: true });
+    await dialog
+      .getByRole("group", { name: "Filter sessions by provider" })
+      .getByRole("button", { name: "Codex", exact: true })
+      .click();
+    await dialog.getByRole("textbox", { name: "Search sessions" }).fill("session 77");
+    await expect(dialog.locator("[data-session-provider]")).toHaveCount(1);
+    await dialog.getByRole("button", { name: /^Older CLI session 77 / }).click();
+    await expect(page.getByRole("log")).toContainText("Long session response 80");
+    await page.waitForTimeout(1000);
+    const frames = await page.evaluate(
+      () =>
+        (
+          window as unknown as {
+            frames_: { items: number; fromBottom: number; first: string | null }[];
+          }
+        ).frames_,
+    );
+    const shown = frames.filter((frame) => frame.items);
+    expect(shown.length).toBeGreaterThan(0);
+    // Never painted the start of the history, and always painted at the bottom.
+    expect(shown.filter((frame) => frame.first === "long-user-1")).toEqual([]);
+    expect(shown.filter((frame) => frame.fromBottom > 2)).toEqual([]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
