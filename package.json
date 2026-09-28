@@ -22,6 +22,7 @@
     "desktop:build": "pnpm --filter @concors/desktop build",
     "desktop:package:linux": "node apps/desktop/scripts/package-linux.ts",
     "desktop:package:macos": "node apps/desktop/scripts/package-macos.ts",
+    "desktop:release:macos": "node apps/desktop/scripts/release-dmg.ts",
     "desktop:release:linux": "node apps/desktop/scripts/release-tarball.ts",
     "desktop:release:manifest": "node apps/desktop/scripts/release-manifest.ts",
     "desktop:version": "node apps/desktop/scripts/release-version.ts",

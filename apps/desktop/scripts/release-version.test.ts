@@ -143,6 +143,16 @@ describe("describeArtifact", () => {
     expect(describeArtifact("Concors-0.2.0-x86_64.AppImage", "0.2.0")).toMatchObject({
       format: "appimage",
     });
+    expect(describeArtifact("Concors-0.2.0-aarch64.dmg", "0.2.0")).toEqual({
+      format: "dmg",
+      platform: "darwin",
+      arch: "aarch64",
+    });
+    expect(describeArtifact("Concors-0.2.0-x86_64.dmg", "0.2.0")).toMatchObject({
+      arch: "x86_64",
+    });
+    // Tauri's own name for the image, before the release step renames it.
+    expect(describeArtifact("Concors_0.2.0_aarch64.dmg", "0.2.0")).toBeNull();
   });
 
   it("ignores checksums, signatures and builds of another version", () => {

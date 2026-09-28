@@ -12,7 +12,7 @@ import { desktopVersion, repoRoot } from "./release-version.ts";
 // Formats are recognised from the file name, which is what the build scripts and PKGBUILD produce.
 // An unrecognised file in the release directory is ignored rather than guessed at.
 
-export type DesktopFormat = "tarball" | "pacman" | "appimage";
+export type DesktopFormat = "tarball" | "pacman" | "appimage" | "dmg";
 
 export interface ArtifactKind {
   format: DesktopFormat;
@@ -49,6 +49,9 @@ export function describeArtifact(name: string, version: string): ArtifactKind | 
     return { format: "pacman", platform: "linux", arch: "x86_64" };
   if (name === `Concors-${version}-x86_64.AppImage`)
     return { format: "appimage", platform: "linux", arch: "x86_64" };
+  // Named with the control plane's arch, not Node's (`arm64`), since that is what it matches on.
+  const dmg = new RegExp(`^Concors-${escape(version)}-(aarch64|x86_64)\\.dmg$`).exec(name);
+  if (dmg?.[1]) return { format: "dmg", platform: "darwin", arch: dmg[1] };
   return null;
 }
 
