@@ -61,11 +61,17 @@ const nativeProviderIcons: Record<string, "model" | "claude" | "opencode" | "pi"
 export function AgentComposer({
   agent,
   connected,
+  reachable = connected,
   onInterrupt,
   onSend,
 }: {
   agent: AgentInfo;
   connected: boolean;
+  /**
+   * The machine itself is connected. `connected` is also false while a chat action runs, which
+   * must not end dictation or blame the connection.
+   */
+  reachable?: boolean;
   onInterrupt: () => void;
   /** The user sent or queued a message: show the bottom of the chat. */
   onSend?: () => void;
@@ -150,7 +156,7 @@ export function AgentComposer({
       onCancel: () => setDraft(dictationBase.current),
     },
     visible,
-    connected,
+    reachable,
     connection,
   );
   useLayoutEffect(() => {
@@ -913,6 +919,7 @@ export function AgentComposer({
                 onChange={(e) => {
                   setDraft(e.target.value);
                   setSlashActive(0);
+                  dictation.dismissError();
                 }}
                 onPaste={(e) => {
                   if (e.clipboardData.files.length) {

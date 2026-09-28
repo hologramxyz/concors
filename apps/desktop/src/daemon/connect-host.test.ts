@@ -302,6 +302,49 @@ describe("managed host connection", () => {
     await vi.advanceTimersByTimeAsync(14 * 60_000);
     expect(legacy.fetch).toHaveBeenCalledTimes(1);
   });
+  it("replaces a socket whose access lapsed while timers were held back, without waiting for a close", async () => {
+    const t = setup({ token: jwt });
+    await flush();
+    t.sockets[0]!.ready(["auth-refresh"]);
+    // A sleeping device runs no timers; the clock still moves past the token's expiry.
+    vi.setSystemTime(Date.now() + 16 * 60_000);
+    t.session.wake();
+    await flush();
+    expect(t.sockets[0]!.close).toHaveBeenCalled();
+    expect(t.onState).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "disconnected" }),
+      true,
+    );
+    expect(t.fetch).toHaveBeenCalledTimes(2);
+    expect(t.webSocketFactory).toHaveBeenCalledTimes(2);
+  });
+  it("renews at once on wake when renewal is due, and leaves a fresh socket alone", async () => {
+    const t = setup({ token: jwt });
+    await flush();
+    t.sockets[0]!.ready(["auth-refresh"]);
+    t.session.wake();
+    await flush();
+    expect(t.fetch).toHaveBeenCalledTimes(1);
+    vi.setSystemTime(Date.now() + 14 * 60_000);
+    t.session.wake();
+    await flush();
+    expect(t.fetch).toHaveBeenCalledTimes(2);
+    expect(t.sockets[0]!.sent().at(-1)).toMatchObject({ type: "auth.refresh" });
+    expect(t.webSocketFactory).toHaveBeenCalledTimes(1);
+  });
+  it("skips the backoff on wake", async () => {
+    const t = setup();
+    await flush();
+    t.sockets[0]!.ready();
+    t.sockets[0]!.emit("close", { code: 1006, reason: "network" });
+    await vi.advanceTimersByTimeAsync(500);
+    expect(t.fetch).toHaveBeenCalledTimes(1);
+    t.session.wake();
+    await flush();
+    expect(t.fetch).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(t.fetch).toHaveBeenCalledTimes(2);
+  });
   it("does not open a socket after selection changes while a token is pending", async () => {
     const t = setup();
     t.session.dispose();

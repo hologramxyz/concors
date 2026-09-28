@@ -121,7 +121,7 @@ export function connectHost(options: HostConnectionOptions) {
     const deadline = tokenExpiresAt;
     const scheduled = generation;
     refreshTimer = setTimeout(
-      () => void renew(),
+      () => (expired() ? restore() : void renew()),
       delay ?? Math.max(0, deadline - REFRESH_LEAD_MS - Date.now()),
     );
     async function renew() {
@@ -138,6 +138,23 @@ export function connectHost(options: HostConnectionOptions) {
       if (renewed) scheduleRefresh();
       else if (deadline - Date.now() > REFRESH_RETRY_MS) scheduleRefresh(REFRESH_RETRY_MS);
     }
+  }
+
+  /** Timers can fire late (sleep, App Nap); past its token's expiry the gateway has cut the socket. */
+  function expired() {
+    return (
+      managed &&
+      tokenExpiresAt !== null &&
+      connection.state.status === "ready" &&
+      Date.now() >= tokenExpiresAt
+    );
+  }
+  /** Replaces a socket that is gone even if no close arrived; a sleeping device never hears it. */
+  function restore() {
+    drop();
+    report({ status: "disconnected", reason: "Access expired before it could be renewed" });
+    readySince = null;
+    void attempt();
   }
 
   options.onTransport(connection);
@@ -179,6 +196,25 @@ export function connectHost(options: HostConnectionOptions) {
     resume: () => {
       clearTimeout(offlineTimer);
       if (!blocked && connection.state.status !== "ready") void attempt();
+    },
+    /**
+     * The app is back in front or the device woke. Timers may have been held back meanwhile, so
+     * catch up now: replace a socket whose access lapsed, renew one about to, skip any backoff.
+     */
+    wake: () => {
+      if (disposed || blocked) return;
+      const status = connection.state.status;
+      if (status === "disconnected" || status === "error") {
+        clearTimeout(timer);
+        void attempt();
+      } else if (expired()) restore();
+      else if (
+        managed &&
+        status === "ready" &&
+        tokenExpiresAt !== null &&
+        Date.now() >= tokenExpiresAt - REFRESH_LEAD_MS
+      )
+        scheduleRefresh(0);
     },
     /**
      * OS offline events fire on any interface change (VPN, Wi-Fi roaming), so a healthy socket

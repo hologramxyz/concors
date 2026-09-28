@@ -12,6 +12,7 @@ function fakeHost() {
   const session: HostSession = {
     reconnect: vi.fn(),
     resume: vi.fn(),
+    wake: vi.fn(),
     offline: vi.fn(),
     dispose: vi.fn(() => handlers?.onTransport(null)),
   };

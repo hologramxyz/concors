@@ -62,6 +62,9 @@ function useDaemonDictation(connection: DaemonConnection | null | undefined) {
 }
 const noop = () => undefined;
 
+const CONNECTION_DROPPED =
+  "Dictation stopped because the connection to this machine dropped. Your words so far are in the message.";
+
 export function useDictation(
   callbacks: {
     onTranscript: (text: string) => void;
@@ -85,11 +88,14 @@ export function useDictation(
     if (!visible) session.current?.suspend();
   }, [visible]);
   useEffect(() => {
-    if (!connected)
-      session.current?.suspend(
-        "Dictation stopped because the connection to this machine dropped. Your words so far are in the message.",
-      );
+    if (!connected) session.current?.suspend(CONNECTION_DROPPED);
   }, [connected]);
+  // Once the machine is back the notice is stale; the words are already in the message.
+  const [wasConnected, setWasConnected] = useState(connected);
+  if (connected !== wasConnected) {
+    setWasConnected(connected);
+    if (connected && state.error === CONNECTION_DROPPED) setState({ ...state, error: null });
+  }
   const Constructor =
     typeof window === "undefined"
       ? undefined
@@ -129,6 +135,11 @@ export function useDictation(
     },
     stop: (action?: DictationAction) => session.current?.stop(action),
     suspend: () => session.current?.suspend(),
+    /** An ended run's notice only describes that run; editing the message moves past it. */
+    dismissError: () =>
+      setState((state) =>
+        state.phase === "idle" && state.error ? { ...state, error: null } : state,
+      ),
     cancel: () => {
       session.current?.dispose();
       session.current = null;

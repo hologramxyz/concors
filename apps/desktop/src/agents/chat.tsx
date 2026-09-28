@@ -350,6 +350,7 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
               key={agent.id}
               agent={agent}
               connected={!!connected && !busy && !resuming}
+              reachable={connection?.state.status === "ready"}
               onSend={latest}
               onInterrupt={() => {
                 if (agent.turnId)
