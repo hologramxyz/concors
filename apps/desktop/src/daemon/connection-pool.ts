@@ -21,6 +21,7 @@ export interface HostSnapshot {
 export interface HostSession {
   reconnect(): void;
   resume(): void;
+  wake(): void;
   offline(): void;
   dispose(): void;
 }
@@ -208,6 +209,11 @@ export class HostConnectionPool {
 
   resume() {
     for (const entry of this.#entries.values()) entry.session?.resume();
+  }
+
+  /** The app returned to the foreground or the device woke from sleep. */
+  wake() {
+    for (const entry of this.#entries.values()) entry.session?.wake();
   }
 
   reconnect(key: string) {

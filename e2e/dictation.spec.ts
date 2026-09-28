@@ -258,3 +258,43 @@ test("recording carries on while the window is out of view", async ({ page }) =>
     await dispose();
   }
 });
+
+test("a dropped connection's dictation notice clears once the machine is back, and typing dismisses others", async ({
+  page,
+}) => {
+  let refuse = false;
+  let drop: () => void = () => undefined;
+  await page.routeWebSocket("**/ws", (client) => {
+    if (refuse) {
+      client.close({ code: 1011, reason: "Unavailable" });
+      return;
+    }
+    client.connectToServer();
+    drop = () => client.close({ code: 1001, reason: "Test reconnect" });
+  });
+  await page.reload();
+  const { composer, dispose } = await workspace(page);
+  try {
+    await page.getByRole("button", { name: "Start dictation", exact: true }).click();
+    await page.evaluate(() => window.testDictation.result("Words before the drop", true));
+    refuse = true;
+    drop();
+    const notice = page.getByText(
+      "Dictation stopped because the connection to this machine dropped",
+    );
+    await expect(notice).toBeVisible();
+    refuse = false;
+    // The app restores the connection by itself; the notice goes with the drop it described.
+    await expect(notice).toHaveCount(0, { timeout: 15_000 });
+    await expect(composer).toHaveValue("Words before the drop");
+
+    await page.getByRole("button", { name: "Start dictation", exact: true }).click();
+    await page.evaluate(() => window.testDictation.error("no-speech"));
+    await expect(page.getByRole("alert")).toContainText("No speech was detected");
+    await composer.press("End");
+    await composer.pressSequentially(".");
+    await expect(page.getByText("No speech was detected")).toHaveCount(0);
+  } finally {
+    await dispose();
+  }
+});
