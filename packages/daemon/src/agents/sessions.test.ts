@@ -783,6 +783,23 @@ it("resumes once into an empty pane with native history and settings, without re
   expect(
     providers.flatMap((p) => p.requests).filter((r) => r.method === "turn/start"),
   ).toHaveLength(0);
+  // After a restart, the first read replays the saved history into a new CLI before answering.
+  // Streaming it drew a reopened chat from the top; unchanged, it needs no reload either.
+  a.disconnect();
+  b.disconnect();
+  await server!.close();
+  const next = await open(await boot());
+  const replayed: string[] = [];
+  next.onAgent((event) => {
+    if (event.type === "agent.item") replayed.push(event.item.id);
+  });
+  expect((await action(next, { kind: "read", sessionId: resumed })).outcome).toMatchObject({
+    status: "ok",
+    conversation: { items: [{ text: "Saved CLI prompt" }, { text: "Saved CLI response" }] },
+  });
+  expect(providers.at(-1)?.requests.some((r) => r.method === "thread/resume")).toBe(true);
+  expect(replayed).toEqual([]);
+  expect(next.agents.find((agent) => agent.id === resumed)?.historyRevision).toBe(1);
 });
 
 it("resuming a session again brings back the pane and tab names it was given", async () => {

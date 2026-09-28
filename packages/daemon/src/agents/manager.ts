@@ -117,7 +117,7 @@ export class AgentManager {
   readonly #factory: AgentProviderFactory;
   readonly #runtimes = new Map<string, Runtime>();
   /** Agents replaying a whole history, whose items clients load as a page rather than one by one. */
-  readonly #quiet = new Set<string>();
+  readonly #quiet = new Map<string, { changed: boolean }>();
   /** New chats started from remembered settings, checked once their provider reports its options. */
   readonly #remembered = new Map<string, AgentSettings>();
   /**
@@ -293,7 +293,13 @@ export class AgentManager {
       revision: previous?.revision ?? 0,
       createdAt: previous?.createdAt ?? new Date().toISOString(),
     });
-    if (!this.#quiet.has(id)) this.#emit({ type: "agent.item", item });
+    const replay = this.#quiet.get(id);
+    if (!replay) this.#emit({ type: "agent.item", item });
+    else if (
+      !previous ||
+      JSON.stringify({ ...previous, revision: 0 }) !== JSON.stringify({ ...item, revision: 0 })
+    )
+      replay.changed = true;
   }
   /** New chats open with the provider last chosen on this machine, while it is still usable. */
   private newChatProvider(): string {
@@ -486,12 +492,13 @@ export class AgentManager {
           updatedAt: current.updatedAt,
         });
       }
-      // Rehydrate provider history after restart using stable item and turn identities. The
-      // first replay of a resumed session is its whole history: save it in one commit and have
-      // clients load its latest page, rather than streaming every item, which drew the chat from
-      // the top down (and took seconds of disk flushes on a long session).
-      const fresh = !this.#store.hasAgentProviderHistory(id);
-      if (fresh) this.#quiet.add(id);
+      // Rehydrate provider history after restart using stable item and turn identities. A replay
+      // is the whole history, whether a resumed session's first or a saved chat's after restart:
+      // save it in one commit and have clients load its latest page, rather than streaming every
+      // item, which drew the chat from the top down (and took seconds of disk flushes on a long
+      // session). The first read of a chat starts its provider, so it replays before answering.
+      const replay = { changed: false };
+      this.#quiet.set(id, replay);
       try {
         this.#store.transaction(() => {
           for (const turn of response.thread.turns)
@@ -501,7 +508,7 @@ export class AgentManager {
       } finally {
         this.#quiet.delete(id);
       }
-      if (fresh && response.thread.turns.some((turn) => turn.items.length)) {
+      if (replay.changed) {
         const current = this.#store.agent(id);
         this.update(id, {
           historyRevision: (current.historyRevision ?? 0) + 1,
