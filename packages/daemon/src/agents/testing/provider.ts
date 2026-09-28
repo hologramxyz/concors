@@ -102,22 +102,45 @@ export class TestAgentProvider implements AgentProvider {
       return {
         thread: {
           id: this.threadId,
-          turns: this.threadId.startsWith("external-thread")
-            ? [
-                {
-                  id: "native-turn",
+          turns:
+            this.threadId === "external-thread-77"
+              ? // A long session, for checking that resuming opens at its latest messages.
+                Array.from({ length: 80 }, (_, index) => ({
+                  id: `long-turn-${index + 1}`,
                   status: "completed",
                   items: [
                     {
-                      id: "native-user",
+                      id: `long-user-${index + 1}`,
                       type: "userMessage",
-                      content: [{ type: "text", text: "Saved CLI prompt" }],
+                      content: [{ type: "text", text: `Long session prompt ${index + 1}` }],
                     },
-                    { id: "native-assistant", type: "agentMessage", text: "Saved CLI response" },
+                    {
+                      id: `long-assistant-${index + 1}`,
+                      type: "agentMessage",
+                      text: `Long session response ${index + 1}\n\n${"A paragraph of history. ".repeat(40)}`,
+                    },
                   ],
-                },
-              ]
-            : [],
+                }))
+              : this.threadId.startsWith("external-thread")
+                ? [
+                    {
+                      id: "native-turn",
+                      status: "completed",
+                      items: [
+                        {
+                          id: "native-user",
+                          type: "userMessage",
+                          content: [{ type: "text", text: "Saved CLI prompt" }],
+                        },
+                        {
+                          id: "native-assistant",
+                          type: "agentMessage",
+                          text: "Saved CLI response",
+                        },
+                      ],
+                    },
+                  ]
+                : [],
         },
         model: this.provider === "codex" ? "fixture" : `fixture-${this.provider}`,
       };
