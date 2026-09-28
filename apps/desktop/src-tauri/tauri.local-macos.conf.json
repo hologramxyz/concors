@@ -1,8 +1,13 @@
 {
   "bundle": {
-    "targets": ["app"],
+    "targets": ["app", "dmg"],
     "resources": {
       "resources/local-daemon/concors-daemon/": "daemon/"
+    },
+    "macOS": {
+      "minimumSystemVersion": "13.5",
+      "hardenedRuntime": true,
+      "entitlements": "macos/app.entitlements"
     }
   }
 }

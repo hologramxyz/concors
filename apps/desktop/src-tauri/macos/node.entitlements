@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  The bundled Node that runs the daemon, re-signed with our identity. V8 needs to write and execute
+  generated code, and the library-validation exemption lets it load native addons that are not
+  signed by our team, such as those in tools an agent installs with the bundled npm. This matches
+  the entitlements nodejs.org signs its own binary with, less the ones we do not use.
+-->
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+</dict>
+</plist>
