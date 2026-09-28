@@ -100,9 +100,19 @@ export function useMessageIndex(
         if (!disposed) setLoading(false);
       }
     };
-    void load();
+    // `ready` precedes the workspace snapshot, and requests are refused until it arrives.
+    let requested = false;
+    const off = connection.subscribeWorkspace(() => {
+      if (requested) return;
+      requested = true;
+      void load();
+    });
     return () => {
       disposed = true;
+      off();
+      // A drop reruns this once the connection is back; its failure would only be stale.
+      setError(null);
+      setLoading(false);
     };
   }, [connection, supported, ready, sessionId, historyRevision, retry]);
   const entries = useMemo(
