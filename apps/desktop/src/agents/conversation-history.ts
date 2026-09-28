@@ -74,6 +74,9 @@ export class ConversationHistory {
   receive = (item: AgentItem) => {
     this.newest = Math.max(this.newest, item.position);
     const current = this.snapshot;
+    // Until the latest page arrives it includes everything saved so far. Older daemons replay a
+    // chat's whole history as items before answering its first read, which drew it from the top.
+    if (!current.ready) return;
     const existing = current.items.some((entry) => entry.id === item.id);
     if (!existing && (current.hasNewer || item.position < (current.items[0]?.position ?? 0)))
       return;
