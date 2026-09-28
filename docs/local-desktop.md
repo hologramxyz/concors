@@ -54,8 +54,12 @@ build always targets the host architecture, so do not set `CARGO_BUILD_TARGET`.
 `target/debug` executable beside a `daemon/` directory has no equivalent here, and such a build
 reports the runtime as missing. `--debug` alone is the fast path; do not add `--no-bundle`.
 
-The build is unsigned, so it runs from Finder on the machine that built it but is not
-distributable. Signing, notarization and DMG packaging are deliberately out of scope.
+The command also writes a disk image under `target/release/bundle/dmg/`. Unsigned, both run from
+Finder on the machine that built them but not on anyone else's, where macOS calls them damaged.
+Setting `APPLE_SIGNING_IDENTITY` signs the daemon runtime and the app under the hardened runtime;
+`-` signs ad hoc, which needs no certificate and still proves the entitlements work, because the
+runtime's PTY check runs after signing. Publishing a notarized image is covered in
+[desktop releases](./desktop-releases.md#macos).
 Opening the app the first time may raise a macOS firewall prompt, because sign-in listens on a
 loopback port for the OAuth callback, and a terminal that reaches `~/Documents` or `~/Desktop`
 raises the usual privacy prompts.
