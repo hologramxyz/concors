@@ -52,6 +52,9 @@ which fixes the glibc floor — and produces:
 | `concors-bin-<version>-1-x86_64.pkg.tar.zst` | Arch and Omarchy, via `pacman -U`                |
 | `release.json`                               | the control plane; nothing else reads it         |
 
+and, on a macOS runner, `Concors-<version>-aarch64.dmg` for Apple Silicon (see [macOS](#macos)).
+The release manifest is written once both have finished, so it describes every build.
+
 Before publishing, the workflow installs the package in a clean `archlinux` container and runs the
 bundled daemon there, so a package that cannot actually be installed never reaches a release.
 Nothing is compiled inside that container: `package()` only restages the tarball.
@@ -65,6 +68,45 @@ packaging/linux/build-package.sh \
   apps/desktop/dist/release/Concors-0.2.0-x64.tar.gz 0.2.0 apps/desktop/dist/release
 pnpm desktop:release:manifest --notes "What changed."
 ```
+
+## macOS
+
+The Mac build is a signed, notarized disk image. Unlike Linux, an unsigned one is worse than none —
+macOS reports it as damaged and offers to move it to the bin — so without Apple credentials the
+workflow skips the Mac job with a warning and publishes Linux alone.
+
+Signing covers more than the app. The bundled daemon carries its own native code (Node, node-pty
+and its `spawn-helper`, the sherpa-onnx addon and ONNX Runtime), and notarization rejects a bundle
+if any of it is unsigned. `package-macos.ts` signs each of those with the same identity before
+Tauri bundles them, and Node with `src-tauri/macos/node.entitlements`, since V8 cannot run under
+the hardened runtime without them. The nodejs.org signature cannot simply be kept: it carries
+`get-task-allow`, which notarization refuses. The app itself gets `macos/app.entitlements`, whose
+microphone entitlement dictation depends on.
+
+`pnpm desktop:release:macos` then signs, notarizes and staples the image and asks Gatekeeper about
+it, and about the app inside it, the way a downloading Mac would. Locally:
+
+```sh
+export APPLE_SIGNING_IDENTITY="Developer ID Application: … (TEAMID)"
+export APPLE_API_KEY=<key id> APPLE_API_ISSUER=<issuer id> APPLE_API_KEY_PATH=~/.concors/AuthKey.p8
+VITE_CONCORS_API_URL=https://api.concors.dev pnpm desktop:package:macos
+pnpm desktop:release:macos
+```
+
+The workflow needs these repository secrets:
+
+| Secret                       | What it is                                                           |
+| ---------------------------- | -------------------------------------------------------------------- |
+| `APPLE_CERTIFICATE`          | the Developer ID Application certificate and key, as a base64 `.p12` |
+| `APPLE_CERTIFICATE_PASSWORD` | the password the `.p12` was exported with                            |
+| `APPLE_API_KEY`              | an App Store Connect API key's ID, for the notary service            |
+| `APPLE_API_ISSUER`           | that key's issuer ID                                                 |
+| `APPLE_API_PRIVATE_KEY`      | the key's `.p8` file, as text                                        |
+
+Only Apple Silicon is built. The daemon runtime bundles the host's Node and native modules, so
+Intel would be a second job on an Intel runner. Macs are not offered in-app updates yet: the
+control plane does not know the `dmg` format, and `update.rs` does not recognise an app bundle as
+an installation it could replace.
 
 ## Offering the release
 
@@ -148,8 +190,8 @@ plugin is adopted; nothing reads it before then.
 
 ## Not done yet
 
-- **macOS and Windows.** The manifest and the endpoint already carry `platform` and `arch`; only
-  the builds are missing.
+- **Windows**, and **Intel Macs**. The manifest and the endpoint already carry `platform` and
+  `arch`; only the builds are missing.
 - **AppImage**, which would give a self-updating build to Linux users who are not on Arch.
 - **`tauri-plugin-updater` itself**, whose one-click path covers AppImage, macOS and Windows. The
   endpoint already answers in the shape the plugin expects, and builds are signed once a key
