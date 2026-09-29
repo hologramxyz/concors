@@ -239,14 +239,12 @@ Only that tested archive is passed to the publishing job.
    `daemon-v0.2.0`, with asset `concors-daemon-linux-x64.tar.gz`. Daemon releases do not
    replace the repository's global **Latest** release; installers address the exact tag.
    Only the publishing job has `contents: write`; the final job downloads the published
-   asset using its separate `contents: read` token and verifies `--version`.
-4. Verify installer access from an empty download directory. For this private repository,
-   set `GH_TOKEN` through your secret manager to a fine-grained token with access to
-   `concors-dev/concors` and **Contents: read-only** (and any required organization approval):
+   asset anonymously, as the control plane does, and verifies `--version`.
+4. Optionally check the download yourself from an empty directory; the repository is public, so
+   no token is involved:
 
    ```sh
-   gh release download daemon-v0.2.0 \
-     --repo concors-dev/concors -p 'concors-daemon-linux-x64.tar.gz'
+   curl -fsSLO https://github.com/hologramxyz/concors/releases/download/daemon-v0.2.0/concors-daemon-linux-x64.tar.gz
    tar -xzf concors-daemon-linux-x64.tar.gz
    ./concors-daemon/bin/concors-daemon --version  # 0.2.0
    ```
