@@ -100,18 +100,18 @@ jobs:
             --notes "Concors daemon $DAEMON_VERSION for Ubuntu 24.04 x86_64. Extract concors-daemon-linux-x64.tar.gz and run concors-daemon/bin/concors-daemon; Node and native PTY files are included."
 
   verify-download:
-    name: Verify release download with read token
+    name: Verify anonymous release download
     needs: [build, publish]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
     steps:
+      # The control plane downloads without a token, since the repository is public; so does this.
       - name: Download published asset and check version
         env:
-          GH_TOKEN: ${{ github.token }}
           DAEMON_VERSION: ${{ needs.build.outputs.version }}
         run: |
-          gh release download "$RELEASE_TAG" -p 'concors-daemon-linux-x64.tar.gz'
+          curl -fsSLO "https://github.com/$GH_REPO/releases/download/$RELEASE_TAG/concors-daemon-linux-x64.tar.gz"
           tar -xzf concors-daemon-linux-x64.tar.gz
           test "$(concors-daemon/bin/concors-daemon --version)" = "$DAEMON_VERSION"

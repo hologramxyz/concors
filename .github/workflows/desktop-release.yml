@@ -313,7 +313,7 @@ jobs:
             --notes "Concors $VERSION. macOS (Apple Silicon): open the .dmg and drag Concors to Applications. Arch/Omarchy: install the .pkg.tar.zst with \`pacman -U\`. Other Linux x86_64: extract the tarball and run \`bin/concors-desktop\`, keeping \`bin/\` and \`lib/\` siblings. release.json is what the control plane reads to offer in-app updates."
 
   verify-download:
-    name: Verify release download with read token
+    name: Verify anonymous release download
     needs: [build, publish]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -322,11 +322,12 @@ jobs:
     steps:
       - name: Download the published release and check it describes itself
         env:
-          GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.build.outputs.version }}
-        # This is the path the control plane takes: read release.json, then fetch what it names.
+        # This is the path the control plane takes, without a token since the repository is public:
+        # read release.json, then fetch what it names.
         run: |
-          gh release download "$RELEASE_TAG" -p 'release.json'
+          download() { curl -fsSL -o "$1" "https://github.com/$GH_REPO/releases/download/$RELEASE_TAG/$1"; }
+          download release.json
           node --input-type=module <<'NODE'
           import { readFileSync } from 'node:fs';
           const manifest = JSON.parse(readFileSync('release.json', 'utf8'));
@@ -341,7 +342,7 @@ jobs:
           console.log(manifest.artifacts.map((a) => `${a.format} ${a.name} ${a.sha256}`).join('\n'));
           NODE
           for asset in $(node -p "JSON.parse(require('fs').readFileSync('release.json','utf8')).artifacts.map(a=>a.name).join('\n')"); do
-            gh release download "$RELEASE_TAG" -p "$asset" --clobber
+            download "$asset"
             expected="$(node -p "JSON.parse(require('fs').readFileSync('release.json','utf8')).artifacts.find(a=>a.name==='$asset').sha256")"
             echo "$expected  $asset" | sha256sum -c -
           done

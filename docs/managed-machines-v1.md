@@ -156,8 +156,7 @@ the number of live terminal sessions; the control plane only displays it.
 - The tarball extracts into one directory containing a runnable `bin/concors-daemon` (either a
   single-executable build or `node` + bundled JS; the installer does not care) plus whatever
   native files it needs. It must run on Ubuntu 24.04 x86_64 with no build tools.
-- The control plane pins `DAEMON_VERSION`, downloads the asset once (with a read token while the
-  repo is private), caches it, and streams it over SSH. Version bump + deploy = fleet update.
+- The control plane pins `DAEMON_VERSION`, downloads the asset once, caches it, and streams it over SSH. Version bump + deploy = fleet update.
 - `concors-daemon --version` prints the semver; `/health` reports the same string; the installer
   compares it with the pinned version.
 
@@ -230,12 +229,12 @@ plane (`concors-server`, Pierre). Items with no unmet dependency can start in pa
   asset. Version comes from `packages/daemon/package.json`; the tag must match it.
 - Document the release steps in `packages/daemon/README.md`.
 - Acceptance: `daemon-v0.2.0` exists with `concors-daemon-linux-x64.tar.gz`; the control plane
-  can download it with a read token.
+  can download it.
 
 ### S1 — Installer targets the daemon release (depends on D3)
 
 - Replace `dist/agent` packing with a download of the pinned `DAEMON_VERSION` asset (cached in
-  memory/disk; `GITHUB_TOKEN` env while the repo is private).
+  memory/disk).
 - Ship `daemon.json` (4.1), the TLS pair, both units (4.5), and an install script that unpacks
   to `/opt/concors-daemon.new`, swaps, restarts the gateway, restarts the host only on a version
   change that requires it, then checks `https://<hostname>/health` reports the pinned version.
