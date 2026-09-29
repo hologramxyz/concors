@@ -15,7 +15,7 @@ sessions in its private loopback host. No second terminal-agent bridge is needed
   `daemon-v0.2.0` predates the active-socket expiry hardening in this mobile PR.
   A new reviewed daemon release and rollout are required before claiming the
   documented revocation window.
-- [Server PR #1](https://github.com/concors-dev/concors-server/pull/1) replaces the
+- [The daemon installer change](https://github.com/hologramxyz/concors-server/commit/f8d03539d726b3cbc45bb2ca46e5e09ea6719171) replaces the
   legacy tmux agent with the daemon release and is merged into server main (`f8d0353`).
   A merged installer is not proof that the updated artifact is deployed to a machine.
 - Optional mobile capabilities control push and account deletion. Managed workspace access

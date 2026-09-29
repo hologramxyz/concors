@@ -592,7 +592,7 @@ describe("workspace replica lifecycle", () => {
       kind: "merge" as const,
       epoch: snapshot.epoch,
       projectId: snapshot.epoch,
-      repository: "concors-dev/concors",
+      repository: "hologramxyz/concors",
       number: 7,
       method: "squash" as const,
       expectedHeadSha: "a".repeat(40),

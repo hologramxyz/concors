@@ -7,29 +7,29 @@ import { gitHubRepository, parseGitHubRemote, preferredGitHubRemote } from "./re
 
 describe("parseGitHubRemote", () => {
   it.each([
-    "https://github.com/concors-dev/concors.git",
-    "https://github.com/concors-dev/concors",
-    "https://github.com/concors-dev/concors/",
-    "http://www.github.com/concors-dev/concors.git",
-    "https://x-access-token:secret@github.com/concors-dev/concors.git",
-    "git@github.com:concors-dev/concors.git",
-    "github.com:concors-dev/concors",
-    "ssh://git@github.com/concors-dev/concors.git",
-    "ssh://git@github.com:22/concors-dev/concors.git",
-    "git://github.com/concors-dev/concors.git",
+    "https://github.com/hologramxyz/concors.git",
+    "https://github.com/hologramxyz/concors",
+    "https://github.com/hologramxyz/concors/",
+    "http://www.github.com/hologramxyz/concors.git",
+    "https://x-access-token:secret@github.com/hologramxyz/concors.git",
+    "git@github.com:hologramxyz/concors.git",
+    "github.com:hologramxyz/concors",
+    "ssh://git@github.com/hologramxyz/concors.git",
+    "ssh://git@github.com:22/hologramxyz/concors.git",
+    "git://github.com/hologramxyz/concors.git",
   ])("recognizes %s", (url) => {
-    expect(parseGitHubRemote(url)).toEqual({ owner: "concors-dev", name: "concors" });
+    expect(parseGitHubRemote(url)).toEqual({ owner: "hologramxyz", name: "concors" });
   });
 
   it.each([
-    "https://gitlab.com/concors-dev/concors.git",
-    "https://github.example.com/concors-dev/concors.git",
-    "git@github-work:concors-dev/concors.git",
-    "https://github.com/concors-dev",
-    "https://github.com/concors-dev/concors/pulls",
+    "https://gitlab.com/hologramxyz/concors.git",
+    "https://github.example.com/hologramxyz/concors.git",
+    "git@github-work:hologramxyz/concors.git",
+    "https://github.com/hologramxyz",
+    "https://github.com/hologramxyz/concors/pulls",
     "https://github.com/-bad/concors",
-    "https://github.com/concors-dev/..",
-    "file:///github.com/concors-dev/concors",
+    "https://github.com/hologramxyz/..",
+    "file:///github.com/hologramxyz/concors",
     "/srv/git/concors.git",
     "",
   ])("ignores %s", (url) => {
@@ -43,11 +43,11 @@ describe("preferredGitHubRemote", () => {
   it("prefers the gh default, then upstream, github and origin, like the GitHub CLI", () => {
     const remotes = [
       "remote.origin.url git@github.com:me/concors.git",
-      "remote.upstream.url https://github.com/concors-dev/concors.git",
+      "remote.upstream.url https://github.com/hologramxyz/concors.git",
       "remote.backup.url https://github.com/backup/concors.git",
     ];
     expect(preferredGitHubRemote(config(...remotes))).toEqual({
-      owner: "concors-dev",
+      owner: "hologramxyz",
       name: "concors",
     });
     expect(preferredGitHubRemote(config(...remotes, "remote.backup.gh-resolved base"))).toEqual({
@@ -79,8 +79,8 @@ it("reads a checkout's remotes and treats a repository without them as unmatched
     const git = (...args: string[]) => execFileSync("git", ["-C", directory, ...args]);
     git("init", "--quiet");
     expect(await gitHubRepository(directory)).toBeNull();
-    git("remote", "add", "origin", "git@github.com:concors-dev/concors.git");
-    expect(await gitHubRepository(directory)).toEqual({ owner: "concors-dev", name: "concors" });
+    git("remote", "add", "origin", "git@github.com:hologramxyz/concors.git");
+    expect(await gitHubRepository(directory)).toEqual({ owner: "hologramxyz", name: "concors" });
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
