@@ -1,7 +1,7 @@
 /**
  * The API answered with a non-2xx status. `code` carries the machine-readable code when the server
- * sent one (Better Auth's `INVALID_EMAIL_OR_PASSWORD`, `USER_ALREADY_EXISTS`, …); `status` is always
- * set so callers can special-case 401 (session expired or revoked).
+ * sent one (or `INVALID_RESPONSE` when the answer did not match its schema); `status` is always set
+ * so callers can special-case 401 (session expired or revoked).
  */
 export class ApiError extends Error {
   override readonly name = "ApiError";

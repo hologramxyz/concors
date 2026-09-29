@@ -19,12 +19,13 @@ export function useSignInProviders(enabled: boolean) {
     refetchOnWindowFocus: "always",
     refetchOnReconnect: "always",
   });
+  const providers = query.data;
   return {
-    available: enabled && (query.data?.github ?? false),
+    available: enabled && !!providers && (providers.github || providers.google || providers.email),
     checking: enabled && query.data === undefined && query.isFetching,
     error:
       enabled && query.data === undefined && query.isError
-        ? "Could not check GitHub sign-in. You can still sign in with email."
+        ? "Could not reach Concors to start sign-in. Check your connection and retry."
         : null,
     retry: async () => {
       // refetch() ignores enabled, so guard demo, direct-daemon and web callers explicitly.

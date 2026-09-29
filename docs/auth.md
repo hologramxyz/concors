@@ -8,12 +8,14 @@ what the server provides for it.
 ## Flow
 
 ```text
-┌──────────────┐  POST /api/auth/sign-in/email   ┌────────────────┐
-│ Desktop app  │ ───────────────────────────────▶ │ concors-server │
-│ (@concors/   │ ◀─────────────────────────────── │ (Better Auth)  │
-│  api-client) │  { token, user } + session cookie└────────────────┘
+┌──────────────┐  opens /api/v1/native-auth/start   ┌──────────────────────────┐
+│ Desktop or   │ ─────── in the browser ──────────▶ │ concors-server sign-in   │
+│ mobile app   │                                    │ page (Privy: GitHub,     │
+│ (@concors/   │ ◀── one-time code to loopback ──── │ Google or emailed code)  │
+│  api-client) │     port or app scheme             └──────────────────────────┘
 │              │
-│   token ──▶ TokenStore (webview storage)
+│              │  POST /api/v1/native-auth/exchange { code, verifier } → { token }
+│   token ──▶ TokenStore
 │              │
 │              │  GET /api/v1/me   Authorization: Bearer <token>   (+ cookie when same-site)
 │              │ ───────────────────────────────▶
@@ -25,9 +27,11 @@ what the server provides for it.
    splash. A `401` drops the saved token and shows the sign-in screen; any other failure keeps the
    token and shows the sign-in screen with the error and a retry, so a flaky network never destroys
    a valid session.
-2. **Sign in / sign up.** Email + password through Better Auth (`/api/auth/sign-in/email`,
-   `/api/auth/sign-up/email`). The session token from the response is stored and the session is
-   re-checked with `/api/v1/me` so the UI always mirrors what the API believes.
+2. **Sign in.** One **Sign in** button continues in the browser, on a page the API hosts, where the
+   person picks GitHub, Google or a one-time code sent by email. There is no password and no
+   separate sign-up: see [Browser sign-in](#browser-sign-in). The session token the exchange returns
+   is stored and the session is re-checked with `/api/v1/me` so the UI always mirrors what the API
+   believes.
 3. **Signed in.** The app renders. The sidebar footer shows the account; Settings → Account shows
    the email, verification state, the active organization (switchable when the user belongs to
    several, via `/api/auth/organization/set-active`) and the session expiry.
@@ -45,8 +49,9 @@ dance on the client.
 | `apps/desktop/src/auth/api.ts`                 | The app's single `ApiClient`, pointed at `VITE_CONCORS_API_URL`.                                                           |
 | `apps/desktop/src/auth/token-store.ts`         | Keeps the session token in webview `localStorage` (memory fallback).                                                       |
 | `apps/desktop/src/auth/auth-state.ts`          | `AuthState` machine and error-to-message mapping. Pure, unit-tested.                                                       |
-| `apps/desktop/src/auth/use-auth.ts`            | React hook: restore on mount, sign in/up/out, organization switch.                                                         |
-| `apps/desktop/src/auth/auth-screen.tsx`        | Full-screen sign-in / create-account gate (the only UI while signed out).                                                  |
+| `apps/desktop/src/auth/use-auth.ts`            | React hook: restore on mount, sign in/out, organization switch.                                                            |
+| `apps/desktop/src/auth/sign-in.ts`             | Browser sign-in over the loopback port, and whether it can be offered here.                                                |
+| `apps/desktop/src/auth/auth-screen.tsx`        | Full-screen sign-in gate (the only UI while signed out).                                                                   |
 | `apps/desktop/src/components/account-menu.tsx` | Sidebar footer account widget.                                                                                             |
 
 ## Two credentials, one code path
@@ -71,17 +76,14 @@ API client. The mobile app will use its platform secure store the same way.
 
 ## What the server provides (and every deployment needs)
 
-Both were added to `concors-server` and its `dev` Railway environment on 2026-09-07. New
-environments must carry them too, or native builds cannot sign in (the browser preview would still
-work through the dev proxy).
-
-1. **Bearer tokens.** Better Auth's `bearer()` plugin is registered in `src/modules/auth/auth.ts`.
-   With its default options it accepts the raw `token` that sign-in returns in its body as
-   `Authorization: Bearer …`, and also exposes a signed token in a `set-auth-token` response header;
-   the client prefers the header when present.
-2. **Allowed origins.** `CORS_ORIGINS` (also Better Auth's `trustedOrigins`) includes the desktop
-   origins `tauri://localhost`, `http://tauri.localhost` and `https://tauri.localhost`, plus
-   `http://localhost:1420` for the desktop dev server.
+1. **Bearer tokens.** `/api/v1/*` and the remaining `/api/auth/*` routes accept the session token
+   as `Authorization: Bearer …`. Native builds depend on it.
+2. **Allowed origins.** `CORS_ORIGINS` includes the desktop origins `tauri://localhost`,
+   `http://tauri.localhost` and `https://tauri.localhost`, plus `http://localhost:1420` for the
+   desktop dev server.
+3. **An identity provider.** Sign-in is powered by Privy on the server. Without it configured,
+   `/api/v1/native-auth/providers` reports nothing available and the apps say sign-in is not set
+   up rather than opening a page that fails. Server setup is documented in concors-server.
 
 Nice to have, not blocking: `/api/v1/me` could additionally return the active organization's name
 to save the client one request.
@@ -90,11 +92,10 @@ to save the client one request.
 
 | Method | Path                                | Purpose                                           |
 | ------ | ----------------------------------- | ------------------------------------------------- |
-| POST   | `/api/auth/sign-up/email`           | `{ name, email, password }` → `{ token, user }`   |
-| POST   | `/api/auth/sign-in/email`           | `{ email, password }` → `{ token, user }`         |
-| POST   | `/api/auth/sign-out`                | Revoke the session                                |
-| GET    | `/api/v1/native-auth/providers`     | `{ github }`: sign-in methods beyond email        |
+| GET    | `/api/v1/native-auth/providers`     | `{ github, google, email }`: methods on offer     |
+| GET    | `/api/v1/native-auth/start`         | Sign-in page, opened in the browser (not fetched) |
 | POST   | `/api/v1/native-auth/exchange`      | `{ code, verifier }` → `{ token }`                |
+| POST   | `/api/auth/sign-out`                | Revoke the session                                |
 | GET    | `/api/v1/me`                        | Current user + session (active organization)      |
 | GET    | `/api/v1/organizations`             | Organizations of the user, personal first         |
 | POST   | `/api/auth/organization/set-active` | `{ organizationId }`                              |
@@ -113,30 +114,36 @@ to save the client one request.
 | POST   | `/api/v1/billing/portal`            | Stripe customer portal URL                        |
 | GET    | `/api/v1/billing/invoices`          | Invoices of an organization                       |
 
-Error bodies come in two shapes and are both mapped to `ApiError`: Fastify's
-`{ statusCode, error, message }` and Better Auth's `{ message, code }` (for example
-`INVALID_EMAIL_OR_PASSWORD`, `USER_ALREADY_EXISTS`).
+Error bodies (Fastify's `{ statusCode, error, message }`, sometimes with a `code`) are mapped to
+`ApiError`.
 
-## Sign in with GitHub
+## Browser sign-in
 
-The desktop and mobile apps offer **Continue with GitHub** — for new and existing accounts alike —
-when the API reports the provider configured (`GET /api/v1/native-auth/providers`). An environment
-without GitHub credentials never shows the button. Browser builds (the desktop web preview and the
-mobile web export) do not offer it: the result can only return to a native app.
+Every sign-in happens in a browser, on a Privy-powered page the API itself hosts; the person picks
+GitHub, Google or a one-time code sent to their email. The apps never talk to Privy and carry no
+Privy SDK: they only open the page and redeem what it returns. The first sign-in also creates the
+account.
 
-Both apps follow RFC 8252 — a browser for the OAuth flow, the result returned only to the app that
-started it, and PKCE — and share parsing, error messages and PKCE encoding from
-`packages/client-core/src/github-sign-in.ts`:
+Browser builds (the desktop web preview and the mobile web export) do not offer it — the result can
+only return to a native app — and explain that in place of the button. The native apps hide the
+button only when the API explicitly reports no method configured
+(`GET /api/v1/native-auth/providers`); while that check is pending or failing, desktop still offers
+it, and mobile shows a retry.
+
+Both apps follow RFC 8252 — a browser for the sign-in page, the result returned only to the app
+that started it, and PKCE — and share parsing, error messages and PKCE encoding from
+`packages/client-core/src/sign-in.ts`:
 
 |                   | Desktop                                                                     | Mobile                                                                                                           |
 | ----------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | Browser           | System browser                                                              | In-app authentication session: `ASWebAuthenticationSession` (iOS), Custom Tabs (Android), via `expo-web-browser` |
 | Result returns to | One-shot listener on `127.0.0.1:<random port>` (`src-tauri/src/sign_in.rs`) | The build's URL scheme, `<scheme>://native-auth/callback`                                                        |
-| Flow              | `apps/desktop/src/auth/github-sign-in.ts`                                   | `apps/mobile/src/auth/github-sign-in.ts`                                                                         |
+| Flow              | `apps/desktop/src/auth/sign-in.ts`                                          | `apps/mobile/src/auth/sign-in.ts`                                                                                |
 
-In both, the app creates a PKCE verifier, opens `/api/v1/native-auth/github/start` with `port=…` or
-`app=<scheme>`, receives a one-time code, and redeems it with `ApiClient.completeNativeSignIn` for the
-session token, stored exactly like an email sign-in's.
+In both, the app creates a PKCE verifier, opens `/api/v1/native-auth/start` with `port=…` or
+`app=<scheme>` and the challenge, receives a one-time code, and redeems it with
+`ApiClient.completeNativeSignIn` for the session token. (`/api/v1/native-auth/github/start` is a
+deprecated alias the server keeps for older builds.)
 
 Why this shape:
 
@@ -147,23 +154,30 @@ Why this shape:
   same URL scheme; the API also only returns to its allowlist of Concors schemes.
 - **No OS registration on desktop.** A deep link needs a URL scheme registered per platform (on
   Linux, a `MimeType` in the desktop entry) and does not work in development builds.
-- **Credentials stay with GitHub.** People authenticate on GitHub's own page, with their password
-  manager and passkeys, and an existing browser login is reused. The apps never see GitHub
-  credentials, and the API does not store GitHub's token.
+- **Credentials stay with the provider.** People authenticate on GitHub's or Google's own page, or
+  with a code from their inbox, with their password manager and passkeys, and an existing browser
+  login is reused. The apps never see those credentials.
 
-Declining on GitHub or closing the mobile sheet returns quietly to the sign-in screen. If the GitHub
-email already belongs to a password account whose email is unverified, the API refuses to link them
-(`account_not_linked`) and the app asks the person to sign in with their password; linking would let
-someone register a victim's address first and inherit the victim's session.
+Closing the page, cancelling on it or closing the mobile sheet (`cancelled`, `access_denied`)
+returns quietly to the sign-in screen. `email_required` means the account had no usable email — for
+example a GitHub account without a verified address — and the app suggests email, Google, or a
+GitHub account with a verified email. Any other code reads as a generic "did not complete".
+
+**Existing accounts.** Accounts from before Privy (email and password, or the earlier GitHub
+sign-in) are linked automatically the first time their owner signs in through Privy: by the GitHub
+account id the old GitHub sign-in recorded, or else by the verified email address. Nobody needs to
+do anything, and organizations, machines and billing stay where they were.
 
 `expo-web-browser` is a native module: mobile needs a new development client or store build before
 the button works on a device. Android also delivers the callback as a deep link, which
-`apps/mobile/app/native-auth/callback.tsx` absorbs. Server setup — including reusing the repository
-GitHub App — is documented in concors-server `docs/github-sign-in.md`.
+`apps/mobile/app/native-auth/callback.tsx` absorbs.
+
+The private direct-daemon preview on mobile still has an optional profile sign-in that posts an
+email and password through its gateway (`apps/mobile/src/auth/direct-profile.ts`). Account APIs
+that sign in only through the browser refuse it.
 
 ## Out of scope for now
 
-- Password reset and e-mail verification screens (the server has no e-mail provider wired up).
 - Connecting the workspace to a **cloud machine's daemon**. Machines can be created and destroyed
   from the Machines view and reached over SSH, but the machine switcher still only knows manually
   added daemon URLs.

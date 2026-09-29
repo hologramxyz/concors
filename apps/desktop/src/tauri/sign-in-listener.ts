@@ -5,7 +5,7 @@ import { z } from "zod";
 /*
  * Wrapper around `src-tauri/src/sign_in.rs`, the one-shot loopback receiver the control plane
  * redirects the browser to after signing in. It only delivers what arrived on the port; the PKCE
- * verifier and the exchange stay in `auth/github-sign-in.ts`.
+ * verifier and the exchange stay in `auth/sign-in.ts`.
  */
 
 const AttemptSchema = z.object({ attempt: z.number().int(), port: z.number().int() });

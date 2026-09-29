@@ -28,6 +28,8 @@ export default defineConfig({
         EXPO_PUBLIC_DEMO: "false",
         EXPO_PUBLIC_DEV_DAEMON_URL: "",
         EXPO_PUBLIC_API_URL: "https://control-plane.example",
+        // Sign-in happens in a native sheet the browser preview cannot open; start signed in.
+        EXPO_PUBLIC_E2E_SESSION_TOKEN: "e2e-session-token",
       },
     },
   ],

@@ -37,22 +37,18 @@ export const MeSchema = z.object({
 });
 export type Me = z.infer<typeof MeSchema>;
 
-/** `POST /api/auth/sign-in/email` and `POST /api/auth/sign-up/email` */
-export const AuthResponseSchema = z.object({
-  /** Session token. `null` when the account still needs e-mail verification before it can sign in. */
-  token: z
-    .string()
-    .nullish()
-    .transform((value) => value ?? null),
-  user: ApiUserSchema,
-});
-export type AuthResponse = z.infer<typeof AuthResponseSchema>;
-
 /** `POST /api/v1/native-auth/exchange`: the session token a native client uses as its bearer token. */
 export const NativeSignInResponseSchema = z.object({ token: z.string().min(1) });
 
-/** `GET /api/v1/native-auth/providers`: sign-in methods this environment has configured. */
-export const SignInProvidersSchema = z.object({ github: z.boolean() });
+/**
+ * `GET /api/v1/native-auth/providers`: sign-in methods this environment has configured. A missing
+ * method reads as unavailable, so an older API that only reports `github` still parses.
+ */
+export const SignInProvidersSchema = z.object({
+  github: z.boolean().default(false),
+  google: z.boolean().default(false),
+  email: z.boolean().default(false),
+});
 export type SignInProviders = z.infer<typeof SignInProvidersSchema>;
 
 /**
@@ -97,7 +93,7 @@ export const OrganizationListSchema = z.object({
   organizations: z.array(OrganizationSchema),
 });
 
-/** Error bodies: Fastify sends `{ statusCode, error, message }`, Better Auth `{ message, code }`. */
+/** Error bodies: Fastify sends `{ statusCode, error, message }`; some routes add a `code`. */
 export const ErrorBodySchema = z.object({
   message: z.string(),
   code: z.string().optional(),
