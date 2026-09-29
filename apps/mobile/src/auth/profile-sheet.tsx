@@ -22,7 +22,7 @@ export function useDirectProfile() {
     setError(null);
     try {
       if (email !== undefined && password !== undefined) {
-        await session.api.signInWithEmail({ email: email.trim(), password });
+        await session.signIn(email.trim(), password);
         setProfile(await session.getProfile());
         setOpen(false);
       } else {
@@ -35,7 +35,9 @@ export function useDirectProfile() {
       setError(
         cause instanceof ApiError && [400, 401].includes(cause.status)
           ? "Email or password is incorrect."
-          : "Could not verify your Concors profile. Check your connection and retry.",
+          : cause instanceof ApiError && cause.status === 404
+            ? "This Concors server no longer accepts password sign-in for profiles."
+            : "Could not verify your Concors profile. Check your connection and retry.",
       );
     } finally {
       busyRef.current = false;

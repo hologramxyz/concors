@@ -14,8 +14,7 @@ it("signs in, reads the profile and signs out against an Origin-checking API", a
     calls.push({ path, headers, init });
     if (headers.get("origin") !== apiUrl)
       return Response.json({ code: "MISSING_OR_NULL_ORIGIN" }, { status: 403 });
-    if (path === "/api/auth/sign-in/email")
-      return Response.json({ user: demoMe.user, token: "test-session" });
+    if (path === "/api/v1/native-auth/exchange") return Response.json({ token: "test-session" });
     if (headers.get("authorization") !== "Bearer test-session")
       return Response.json({ message: "Unauthorized" }, { status: 401 });
     return Response.json(path === "/api/v1/me" ? demoMe : {});
@@ -26,12 +25,12 @@ it("signs in, reads the profile and signs out against an Origin-checking API", a
     tokenStore: tokens,
     fetch: createMobileApiFetch({ apiUrl, native: true, request }),
   });
-  await api.signInWithEmail({ email: "fixture@example.invalid", password: "test-only-password" });
+  await api.completeNativeSignIn({ code: "c".repeat(43), verifier: "v".repeat(43) });
   expect((await api.getMe()).user).toEqual(demoMe.user);
   await api.signOut();
   expect(tokens.get()).toBeNull();
   expect(calls.map(({ path }) => path)).toEqual([
-    "/api/auth/sign-in/email",
+    "/api/v1/native-auth/exchange",
     "/api/v1/me",
     "/api/auth/sign-out",
   ]);
@@ -41,8 +40,8 @@ it("signs in, reads the profile and signs out against an Origin-checking API", a
   }
   expect(calls[0]?.headers.get("content-type")).toBe("application/json");
   expect(JSON.parse(calls[0]?.init?.body as string)).toEqual({
-    email: "fixture@example.invalid",
-    password: "test-only-password",
+    code: "c".repeat(43),
+    verifier: "v".repeat(43),
   });
 });
 
@@ -84,7 +83,7 @@ it("preserves Request headers and explicit header overrides", async () => {
 it("rejects a foreign origin before sending credentials", async () => {
   const request = vi.fn<typeof fetch>();
   const fetchApi = createMobileApiFetch({ apiUrl, native: true, request });
-  for (const url of ["https://other.invalid/api/auth/sign-in/email", "http://api.concors.dev/me"])
+  for (const url of ["https://other.invalid/api/v1/me", "http://api.concors.dev/me"])
     await expect(fetchApi(url, { headers: { authorization: "Bearer fixture" } })).rejects.toThrow(
       "outside the configured mobile API",
     );

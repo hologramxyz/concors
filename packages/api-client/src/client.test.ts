@@ -42,8 +42,8 @@ function client(fetch: typeof globalThis.fetch, token: string | null = null) {
 describe("native sign-in", () => {
   it("builds the start URL for the desktop loopback port", () => {
     const { api } = client(vi.fn());
-    const url = new URL(api.nativeGitHubSignInUrl({ port: 49152 }, "c".repeat(43)));
-    expect(url.origin + url.pathname).toBe("https://api.example/api/v1/native-auth/github/start");
+    const url = new URL(api.nativeSignInUrl({ port: 49152 }, "c".repeat(43)));
+    expect(url.origin + url.pathname).toBe("https://api.example/api/v1/native-auth/start");
     expect(url.searchParams.get("port")).toBe("49152");
     expect(url.searchParams.has("app")).toBe(false);
     expect(url.searchParams.get("challenge")).toBe("c".repeat(43));
@@ -51,20 +51,42 @@ describe("native sign-in", () => {
 
   it("builds the start URL for the mobile app scheme", () => {
     const { api } = client(vi.fn());
-    const url = new URL(api.nativeGitHubSignInUrl({ app: "concors" }, "c".repeat(43)));
+    const url = new URL(api.nativeSignInUrl({ app: "concors" }, "c".repeat(43)));
     expect(url.searchParams.get("app")).toBe("concors");
     expect(url.searchParams.has("port")).toBe(false);
   });
 
+  it("reads the configured sign-in methods", async () => {
+    const fetch = vi.fn(async () => json({ github: true, google: true, email: true }));
+    await expect(client(fetch).api.getSignInProviders()).resolves.toEqual({
+      github: true,
+      google: true,
+      email: true,
+    });
+    const [url] = fetch.mock.calls[0] as unknown as [string];
+    expect(url).toBe("https://api.example/api/v1/native-auth/providers");
+  });
+
+  it("treats methods an older API does not report as unavailable", async () => {
+    const fetch = vi.fn(async () => json({ github: true }));
+    await expect(client(fetch).api.getSignInProviders()).resolves.toEqual({
+      github: true,
+      google: false,
+      email: false,
+    });
+  });
+
   it("redeems the code with the verifier and stores the returned token", async () => {
-    const fetch = vi.fn(async () => json({ token: "tok-github" }));
+    const fetch = vi.fn(async () => json({ token: "tok-native" }));
     const { api, tokens } = client(fetch);
     await api.completeNativeSignIn({ code: "k".repeat(43), verifier: "v".repeat(64) });
 
-    expect(tokens.get()).toBe("tok-github");
+    expect(tokens.get()).toBe("tok-native");
     const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("https://api.example/api/v1/native-auth/exchange");
     expect(init.method).toBe("POST");
+    expect(init.credentials).toBe("include");
+    expect(new Headers(init.headers).get("content-type")).toBe("application/json");
     expect(JSON.parse(init.body as string)).toEqual({
       code: "k".repeat(43),
       verifier: "v".repeat(64),
@@ -90,39 +112,6 @@ describe("ApiClient", () => {
     );
   });
 
-  it("signs in, stores the token from the body and returns the user", async () => {
-    const fetch = vi.fn(async () => json({ redirect: false, token: "tok-1", user: USER }));
-    const { api, tokens } = client(fetch);
-
-    await expect(
-      api.signInWithEmail({ email: USER.email, password: "secret-123" }),
-    ).resolves.toEqual(USER);
-    expect(tokens.get()).toBe("tok-1");
-
-    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
-    expect(url).toBe("https://api.example/api/auth/sign-in/email");
-    expect(init.method).toBe("POST");
-    expect(init.credentials).toBe("include");
-    expect(new Headers(init.headers).get("content-type")).toBe("application/json");
-    expect(JSON.parse(init.body as string)).toEqual({ email: USER.email, password: "secret-123" });
-  });
-
-  it("prefers the set-auth-token header over the body token", async () => {
-    const fetch = vi.fn(async () =>
-      json({ token: "body-token", user: USER }, { headers: { "set-auth-token": "signed.token" } }),
-    );
-    const { api, tokens } = client(fetch);
-    await api.signUpWithEmail({ name: "Ada", email: USER.email, password: "secret-123" });
-    expect(tokens.get()).toBe("signed.token");
-  });
-
-  it("leaves the store untouched when sign-up did not open a session", async () => {
-    const fetch = vi.fn(async () => json({ token: null, user: USER }));
-    const { api, tokens } = client(fetch);
-    await api.signUpWithEmail({ name: "Ada", email: USER.email, password: "secret-123" });
-    expect(tokens.get()).toBeNull();
-  });
-
   it("sends the stored token as a bearer credential", async () => {
     const fetch = vi.fn(async () => json(ME));
     const { api } = client(fetch, "tok-1");
@@ -132,7 +121,7 @@ describe("ApiClient", () => {
     expect(new Headers(init.headers).get("authorization")).toBe("Bearer tok-1");
   });
 
-  it("maps Fastify and Better Auth error bodies to ApiError", async () => {
+  it("maps error bodies to ApiError", async () => {
     const fastify = vi.fn(async () =>
       json(
         { statusCode: 401, error: "Unauthorized", message: "Authentication required" },
@@ -147,15 +136,14 @@ describe("ApiClient", () => {
       code: undefined,
     });
 
-    const betterAuth = vi.fn(async () =>
-      json(
-        { message: "Invalid email or password", code: "INVALID_EMAIL_OR_PASSWORD" },
-        { status: 401 },
-      ),
+    const coded = vi.fn(async () =>
+      json({ message: "Not a member", code: "FORBIDDEN" }, { status: 403 }),
     );
-    await expect(
-      client(betterAuth).api.signInWithEmail({ email: USER.email, password: "nope" }),
-    ).rejects.toMatchObject({ status: 401, code: "INVALID_EMAIL_OR_PASSWORD" });
+    await expect(client(coded).api.setActiveOrganization("org2")).rejects.toMatchObject({
+      status: 403,
+      unauthorized: false,
+      code: "FORBIDDEN",
+    });
 
     const html = vi.fn(async () => new Response("<h1>Bad Gateway</h1>", { status: 502 }));
     await expect(client(html).api.getMe()).rejects.toMatchObject({
@@ -240,10 +228,10 @@ describe("ApiClient", () => {
             ? json({ message: "Unauthorized" }, { status: 401 })
             : json({ success: true });
         })
-        .mockResolvedValueOnce(json({ token: "new-token", user: USER }));
+        .mockResolvedValueOnce(json({ token: "new-token" }));
       const { api, tokens } = client(fetch, "old-token");
       const signingOut = api.signOut().catch((error: unknown) => error);
-      await api.signInWithEmail({ email: USER.email, password: "secret-123" });
+      await api.completeNativeSignIn({ code: "k".repeat(43), verifier: "v".repeat(64) });
       expect(tokens.get()).toBe("new-token");
       finish();
       await signingOut;

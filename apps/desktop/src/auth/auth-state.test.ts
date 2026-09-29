@@ -72,11 +72,10 @@ describe("interpretProbe", () => {
 });
 
 describe("describeAuthError", () => {
-  it("translates known Better Auth codes", () => {
-    expect(describeAuthError(new ApiError(401, "x", "INVALID_EMAIL_OR_PASSWORD"))).toBe(
-      "Incorrect email or password.",
+  it("translates known codes", () => {
+    expect(describeAuthError(new ApiError(200, "x", "INVALID_RESPONSE"))).toMatch(
+      /unexpected format/,
     );
-    expect(describeAuthError(new ApiError(422, "x", "USER_ALREADY_EXISTS"))).toMatch(/Sign in/);
   });
 
   it("falls back to the server message for unknown 4xx and hides 5xx details", () => {

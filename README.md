@@ -157,8 +157,9 @@ See [Color themes](docs/themes.md) for the format, examples, and live reload beh
 ### Accounts
 
 The app requires a Concors account: signed out, you only see the sign-in screen; the workspace
-appears once the control plane confirms the session (email + password today). The flow, token
-handling and what the server provides are described in [docs/auth.md](docs/auth.md).
+appears once the control plane confirms the session. Signing in continues in your browser with
+GitHub, Google or an emailed code. The flow, token handling and what the server provides are
+described in [docs/auth.md](docs/auth.md).
 
 ## How the client talks to the daemon
 

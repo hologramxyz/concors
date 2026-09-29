@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   base64url,
-  describeGitHubSignInError,
+  describeSignInError,
   parseSignInCallback,
   verifierFromBytes,
-} from "./github-sign-in.ts";
+} from "./sign-in.ts";
 
 const CODE = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJ0123456";
 
@@ -52,9 +52,9 @@ describe("parseSignInCallback", () => {
   });
 
   it("passes known error codes through", () => {
-    expect(parseSignInCallback("concors://native-auth/callback?error=account_not_linked")).toEqual({
+    expect(parseSignInCallback("concors://native-auth/callback?error=email_required")).toEqual({
       kind: "error",
-      error: "account_not_linked",
+      error: "email_required",
     });
   });
 
@@ -69,14 +69,13 @@ describe("parseSignInCallback", () => {
   });
 });
 
-describe("describeGitHubSignInError", () => {
-  it("explains a refused link to a password account", () => {
-    expect(describeGitHubSignInError("account_not_linked")).toContain("email and password");
+describe("describeSignInError", () => {
+  it("explains an account without a verified email", () => {
+    expect(describeSignInError("email_required")).toContain("no verified email address");
   });
 
   it("never shows an unknown code", () => {
-    expect(describeGitHubSignInError("<script>")).toBe(
-      "GitHub sign-in did not complete. Try again.",
-    );
+    expect(describeSignInError("<script>")).toBe("Sign-in did not complete. Try again.");
+    expect(describeSignInError("sign_in_failed")).toBe("Sign-in did not complete. Try again.");
   });
 });

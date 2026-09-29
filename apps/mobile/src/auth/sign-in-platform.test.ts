@@ -15,7 +15,7 @@ vi.mock("expo-crypto", () => ({
   digest: mocks.digest,
   CryptoDigestAlgorithm: { SHA256: "SHA-256" },
 }));
-import { nativeGitHubPlatform } from "./github-platform";
+import { nativeSignInPlatform } from "./sign-in-platform";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -27,18 +27,18 @@ it.each(["ios", "android"])(
   "uses the %s authentication session with the registered callback",
   async (os) => {
     mocks.platform.OS = os;
-    const platform = nativeGitHubPlatform();
+    const platform = nativeSignInPlatform();
     if (!platform) throw new Error("Missing native authentication adapter");
     expect(platform.scheme).toBe("concors");
     mocks.browser.mockResolvedValue({ type: "cancel" });
     await expect(
       platform.openAuthSession(
-        "https://api.concors.dev/api/v1/native-auth/github/start",
+        "https://api.concors.dev/api/v1/native-auth/start",
         "concors://native-auth/callback",
       ),
     ).resolves.toEqual({ type: "cancel" });
     expect(mocks.browser).toHaveBeenCalledExactlyOnceWith(
-      "https://api.concors.dev/api/v1/native-auth/github/start",
+      "https://api.concors.dev/api/v1/native-auth/start",
       "concors://native-auth/callback",
       { preferEphemeralSession: false },
     );
@@ -46,7 +46,7 @@ it.each(["ios", "android"])(
 );
 
 it("uses native cryptographic randomness and SHA-256 for PKCE", async () => {
-  const platform = nativeGitHubPlatform();
+  const platform = nativeSignInPlatform();
   if (!platform) throw new Error("Missing native authentication adapter");
   const bytes = new Uint8Array(32).fill(5);
   mocks.bytes.mockReturnValue(bytes);
@@ -59,13 +59,13 @@ it("uses native cryptographic randomness and SHA-256 for PKCE", async () => {
 
 it("keeps preview callbacks isolated from the store identity", () => {
   mocks.config.scheme = ["concors-preview", "exp+concors"];
-  expect(nativeGitHubPlatform()?.scheme).toBe("concors-preview");
+  expect(nativeSignInPlatform()?.scheme).toBe("concors-preview");
 });
 
 it("does not offer a broken native callback on web or an unconfigured build", () => {
   mocks.platform.OS = "web";
-  expect(nativeGitHubPlatform()).toBeNull();
+  expect(nativeSignInPlatform()).toBeNull();
   mocks.platform.OS = "ios";
   mocks.config.scheme = undefined;
-  expect(nativeGitHubPlatform()).toBeNull();
+  expect(nativeSignInPlatform()).toBeNull();
 });

@@ -7,9 +7,12 @@ import { tokenStore, machineCredentials } from "../platform/storage";
 import { disablePush } from "../platform/notifications";
 import { config } from "../config";
 import { useDirectProfile } from "./profile-sheet";
-import { nativeGitHubPlatform } from "./github-platform";
-import { GitHubSignInError, signInWithGitHub as runGitHubSignIn } from "./github-sign-in";
+import { nativeSignInPlatform } from "./sign-in-platform";
+import { SignInError, signInWithAuthSession, type SignInOutcome } from "./sign-in";
 import { useSignInProviders } from "./use-sign-in-providers";
+
+/** Any bearer works against the simulated API; it only has to exist for the session to restore. */
+const DEMO_SESSION_TOKEN = "demo-session-token";
 
 interface AuthState {
   me: Me | null;
@@ -22,14 +25,17 @@ interface AuthContextValue extends AuthState {
   openProfile(): void;
   direct: boolean;
   connectDirect(): void;
-  signIn(email: string, password: string): Promise<void>;
-  /** `true` once this build and the API both support GitHub sign-in. */
-  githubSignIn: boolean;
-  githubSignInChecking: boolean;
-  githubSignInError: string | null;
-  retryGitHubSignIn(): Promise<void>;
-  /** Signs in, or creates an account, through GitHub in an in-app browser sheet. */
-  signInWithGitHub(): Promise<void>;
+  /** `false` where the in-app browser sheet cannot run: the web preview. */
+  signInSupported: boolean;
+  /** `true` once this build and the API both support sign-in. */
+  signInAvailable: boolean;
+  signInChecking: boolean;
+  signInCheckError: string | null;
+  retrySignInCheck(): Promise<void>;
+  /** Signs in, or creates an account, on the API's sign-in page in an in-app browser sheet. */
+  signIn(): Promise<void>;
+  /** Opens the simulated account of a demo build. */
+  exploreDemo(): Promise<void>;
   signOut(): Promise<void>;
   refresh(): Promise<void>;
   switchOrganization(organizationId: string): Promise<void>;
@@ -48,10 +54,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [direct, setDirect] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const [state, setState] = useState<AuthState>({ me: null, loading: true, error: null });
-  const [github] = useState(() =>
-    config.demo || config.developmentDaemon ? null : nativeGitHubPlatform(),
+  const [platform] = useState(() =>
+    config.demo || config.developmentDaemon ? null : nativeSignInPlatform(),
   );
-  const githubProviders = useSignInProviders(!!github);
+  const providers = useSignInProviders(!!platform);
   const refresh = async () => {
     // A private-daemon test session is not a cloud login. Do not hydrate or send account tokens.
     if (config.developmentDaemon) {
@@ -105,45 +111,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // refresh intentionally reads the current store, not a render's auth state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const signIn = async (email: string, password: string) => {
-    if (config.developmentDaemon) throw new Error("Cloud login is unavailable in direct mode.");
+  /** Runs one way of obtaining a session token, then loads the account it belongs to. */
+  const startSession = async (
+    authenticate: () => Promise<SignInOutcome>,
+    failure: (error: unknown) => string,
+  ) => {
     if (changingSession.current) return;
     changingSession.current = true;
     const attempt = ++generation.current;
     setState({ me: null, loading: true, error: null });
     try {
       await tokenStore.hydrate();
-      await api.signInWithEmail({ email: email.trim(), password });
-      await tokenStore.flush();
-      const me = await api.getMe();
-      if (attempt === generation.current) {
-        query.clear();
-        setState({ me, loading: false, error: null });
-      }
-    } catch (error) {
-      if (attempt !== generation.current) return;
-      setState({
-        me: null,
-        loading: false,
-        error:
-          error instanceof ApiError && [400, 401].includes(error.status)
-            ? "Email or password is incorrect."
-            : "Could not sign in. Check your connection and try again.",
-      });
-    } finally {
-      changingSession.current = false;
-    }
-  };
-  const signInWithGitHub = async () => {
-    if (!github) throw new Error("GitHub sign-in is not available in this build.");
-    if (changingSession.current) return;
-    changingSession.current = true;
-    const attempt = ++generation.current;
-    setState({ me: null, loading: true, error: null });
-    try {
-      await tokenStore.hydrate();
-      const outcome = await runGitHubSignIn(api, github);
-      if (outcome === "cancelled") {
+      if ((await authenticate()) === "cancelled") {
         if (attempt === generation.current) setState({ me: null, loading: false, error: null });
         return;
       }
@@ -155,17 +134,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } catch (error) {
       if (attempt !== generation.current) return;
-      setState({
-        me: null,
-        loading: false,
-        error:
-          error instanceof GitHubSignInError
-            ? error.message
-            : "Could not sign in with GitHub. Check your connection and try again.",
-      });
+      setState({ me: null, loading: false, error: failure(error) });
     } finally {
       changingSession.current = false;
     }
+  };
+  const signIn = async () => {
+    if (!platform) throw new Error("Sign-in is not available in this build.");
+    await startSession(
+      () => signInWithAuthSession(api, platform),
+      (error) =>
+        error instanceof SignInError
+          ? error.message
+          : "Could not sign in. Check your connection and try again.",
+    );
+  };
+  const exploreDemo = async () => {
+    if (!config.demo) throw new Error("This is not a demo build.");
+    await startSession(
+      async () => {
+        tokenStore.set(DEMO_SESSION_TOKEN);
+        return "signed-in";
+      },
+      () => "Could not open the demo. Try again.",
+    );
   };
   const signOut = async () => {
     if (config.developmentDaemon) {
@@ -244,15 +236,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setState({ me: null, loading: false, error: null });
           setDirect(true);
         },
+        signInSupported: !!platform,
+        signInAvailable: providers.available,
+        signInChecking: providers.checking,
+        signInCheckError: providers.error,
+        retrySignInCheck: providers.retry,
         signIn,
-        githubSignIn: githubProviders.available,
-        githubSignInChecking: githubProviders.checking,
-        githubSignInError: githubProviders.error,
-        retryGitHubSignIn: githubProviders.retry,
-        signInWithGitHub,
+        exploreDemo,
         signOut,
         refresh: async () => {
-          await Promise.all([refresh(), githubProviders.retry()]);
+          await Promise.all([refresh(), providers.retry()]);
         },
         switchOrganization,
       }}

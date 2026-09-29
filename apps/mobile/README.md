@@ -163,7 +163,9 @@ The private `/desktop-daemon/profile-api` route only forwards email sign-in, sig
 methods, bounded bodies, no redirects and no cookie forwarding. GitHub repositories,
 account management and connection changes are not exposed by this profile-only route.
 The same Tailscale identity/origin check protects these routes. It does not substitute
-a Tailscale profile or copy a desktop session token.
+a Tailscale profile or copy a desktop session token. Account APIs that sign in only
+through the browser (GitHub, Google or an emailed code) no longer accept the password
+route, and answer profile sign-in with "no longer accepts password sign-in".
 
 Example on the computer running the daemon (replace the origin and login):
 
