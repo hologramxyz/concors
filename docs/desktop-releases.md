@@ -5,8 +5,7 @@ exists and replaces itself.
 
 Two halves meet here. This repository builds and publishes the app; the control plane
 (`concors-server`) pins one published version and answers the question a running app asks. The
-app never talks to GitHub, because the repository is private and the release assets are not
-public.
+app never talks to GitHub itself: the API reads the release and hands out download links.
 
 ## The version lives in four files
 
@@ -122,8 +121,8 @@ silence, and the rest of the API is untouched — but there is no reason to arra
 railway variable set DESKTOP_VERSION=0.2.0
 ```
 
-The API reads only `release.json` from that release, over the same `GITHUB_TOKEN` the daemon
-already uses. Builds are never proxied through it: a client asking to download one is redirected
+The API reads only `release.json` from that release, anonymously, since the repository is
+public. Builds are never proxied through it: a client asking to download one is redirected
 to a short-lived link, so a 50 MB package never occupies API memory.
 
 For development, `DESKTOP_MANIFEST_PATH` points at a local `release.json` instead of a published
