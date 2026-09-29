@@ -27,10 +27,11 @@ what the server provides for it.
    splash. A `401` drops the saved token and shows the sign-in screen; any other failure keeps the
    token and shows the sign-in screen with the error and a retry, so a flaky network never destroys
    a valid session.
-2. **Sign in.** One **Sign in** button continues in the browser, on a page the API hosts, where the
-   person picks GitHub, Google or a one-time code sent by email. There is no password and no
-   separate sign-up: see [Browser sign-in](#browser-sign-in). The session token the exchange returns
-   is stored and the session is re-checked with `/api/v1/me` so the UI always mirrors what the API
+2. **Sign in.** The person chooses **Sign in** or **Sign up**, then **GitHub**, **Google** or
+   **email** (typing the address in the app). The browser opens straight on that method, on a page
+   the API hosts: GitHub's or Google's own sign-in, or a box for the code just emailed. There is no
+   password: see [Browser sign-in](#browser-sign-in). The session token the exchange returns is
+   stored and the session is re-checked with `/api/v1/me` so the UI always mirrors what the API
    believes.
 3. **Signed in.** The app renders. The sidebar footer shows the account; Settings → Account shows
    the email, verification state, the active organization (switchable when the user belongs to
@@ -119,10 +120,14 @@ Error bodies (Fastify's `{ statusCode, error, message }`, sometimes with a `code
 
 ## Browser sign-in
 
-Every sign-in happens in a browser, on a Privy-powered page the API itself hosts; the person picks
-GitHub, Google or a one-time code sent to their email. The apps never talk to Privy and carry no
-Privy SDK: they only open the page and redeem what it returns. The first sign-in also creates the
-account.
+Every sign-in happens in a browser, on a Privy-powered page the API itself hosts, which goes
+straight to the method picked in the app: GitHub, Google, or a one-time code sent to the address
+typed in the app. The page is Concors' own (Privy's headless hooks, no Privy modal). The apps never
+talk to Privy and carry no Privy SDK: they only open the page and redeem what it returns.
+
+**Sign up** creates the account on first use, or just signs in when it exists. **Sign in** never
+creates one: without a matching account the app gets `account_not_found` and suggests signing up,
+so trying a second method under another address does not quietly create a second, empty account.
 
 Browser builds (the desktop web preview and the mobile web export) do not offer it — the result can
 only return to a native app — and explain that in place of the button. The native apps hide the
@@ -141,7 +146,7 @@ that started it, and PKCE — and share parsing, error messages and PKCE encodin
 | Flow              | `apps/desktop/src/auth/sign-in.ts`                                          | `apps/mobile/src/auth/sign-in.ts`                                                                                |
 
 In both, the app creates a PKCE verifier, opens `/api/v1/native-auth/start` with `port=…` or
-`app=<scheme>` and the challenge, receives a one-time code, and redeems it with
+`app=<scheme>`, the challenge, and the choice (`method`, `email`, `intent`), receives a one-time code, and redeems it with
 `ApiClient.completeNativeSignIn` for the session token. (`/api/v1/native-auth/github/start` is a
 deprecated alias the server keeps for older builds.)
 
