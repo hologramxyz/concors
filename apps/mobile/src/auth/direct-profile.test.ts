@@ -68,7 +68,7 @@ it("signs in against the private profile endpoint with isolated memory credentia
       );
     },
   );
-  await session.api.signInWithEmail({ email: "test@example.com", password: "fixture" });
+  await session.signIn("test@example.com", "fixture");
   expect((await session.api.getMe()).user).toEqual(demoMe.user);
   expect(requests[0]?.url).toBe(
     "https://private.example/desktop-daemon/profile-api/api/auth/sign-in/email",

@@ -10,7 +10,6 @@ import type { z } from "zod";
 
 import { ApiError, ApiNetworkError } from "./errors.ts";
 import {
-  AuthResponseSchema,
   NativeSignInResponseSchema,
   SignInProvidersSchema,
   DesktopUpdateSchema,
@@ -34,7 +33,6 @@ import {
   RedirectSchema,
   SshKeyListSchema,
   SshKeyResponseSchema,
-  type ApiUser,
   type BillingStatus,
   type Invoice,
   type Machine,
@@ -68,17 +66,6 @@ export interface ApiClientOptions {
   readonly fetch?: typeof globalThis.fetch;
 }
 
-export interface SignUpInput {
-  readonly name: string;
-  readonly email: string;
-  readonly password: string;
-}
-
-export interface SignInInput {
-  readonly email: string;
-  readonly password: string;
-}
-
 /**
  * Organization a request acts on. Every machine, key and billing call is scoped to one; when
  * omitted the API uses the session's active organization (see `setActiveOrganization`).
@@ -104,11 +91,8 @@ export interface AddSshKeyInput extends OrganizationScope {
   readonly publicKey: string;
 }
 
-/** Where a native GitHub sign-in returns: the desktop loopback port or the mobile URL scheme. */
+/** Where a native sign-in returns: the desktop loopback port or the mobile URL scheme. */
 export type NativeSignInTarget = { readonly port: number } | { readonly app: string };
-
-/** Response header the API uses to hand out a bearer token alongside the session cookie. */
-const AUTH_TOKEN_HEADER = "set-auth-token";
 
 /**
  * Client for the Concors control-plane API.
@@ -136,25 +120,6 @@ export class ApiClient {
     // `this` other than the global object.
     const fetchImpl = options.fetch ?? globalThis.fetch;
     this.#fetch = (input, init) => fetchImpl(input, init);
-  }
-
-  /** Creates an account and, unless e-mail verification is required, signs in right away. */
-  async signUpWithEmail(input: SignUpInput): Promise<ApiUser> {
-    const { data, response } = await this.#request("POST", "/api/auth/sign-up/email", {
-      body: input,
-      schema: AuthResponseSchema,
-    });
-    this.#rememberToken(response, data.token);
-    return data.user;
-  }
-
-  async signInWithEmail(input: SignInInput): Promise<ApiUser> {
-    const { data, response } = await this.#request("POST", "/api/auth/sign-in/email", {
-      body: input,
-      schema: AuthResponseSchema,
-    });
-    this.#rememberToken(response, data.token);
-    return data.user;
   }
 
   /**
@@ -188,7 +153,10 @@ export class ApiClient {
     return { ...rest, publishedAt };
   }
 
-  /** Sign-in methods beyond email this API offers; an environment without credentials hides them. */
+  /**
+   * Sign-in methods the API offers on its sign-in page. An environment without an identity provider
+   * configured reports none, so clients can say so instead of opening a page that fails.
+   */
   async getSignInProviders(): Promise<SignInProviders> {
     const { data } = await this.#request("GET", "/api/v1/native-auth/providers", {
       schema: SignInProvidersSchema,
@@ -197,12 +165,13 @@ export class ApiClient {
   }
 
   /**
-   * Browser URL that starts GitHub sign-in for a native client. The result returns only to `target`:
-   * a loopback port the desktop app listens on, or the mobile app's URL scheme (one of the builds the
-   * API allowlists). `challenge` is the base64url SHA-256 of a PKCE verifier the client keeps.
+   * Browser URL of the API's sign-in page for a native client, where the person picks GitHub, Google
+   * or an emailed code. The result returns only to `target`: a loopback port the desktop app listens
+   * on, or the mobile app's URL scheme (one of the builds the API allowlists). `challenge` is the
+   * base64url SHA-256 of a PKCE verifier the client keeps.
    */
-  nativeGitHubSignInUrl(target: NativeSignInTarget, challenge: string): string {
-    const url = new URL(`${this.baseUrl}/api/v1/native-auth/github/start`);
+  nativeSignInUrl(target: NativeSignInTarget, challenge: string): string {
+    const url = new URL(`${this.baseUrl}/api/v1/native-auth/start`);
     if ("port" in target) url.searchParams.set("port", String(target.port));
     else url.searchParams.set("app", target.app);
     url.searchParams.set("challenge", challenge);
@@ -210,8 +179,8 @@ export class ApiClient {
   }
 
   /**
-   * Redeems the one-time code delivered to the loopback port and keeps the session token, exactly
-   * as email sign-in does. The code is single-use: a failed attempt means starting over.
+   * Redeems the one-time code the sign-in page returned and keeps the session token. The code is
+   * single-use: a failed attempt means starting over.
    */
   async completeNativeSignIn(input: { readonly code: string; readonly verifier: string }) {
     const { data } = await this.#request("POST", "/api/v1/native-auth/exchange", {
@@ -558,11 +527,6 @@ export class ApiClient {
       )
     ).data;
   }
-  #rememberToken(response: Response, bodyToken: string | null): void {
-    const token = response.headers.get(AUTH_TOKEN_HEADER) ?? bodyToken;
-    if (token !== null && token !== "") this.tokens.set(token);
-  }
-
   async #request<T>(
     method: "GET" | "POST" | "PATCH" | "DELETE",
     path: string,

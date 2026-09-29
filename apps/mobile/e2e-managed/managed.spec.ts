@@ -18,23 +18,6 @@ test("phone and desktop discover a managed machine and share one real terminal",
     const desktopHost = await managedHost(desktop);
     await signedIn(phone);
     const phoneHost = await managedHost(phone, true);
-    await phone.route("**/api/auth/sign-in/email", async (route) => {
-      await route.fulfill({
-        headers: { "access-control-allow-origin": "*" },
-        json: {
-          token: "e2e-session-token",
-          user: {
-            id: "e2e-user",
-            name: "E2E User",
-            email: "e2e@example.com",
-            emailVerified: true,
-            image: null,
-            createdAt: "2026-09-07T00:00:00Z",
-            updatedAt: "2026-09-07T00:00:00Z",
-          },
-        },
-      });
-    });
     // An older control plane has no optional mobile capabilities endpoint.
     await phone.route("**/api/v1/mobile/capabilities", (route) =>
       route.fulfill({ status: 404, headers: { "access-control-allow-origin": "*" }, json: {} }),
@@ -50,10 +33,8 @@ test("phone and desktop discover a managed machine and share one real terminal",
     ).toBeVisible();
     const desktopTerminal = desktop.locator(".concors-terminal");
     await expect(desktopTerminal).toBeVisible();
+    // The preview starts with a session (see playwright.managed.config.mts).
     await phone.goto("http://localhost:8088");
-    await phone.getByRole("textbox", { name: "Email", exact: true }).fill("e2e@example.com");
-    await phone.getByRole("textbox", { name: "Password", exact: true }).fill("test-password");
-    await phone.getByRole("button", { name: "Sign in", exact: true }).click();
     const ui = phone.frameLocator('iframe[title="Concors workspace"]');
     await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
     await ui.getByRole("combobox", { name: "Machine", exact: true }).click();

@@ -1,7 +1,10 @@
 import { HydratedTokenStore, MachineCredentialStore } from "@concors/client-core";
 
 // Browser preview deliberately keeps credentials in memory. Native builds use SecureStore.
-let token: string | null = null;
+// The preview cannot run the in-app sign-in sheet, so the acceptance tests start their development
+// server with a session instead. A production bundle never reads it.
+let token: string | null =
+  (process.env.NODE_ENV !== "production" && process.env.EXPO_PUBLIC_E2E_SESSION_TOKEN) || null;
 export const tokenStore = new HydratedTokenStore({
   read: async () => token,
   write: async (value) => {

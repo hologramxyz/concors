@@ -14,8 +14,6 @@ export {
   type CreateMachineInput,
   type NativeSignInTarget,
   type OrganizationScope,
-  type SignInInput,
-  type SignUpInput,
 } from "./client.ts";
 export { ApiError, ApiNetworkError } from "./errors.ts";
 export {
@@ -23,7 +21,6 @@ export {
   DesktopUpdateSchema,
   type DesktopUpdate,
   ApiUserSchema,
-  AuthResponseSchema,
   BillingStatusSchema,
   SetupCheckoutSchema,
   SetupConfirmationSchema,
@@ -55,7 +52,6 @@ export {
   SshKeySchema,
   type ApiSession,
   type ApiUser,
-  type AuthResponse,
   type SignInProviders,
   type BillingStatus,
   type CardSummary,

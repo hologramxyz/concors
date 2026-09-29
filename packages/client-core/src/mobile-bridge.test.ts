@@ -38,7 +38,7 @@ describe("mobile host boundary", () => {
       "fetch",
       "tokens",
       "connectMachine",
-      "signInWithEmail",
+      "completeNativeSignIn",
       "getMe",
       "__proto__",
       "constructor",

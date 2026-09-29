@@ -1,7 +1,8 @@
 /**
- * Shared pieces of "Sign in with GitHub" for the desktop and mobile apps. Each app owns only its
- * transport — a loopback port on desktop, an authentication session on mobile — and both parse and
- * explain results here, so a given outcome reads the same everywhere.
+ * Shared pieces of browser sign-in for the desktop and mobile apps. The API's sign-in page offers
+ * GitHub, Google and an emailed code; each app owns only how the result gets back to it — a
+ * loopback port on desktop, an authentication session on mobile — and both parse and explain
+ * results here, so a given outcome reads the same everywhere.
  *
  * Written without `URL`, `URLSearchParams` or `btoa`, whose React Native implementations are
  * incomplete or engine-dependent.
@@ -9,7 +10,7 @@
 
 /** 256 random bits in base64url: the shape of a sign-in code minted by the API. */
 export const SIGN_IN_CODE_PATTERN = /^[A-Za-z0-9_-]{43}$/;
-/** Better Auth callback error codes are lowercase identifiers. */
+/** Callback error codes are lowercase identifiers. */
 const ERROR_CODE_PATTERN = /^[a-z_]{1,64}$/;
 
 export type SignInCallback =
@@ -20,19 +21,15 @@ export type SignInCallback =
 export const CANCELLED_SIGN_IN_CODES: ReadonlySet<string> = new Set(["cancelled", "access_denied"]);
 
 const MESSAGES: Readonly<Record<string, string>> = {
-  // The API refuses to attach GitHub to an account whose email was never verified, so a
-  // pre-registered address cannot capture someone's GitHub sign-in.
-  account_not_linked:
-    "An account with this email already exists. Sign in with your email and password instead.",
-  access_denied: "GitHub sign-in was cancelled.",
-  cancelled: "GitHub sign-in was cancelled.",
-  email_not_found:
-    "Your GitHub account has no email address Concors can use. Add a verified email on GitHub and try again.",
-  unable_to_get_user_info: "GitHub did not share your profile. Try again.",
+  access_denied: "Sign-in was cancelled.",
+  cancelled: "Sign-in was cancelled.",
+  // Accounts are keyed by a verified email, so a sign-in without one cannot be matched or created.
+  email_required:
+    "This account has no verified email address. Sign in with email, Google, or a GitHub account with a verified email.",
 };
 
-export function describeGitHubSignInError(code: string): string {
-  return MESSAGES[code] ?? "GitHub sign-in did not complete. Try again.";
+export function describeSignInError(code: string): string {
+  return MESSAGES[code] ?? "Sign-in did not complete. Try again.";
 }
 
 /**
