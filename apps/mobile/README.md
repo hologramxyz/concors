@@ -253,7 +253,7 @@ Those require team project/signing setup and explicit upload approval, not the d
 
 ### Browse and edit the project's real files
 
-The connected daemon must include desktop [PR #36](https://github.com/concors-dev/concors/pull/36)
+The connected daemon must include the [project files change](https://github.com/hologramxyz/concors/commit/ee1914bb65b152e9b6ef28fe48b080f65d9d7aca)
 and advertise `project-files` (plus `project-file-create` for creation). Updating the phone
 alone cannot enable files on an older running daemon. No control-plane/server PR is needed.
 Upgrade/restart that daemon when it is safe for your sessions, or test with a separate current daemon.

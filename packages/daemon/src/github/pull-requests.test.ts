@@ -7,12 +7,12 @@ import {
   readPullRequests,
 } from "./pull-requests.ts";
 
-const concors = { owner: "concors-dev", name: "concors" };
-const secret = { owner: "concors-dev", name: "secret" };
+const concors = { owner: "hologramxyz", name: "concors" };
+const secret = { owner: "hologramxyz", name: "secret" };
 const node = (number: number, overrides: Record<string, unknown> = {}) => ({
   number,
   title: `Change ${number}`,
-  url: `https://github.com/concors-dev/concors/pull/${number}`,
+  url: `https://github.com/hologramxyz/concors/pull/${number}`,
   isDraft: false,
   createdAt: "2026-09-18T10:00:00Z",
   updatedAt: "2026-09-18T11:00:00Z",
@@ -24,16 +24,16 @@ const node = (number: number, overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 const repository = (nodes: unknown[], totalCount = nodes.length) => ({
-  nameWithOwner: "concors-dev/concors",
-  url: "https://github.com/concors-dev/concors",
+  nameWithOwner: "hologramxyz/concors",
+  url: "https://github.com/hologramxyz/concors",
   viewerPermission: "WRITE",
   pullRequests: { totalCount, nodes },
 });
 
 it("passes owners and names as variables rather than query text", () => {
   const { query, variables } = pullRequestsQuery([concors, { owner: "a", name: 'b") {' }]);
-  expect(variables).toEqual({ o0: "concors-dev", n0: "concors", o1: "a", n1: 'b") {' });
-  expect(query).not.toContain("concors-dev");
+  expect(variables).toEqual({ o0: "hologramxyz", n0: "concors", o1: "a", n1: 'b") {' });
+  expect(query).not.toContain("hologramxyz");
   expect(query).toContain("r1: repository(owner: $o1, name: $n1)");
 });
 
@@ -60,8 +60,8 @@ it("maps pull requests, reviews and checks, keeping the exact open count", () =>
   expect(listing.viewer).toBe("octocat");
   expect(listing.repositories).toEqual([
     {
-      name: "concors-dev/concors",
-      url: "https://github.com/concors-dev/concors",
+      name: "hologramxyz/concors",
+      url: "https://github.com/hologramxyz/concors",
       openCount: 40,
       error: null,
       permission: "write",
@@ -69,7 +69,7 @@ it("maps pull requests, reviews and checks, keeping the exact open count", () =>
         {
           number: 2,
           title: "Change 2",
-          url: "https://github.com/concors-dev/concors/pull/2",
+          url: "https://github.com/hologramxyz/concors/pull/2",
           author: "octocat",
           mine: true,
           draft: false,
@@ -112,8 +112,8 @@ it("reports an inaccessible repository on its own", () => {
     errors: [{ type: "NOT_FOUND", path: ["r0"], message: "Could not resolve" }],
   });
   expect(listing.repositories[0]).toEqual({
-    name: "concors-dev/secret",
-    url: "https://github.com/concors-dev/secret",
+    name: "hologramxyz/secret",
+    url: "https://github.com/hologramxyz/secret",
     openCount: 0,
     pullRequests: [],
     error: "Not found, or this machine's GitHub account cannot see it.",
@@ -129,7 +129,7 @@ it("fails the whole lookup when GitHub returns no data", () => {
 
 it("batches large sets and bounds each repository's listing", async () => {
   const repositories = Array.from({ length: 31 }, (_, index) => ({
-    owner: "concors-dev",
+    owner: "hologramxyz",
     name: `repo-${index}`,
   }));
   const request = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
