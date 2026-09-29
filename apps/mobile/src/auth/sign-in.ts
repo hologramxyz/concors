@@ -1,4 +1,4 @@
-import type { ApiClient } from "@concors/api-client";
+import type { ApiClient, NativeSignInChoice } from "@concors/api-client";
 import {
   CANCELLED_SIGN_IN_CODES,
   base64url,
@@ -9,8 +9,8 @@ import {
 
 /**
  * Sign-in on mobile (RFC 8252 §7.1). An in-app authentication session — ASWebAuthenticationSession
- * on iOS, Custom Tabs on Android — opens the API's sign-in page (GitHub, Google or an emailed code)
- * and hands the redirect to this app's URL scheme straight back to the caller. The one-time code in
+ * on iOS, Custom Tabs on Android — opens the API's sign-in page straight on the method picked in the
+ * app (GitHub, Google, or the code emailed to the address entered here) and hands the redirect to this app's URL scheme straight back to the caller. The one-time code in
  * it is redeemed with a PKCE verifier that never leaves this process, so another app claiming the
  * same scheme could not use a code even if it saw one.
  *
@@ -41,12 +41,13 @@ export class SignInError extends Error {
 export async function signInWithAuthSession(
   api: ApiClient,
   platform: SignInPlatform,
+  choice: NativeSignInChoice,
 ): Promise<SignInOutcome> {
   const verifier = verifierFromBytes(platform.randomBytes(32));
   const challenge = base64url(await platform.sha256(verifier));
   const redirectUrl = `${platform.scheme}://native-auth/callback`;
   const session = await platform.openAuthSession(
-    api.nativeSignInUrl({ app: platform.scheme }, challenge),
+    api.nativeSignInUrl({ app: platform.scheme }, challenge, choice),
     redirectUrl,
   );
   if (session.type !== "success" || session.url === undefined) return "cancelled";

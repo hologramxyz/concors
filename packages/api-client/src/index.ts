@@ -12,8 +12,10 @@ export {
   type AddSshKeyInput,
   type ApiClientOptions,
   type CreateMachineInput,
+  type NativeSignInChoice,
   type NativeSignInTarget,
   type OrganizationScope,
+  type SignInMethod,
 } from "./client.ts";
 export { ApiError, ApiNetworkError } from "./errors.ts";
 export {
