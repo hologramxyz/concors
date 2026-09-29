@@ -7,7 +7,7 @@ const projectId = "22222222-2222-4222-8222-222222222222";
 const pullRequest = {
   number: 7,
   title: "Add workspace pull requests",
-  url: "https://github.com/concors-dev/concors/pull/7",
+  url: "https://github.com/hologramxyz/concors/pull/7",
   author: "octocat",
   mine: true,
   draft: false,
@@ -17,7 +17,7 @@ const pullRequest = {
   review: "review-required",
   checks: "passing",
 };
-const listed = (pullRequests: unknown[], url = "https://github.com/concors-dev/concors") => ({
+const listed = (pullRequests: unknown[], url = "https://github.com/hologramxyz/concors") => ({
   type: "pull-request.result",
   requestId,
   outcome: {
@@ -30,7 +30,7 @@ const listed = (pullRequests: unknown[], url = "https://github.com/concors-dev/c
         directory: "/home/me/concors",
         repositories: [
           {
-            name: "concors-dev/concors",
+            name: "hologramxyz/concors",
             url,
             folders: [""],
             openCount: pullRequests.length,
@@ -78,10 +78,10 @@ it("only links to GitHub and bounds each repository's listing", () => {
 });
 
 const detail = {
-  repository: "concors-dev/concors",
+  repository: "hologramxyz/concors",
   number: 7,
   title: "Add workspace pull requests",
-  url: "https://github.com/concors-dev/concors/pull/7",
+  url: "https://github.com/hologramxyz/concors/pull/7",
   body: "Adds counts.",
   bodyTruncated: false,
   state: "open",
@@ -120,7 +120,7 @@ const detail = {
   ],
   commentCount: 0,
 };
-const target = { epoch: requestId, projectId, repository: "concors-dev/concors", number: 7 };
+const target = { epoch: requestId, projectId, repository: "hologramxyz/concors", number: 7 };
 
 it("carries pull request details and the result of an action", () => {
   for (const outcome of [
