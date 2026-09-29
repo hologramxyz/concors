@@ -6,7 +6,7 @@ const pullRequest = (overrides: Record<string, unknown> = {}) => ({
   id: "PR_node",
   number: 7,
   title: "Add workspace pull requests",
-  url: "https://github.com/concors-dev/concors/pull/7",
+  url: "https://github.com/hologramxyz/concors/pull/7",
   body: "<!-- Describe your change -->\nAdds counts to the sidebar.",
   state: "OPEN",
   isDraft: false,
@@ -104,7 +104,7 @@ const pullRequest = (overrides: Record<string, unknown> = {}) => ({
 const response = (permission: string, overrides: Record<string, unknown> = {}) => ({
   data: {
     repository: {
-      nameWithOwner: "concors-dev/concors",
+      nameWithOwner: "hologramxyz/concors",
       mergeCommitAllowed: true,
       squashMergeAllowed: true,
       rebaseMergeAllowed: false,
@@ -120,7 +120,7 @@ it("maps a pull request into the bounded detail clients render", () => {
   expect(id).toBe("PR_node");
   expect(PullRequestDetailSchema.safeParse(detail).success).toBe(true);
   expect(detail).toMatchObject({
-    repository: "concors-dev/concors",
+    repository: "hologramxyz/concors",
     body: "Adds counts to the sidebar.",
     state: "open",
     mergeable: "mergeable",

@@ -30,7 +30,7 @@ test("GitHub clone images fall back cleanly and project hover spans the action b
           for (const setup of event.setups)
             if (setup.name === "Sidebar images") {
               setup.mode = "clone";
-              setup.repository = "git@github.com:concors-dev/concors.git";
+              setup.repository = "git@github.com:hologramxyz/concors.git";
             }
         }
         socket.send(JSON.stringify(event));
@@ -47,7 +47,7 @@ test("GitHub clone images fall back cleanly and project hover spans the action b
     await expect(row.locator("img")).toBeVisible();
     await expect(row.locator("img")).toHaveAttribute(
       "src",
-      "https://opengraph.githubassets.com/1/concors-dev/concors",
+      "https://opengraph.githubassets.com/1/hologramxyz/concors",
     );
     await expect(
       nav.getByRole("button", { name: "Local sidebar", exact: true }).locator("img"),
