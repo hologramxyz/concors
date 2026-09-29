@@ -55,7 +55,7 @@ const TOKEN_KEY = "concors.auth.session-token.v1";
  * The app renders nothing but the sign-in screen until the control plane confirms a session. Specs
  * that are about the workspace, not about auth, call this before `goto`: it preloads a saved token
  * and answers the API as an already-signed-in user, at the network layer. `auth.spec.ts` covers the
- * real sign-in flow.
+ * sign-in gate itself.
  */
 export async function signedIn(page: Page, name = "E2E User"): Promise<void> {
   await page.addInitScript(

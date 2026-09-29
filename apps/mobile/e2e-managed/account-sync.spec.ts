@@ -68,8 +68,6 @@ async function fixture(page: Page) {
     };
     if (request.method() === "OPTIONS") return route.fulfill({ status: 204, headers });
     const json = (data: unknown, status = 200) => route.fulfill({ headers, status, json: data });
-    if (path === "/api/auth/sign-in/email")
-      return json({ user: me.user, token: "e2e-session-token" });
     if (path === "/api/v1/me")
       return json({ ...me, session: { ...me.session, activeOrganizationId: activeOrganization } });
     if (path === "/api/v1/mobile/capabilities") return json({}, 404);
@@ -203,10 +201,8 @@ async function fixture(page: Page) {
   };
 }
 async function enter(page: Page) {
+  // The preview starts with a session (see playwright.managed.config.mts).
   await page.goto("http://localhost:8088");
-  await page.getByRole("textbox", { name: "Email", exact: true }).fill("e2e@example.com");
-  await page.getByRole("textbox", { name: "Password", exact: true }).fill("test-password");
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
   const ui = uiFor(page);
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
   await ui.getByRole("combobox", { name: "Machine", exact: true }).click();
@@ -220,35 +216,12 @@ async function enter(page: Page) {
 }
 test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
-test("beta sign-in stays interactive and diagnostics reports the phone's backend and build", async ({
-  page,
-}) => {
+test("diagnostics reports the phone's backend and build", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await fixture(page);
-  let release!: () => void;
-  const pending = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  await page.route("**/api/auth/sign-in/email", async (route) => {
-    await pending;
-    await route.fallback();
-  });
-  try {
-    await page.goto("http://localhost:8088");
-    await page.getByRole("textbox", { name: "Email", exact: true }).fill("e2e@example.com");
-    await page.getByRole("textbox", { name: "Password", exact: true }).fill("test-password");
-    await page.getByRole("button", { name: "Sign in", exact: true }).click();
-    await expect(
-      page.getByRole("button", { name: "Checking session…", exact: true }),
-    ).toBeDisabled();
-    await expect(page.getByRole("textbox", { name: "Email", exact: true })).toHaveValue(
-      "e2e@example.com",
-    );
-    await expect(page.getByRole("progressbar", { name: "Opening Concors" })).toHaveCount(0);
-  } finally {
-    release();
-  }
+  // The preview starts with a session (see playwright.managed.config.mts).
+  await page.goto("http://localhost:8088");
   const ui = uiFor(page);
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
   const profile = await account(ui);

@@ -48,7 +48,7 @@ beforeEach(() => {
   client = new QueryClient({ defaultOptions: { queries: { gcTime: Infinity } } });
   read = vi.fn(async () => null);
   tokens = new HydratedTokenStore({ read, write: async () => undefined });
-  fetch = vi.fn(async () => Response.json({ github: true }));
+  fetch = vi.fn(async () => Response.json({ github: true, google: true, email: true }));
   // Use the real API client and secure-store state machine, not an already-hydrated memory store.
   const api = createApiClient({ baseUrl: "https://api.example", tokenStore: tokens, fetch });
   mocks.hydrate.mockImplementation(() => tokens.hydrate());
@@ -79,7 +79,7 @@ describe("native sign-in provider discovery", () => {
     expect(result.error).toBeNull();
   });
 
-  it("also discovers GitHub when a saved session is hydrated", async () => {
+  it("also discovers sign-in methods when a saved session is hydrated", async () => {
     read.mockResolvedValue("saved-test-session");
     await mount();
     expect(result.available).toBe(true);
@@ -114,8 +114,8 @@ describe("native sign-in provider discovery", () => {
     expect(fetch).toHaveBeenCalledTimes(3);
     expect(result.available).toBe(false);
     expect(result.checking).toBe(false);
-    expect(result.error).toContain("You can still sign in with email");
-    fetch.mockResolvedValue(Response.json({ github: true }));
+    expect(result.error).toContain("Check your connection and retry");
+    fetch.mockResolvedValue(Response.json({ github: true, google: true, email: true }));
     await act(async () => result.retry());
     await tick();
     expect(result.available).toBe(true);
@@ -126,7 +126,7 @@ describe("native sign-in provider discovery", () => {
     fetch.mockRejectedValue(new Error("Offline"));
     await mount();
     await tick(3_100);
-    fetch.mockResolvedValue(Response.json({ github: true }));
+    fetch.mockResolvedValue(Response.json({ github: true, google: true, email: true }));
     await act(async () => {
       focusManager.setFocused(false);
       focusManager.setFocused(true);
@@ -138,7 +138,9 @@ describe("native sign-in provider discovery", () => {
   });
 
   it("does not treat a deliberately disabled server provider as an error", async () => {
-    fetch.mockImplementation(async () => Response.json({ github: false }));
+    fetch.mockImplementation(async () =>
+      Response.json({ github: false, google: false, email: false }),
+    );
     await mount();
     expect(result.available).toBe(false);
     expect(result.error).toBeNull();
@@ -147,7 +149,7 @@ describe("native sign-in provider discovery", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps a known GitHub button visible during a failed background refresh", async () => {
+  it("keeps a known sign-in button visible during a failed background refresh", async () => {
     await mount();
     fetch.mockRejectedValue(new Error("Offline"));
     await act(async () => {

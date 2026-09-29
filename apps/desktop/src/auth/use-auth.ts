@@ -1,21 +1,17 @@
-import type { ApiClient, SignInInput, SignUpInput } from "@concors/api-client";
+import type { ApiClient } from "@concors/api-client";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { clearApiCache } from "@/data/api-resource";
 
 import { interpretProbe, type AuthState, type SessionProbe } from "./auth-state.ts";
-import { signInWithGitHub as runGitHubSignIn } from "./github-sign-in.ts";
-
-export type SignUpResult = "signed-in" | "verify-email";
+import { signInWithBrowser } from "./sign-in.ts";
 
 export interface Auth {
   readonly state: AuthState;
   /** Re-checks the session with the API. Resolves to the resulting state. */
   refresh(): Promise<AuthState>;
-  signIn(input: SignInInput): Promise<void>;
-  /** Signs in (or creates an account) through GitHub in the system browser. Native app only. */
-  signInWithGitHub(signal?: AbortSignal): Promise<void>;
-  signUp(input: SignUpInput): Promise<SignUpResult>;
+  /** Signs in (or creates an account) on the API's sign-in page in the system browser. Native app only. */
+  signIn(signal?: AbortSignal): Promise<void>;
   signOut(): Promise<void>;
   setActiveOrganization(organizationId: string): Promise<void>;
 }
@@ -50,33 +46,10 @@ export function useAuth(api: ApiClient): Auth {
   }, [refresh]);
 
   const signIn = useCallback(
-    async (input: SignInInput) => {
-      await api.signInWithEmail(input);
-      const next = await refresh();
-      if (next.status !== "signed-in") throw new Error(sessionNotAccepted(next));
-    },
-    [api, refresh],
-  );
-
-  const signInWithGitHub = useCallback(
     async (signal?: AbortSignal) => {
-      await runGitHubSignIn(api, signal);
+      await signInWithBrowser(api, signal);
       const next = await refresh();
       if (next.status !== "signed-in") throw new Error(sessionNotAccepted(next));
-    },
-    [api, refresh],
-  );
-
-  const signUp = useCallback(
-    async (input: SignUpInput): Promise<SignUpResult> => {
-      await api.signUpWithEmail(input);
-      if (api.tokens.get() === null) {
-        // No session was opened: the account exists but must verify its e-mail first.
-        return "verify-email";
-      }
-      const next = await refresh();
-      if (next.status !== "signed-in") throw new Error(sessionNotAccepted(next));
-      return "signed-in";
     },
     [api, refresh],
   );
@@ -100,7 +73,7 @@ export function useAuth(api: ApiClient): Auth {
     [api, refresh],
   );
 
-  return { state, refresh, signIn, signInWithGitHub, signUp, signOut, setActiveOrganization };
+  return { state, refresh, signIn, signOut, setActiveOrganization };
 }
 
 async function probeSession(api: ApiClient): Promise<SessionProbe> {

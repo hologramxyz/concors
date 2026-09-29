@@ -2,7 +2,7 @@ import type { ApiClient } from "@concors/api-client";
 import {
   CANCELLED_SIGN_IN_CODES,
   base64url,
-  describeGitHubSignInError,
+  describeSignInError,
   verifierFromBytes,
 } from "@concors/client-core";
 import { useEffect, useState } from "react";
@@ -10,35 +10,35 @@ import { useEffect, useState } from "react";
 import { isTauri, openExternal, startSignInListener, type SignInListener } from "@/tauri";
 
 /**
- * Sign in with GitHub from the native app, following RFC 8252: the system browser runs the OAuth
- * flow, the control plane redirects a one-time code to a loopback port on this machine, and the
- * code is redeemed with a PKCE verifier that never leaves this process.
+ * Sign-in from the native app, following RFC 8252: the system browser opens the API's sign-in page
+ * (GitHub, Google or an emailed code), the control plane redirects a one-time code to a loopback
+ * port on this machine, and the code is redeemed with a PKCE verifier that never leaves this
+ * process.
  *
  * The browser is used rather than an embedded webview so users authenticate on a page they can
- * trust (and where password managers and passkeys work), and so this app never sees their GitHub
- * credentials. See concors-server `docs/github-sign-in.md` for the server half.
+ * trust (where password managers and passkeys work), and so this app never sees their credentials.
  */
 
-export interface GitHubSignInDependencies {
+export interface SignInDependencies {
   startListener(): Promise<SignInListener>;
   openExternal(url: string): Promise<void>;
 }
 
-const nativeDependencies: GitHubSignInDependencies = {
+const nativeDependencies: SignInDependencies = {
   startListener: startSignInListener,
   openExternal,
 };
 
-export class GitHubSignInError extends Error {
+export class SignInError extends Error {
   readonly code: string;
-  /** The person stopped on purpose (cancelled here, or denied on GitHub); not worth an error. */
+  /** The person stopped on purpose (cancelled here, or on the sign-in page); not worth an error. */
   get cancelled(): boolean {
     return CANCELLED_SIGN_IN_CODES.has(this.code);
   }
 
   constructor(code: string, message: string) {
     super(message);
-    this.name = "GitHubSignInError";
+    this.name = "SignInError";
     this.code = code;
   }
 }
@@ -54,13 +54,13 @@ export async function challengeFor(verifier: string): Promise<string> {
 }
 
 /**
- * Runs one GitHub sign-in to completion. On success the session token is stored in `api.tokens`;
+ * Runs one browser sign-in to completion. On success the session token is stored in `api.tokens`;
  * the caller re-checks the session. Aborting `signal` stops listening and rejects as cancelled.
  */
-export async function signInWithGitHub(
+export async function signInWithBrowser(
   api: ApiClient,
   signal?: AbortSignal,
-  dependencies: GitHubSignInDependencies = nativeDependencies,
+  dependencies: SignInDependencies = nativeDependencies,
 ): Promise<void> {
   const verifier = createVerifier();
   const challenge = await challengeFor(verifier);
@@ -69,10 +69,10 @@ export async function signInWithGitHub(
   signal?.addEventListener("abort", abort, { once: true });
   try {
     if (signal?.aborted) listener.cancel();
-    await dependencies.openExternal(api.nativeGitHubSignInUrl({ port: listener.port }, challenge));
+    await dependencies.openExternal(api.nativeSignInUrl({ port: listener.port }, challenge));
     const result = await listener.result;
     if (result.kind === "error")
-      throw new GitHubSignInError(result.error, describeGitHubSignInError(result.error));
+      throw new SignInError(result.error, describeSignInError(result.error));
     await api.completeNativeSignIn({ code: result.code, verifier });
   } finally {
     signal?.removeEventListener("abort", abort);
@@ -81,24 +81,27 @@ export async function signInWithGitHub(
 }
 
 /**
- * Whether to offer GitHub sign-in: only in the native app (the loopback redirect needs it) and only
- * when the API reports the provider configured, so an environment without credentials never shows
- * a button that leads to an error page. Unknown until the API answers, and `false` if it cannot.
+ * Why sign-in cannot be offered right now, or `null` when it can. The loopback redirect needs the
+ * native app, so a browser preview explains that instead. In the app, only an explicit answer that
+ * the API has no sign-in method configured hides the button: while the check is pending, or if it
+ * fails, the page itself is the better place to find out.
  */
-export function useGitHubSignInAvailable(api: ApiClient): boolean {
-  const [available, setAvailable] = useState(false);
+export function useSignInUnavailable(api: ApiClient): string | null {
+  const [configured, setConfigured] = useState(true);
   useEffect(() => {
     if (!isTauri()) return;
     let current = true;
     api
       .getSignInProviders()
       .then((providers) => {
-        if (current) setAvailable(providers.github);
+        if (current) setConfigured(providers.github || providers.google || providers.email);
       })
       .catch(() => undefined);
     return () => {
       current = false;
     };
   }, [api]);
-  return available;
+  if (!isTauri())
+    return "Signing in opens your browser, which only the Concors desktop app can do. Open the app to sign in.";
+  return configured ? null : "Sign-in is not set up on this Concors server yet.";
 }

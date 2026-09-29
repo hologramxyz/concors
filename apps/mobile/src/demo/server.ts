@@ -637,8 +637,6 @@ export function createDemoServer() {
         method = init?.method ?? "GET";
       const raw: unknown = typeof init?.body === "string" ? JSON.parse(init.body) : {};
       const body = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-      if (path === "/api/auth/sign-in/email")
-        return response({ user: demoMe.user, token: "demo-session-token" });
       if (path === "/api/v1/me") return response(demoMe);
       if (path === "/api/v1/github/")
         return response({

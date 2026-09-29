@@ -10,20 +10,23 @@ vi.mock("@/tauri", () => ({
 import {
   challengeFor,
   createVerifier,
-  GitHubSignInError,
-  signInWithGitHub,
-  type GitHubSignInDependencies,
-} from "./github-sign-in.ts";
+  SignInError,
+  signInWithBrowser,
+  type SignInDependencies,
+} from "./sign-in.ts";
 import type { SignInCallback } from "@/tauri";
 
-function harness(callback: SignInCallback, exchange = () => Response.json({ token: "tok-gh" })) {
+function harness(
+  callback: SignInCallback,
+  exchange = () => Response.json({ token: "tok-native" }),
+) {
   const tokens = memoryTokenStore();
   const fetch = vi.fn(async () => exchange());
   const api = createApiClient({ baseUrl: "https://api.example", tokenStore: tokens, fetch });
   let resolve: (value: SignInCallback) => void = () => undefined;
   const cancel = vi.fn(() => resolve({ kind: "error", error: "cancelled" }));
   const opened: string[] = [];
-  const dependencies: GitHubSignInDependencies = {
+  const dependencies: SignInDependencies = {
     startListener: async () => ({
       port: 49152,
       result: new Promise<SignInCallback>((settle) => {
@@ -53,16 +56,17 @@ describe("PKCE", () => {
   });
 });
 
-describe("signInWithGitHub", () => {
+describe("signInWithBrowser", () => {
   it("opens the browser with this attempt's challenge and redeems the code with its verifier", async () => {
     const { api, tokens, fetch, opened, dependencies } = harness({
       kind: "code",
       code: "k".repeat(43),
     });
-    await signInWithGitHub(api, undefined, dependencies);
+    await signInWithBrowser(api, undefined, dependencies);
 
-    expect(tokens.get()).toBe("tok-gh");
+    expect(tokens.get()).toBe("tok-native");
     const start = new URL(opened[0]!);
+    expect(start.pathname).toBe("/api/v1/native-auth/start");
     expect(start.searchParams.get("port")).toBe("49152");
     const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
     const body = JSON.parse(init.body as string) as { code: string; verifier: string };
@@ -71,14 +75,14 @@ describe("signInWithGitHub", () => {
     expect(await challengeFor(body.verifier)).toBe(start.searchParams.get("challenge"));
   });
 
-  it("explains a refused link to an existing password account and stores nothing", async () => {
+  it("explains an account without a verified email and stores nothing", async () => {
     const { api, tokens, fetch, dependencies } = harness({
       kind: "error",
-      error: "account_not_linked",
+      error: "email_required",
     });
-    const attempt = signInWithGitHub(api, undefined, dependencies);
-    await expect(attempt).rejects.toBeInstanceOf(GitHubSignInError);
-    await expect(attempt).rejects.toThrow("Sign in with your email and password");
+    const attempt = signInWithBrowser(api, undefined, dependencies);
+    await expect(attempt).rejects.toBeInstanceOf(SignInError);
+    await expect(attempt).rejects.toThrow("no verified email address");
     expect(fetch).not.toHaveBeenCalled();
     expect(tokens.get()).toBeNull();
   });
@@ -87,7 +91,7 @@ describe("signInWithGitHub", () => {
     const { api, cancel, dependencies } = harness({ kind: "code", code: "k".repeat(43) });
     const controller = new AbortController();
     dependencies.openExternal = async () => controller.abort();
-    await expect(signInWithGitHub(api, controller.signal, dependencies)).rejects.toThrow(
+    await expect(signInWithBrowser(api, controller.signal, dependencies)).rejects.toThrow(
       "cancelled",
     );
     expect(cancel).toHaveBeenCalled();
@@ -98,7 +102,7 @@ describe("signInWithGitHub", () => {
     dependencies.openExternal = async () => {
       throw new Error("no browser");
     };
-    await expect(signInWithGitHub(api, undefined, dependencies)).rejects.toThrow("no browser");
+    await expect(signInWithBrowser(api, undefined, dependencies)).rejects.toThrow("no browser");
     expect(cancel).toHaveBeenCalled();
   });
 });

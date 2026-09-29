@@ -151,7 +151,7 @@ TestFlight builds last 90 days, enough for this two-week trial.
 Record iPhone/iOS version and Diagnostics version/build with each report. Use TestFlight feedback
 without private code, credentials or personal data in screenshots.
 
-- First install: Concors icon/name, light/dark startup, real sign-in, wrong password, offline/retry,
+- First install: Concors icon/name, light/dark startup, real sign-in, cancelled sign-in, offline/retry,
   force-close/session restoration. No demo or extra consent/onboarding page.
 - Desktop sync: same organization/machine/workspaces; harmless chat and terminal from both clients;
   tabs/panes and files stay in sync. No VPS purchase on phone.
@@ -179,19 +179,19 @@ Run these on the newly built candidate, not an older installed TestFlight binary
    directory title travel with Files throughout the gesture; underlying controls do not float above it.
 4. Check sidebar and Files backgrounds behind the notch and home indicator. Controls stay in
    the safe area; opening and dismissing the keyboard must not leave a blank bottom band.
-5. Sign out and choose GitHub. Verify successful return from the system browser, cancellation,
-   and an unlinked account without exposing callback codes or credentials in feedback.
-   Force-close and cold-launch while signed out: **Continue with GitHub** must appear above
-   email/password after discovery finishes, without needing an existing saved session.
-   Repeat in airplane mode: email/password stays usable and provider discovery eventually
-   offers **Retry GitHub sign-in**, rather than silently hiding the option. Restore connectivity
+5. Sign out and tap **Sign in**. On the sign-in page, try GitHub, Google and an emailed code;
+   verify successful return to the app, cancellation, and a GitHub account without a verified
+   email, without exposing callback codes or credentials in feedback.
+   Force-close and cold-launch while signed out: **Sign in** must appear after discovery
+   finishes, without needing an existing saved session. Repeat in airplane mode: discovery
+   eventually offers **Retry**, rather than silently hiding the button. Restore connectivity
    and retry, then repeat recovery by backgrounding/foregrounding without restarting.
 6. Open the machine picker, then Manage machines. Also test an account with no machines.
    This provides setup navigation, not VPS provisioning: new machines still require desktop
    setup under the existing companion scope. Do not record this as mobile machine creation.
 
 Browser geometry/bridge tests cover clipping and safe-area calculations, but cannot verify
-SwiftUI glass rendering, device keyboard behavior or a real GitHub browser callback. Record
+SwiftUI glass rendering, device keyboard behavior or a real browser sign-in callback. Record
 those separately on the physical device before marking them passed.
 
 After testing, record real evidence in `apps/mobile/release/readiness.json` and address the

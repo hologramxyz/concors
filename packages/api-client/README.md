@@ -9,7 +9,9 @@ import { ApiError, createApiClient } from "@concors/api-client";
 
 const api = createApiClient({ baseUrl: "https://api.concors.dev", tokenStore });
 
-await api.signInWithEmail({ email, password }); // stores the session token in `tokenStore`
+// Sign-in runs in the system browser: open `api.nativeSignInUrl(target, challenge)`, then redeem
+// the code it returns with `api.completeNativeSignIn({ code, verifier })`, which stores the
+// session token in `tokenStore`.
 const me = await api.getMe(); // { user, session: { activeOrganizationId, … } }
 const orgs = await api.listOrganizations();
 await api.signOut(); // drops the token; revoking the server session is best-effort
@@ -34,7 +36,7 @@ try {
   package; React Native will use its secure store.
 - **Validated at the boundary.** Responses are parsed with the schemas in `src/schemas.ts`; a server
   change fails loudly with `ApiError("INVALID_RESPONSE")` instead of leaking `undefined` into the UI.
-- **No framework.** A handful of methods over `fetch` is all the clients need right now. Reach for
-  Better Auth's own client library only if the surface grows past what is comfortable here.
+- **No framework.** A handful of methods over `fetch` is all the clients need right now, and no
+  identity provider SDK: the sign-in page lives on the API, so clients only see its result.
 
 See [`docs/auth.md`](../../docs/auth.md) for the end-to-end flow and the server-side prerequisites.
