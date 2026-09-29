@@ -16,6 +16,8 @@ import {
 } from "./sign-in.ts";
 import type { SignInCallback } from "@/tauri";
 
+const GITHUB = { method: "github", intent: "sign-in" } as const;
+
 function harness(
   callback: SignInCallback,
   exchange = () => Response.json({ token: "tok-native" }),
@@ -62,12 +64,14 @@ describe("signInWithBrowser", () => {
       kind: "code",
       code: "k".repeat(43),
     });
-    await signInWithBrowser(api, undefined, dependencies);
+    await signInWithBrowser(api, GITHUB, undefined, dependencies);
 
     expect(tokens.get()).toBe("tok-native");
     const start = new URL(opened[0]!);
     expect(start.pathname).toBe("/api/v1/native-auth/start");
     expect(start.searchParams.get("port")).toBe("49152");
+    expect(start.searchParams.get("method")).toBe("github");
+    expect(start.searchParams.get("intent")).toBe("sign-in");
     const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
     const body = JSON.parse(init.body as string) as { code: string; verifier: string };
     expect(body.code).toBe("k".repeat(43));
@@ -80,7 +84,7 @@ describe("signInWithBrowser", () => {
       kind: "error",
       error: "email_required",
     });
-    const attempt = signInWithBrowser(api, undefined, dependencies);
+    const attempt = signInWithBrowser(api, GITHUB, undefined, dependencies);
     await expect(attempt).rejects.toBeInstanceOf(SignInError);
     await expect(attempt).rejects.toThrow("no verified email address");
     expect(fetch).not.toHaveBeenCalled();
@@ -91,7 +95,7 @@ describe("signInWithBrowser", () => {
     const { api, cancel, dependencies } = harness({ kind: "code", code: "k".repeat(43) });
     const controller = new AbortController();
     dependencies.openExternal = async () => controller.abort();
-    await expect(signInWithBrowser(api, controller.signal, dependencies)).rejects.toThrow(
+    await expect(signInWithBrowser(api, GITHUB, controller.signal, dependencies)).rejects.toThrow(
       "cancelled",
     );
     expect(cancel).toHaveBeenCalled();
@@ -102,7 +106,9 @@ describe("signInWithBrowser", () => {
     dependencies.openExternal = async () => {
       throw new Error("no browser");
     };
-    await expect(signInWithBrowser(api, undefined, dependencies)).rejects.toThrow("no browser");
+    await expect(signInWithBrowser(api, GITHUB, undefined, dependencies)).rejects.toThrow(
+      "no browser",
+    );
     expect(cancel).toHaveBeenCalled();
   });
 });

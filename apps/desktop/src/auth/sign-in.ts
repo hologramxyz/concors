@@ -1,4 +1,4 @@
-import type { ApiClient } from "@concors/api-client";
+import type { ApiClient, NativeSignInChoice } from "@concors/api-client";
 import {
   CANCELLED_SIGN_IN_CODES,
   base64url,
@@ -10,8 +10,9 @@ import { useEffect, useState } from "react";
 import { isTauri, openExternal, startSignInListener, type SignInListener } from "@/tauri";
 
 /**
- * Sign-in from the native app, following RFC 8252: the system browser opens the API's sign-in page
- * (GitHub, Google or an emailed code), the control plane redirects a one-time code to a loopback
+ * Sign-in from the native app, following RFC 8252: the system browser opens the API's sign-in page,
+ * which goes straight to the method picked in the app (GitHub, Google, or the code emailed to the
+ * address entered here), the control plane redirects a one-time code to a loopback
  * port on this machine, and the code is redeemed with a PKCE verifier that never leaves this
  * process.
  *
@@ -59,6 +60,7 @@ export async function challengeFor(verifier: string): Promise<string> {
  */
 export async function signInWithBrowser(
   api: ApiClient,
+  choice: NativeSignInChoice,
   signal?: AbortSignal,
   dependencies: SignInDependencies = nativeDependencies,
 ): Promise<void> {
@@ -69,7 +71,9 @@ export async function signInWithBrowser(
   signal?.addEventListener("abort", abort, { once: true });
   try {
     if (signal?.aborted) listener.cancel();
-    await dependencies.openExternal(api.nativeSignInUrl({ port: listener.port }, challenge));
+    await dependencies.openExternal(
+      api.nativeSignInUrl({ port: listener.port }, challenge, choice),
+    );
     const result = await listener.result;
     if (result.kind === "error")
       throw new SignInError(result.error, describeSignInError(result.error));

@@ -94,6 +94,23 @@ export interface AddSshKeyInput extends OrganizationScope {
 /** Where a native sign-in returns: the desktop loopback port or the mobile URL scheme. */
 export type NativeSignInTarget = { readonly port: number } | { readonly app: string };
 
+/** How someone signs in: GitHub or Google directly, or a code emailed to them. */
+export type SignInMethod = "github" | "google" | "email";
+
+/**
+ * What the person chose in the app. The sign-in page goes straight to that method: GitHub or
+ * Google at once, or the emailed code. `sign-in` never creates an account (the page returns
+ * `account_not_found` instead); `sign-up` creates one, or signs in when it already exists.
+ */
+export type NativeSignInChoice =
+  | { readonly intent: "sign-in" | "sign-up"; readonly method: "github" | "google" }
+  | {
+      readonly intent: "sign-in" | "sign-up";
+      readonly method: "email";
+      /** Where the code goes; without it the page asks. */
+      readonly email?: string;
+    };
+
 /**
  * Client for the Concors control-plane API.
  *
@@ -165,16 +182,26 @@ export class ApiClient {
   }
 
   /**
-   * Browser URL of the API's sign-in page for a native client, where the person picks GitHub, Google
-   * or an emailed code. The result returns only to `target`: a loopback port the desktop app listens
-   * on, or the mobile app's URL scheme (one of the builds the API allowlists). `challenge` is the
-   * base64url SHA-256 of a PKCE verifier the client keeps.
+   * Browser URL of the API's sign-in page for a native client, which goes straight to the method in
+   * `choice` (without one, the page offers GitHub, Google and an emailed code). The result returns
+   * only to `target`: a loopback port the desktop app listens on, or the mobile app's URL scheme
+   * (one of the builds the API allowlists). `challenge` is the base64url SHA-256 of a PKCE verifier
+   * the client keeps.
    */
-  nativeSignInUrl(target: NativeSignInTarget, challenge: string): string {
+  nativeSignInUrl(
+    target: NativeSignInTarget,
+    challenge: string,
+    choice?: NativeSignInChoice,
+  ): string {
     const url = new URL(`${this.baseUrl}/api/v1/native-auth/start`);
     if ("port" in target) url.searchParams.set("port", String(target.port));
     else url.searchParams.set("app", target.app);
     url.searchParams.set("challenge", challenge);
+    if (choice) {
+      url.searchParams.set("method", choice.method);
+      if (choice.method === "email" && choice.email) url.searchParams.set("email", choice.email);
+      url.searchParams.set("intent", choice.intent);
+    }
     return url.toString();
   }
 

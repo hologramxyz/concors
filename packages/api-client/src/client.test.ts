@@ -56,6 +56,30 @@ describe("native sign-in", () => {
     expect(url.searchParams.has("port")).toBe(false);
   });
 
+  it("passes the method and intent picked in the app", () => {
+    const { api } = client(vi.fn());
+    const github = new URL(
+      api.nativeSignInUrl({ port: 49152 }, "c".repeat(43), {
+        method: "github",
+        intent: "sign-in",
+      }),
+    );
+    expect(github.searchParams.get("method")).toBe("github");
+    expect(github.searchParams.get("intent")).toBe("sign-in");
+    expect(github.searchParams.has("email")).toBe(false);
+
+    const email = new URL(
+      api.nativeSignInUrl({ app: "concors" }, "c".repeat(43), {
+        method: "email",
+        email: "ada+concors@example.com",
+        intent: "sign-up",
+      }),
+    );
+    expect(email.searchParams.get("method")).toBe("email");
+    expect(email.searchParams.get("email")).toBe("ada+concors@example.com");
+    expect(email.searchParams.get("intent")).toBe("sign-up");
+  });
+
   it("reads the configured sign-in methods", async () => {
     const fetch = vi.fn(async () => json({ github: true, google: true, email: true }));
     await expect(client(fetch).api.getSignInProviders()).resolves.toEqual({

@@ -2,6 +2,7 @@ import { Redirect } from "expo-router";
 import { Image, Linking, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../src/auth/provider";
+import { SignInChoices } from "../src/auth/sign-in-choices";
 import { config } from "../src/config";
 import { Button, Copy, Notice, Screen, useTheme } from "../src/ui";
 import { useAppearance } from "../src/appearance-provider";
@@ -66,7 +67,6 @@ export default function SignInScreen() {
           </Copy>
         ) : (
           <>
-            <Copy muted>Continue in your browser with GitHub, Google or email.</Copy>
             {auth.signInChecking && <Copy muted>Checking sign-in options…</Copy>}
             {auth.signInCheckError && (
               <>
@@ -84,15 +84,12 @@ export default function SignInScreen() {
               </>
             )}
             {auth.signInAvailable ? (
-              <Button
-                testID="sign-in"
+              <SignInChoices
                 disabled={auth.loading}
-                onPress={() => {
-                  void auth.signIn();
+                onChoose={(choice) => {
+                  void auth.signIn(choice);
                 }}
-              >
-                {auth.loading ? "Checking session…" : "Sign in"}
-              </Button>
+              />
             ) : (
               !auth.signInChecking &&
               !auth.signInCheckError && (
