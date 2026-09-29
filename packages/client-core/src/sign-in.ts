@@ -1,6 +1,6 @@
 /**
- * Shared pieces of browser sign-in for the desktop and mobile apps. The API's sign-in page offers
- * GitHub, Google and an emailed code; each app owns only how the result gets back to it — a
+ * Shared pieces of browser sign-in for the desktop and mobile apps. The API's sign-in page runs
+ * GitHub, Google or an emailed code, whichever the person picked in the app; each app owns only how the result gets back to it — a
  * loopback port on desktop, an authentication session on mobile — and both parse and explain
  * results here, so a given outcome reads the same everywhere.
  *
@@ -26,7 +26,12 @@ const MESSAGES: Readonly<Record<string, string>> = {
   // Accounts are keyed by a verified email, so a sign-in without one cannot be matched or created.
   email_required:
     "This account has no verified email address. Sign in with email, Google, or a GitHub account with a verified email.",
+  account_not_found:
+    "There's no Concors account for that login yet. Sign in the way you signed up, or create an account.",
 };
+
+/** The person chose sign-in but has no account yet; clients offer to sign up instead. */
+export const ACCOUNT_NOT_FOUND = "account_not_found";
 
 export function describeSignInError(code: string): string {
   return MESSAGES[code] ?? "Sign-in did not complete. Try again.";

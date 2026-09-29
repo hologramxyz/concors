@@ -1,4 +1,4 @@
-import type { ApiClient } from "@concors/api-client";
+import type { ApiClient, NativeSignInChoice } from "@concors/api-client";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { clearApiCache } from "@/data/api-resource";
@@ -10,8 +10,11 @@ export interface Auth {
   readonly state: AuthState;
   /** Re-checks the session with the API. Resolves to the resulting state. */
   refresh(): Promise<AuthState>;
-  /** Signs in (or creates an account) on the API's sign-in page in the system browser. Native app only. */
-  signIn(signal?: AbortSignal): Promise<void>;
+  /**
+   * Signs in, or creates an account, with the chosen method on the API's sign-in page in the system
+   * browser. Native app only.
+   */
+  signIn(choice: NativeSignInChoice, signal?: AbortSignal): Promise<void>;
   signOut(): Promise<void>;
   setActiveOrganization(organizationId: string): Promise<void>;
 }
@@ -46,8 +49,8 @@ export function useAuth(api: ApiClient): Auth {
   }, [refresh]);
 
   const signIn = useCallback(
-    async (signal?: AbortSignal) => {
-      await signInWithBrowser(api, signal);
+    async (choice: NativeSignInChoice, signal?: AbortSignal) => {
+      await signInWithBrowser(api, choice, signal);
       const next = await refresh();
       if (next.status !== "signed-in") throw new Error(sessionNotAccepted(next));
     },

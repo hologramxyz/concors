@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { SignInError, signInWithAuthSession, type SignInPlatform } from "./sign-in";
 
 const CODE = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJ0123456";
+const GOOGLE = { method: "google", intent: "sign-up" } as const;
 
 function harness(session: { type: string; url?: string }) {
   const tokens = memoryTokenStore();
@@ -29,12 +30,14 @@ describe("mobile sign-in", () => {
       type: "success",
       url: `concors://native-auth/callback?code=${CODE}`,
     });
-    expect(await signInWithAuthSession(api, platform)).toBe("signed-in");
+    expect(await signInWithAuthSession(api, platform, GOOGLE)).toBe("signed-in");
 
     expect(tokens.get()).toBe("tok-mobile");
     const start = new URL(opened[0]!.url);
     expect(start.pathname).toBe("/api/v1/native-auth/start");
     expect(start.searchParams.get("app")).toBe("concors");
+    expect(start.searchParams.get("method")).toBe("google");
+    expect(start.searchParams.get("intent")).toBe("sign-up");
     expect(opened[0]!.redirectUrl).toBe("concors://native-auth/callback");
     const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
     const body = JSON.parse(init.body as string) as { code: string; verifier: string };
@@ -53,7 +56,7 @@ describe("mobile sign-in", () => {
     "treats closing the sheet or cancelling on the sign-in page as a quiet cancel: %o",
     async (session) => {
       const { api, tokens, fetch, platform } = harness(session);
-      expect(await signInWithAuthSession(api, platform)).toBe("cancelled");
+      expect(await signInWithAuthSession(api, platform, GOOGLE)).toBe("cancelled");
       expect(fetch).not.toHaveBeenCalled();
       expect(tokens.get()).toBeNull();
     },
@@ -64,7 +67,7 @@ describe("mobile sign-in", () => {
       type: "success",
       url: `concors-preview://native-auth/callback?code=${CODE}`,
     });
-    expect(await signInWithAuthSession(api, platform)).toBe("cancelled");
+    expect(await signInWithAuthSession(api, platform, GOOGLE)).toBe("cancelled");
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -73,7 +76,7 @@ describe("mobile sign-in", () => {
       type: "success",
       url: "concors://native-auth/callback?error=email_required",
     });
-    const attempt = signInWithAuthSession(api, platform);
+    const attempt = signInWithAuthSession(api, platform, GOOGLE);
     await expect(attempt).rejects.toBeInstanceOf(SignInError);
     await expect(attempt).rejects.toThrow("no verified email address");
     expect(tokens.get()).toBeNull();

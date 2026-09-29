@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { ApiError, type Me } from "@concors/api-client";
+import { ApiError, type Me, type NativeSignInChoice } from "@concors/api-client";
 import { useQueryClient } from "@tanstack/react-query";
 import { AppState } from "react-native";
 import { api } from "./runtime";
@@ -32,8 +32,11 @@ interface AuthContextValue extends AuthState {
   signInChecking: boolean;
   signInCheckError: string | null;
   retrySignInCheck(): Promise<void>;
-  /** Signs in, or creates an account, on the API's sign-in page in an in-app browser sheet. */
-  signIn(): Promise<void>;
+  /**
+   * Signs in, or creates an account, with the chosen method on the API's sign-in page in an in-app
+   * browser sheet.
+   */
+  signIn(choice: NativeSignInChoice): Promise<void>;
   /** Opens the simulated account of a demo build. */
   exploreDemo(): Promise<void>;
   signOut(): Promise<void>;
@@ -139,10 +142,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       changingSession.current = false;
     }
   };
-  const signIn = async () => {
+  const signIn = async (choice: NativeSignInChoice) => {
     if (!platform) throw new Error("Sign-in is not available in this build.");
     await startSession(
-      () => signInWithAuthSession(api, platform),
+      () => signInWithAuthSession(api, platform, choice),
       (error) =>
         error instanceof SignInError
           ? error.message
