@@ -41,6 +41,7 @@ test("iPhone backgrounds fill the screen while controls respect notch and home i
         viewport: innerHeight,
         menu: rect("#mobile-sidebar-toggle"),
         files: rect("#mobile-files-toggle"),
+        tabs: rect(".mobile-header .mobile-picker"),
         sidebar: rect(".mobile-sidebar"),
         search: rect('[aria-label="Search workspace"]'),
         picker: rect(".mobile-sidebar-machine button"),
@@ -57,7 +58,13 @@ test("iPhone backgrounds fill the screen while controls respect notch and home i
   expect(metrics.footer.bottom).toBe(metrics.viewport);
   expect(metrics.footerPadding).toBe("34px");
   expect(metrics.panePadding).toBe("34px");
-  for (const control of [metrics.menu, metrics.files, metrics.search, metrics.picker]) {
+  for (const control of [
+    metrics.menu,
+    metrics.files,
+    metrics.tabs,
+    metrics.search,
+    metrics.picker,
+  ]) {
     expect(control.height).toBe(44);
     expect(control.y).toBe(metrics.menu.y);
   }
