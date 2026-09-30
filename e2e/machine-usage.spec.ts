@@ -110,7 +110,12 @@ test("machine cards display usage, poll, and identify stale or missing reports",
   await expect(page.getByText("Paid until", { exact: true })).toHaveCount(0);
   await expect(page.getByText(/refreshes every 30 seconds/i)).toHaveCount(0);
   await expect(page.getByText(/Development tools ready/i)).toHaveCount(0);
-  const advanced = page.locator("details").filter({ hasText: "Advanced" });
+  // This computer has an Advanced section of its own, for its daemon; SSH access is the cloud
+  // machine's.
+  const advanced = page
+    .locator("details")
+    .filter({ hasText: "Advanced" })
+    .filter({ hasText: "SSH access" });
   await expect(advanced.getByText("SSH access", { exact: true })).toBeHidden();
   await advanced.locator("summary").click();
   await expect(advanced.getByText("SSH access", { exact: true })).toBeVisible();

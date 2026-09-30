@@ -21,7 +21,7 @@ test("settings replace the app sidebar with grouped pages and return to the app"
   await expect(settingsNavigation.getByRole("heading", { name: "Settings" })).toBeVisible();
   await expect(settingsNavigation.getByRole("region", { name: "Personal" })).toBeVisible();
   await expect(settingsNavigation.getByRole("region", { name: "Workspace" })).toBeVisible();
-  await expect(settingsNavigation.getByRole("region", { name: "Developer" })).toBeVisible();
+  await expect(settingsNavigation.getByRole("region", { name: "App" })).toBeVisible();
 
   const account = settingsNavigation.getByRole("button", { name: "Account", exact: true });
   await expect(account).toHaveAttribute("aria-current", "page");
@@ -75,10 +75,10 @@ test("settings replace the app sidebar with grouped pages and return to the app"
   await expect(page.locator("header").getByRole("heading", { name: "SSH keys" })).toBeVisible();
   await expect(page.getByRole("main").getByRole("heading", { name: "SSH keys" })).toBeVisible();
 
-  await settingsNavigation.getByRole("button", { name: "Advanced", exact: true }).click();
-  await expect(page.locator("header").getByRole("heading", { name: "Advanced" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Daemon", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "About", exact: true })).toBeVisible();
+  // About describes this client; each machine's daemon details are on the Machines page.
+  await settingsNavigation.getByRole("button", { name: "About", exact: true }).click();
+  await expect(page.locator("header").getByRole("heading", { name: "About" })).toBeVisible();
+  await expect(main.getByText("Client version", { exact: true })).toBeVisible();
 
   await settingsNavigation.getByRole("button", { name: "Back to app", exact: true }).click();
   await expect(primaryNavigation).toBeVisible();

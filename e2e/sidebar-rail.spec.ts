@@ -86,7 +86,8 @@ test("collapsed sidebar keeps workspace, machine, search and account navigation 
     await expect(page.getByRole("heading", { name: "Alpha workspace", exact: true })).toBeVisible();
     await expect(alpha).toHaveAttribute("aria-current", "page");
     await beta.focus();
-    await expect(page.getByRole("tooltip")).toContainText("Beta workspace");
+    // Alpha's tooltip may still be closing after the click.
+    await expect(page.getByRole("tooltip").filter({ hasText: "Beta workspace" })).toBeVisible();
     await page.keyboard.press("Enter");
     await expect(page.getByRole("heading", { name: "Beta workspace", exact: true })).toBeVisible();
     const search = rail.getByRole("button", { name: "Search", exact: true });
@@ -180,8 +181,10 @@ test("collapsed agents show provider icons and live status without losing chat d
     await expect(codexButton.getByRole("img", { name: "Agent status: Ready" })).toBeVisible();
     await codex.fill("hello from the compact rail");
     await page.getByRole("button", { name: "Send message", exact: true }).click();
-    await expect(codexButton.getByRole("img", { name: "Agent status: Done" })).toBeVisible();
-    await expect(codexButton.locator(".bg-emerald-500")).toBeVisible();
+    // The open chat has seen its finished turn, so it reads as Ready rather than a green Done.
+    await expect(page.getByText(/^Worked for /)).toHaveCount(1);
+    await expect(codexButton.getByRole("img", { name: "Agent status: Ready" })).toBeVisible();
+    await expect(codexButton.locator(".bg-emerald-500")).toHaveCount(0);
     await codex.fill("Keep this draft");
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
@@ -208,7 +211,7 @@ test("collapsed agents show provider icons and live status without losing chat d
     await page.screenshot({ path: test.info().outputPath("rail-providers-dark.png") });
     await rail.getByRole("button", { name: "Expand sidebar", exact: true }).click();
     await expect(codex).toHaveValue("Keep this draft");
-    await expect(agents.getByRole("img", { name: "Agent status: Done" })).toBeVisible();
+    await expect(agents.getByRole("img", { name: "Agent status: Ready" })).toHaveCount(2);
     await expectNoSidebarTooltips(page, rail);
     const expandedCodex = rail.locator('button[data-agent-id]:has([data-provider="codex"])');
     await expect(expandedCodex.locator('[data-provider="codex"]')).toBeVisible();

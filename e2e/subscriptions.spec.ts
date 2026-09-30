@@ -25,6 +25,16 @@ test("adds accounts to a library and assigns one per provider to each machine", 
     const settingsNavigation = page.getByRole("navigation", { name: "Settings" });
     await settingsNavigation.getByRole("button", { name: "Subscriptions", exact: true }).click();
     const section = page.getByRole("region", { name: "Subscriptions" });
+    // Assignment changes are staged, then saved together after a confirmation.
+    const saveAssignments = async () => {
+      await section.getByRole("button", { name: "Save changes", exact: true }).click();
+      const confirm = page.getByRole("dialog", { name: "Save subscription changes?" });
+      await confirm.getByRole("button", { name: "Save changes", exact: true }).click();
+      await expect(confirm).toHaveCount(0);
+      await expect(
+        section.getByRole("button", { name: "Save changes", exact: true }),
+      ).toBeDisabled();
+    };
 
     const local = section.getByRole("group", { name: "This computer assignments" });
     const second = section.getByRole("group", { name: "Second machine assignments" });
@@ -74,7 +84,9 @@ test("adds accounts to a library and assigns one per provider to each machine", 
     await expect(localClaudeOption).toContainText("Weekly · Fable");
     await expect(localClaudeOption).toContainText("91%");
     await localClaudeOption.click();
-    await expect(local.getByText("Signed in", { exact: true })).toBeVisible();
+    await saveAssignments();
+    // A signed-in assignment needs no status line; only a missing sign-in is called out.
+    await expect(local.getByText("Needs sign-in", { exact: true })).toHaveCount(0);
     await expect(localClaude).toContainText("Weekly · Fable");
     await expect(localClaude).toContainText("91%");
 
@@ -90,6 +102,7 @@ test("adds accounts to a library and assigns one per provider to each machine", 
     });
     await secondClaude.click();
     await page.getByRole("menuitemradio", { name: "Use fixture-account@example.test" }).click();
+    await saveAssignments();
     await expect(second.getByText("Needs sign-in", { exact: true })).toBeVisible();
     await second.getByRole("button", { name: "Connect Claude on Second machine" }).click();
     connectDialog = page.getByRole("dialog", { name: "Claude — Account" });
@@ -97,7 +110,10 @@ test("adds accounts to a library and assigns one per provider to each machine", 
     await connectDialog.getByLabel("Authorization code").fill("test-second-machine-code");
     await connectDialog.getByRole("button", { name: "Connect", exact: true }).click();
     await connectDialog.getByRole("button", { name: "Done", exact: true }).click();
-    await expect(second.getByText("Signed in", { exact: true })).toBeVisible();
+    await expect(second.getByText("Needs sign-in", { exact: true })).toHaveCount(0);
+    await expect(
+      second.getByRole("button", { name: "Connect Claude on Second machine" }),
+    ).toHaveCount(0);
 
     // Codex device-code sign-in must survive the page's background provider refresh.
     await section.getByRole("button", { name: "Add subscription", exact: true }).click();

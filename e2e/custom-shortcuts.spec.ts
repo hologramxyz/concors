@@ -101,8 +101,9 @@ test("custom sequences split from a terminal and run from an Agent input without
   await page.keyboard.press("Enter");
   await expect(chat).toHaveCount(2);
   await expect(chat.last()).toBeFocused();
+  // Ctrl+Shift+Arrow selects words in the composer rather than moving to another pane.
   await page.keyboard.press("Control+Shift+ArrowLeft");
-  await expect(chat.first()).toBeFocused();
+  await expect(chat.last()).toBeFocused();
   await expect(chat.first()).toHaveValue("Keep this draft");
 });
 
