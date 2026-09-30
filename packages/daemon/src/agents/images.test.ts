@@ -1,6 +1,7 @@
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterEach, expect, it } from "vitest";
 import { MAX_MESSAGE_IMAGES } from "@concors/protocol";
 import {
@@ -39,12 +40,15 @@ it("finds Markdown image destinations in prose, once each, and not in code", () 
 });
 
 it("resolves local destinations and refuses web addresses", () => {
-  expect(localImagePath("/tmp/a.png", "/repo")).toBe("/tmp/a.png");
-  expect(localImagePath("shots/a%20b.png", "/repo")).toBe("/repo/shots/a b.png");
-  expect(localImagePath("file:///tmp/a.png", "/repo")).toBe("/tmp/a.png");
-  expect(localImagePath("~/a.png", "/repo")).toBe(join(homedir(), "a.png"));
-  expect(localImagePath("https://example.com/a.png", "/repo")).toBeNull();
-  expect(localImagePath("data:image/png;base64,AAAA", "/repo")).toBeNull();
+  // Absolute paths and file URLs are this machine's own, so a drive letter on Windows.
+  const repo = resolve("/repo");
+  const absolute = resolve("/tmp/a.png");
+  expect(localImagePath(absolute, repo)).toBe(absolute);
+  expect(localImagePath("shots/a%20b.png", repo)).toBe(join(repo, "shots", "a b.png"));
+  expect(localImagePath(pathToFileURL(absolute).href, repo)).toBe(absolute);
+  expect(localImagePath("~/a.png", repo)).toBe(join(homedir(), "a.png"));
+  expect(localImagePath("https://example.com/a.png", repo)).toBeNull();
+  expect(localImagePath("data:image/png;base64,AAAA", repo)).toBeNull();
 });
 
 it("recognises image formats by their bytes", () => {

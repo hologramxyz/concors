@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -76,6 +77,14 @@ describe("ensureSessionHost", () => {
     expect(current.pid).not.toBe(previous.pid);
     expect(current.build).toBe(await hostBuild(launch));
     await expect.poll(() => alive(previous.pid)).toBe(false);
+  });
+
+  it("stops a host only once it has released the runtime to a successor", async () => {
+    const directory = await fixture();
+    const host = await ensureSessionHost(directory, launch);
+    await stopSessionHost(directory);
+    // A host started now claims the runtime only if the lock is gone or its owner has exited.
+    expect(!alive(host.pid) || !existsSync(join(directory, "session-host"))).toBe(true);
   });
 
   it("replaces a host from before builds were recorded", async () => {
