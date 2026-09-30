@@ -1066,6 +1066,9 @@ it.each(["sign-in", "restart"])(
       });
       expect(result.outcome.status === "ok" && result.outcome.account?.status).toBe("connected");
       expect(providers[0]!.closed).toBe(true);
+      // Clients only accept a prompt for a chat with a thread: the open chat gets one at once.
+      await expect.poll(() => a.agents[0]?.threadId).toBeTruthy();
+      expect(a.agents[0]!.threadId).not.toBe(oldThread);
     } else {
       a.disconnect();
       b.disconnect();
