@@ -118,13 +118,12 @@ if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
     if (!wanted) throw new Error("--set needs a version, e.g. --set 0.3.0");
     const previous = await desktopVersion().catch(() => "unknown");
     const version = await setDesktopVersion(wanted);
+    // Releases bump through the Release workflow; this is for trying a version locally.
     process.stdout.write(
       `${previous} -> ${version}\n\n` +
         `Cargo.lock still records the old version; refresh it with:\n` +
         `  cargo metadata --manifest-path apps/desktop/src-tauri/Cargo.toml --format-version 1 >/dev/null\n\n` +
-        `Then commit, merge to main, and tag the merge commit:\n` +
-        `  git tag -a desktop-v${version} -m "What changed, for the people reading it in the app."\n` +
-        `  git push origin desktop-v${version}\n`,
+        `To publish a release, run the Release workflow instead (see Releasing in AGENTS.md).\n`,
     );
   }
 }

@@ -1,18 +1,19 @@
 name: Daemon release
 
+# Builds, tests and publishes one daemon version. It is a step of release.yml, which bumps the
+# version, tags it and passes it here; nothing starts this workflow on its own.
 on:
-  push:
-    tags: [daemon-v*]
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
 
 permissions:
   contents: read
 
-concurrency:
-  group: daemon-release-${{ github.ref }}
-  cancel-in-progress: false
-
 env:
-  RELEASE_TAG: ${{ github.ref_name }}
+  RELEASE_TAG: daemon-v${{ inputs.version }}
   GH_REPO: ${{ github.repository }}
 
 jobs:
@@ -25,6 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ env.RELEASE_TAG }}
           fetch-depth: 0
           persist-credentials: false
 
