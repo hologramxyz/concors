@@ -58,6 +58,9 @@ test("folders, repo initials and local favicons match in expanded and collapsed 
           ).toBe(true);
         }
         await page.keyboard.press("Escape");
+        // A tooltip still closing keeps its pointer-transit grace area, which would swallow the
+        // hover that opens the next one (see hoverControl in sidebar-rail.spec.ts).
+        await expect(page.getByRole("tooltip")).toHaveCount(0);
         await button.hover();
         await expect(page.getByRole("tooltip")).toContainText(join(root, name));
         await button.click();
