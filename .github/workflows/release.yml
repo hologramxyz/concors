@@ -98,9 +98,6 @@ jobs:
   bump:
     name: Commit and tag the versions
     needs: [plan, tests]
-    # A suite that times out reports as cancelled rather than failed, and the non-blocking ones
-    # (heavy-tests.yml, `release` input) may; only a real failure, or cancelling the run, stops here.
-    if: always() && !cancelled() && needs.plan.result == 'success' && needs.tests.result != 'failure'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:

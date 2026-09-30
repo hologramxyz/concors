@@ -16,10 +16,11 @@ cargo fmt --check --manifest-path apps/desktop/src-tauri/Cargo.toml
 cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings
 ```
 
-CI on pushes and pull requests runs only these fast checks. The slow suites (browser acceptance,
-Tauri/Rust, bundle smoke tests, macOS/Windows runners) live in `.github/workflows/heavy-tests.yml`
-and run only when dispatched by hand, so run them before a release or after touching what they
-cover. Confirm a failure also happens on `main` before treating it as yours.
+CI (`ci.yml`) runs these fast checks on every push and pull request. The slow suites (browser
+acceptance, Tauri/Rust, bundle smoke tests, macOS/Windows runners) live in
+`.github/workflows/heavy-tests.yml` and run on every pull request that touches more than docs,
+split across runners so they take about as long as the slowest shard. Confirm a failure also
+happens on `main` before treating it as yours.
 
 Anything the shared UI imports from `@/tauri` must also exist in
 `apps/desktop/src/mobile/native-platform.ts`. The mobile bundle aliases one to the other, and a
@@ -42,8 +43,8 @@ tagged or pinned by hand. The form asks:
 Or from a terminal:
 `gh workflow run release.yml -f component=desktop -f notes="What changed, in plain words."`
 
-The workflow runs the slow suites (`heavy-tests.yml`; the workspace browser suite fails on `main`
-today, so for now it reports without blocking), commits the new version to `main` and tags
+The workflow runs the build and runtime checks from `heavy-tests.yml` (the browser suites
+already ran on every pull request that reached `main`), commits the new version to `main` and tags
 it, builds and publishes (Linux packages and a notarized Mac disk image for the desktop, a tarball
 for the daemon), downloads what it published to check it, then rolls out: it sets
 `DESKTOP_VERSION`/`DAEMON_VERSION` on the control plane and marks the desktop release Latest, which
