@@ -27,10 +27,16 @@ test("live waveform replaces input and Enter puts the final words in the prompt 
 }) => {
   const { composer, dispose } = await workspace(page);
   try {
+    // Agent sounds keep one audio context once the page has been clicked; only the microphone
+    // meter's own context has to close again.
+    const contexts = await page.evaluate(() => window.testDictation.capture.contexts);
     await page.getByRole("button", { name: "Start dictation", exact: true }).click();
     const recording = page.getByRole("group", { name: "Dictation", exact: true });
     await expect(recording).toBeFocused();
     await expect(composer).toHaveCount(0);
+    await expect
+      .poll(() => page.evaluate(() => window.testDictation.capture.contexts))
+      .toBe(contexts + 1);
     const meter = page.getByRole("meter", { name: "Microphone volume" });
     await expect(meter).toHaveAttribute("aria-valuenow", "67");
     await page.evaluate(() => {
@@ -60,7 +66,9 @@ test("live waveform replaces input and Enter puts the final words in the prompt 
       page.getByRole("log").getByText("Fix the login bug.", { exact: true }),
     ).toHaveCount(0);
     await expect.poll(() => page.evaluate(() => window.testDictation.capture.tracks)).toBe(0);
-    await expect.poll(() => page.evaluate(() => window.testDictation.capture.contexts)).toBe(0);
+    await expect
+      .poll(() => page.evaluate(() => window.testDictation.capture.contexts))
+      .toBe(contexts);
   } finally {
     await dispose();
   }

@@ -30,7 +30,8 @@ test("shared chat streams, handles approvals and removes detached sidebar entrie
     await expect(agentList.getByText("Chat acceptance", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
     await expect(page.getByRole("heading", { name: "Choose an agent" })).toHaveCount(0);
-    await expect(page.getByRole("log")).toBeEmpty();
+    // No messages or placeholder text: an empty chat only offers to resume an earlier session.
+    await expect(page.getByRole("log")).toHaveText("Resume session");
     await expect(page.getByText("Start a conversation", { exact: true })).toHaveCount(0);
     await expect(
       page.getByRole("region", { name: "Agent pane", exact: true }).locator("header .truncate"),
@@ -81,9 +82,10 @@ test("shared chat streams, handles approvals and removes detached sidebar entrie
     await page.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(second.getByRole("region", { name: "Allow command execution?" })).toBeVisible();
     await second.getByRole("button", { name: "Decline", exact: true }).click();
-    await expect(page.getByLabel("Agent status: Done").first()).toBeVisible();
-    await expect(row.getByRole("img", { name: "Agent status: Done" })).toBeVisible();
+    // The open chat has seen its finished turn, so it reads as Ready rather than Done.
     await expect(page.getByText(/^Worked for /)).toBeVisible();
+    await expect(page.getByLabel("Agent status: Ready").first()).toBeVisible();
+    await expect(row.getByRole("img", { name: "Agent status: Ready" })).toBeVisible();
     await expect(page.getByText(/^Completed ·/)).toHaveCount(0);
     await expect(page.getByLabel("Elapsed time", { exact: true })).toHaveCount(0);
     await expect(agentList.locator("[data-agent-status-badge] svg")).toHaveCount(0);
@@ -93,7 +95,8 @@ test("shared chat streams, handles approvals and removes detached sidebar entrie
     await page.getByRole("button", { name: "Send message", exact: true }).click();
     await second.getByRole("radio", { name: "Blue Use blue", exact: true }).click();
     await second.getByRole("button", { name: "Submit answers", exact: true }).click();
-    await expect(page.getByLabel("Agent status: Done").first()).toBeVisible();
+    await expect(page.getByText(/^Worked for /)).toHaveCount(2);
+    await expect(page.getByLabel("Agent status: Ready").first()).toBeVisible();
     await page.getByRole("textbox", { name: "Message Codex" }).fill("hello again");
     await page.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(page.getByRole("log")).toContainText("Hello from Codex");

@@ -13,7 +13,7 @@ test("cancelled project dialogs restore keyboard focus to their workspace menu",
     await expect(dialog).toBeVisible();
     await expect(page.getByRole("menu")).toHaveCount(0);
     if (mode === "Open folder…") {
-      await dialog.locator("form").getByRole("button", { name: "Close", exact: true }).click();
+      await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
     } else {
       await dialog.getByRole("button", { name: "Paste a URL", exact: true }).click();
       await dialog.getByLabel("Repository URL or local path").click();

@@ -284,7 +284,9 @@ test("Mac workspace shortcuts use physical Control and display matching hints", 
     await page.keyboard.press("Backspace");
     await expect(panes).toHaveCount(0);
     await page.keyboard.press("Control+Shift+Slash");
-    await expect(page.getByRole("main")).toContainText("physical Control (⌃) key, not Command (⌘)");
+    await expect(page.getByRole("main")).toContainText(
+      "Default Mac bindings use Control (⌃), not Command (⌘).",
+    );
     await expect(page.getByRole("main")).toContainText("Control+Shift+P → Backspace");
     await expect(page.getByRole("dialog")).toHaveCount(0);
   } finally {

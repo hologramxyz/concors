@@ -78,6 +78,8 @@ test("sent-message rail previews and jumps through paginated history, with a nar
     await expect(nav.getByRole("button").last()).toHaveAttribute("aria-current", "location");
     // Reading just above the bottom still tracks the prompt at the top of the viewport.
     await timeline.evaluate((el) => {
+      // Only user input may leave the bottom; a bare scrollTop write reads as layout churn.
+      el.dispatchEvent(new WheelEvent("wheel", { deltaY: -1 }));
       el.scrollTop = el.scrollHeight - el.clientHeight - 100;
     });
     await expect(nav.getByRole("button").last()).not.toHaveAttribute("aria-current", "location");
