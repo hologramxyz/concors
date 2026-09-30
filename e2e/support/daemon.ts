@@ -7,6 +7,7 @@ import {
 } from "../../packages/daemon/src/terminal/testing/profile.ts";
 // Test-only server entry point. Production CLI never imports or enables this provider.
 import { mkdir } from "node:fs/promises";
+import { DatabaseSync } from "node:sqlite";
 import { join } from "node:path";
 import { createDaemonServer } from "../../packages/daemon/src/server.ts";
 import { loadDaemonConfig } from "../../packages/daemon/src/config.ts";
@@ -48,5 +49,15 @@ if (uiOrigin && new URL(uiOrigin).hostname === "localhost") {
     if (request.headers.origin === uiOrigin) request.headers.origin = "http://localhost:1420";
   });
 }
+// New chats open with the provider and settings last chosen on this machine, and every spec
+// shares this daemon, so one spec picking Claude Code would open the next spec's chats in it. The
+// shared cleanup in `signed-in.ts` forgets those choices through this test-only route, which reaches
+// the daemon's own database rather than adding a way to forget them to the production protocol.
+const workspaceDatabase = new DatabaseSync(join(directory, "workspace.sqlite"));
+workspaceDatabase.exec("PRAGMA busy_timeout = 5000;");
+server.app.post("/e2e/forget-agent-defaults", async () => {
+  workspaceDatabase.exec("DELETE FROM agent_defaults");
+  return { forgotten: true };
+});
 await server.listen();
 for (const signal of ["SIGINT", "SIGTERM"] as const) process.on(signal, () => void server.close());

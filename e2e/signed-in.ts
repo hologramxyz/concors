@@ -2,10 +2,15 @@ import { test as base, expect, type Page } from "@playwright/test";
 import { DaemonConnection, describeDaemonEndpoint } from "../packages/daemon-client/src/index.ts";
 
 // Specs share isolated daemons. Clear previous projects as well as live PTYs so a failed
-// test cannot leave agent panes in the next test's sidebar.
+// test cannot leave agent panes in the next test's sidebar, and forget the agent provider and
+// settings remembered for new chats so each spec's first chat opens in Codex.
 export const test = base.extend({
   page: async ({ page }, use) => {
     for (const port of [7429, 7430]) {
+      const forgotten = await fetch(`http://127.0.0.1:${port}/e2e/forget-agent-defaults`, {
+        method: "POST",
+      });
+      expect(forgotten.ok).toBe(true);
       const connection = new DaemonConnection({
         endpoint: describeDaemonEndpoint(`ws://127.0.0.1:${port}/ws`),
         client: { kind: "test", name: "workspace cleanup", version: "0.0.0" },
