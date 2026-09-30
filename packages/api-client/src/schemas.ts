@@ -132,6 +132,17 @@ export const MachineResourceUsageSchema = z.object({
 });
 export type MachineResourceUsage = z.infer<typeof MachineResourceUsageSchema>;
 
+/**
+ * A daemon version rolled out but not yet installed on a machine. Installing restarts the
+ * machine's agents, so it waits until none is working or waiting, or until its owner asks for it
+ * (`updateMachineDaemon`); `installing` is true from then until the new version reports in.
+ */
+export const DaemonUpdateSchema = z.object({
+  version: z.string(),
+  installing: z.boolean(),
+});
+export type DaemonUpdate = z.infer<typeof DaemonUpdateSchema>;
+
 export const DevelopmentToolsSchema = z.object({
   node: z.enum(["lts", "24", "22"]).nullable(),
   docker: z.boolean(),
@@ -174,6 +185,8 @@ export const MachineSchema = z.object({
   agentInstalledAt: z.string().nullable().optional(),
   agentVersion: z.string().nullable().optional(),
   agentSeenAt: z.string().nullable().optional(),
+  /** Null when the daemon is current; optional for older control planes. */
+  daemonUpdate: DaemonUpdateSchema.nullable().optional(),
   resourceUsage: MachineResourceUsageSchema.nullable().optional(),
   developmentTools: DevelopmentToolsSchema.nullable().optional(),
   developmentToolsSetup: DevelopmentToolsSetupSchema.nullable().optional(),

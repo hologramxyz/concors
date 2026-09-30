@@ -299,6 +299,18 @@ export class ApiClient {
   }
 
   /**
+   * Installs the machine's pending `daemonUpdate` now instead of waiting until its agents are
+   * idle. This restarts them: running work stops, conversations are kept. Accepted with 202; the
+   * machine then reports `daemonUpdate.installing` until the new version is up. 409 (with a
+   * message) when the daemon is already current or the machine is not running.
+   */
+  async updateMachineDaemon(id: string): Promise<void> {
+    await this.#request("POST", `/api/v1/machines/${encodeURIComponent(id)}/daemon/update`, {
+      schema: null,
+    });
+  }
+
+  /**
    * Creates a machine: charges the first month (402 without a card on file or when it is
    * declined), then orders or reuses a VPS. Poll `getMachine` until `status` is `running`.
    */
