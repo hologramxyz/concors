@@ -187,7 +187,10 @@ export function TerminalSurface({
           if (
             document.visibilityState === "visible" &&
             isVisible() &&
-            !focused?.closest('[role="dialog"], [role="alertdialog"], [role="menu"]') &&
+            // A menu still closing after its item was chosen no longer holds focus.
+            !focused?.closest(
+              '[role="dialog"]:not([data-state="closed"]), [role="alertdialog"], [role="menu"]:not([data-state="closed"])',
+            ) &&
             (!focusedPane || focusedPane === element.closest("[data-pane-id]"))
           )
             terminal.focus();

@@ -48,6 +48,9 @@ interface Props {
   onCommand: (operation: WorkspaceOperation) => void;
 }
 
+/** Overlays that keep focus while pane focus waits; a closing menu or dialog no longer does. */
+const OPEN_OVERLAY =
+  '[role="dialog"][data-state="open"], [role="alertdialog"], [role="menu"][data-state="open"]';
 type Placement = "left" | "right" | "top" | "bottom";
 interface PaneDrag {
   paneId: string;
@@ -96,12 +99,7 @@ export function PaneLayout(props: Props) {
     let initial = true;
     const focus = () => {
       const focused = document.activeElement;
-      if (
-        focused?.closest(
-          '[role="dialog"][data-state="open"], [role="alertdialog"], [role="menu"][data-state="open"]',
-        )
-      )
-        return;
+      if (focused?.closest(OPEN_OVERLAY)) return;
       const focusedPane = focused?.closest<HTMLElement>("[data-pane-id]");
       if (!initial && focusedPane && focusedPane !== pane && focusedPane.getClientRects().length) {
         pendingFocus.current = null;
@@ -201,7 +199,10 @@ export function PaneLayout(props: Props) {
       const input = pane?.querySelector<HTMLTextAreaElement>("textarea:not(:disabled)");
       const focused = document.activeElement;
       const focusedPane = focused?.closest<HTMLElement>("[data-pane-id]");
-      if (focused?.closest('[role="dialog"], [role="alertdialog"], [role="menu"]')) return;
+      // Only an open menu or dialog keeps focus. The New tab menu is still playing its exit
+      // animation when a quick agent's composer arrives; waiting for it then never saw the input
+      // again, and a later change in the pane moved focus from whatever had it to the pane.
+      if (focused?.closest(OPEN_OVERLAY)) return;
       if (!initial && focusedPane && focusedPane !== pane && focusedPane.getClientRects().length) {
         observer.disconnect();
         return;

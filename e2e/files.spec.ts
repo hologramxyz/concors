@@ -393,10 +393,14 @@ test("a slow editor download shows the file immediately instead of a loading-edi
   const download = new Promise<void>((resolve) => {
     release = resolve;
   });
-  await page.route("**/files/code-editor.tsx*", async (route) => {
-    await download;
-    await route.continue();
-  });
+  // The editor's lazy chunk: its source module from a dev server, its hashed bundle from a build.
+  await page.route(
+    /\/(files\/code-editor\.tsx|assets\/code-editor-[\w-]+\.js)(\?.*)?$/,
+    async (route) => {
+      await download;
+      await route.continue();
+    },
+  );
   const root = await project(page);
   try {
     await page.getByRole("button", { name: "Toggle project files" }).click();

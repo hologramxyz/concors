@@ -31,7 +31,11 @@ test("tabs are numbered per workspace and keep custom names across pane changes 
     await page.getByRole("menuitem", { name: "Rename tab", exact: true }).click();
     await page.getByLabel("Tab name", { exact: true }).fill("Build and review");
     await page.keyboard.press("Enter");
-    await tabs.getByRole("button", { name: "Build and review", exact: true }).click();
+    const renamed = tabs.getByRole("button", { name: "Build and review", exact: true });
+    await renamed.click();
+    // Until the switch lands, "Pane actions" still resolves to the previous tab's pane, which
+    // then hides.
+    await expect(renamed).toHaveAttribute("aria-pressed", "true");
     await page.getByRole("button", { name: "Pane actions", exact: true }).click();
     await page.getByRole("menuitemradio", { name: "Agent", exact: true }).click();
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
