@@ -16,10 +16,10 @@ cargo fmt --check --manifest-path apps/desktop/src-tauri/Cargo.toml
 cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings
 ```
 
-Three CI jobs are **already failing on `main`** and are unrelated to whatever you are doing:
-Workspace browser acceptance, Mobile browser (direct), Terminal runtime (windows-latest). Confirm a
-failure exists on `main` before treating it as yours, and do not claim to have fixed them unless
-you did.
+CI on pushes and pull requests runs only these fast checks. The slow suites (browser acceptance,
+Tauri/Rust, bundle smoke tests, macOS/Windows runners) live in `.github/workflows/heavy-tests.yml`
+and run only when dispatched by hand, so run them before a release or after touching what they
+cover. Confirm a failure also happens on `main` before treating it as yours.
 
 Anything the shared UI imports from `@/tauri` must also exist in
 `apps/desktop/src/mobile/native-platform.ts`. The mobile bundle aliases one to the other, and a
