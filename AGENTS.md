@@ -42,8 +42,8 @@ tagged or pinned by hand. The form asks:
 Or from a terminal:
 `gh workflow run release.yml -f component=desktop -f notes="What changed, in plain words."`
 
-The workflow runs the slow suites (`heavy-tests.yml`; the browser and Windows suites fail on `main`
-today, so for now they report without blocking), commits the new version to `main` and tags
+The workflow runs the slow suites (`heavy-tests.yml`; the workspace browser suite fails on `main`
+today, so for now it reports without blocking), commits the new version to `main` and tags
 it, builds and publishes (Linux packages and a notarized Mac disk image for the desktop, a tarball
 for the daemon), downloads what it published to check it, then rolls out: it sets
 `DESKTOP_VERSION`/`DAEMON_VERSION` on the control plane and marks the desktop release Latest, which
