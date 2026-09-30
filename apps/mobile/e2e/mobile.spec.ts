@@ -1,8 +1,8 @@
 import { expect, test, type Page, type FrameLocator } from "@playwright/test";
 import { ids } from "../src/demo/fixtures";
-import { swipe as touchSwipe } from "./support/swipe";
+import { swipe as touchSwipe, scrollTimelineUp } from "./support/swipe";
 import { BINDINGS, isCompactCommand } from "../../desktop/src/shortcuts/bindings";
-import { bindingLabel, defaultKeymap } from "../../desktop/src/shortcuts/keymap";
+import { bindingLabel, defaultKeymap, strokeLabel } from "../../desktop/src/shortcuts/keymap";
 const workspace = (page: Page) => page.frameLocator('iframe[title="Concors workspace"]');
 const activeChat = `${ids.tab}:${ids.pane}`;
 const activeTerminal = `${ids.tab}:${ids.terminalPane}`;
@@ -41,6 +41,9 @@ async function closePickerSheet(ui: FrameLocator, name = "Tabs") {
   await sheet.getByRole("button", { name: "Close", exact: true }).click();
   await expect(sheet).toHaveCount(0);
 }
+/** Emulated phones keep the host's navigator.platform, so shortcut labels follow the runner. */
+const macLabels = (ui: FrameLocator) =>
+  ui.locator("body").evaluate(() => /Mac|iPhone|iPad/.test(navigator.platform));
 async function openSettings(ui: FrameLocator) {
   await ui.getByRole("button", { name: /^Account:/ }).click();
   await ui
@@ -391,8 +394,12 @@ test("top select switches split panes and cold session links survive sign-in", a
   await choose(ui, "Tabs", activeChat);
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
-  await openSettings(ui);
-  await ui.getByRole("button", { name: "Sign out", exact: true }).click();
+  // Sign out lives in the Account drawer; account settings no longer repeat it.
+  await ui.getByRole("button", { name: /^Account:/ }).click();
+  await ui
+    .getByRole("dialog", { name: "Account", exact: true })
+    .getByRole("button", { name: "Sign out", exact: true })
+    .click();
   await expect(page.getByRole("button", { name: "Explore demo" })).toBeVisible();
   expect(
     await page.evaluate(() =>
@@ -406,6 +413,9 @@ test("desktop tool cards, diffs, MCP results, subagents and markdown fit a phone
   const ui = await enter(page);
   const tools = ui.getByRole("article", { name: "Tool call", exact: true });
   await expect(tools).toHaveCount(3);
+  // The demo turn is still live, so the chat stays pinned until the reader scrolls up to them.
+  await scrollTimelineUp(page, ui.getByRole("log", { name: "Chat timeline" }), 400);
+  await expect(ui.getByRole("button", { name: "Latest", exact: true })).toBeVisible();
   for (let i = 0; i < 3; i++) {
     await tools.nth(i).getByRole("button").first().click();
     await expect(tools.nth(i).getByRole("button").first()).toHaveAttribute("aria-expanded", "true");
@@ -996,17 +1006,19 @@ test("mobile Shortcuts settings preserve supported commands and all entry points
   const settings = ui.getByRole("dialog", { name: "Settings", exact: true });
   await expect(settings.getByRole("heading", { level: 2 })).toHaveText([
     "Settings",
+    "Keyboard shortcuts",
     "Workspace",
     "Tabs",
   ]);
   await expect(settings).toContainText("An external keyboard");
   await expect(settings).toContainText("Move through the flat Tabs list.");
+  const mac = await macLabels(ui);
   const bindings = BINDINGS.filter((binding) => isCompactCommand(binding.id));
   await expect(settings.locator("dt")).toHaveCount(bindings.length);
   for (const binding of bindings) {
     const row = settings.locator("dt").filter({ hasText: binding.label }).locator("..");
     await expect(row.locator("kbd")).toHaveText(
-      defaultKeymap(false)[binding.id].map((shortcut) => bindingLabel(shortcut, false)),
+      defaultKeymap(mac)[binding.id].map((shortcut) => bindingLabel(shortcut, mac)),
     );
   }
   await expect(settings.getByText("New pane beside current", { exact: true })).toHaveCount(0);
@@ -1222,7 +1234,9 @@ test("custom shortcuts persist through the mobile preference bridge and renderer
   await editor.getByRole("button", { name: "Save shortcuts" }).click();
   await expect(editor).toHaveCount(0);
   const settings = ui.getByRole("dialog", { name: "Settings", exact: true });
-  await expect(settings).toContainText("Ctrl+Alt+S");
+  await expect(settings).toContainText(
+    strokeLabel({ key: "s", modifiers: ["Control", "Alt"] }, await macLabels(ui)),
+  );
   await settings.getByRole("button", { name: "Close", exact: true }).click();
   await ui.getByRole("textbox", { name: "Message Codex" }).press("Control+Alt+s");
   await expect(ui.getByRole("dialog", { name: "Search", exact: true })).toBeVisible();
