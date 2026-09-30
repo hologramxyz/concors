@@ -155,6 +155,11 @@ test("manual input supports modifiers and function keys, and invalid recordings 
   await page.keyboard.press("Control+Shift+n");
   const tab = page.getByRole("button", { name: "Tab 1", exact: true });
   await expect(tab).toBeVisible();
+  // A new tab moves focus into its pane once the pane's input arrives. Let that settle, as it has
+  // long before a person could reach the tab, or it takes focus back from the tab below.
+  await expect
+    .poll(() => page.evaluate(() => !!document.activeElement?.closest("[data-pane-id] textarea")))
+    .toBe(true);
   await tab.focus();
   await page.keyboard.press("F2");
   await expect(page.getByRole("textbox", { name: "Tab name" })).toHaveCount(0);

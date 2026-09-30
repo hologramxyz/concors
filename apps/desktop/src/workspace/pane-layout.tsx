@@ -96,23 +96,28 @@ export function PaneLayout(props: Props) {
     if (!targetId) return;
     const pane = container.current?.querySelector<HTMLElement>(`[data-pane-id="${targetId}"]`);
     if (!pane) return;
+    // Marks where focus is going while this pane's input is still arriving. A split remounts the
+    // sibling terminal, and when it re-claims its session it would otherwise take focus in the
+    // moment no pane has it, after which this pane would see another pane focused and give up.
+    pane.dataset.focusPending = "";
     let initial = true;
+    const settle = () => {
+      pendingFocus.current = null;
+      delete pane.dataset.focusPending;
+      observer.disconnect();
+    };
     const focus = () => {
       const focused = document.activeElement;
       if (focused?.closest(OPEN_OVERLAY)) return;
       const focusedPane = focused?.closest<HTMLElement>("[data-pane-id]");
       if (!initial && focusedPane && focusedPane !== pane && focusedPane.getClientRects().length) {
-        pendingFocus.current = null;
-        observer.disconnect();
+        settle();
         return;
       }
       const input = pane.querySelector<HTMLTextAreaElement>("textarea:not(:disabled)");
       (input ?? pane).focus({ preventScroll: true });
       initial = false;
-      if (input) {
-        pendingFocus.current = null;
-        observer.disconnect();
-      }
+      if (input) settle();
     };
     // A newly split Agent pane receives its usable composer after the workspace update.
     const observer = new MutationObserver(focus);
@@ -126,6 +131,7 @@ export function PaneLayout(props: Props) {
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
+      delete pane.dataset.focusPending;
     };
   }, [props.tab.nodes, activePaneId, activePane?.id, visible]);
   const connection = useContext(TerminalConnectionContext);
