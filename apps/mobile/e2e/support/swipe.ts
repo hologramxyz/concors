@@ -1,4 +1,4 @@
-import type { Locator, Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 
 /** Real touch input (including browser gesture arbitration), not synthetic pointer events. */
 export async function swipe(
@@ -49,7 +49,18 @@ export async function touchScroll(page: Page, from: { x: number; y: number }, di
  * message until then, and snaps back from a programmatic scroll such as Playwright's own.
  */
 export async function scrollTimelineUp(page: Page, timeline: Locator, distance = 300) {
-  const box = await timeline.boundingBox();
-  if (!box) throw new Error("Chat timeline is not visible");
-  await touchScroll(page, { x: box.x + box.width / 2, y: box.y + box.height / 2 }, distance);
+  const fromBottom = () =>
+    timeline.evaluate(
+      (viewport) => viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight,
+    );
+  // On a CI runner the first gesture right after the chat opens can leave it at the bottom, so
+  // scroll again until the reader has stayed away from the bottom.
+  await expect(async () => {
+    const box = await timeline.boundingBox();
+    if (!box) throw new Error("Chat timeline is not visible");
+    await touchScroll(page, { x: box.x + box.width / 2, y: box.y + box.height / 2 }, distance);
+    // Past the moment the chat decides whether the finger left it following the bottom.
+    await page.waitForTimeout(500);
+    expect(await fromBottom()).toBeGreaterThan(distance / 2);
+  }).toPass({ timeout: 15_000 });
 }
