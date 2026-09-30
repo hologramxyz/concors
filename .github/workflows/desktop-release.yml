@@ -301,14 +301,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.build.outputs.version }}
-        # The directory holds exactly what the build jobs uploaded, plus release.json. The disk image
-        # is also published under a name without the version, so the website can link to
-        # releases/latest/download/Concors-mac-arm64.dmg. That follows the release marked Latest,
-        # which happens when a release is rolled out, not here: publishing is not rolling out.
+        # The directory holds exactly what the build jobs uploaded, plus release.json. The Mac disk
+        # image and the Linux tarball are also published under names without the version, so the
+        # website can link to releases/latest/download/Concors-mac-arm64.dmg and
+        # …/Concors-linux-x64.tar.gz. Those follow the release marked Latest, which happens when a
+        # release is rolled out, not here: publishing is not rolling out.
         run: |
           if [ -e "Concors-$VERSION-aarch64.dmg" ]; then
             cp "Concors-$VERSION-aarch64.dmg" Concors-mac-arm64.dmg
           fi
+          cp "Concors-$VERSION-x64.tar.gz" Concors-linux-x64.tar.gz
           ls -l
           gh release create "$RELEASE_TAG" * \
             --verify-tag --title "Concors $VERSION" --latest=false \
