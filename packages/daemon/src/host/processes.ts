@@ -2,7 +2,7 @@ import { readFile, readlink, readdir, stat } from "node:fs/promises";
 import { readFileSync, statSync } from "node:fs";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
-import { basename, sep } from "node:path";
+import { basename } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type {
@@ -15,7 +15,11 @@ import type {
 import { environmentPreviewName, PreviewNames } from "./preview-names.ts";
 
 const execute = promisify(execFile);
-export const within = (path: string, root: string) => path === root || path.startsWith(root + sep);
+/**
+ * Whether a process directory lies inside a project. Process inspection reads Linux's
+ * `/proc/<pid>/cwd`, so both paths are POSIX and the separator is `/`, not the host's `path.sep`.
+ */
+export const within = (path: string, root: string) => path === root || path.startsWith(`${root}/`);
 
 export async function concurrentMap<T, R>(
   items: T[],
