@@ -35,12 +35,14 @@ before updating, so write them for the person who will read them there.
 `desktop-release.yml` builds on Ubuntu 24.04 — the oldest base supported,
 which fixes the glibc floor — and produces:
 
-| Asset                                        | For                                              |
-| -------------------------------------------- | ------------------------------------------------ |
-| `Concors-<version>-x64.tar.gz` (+ `.sha256`) | any Linux; extract and run `bin/concors-desktop` |
-| `concors-bin-<version>-1-x86_64.pkg.tar.zst` | Arch and Omarchy, via `pacman -U`                |
-| `release.json`                               | the control plane; nothing else reads it         |
-| `Concors-linux-x64.tar.gz`                   | the website's Linux download; see below          |
+| Asset                                             | For                                                   |
+| ------------------------------------------------- | ----------------------------------------------------- |
+| `Concors-<version>-x86_64.AppImage` (+ `.sha256`) | any Linux; one file to make executable and run        |
+| `Concors-<version>-x64.tar.gz` (+ `.sha256`)      | any Linux; extract and run `bin/concors-desktop`      |
+| `concors-bin-<version>-1-x86_64.pkg.tar.zst`      | Arch and Omarchy, via `pacman -U`                     |
+| `release.json`                                    | the control plane; nothing else reads it              |
+| `Concors-linux-x86_64.AppImage`                   | the website's Linux download; see below               |
+| `Concors-linux-x64.tar.gz`                        | a stable link to the latest tarball, for the same use |
 
 and, on a macOS runner, `Concors-<version>-aarch64.dmg` for Apple Silicon (see [macOS](#macos)).
 The release manifest is written once both have finished, so it describes every build.
@@ -49,11 +51,20 @@ Before publishing, the workflow installs the package in a clean `archlinux` cont
 bundled daemon there, so a package that cannot actually be installed never reaches a release.
 Nothing is compiled inside that container: `package()` only restages the tarball.
 
+The AppImage is Tauri's `appimage` bundle of the same binary and daemon, built in the same job.
+An AppImage runs from a read-only mount of itself, so the workflow extracts it, mounts the result
+read-only in a clean `ubuntu:24.04` container with no Node or compilers, and runs the bundle smoke
+test against the daemon where it lies (`smoke-bundle.ts --in-place`) as well as from a copy: a
+daemon that wrote beside itself, or a native module that no longer loaded, fails the release there.
+It is the image's own daemon that is tested, because the AppImage tooling edits the ELF files it
+finds on the way in (today it gives Node and node-pty's module a `$ORIGIN` run path).
+
 To build the same artifacts locally on Arch:
 
 ```sh
-VITE_CONCORS_API_URL=https://api.concors.dev pnpm desktop:package:linux --no-bundle
+VITE_CONCORS_API_URL=https://api.concors.dev pnpm desktop:package:linux --bundles appimage
 pnpm desktop:release:linux
+pnpm desktop:release:appimage
 packaging/linux/build-package.sh \
   apps/desktop/dist/release/Concors-0.2.0-x64.tar.gz 0.2.0 apps/desktop/dist/release
 pnpm desktop:release:manifest --notes "What changed."
@@ -111,8 +122,9 @@ silence, and the rest of the API is untouched — but there is no reason to arra
 
 Rolling out sets `DESKTOP_VERSION` on the production `concors-server` (with the `RAILWAY_TOKEN`
 secret), then marks the release GitHub's Latest, which is what new downloads follow: the website
-links to `releases/latest/download/Concors-mac-arm64.dmg`, a copy of the disk image every release
-also publishes under that fixed name. Releases are published with `--latest=false` so that this,
+links to `releases/latest/download/Concors-mac-arm64.dmg` and
+`releases/latest/download/Concors-linux-x86_64.AppImage`, copies of the disk image and the AppImage
+every release also publishes under those fixed names. Releases are published with `--latest=false` so that this,
 too, waits for the rollout. Last, it asks the API for an update the way an old copy would, and
 fails unless the answer is the version just rolled out.
 
@@ -142,12 +154,19 @@ works out from where its executable lives (`src-tauri/src/update.rs`):
 | ---------------------------------------------------- | -------------------------------------------------------------------- |
 | a pacman package (`/opt/Concors`)                    | downloads the package and installs it with `pkexec pacman -U`        |
 | a tarball the person unpacked and can write to       | replaces the tree, keeping the old one until the new one is in place |
+| an AppImage in a directory the person can write to   | replaces the file in place, keeping its name, and relaunches it      |
 | a tree it cannot write to, or an unfamiliar location | says a new version exists and leaves it to them                      |
 | a build from a checkout                              | nothing at all; the checkout is the source of truth                  |
 
 The badge sits above the account menu in the sidebar and is absent whenever there is nothing to
 say. A failed check is silence, not an error: the control plane being unreachable is not worth
 interrupting anyone about.
+
+An AppImage is recognised by the `APPIMAGE` and `APPDIR` variables its runtime sets, and only when
+the running executable is inside `APPDIR`: both are inherited by anything started from an AppImage,
+and a copy of Concors launched from another AppImage's terminal must not replace that program. The
+new image is written beside the old one and renamed over it, so the running copy keeps reading the
+file it mounted until it restarts, and a desktop entry pointing at the file keeps working.
 
 Downloads are verified against the digest in `release.json` before anything is installed, and the
 session token is passed to `curl` through its stdin configuration rather than its command line, so
@@ -186,7 +205,7 @@ plugin is adopted; nothing reads it before then.
 
 - **Windows**, and **Intel Macs**. The manifest and the endpoint already carry `platform` and
   `arch`; only the builds are missing.
-- **AppImage**, which would give a self-updating build to Linux users who are not on Arch.
 - **`tauri-plugin-updater` itself**, whose one-click path covers AppImage, macOS and Windows. The
   endpoint already answers in the shape the plugin expects, and builds are signed once a key
-  exists, so what remains is the plugin and the builds for those platforms.
+  exists, so what remains is the plugin and the Windows builds. Until then the badge replaces an
+  AppImage itself, as it does a tarball, after checking the digest but not the signature.

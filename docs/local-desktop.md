@@ -106,6 +106,35 @@ A package built on Arch links against the build host's glibc and WebKitGTK, so i
 comparably recent systems. Artifacts intended for other distributions must be built on the
 oldest supported base (a Linux x86_64 container) rather than on a rolling-release host.
 
+## AppImage
+
+For everyone else on Linux the release carries an AppImage: one file that runs on any x86_64
+distribution with a glibc at least as new as the build host's. It is Tauri's `appimage` bundle of
+the same binary and daemon, so a single build produces it alongside the tarball:
+
+```sh
+VITE_CONCORS_API_URL=https://api.concors.dev pnpm desktop:package:linux --bundles appimage
+pnpm desktop:release:linux      # the tarball, from the same binary
+pnpm desktop:release:appimage
+```
+
+The last command copies Tauri's `Concors_<version>_amd64.AppImage` to
+`apps/desktop/dist/release/Concors-<version>-x86_64.AppImage`, the name releases use, and writes
+its `.sha256`. Bundling downloads linuxdeploy and its plugins from GitHub on first use.
+
+Run it with `chmod +x Concors-*.AppImage` and then the file itself. Its runtime mounts the image
+read-only under `/tmp/.mount_*`, and Tauri finds the daemon at `usr/lib/Concors/daemon` inside
+it. Nothing is written beside the daemon — its data lives in `~/.concors` as for every other build
+— and the release workflow runs the bundle smoke test against a read-only copy of the image to keep
+it that way. On a system without FUSE, `--appimage-extract-and-run` unpacks it to a temporary
+directory instead.
+
+The image's launch scripts point the app at its bundled libraries through the environment
+(`LD_LIBRARY_PATH`, `PYTHONHOME`, GTK and GStreamer paths, `GDK_BACKEND=x11`). Terminals and
+agents must not inherit that — `PYTHONHOME` alone breaks every Python — so `daemon.rs` starts the
+daemon without the entries that point into the image and without the variables the image sets
+outright. Processes the app itself starts (notification sounds, the browser) still inherit them.
+
 ## Repeatable local preview
 
 After the initial Linux setup, update and relaunch the native app with one command from
