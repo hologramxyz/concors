@@ -315,6 +315,9 @@ jobs:
   verify-download:
     name: Verify anonymous release download
     needs: [build, publish]
+    # Without this, a skipped Mac build skips this job too: the implicit success() looks through
+    # `publish` at every job it depends on, even though `publish` itself ran.
+    if: always() && needs.publish.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
