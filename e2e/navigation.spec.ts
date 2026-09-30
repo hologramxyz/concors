@@ -4,14 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Page } from "@playwright/test";
 import { test, expect, signedIn } from "./signed-in.ts";
+// Pane and tab sequences share one dialog, which names the combination that opened it.
+const shortcutActions = (page: Page, prefix: "p" | "t") =>
+  page
+    .getByRole("dialog", { name: "Shortcut actions", exact: true })
+    .filter({ hasText: `Shift+${prefix.toUpperCase()}:` });
 const sequence = async (page: Page, prefix: "p" | "t", key: string) => {
   await page.keyboard.press(`Control+Shift+${prefix}`);
-  await expect(
-    page.getByRole("dialog", {
-      name: prefix === "p" ? "Pane shortcuts" : "Tab shortcuts",
-      exact: true,
-    }),
-  ).toBeVisible();
+  await expect(shortcutActions(page, prefix)).toBeVisible();
   await page.keyboard.press(key);
 };
 const focusedPane = (page: Page) =>
@@ -42,7 +42,7 @@ test("directional pane sequences, tab cycling, project memory and immediate Agen
         }),
       ),
     );
-    await expect(page.getByRole("dialog", { name: "Pane shortcuts", exact: true })).toBeVisible();
+    await expect(shortcutActions(page, "p")).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(panes).toHaveCount(1);
     await sequence(page, "p", "ArrowLeft");
@@ -115,7 +115,7 @@ test("directional pane sequences, tab cycling, project memory and immediate Agen
     expect(
       await input.evaluate((node: HTMLTextAreaElement) => node.selectionEnd - node.selectionStart),
     ).toBeGreaterThan(0);
-    await expect(page.getByRole("dialog", { name: "Pane shortcuts", exact: true })).toHaveCount(0);
+    await expect(shortcutActions(page, "p")).toHaveCount(0);
     // P/T sequences work directly in the composer without inserting their follow-up keys.
     await sequence(page, "p", "Escape");
     await expect(input).toHaveValue("keep these words");

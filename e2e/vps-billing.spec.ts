@@ -354,14 +354,16 @@ test("machine views reuse fresh data and explicit refresh updates the switcher",
   expect(reads()).toBe(before);
   await page.getByRole("menuitem", { name: /build-agent provisioning/i }).click();
   await expect(page.getByRole("heading", { name: "build-agent", exact: true })).toBeVisible();
-  expect(reads()).toBe(before);
+  // Choosing a machine that is not reachable reads the list once more before showing it on
+  // Machines, which then reuses that read.
+  expect(reads()).toBe(before + 1);
   state.created = false;
   await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await expect(page.getByRole("heading", { name: "No cloud machines yet" })).toBeVisible();
   await page.getByRole("button", { name: "Back to app", exact: true }).click();
   await page.getByRole("button", { name: "Switch machine", exact: true }).click();
   await expect(page.getByRole("menuitem", { name: /build-agent provisioning/i })).toHaveCount(0);
-  expect(reads()).toBe(before + 1);
+  expect(reads()).toBe(before + 2);
 });
 
 for (const viewport of [

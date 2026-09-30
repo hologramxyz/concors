@@ -30,6 +30,8 @@ test("terminal copies with Super, Ctrl+Shift and Insert shortcuts, pastes once, 
   context,
 }) => {
   const directory = await mkdtemp(join(tmpdir(), "clipboard-project-"));
+  // The workspace suite also runs this spec, without the clipboard config's permissions.
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   try {
     await signedIn(page);
     await managedHost(page);
