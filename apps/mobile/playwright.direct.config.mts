@@ -11,6 +11,9 @@ export default defineConfig({
   testDir: "./e2e-direct",
   outputDir: "./test-results/direct",
   workers: 1,
+  // One test at a time against one server, but CI splits the suite across runners
+  // (heavy-tests.yml, --shard); per test rather than per file, since most tests share one file.
+  fullyParallel: true,
   timeout: 120_000,
   use: {
     ...devices["iPhone 13"],

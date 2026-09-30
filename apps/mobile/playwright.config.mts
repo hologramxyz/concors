@@ -4,6 +4,9 @@ import { fileURLToPath } from "node:url";
 export default defineConfig({
   testDir: "./e2e",
   workers: 1,
+  // One test at a time against one server, but CI splits the suite across runners
+  // (heavy-tests.yml, --shard); per test rather than per file, since most tests share one file.
+  fullyParallel: true,
   timeout: 60_000,
   use: {
     ...devices["Pixel 7"],

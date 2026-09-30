@@ -11,7 +11,7 @@ concurrency:
 
 # Fast checks only: everything slow or platform-specific (browser suites,
 # Tauri/Rust, packaged bundles, macOS/Windows runners) lives in
-# heavy-tests.yml and runs on demand, not on every push.
+# heavy-tests.yml, which runs alongside on pull requests.
 jobs:
   checks:
     name: Lint, typecheck, test
