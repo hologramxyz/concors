@@ -31,6 +31,8 @@ export {
   type SetupCheckout,
   type MachineSubscription,
   CardSummarySchema,
+  DaemonUpdateSchema,
+  type DaemonUpdate,
   InvoiceListSchema,
   InvoiceSchema,
   MACHINE_STATUSES,
