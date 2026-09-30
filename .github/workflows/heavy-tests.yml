@@ -76,7 +76,9 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 7
+    # Usually two minutes, but on Linux it first downloads WebKitGTK and its dependencies from
+    # Ubuntu's mirror, which has taken over seven minutes and cancelled a release.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
