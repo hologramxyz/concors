@@ -11,11 +11,13 @@ name: Release
 on:
   workflow_dispatch:
     inputs:
+      # Both by default: publishing a daemon reaches no machine until it is rolled out, and a
+      # desktop-only default once shipped fixes to the app while cloud machines went without them.
       component:
         description: What to release
         type: choice
-        options: [desktop, daemon, both]
-        default: desktop
+        options: [both, desktop, daemon]
+        default: both
       bump:
         description: Version bump
         type: choice
