@@ -141,6 +141,15 @@ Everything else, including the WebSocket upgrade, is rejected with 401 before an
 processing. Reference implementation to port: `concors-server/packages/agent/src/auth.ts`
 and `tests/auth.test.ts` (jose `createRemoteJWKSet`, audience = machineId).
 
+`GET /activity` takes the same machine token and is served by the session host, which owns the
+agents: `{ "busy": boolean, "agents": { "working": number, "waiting": number } }`. `working`
+counts agent chats that are starting or working and terminal CLI agents whose activity is
+`working`; `waiting` counts chats that need input or have a question or approval pending, and
+terminal agents whose activity is `needs_input`. An agent that is open but idle is not busy: its
+conversation resumes after a restart. Nor is a question asked without stopping the agent (Codex's
+asynchronous questions), which a restart keeps. The control plane asks before installing a new daemon (4.4)
+and treats any other answer, such as an older daemon's 401 or 404, as busy.
+
 ### 4.3 Heartbeat (daemon → control plane)
 
 `POST <controlPlaneUrl>/api/v1/agent/heartbeat`, `Authorization: Bearer <machineId>.<agentToken>`,
@@ -156,7 +165,11 @@ the number of live terminal sessions; the control plane only displays it.
 - The tarball extracts into one directory containing a runnable `bin/concors-daemon` (either a
   single-executable build or `node` + bundled JS; the installer does not care) plus whatever
   native files it needs. It must run on Ubuntu 24.04 x86_64 with no build tools.
-- The control plane pins `DAEMON_VERSION`, downloads the asset once, caches it, and streams it over SSH. Version bump + deploy = fleet update.
+- The control plane pins `DAEMON_VERSION`, downloads the asset once, caches it, and streams it
+  over SSH. Rolling out a version (setting `DAEMON_VERSION`) makes it available; it does not
+  install it everywhere at once. Each machine updates when no agent on it is working or waiting
+  (`GET /activity`, 4.2), or when its owner presses **Update now** in the app. Until then the
+  machine record carries the pending version (4.6).
 - `concors-daemon --version` prints the semver; `/health` reports the same string; the installer
   compares it with the pinned version.
 
@@ -175,9 +188,10 @@ ExecStart=/opt/concors-daemon/bin/concors-daemon serve --managed-config /etc/con
 AmbientCapabilities=CAP_NET_BIND_SERVICE   # bind 443 without root
 ```
 
-A gateway restart (update) must not end sessions. Updating the _host_ ends processes; the
-installer only restarts the host when the daemon major/minor version changes (documented
-host-loss semantics apply). Node is not required on the machine for the daemon; Claude Code,
+A gateway restart must not end sessions. Installing a new daemon does: the gateway replaces a
+session host started by a different build ([session-recovery.md](session-recovery.md)), which
+ends its terminals and agents (documented host-loss semantics apply; conversations are kept).
+That is why a rolled-out version waits for the machine to be idle or for its owner (4.4). Node is not required on the machine for the daemon; Claude Code,
 Codex and OpenCode bring their own requirements and are installed separately (out of scope here).
 
 ### 4.6 Machine record (control plane → clients)
@@ -187,6 +201,12 @@ Already served by `GET /api/v1/machines` and `/machines/:id`: `hostname` (null u
 the existing status fields. A cloud machine is _connectable_ when `status === "running"`,
 `hostname` is set and `agentSeenAt` is within the last 90 s. `POST /machines/:id/token` mints
 the token; clients should mint right before connecting and again on a 401/4401 close.
+
+`daemonUpdate` is `{ version, installing }` while a rolled-out daemon is not yet on the machine,
+otherwise null (absent from older control planes). The app's machine card shows it with an
+**Update now** button, which confirms that updating restarts the machine's agents and then calls
+`POST /machines/:id/daemon/update` (202; 409 with a message when the daemon is already current or
+the machine is not running). `installing` stays true until the new version reports in.
 
 ## 5. Work items
 
