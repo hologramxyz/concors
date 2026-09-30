@@ -40,6 +40,7 @@ which fixes the glibc floor — and produces:
 | `Concors-<version>-x64.tar.gz` (+ `.sha256`) | any Linux; extract and run `bin/concors-desktop` |
 | `concors-bin-<version>-1-x86_64.pkg.tar.zst` | Arch and Omarchy, via `pacman -U`                |
 | `release.json`                               | the control plane; nothing else reads it         |
+| `Concors-linux-x64.tar.gz`                   | the website's Linux download; see below          |
 
 and, on a macOS runner, `Concors-<version>-aarch64.dmg` for Apple Silicon (see [macOS](#macos)).
 The release manifest is written once both have finished, so it describes every build.
