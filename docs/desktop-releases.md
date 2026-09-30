@@ -136,6 +136,22 @@ For development, `DESKTOP_MANIFEST_PATH` points at a local `release.json` instea
 release. Downloads are refused in that mode, since the builds it describes are on the machine that
 produced them.
 
+## The AUR
+
+Arch and Omarchy users can install `concors-bin` from the AUR (`yay -S concors-bin`), and their AUR
+helper updates it like any other package. It is the same `packaging/linux/PKGBUILD` the release
+builds, whose source is the release's tarball on GitHub: when the release workflow builds the
+package, the tarball is already in place and makepkg downloads nothing.
+
+Rolling out a desktop version (`roll-out.yml`, also the end of every release) then publishes it.
+`packaging/linux/prepare-aur.sh` runs in a clean `archlinux` container: it replaces the
+checked-in `SKIP` digests with the published tarball's, writes `.SRCINFO`, and builds the package
+from the release exactly as a user's makepkg would. Only then does the job push those four files to
+`ssh://aur@aur.archlinux.org/concors-bin.git`, authenticated with the `AUR_SSH_PRIVATE_KEY`
+secret, whose public half is on the maintainer's AUR account, and trusting only the host key the
+AUR publishes. Rolling back to an older version leaves the AUR alone, since AUR helpers never
+downgrade.
+
 ## What a running app does
 
 On launch, every 30 minutes after, and whenever its window comes back to the front, the app asks

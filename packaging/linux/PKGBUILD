@@ -22,13 +22,15 @@ provides=("concors=${pkgver}")
 conflicts=('concors')
 # The bundled Node binary and the daemon's native terminal module must not be stripped.
 options=('!strip' '!debug')
+# The release tarball. The release workflow builds this package before the release is published,
+# with the tarball already in place, so makepkg finds it and downloads nothing.
 source=(
-    "Concors-${pkgver}-x64.tar.gz"
+    "Concors-${pkgver}-x64.tar.gz::https://github.com/hologramxyz/concors/releases/download/desktop-v${pkgver}/Concors-${pkgver}-x64.tar.gz"
     'concors.sh'
     'concors.desktop'
 )
-# SKIP while the tarball is built locally. When this moves to a GitHub release URL, pin the
-# digest with `updpkgsums`.
+# SKIP here because the tarball does not exist until the release does. The copy on the AUR has
+# real digests, filled in by prepare-aur.sh once the release is published.
 sha256sums=('SKIP'
             'SKIP'
             'SKIP')

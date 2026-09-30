@@ -84,3 +84,82 @@ jobs:
           done
           echo "The control plane still offers ${offered:-nothing}, not $DESKTOP_VERSION" >&2
           exit 1
+
+  # Arch and Omarchy users install concors-bin from the AUR, and their AUR helper updates it when
+  # this job pushes a newer PKGBUILD, so it is part of rolling out like the variables above.
+  aur:
+    name: Publish to the AUR
+    needs: roll-out
+    if: inputs.desktop_version != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+    steps:
+      - name: Check the AUR key is configured
+        id: key
+        run: |
+          if [ -z "$AUR_SSH_PRIVATE_KEY" ]; then
+            echo "::warning::AUR_SSH_PRIVATE_KEY is not set, so the AUR still has the previous version."
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # A rollback names an older version; AUR helpers never downgrade, so the AUR keeps the newer
+      # one and says so rather than publishing something nobody would install.
+      - name: Skip versions older than the AUR's
+        id: newer
+        if: steps.key.outputs.present == 'true'
+        run: |
+          current="$(curl -fsS 'https://aur.archlinux.org/rpc/v5/info?arg[]=concors-bin' \
+            | node -p 'JSON.parse(require("fs").readFileSync(0,"utf8")).results[0]?.Version ?? ""')"
+          current="${current%-*}"
+          if [ -n "$current" ] && [ "$(printf '%s\n%s\n' "$current" "$DESKTOP_VERSION" | sort -V | tail -1)" = "$current" ] \
+            && [ "$current" != "$DESKTOP_VERSION" ]; then
+            echo "::notice::The AUR has $current, newer than $DESKTOP_VERSION; leaving it."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.newer.outputs.publish == 'true'
+        with:
+          ref: desktop-v${{ inputs.desktop_version }}
+          persist-credentials: false
+
+      - name: Prepare and test-build the PKGBUILD
+        if: steps.newer.outputs.publish == 'true'
+        run: |
+          mkdir -p aur-out && chmod 777 aur-out
+          docker run --rm -e DESKTOP_VERSION -v "$PWD/packaging/linux:/src:ro" -v "$PWD/aur-out:/out" \
+            archlinux:base-devel bash -ec '
+              pacman -Sy --noconfirm --needed pacman-contrib > /dev/null
+              useradd -m builder
+              su builder -c "/src/prepare-aur.sh $DESKTOP_VERSION /out"
+            '
+          cat aur-out/.SRCINFO
+
+      - name: Push to the AUR
+        if: steps.newer.outputs.publish == 'true'
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur && chmod 600 ~/.ssh/aur
+          # Pinned: this is the ED25519 key aur.archlinux.org publishes on its home page.
+          echo "aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN" \
+            > ~/.ssh/known_hosts
+          export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/aur -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
+          git clone -q ssh://aur@aur.archlinux.org/concors-bin.git aur
+          cp aur-out/PKGBUILD aur-out/.SRCINFO aur-out/concors.sh aur-out/concors.desktop aur/
+          cd aur
+          git add PKGBUILD .SRCINFO concors.sh concors.desktop
+          if git diff --cached --quiet; then
+            echo "The AUR already has concors-bin $DESKTOP_VERSION."
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" \
+            -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -qm "Update to $DESKTOP_VERSION"
+          git push -q origin HEAD:master
+          echo "Published concors-bin $DESKTOP_VERSION: https://aur.archlinux.org/packages/concors-bin"
