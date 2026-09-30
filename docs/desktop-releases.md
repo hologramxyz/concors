@@ -119,7 +119,13 @@ silence, and the rest of the API is untouched — but there is no reason to arra
 
 ```sh
 railway variable set DESKTOP_VERSION=0.2.0
+gh release edit desktop-v0.2.0 --latest
 ```
+
+The second line makes it GitHub's Latest release, which is what new downloads follow: the website
+links to `releases/latest/download/Concors-mac-arm64.dmg`, a copy of the disk image every release
+also publishes under that fixed name. The workflow publishes with `--latest=false` so that this,
+too, waits for the rollout.
 
 The API reads only `release.json` from that release, anonymously, since the repository is
 public. Builds are never proxied through it: a client asking to download one is redirected
