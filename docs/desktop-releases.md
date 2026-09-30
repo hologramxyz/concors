@@ -129,6 +129,11 @@ every release also publishes under those fixed names. Releases are published wit
 too, waits for the rollout. Last, it asks the API for an update the way an old copy would, and
 fails unless the answer is the version just rolled out.
 
+Rolling out a daemon version (`DAEMON_VERSION`) is gentler, because installing one restarts a
+cloud machine's agents. It only makes the version available: each machine updates when no agent
+on it is working or waiting, or when its owner presses **Update now** on the machine's card in
+Settings → Machines (see [managed machines](managed-machines-v1.md), 4.4).
+
 The API reads only `release.json` from that release, anonymously, since the repository is
 public. Builds are never proxied through it: a client asking to download one is redirected
 to a short-lived link, so a 50 MB package never occupies API memory.
