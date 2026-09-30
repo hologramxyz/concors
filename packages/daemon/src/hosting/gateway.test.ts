@@ -158,14 +158,18 @@ it("preserves a real process, shell environment, cwd, screen, and bindings acros
   // hand the shell an 8.3 short name (RUNNER~1). Canonicalize both sides before comparing.
   const canonical = async (value: Awaited<ReturnType<typeof state>>) =>
     value === null ? null : { ...value, cwd: await realpath(value.cwd) };
+  // Typing into a real shell, which then starts Node: under a parallel test run that can take
+  // well over expect.poll's one-second default, and the probe does not exist until it has.
   await expect
-    .poll(async () => canonical(await state()))
+    .poll(async () => canonical(await state()), { timeout: 10_000 })
     .toMatchObject({ cwd: await realpath(cwd), env: "kept" });
   const before = (await state())!;
   const host = await ensureSessionHost(directory, launch);
   expect(await countHostSessions(host)).toBe(1);
   await first.close();
-  await expect.poll(async () => (await state())?.n ?? 0).toBeGreaterThan(before.n + 2);
+  await expect
+    .poll(async () => (await state())?.n ?? 0, { timeout: 5_000 })
+    .toBeGreaterThan(before.n + 2);
   const second = await cliGateway(directory);
   const remote = await connect(second.url);
   await terminal(remote.c, { kind: "attach", sessionId });
