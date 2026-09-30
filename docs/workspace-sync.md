@@ -29,7 +29,7 @@ pnpm exec playwright install chromium
 pnpm test:workspace:e2e
 ```
 
-The test starts two temporary daemons on ports 7429/7430 and Vite on 1420; stop any existing Vite instance first. It uses independent browser contexts to verify layout/profile/navigation sync, keyboard resizing, reload, actual WebSocket disconnection/reconnection, and isolation when switching machines. Temporary SQLite files live under the system temp directory. Traces are retained on failure in ignored `test-results/`.
+The test starts two temporary daemons on ports 7429/7430, builds the web app and serves it with `vite preview` on 1420; stop any existing Vite instance first. It uses independent browser contexts to verify layout/profile/navigation sync, keyboard resizing, reload, actual WebSocket disconnection/reconnection, and isolation when switching machines. Temporary SQLite files live under the system temp directory. Traces are retained on failure in ignored `test-results/`.
 
 ## Rearranging panes
 
