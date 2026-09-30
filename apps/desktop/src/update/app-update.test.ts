@@ -2,6 +2,7 @@ import type { DesktopUpdate } from "@concors/api-client";
 import { describe, expect, it, vi } from "vitest";
 
 import type { InstallationReport } from "@/tauri";
+import { InstallationReportSchema } from "@/tauri/app-update";
 
 import {
   applyUpdate,
@@ -65,6 +66,34 @@ describe("updateQuery", () => {
       formats: ["tarball"],
       installable: false,
     });
+  });
+
+  it("asks for an AppImage for an AppImage it can replace, and only says so otherwise", () => {
+    const appimage = { kind: "appimage", path: "/home/someone/Concors.AppImage" } as const;
+    expect(updateQuery(report({ ...appimage, writable: true, formats: ["appimage"] }))).toEqual({
+      formats: ["appimage"],
+      installable: true,
+    });
+    expect(updateQuery(report({ ...appimage, writable: false, formats: [] }))).toEqual({
+      formats: ["tarball"],
+      installable: false,
+    });
+  });
+});
+
+describe("InstallationReportSchema", () => {
+  // Exactly what `app_installation` in update.rs serialises for an AppImage; a kind the schema does
+  // not know fails the parse, and a failed check is silence, so the badge would never appear.
+  it("accepts the native report for an AppImage", () => {
+    const native = {
+      kind: "appimage",
+      path: "/home/someone/Applications/Concors-linux-x86_64.AppImage",
+      writable: true,
+      formats: ["appimage"],
+      platform: "linux",
+      arch: "x86_64",
+    };
+    expect(InstallationReportSchema.parse(native)).toEqual(native);
   });
 });
 
