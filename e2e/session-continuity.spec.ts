@@ -76,7 +76,10 @@ test("Codex and Claude panes reconnect to the same processes, then recover lost 
     await page.getByRole("menuitemradio", { name: "Claude Code", exact: true }).click();
     const terminals = page.getByLabel("Terminal output").filter({ visible: true });
     await expect(terminals).toHaveCount(2);
-    await expect(terminals.last()).toContainText("SESSION_PID:");
+    // The label can be on screen before its number, and the split remounts the first terminal,
+    // which repaints its screen a moment later: read the IDs once both are complete.
+    for (const terminal of [terminals.last(), terminals.first()])
+      await expect(terminal).toContainText(/SESSION_PID:\d+/);
     const pids = await terminals.allTextContents();
     const paneIds = await page
       .locator("[data-pane-id]")
