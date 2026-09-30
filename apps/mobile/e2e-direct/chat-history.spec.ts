@@ -63,6 +63,12 @@ for (const native of [false, true]) {
       await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
       const ui = page.frameLocator('iframe[title="Concors workspace"]');
       const timeline = ui.getByRole("log", { name: "Chat timeline" });
+      const scrollToEdge = (edge: "top" | "bottom") =>
+        timeline.evaluate((viewport, edge) => {
+          // Only user input may leave the bottom; a bare scrollTop write reads as layout churn.
+          viewport.dispatchEvent(new WheelEvent("wheel", { deltaY: edge === "top" ? -1 : 1 }));
+          viewport.scrollTop = edge === "top" ? 1 : viewport.scrollHeight;
+        }, edge);
       await expect(timeline.getByText("History 0 message 639", { exact: true })).toBeVisible();
       await expect(ui.getByRole("heading", { name: "Choose an agent" })).toHaveCount(0);
       for (const name of [
@@ -77,9 +83,7 @@ for (const native of [false, true]) {
         0,
       );
       for (let step = 0; step < 4; step++) {
-        await timeline.evaluate((viewport) => {
-          viewport.scrollTop = 1;
-        });
+        await scrollToEdge("top");
         await expect(timeline.locator("[data-message-position]").first()).toHaveAttribute(
           "data-message-position",
           String(480 - step * 80),
@@ -87,9 +91,7 @@ for (const native of [false, true]) {
         expect(await timeline.locator("[data-message-id]").count()).toBeLessThanOrEqual(240);
       }
       for (const last of [559, 639]) {
-        await timeline.evaluate((viewport) => {
-          viewport.scrollTop = viewport.scrollHeight;
-        });
+        await scrollToEdge("bottom");
         await expect(timeline.locator("[data-message-position]").last()).toHaveAttribute(
           "data-message-position",
           String(last),
@@ -110,14 +112,10 @@ for (const native of [false, true]) {
         ).toBeInViewport();
         expect(await timeline.locator("[data-message-id]").count()).toBeLessThanOrEqual(240);
       }
-      await timeline.evaluate((viewport) => {
-        viewport.scrollTop = viewport.scrollHeight;
-      });
+      await scrollToEdge("bottom");
       await expect(ui.getByRole("button", { name: "Latest", exact: true })).toHaveCount(0);
       const release = history.pauseNext("earlier");
-      await timeline.evaluate((viewport) => {
-        viewport.scrollTop = 1;
-      });
+      await scrollToEdge("top");
       await expect(timeline.getByRole("status")).toContainText("Loading earlier messages");
       history.truncate();
       await expect(timeline.getByText("History 1 message 119", { exact: true })).toBeVisible();

@@ -187,7 +187,8 @@ for (const native of [false, true]) {
           const row = ui.locator(`button[data-agent-id]:has([data-provider="${provider}"])`);
           await expect(row).toHaveCount(1);
           await expect(row.locator(`[data-provider="${provider}"]`)).toBeVisible();
-          await expect(row.getByRole("img", { name: "Agent status: Done" })).toBeVisible();
+          // The open chat has seen its finished turn, so it reads as Ready rather than Done.
+          await expect(row.getByRole("img", { name: "Agent status: Ready" })).toBeVisible();
           await row.click();
         }
         if (native) {
