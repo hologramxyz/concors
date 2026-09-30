@@ -49,7 +49,12 @@ publishes it. Nothing is offered to anyone until the control plane points at it:
 
 ```sh
 railway variables --environment production --service concors-server --set "DESKTOP_VERSION=0.3.0"
+gh release edit desktop-v0.3.0 --latest
 ```
+
+The second line is what the website's download button follows
+(`releases/latest/download/Concors-mac-arm64.dmg`), so a release held back from updates is held
+back from new downloads too.
 
 Publishing and rolling out are separate on purpose, so a release can be held back — and in that
 order: pinning a version before its release exists leaves the update check answering 502 until it
