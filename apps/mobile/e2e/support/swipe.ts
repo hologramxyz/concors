@@ -26,41 +26,21 @@ export async function swipe(
 }
 
 /**
- * A finger dragging a scroller, which the browser scrolls natively. Raw touch events above
- * reach page handlers but never scroll; a positive distance reveals content above.
- */
-export async function touchScroll(page: Page, from: { x: number; y: number }, distance: number) {
-  const client = await page.context().newCDPSession(page);
-  try {
-    await client.send("Input.synthesizeScrollGesture", {
-      x: Math.round(from.x),
-      y: Math.round(from.y),
-      yDistance: distance,
-      gestureSourceType: "touch",
-      speed: 2000,
-    });
-  } finally {
-    await client.detach();
-  }
-}
-
-/**
- * Scrolls a chat timeline up the way a reader does. A live chat stays pinned to its latest
- * message until then, and snaps back from a programmatic scroll such as Playwright's own.
+ * Scrolls a chat timeline up with real input from the reader. A live chat stays pinned to its
+ * latest message until then, and snaps back from a programmatic scroll such as Playwright's own
+ * scroll into view. The wheel stands in for a finger: the chat counts both as the reader's, and
+ * a synthesized touch scroll never took the timeline away from the bottom on the Linux runner.
  */
 export async function scrollTimelineUp(page: Page, timeline: Locator, distance = 300) {
-  const fromBottom = () =>
-    timeline.evaluate(
-      (viewport) => viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight,
-    );
-  // On a CI runner the first gesture right after the chat opens can leave it at the bottom, so
-  // scroll again until the reader has stayed away from the bottom.
-  await expect(async () => {
-    const box = await timeline.boundingBox();
-    if (!box) throw new Error("Chat timeline is not visible");
-    await touchScroll(page, { x: box.x + box.width / 2, y: box.y + box.height / 2 }, distance);
-    // Past the moment the chat decides whether the finger left it following the bottom.
-    await page.waitForTimeout(500);
-    expect(await fromBottom()).toBeGreaterThan(distance / 2);
-  }).toPass({ timeout: 15_000 });
+  const box = await timeline.boundingBox();
+  if (!box) throw new Error("Chat timeline is not visible");
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(0, -distance);
+  await expect
+    .poll(() =>
+      timeline.evaluate(
+        (viewport) => viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight,
+      ),
+    )
+    .toBeGreaterThan(distance / 2);
 }
