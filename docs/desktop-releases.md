@@ -43,6 +43,7 @@ which fixes the glibc floor — and produces:
 | `release.json`                                    | the control plane; nothing else reads it              |
 | `Concors-linux-x86_64.AppImage`                   | the website's Linux download; see below               |
 | `Concors-linux-x64.tar.gz`                        | a stable link to the latest tarball, for the same use |
+| `Concors-linux-x86_64.pkg.tar.zst`                | the website's Arch and Omarchy install command        |
 
 and, on a macOS runner, `Concors-<version>-aarch64.dmg` for Apple Silicon (see [macOS](#macos)).
 The release manifest is written once both have finished, so it describes every build.

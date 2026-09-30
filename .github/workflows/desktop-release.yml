@@ -341,9 +341,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.build.outputs.version }}
         # The directory holds exactly what the build jobs uploaded, plus release.json. The Mac disk
-        # image, the Linux tarball and the AppImage are also published under names without the
-        # version, so the website can link to releases/latest/download/Concors-mac-arm64.dmg,
-        # …/Concors-linux-x64.tar.gz and …/Concors-linux-x86_64.AppImage. Those follow the release
+        # image, the Linux tarball, the AppImage and the Arch package are also published under names
+        # without the version, so the website can link to releases/latest/download/Concors-mac-arm64.dmg,
+        # …/Concors-linux-x64.tar.gz, …/Concors-linux-x86_64.AppImage and
+        # …/Concors-linux-x86_64.pkg.tar.zst. pacman reads a package's name and version from inside
+        # the file, so the fixed name installs as concors-bin all the same. Those follow the release
         # marked Latest, which happens when a release is rolled out, not here: publishing is not
         # rolling out. The copies are made after release.json, which names only versioned builds.
         run: |
@@ -352,6 +354,7 @@ jobs:
           fi
           cp "Concors-$VERSION-x64.tar.gz" Concors-linux-x64.tar.gz
           cp "Concors-$VERSION-x86_64.AppImage" Concors-linux-x86_64.AppImage
+          cp concors-bin-"$VERSION"-*-x86_64.pkg.tar.zst Concors-linux-x86_64.pkg.tar.zst
           ls -l
           gh release create "$RELEASE_TAG" * \
             --verify-tag --title "Concors $VERSION" --latest=false \
