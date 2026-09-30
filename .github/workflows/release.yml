@@ -1,0 +1,183 @@
+name: Release
+
+# The one way to release Concors: Actions → Release → Run workflow, on main. Pick what to release
+# and how far to bump it, write the notes people will read in the app, and the workflow does the
+# rest: runs the slow test suites, bumps the version in a commit on main, tags it, builds and
+# publishes the desktop app (Linux and a notarized Mac disk image) and/or the daemon, checks the
+# downloads, and rolls out.
+#
+# If a build fails after the version commit has landed, "Re-run failed jobs" retries with the same
+# version. Starting a fresh release instead just takes the next number.
+on:
+  workflow_dispatch:
+    inputs:
+      component:
+        description: What to release
+        type: choice
+        options: [desktop, daemon, both]
+        default: desktop
+      bump:
+        description: Version bump
+        type: choice
+        options: [patch, minor]
+        default: patch
+      notes:
+        description: Release notes, shown in the app before updating (required for desktop)
+        type: string
+      roll_out_desktop:
+        description: Offer the desktop release to everyone once it is published
+        type: boolean
+        default: true
+      roll_out_daemon:
+        description: Put the daemon on every cloud machine once published (restarts their sessions)
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  COMPONENT: ${{ inputs.component }}
+  BUMP: ${{ inputs.bump }}
+
+jobs:
+  plan:
+    name: Plan versions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      desktop: ${{ steps.plan.outputs.desktop }}
+      daemon: ${{ steps.plan.outputs.daemon }}
+    steps:
+      - name: Require main
+        run: |
+          [ "$GITHUB_REF" = refs/heads/main ] || {
+            echo "Release from main, not $GITHUB_REF" >&2; exit 1; }
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Name the versions
+        id: plan
+        env:
+          NOTES: ${{ inputs.notes }}
+        run: |
+          plan="$(node apps/desktop/scripts/release-plan.ts \
+            --component "$COMPONENT" --bump "$BUMP" --dry-run)"
+          echo "$plan" | tee -a "$GITHUB_OUTPUT"
+          desktop="$(echo "$plan" | sed -n 's/^desktop=//p')"
+          daemon="$(echo "$plan" | sed -n 's/^daemon=//p')"
+          if [ -n "$desktop" ] && [ -z "$NOTES" ]; then
+            echo "A desktop release needs notes: the app shows them before updating" >&2; exit 1
+          fi
+          for tag in ${desktop:+desktop-v$desktop} ${daemon:+daemon-v$daemon}; do
+            if git rev-parse -q --verify "refs/tags/$tag" > /dev/null; then
+              echo "$tag already exists" >&2; exit 1
+            fi
+          done
+
+  tests:
+    name: Slow test suites
+    needs: plan
+    permissions:
+      contents: read
+    uses: ./.github/workflows/heavy-tests.yml
+    with:
+      release: true
+
+  bump:
+    name: Commit and tag the versions
+    needs: [plan, tests]
+    # A suite that times out reports as cancelled rather than failed, and the non-blocking ones
+    # (heavy-tests.yml, `release` input) may; only a real failure, or cancelling the run, stops here.
+    if: always() && !cancelled() && needs.plan.result == 'success' && needs.tests.result != 'failure'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      DESKTOP: ${{ needs.plan.outputs.desktop }}
+      DAEMON: ${{ needs.plan.outputs.daemon }}
+      NOTES: ${{ inputs.notes }}
+    steps:
+      # The commit the tests ran on; if main has moved since, the push below is refused.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Write the versions
+        run: |
+          node apps/desktop/scripts/release-plan.ts --component "$COMPONENT" --bump "$BUMP" \
+            > /tmp/written
+          # The same versions the plan named, or main moved under us.
+          { [ -z "$DESKTOP" ] || echo "desktop=$DESKTOP"; [ -z "$DAEMON" ] || echo "daemon=$DAEMON"; } \
+            | diff - /tmp/written
+          if [ -n "$DESKTOP" ]; then
+            # The crate's own entry in Cargo.lock follows Cargo.toml.
+            cargo metadata --manifest-path apps/desktop/src-tauri/Cargo.toml --format-version 1 > /dev/null
+          fi
+          git status --short
+
+      - name: Commit, tag and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          subject="Release${DESKTOP:+ desktop $DESKTOP}${DESKTOP:+${DAEMON:+ and}}${DAEMON:+ daemon $DAEMON}"
+          git commit -qam "$subject"
+          tags=()
+          if [ -n "$DESKTOP" ]; then
+            git tag -a "desktop-v$DESKTOP" -m "$NOTES"; tags+=("refs/tags/desktop-v$DESKTOP")
+          fi
+          if [ -n "$DAEMON" ]; then
+            git tag -a "daemon-v$DAEMON" -m "Concors daemon $DAEMON"; tags+=("refs/tags/daemon-v$DAEMON")
+          fi
+          git push --atomic origin HEAD:refs/heads/main "${tags[@]}" || {
+            echo "main moved while the tests ran; start the release again" >&2; exit 1; }
+          echo "$subject: $(git rev-parse --short HEAD)"
+
+  desktop:
+    name: Desktop
+    needs: [plan, bump]
+    if: needs.plan.outputs.desktop != ''
+    uses: ./.github/workflows/desktop-release.yml
+    with:
+      version: ${{ needs.plan.outputs.desktop }}
+      notes: ${{ inputs.notes }}
+    secrets: inherit
+
+  daemon:
+    name: Daemon
+    needs: [plan, bump]
+    if: needs.plan.outputs.daemon != ''
+    uses: ./.github/workflows/daemon-release.yml
+    with:
+      version: ${{ needs.plan.outputs.daemon }}
+
+  roll-out:
+    name: Roll out
+    needs: [plan, bump, desktop, daemon]
+    # A skipped half (a desktop-only release skips the daemon) is fine; a failed one rolls out
+    # nothing, since the other half may depend on it.
+    if: >-
+      always() && !cancelled() && needs.bump.result == 'success' &&
+      !contains(needs.*.result, 'failure') &&
+      ((needs.plan.outputs.desktop != '' && inputs.roll_out_desktop) ||
+       (needs.plan.outputs.daemon != '' && inputs.roll_out_daemon))
+    uses: ./.github/workflows/roll-out.yml
+    with:
+      desktop_version: ${{ inputs.roll_out_desktop && needs.plan.outputs.desktop || '' }}
+      daemon_version: ${{ inputs.roll_out_daemon && needs.plan.outputs.daemon || '' }}
+    secrets: inherit

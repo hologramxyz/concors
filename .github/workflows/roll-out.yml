@@ -1,0 +1,86 @@
+name: Roll out
+
+# Offers published versions to everyone: points the control plane at them and, for the desktop
+# app, marks its release Latest, which is what the website's download button follows. release.yml
+# runs this at its end; run it by hand to roll out a release published with roll-out off, or to
+# roll back by naming an earlier version.
+#
+# The daemon is the one to be deliberate about: a new DAEMON_VERSION makes every cloud machine
+# restart its session host, ending the terminals and agents running on it.
+on:
+  workflow_dispatch:
+    inputs:
+      desktop_version:
+        description: Desktop version to offer, e.g. 0.6.15 (empty leaves it alone)
+        type: string
+      daemon_version:
+        description: Daemon version for cloud machines, e.g. 0.6.15 (empty leaves it alone)
+        type: string
+  workflow_call:
+    inputs:
+      desktop_version:
+        type: string
+      daemon_version:
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: roll-out
+  cancel-in-progress: false
+
+env:
+  GH_REPO: ${{ github.repository }}
+  DESKTOP_VERSION: ${{ inputs.desktop_version }}
+  DAEMON_VERSION: ${{ inputs.daemon_version }}
+  # The production control plane, in the Holoworld AI workspace's `concors` project.
+  API_URL: https://api.concors.dev
+
+jobs:
+  roll-out:
+    name: Point production at the release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      # Publish first, pin second: a pinned version with no release behind it breaks the update
+      # check until one exists.
+      - name: Check the releases exist
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [ -n "$DESKTOP_VERSION$DAEMON_VERSION" ] || { echo "Name a version to roll out" >&2; exit 1; }
+          if [ -n "$DESKTOP_VERSION" ]; then gh release view "desktop-v$DESKTOP_VERSION" > /dev/null; fi
+          if [ -n "$DAEMON_VERSION" ]; then gh release view "daemon-v$DAEMON_VERSION" > /dev/null; fi
+
+      # One `variable set` for both, so the server redeploys once.
+      - name: Pin the versions on the control plane
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          [ -n "$RAILWAY_TOKEN" ] || {
+            echo "RAILWAY_TOKEN is not set; see Releasing in AGENTS.md" >&2; exit 1; }
+          variables=()
+          if [ -n "$DESKTOP_VERSION" ]; then variables+=("DESKTOP_VERSION=$DESKTOP_VERSION"); fi
+          if [ -n "$DAEMON_VERSION" ]; then variables+=("DAEMON_VERSION=$DAEMON_VERSION"); fi
+          npx --yes @railway/cli@5.62.1 variable set "${variables[@]}" \
+            --service concors-server --environment production
+
+      - name: Make the desktop release the one new downloads get
+        if: inputs.desktop_version != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "desktop-v$DESKTOP_VERSION" --latest
+
+      # Read back the way a running app asks, once the redeploy has picked the variable up.
+      - name: Check the control plane offers it
+        if: inputs.desktop_version != ''
+        run: |
+          for attempt in $(seq 1 60); do
+            offered="$(curl -fsS "$API_URL/api/v1/releases/desktop/linux/x86_64/0.0.1" \
+              | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).version' 2>/dev/null || true)"
+            if [ "$offered" = "$DESKTOP_VERSION" ]; then echo "Offering $offered"; exit 0; fi
+            sleep 10
+          done
+          echo "The control plane still offers ${offered:-nothing}, not $DESKTOP_VERSION" >&2
+          exit 1

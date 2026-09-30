@@ -26,52 +26,50 @@ Anything the shared UI imports from `@/tauri` must also exist in
 missing export there breaks mobile releases while every test still passes. Rebuild it with
 `pnpm --filter @concors/mobile assets` after adding an export.
 
-## Releasing the desktop app
+## Releasing
 
-The whole procedure, and what the app does with a release, is in
-[docs/desktop-releases.md](docs/desktop-releases.md). In short:
+**Actions → Release → Run workflow**, on `main`. That is the whole procedure; nothing is bumped,
+tagged or pinned by hand. The form asks:
 
-```sh
-pnpm desktop:version --set 0.3.0     # rewrites the four files that carry the version
-cargo metadata --manifest-path apps/desktop/src-tauri/Cargo.toml --format-version 1 >/dev/null
-```
+| Input                | What it decides                                                           |
+| -------------------- | ------------------------------------------------------------------------- |
+| **component**        | `desktop`, `daemon` or `both`. Release only what changed (see below)      |
+| **bump**             | `patch` or `minor`, from the version on `main`                            |
+| **notes**            | shown in the app's update dialog, so write them for the people reading it |
+| **roll_out_desktop** | on by default: offer the release to every copy, and to new downloads      |
+| **roll_out_daemon**  | off by default: a new daemon restarts every cloud machine's sessions      |
 
-Commit that, merge it to `main`, then tag the merge commit. **The tag's message becomes the release
-notes people read in the update dialog**, so write it for them, not as a changelog:
+Or from a terminal:
+`gh workflow run release.yml -f component=desktop -f notes="What changed, in plain words."`
 
-```sh
-git tag -a desktop-v0.3.0 -m "What changed, in plain words."
-git push origin desktop-v0.3.0
-```
+The workflow runs the slow suites (`heavy-tests.yml`; the browser and Windows suites fail on `main`
+today, so for now they report without blocking), commits the new version to `main` and tags
+it, builds and publishes (Linux packages and a notarized Mac disk image for the desktop, a tarball
+for the daemon), downloads what it published to check it, then rolls out: it sets
+`DESKTOP_VERSION`/`DAEMON_VERSION` on the control plane and marks the desktop release Latest, which
+is what the website's download button follows. If a build fails, "Re-run failed jobs" retries the
+same version.
 
-CI builds it, installs the package in a clean Arch container to prove it is installable, and
-publishes it. Nothing is offered to anyone until the control plane points at it:
+The desktop app and the daemon keep separate versions because rolling out a daemon ends the
+terminals and agents running on cloud machines, so a desktop-only release must not do that.
 
-```sh
-railway variables --environment production --service concors-server --set "DESKTOP_VERSION=0.3.0"
-gh release edit desktop-v0.3.0 --latest
-```
+**Roll out later, or roll back:** Actions → **Roll out** with the version to offer. It is the same
+step the release ends with, and naming an earlier version rolls back to it.
 
-The second line is what the website's download button follows
-(`releases/latest/download/Concors-mac-arm64.dmg`), so a release held back from updates is held
-back from new downloads too.
+What the app does with a release, and how the Mac build is signed, is in
+[docs/desktop-releases.md](docs/desktop-releases.md). The workflow needs these repository secrets:
+the five Apple ones listed there, and `RAILWAY_TOKEN`, a project token for the production
+environment of the `concors` project in the Holoworld AI Railway workspace.
 
-Publishing and rolling out are separate on purpose, so a release can be held back — and in that
-order: pinning a version before its release exists leaves the update check answering 502 until it
-does. `DAEMON_VERSION` is the same idea for the daemon that runs on cloud machines, released by the
-`daemon-v*` tag.
-
-**Once a pull request is ready for review, stop pushing to it.** Anything else — a version bump, a
-follow-up fix — gets its own pull request. A commit pushed to a branch someone is already merging
-is simply not in the merge, and the result looks merged while missing the very thing it was for.
-This has happened twice: a version bump that left `main` a release behind, and the fix for a broken
-updater that left `main` still shipping the bug. Before tagging a release, check that the commit
-being tagged actually contains what it is supposed to.
+**Once a pull request is ready for review, stop pushing to it.** Anything else, such as a
+follow-up fix, gets its own pull request. A commit pushed to a branch someone is already merging is
+simply not in the merge, and the result looks merged while missing the very thing it was for.
 
 Two habits worth keeping, both learned the hard way:
 
-- **The release workflow only runs on tags, so CI never exercises it.** Its container steps can be
-  run locally with Docker; do that after changing them rather than finding out during a release.
+- **CI never exercises the release workflows.** They run only when someone releases; their
+  container steps can be run locally with Docker, and `actionlint` catches most mistakes in them.
+  Check after changing them rather than finding out during a release.
 - **Read back what you wrote.** Both bugs in the first release — a pacman flag that skipped the
   wrong checks, and release notes that silently became "Merge pull request #124" — were invisible
   until someone looked at the actual output.

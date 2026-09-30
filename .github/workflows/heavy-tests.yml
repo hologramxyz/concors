@@ -3,9 +3,18 @@ name: Heavy tests
 # The slow, expensive suites that used to run on every push and PR: browser
 # acceptance tests, Tauri/Rust checks, packaged-bundle smoke tests, and the
 # macOS/Windows runners (billed at 10x/2x). Run them on demand from the
-# Actions tab, e.g. before a release or after touching the areas they cover.
+# Actions tab after touching the areas they cover; release.yml runs them before
+# every release.
 on:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      release:
+        description: >-
+          Called by release.yml. Suites that do not test what a desktop or daemon release ships,
+          or that fail on main today, then report without blocking it.
+        type: boolean
+        default: false
 
 jobs:
   # Bundle and packaging checks that used to live in the CI "node" job.
@@ -110,6 +119,8 @@ jobs:
     runs-on: ubuntu-latest
     # The complete single-worker suite takes about 8–10 minutes before dependency setup.
     timeout-minutes: 15
+    # Times out on main today; blocks releases again once it passes.
+    continue-on-error: ${{ inputs.release }}
     steps:
       - uses: actions/checkout@v4
       - name: Disable unused Chrome package source
@@ -138,6 +149,8 @@ jobs:
     runs-on: ubuntu-latest
     # Include bundle generation and the full phone interaction suite (about 7 minutes).
     timeout-minutes: 15
+    # The mobile app is not released by release.yml, and e2e and direct fail on main today.
+    continue-on-error: ${{ inputs.release }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -162,6 +175,8 @@ jobs:
         os: [macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 7
+    # Windows is not a release platform yet, and its runtime tests have known path failures.
+    continue-on-error: ${{ inputs.release && matrix.os == 'windows-latest' }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
