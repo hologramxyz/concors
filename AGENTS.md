@@ -59,8 +59,10 @@ step the release ends with, and naming an earlier version rolls back to it.
 
 What the app does with a release, and how the Mac build is signed, is in
 [docs/desktop-releases.md](docs/desktop-releases.md). The workflow needs these repository secrets:
-the five Apple ones listed there, and `RAILWAY_TOKEN`, a project token for the production
-environment of the `concors` project in the Holoworld AI Railway workspace.
+the five Apple ones listed there; `RAILWAY_TOKEN`, a project token for the production environment of
+the `concors` project in the Holoworld AI Railway workspace; and `AUR_SSH_PRIVATE_KEY`, which
+rolling out uses to publish `concors-bin` to the AUR (without it, that one step is skipped with a
+warning).
 
 **Once a pull request is ready for review, stop pushing to it.** Anything else, such as a
 follow-up fix, gets its own pull request. A commit pushed to a branch someone is already merging is
