@@ -1,3 +1,4 @@
+import { rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import {
@@ -32,11 +33,21 @@ import {
   type WorkspaceSnapshot,
 } from "@concors/protocol";
 
+/**
+ * How many chat sessions a machine keeps. Every session is replayed to each client that connects,
+ * so the number is bounded; when it is reached, the least recently used closed chat makes room.
+ */
+export const AGENT_SESSION_LIMIT = 128;
+const ACTIVE_AGENT = ["starting", "working", "needs_input"];
+
 /** A single daemon owns this database. Layout and retry receipts commit atomically. */
 export class WorkspaceStore {
   readonly #db: DatabaseSync;
   readonly attachmentsDirectory: string;
   #closed = false;
+  readonly #kept: (() => Iterable<string>)[] = [];
+  /** Told which sessions were removed to make room, once they are gone (see makeRoomForAgent). */
+  onAgentsRetired: ((ids: string[]) => void) | null = null;
 
   constructor(path = ":memory:") {
     this.attachmentsDirectory =
@@ -369,6 +380,79 @@ export class WorkspaceStore {
     if (!row) throw new Error("Agent session no longer exists");
     return AgentInfoSchema.parse(JSON.parse(String(row["info"])));
   }
+  /** Sessions something else still relies on although no pane shows them, such as a schedule's. */
+  keepAgents(ids: () => Iterable<string>): void {
+    this.#kept.push(ids);
+  }
+  /**
+   * Frees a place for one more session by removing the least recently updated closed chats.
+   * A chat is closed when no pane shows it, it is not running or waiting for an answer, nothing is
+   * queued for it, and nothing keeps it (keepAgents). Its conversation, images and attachment
+   * files go with it; for Claude Code and Codex the provider's own history usually remains, so
+   * Resume session can still find it. Throws only when every session is open or active.
+   */
+  makeRoomForAgent(state: WorkspaceSnapshot = this.snapshot()): void {
+    const agents = this.agents();
+    const excess = agents.length - (AGENT_SESSION_LIMIT - 1);
+    if (excess <= 0) return;
+    const shown = new Set(
+      state.projects.flatMap((project) =>
+        project.tabs.flatMap((tab) =>
+          tab.nodes.flatMap((node) =>
+            node.kind === "pane" && node.sessionId ? [node.sessionId] : [],
+          ),
+        ),
+      ),
+    );
+    const kept = new Set(this.#kept.flatMap((ids) => [...ids()]));
+    const queued = new Set(
+      this.#db
+        .prepare("SELECT DISTINCT session_id FROM agent_queue")
+        .all()
+        .map((row) => String(row["session_id"])),
+    );
+    const retired = agents
+      .filter(
+        (agent) =>
+          !shown.has(agent.id) &&
+          !kept.has(agent.id) &&
+          !queued.has(agent.id) &&
+          !ACTIVE_AGENT.includes(agent.status) &&
+          agent.pending.length === 0 &&
+          !agent.queue?.length,
+      )
+      .sort((a, b) => a.updatedAt.localeCompare(b.updatedAt))
+      .slice(0, excess)
+      .map((agent) => agent.id);
+    if (retired.length < excess)
+      throw new Error(
+        `All ${AGENT_SESSION_LIMIT} chats on this machine are open or active. Close one to start another.`,
+      );
+    this.transaction(() => {
+      for (const id of retired)
+        for (const table of [
+          "agent_items",
+          "agent_item_images",
+          "agent_native_turns",
+          "agent_queue",
+          "agent_requests",
+        ])
+          this.#db.prepare(`DELETE FROM ${table} WHERE session_id = ?`).run(id);
+      for (const id of retired) this.#db.prepare("DELETE FROM agents WHERE id = ?").run(id);
+    });
+    // Callers start the new chat in a transaction of their own. Files and notices wait until it
+    // has settled, and only for chats really gone: a start that rolled back keeps its old chats.
+    queueMicrotask(() => {
+      if (this.#closed) return;
+      const gone = retired.filter(
+        (id) => !this.#db.prepare("SELECT 1 FROM agents WHERE id = ?").get(id),
+      );
+      if (gone.length === 0) return;
+      for (const id of gone)
+        rmSync(join(this.attachmentsDirectory, id), { recursive: true, force: true });
+      this.onAgentsRetired?.(gone);
+    });
+  }
   mapNativeTurn(sessionId: string, nativeId: string, turnId: string): void {
     this.#db
       .prepare(
@@ -441,7 +525,7 @@ export class WorkspaceStore {
   createBackgroundAgent(info: AgentInfo): void {
     if (!this.snapshot().projects.some((p) => p.id === info.projectId))
       throw new Error("Project no longer exists");
-    if (this.agents().length >= 128) throw new Error("Agent session limit reached (128)");
+    this.makeRoomForAgent();
     this.#db
       .prepare("INSERT INTO agents (id,info) VALUES (?,?)")
       .run(info.id, JSON.stringify(AgentInfoSchema.parse(info)));
@@ -568,8 +652,7 @@ export class WorkspaceStore {
         throw new Error("That session is still active. Finish it before resuming here.");
       if (existing) info = existing;
       if (!existingBound) {
-        if (!existing && this.agents().length >= 128)
-          throw new Error("Agent session limit reached (128)");
+        if (!existing) this.makeRoomForAgent(state);
         bound.sessionId = info.id;
         // A chat resumed from its session comes back under the names it was given, unless this
         // pane or tab was named since. Without this the next workspace edit forgot them.
@@ -667,7 +750,7 @@ export class WorkspaceStore {
         );
       if (!project || !pane || pane.kind !== "pane")
         throw new Error("This agent's pane has been closed or changed.");
-      if (this.agents().length >= 128) throw new Error("Agent session limit reached (128)");
+      this.makeRoomForAgent(state);
       pane.sessionId = info.id;
       project.version++;
       state.revision++;
@@ -799,8 +882,7 @@ export class WorkspaceStore {
         pane.sessionId !== (op.kind === "switch-provider" ? op.sessionId : null)
       )
         throw new Error("Select an empty chat pane");
-      if (!restoring && this.agents().length >= 128)
-        throw new Error("Agent session limit reached (128)");
+      if (!restoring) this.makeRoomForAgent(state);
       pane.sessionId = info.id;
       project.version++;
       state.revision++;

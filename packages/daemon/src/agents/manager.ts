@@ -157,6 +157,18 @@ export class AgentManager {
     this.registry = registry;
     this.#store = store;
     this.#emit = emit;
+    // Old closed chats removed to make room for a new one: stop anything still attached to them,
+    // and send the whole list, which clients take as the full set of sessions.
+    store.onAgentsRetired = (ids) => {
+      for (const id of ids) {
+        const runtime = this.#runtimes.get(id);
+        if (!runtime) continue;
+        runtime.closed = true;
+        this.#runtimes.delete(id);
+        void runtime.provider.close().catch(() => undefined);
+      }
+      this.#emit({ type: "agent.list", agents: store.agents() });
+    };
     // Switching provider or resuming another session can leave the pane's old agent hidden. It
     // runs after the change's own agent events, so those never overwrite the names it records.
     this.#workspaceChanged = () => {
@@ -733,7 +745,7 @@ export class AgentManager {
       const project = this.#store.snapshot().projects.find((project) => project.id === projectId);
       if (!project?.directory || !(await stat(project.directory)).isDirectory())
         throw new Error("Project folder is unavailable");
-      if (this.#store.agents().length >= 128) throw new Error("Agent session limit reached (128)");
+      this.#store.makeRoomForAgent();
       if (this.#closed) throw new Error("Daemon is shutting down");
       const config = this.registry.config(providerId),
         now = new Date().toISOString();
