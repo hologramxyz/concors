@@ -66,6 +66,9 @@ test("directional pane sequences, tab cycling, project memory and immediate Agen
     // Navigating into an Agent pane focuses its composer, where Ctrl+Shift+Arrow selects words.
     await upper.getByRole("button", { name: "Pane actions" }).click();
     await page.getByRole("menuitemradio", { name: "Agent", exact: true }).click();
+    // A closing menu hands focus back to its button when its exit animation ends, and still
+    // counts as open for shortcuts until then, so let it finish before navigating by keyboard.
+    await expect(page.getByRole("menu")).toHaveCount(0);
     const composer = upper.getByRole("textbox", { name: "Message Codex" });
     await expect(composer).toBeEnabled();
     await panes.first().locator("textarea").focus();
@@ -106,6 +109,7 @@ test("directional pane sequences, tab cycling, project memory and immediate Agen
     await expect.poll(() => focusedPane(page)).toBe(left);
     await sequence(page, "t", "Enter");
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await expect(page.getByRole("menu")).toHaveCount(0);
     const input = page.getByRole("textbox", { name: "Message Codex" });
     await expect(input).toBeEnabled();
     await input.fill("keep these words");

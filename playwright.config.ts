@@ -35,10 +35,14 @@ export default defineConfig({
       reuseExistingServer: false,
     },
     {
-      command: `pnpm desktop:web:dev --port ${port}`,
+      // The built app, not the dev server: every test opens fresh pages, and the dev server's
+      // per-module requests made the whole suite take about 40% longer on two CPUs (and overrun
+      // its CI time limit before it was sharded). It is also the bundle that ships.
+      command: `pnpm desktop:web:build && pnpm --filter @concors/desktop exec vite preview --port ${port} --strictPort`,
       url: baseURL,
       env: { VITE_CONCORS_DAEMON_URL: "ws://127.0.0.1:7429/ws" },
       reuseExistingServer: false,
+      timeout: 180_000,
     },
   ],
 });

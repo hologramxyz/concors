@@ -1,6 +1,9 @@
 import { test, expect, signedIn } from "./signed-in.ts";
 import { managedHost } from "./support/managed-host.ts";
 
+/** The app's entry script: the source module from a dev server, the hashed bundle from a build. */
+const ENTRY = /\/(src\/main\.tsx|assets\/index-[\w-]+\.js)(\?.*)?$/;
+
 function gate() {
   let release: () => void = () => undefined;
   const promise = new Promise<void>((resolve) => {
@@ -95,7 +98,7 @@ test("the first HTML paint already has the mark and saved dark appearance before
   await signedIn(page);
   await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
   await page.addInitScript(() => localStorage.setItem("concors.theme", "dark"));
-  await page.route("**/src/main.tsx", async (route) => {
+  await page.route(ENTRY, async (route) => {
     await entry.promise;
     await route.continue();
   });
@@ -127,7 +130,7 @@ test("custom appearance survives the first frame of a reload", async ({ page }) 
   );
   expect(cached.id).toBe("ocean");
   const entry = gate();
-  await page.route("**/src/main.tsx", async (route) => {
+  await page.route(ENTRY, async (route) => {
     await entry.promise;
     await route.continue();
   });
