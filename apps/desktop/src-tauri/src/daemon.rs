@@ -1,6 +1,7 @@
 //! Starts the runtime shipped in the desktop bundle and reports its actual listening port.
 //! Only the gateway belongs to the window; the detached session host preserves terminals on exit.
 
+use std::ffi::{OsStr, OsString};
 use std::fs::{self, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
@@ -113,7 +114,14 @@ fn launch(
         .open(log_path)
         .map_err(|e| e.to_string())?;
     let stderr = output.try_clone().map_err(|e| e.to_string())?;
-    let mut child = Command::new(path)
+    let mut command = Command::new(path);
+    for (name, value) in appimage_overrides() {
+        match value {
+            Some(value) => command.env(name, value),
+            None => command.env_remove(name),
+        };
+    }
+    let mut child = command
         .args([
             "serve",
             "--host",
@@ -161,6 +169,68 @@ fn launch(
             ))
         }
     }
+}
+
+/// Set by the AppImage runtime and its launch scripts without pointing anywhere, so they cannot be
+/// recognised by their value: which image is running, and the GTK and Python settings the image's
+/// own libraries need. Each overwrote whatever the person had, so there is nothing to restore.
+const APPIMAGE_ONLY: &[&str] = &[
+    "APPDIR",
+    "APPIMAGE",
+    "ARGV0",
+    "OWD",
+    "GDK_BACKEND",
+    "GTK_THEME",
+    "PYTHONDONTWRITEBYTECODE",
+];
+
+/// The environment changes that give the daemon the person's environment rather than the image's.
+///
+/// An AppImage's launch scripts point library, Python, GTK and GStreamer search paths into the
+/// image so the app finds what it bundles. The daemon needs none of it, and every terminal and
+/// agent it starts would inherit it: `PYTHONHOME` alone breaks every Python in every terminal, and
+/// `LD_LIBRARY_PATH` hands system programs the image's libraries. So entries inside `appdir` are
+/// dropped from each variable, a variable left with nothing is removed, and the ones the image set
+/// outright ([`APPIMAGE_ONLY`]) are removed too. Returns `(name, None)` for a removal.
+pub fn appimage_environment(
+    variables: impl IntoIterator<Item = (OsString, OsString)>,
+    appdir: &Path,
+) -> Vec<(OsString, Option<OsString>)> {
+    let mut changes = Vec::new();
+    for (name, value) in variables {
+        if APPIMAGE_ONLY.iter().any(|only| OsStr::new(only) == name) {
+            changes.push((name, None));
+            continue;
+        }
+        let Some(text) = value.to_str() else { continue };
+        let entries: Vec<&str> = text.split(':').collect();
+        if !entries
+            .iter()
+            .any(|entry| !entry.is_empty() && Path::new(entry).starts_with(appdir))
+        {
+            continue;
+        }
+        let kept: Vec<&str> = entries
+            .into_iter()
+            .filter(|entry| !entry.is_empty() && !Path::new(entry).starts_with(appdir))
+            .collect();
+        let replacement = (!kept.is_empty()).then(|| OsString::from(kept.join(":")));
+        changes.push((name, replacement));
+    }
+    changes
+}
+
+/// [`appimage_environment`] for this process, when it is running from an AppImage.
+fn appimage_overrides() -> Vec<(OsString, Option<OsString>)> {
+    let (Ok(executable), Some(appdir)) = (std::env::current_exe(), std::env::var_os("APPDIR"))
+    else {
+        return Vec::new();
+    };
+    let appimage = std::env::var_os("APPIMAGE");
+    if crate::update::running_appimage(&executable, appimage.as_deref(), Some(&appdir)).is_none() {
+        return Vec::new();
+    }
+    appimage_environment(std::env::vars_os(), Path::new(&appdir))
 }
 
 fn bundled_daemon_path(app: &AppHandle) -> Option<PathBuf> {
@@ -224,7 +294,9 @@ pub fn stop_local_daemon(daemon: State<'_, LocalDaemon>) -> Result<LocalDaemonSt
 
 #[cfg(test)]
 mod tests {
-    use super::{ready_port, Profile};
+    use super::{appimage_environment, ready_port, Profile};
+    use std::ffi::OsString;
+    use std::path::Path;
 
     fn profile() -> Profile {
         Profile {
@@ -277,6 +349,52 @@ mod tests {
         )
         .is_err());
         fs::remove_dir_all(root).unwrap();
+    }
+
+    /// What the AppImage's AppRun and GTK hook actually set, as recorded from a release build.
+    #[test]
+    fn an_appimage_leaves_its_own_search_paths_out_of_the_daemon() {
+        let appdir = "/tmp/.mount_ConcorAbC123";
+        let variables = [
+            (
+                "PATH",
+                format!("{appdir}/usr/bin/:{appdir}/usr/sbin/:/usr/local/bin:/usr/bin"),
+            ),
+            (
+                "LD_LIBRARY_PATH",
+                format!("{appdir}/usr/lib/:{appdir}/lib64/:"),
+            ),
+            ("PYTHONHOME", format!("{appdir}/usr/")),
+            (
+                "XDG_DATA_DIRS",
+                format!("{appdir}/usr/share/:{appdir}/usr/share:/usr/share:"),
+            ),
+            ("GTK_PATH", format!("{appdir}//usr/lib/gtk-3.0")),
+            ("GDK_BACKEND", "x11".into()),
+            ("APPIMAGE", "/home/someone/Concors.AppImage".into()),
+            ("APPDIR", appdir.into()),
+            ("HOME", "/home/someone".into()),
+            ("DISPLAY", ":0".into()),
+            // Not inside the mount, however similar the name.
+            ("EDITOR_PATH", "/tmp/.mount_ConcorAbC1234/usr/bin".into()),
+        ]
+        .map(|(name, value)| (OsString::from(name), OsString::from(value)));
+        let mut changes = appimage_environment(variables, Path::new(appdir));
+        changes.sort();
+        let expected: Vec<(OsString, Option<OsString>)> = [
+            ("APPDIR", None),
+            ("APPIMAGE", None),
+            ("GDK_BACKEND", None),
+            ("GTK_PATH", None),
+            ("LD_LIBRARY_PATH", None),
+            ("PATH", Some("/usr/local/bin:/usr/bin")),
+            ("PYTHONHOME", None),
+            ("XDG_DATA_DIRS", Some("/usr/share")),
+        ]
+        .into_iter()
+        .map(|(name, value)| (name.into(), value.map(OsString::from)))
+        .collect();
+        assert_eq!(changes, expected);
     }
 
     #[test]

@@ -71,12 +71,16 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Builds the daemon, checks its relocated runtime with a real PTY, then the app binary.
-      - name: Build the app and its bundled daemon
-        run: pnpm desktop:package:linux --no-bundle
+      # Builds the daemon, checks its relocated runtime with a real PTY, then the app binary and,
+      # from it, the AppImage. The tarball below repackages the same binary.
+      - name: Build the app, its bundled daemon and the AppImage
+        run: pnpm desktop:package:linux --bundles appimage
 
       - name: Assemble the relocatable tree
         run: pnpm desktop:release:linux
+
+      - name: Stage the AppImage
+        run: pnpm desktop:release:appimage
 
       - name: Build the Arch package
         env:
@@ -114,6 +118,38 @@ jobs:
               /opt/Concors/lib/Concors/daemon/bin/concors-daemon --version
             '
 
+      - name: Run the AppImage's bundled daemon on clean Ubuntu, from a read-only mount
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        # An AppImage runs from a read-only squashfs mount, so the daemon inside it must work
+        # without writing beside itself. The extracted image is mounted read-only in a container
+        # with no Node or compilers, and the smoke test runs the daemon where it lies, as well as
+        # from a relocated copy. It is the image's daemon that has to pass, not the one tested
+        # before bundling: linuxdeploy edits the ELF files it finds, and gives Node and node-pty's
+        # module a `$ORIGIN` run path on the way into the image.
+        run: |
+          appimage="$PWD/apps/desktop/dist/release/Concors-$VERSION-x86_64.AppImage"
+          rm -rf "$RUNNER_TEMP/appimage" && mkdir "$RUNNER_TEMP/appimage"
+          (cd "$RUNNER_TEMP/appimage" && "$appimage" --appimage-extract > /dev/null)
+          app="$RUNNER_TEMP/appimage/squashfs-root"
+          test -x "$app/AppRun"
+          test -x "$app/usr/bin/concors-desktop"
+          test -f "$app/Concors.desktop"
+          # The type 2 magic, which update.rs checks before replacing a running copy with a download.
+          [ "$(od -An -tx1 -j8 -N3 "$appimage" | tr -d ' ')" = 414902 ]
+          docker run --rm --network none \
+            -v "$app:/app:ro" \
+            -v "$PWD/packages/daemon/scripts/smoke-bundle.ts:/smoke-bundle.ts:ro" \
+            ubuntu:24.04 sh -ec '
+              for tool in node npm pnpm python3 gcc g++ cc make clang; do
+                if command -v "$tool"; then echo "Unexpected preinstalled tool: $tool"; exit 1; fi
+              done
+              daemon=/app/usr/lib/Concors/daemon
+              "$daemon/bin/concors-daemon" --version
+              "$daemon/bin/node" /smoke-bundle.ts --release "$daemon" --in-place
+              "$daemon/bin/node" /smoke-bundle.ts --release "$daemon"
+            '
+
       - name: Sign the builds
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -130,6 +166,7 @@ jobs:
           # Absolute paths: `pnpm --filter … exec` runs the signer from apps/desktop, where a
           # repository-relative path does not exist.
           for artifact in "$PWD"/apps/desktop/dist/release/Concors-*-x64.tar.gz \
+                          "$PWD"/apps/desktop/dist/release/Concors-*-x86_64.AppImage \
                           "$PWD"/apps/desktop/dist/release/concors-bin-*.pkg.tar.zst; do
             pnpm --filter @concors/desktop exec tauri signer sign "$artifact" > /dev/null
             test -s "$artifact.sig" || { echo "no signature for $artifact" >&2; exit 1; }
@@ -142,6 +179,8 @@ jobs:
           path: |
             apps/desktop/dist/release/Concors-*-x64.tar.gz
             apps/desktop/dist/release/Concors-*-x64.tar.gz.sha256
+            apps/desktop/dist/release/Concors-*-x86_64.AppImage
+            apps/desktop/dist/release/Concors-*-x86_64.AppImage.sha256
             apps/desktop/dist/release/concors-bin-*.pkg.tar.zst
             apps/desktop/dist/release/*.sig
           if-no-files-found: error
@@ -302,19 +341,21 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.build.outputs.version }}
         # The directory holds exactly what the build jobs uploaded, plus release.json. The Mac disk
-        # image and the Linux tarball are also published under names without the version, so the
-        # website can link to releases/latest/download/Concors-mac-arm64.dmg and
-        # …/Concors-linux-x64.tar.gz. Those follow the release marked Latest, which happens when a
-        # release is rolled out, not here: publishing is not rolling out.
+        # image, the Linux tarball and the AppImage are also published under names without the
+        # version, so the website can link to releases/latest/download/Concors-mac-arm64.dmg,
+        # …/Concors-linux-x64.tar.gz and …/Concors-linux-x86_64.AppImage. Those follow the release
+        # marked Latest, which happens when a release is rolled out, not here: publishing is not
+        # rolling out. The copies are made after release.json, which names only versioned builds.
         run: |
           if [ -e "Concors-$VERSION-aarch64.dmg" ]; then
             cp "Concors-$VERSION-aarch64.dmg" Concors-mac-arm64.dmg
           fi
           cp "Concors-$VERSION-x64.tar.gz" Concors-linux-x64.tar.gz
+          cp "Concors-$VERSION-x86_64.AppImage" Concors-linux-x86_64.AppImage
           ls -l
           gh release create "$RELEASE_TAG" * \
             --verify-tag --title "Concors $VERSION" --latest=false \
-            --notes "Concors $VERSION. macOS (Apple Silicon): open the .dmg and drag Concors to Applications. Arch/Omarchy: install the .pkg.tar.zst with \`pacman -U\`. Other Linux x86_64: extract the tarball and run \`bin/concors-desktop\`, keeping \`bin/\` and \`lib/\` siblings. release.json is what the control plane reads to offer in-app updates."
+            --notes "Concors $VERSION. macOS (Apple Silicon): open the .dmg and drag Concors to Applications. Arch/Omarchy: install the .pkg.tar.zst with \`pacman -U\`. Other Linux x86_64: download the .AppImage, make it executable (\`chmod +x\`) and run it; or extract the tarball and run \`bin/concors-desktop\`, keeping \`bin/\` and \`lib/\` siblings. release.json is what the control plane reads to offer in-app updates."
 
   verify-download:
     name: Verify anonymous release download
@@ -342,9 +383,9 @@ jobs:
             throw new Error(`manifest is ${manifest.version}, expected ${process.env.VERSION}`);
           const formats = manifest.artifacts.map((a) => a.format);
           // Linux always ships; the disk image only when Apple credentials are configured.
-          for (const required of ['pacman', 'tarball'])
+          for (const required of ['pacman', 'tarball', 'appimage'])
             if (!formats.includes(required)) throw new Error(`no ${required} in the manifest`);
-          const unknown = formats.filter((f) => !['pacman', 'tarball', 'dmg'].includes(f));
+          const unknown = formats.filter((f) => !['pacman', 'tarball', 'appimage', 'dmg'].includes(f));
           if (unknown.length) throw new Error(`unexpected formats: ${unknown.join(',')}`);
           console.log(manifest.artifacts.map((a) => `${a.format} ${a.name} ${a.sha256}`).join('\n'));
           NODE

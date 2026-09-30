@@ -8,17 +8,23 @@ import { setTimeout as delay } from "node:timers/promises";
 import type { DaemonMessage, TerminalOperation, WorkspaceOperation } from "@concors/protocol";
 
 // This check has no runtime npm dependencies. It also runs using the Node shipped in the tarball.
-const release = process.argv[2] === "--release";
-const source = resolve(process.argv[release ? 3 : 2] ?? "dist");
+const args = process.argv.slice(2);
+const release = args.includes("--release");
+// Runs a release where it lies instead of from a relocated copy. An AppImage runs the daemon from
+// a read-only mount, so pointing this at one proves nothing in the bundle writes beside itself.
+const inPlace = args.includes("--in-place");
+if (inPlace && !release) throw new Error("--in-place applies to --release bundles only.");
+const source = resolve(args.find((arg) => !arg.startsWith("--")) ?? "dist");
 const temporary = await mkdtemp(join(tmpdir(), "concors-bundle-"));
-const isolated = join(temporary, "relocated bundle with spaces");
-await mkdir(isolated);
+const isolated = inPlace ? source : join(temporary, "relocated bundle with spaces");
+if (!inPlace) await mkdir(isolated);
 let child: ReturnType<typeof spawn> | undefined;
 let socket: WebSocket | undefined;
 let exited: Promise<unknown> | undefined;
 try {
+  // In place, there is nothing to copy: the checks below read and run `source` itself.
   if (release) {
-    await cp(source, isolated, { recursive: true });
+    if (!inPlace) await cp(source, isolated, { recursive: true });
   } else {
     for (const file of ["cli.js", "package.json", "node_modules"])
       await cp(join(source, file), join(isolated, file), { recursive: true });

@@ -2,8 +2,9 @@
 //!
 //! Two things are native here. The first is recognising how this copy was installed, because that
 //! decides whether the app can update itself at all: a package under `/opt` belongs to the system
-//! package manager and needs an administrator, while a tree unpacked in a home directory is ours
-//! to replace. The second is applying an update, which means touching files the webview cannot.
+//! package manager and needs an administrator, while a tree unpacked in a home directory, or an
+//! AppImage saved in one, is ours to replace. The second is applying an update, which means
+//! touching files the webview cannot.
 //!
 //! Downloading and verifying use the system's `curl` and `sha256sum` rather than HTTP and digest
 //! crates, for the same reason `ssh_key.rs` uses `ssh-keygen`: they are present wherever this app
@@ -11,8 +12,10 @@
 //! `curl` is told not to carry our credential across a redirect, so the session token reaches the
 //! control plane and never the host storing the build.
 
+use std::ffi::OsStr;
 use std::fs;
-use std::path::Path;
+use std::io::Read;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
 
@@ -30,6 +33,9 @@ pub enum Installation {
     Pacman { package: String },
     /// A relocatable tree we can replace ourselves, if its files are writable.
     Tarball { root: String, writable: bool },
+    /// A single AppImage file, which we can replace ourselves if its directory is writable.
+    #[serde(rename = "appimage")]
+    AppImage { path: String, writable: bool },
     /// Built from a checkout. Nothing is offered: the checkout is the source of truth.
     Development,
     /// Somewhere we do not recognise; the app can still say a version exists.
@@ -42,13 +48,27 @@ impl Installation {
         match self {
             Installation::Pacman { .. } => &["pacman"],
             Installation::Tarball { writable: true, .. } => &["tarball"],
+            Installation::AppImage { writable: true, .. } => &["appimage"],
             _ => &[],
         }
     }
 }
 
 /// Where this executable lives decides everything else, so it is read once and reasoned about here.
-pub fn detect(executable: &Path, owner: impl FnOnce(&Path) -> Option<String>) -> Installation {
+/// `appimage` is the file this process was started from, when it was (see [`running_appimage`]).
+pub fn detect(
+    executable: &Path,
+    appimage: Option<&Path>,
+    owner: impl FnOnce(&Path) -> Option<String>,
+) -> Installation {
+    // Inside an AppImage the executable sits on a temporary read-only mount; what the person
+    // downloaded, and what an update replaces, is the file the runtime mounted.
+    if let Some(file) = appimage {
+        return Installation::AppImage {
+            path: file.to_string_lossy().into_owned(),
+            writable: file.parent().is_some_and(is_writable),
+        };
+    }
     let path = executable.to_string_lossy();
     // `cargo build` and `tauri dev` both land here; neither is a published build.
     if path.contains("/target/debug/") || path.contains("/target/release/") {
@@ -67,6 +87,20 @@ pub fn detect(executable: &Path, owner: impl FnOnce(&Path) -> Option<String>) ->
         }
     }
     Installation::Unknown
+}
+
+/// The AppImage file this process was started from, if any. The AppImage runtime mounts the image
+/// at `APPDIR` and names the file in `APPIMAGE`, and both are inherited by everything started from
+/// inside it: a Concors launched from another AppImage's terminal sees that program's values, and
+/// must not replace it with itself. Only an executable inside `APPDIR` was started from `APPIMAGE`.
+pub fn running_appimage(
+    executable: &Path,
+    appimage: Option<&OsStr>,
+    appdir: Option<&OsStr>,
+) -> Option<PathBuf> {
+    let (file, mount) = (Path::new(appimage?), Path::new(appdir?));
+    (file.is_absolute() && mount.is_absolute() && executable.starts_with(mount))
+        .then(|| file.to_path_buf())
 }
 
 /// Asks the filesystem rather than the permission bits: a tree under `/opt` is typically
@@ -121,7 +155,14 @@ fn platform() -> &'static str {
 #[tauri::command]
 pub fn app_installation() -> InstallationReport {
     let installation = match std::env::current_exe() {
-        Ok(executable) => detect(&executable, pacman_owner),
+        Ok(executable) => {
+            let appimage = running_appimage(
+                &executable,
+                std::env::var_os("APPIMAGE").as_deref(),
+                std::env::var_os("APPDIR").as_deref(),
+            );
+            detect(&executable, appimage.as_deref(), pacman_owner)
+        }
         Err(error) => {
             log::warn!("could not locate the running executable: {error}");
             Installation::Unknown
@@ -196,6 +237,7 @@ fn download_and_install(
 ) -> Result<(), String> {
     let name = match installation {
         Installation::Pacman { .. } => format!("concors-{}.pkg.tar.zst", request.version),
+        Installation::AppImage { .. } => format!("concors-{}.AppImage", request.version),
         _ => format!("concors-{}.tar.gz", request.version),
     };
     let file = directory.join(name);
@@ -204,6 +246,8 @@ fn download_and_install(
     match installation {
         Installation::Pacman { .. } => install_package(&file),
         Installation::Tarball { root, .. } => replace_tree(&file, Path::new(root)),
+        // Tauri's restart relaunches `APPIMAGE`, so it starts the file that is now the new build.
+        Installation::AppImage { path, .. } => replace_appimage(&file, Path::new(path)),
         _ => Err("This copy of Concors cannot install updates.".into()),
     }
 }
@@ -355,6 +399,43 @@ fn replace_tree(archive: &Path, root: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// Copies the new image beside the running one and renames it over it. The rename is what makes
+/// this safe while the old image runs: its mount keeps reading the file it opened, which lives on
+/// unnamed until the app exits, while the name now belongs to the new build. Writing into the
+/// running file instead would change the image underneath its own mount.
+fn replace_appimage(download: &Path, target: &Path) -> Result<(), String> {
+    if !is_appimage(download) {
+        return Err("The update did not contain a Concors build.".into());
+    }
+    let (Some(directory), Some(name)) = (target.parent(), target.file_name()) else {
+        return Err("Could not find the AppImage to replace.".into());
+    };
+    // Hidden, and in the same directory, since a rename cannot cross filesystems.
+    let staging = directory.join(format!(".{}.update", name.to_string_lossy()));
+    let result = fs::copy(download, &staging)
+        .and_then(|_| {
+            // Keep whatever mode the person gave the file; it is running, so it is executable.
+            let permissions = fs::metadata(target)?.permissions();
+            fs::set_permissions(&staging, permissions)
+        })
+        .and_then(|()| fs::rename(&staging, target));
+    if let Err(error) = result {
+        let _ = fs::remove_file(&staging);
+        return Err(format!("Could not put the update in place: {error}"));
+    }
+    Ok(())
+}
+
+/// An ELF file carrying the AppImage type 2 magic (`AI` 2) in its identification padding.
+fn is_appimage(file: &Path) -> bool {
+    let mut header = [0u8; 11];
+    fs::File::open(file)
+        .and_then(|mut opened| opened.read_exact(&mut header))
+        .is_ok()
+        && header.starts_with(b"\x7fELF")
+        && &header[8..] == b"AI\x02"
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -373,11 +454,11 @@ mod tests {
         let cargo = Path::new(
             "/home/someone/concors/apps/desktop/src-tauri/target/release/concors-desktop",
         );
-        assert_eq!(detect(cargo, |_| None), Installation::Development);
+        assert_eq!(detect(cargo, None, |_| None), Installation::Development);
         let debug =
             Path::new("/home/someone/concors/apps/desktop/src-tauri/target/debug/concors-desktop");
         assert_eq!(
-            detect(debug, |_| Some("concors-bin".into())),
+            detect(debug, None, |_| Some("concors-bin".into())),
             Installation::Development
         );
         assert!(Installation::Development.formats().is_empty());
@@ -387,7 +468,7 @@ mod tests {
     fn a_packaged_copy_reports_the_package_that_owns_it() {
         let installed = Path::new("/opt/Concors/bin/concors-desktop");
         assert_eq!(
-            detect(installed, |_| Some("concors-bin".into())),
+            detect(installed, None, |_| Some("concors-bin".into())),
             Installation::Pacman {
                 package: "concors-bin".into()
             }
@@ -410,7 +491,7 @@ mod tests {
         fs::write(&executable, "").unwrap();
 
         assert_eq!(
-            detect(&executable, |_| None),
+            detect(&executable, None, |_| None),
             Installation::Tarball {
                 root: root.to_string_lossy().into_owned(),
                 writable: true
@@ -426,7 +507,7 @@ mod tests {
         let executable = root.join("bin/concors-desktop");
         fs::write(&executable, "").unwrap();
 
-        assert_eq!(detect(&executable, |_| None), Installation::Unknown);
+        assert_eq!(detect(&executable, None, |_| None), Installation::Unknown);
         assert!(Installation::Unknown.formats().is_empty());
         fs::remove_dir_all(&root).unwrap();
     }
@@ -513,5 +594,136 @@ mod tests {
             "old"
         );
         fs::remove_dir_all(&base).unwrap();
+    }
+
+    /// The start of a type 2 AppImage: an ELF identification with `AI` 2 in its padding.
+    const APPIMAGE_HEADER: &[u8] = b"\x7fELF\x02\x01\x01\0AI\x02\0\0\0\0\0";
+
+    #[test]
+    fn an_appimage_is_recognised_by_the_file_its_runtime_names() {
+        let directory = temp("appimage");
+        let file = directory.join("Concors-linux-x86_64.AppImage");
+        let executable = Path::new("/tmp/.mount_ConcorAbC123/usr/bin/concors-desktop");
+        let found = running_appimage(
+            executable,
+            Some(file.as_os_str()),
+            Some(OsStr::new("/tmp/.mount_ConcorAbC123")),
+        );
+        assert_eq!(found.as_deref(), Some(file.as_path()));
+
+        // Checked before anything else: a pacman query about the mount would mean nothing.
+        let installation = detect(executable, found.as_deref(), |_| Some("concors-bin".into()));
+        assert_eq!(
+            installation,
+            Installation::AppImage {
+                path: file.to_string_lossy().into_owned(),
+                writable: true
+            }
+        );
+        assert_eq!(installation.formats(), &["appimage"]);
+        fs::remove_dir_all(&directory).unwrap();
+    }
+
+    /// Another AppImage's variables reach any Concors started from its terminal.
+    #[test]
+    fn an_appimage_variable_inherited_from_another_program_is_ignored() {
+        let other = Some(OsStr::new("/home/someone/Apps/Editor.AppImage"));
+        let mount = Some(OsStr::new("/tmp/.mount_EditorXyZ"));
+        let tarball = Path::new("/home/someone/Concors/bin/concors-desktop");
+        assert_eq!(running_appimage(tarball, other, mount), None);
+        // Components, not characters: one mount's name can be the prefix of another's.
+        let lookalike = Path::new("/tmp/.mount_EditorXyZ9/usr/bin/concors-desktop");
+        assert_eq!(running_appimage(lookalike, other, mount), None);
+        let inside = Path::new("/tmp/.mount_EditorXyZ/usr/bin/concors-desktop");
+        assert_eq!(running_appimage(inside, None, mount), None);
+        assert_eq!(running_appimage(inside, other, None), None);
+        assert_eq!(
+            running_appimage(inside, Some(OsStr::new("Editor.AppImage")), mount),
+            None
+        );
+    }
+
+    /// The webview's schema (`src/tauri/app-update.ts`) matches on exactly this shape.
+    #[test]
+    fn an_appimage_reports_the_kind_the_webview_expects() {
+        let installation = Installation::AppImage {
+            path: "/home/someone/Concors.AppImage".into(),
+            writable: true,
+        };
+        assert_eq!(
+            serde_json::to_value(installation).unwrap(),
+            serde_json::json!({
+                "kind": "appimage",
+                "path": "/home/someone/Concors.AppImage",
+                "writable": true
+            })
+        );
+    }
+
+    #[test]
+    fn an_appimage_that_cannot_be_rewritten_is_only_announced() {
+        let installation = Installation::AppImage {
+            path: "/opt/Concors.AppImage".into(),
+            writable: false,
+        };
+        assert!(installation.formats().is_empty());
+    }
+
+    #[test]
+    fn replacing_an_appimage_swaps_the_file_under_the_running_one() {
+        let directory = temp("appimage-swap");
+        let target = directory.join("Concors.AppImage");
+        fs::write(&target, [APPIMAGE_HEADER, b"old"].concat()).unwrap();
+        let download = directory.join("download");
+        let new = [APPIMAGE_HEADER, b"new"].concat();
+        fs::write(&download, &new).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&target, fs::Permissions::from_mode(0o750)).unwrap();
+        }
+        // What the running image's mount holds on to.
+        let mut running = fs::File::open(&target).unwrap();
+
+        replace_appimage(&download, &target).unwrap();
+
+        assert_eq!(fs::read(&target).unwrap(), new);
+        let mut old = Vec::new();
+        running.read_to_end(&mut old).unwrap();
+        assert!(
+            old.ends_with(b"old"),
+            "the running image changed underneath it"
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = fs::metadata(&target).unwrap().permissions().mode();
+            assert_eq!(mode & 0o777, 0o750);
+        }
+        let mut left = fs::read_dir(&directory)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+        left.sort();
+        assert_eq!(left, ["Concors.AppImage", "download"]);
+        fs::remove_dir_all(&directory).unwrap();
+    }
+
+    #[test]
+    fn replacing_an_appimage_keeps_the_old_one_when_the_download_is_not_one() {
+        let directory = temp("appimage-refuse");
+        let target = directory.join("Concors.AppImage");
+        fs::write(&target, [APPIMAGE_HEADER, b"old"].concat()).unwrap();
+        let download = directory.join("download");
+        // An ELF file, but not an AppImage.
+        fs::write(&download, b"\x7fELF\x02\x01\x01\0\0\0\0\0\0\0\0\0rest").unwrap();
+
+        assert!(replace_appimage(&download, &target).is_err());
+        assert_eq!(
+            fs::read(&target).unwrap(),
+            [APPIMAGE_HEADER, b"old"].concat()
+        );
+        assert!(!directory.join(".Concors.AppImage.update").exists());
+        fs::remove_dir_all(&directory).unwrap();
     }
 }
