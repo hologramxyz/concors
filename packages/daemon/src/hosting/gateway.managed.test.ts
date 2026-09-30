@@ -219,6 +219,30 @@ it("keeps health open with version and authenticates all other HTTP requests bef
   expect(await health.json()).toEqual({ status: "ok", version: DAEMON_VERSION });
 });
 
+it("serves agent activity to machine tokens only, from the private host", async () => {
+  const f = await fixture();
+  for (const headers of [
+    { host: f.headers.host },
+    { ...f.headers, authorization: "Bearer bad" },
+    { ...f.headers, authorization: `Bearer ${await f.sign("15m", "user_1").then((t) => t + "x")}` },
+  ])
+    expect((await httpFetch(f.url + "/activity", { headers })).status).toBe(401);
+  expect(ensureSessionHost).not.toHaveBeenCalled();
+  expect(f.forwarded).toHaveLength(0);
+  expect(
+    (await httpFetch(f.url + "/activity", { headers: { ...f.headers, host: "evil.test" } })).status,
+  ).toBe(403);
+  const response = await httpFetch(f.url + "/activity", { headers: f.headers });
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ busy: false, agents: { working: 0, waiting: 0 } });
+  expect(f.forwarded).toEqual([
+    expect.objectContaining({
+      url: "/activity",
+      headers: expect.objectContaining({ authorization: "Bearer host-secret" }),
+    }),
+  ]);
+});
+
 it("rejects every unauthenticated upgrade before inspecting its route or Host", async () => {
   const f = await fixture();
   for (const path of ["/ws", "/wrong-path", "/health", "/internal/stop"]) {

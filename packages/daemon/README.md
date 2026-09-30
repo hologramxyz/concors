@@ -64,6 +64,11 @@ The gateway caches the control plane's JWKS for one hour, refreshing unknown key
 30-second cooldown. Machine tokens and browser origins terminate at the gateway; the loopback
 session host still uses its private credential, and its maintenance routes remain private.
 
+`GET /activity` (machine token required, answered by the session host) tells the control plane
+whether agents are working or waiting: `{ "busy", "agents": { "working", "waiting" } }`. The
+control plane installs a rolled-out daemon only while it is not busy, or when the machine's owner
+asks for it, since installing restarts every agent (`src/managed/activity.ts` has the rules).
+
 After listening, the gateway posts version, process uptime, and live terminal count to the
 control plane every 30 seconds, using `Bearer <machineId>.<agentToken>` and a 10-second HTTP timeout.
 Counting uses the existing private session protocol. Gateway shutdown stops heartbeats and detaches

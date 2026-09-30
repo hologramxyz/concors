@@ -1487,3 +1487,24 @@ it("previews submitted attachments after restart without broadcasting the bytes 
       .outcome.status,
   ).toBe("error");
 });
+it("reports on /activity whether chats are working or waiting, and not when they are idle", async () => {
+  const { a, id, url } = await setup();
+  const activity = async () => (await fetch(new URL("/activity", url))).json();
+  expect(await activity()).toEqual({ busy: false, agents: { working: 0, waiting: 0 } });
+  await action(a, { kind: "send", sessionId: id, text: "hold" });
+  await expect.poll(() => a.agents[0]?.status).toBe("working");
+  expect(await activity()).toEqual({ busy: true, agents: { working: 1, waiting: 0 } });
+  await action(a, { kind: "interrupt", sessionId: id, turnId: a.agents[0]!.turnId! });
+  await expect.poll(() => a.agents[0]?.status).not.toBe("working");
+  await action(a, { kind: "send", sessionId: id, text: "approve command" });
+  await expect.poll(() => a.agents[0]?.status).toBe("needs_input");
+  expect(await activity()).toEqual({ busy: true, agents: { working: 0, waiting: 1 } });
+  await action(a, {
+    kind: "respond",
+    sessionId: id,
+    pendingId: a.agents[0]!.pending[0]!.id,
+    decision: "accept",
+  });
+  await expect.poll(() => a.agents[0]?.status).toBe("done");
+  expect(await activity()).toEqual({ busy: false, agents: { working: 0, waiting: 0 } });
+});
