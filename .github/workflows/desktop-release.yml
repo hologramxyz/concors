@@ -1,18 +1,23 @@
 name: Desktop release
 
+# Builds, tests and publishes one desktop version. It is a step of release.yml, which bumps the
+# version, tags it and passes it here; nothing starts this workflow on its own.
 on:
-  push:
-    tags: [desktop-v*]
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
+      notes:
+        description: Shown in the app before updating, so written for the people reading it there.
+        type: string
+        required: true
 
 permissions:
   contents: read
 
-concurrency:
-  group: desktop-release-${{ github.ref }}
-  cancel-in-progress: false
-
 env:
-  RELEASE_TAG: ${{ github.ref_name }}
+  RELEASE_TAG: desktop-v${{ inputs.version }}
   GH_REPO: ${{ github.repository }}
   # Published builds talk to production. A release pointed at the development API would look
   # identical and quietly send everyone who installed it to the wrong control plane.
@@ -28,6 +33,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ env.RELEASE_TAG }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -175,6 +181,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ env.RELEASE_TAG }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -267,6 +274,7 @@ jobs:
       # Only for release-manifest.ts, which needs nothing beyond Node itself.
       - uses: actions/checkout@v4
         with:
+          ref: ${{ env.RELEASE_TAG }}
           persist-credentials: false
 
       - uses: actions/setup-node@v4
@@ -281,23 +289,11 @@ jobs:
 
       - name: Write the release manifest
         env:
-          GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.build.outputs.version }}
-        # The tag's annotation becomes the release notes the app shows before updating, so it is
-        # read from the API rather than the checkout: actions/checkout creates the local tag ref
-        # from the commit SHA, which makes it lightweight, and `%(contents)` on a lightweight tag
-        # quietly yields the commit message instead. A release would then offer people
-        # "Merge pull request #124" as its description.
+          # Through the environment rather than inline, so quotes in the notes cannot break the script.
+          NOTES: ${{ inputs.notes }}
         run: |
-          object="$(gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" --jq '.object.type + " " + .object.sha')"
-          if [ "${object%% *}" = "tag" ]; then
-            gh api "repos/$GH_REPO/git/tags/${object##* }" --jq '.message' > /tmp/notes.txt
-          else
-            echo "::warning::$RELEASE_TAG is not an annotated tag, so the release has no notes."
-            : > /tmp/notes.txt
-          fi
-          [ -s /tmp/notes.txt ] || echo "Concors $VERSION." > /tmp/notes.txt
-          cat /tmp/notes.txt
+          printf '%s\n' "$NOTES" > /tmp/notes.txt
           node apps/desktop/scripts/release-manifest.ts --notes-file /tmp/notes.txt
 
       - name: Create release with tested builds

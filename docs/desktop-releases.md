@@ -18,31 +18,21 @@ app never talks to GitHub itself: the API reads the release and hands out downlo
 | `packaging/linux/PKGBUILD` (`pkgver`)    | the version pacman records                                |
 | `apps/desktop/src-tauri/Cargo.toml`      | the crate version, shown by `cargo` and in a panic        |
 
-Nothing keeps them together except a check, so bump them with one command rather than by hand:
-
-```sh
-pnpm desktop:version --set 0.3.0
-cargo metadata --manifest-path apps/desktop/src-tauri/Cargo.toml --format-version 1 >/dev/null
-```
-
-That rewrites all four, resets the PKGBUILD's `pkgrel` to 1, and reads them back to check they
-agree. `pnpm desktop:version` on its own prints the agreed version, or names every file that
+Nothing keeps them together except a check, and nobody edits them by hand: the Release workflow
+bumps all four through `release-plan.ts`, with the same code as `pnpm desktop:version --set`. That
+rewrites all four, resets the PKGBUILD's `pkgrel` to 1, and reads them back to check they agree. `pnpm desktop:version` on its own prints the agreed version, or names every file that
 disagrees, which is what the release workflow runs before building anything: a release whose pieces disagree would ask the control plane for updates
 to a version it is not, and would never stop offering the one it already has.
 
 ## Publishing
 
-Bump the version as above, merge to `main`, then tag the merge commit:
+Releases are made by the Release workflow (Actions → Release → Run workflow on `main`; see
+Releasing in AGENTS.md). It commits the bumped version to `main`, tags that commit
+`desktop-v<version>` with the notes, and hands the version to
+`.github/workflows/desktop-release.yml`. The notes become the release notes shown in the app
+before updating, so write them for the person who will read them there.
 
-```sh
-git tag -a desktop-v0.2.0 -m "Faster terminals and a quieter sidebar."
-git push origin desktop-v0.2.0
-```
-
-The annotated tag's message becomes the release notes shown in the app before updating, so write
-it for the person who will read it there.
-
-`.github/workflows/desktop-release.yml` then builds on Ubuntu 24.04 — the oldest base supported,
+`desktop-release.yml` builds on Ubuntu 24.04 — the oldest base supported,
 which fixes the glibc floor — and produces:
 
 | Asset                                        | For                                              |
@@ -109,23 +99,21 @@ an installation it could replace.
 
 ## Offering the release
 
-A published release reaches nobody until the control plane points at it. Set `DESKTOP_VERSION` on
-the API to the version just published; until then every copy is told it is current. It is a
-separate, deliberate step, so a release can be published and then rolled out — or held back.
+A published release reaches nobody until the control plane points at it: until `DESKTOP_VERSION`
+on the API names it, every copy is told it is current. The Release workflow ends by doing that
+(`roll-out.yml`) unless `roll_out_desktop` was turned off, and the Roll out workflow does it on its
+own, for a release held back or to roll back to an earlier one.
 
 **Publish first, pin second.** Pinning a version whose release does not exist yet leaves the update
 check answering 502 until it does. Nothing is user-visible while that lasts — a failed check is
 silence, and the rest of the API is untouched — but there is no reason to arrange it.
 
-```sh
-railway variable set DESKTOP_VERSION=0.2.0
-gh release edit desktop-v0.2.0 --latest
-```
-
-The second line makes it GitHub's Latest release, which is what new downloads follow: the website
+Rolling out sets `DESKTOP_VERSION` on the production `concors-server` (with the `RAILWAY_TOKEN`
+secret), then marks the release GitHub's Latest, which is what new downloads follow: the website
 links to `releases/latest/download/Concors-mac-arm64.dmg`, a copy of the disk image every release
-also publishes under that fixed name. The workflow publishes with `--latest=false` so that this,
-too, waits for the rollout.
+also publishes under that fixed name. Releases are published with `--latest=false` so that this,
+too, waits for the rollout. Last, it asks the API for an update the way an old copy would, and
+fails unless the answer is the version just rolled out.
 
 The API reads only `release.json` from that release, anonymously, since the repository is
 public. Builds are never proxied through it: a client asking to download one is redirected
