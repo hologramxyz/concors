@@ -11,8 +11,7 @@ on:
     inputs:
       release:
         description: >-
-          Called by release.yml. Suites that do not test what a desktop or daemon release ships,
-          or that fail on main today, then report without blocking it.
+          Called by release.yml. A suite that fails on main today then reports without blocking it.
         type: boolean
         default: false
 
@@ -149,8 +148,6 @@ jobs:
     runs-on: ubuntu-latest
     # Include bundle generation and the full phone interaction suite (about 7 minutes).
     timeout-minutes: 15
-    # The mobile app is not released by release.yml, and e2e and direct fail on main today.
-    continue-on-error: ${{ inputs.release == true }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -175,8 +172,6 @@ jobs:
         os: [macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 7
-    # Windows is not a release platform yet, and its runtime tests have known path failures.
-    continue-on-error: ${{ inputs.release == true && matrix.os == 'windows-latest' }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
