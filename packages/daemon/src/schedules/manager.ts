@@ -45,6 +45,16 @@ export class ScheduleManager {
     this.providers = providers;
     this.changed = changed;
     this.clock = clock;
+    // A schedule runs every time in the same session, which no pane shows. Keep it through the
+    // clearing of old closed chats, or the schedule would lose its conversation.
+    workspace.keepAgents(() =>
+      store
+        .list()
+        .flatMap((schedule) => [
+          ...(schedule.sessionId ? [schedule.sessionId] : []),
+          ...(schedule.target.kind === "session" ? [schedule.target.sessionId] : []),
+        ]),
+    );
     // A crash can occur after delivery but before the receipt is updated. Never replay it.
     for (const schedule of store.list()) {
       let interrupted = false;

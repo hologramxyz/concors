@@ -27,7 +27,12 @@ turn. Daemon restart marks unfinished work interrupted and clears stale approval
 continuing resumes the saved provider thread without replaying its previous prompt.
 
 Limits: 128 saved sessions, eight connected providers (idle providers are evicted
-and resumed when needed), and up to 16 pending provider requests. Timeline pages
+and resumed when needed), and up to 16 pending provider requests. When a new chat
+needs one of the 128 places, the least recently used closed chat makes room: one no
+pane shows, not running or waiting for an answer, with nothing queued, and not a
+schedule's. Its Concors history and attachment files are removed; the provider's own
+thread usually remains for Resume session. Only when every session is open or active
+is a new chat refused. Timeline pages
 contain at most 80 items and 384 KiB of item JSON. Individual text/detail fields
 are capped at 16,000 characters with an explicit truncation marker. Older items
 remain in SQLite and can be loaded in earlier pages. Codex retains its native
