@@ -120,7 +120,7 @@ jobs:
     # The complete single-worker suite takes about 8–10 minutes before dependency setup.
     timeout-minutes: 15
     # Times out on main today; blocks releases again once it passes.
-    continue-on-error: ${{ inputs.release }}
+    continue-on-error: ${{ inputs.release == true }}
     steps:
       - uses: actions/checkout@v4
       - name: Disable unused Chrome package source
@@ -150,7 +150,7 @@ jobs:
     # Include bundle generation and the full phone interaction suite (about 7 minutes).
     timeout-minutes: 15
     # The mobile app is not released by release.yml, and e2e and direct fail on main today.
-    continue-on-error: ${{ inputs.release }}
+    continue-on-error: ${{ inputs.release == true }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -176,7 +176,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 7
     # Windows is not a release platform yet, and its runtime tests have known path failures.
-    continue-on-error: ${{ inputs.release && matrix.os == 'windows-latest' }}
+    continue-on-error: ${{ inputs.release == true && matrix.os == 'windows-latest' }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
