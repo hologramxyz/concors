@@ -126,7 +126,7 @@ it("shares a real PTY, transfers control, replays its screen, rebinds and record
     randomUUID(),
   );
   if (pasted.outcome.status !== "ok") throw new Error(pasted.outcome.message);
-  expect(pasted.outcome.path).toMatch(/\/terminal-[0-9a-f-]+\/[0-9a-f-]+\.png$/);
+  expect(pasted.outcome.path).toMatch(/[\\/]terminal-[0-9a-f-]+[\\/][0-9a-f-]+\.png$/);
   expect(readFileSync(pasted.outcome.path!)).toEqual(png);
   await expect(
     request(first.connection, {

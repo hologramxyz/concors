@@ -246,11 +246,24 @@ export async function stopSessionHost(directory: string): Promise<void> {
     signal: AbortSignal.timeout(5000),
   });
   if (!response.ok) throw new Error("Could not stop the session host");
-  for (let attempt = 0; attempt < 100; attempt++) {
-    if (!(await hostHealthy(host))) return;
+  // The host stops answering as soon as its server stops listening, but it owns the runtime
+  // database until it has closed it and released its lock. A host started before then finds the
+  // lock held by a live process and quietly gives way, so the caller would wait for one that never
+  // comes. Stopped means released: the lock is gone, or its owner has exited and it can be reaped.
+  const deadline = Date.now() + 10000;
+  while (Date.now() < deadline) {
+    if (!alive(host.pid) || !(await exists(hostDirectory(resolved)))) return;
     await delay(50);
   }
   throw new Error("Session host is still stopping");
+}
+
+/** Anything but "not found" counts as present: Windows denies access to a folder being deleted. */
+async function exists(path: string): Promise<boolean> {
+  return stat(path).then(
+    () => true,
+    (error: NodeJS.ErrnoException) => error.code !== "ENOENT",
+  );
 }
 
 /** Service-manager readiness barrier; unlike ensureSessionHost, never launches a competing host. */
