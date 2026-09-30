@@ -189,8 +189,10 @@ async function recordFrames(page: Page) {
   await page.evaluate(() => {
     const frames: { items: number; fromBottom: number; first: string | null }[] = [];
     (window as unknown as { chatFrames: typeof frames }).chatFrames = frames;
-    // Measure after each frame's resize observers have run, which is what gets painted.
-    const sample = () => setTimeout(measure);
+    // Measure each frame just before it is painted: from a resize observer created during that
+    // frame, which is notified after the chat's own observer has pinned the timeline. A timer
+    // would also catch layout that a task between frames (a message arriving) changed and the
+    // chat corrects before painting, which nobody sees.
     const measure = () => {
       const log = document.querySelector<HTMLElement>('[role="log"]');
       if (log)
@@ -199,6 +201,13 @@ async function recordFrames(page: Page) {
           fromBottom: log.scrollHeight - log.scrollTop - log.clientHeight,
           first: log.querySelector<HTMLElement>("[data-message-id]")?.dataset.messageId ?? null,
         });
+    };
+    const sample = () => {
+      const observer = new ResizeObserver(() => {
+        observer.disconnect();
+        measure();
+      });
+      observer.observe(document.documentElement);
       requestAnimationFrame(sample);
     };
     requestAnimationFrame(sample);
