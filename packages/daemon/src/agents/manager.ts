@@ -533,11 +533,16 @@ export class AgentManager {
    * provider. Start it afresh with the new credentials instead of resuming a phantom ID.
    * Conversations with provider history and explicitly imported native sessions are durable.
    * Idle runtimes are dropped so the next send reloads the freshly selected credentials.
+   *
+   * Clients only accept a prompt for a chat that has a thread, so an open empty chat gets its
+   * fresh thread straight away, as a new chat does. Chats without a running CLI keep their
+   * thread ID: resuming it later starts afresh if the provider never saved it.
    */
   private refreshSessions(matches: (info: AgentInfo) => boolean, resetEmptyThreads = true): void {
     this.catalogs.clear();
     this.catalogGeneration++;
     this.#usage.clear();
+    const restart: string[] = [];
     for (const current of this.#store.agents()) {
       if (!matches(current)) continue;
       if (["starting", "working", "needs_input"].includes(current.status)) {
@@ -545,18 +550,28 @@ export class AgentManager {
         if (runtime) runtime.reloadWhenIdle = true;
         continue;
       }
-      if (
-        resetEmptyThreads &&
-        current.threadId &&
-        !current.nativeImport &&
-        !this.#store.hasAgentProviderHistory(current.id)
-      )
-        this.update(current.id, { threadId: null, updatedAt: current.updatedAt });
       const runtime = this.#runtimes.get(current.id);
       if (!runtime) continue;
       runtime.closed = true;
       this.#runtimes.delete(current.id);
       void runtime.provider.close().catch(() => undefined);
+      if (
+        resetEmptyThreads &&
+        !current.nativeImport &&
+        !this.#store.hasAgentProviderHistory(current.id)
+      ) {
+        if (current.threadId)
+          this.update(current.id, { threadId: null, updatedAt: current.updatedAt });
+        restart.push(current.id);
+      }
+    }
+    for (const id of restart) {
+      const ready = this.provider(id);
+      const runtime = this.#runtimes.get(id);
+      // Another refresh may close this runtime before it is ready; that one restarts the chat.
+      void ready.catch((error) => {
+        if (this.#runtimes.get(id) === runtime) this.fail(id, error);
+      });
     }
   }
   /** Applies a machine-wide subscription switch: every chat of that engine reloads credentials. */

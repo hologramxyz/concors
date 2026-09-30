@@ -76,8 +76,9 @@ body {
   justify-content: center;
   width: 100%;
   min-width: 0;
-  min-height: 44px;
-  padding: 5px 14px;
+  /* Two lines of text are taller than 44px with padding; keep the header's glass row even. */
+  height: 44px;
+  padding: 0 14px;
   text-align: left;
   font-size: 15px;
   font-weight: 600;
@@ -259,7 +260,9 @@ body {
 .mobile-shell {
   position: relative;
   height: 100%;
-  overflow: hidden;
+  /* Panels move by transform only. A hidden overflow still scrolls when something focuses or
+     scrolls to an element, which left the workspace stranded beside the Files panel. */
+  overflow: clip;
   background: var(--sidebar);
   touch-action: pan-y;
 }
@@ -580,8 +583,10 @@ body {
 }
 .mobile-picker {
   flex: 1;
-  padding: 5px 14px;
+  padding: 0 14px;
   gap: 6px;
+  /* The same 44px as the icon buttons beside it, whatever its two lines of text measure. */
+  height: 44px;
   min-height: 44px;
   font-size: 13px;
 }
