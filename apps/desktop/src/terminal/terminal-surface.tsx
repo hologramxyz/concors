@@ -184,6 +184,9 @@ export function TerminalSurface({
           // Acquiring control must not steal that newer focus (or focus from an open dialog).
           const focused = document.activeElement;
           const focusedPane = focused?.closest("[data-pane-id]");
+          const ownPane = element.closest("[data-pane-id]");
+          // A pane that was just split off is still waiting for its input (pane-layout.tsx).
+          const pending = document.querySelector("[data-focus-pending]");
           if (
             document.visibilityState === "visible" &&
             isVisible() &&
@@ -191,7 +194,8 @@ export function TerminalSurface({
             !focused?.closest(
               '[role="dialog"]:not([data-state="closed"]), [role="alertdialog"], [role="menu"]:not([data-state="closed"])',
             ) &&
-            (!focusedPane || focusedPane === element.closest("[data-pane-id]"))
+            (!focusedPane || focusedPane === ownPane) &&
+            (!pending || pending === ownPane)
           )
             terminal.focus();
         })
