@@ -113,10 +113,16 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings
         working-directory: apps/desktop/src-tauri
 
+  # Split across runners: the suite runs one test at a time against one shared daemon, so it
+  # cannot run in parallel on one machine, but each runner starts its own daemon.
   workspace-browser:
-    name: Workspace browser acceptance
+    name: Workspace browser acceptance (${{ matrix.shard }}/4)
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     runs-on: ubuntu-latest
-    # The complete single-worker suite takes about 8–10 minutes before dependency setup.
+    # The single-worker suite takes about 12–14 minutes in all, so a quarter of it plus setup.
     timeout-minutes: 15
     # Times out on main today; blocks releases again once it passes.
     continue-on-error: ${{ inputs.release == true }}
@@ -132,19 +138,27 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm test:workspace:e2e
+      - run: pnpm test:workspace:e2e --shard=${{ matrix.shard }}/4
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: workspace-browser-traces
+          name: workspace-browser-traces-${{ matrix.shard }}
           path: test-results/
 
+  # e2e and direct are split across runners like the workspace suite; managed takes a minute.
   mobile-browser:
-    name: Mobile browser (${{ matrix.suite }})
+    name: Mobile browser (${{ matrix.suite }} ${{ matrix.shard }}/${{ matrix.shards }})
     strategy:
       fail-fast: false
       matrix:
-        suite: [e2e, direct, managed]
+        include:
+          - { suite: e2e, shard: 1, shards: 3 }
+          - { suite: e2e, shard: 2, shards: 3 }
+          - { suite: e2e, shard: 3, shards: 3 }
+          - { suite: direct, shard: 1, shards: 3 }
+          - { suite: direct, shard: 2, shards: 3 }
+          - { suite: direct, shard: 3, shards: 3 }
+          - { suite: managed, shard: 1, shards: 1 }
     runs-on: ubuntu-latest
     # Include bundle generation and the full phone interaction suite (about 7 minutes).
     timeout-minutes: 15
@@ -157,11 +171,11 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm test:mobile:${{ matrix.suite }}
+      - run: pnpm test:mobile:${{ matrix.suite }} --shard=${{ matrix.shard }}/${{ matrix.shards }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: mobile-browser-evidence-${{ matrix.suite }}
+          name: mobile-browser-evidence-${{ matrix.suite }}-${{ matrix.shard }}
           path: apps/mobile/test-results/
 
   terminal-platforms:
