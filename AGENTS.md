@@ -34,7 +34,7 @@ tagged or pinned by hand. The form asks:
 
 | Input                | What it decides                                                           |
 | -------------------- | ------------------------------------------------------------------------- |
-| **component**        | `desktop`, `daemon` or `both`. Release only what changed (see below)      |
+| **component**        | `both` by default; `desktop` or `daemon` to release only one (see below)  |
 | **bump**             | `patch` or `minor`, from the version on `main`                            |
 | **notes**            | shown in the app's update dialog, so write them for the people reading it |
 | **roll_out_desktop** | on by default: offer the release to every copy, and to new downloads      |
