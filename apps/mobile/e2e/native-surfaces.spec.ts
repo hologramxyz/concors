@@ -124,11 +124,14 @@ test("native surface bridge preserves navigation, drafts, settings, attachments 
       (await snapshot(page))?.surfaces.some((item) => item.content.kind === "composer"),
     )
     .toBe(true);
-  expect(
-    (await snapshot(page))?.surfaces.some(
-      (item) => item.content.kind === "button" && item.content.label === "Search workspace",
-    ),
-  ).toBe(false);
+  // Sidebar surfaces follow the panel while it slides away, so Search leaves a moment later.
+  await expect
+    .poll(async () =>
+      (await snapshot(page))?.surfaces.some(
+        (item) => item.content.kind === "button" && item.content.label === "Search workspace",
+      ),
+    )
+    .toBe(false);
   await event(page, "composer", "", { kind: "focus", focused: true });
   await event(page, "composer", "", { kind: "height", height: 144 });
   await event(page, "composer", "", {
@@ -240,6 +243,15 @@ test("native surface bridge preserves navigation, drafts, settings, attachments 
     })
     .toBe("auto-review");
   await ui.getByRole("button", { name: "Allow once", exact: true }).click();
+  // The native Send button stays disabled while the approval is being answered.
+  await expect
+    .poll(async () => {
+      const content = (await snapshot(page))?.surfaces.find(
+        (item) => item.content.kind === "composer",
+      )?.content;
+      return content?.kind === "composer" && content.canSend;
+    })
+    .toBe(true);
   // Submit carries the last keystroke atomically, even before its separate text event is echoed.
   await event(page, "composer", "", {
     kind: "press",

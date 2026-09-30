@@ -66,8 +66,10 @@ function ShortcutHandler({ children }: { children: ReactNode }) {
       const editing =
         !!target?.closest('input, textarea, select, [contenteditable="true"]') && !terminal;
       const composer = !!target?.closest("[data-agent-composer]");
+      // A dialog playing its exit animation (mobile drawers slide out for 200ms) is already
+      // closed; counting it would swallow a shortcut pressed right after dismissing it.
       const modal = !!document.querySelector(
-        '[role="dialog"]:not([data-shortcut-dialog]), [role="alertdialog"], [role="menu"]',
+        ':is([role="dialog"]:not([data-shortcut-dialog]), [role="alertdialog"], [role="menu"]):not([data-state="closed"])',
       );
       const consume = () => {
         event.preventDefault();

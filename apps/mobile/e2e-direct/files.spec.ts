@@ -355,7 +355,7 @@ test("Files keeps shared glass controls and an icon-free directory breadcrumb in
       for (const control of [back, directory]) {
         await expect(control).toHaveCSS("background-color", chatStyle.background);
         await expect(control).toHaveCSS("backdrop-filter", chatStyle.blur);
-        await expect(control).toHaveCSS("height", "48px");
+        await expect(control).toHaveCSS("height", "44px");
       }
       expect(await header.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(
         false,
@@ -580,6 +580,9 @@ test("real mobile files preserve drafts, save explicitly and resolve competing d
       .getByRole("button", { name: "Settings", exact: true })
       .click();
     const settings = ui.getByRole("dialog", { name: "Settings", exact: true });
+    // Direct connections open Settings on Appearance; the connection controls live in Machines.
+    await settings.getByRole("combobox", { name: "Settings section", exact: true }).click();
+    await ui.locator('[role="option"][data-value="machines"]').click();
     await settings.getByRole("button", { name: "Reconnect", exact: true }).click();
     await settings.getByRole("button", { name: "Disconnect desktop", exact: true }).click();
     await expect(confirm).toContainText("Discard unsaved file changes and disconnect?");

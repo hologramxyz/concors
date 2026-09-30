@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { DaemonConnection, describeDaemonEndpoint } from "@concors/daemon-client";
 import type { WorkspaceOperation } from "@concors/protocol";
 import { demoMe } from "../src/demo/fixtures";
+import { scrollTimelineUp } from "../e2e/support/swipe";
 
 test("mobile connects without cloud login and shares real daemon chat, panes and terminal sessions", async ({
   page,
@@ -160,6 +161,11 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await expect.poll(() => agents()[0]?.status).toBe("done");
     await input.fill("primitive-form");
     await ui.getByRole("button", { name: "Send message", exact: true }).click();
+    await expect(
+      ui.getByRole("checkbox", { name: "Unit tests Run the focused suite" }),
+    ).toBeVisible();
+    // The question arrives at the bottom of the pinned chat; scroll up to its first option.
+    await scrollTimelineUp(page, ui.getByRole("log", { name: "Chat timeline" }));
     await ui.getByRole("checkbox", { name: "Unit tests Run the focused suite" }).click();
     await ui.getByRole("checkbox", { name: "Type check Verify types" }).click();
     await ui
