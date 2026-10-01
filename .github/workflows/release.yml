@@ -30,10 +30,12 @@ on:
         description: Offer the desktop release to everyone once it is published
         type: boolean
         default: true
+      # On by default: the control plane installs a rolled-out daemon on a machine only while no
+      # agent there is working or waiting, or when its owner presses Update now.
       roll_out_daemon:
-        description: Put the daemon on every cloud machine once published (restarts their sessions)
+        description: Offer the daemon to cloud machines once published (each updates when idle)
         type: boolean
-        default: false
+        default: true
 
 permissions:
   contents: write
