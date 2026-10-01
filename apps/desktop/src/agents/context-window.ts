@@ -2,7 +2,7 @@ import { findAgentModel, type AgentInfo } from "@concors/protocol";
 import type { NativeUsage } from "@concors/client-core";
 import { formatTokenCount } from "./paseo/context-window-meter.utils";
 import type { PlanUsageState } from "./plan-usage";
-import { usageTone, windowSummary } from "./usage-labels";
+import { currentWindow, usageTone, windowSummary } from "./usage-labels";
 
 /**
  * How full this conversation's context window is.
@@ -65,13 +65,15 @@ export function usageView(
               : usage
                 ? (usage.message ?? "This provider does not report plan limits.")
                 : "Reading plan usage…",
-          windows: windows.map((entry) => ({
-            id: entry.id,
-            label: entry.label,
-            summary: windowSummary(entry, now),
-            percent: entry.usedPercent,
-            tone: usageTone(entry.usedPercent),
-          })),
+          windows: windows
+            .map((measured) => currentWindow(measured, now))
+            .map((entry) => ({
+              id: entry.id,
+              label: entry.label,
+              summary: windowSummary(entry, now),
+              percent: entry.usedPercent,
+              tone: usageTone(entry.usedPercent),
+            })),
         }
       : null,
   };
