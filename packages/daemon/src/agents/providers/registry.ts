@@ -24,6 +24,7 @@ import {
   type ProviderStatus,
 } from "@concors/protocol";
 import { resolveTerminalCommand } from "../../terminal/profiles.ts";
+import { shareClaudeHome } from "./claude-home.ts";
 import type { launch } from "./launch.ts";
 import { ProviderVersions, type VersionTarget } from "./versions.ts";
 
@@ -57,10 +58,14 @@ export class ProviderRegistry {
   private versions: ProviderVersions | undefined;
   private versionListeners = new Set<(ids: string[]) => void>();
   readonly directory: string;
+  /** The machine's own Claude directory: the default account's, and every account's history. */
+  readonly claudeHome: string;
   constructor(
     directory = join(process.env["CONCORS_DATA_DIR"] ?? join(homedir(), ".concors"), "providers"),
+    claudeHome = process.env["CLAUDE_CONFIG_DIR"] || join(homedir(), ".claude"),
   ) {
     this.directory = directory;
+    this.claudeHome = claudeHome;
     const path = join(directory, "config.json");
     this.saved = existsSync(path)
       ? Saved.parse(JSON.parse(readFileSync(path, "utf8")))
@@ -99,6 +104,7 @@ export class ProviderRegistry {
       const base = this.configs().find((c) => c.id === engine && c.engine === engine);
       return base ? Object.entries(this.credentialOverlay(base)) : [];
     });
+    this.shareClaudeHome(Object.fromEntries(credentials)["CLAUDE_CONFIG_DIR"]);
     return {
       ...process.env,
       ...Object.fromEntries(credentials),
@@ -184,6 +190,15 @@ export class ProviderRegistry {
         )
       : undefined;
     return active ? { [key]: active.env?.[key] ?? this.credentialHome(active) } : {};
+  }
+  /**
+   * Claude keeps transcripts and the person's setup beside the sign-in, so an account's own
+   * directory links them to the machine's (see claude-home.ts). Only directories Concors created
+   * are touched; one the person configured is theirs to arrange.
+   */
+  private shareClaudeHome(home: string | undefined) {
+    if (home && dirname(home) === join(dirname(this.directory), "accounts", "claude"))
+      shareClaudeHome(home, this.claudeHome);
   }
   /** The credential home this configuration's conversations effectively run under. */
   credentialDir(config: ProviderConfig): string | undefined {
@@ -324,6 +339,10 @@ export class ProviderRegistry {
     if (!config.enabled) throw new Error("This provider is disabled on this machine.");
     if (!this.installed(config))
       throw new Error(`${config.label} is not installed on this machine.`);
+    if (config.engine === "claude")
+      this.shareClaudeHome(
+        activeCredentials ? this.credentialDir(config) : config.env?.["CLAUDE_CONFIG_DIR"],
+      );
     return (_provider, args, cwd, env) => {
       const [command, ...prefix] = this.argv(config);
       const merged = { ...env, ...this.env(config) };
@@ -430,6 +449,7 @@ export class ProviderRegistry {
               const home = this.credentialHome(config);
               mkdirSync(home, { recursive: true, mode: 0o700 });
               config.env[key] = home;
+              if (config.engine === "claude") this.shareClaudeHome(home);
             }
           }
           if (!previous && this.configs().length >= 128) throw new Error("Provider limit reached");
@@ -461,6 +481,9 @@ export class ProviderRegistry {
         this.saved.revision++;
         this.persist();
         // Removing a subscription is its sign-out: saved credentials must not linger on disk.
+        // Its conversations are the person's, so they move to the shared history first; the
+        // removal then deletes the links, never what they point to.
+        if (cleanup && !cleanup.authOnly) this.shareClaudeHome(cleanup.path);
         if (cleanup)
           rmSync(cleanup.authOnly ? join(cleanup.path, "auth.json") : cleanup.path, {
             recursive: !cleanup.authOnly,

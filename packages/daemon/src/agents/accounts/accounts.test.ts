@@ -307,7 +307,7 @@ it.skipIf(process.platform === "win32")(
         `#!/bin/sh\nprintf '{"loggedIn":true,"email":"%s"}' "\${CLAUDE_CONFIG_DIR:-default}"\n`,
         { mode: 0o755 },
       );
-      const registry = new ProviderRegistry(join(root, "providers"));
+      const registry = new ProviderRegistry(join(root, "providers"), join(root, "claude-home"));
       for (const operation of [
         {
           kind: "save",

@@ -41,6 +41,7 @@ async function setup() {
   vi.stubEnv("PATH", directory + delimiter + (process.env["PATH"] ?? ""));
   server = createDaemonServer(loadDaemonConfig({ port: 0, logLevel: "silent" }, {}), {
     workspacePath: join(directory, "state.db"),
+    claudeHome: join(directory, "claude-home"),
     accountBackendFactory: (info) => new TestAccountBackend(info),
     agentProviderFactory: (_cwd, onInput, provider = "codex", tools) => {
       const runtime = new TestAgentProvider(onInput, provider);
