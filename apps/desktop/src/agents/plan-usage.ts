@@ -5,6 +5,7 @@ import {
   type AgentPlanUsage,
   unsupportedPlanUsage,
 } from "@concors/protocol";
+import { hasReset } from "./usage-labels";
 
 /**
  * What is left of each provider's plan, asked for only while someone is looking at it.
@@ -62,7 +63,9 @@ export class PlanUsageStore {
     const fresh =
       current?.usage?.status === "available" &&
       current.receivedAt !== null &&
-      Date.now() - current.receivedAt < AGENT_USAGE_TTL_MS;
+      Date.now() - current.receivedAt < AGENT_USAGE_TTL_MS &&
+      // A window that has rolled over is the one moment a cached answer is plainly wrong.
+      !current.usage.windows.some((window) => hasReset(window));
     if (!force && fresh) return;
     this.#publish(provider, { ...(current ?? idle), loading: true, error: null });
     const request = this.#connection

@@ -28,7 +28,9 @@ context nor plan usage shows no ring.
 
 The machine caches a provider's plan windows for a minute, and clients reuse an account's answer
 for as long, timed on their own clock. Answers about one session — still starting, not connected —
-are asked again on the next look. The refresh button always asks again. Only a connected session can answer: opening a chat connects it,
+are asked again on the next look. The refresh button always asks again. A window whose reset
+time has passed shows no figure, since the one it had belongs to the window that ended, and an
+answer holding such a window is asked again on the next look rather than reused. Only a connected session can answer: opening a chat connects it,
 while starting a provider just to read its usage would launch a CLI unasked. A failed refresh keeps
 the last windows and shows why.
 

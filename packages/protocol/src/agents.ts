@@ -213,6 +213,15 @@ export const AgentInfoSchema = z.object({
   turnId: z.string().nullable(),
   status: z.enum(["idle", "starting", "working", "needs_input", "done", "failed", "interrupted"]),
   error: z.string().nullable(),
+  /**
+   * The account behind the chat reached a plan limit during its last turn, so the chat can offer
+   * the machine's other subscriptions. It describes the account in use, so a new turn or an
+   * account switch clears it. `resetsAt` is ISO 8601 when the provider says.
+   */
+  limit: z
+    .object({ resetsAt: z.string().max(40).nullable() })
+    .nullable()
+    .optional(),
   startedAt: z.string().datetime(),
   turnStartedAt: z.string().datetime().nullable(),
   updatedAt: z.string().datetime(),

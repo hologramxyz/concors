@@ -152,6 +152,26 @@ export class TestAgentProvider implements AgentProvider {
     this.turnId = `turn-${++TestAgentProvider.turns}`;
     this.emit("turn/started", { turn: { id: this.turnId, status: "inProgress", items: [] } });
     const text = (input["input"] as { text: string }[])[0]?.text ?? "";
+    if (text === "primitive-usage-limit") {
+      // The account ran out: how Codex fails a turn when the plan's limit is reached.
+      const turnId = this.turnId;
+      setTimeout(
+        () =>
+          this.emit("turn/completed", {
+            turn: {
+              id: turnId,
+              status: "failed",
+              items: [],
+              error: {
+                message: "You've hit your usage limit.",
+                codexErrorInfo: "usageLimitExceeded",
+              },
+            },
+          }),
+        50,
+      );
+      return { turn: { id: this.turnId, status: "inProgress", items: [] } };
+    }
     if (text === "primitive-form") {
       void this.onRequest(
         "item/tool/requestUserInput",

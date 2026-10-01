@@ -109,3 +109,22 @@ it("judges freshness on this client's clock, whatever the machine's says", async
   store.refresh("claude", sessionId);
   expect(connection.requestAgent).toHaveBeenCalledTimes(2);
 });
+
+it("asks again once a cached window has rolled over", async () => {
+  const { store, connection } = setup();
+  const start = Date.now();
+  vi.spyOn(Date, "now").mockReturnValue(start);
+  const ending = {
+    ...usage,
+    windows: [{ ...usage.windows[0]!, resetsAt: new Date(start + 10_000).toISOString() }],
+  };
+  connection.requestAgent.mockResolvedValueOnce(ok(ending));
+  store.refresh("claude", sessionId);
+  await vi.waitFor(() => expect(store.getSnapshot().get("claude")?.usage).toEqual(ending));
+  store.refresh("claude", sessionId);
+  expect(connection.requestAgent).toHaveBeenCalledTimes(1);
+  // Well inside the minute the answer is otherwise reused, the window turns over.
+  vi.spyOn(Date, "now").mockReturnValue(start + 20_000);
+  store.refresh("claude", sessionId);
+  expect(connection.requestAgent).toHaveBeenCalledTimes(2);
+});
