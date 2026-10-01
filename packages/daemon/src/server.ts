@@ -1,7 +1,12 @@
 import type { AccountBackendFactory } from "./agents/accounts/manager.ts";
 import type { AgentProviderFactory } from "./agents/manager.ts";
 import { timingSafeEqual } from "node:crypto";
-import { HEALTH_PATH, type HealthResponse } from "@concors/protocol";
+import {
+  ACTIVITY_PATH,
+  HEALTH_PATH,
+  type ActivityResponse,
+  type HealthResponse,
+} from "@concors/protocol";
 import websocket from "@fastify/websocket";
 import Fastify, { type FastifyInstance } from "fastify";
 
@@ -9,6 +14,7 @@ import type { DaemonConfig } from "./config.ts";
 import { WorkspaceStore } from "./workspace/store.ts";
 import { DaemonState } from "./state.ts";
 import { registerProtocolEndpoint } from "./ws/protocol-endpoint.ts";
+import { machineActivity } from "./managed/activity.ts";
 import type { GitHubSource } from "./projects/pull-requests.ts";
 
 export interface DaemonServerOptions {
@@ -96,6 +102,10 @@ export function createDaemonServer(
   });
 
   app.get(HEALTH_PATH, async (): Promise<HealthResponse> => ({ status: "ok" }));
+  // The store is written as chats and terminals change, so it is the current state of both.
+  app.get(ACTIVITY_PATH, async (): Promise<ActivityResponse> =>
+    machineActivity(workspace.agents(), workspace.terminals()),
+  );
 
   app.addHook("onClose", () => {
     workspace.close();

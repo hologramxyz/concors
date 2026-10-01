@@ -19,3 +19,19 @@ export const HealthResponseSchema = z.object({
   status: z.literal("ok"),
 });
 export type HealthResponse = z.infer<typeof HealthResponseSchema>;
+
+/**
+ * Whether a machine's agents are in the middle of something, for the control plane: it installs a
+ * new daemon only when this says the machine is not busy, because installing restarts every agent
+ * on it. Managed daemons serve it behind the machine token. Returns `ActivityResponse`.
+ */
+export const ACTIVITY_PATH = "/activity";
+
+export const ActivityResponseSchema = z.object({
+  busy: z.boolean(),
+  agents: z.object({
+    working: z.number().int().nonnegative(),
+    waiting: z.number().int().nonnegative(),
+  }),
+});
+export type ActivityResponse = z.infer<typeof ActivityResponseSchema>;

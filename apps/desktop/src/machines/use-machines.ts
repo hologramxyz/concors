@@ -31,6 +31,8 @@ export interface MachinesState {
   resume(id: string): Promise<void>;
   rename(id: string, name: string): Promise<void>;
   setIcon(id: string, icon: string | null): Promise<void>;
+  /** Installs the machine's pending daemon update now, restarting its agents. */
+  updateDaemon(id: string): Promise<void>;
 }
 
 /**
@@ -92,6 +94,18 @@ export function useMachines(organizationId: string | undefined): MachinesState {
     resume: async (id) => replace(await api.resumeMachine(id)),
     rename: async (id, name) => replace(await api.renameMachine(id, name)),
     setIcon: async (id, icon) => replace(await api.updateMachineIcon(id, icon)),
+    updateDaemon: async (id) => {
+      await api.updateMachineDaemon(id);
+      // Accepted means installing. Showing it now also switches to the faster polling that
+      // notices when the new version is up and the update is gone.
+      list.resource.set((current) =>
+        (current ?? []).map((machine) =>
+          machine.id === id && machine.daemonUpdate
+            ? { ...machine, daemonUpdate: { ...machine.daemonUpdate, installing: true } }
+            : machine,
+        ),
+      );
+    },
   };
 }
 

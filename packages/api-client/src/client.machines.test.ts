@@ -425,3 +425,42 @@ it("saves or resets a machine icon with authorization", async () => {
   await expect(api.updateMachineIcon("machine/1", "not an emoji")).rejects.toThrow();
   expect(fetch).toHaveBeenCalledTimes(2);
 });
+
+it("reads a pending daemon update and tolerates servers without one", async () => {
+  for (const daemonUpdate of [
+    { version: "0.7.0", installing: false },
+    { version: "0.7.0", installing: true },
+    null,
+  ]) {
+    const machine = { ...MACHINE, daemonUpdate };
+    await expect(client(async () => json({ machines: [machine] })).listMachines()).resolves.toEqual(
+      [machine],
+    );
+  }
+  await expect(client(async () => json({ machine: MACHINE })).getMachine("m1")).resolves.toEqual(
+    MACHINE,
+  );
+  await expect(
+    client(async () =>
+      json({ machine: { ...MACHINE, daemonUpdate: { version: "0.7.0" } } }),
+    ).getMachine("m1"),
+  ).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+});
+
+it("asks for a daemon update with authorization and exposes why it was refused", async () => {
+  const fetch = vi.fn(async () => new Response(null, { status: 202 }));
+  const api = client(fetch);
+  await expect(api.updateMachineDaemon("machine/1")).resolves.toBeUndefined();
+  const { url, init } = lastCall(fetch);
+  expect(url).toBe("https://api.example/api/v1/machines/machine%2F1/daemon/update");
+  expect(init.method).toBe("POST");
+  expect(new Headers(init.headers).get("authorization")).toBe("Bearer tok-1");
+  fetch.mockResolvedValueOnce(
+    json({ message: "This machine's daemon is already up to date" }, { status: 409 }),
+  );
+  await expect(api.updateMachineDaemon("machine/1")).rejects.toMatchObject({
+    name: "ApiError",
+    status: 409,
+    message: "This machine's daemon is already up to date",
+  });
+});
