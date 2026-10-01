@@ -49,10 +49,14 @@ it("indexes only sent messages across pages, isolates sessions, bounds previews 
         createdAt: now,
       });
     save("tool-before", "tool", "not a message");
-    for (let i = 0; i < 205; i++) {
-      save(`prompt:${i}`, "user", `Message ${i}\n${"x".repeat(500)}`);
-      save(`output:${i}`, "assistant", "output");
-    }
+    // One commit for the 410 setup writes, as a replayed history is written: each on its own is a
+    // synchronous disk flush, which took this test past its time limit on Windows runners.
+    store.transaction(() => {
+      for (let i = 0; i < 205; i++) {
+        save(`prompt:${i}`, "user", `Message ${i}\n${"x".repeat(500)}`);
+        save(`output:${i}`, "assistant", "output");
+      }
+    });
     save("foreign", "user", "Other session", randomUUID());
     const attachment = save("attachment", "user", "");
     store.saveAgentItem({
