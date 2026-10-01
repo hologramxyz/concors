@@ -5,8 +5,9 @@ name: Roll out
 # runs this at its end; run it by hand to roll out a release published with roll-out off, or to
 # roll back by naming an earlier version.
 #
-# The daemon is the one to be deliberate about: a new DAEMON_VERSION makes every cloud machine
-# restart its session host, ending the terminals and agents running on it.
+# A new DAEMON_VERSION interrupts nobody: the control plane installs it on a cloud machine only
+# while no agent there is working or waiting for an answer, or when the machine's owner presses
+# Update now in the app (installing restarts the machine's agents).
 on:
   workflow_dispatch:
     inputs:

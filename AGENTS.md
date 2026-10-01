@@ -38,7 +38,7 @@ tagged or pinned by hand. The form asks:
 | **bump**             | `patch` or `minor`, from the version on `main`                            |
 | **notes**            | shown in the app's update dialog, so write them for the people reading it |
 | **roll_out_desktop** | on by default: offer the release to every copy, and to new downloads      |
-| **roll_out_daemon**  | off by default: a new daemon restarts every cloud machine's sessions      |
+| **roll_out_daemon**  | on by default: each cloud machine installs it once no agent is busy       |
 
 Or from a terminal:
 `gh workflow run release.yml -f component=desktop -f notes="What changed, in plain words."`
@@ -51,8 +51,9 @@ for the daemon), downloads what it published to check it, then rolls out: it set
 is what the website's download button follows. If a build fails, "Re-run failed jobs" retries the
 same version.
 
-The desktop app and the daemon keep separate versions because rolling out a daemon ends the
-terminals and agents running on cloud machines, so a desktop-only release must not do that.
+The desktop app and the daemon keep separate versions, so each is released only when it changed.
+Installing a daemon restarts a machine's agents, so the control plane does it only while none is
+working or waiting for an answer, or when the machine's owner presses Update now in the app.
 
 **Roll out later, or roll back:** Actions → **Roll out** with the version to offer. It is the same
 step the release ends with, and naming an earlier version rolls back to it.
