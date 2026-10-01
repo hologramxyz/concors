@@ -25,6 +25,28 @@ subscription deletes the registry-created Claude credential home. For Codex, it 
 `auth.json` but retains non-credential legacy conversation state so old chats remain recoverable;
 a user-supplied credential directory is never deleted.
 
+Claude Code keeps conversations and the person's setup under `CLAUDE_CONFIG_DIR` too, with no
+separate setting for them, so on its own a credential home would also give each account its own
+history: a chat could not be resumed after switching, and every account would start without the
+person's settings. Each registry-created Claude home therefore links the person-level entries to
+the machine's own Claude directory (`$CLAUDE_CONFIG_DIR` of the daemon, normally `~/.claude`), the
+one the default account uses (`providers/claude-home.ts`):
+
+| Shared through a link                                                                                           | Kept per account                                         |
+| --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `projects/` (transcripts), `file-history/`, `todos/`, `plans/`, `history.jsonl`                                 | `.credentials.json`, `.claude.json` (account state, MCP) |
+| `settings.json`, `CLAUDE.md`, `keybindings.json`, `agents/`, `commands/`, `skills/`, `output-styles/`, `rules/` | `plugins/`                                               |
+
+Plugins stay apart because Claude Code records a plugin by the absolute path it was installed
+under and rejects a marketplace recorded under another config directory. Links are made when a
+subscription is created and checked before every launch, so homes from before this change are
+migrated on their next use: their entries move into the machine's directory (prompt history is
+appended), and anything that conflicts with the machine's copy is kept in the home's
+`.concors-unshared/` rather than deleted. Removing a Claude subscription migrates first, so its
+conversations survive; deleting the home then removes the links, never what they point to. A
+filesystem without symlinks leaves the account on its own copy, as before. Codex needs none of this
+because `CODEX_SQLITE_HOME` already separates conversation state from the sign-in.
+
 Subscriptions run their engine's regular CLI: binary resolution falls back to the base
 configuration's install directory (`ProviderRegistry.baseId`), so a subscription is "installed"
 whenever its engine is. Built-in preset ids cannot become subscriptions.
@@ -96,3 +118,5 @@ account flow and catalog exclusion over a real socket;
 `apps/desktop/src/settings/subscriptions.test.ts` covers grouping, configuration building and safe
 cross-machine copies; `e2e/subscriptions.spec.ts` walks library add → sign in → assignment →
 per-machine sign in, including Codex device auth across a background refresh.
+`providers/claude-home.test.ts` covers linking, migration and conflict handling of Claude homes,
+and `registry.test.ts` that history survives switching and removal.

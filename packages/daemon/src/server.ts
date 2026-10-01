@@ -30,6 +30,8 @@ export interface DaemonServerOptions {
   readonly workspacePath?: string;
   /** Where dictation keeps its speech model. Without it, dictation is not offered. */
   readonly speechModelsDirectory?: string;
+  /** Test-only stand-in for the machine's Claude directory, which subscriptions link into. */
+  readonly claudeHome?: string;
 }
 
 export interface DaemonServer {
@@ -95,6 +97,7 @@ export function createDaemonServer(
       ...(options.speechModelsDirectory
         ? { speechModelsDirectory: options.speechModelsDirectory }
         : {}),
+      ...(options.claudeHome ? { claudeHome: options.claudeHome } : {}),
       ...(options.handshakeTimeoutMs === undefined
         ? {}
         : { handshakeTimeoutMs: options.handshakeTimeoutMs }),
