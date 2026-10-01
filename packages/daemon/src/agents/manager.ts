@@ -59,7 +59,10 @@ const Turn = z.object({
   id: z.string(),
   status: z.string(),
   items: z.array(z.unknown()).default([]),
-  error: z.object({ message: z.string() }).nullable().optional(),
+  error: z
+    .object({ message: z.string(), codexErrorInfo: z.unknown().optional() })
+    .nullable()
+    .optional(),
 });
 const ThreadResponse = z.object({
   thread: z.object({ id: z.string(), turns: z.array(Turn).default([]) }),
@@ -590,15 +593,20 @@ export class AgentManager {
   activateSubscription(request: ProviderRequest): ProviderResult {
     const op = request.operation;
     const result = this.registry.request(request);
-    if (op.kind === "activate" && result.outcome.status === "ok")
-      this.refreshSessions((current) => {
-        try {
-          const config = this.registry.config(current.provider);
-          return config.engine === op.engine && !config.subscription;
-        } catch {
-          return false;
-        }
-      });
+    if (op.kind !== "activate" || result.outcome.status !== "ok") return result;
+    const switched = (current: AgentInfo) => {
+      try {
+        const config = this.registry.config(current.provider);
+        return config.engine === op.engine && !config.subscription;
+      } catch {
+        return false;
+      }
+    };
+    // A limit described the account the machine just switched away from.
+    for (const current of this.#store.agents())
+      if (current.limit && switched(current))
+        this.update(current.id, { limit: null, updatedAt: current.updatedAt });
+    this.refreshSessions(switched);
     return result;
   }
   /**
@@ -1780,6 +1788,7 @@ export class AgentManager {
       turnId,
       status: "working",
       error: null,
+      ...(info.limit ? { limit: null } : {}),
       turnStartedAt: info.turnId?.startsWith("pending:")
         ? info.turnStartedAt
         : new Date().toISOString(),
@@ -1984,6 +1993,16 @@ export class AgentManager {
         });
       return;
     }
+    if (method === "account/limitReached") {
+      const resetsAt = z
+        .string()
+        .datetime()
+        .nullable()
+        .catch(null)
+        .parse(params["resetsAt"] ?? null);
+      this.update(id, { limit: { resetsAt }, updatedAt: info.updatedAt });
+      return;
+    }
     if (method === "turn/started") {
       const turn = Turn.parse(params["turn"]);
       if (this.#runtimes.get(id)?.cancelledTurn === turn.id) return;
@@ -2075,6 +2094,10 @@ export class AgentManager {
         pending: info.pending.filter((p) => p.asynchronous),
         queuePaused: turn.status === "completed" ? (info.queuePaused ?? false) : true,
         error: turn.error?.message ?? null,
+        // Codex names a plan limit on the failed turn itself; Claude reports it as it happens.
+        ...(turn.error?.codexErrorInfo === "usageLimitExceeded"
+          ? { limit: { resetsAt: null } }
+          : {}),
       });
       return;
     }

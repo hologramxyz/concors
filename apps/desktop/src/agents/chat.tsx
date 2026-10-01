@@ -1,5 +1,6 @@
 import { PendingInput } from "./pending-input";
 import { AgentAccountPrompt } from "./account-prompt";
+import { AgentLimitPrompt } from "./limit-prompt";
 import { completedTurnFooters } from "./duration";
 import { AgentComposer } from "./composer";
 import { TimelineItem } from "./timeline-item";
@@ -345,6 +346,7 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
             </Button>
           )}
           {agent && <AgentAccountPrompt agent={agent} canEdit={!!connected} />}
+          {agent && <AgentLimitPrompt agent={agent} canEdit={!!connected} />}
           {agent && (
             <AgentComposer
               key={agent.id}

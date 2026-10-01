@@ -946,3 +946,57 @@ it("/clear queued behind a running turn runs once the turn ends", async () => {
   expect(c.agents.find((a) => a.id === id)?.queuePaused).not.toBe(true);
   await expect.poll(() => runtime.closed).toBe(true);
 });
+it("marks a chat whose account hit its plan limit until a new turn or another account", async () => {
+  const { c, id } = await setup();
+  const provider = (operation: Parameters<typeof c.requestProvider>[0]) =>
+    c.requestProvider(operation, randomUUID());
+  const saved = await provider({
+    kind: "save",
+    config: {
+      id: "codex-work",
+      label: "Codex — Work",
+      engine: "codex",
+      enabled: true,
+      command: ["codex"],
+      subscription: { nickname: "Work" },
+    },
+    expectedRevision: 0,
+  });
+  if (saved.outcome.status !== "ok") throw new Error(saved.outcome.message);
+  const runtime = instances[0]!.runtime;
+
+  // Codex names the limit on the failed turn.
+  await c.requestAgent({ kind: "send", sessionId: id, text: "hold" }, randomUUID());
+  await expect.poll(() => c.agents[0]?.status).toBe("working");
+  runtime.emit("turn/completed", {
+    turn: {
+      id: runtime.turnId,
+      status: "failed",
+      items: [],
+      error: { message: "You've hit your usage limit.", codexErrorInfo: "usageLimitExceeded" },
+    },
+  });
+  await expect.poll(() => c.agents[0]?.limit).toEqual({ resetsAt: null });
+
+  // Trying again starts afresh: the limit is only shown again if the account is still out.
+  await c.requestAgent({ kind: "send", sessionId: id, text: "hold" }, randomUUID());
+  await expect.poll(() => c.agents[0]?.status).toBe("working");
+  expect(c.agents[0]?.limit ?? null).toBeNull();
+
+  // Claude reports it as it happens, with the reset time.
+  runtime.emit("account/limitReached", { resetsAt: "2030-01-01T00:00:00.000Z" });
+  await expect.poll(() => c.agents[0]?.limit?.resetsAt).toBe("2030-01-01T00:00:00.000Z");
+  runtime.finish();
+  await expect.poll(() => c.agents[0]?.status).toBe("done");
+  expect(c.agents[0]?.limit).toEqual({ resetsAt: "2030-01-01T00:00:00.000Z" });
+
+  // Switching accounts leaves the limit with the account it belonged to.
+  const activated = await provider({
+    kind: "activate",
+    engine: "codex",
+    id: "codex-work",
+    expectedRevision: saved.outcome.revision,
+  });
+  if (activated.outcome.status !== "ok") throw new Error(activated.outcome.message);
+  await expect.poll(() => c.agents[0]?.limit ?? null).toBeNull();
+});
