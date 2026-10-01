@@ -106,9 +106,13 @@ The workflow needs these repository secrets:
 | `APPLE_API_PRIVATE_KEY`      | the key's `.p8` file, as text                                        |
 
 Only Apple Silicon is built. The daemon runtime bundles the host's Node and native modules, so
-Intel would be a second job on an Intel runner. Macs are not offered in-app updates yet: the
-control plane does not know the `dmg` format, and `update.rs` does not recognise an app bundle as
-an installation it could replace.
+Intel would be a second job on an Intel runner.
+
+A Mac copy updates itself from this same disk image (see the table below). `update.rs` mounts it,
+checks the digest, then that the app inside is signed by the same developer team as the running
+copy, passes `codesign --verify --deep --strict` and is accepted by Gatekeeper as notarized, and
+only then swaps the bundles. The signature check is what proves the build is ours, which the
+digest alone cannot: the digest comes from the same control plane that serves the download.
 
 ## Offering the release
 
@@ -177,6 +181,7 @@ works out from where its executable lives (`src-tauri/src/update.rs`):
 | a pacman package (`/opt/Concors`)                    | downloads the package and installs it with `pkexec pacman -U`        |
 | a tarball the person unpacked and can write to       | replaces the tree, keeping the old one until the new one is in place |
 | an AppImage in a directory the person can write to   | replaces the file in place, keeping its name, and relaunches it      |
+| a Mac app in a folder the person can write to        | installs the disk image's app over it (signature checked), restarts  |
 | a tree it cannot write to, or an unfamiliar location | says a new version exists and leaves it to them                      |
 | a build from a checkout                              | nothing at all; the checkout is the source of truth                  |
 
@@ -230,4 +235,5 @@ plugin is adopted; nothing reads it before then.
 - **`tauri-plugin-updater` itself**, whose one-click path covers AppImage, macOS and Windows. The
   endpoint already answers in the shape the plugin expects, and builds are signed once a key
   exists, so what remains is the plugin and the Windows builds. Until then the badge replaces an
-  AppImage itself, as it does a tarball, after checking the digest but not the signature.
+  AppImage or a tarball itself after checking the digest but not a signature; a Mac app is checked
+  against Apple's code signature and notarization instead.

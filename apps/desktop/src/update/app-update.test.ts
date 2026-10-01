@@ -68,6 +68,24 @@ describe("updateQuery", () => {
     });
   });
 
+  it("asks a Mac for its disk image, installing it only where the app can be replaced", () => {
+    const mac = {
+      kind: "macApp",
+      path: "/Applications/Concors.app",
+      platform: "darwin",
+      arch: "aarch64",
+    } as const;
+    expect(updateQuery(report({ ...mac, writable: true, formats: ["dmg"] }))).toEqual({
+      formats: ["dmg"],
+      installable: true,
+    });
+    // Opened straight from a download (App Translocation): told a version exists, not offered it.
+    expect(updateQuery(report({ ...mac, writable: false, formats: [] }))).toEqual({
+      formats: ["dmg"],
+      installable: false,
+    });
+  });
+
   it("asks for an AppImage for an AppImage it can replace, and only says so otherwise", () => {
     const appimage = { kind: "appimage", path: "/home/someone/Concors.AppImage" } as const;
     expect(updateQuery(report({ ...appimage, writable: true, formats: ["appimage"] }))).toEqual({
