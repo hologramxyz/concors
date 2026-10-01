@@ -2,9 +2,9 @@
 //!
 //! Two things are native here. The first is recognising how this copy was installed, because that
 //! decides whether the app can update itself at all: a package under `/opt` belongs to the system
-//! package manager and needs an administrator, while a tree unpacked in a home directory, or an
-//! AppImage saved in one, is ours to replace. The second is applying an update, which means
-//! touching files the webview cannot.
+//! package manager and needs an administrator, while a tree unpacked in a home directory, an
+//! AppImage saved in one, or a Mac app bundle in a folder we can write to is ours to replace. The
+//! second is applying an update, which means touching files the webview cannot.
 //!
 //! Downloading and verifying use the system's `curl` and `sha256sum` rather than HTTP and digest
 //! crates, for the same reason `ssh_key.rs` uses `ssh-keygen`: they are present wherever this app
@@ -36,6 +36,8 @@ pub enum Installation {
     /// A single AppImage file, which we can replace ourselves if its directory is writable.
     #[serde(rename = "appimage")]
     AppImage { path: String, writable: bool },
+    /// A macOS app bundle (`path` is the `.app`), which we can swap if its folder is writable.
+    MacApp { path: String, writable: bool },
     /// Built from a checkout. Nothing is offered: the checkout is the source of truth.
     Development,
     /// Somewhere we do not recognise; the app can still say a version exists.
@@ -49,6 +51,7 @@ impl Installation {
             Installation::Pacman { .. } => &["pacman"],
             Installation::Tarball { writable: true, .. } => &["tarball"],
             Installation::AppImage { writable: true, .. } => &["appimage"],
+            Installation::MacApp { writable: true, .. } => &["dmg"],
             _ => &[],
         }
     }
@@ -74,6 +77,16 @@ pub fn detect(
     if path.contains("/target/debug/") || path.contains("/target/release/") {
         return Installation::Development;
     }
+    if let Some(bundle) = mac_bundle(executable) {
+        // Gatekeeper runs an app opened straight from a download from a randomised read-only
+        // copy (App Translocation), and a disk image is read-only too: an update could not stick,
+        // so such a copy is told a version exists and left to be moved to Applications.
+        let translocated = path.contains("/AppTranslocation/");
+        return Installation::MacApp {
+            path: bundle.to_string_lossy().into_owned(),
+            writable: !translocated && bundle.parent().is_some_and(is_writable),
+        };
+    }
     if let Some(package) = owner(executable) {
         return Installation::Pacman { package };
     }
@@ -87,6 +100,19 @@ pub fn detect(
         }
     }
     Installation::Unknown
+}
+
+/// The `.app` bundle holding `executable`, when it is a bundle's main program
+/// (`<name>.app/Contents/MacOS/<program>`). Read from the path alone, so it is the same on every
+/// platform and testable anywhere.
+fn mac_bundle(executable: &Path) -> Option<&Path> {
+    let macos = executable.parent()?;
+    let contents = macos.parent()?;
+    let bundle = contents.parent()?;
+    (macos.file_name()? == "MacOS"
+        && contents.file_name()? == "Contents"
+        && bundle.extension()? == "app")
+        .then_some(bundle)
 }
 
 /// The AppImage file this process was started from, if any. The AppImage runtime mounts the image
@@ -238,6 +264,7 @@ fn download_and_install(
     let name = match installation {
         Installation::Pacman { .. } => format!("concors-{}.pkg.tar.zst", request.version),
         Installation::AppImage { .. } => format!("concors-{}.AppImage", request.version),
+        Installation::MacApp { .. } => format!("concors-{}.dmg", request.version),
         _ => format!("concors-{}.tar.gz", request.version),
     };
     let file = directory.join(name);
@@ -248,6 +275,8 @@ fn download_and_install(
         Installation::Tarball { root, .. } => replace_tree(&file, Path::new(root)),
         // Tauri's restart relaunches `APPIMAGE`, so it starts the file that is now the new build.
         Installation::AppImage { path, .. } => replace_appimage(&file, Path::new(path)),
+        // The restart starts the program at the bundle's path, which is now the new build's.
+        Installation::MacApp { path, .. } => replace_mac_app(&file, Path::new(path), directory),
         _ => Err("This copy of Concors cannot install updates.".into()),
     }
 }
@@ -316,7 +345,7 @@ fn verify(file: &Path, sha256: &str, expected_size: u64) -> Result<(), String> {
         ));
     }
 
-    let output = Command::new("sha256sum")
+    let output = digest_command()
         .arg(file)
         .stdin(Stdio::null())
         .output()
@@ -332,6 +361,18 @@ fn verify(file: &Path, sha256: &str, expected_size: u64) -> Result<(), String> {
     }
     log::info!("update verified: {actual_size} bytes, sha256 {sha256}");
     Ok(())
+}
+
+/// `sha256sum` only arrived with recent macOS releases; `shasum` has always been there, and prints
+/// the digest the same way.
+fn digest_command() -> Command {
+    if cfg!(target_os = "macos") {
+        let mut command = Command::new("shasum");
+        command.args(["-a", "256"]);
+        command
+    } else {
+        Command::new("sha256sum")
+    }
 }
 
 /// pacman keeps its own record of what is installed, so an update must go through it.
@@ -426,6 +467,148 @@ fn replace_appimage(download: &Path, target: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// Installs the app from a release's disk image: mounts it, checks that the app inside is one Apple
+/// notarized and that it is signed by the same developer as the running copy, then swaps bundles.
+/// The checksum already said the download is what the control plane described; the signature says
+/// it is ours, which a compromised control plane or release host could not fake.
+///
+/// The swap keeps the old bundle until the new one is in place, and the running app keeps working
+/// meanwhile: it holds its files open, and the restart starts the new bundle's program.
+fn replace_mac_app(image: &Path, target: &Path, scratch: &Path) -> Result<(), String> {
+    let mount = scratch.join("mount");
+    fs::create_dir_all(&mount).map_err(|error| format!("Could not stage the update: {error}"))?;
+    let attached = Command::new("hdiutil")
+        .args([
+            "attach",
+            "-nobrowse",
+            "-readonly",
+            "-noautoopen",
+            "-mountpoint",
+        ])
+        .arg(&mount)
+        .arg(image)
+        .stdin(Stdio::null())
+        .output()
+        .map_err(|error| format!("Could not open the update: {error}"))?;
+    if !attached.status.success() {
+        log::warn!(
+            "hdiutil attach failed: {}",
+            String::from_utf8_lossy(&attached.stderr).trim()
+        );
+        return Err("The update could not be opened.".into());
+    }
+    let result = install_from_mount(&mount, target);
+    let detached = Command::new("hdiutil")
+        .args(["detach", "-quiet"])
+        .arg(&mount)
+        .stdin(Stdio::null())
+        .status();
+    if !detached.is_ok_and(|status| status.success()) {
+        let _ = Command::new("hdiutil")
+            .args(["detach", "-force", "-quiet"])
+            .arg(&mount)
+            .stdin(Stdio::null())
+            .status();
+    }
+    result
+}
+
+fn install_from_mount(mount: &Path, target: &Path) -> Result<(), String> {
+    let (Some(directory), Some(name)) = (target.parent(), target.file_name()) else {
+        return Err("Could not find the app to replace.".into());
+    };
+    let update = mount.join(name);
+    if !update.join("Contents/MacOS").is_dir() {
+        return Err("The update did not contain a Concors build.".into());
+    }
+    let expected = team_of(target)
+        .ok_or("This copy of Concors is not a signed release, so it cannot update itself.")?;
+    if team_of(&update).as_deref() != Some(expected.as_str()) {
+        log::warn!("update is not signed by team {expected}");
+        return Err("The update is not signed by Concors' developer and was not installed.".into());
+    }
+    check(
+        Command::new("codesign")
+            .args(["--verify", "--deep", "--strict"])
+            .arg(&update),
+        "The update's signature is broken; it was not installed.",
+    )?;
+    check(
+        Command::new("spctl")
+            .args(["--assess", "--type", "execute"])
+            .arg(&update),
+        "macOS does not accept the update as notarized; it was not installed.",
+    )?;
+
+    // Hidden, and in the same folder, since a rename cannot cross volumes.
+    let staging = directory.join(format!(".{}.update", name.to_string_lossy()));
+    let previous = directory.join(format!(".{}.old", name.to_string_lossy()));
+    let _ = fs::remove_dir_all(&staging);
+    let _ = fs::remove_dir_all(&previous);
+    // ditto keeps what a bundle's signature covers: permissions, symlinks and extended attributes.
+    if let Err(error) = check(
+        Command::new("ditto").arg(&update).arg(&staging),
+        "The update could not be copied into place.",
+    ) {
+        let _ = fs::remove_dir_all(&staging);
+        return Err(error);
+    }
+    fs::rename(target, &previous).map_err(|error| {
+        let _ = fs::remove_dir_all(&staging);
+        // macOS can refuse this under App Management (System Settings › Privacy & Security).
+        format!(
+            "macOS did not let Concors replace itself ({error}). Download the new version from concors.dev instead."
+        )
+    })?;
+    if let Err(error) = fs::rename(&staging, target) {
+        // Put back what was working before reporting the failure.
+        let _ = fs::rename(&previous, target);
+        let _ = fs::remove_dir_all(&staging);
+        return Err(format!("Could not put the update in place: {error}"));
+    }
+    let _ = fs::remove_dir_all(&previous);
+    log::info!("update installed at {}; restarting", target.display());
+    Ok(())
+}
+
+/// Runs a check, turning any failure (including not being able to run it) into `message`.
+fn check(command: &mut Command, message: &str) -> Result<(), String> {
+    let output = command
+        .stdin(Stdio::null())
+        .output()
+        .map_err(|error| format!("{message} ({error})"))?;
+    if output.status.success() {
+        return Ok(());
+    }
+    log::warn!(
+        "{message} {}",
+        String::from_utf8_lossy(&output.stderr).trim()
+    );
+    Err(message.into())
+}
+
+/// The Apple developer team that signed `bundle`, if it is signed by one (ad hoc signatures and
+/// unsigned builds have none).
+fn team_of(bundle: &Path) -> Option<String> {
+    let output = Command::new("codesign")
+        .args(["--display", "--verbose=2"])
+        .arg(bundle)
+        .stdin(Stdio::null())
+        .output()
+        .ok()?;
+    team_identifier(&String::from_utf8_lossy(&output.stderr))
+}
+
+/// `TeamIdentifier=…` from `codesign --display`'s report, which goes to stderr.
+fn team_identifier(report: &str) -> Option<String> {
+    report
+        .lines()
+        .find_map(|line| line.strip_prefix("TeamIdentifier="))
+        .map(str::trim)
+        .filter(|team| !team.is_empty() && *team != "not set")
+        .map(str::to_owned)
+}
+
 /// An ELF file carrying the AppImage type 2 magic (`AI` 2) in its identification padding.
 fn is_appimage(file: &Path) -> bool {
     let mut header = [0u8; 11];
@@ -498,6 +681,127 @@ mod tests {
             }
         );
         fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn a_mac_app_bundle_is_recognised_and_replaceable_where_its_folder_is_writable() {
+        let applications = temp("mac");
+        let program = applications.join("Concors.app/Contents/MacOS/concors-desktop");
+        fs::create_dir_all(program.parent().unwrap()).unwrap();
+        fs::write(&program, "").unwrap();
+
+        let installation = detect(&program, None, |_| None);
+        assert_eq!(
+            installation,
+            Installation::MacApp {
+                path: applications
+                    .join("Concors.app")
+                    .to_string_lossy()
+                    .into_owned(),
+                writable: true
+            }
+        );
+        assert_eq!(installation.formats(), &["dmg"]);
+        fs::remove_dir_all(&applications).unwrap();
+    }
+
+    #[test]
+    fn a_translocated_mac_app_is_told_of_updates_but_not_offered_one() {
+        let program = Path::new(
+            "/private/var/folders/x/AppTranslocation/1234/d/Concors.app/Contents/MacOS/concors-desktop",
+        );
+        let installation = detect(program, None, |_| None);
+        assert!(matches!(
+            installation,
+            Installation::MacApp {
+                writable: false,
+                ..
+            }
+        ));
+        assert!(installation.formats().is_empty());
+        // Not a bundle's main program: a helper inside it, or a loose binary named like one.
+        let helper = Path::new("/Applications/Concors.app/Contents/Resources/daemon/bin/node");
+        assert_eq!(detect(helper, None, |_| None), Installation::Unknown);
+    }
+
+    #[test]
+    fn the_signing_team_is_read_from_codesign_and_ad_hoc_signatures_have_none() {
+        let signed = "Executable=/Applications/Concors.app/Contents/MacOS/concors-desktop\n\
+            Authority=Developer ID Application: Rolling Inc. (9WN4P724M2)\n\
+            TeamIdentifier=9WN4P724M2\n";
+        assert_eq!(team_identifier(signed).as_deref(), Some("9WN4P724M2"));
+        assert_eq!(
+            team_identifier("Signature=adhoc\nTeamIdentifier=not set\n"),
+            None
+        );
+        assert_eq!(team_identifier("code object is not signed at all\n"), None);
+    }
+
+    /// Swaps a copy of an installed, notarized Concors for the app in a published disk image,
+    /// as the update badge does. Needs a Mac, a signed Concors in /Applications and a release's
+    /// image: `CONCORS_TEST_DMG=… cargo test -- --ignored mac_app_is_swapped`.
+    #[test]
+    #[ignore]
+    fn mac_app_is_swapped_for_the_one_in_a_published_disk_image() {
+        let Some(image) = std::env::var_os("CONCORS_TEST_DMG") else {
+            panic!("set CONCORS_TEST_DMG to a published Concors disk image");
+        };
+        let folder = temp("swap");
+        let target = folder.join("Concors.app");
+        let copied = Command::new("ditto")
+            .arg("/Applications/Concors.app")
+            .arg(&target)
+            .status()
+            .unwrap();
+        assert!(copied.success());
+        let scratch = folder.join("scratch");
+        fs::create_dir_all(&scratch).unwrap();
+
+        replace_mac_app(Path::new(&image), &target, &scratch).unwrap();
+
+        assert!(team_of(&target).is_some());
+        assert!(!folder.join(".Concors.app.old").exists());
+        assert!(!folder.join(".Concors.app.update").exists());
+        let verified = Command::new("codesign")
+            .args(["--verify", "--deep", "--strict"])
+            .arg(&target)
+            .status()
+            .unwrap();
+        assert!(verified.success());
+        fs::remove_dir_all(&folder).unwrap();
+    }
+
+    /// An image holding a Concors that is not signed by the running copy's developer (here, an
+    /// installed copy re-signed ad hoc) is refused, and the installed app is left untouched.
+    #[test]
+    #[ignore]
+    fn mac_app_signed_by_someone_else_is_refused() {
+        let folder = temp("foreign");
+        let target = folder.join("Concors.app");
+        let mount = folder.join("mount");
+        fs::create_dir_all(&mount).unwrap();
+        for destination in [&target, &mount.join("Concors.app")] {
+            let copied = Command::new("ditto")
+                .arg("/Applications/Concors.app")
+                .arg(destination)
+                .status()
+                .unwrap();
+            assert!(copied.success());
+        }
+        let resigned = Command::new("codesign")
+            .args(["--force", "--deep", "--sign", "-"])
+            .arg(mount.join("Concors.app"))
+            .output()
+            .unwrap();
+        assert!(resigned.status.success());
+
+        let error = install_from_mount(&mount, &target).unwrap_err();
+        assert!(
+            error.contains("not signed by Concors' developer"),
+            "{error}"
+        );
+        assert!(team_of(&target).is_some(), "the installed app was changed");
+        fs::remove_dir_all(&folder).unwrap();
     }
 
     #[test]
