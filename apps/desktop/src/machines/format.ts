@@ -68,9 +68,16 @@ export function isUndeployed(machine: Pick<Machine, "status" | "orderId" | "serv
   return machine.status === "error" && machine.orderId === null && machine.serviceName === null;
 }
 
-/** Machines the server may still change on its own; the list keeps polling while any exist. */
-export function isSettling(machine: Pick<Machine, "status">): boolean {
-  return machine.status === "provisioning" || machine.status === "unknown";
+/**
+ * Machines the server may still change on its own, including one installing a new daemon; the
+ * list keeps polling while any exist.
+ */
+export function isSettling(machine: Pick<Machine, "status" | "daemonUpdate">): boolean {
+  return (
+    machine.status === "provisioning" ||
+    machine.status === "unknown" ||
+    machine.daemonUpdate?.installing === true
+  );
 }
 
 /** `Ends Oct 8, 2026` for a cancelled machine, or `null` when it is not cancelled. */

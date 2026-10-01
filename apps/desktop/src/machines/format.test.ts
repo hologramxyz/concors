@@ -69,6 +69,12 @@ describe("status", () => {
     expect(isSettling({ status: "unknown" })).toBe(true);
     expect(isSettling({ status: "running" })).toBe(false);
     expect(isSettling({ status: "error" })).toBe(false);
+    const update = { version: "0.7.0", installing: false };
+    expect(isSettling({ status: "running", daemonUpdate: update })).toBe(false);
+    expect(isSettling({ status: "running", daemonUpdate: { ...update, installing: true } })).toBe(
+      true,
+    );
+    expect(isSettling({ status: "running", daemonUpdate: null })).toBe(false);
   });
 
   it("says when a cancelled machine ends", () => {

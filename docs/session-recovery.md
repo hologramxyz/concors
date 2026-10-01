@@ -35,7 +35,9 @@ serving through the previous build's host. The build is recorded in the host des
 fingerprint of the daemon program, not its version, because a rebuild usually carries the same
 version — exactly when stale code would otherwise go unnoticed. A replacement ends that host's
 terminals and agent sessions, like upgrading a machine's daemon; saved projects, tabs and history
-are untouched. The same works for a gateway started by the desktop wrapper. No tmux installation is required. The same CLI entry point launches the host in source, bundled-JavaScript, and planned single-executable distributions.
+are untouched. That is why rolling out a daemon version to cloud machines only makes it
+available: each machine updates when no agent on it is working or waiting, or when its owner
+presses **Update now** in the app ([managed machines](managed-machines-v1.md), 4.4). The same works for a gateway started by the desktop wrapper. No tmux installation is required. The same CLI entry point launches the host in source, bundled-JavaScript, and planned single-executable distributions.
 
 To deliberately stop the runtime for maintenance, stop the gateway first, then run this command with the same `CONCORS_DATA_DIR`:
 

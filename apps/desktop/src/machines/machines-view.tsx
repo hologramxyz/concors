@@ -1,12 +1,13 @@
 import { MachineIcon } from "./machine-icon";
 import { MachineIconPicker } from "./machine-icon-picker";
-import type { Machine } from "@concors/api-client";
+import type { DaemonUpdate, Machine } from "@concors/api-client";
 import { cn } from "cn";
 import {
   CalendarX,
   Check,
   CircleAlert,
   ChevronDown,
+  CircleArrowUp,
   Cloud,
   Copy,
   KeyRound,
@@ -36,6 +37,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 
 import { DaemonDetails, type DaemonConnectionInfo } from "./daemon-details.tsx";
@@ -240,6 +242,11 @@ export function MachinesView({
                   readableRegion(machine.region)
                 }
                 onCancel={() => setCancelling(machine)}
+                onUpdateDaemon={() =>
+                  state.updateDaemon(machine.id).catch((cause: unknown) => {
+                    throw new Error(describeMachinesError(cause));
+                  })
+                }
                 removing={removing === machine.id}
                 onRemove={() => void remove(machine)}
                 onRetry={() => {
@@ -319,6 +326,7 @@ function MachineCard({
   onRename,
   onIconChange,
   onCancel,
+  onUpdateDaemon,
   onResume,
   resuming,
   onRemove,
@@ -335,6 +343,8 @@ function MachineCard({
   readonly onRename: (name: string) => Promise<void>;
   readonly onIconChange: (icon: string | null) => Promise<void>;
   readonly onCancel: () => void;
+  /** Installs the pending daemon update now; the owner has confirmed. Rejects with a message. */
+  readonly onUpdateDaemon: () => Promise<void>;
   readonly onResume: () => void;
   readonly resuming: boolean;
   /** Only offered for machines that were never deployed. */
@@ -424,6 +434,14 @@ function MachineCard({
         <p role="alert" className="selectable mx-5 mb-5 text-xs text-destructive sm:mx-6 sm:mb-6">
           {machine.lastError}
         </p>
+      )}
+
+      {machine.daemonUpdate && machine.status === "running" && !undeployed && (
+        <DaemonUpdateNotice
+          machine={machine}
+          update={machine.daemonUpdate}
+          onUpdate={onUpdateDaemon}
+        />
       )}
 
       {undeployed ? (
@@ -521,6 +539,111 @@ function MachineCard({
           </div>
         </AdvancedDetails>
       )}
+    </div>
+  );
+}
+
+/**
+ * A newer daemon is waiting for this machine. The control plane installs it once no agent is
+ * working or waiting, so the owner only needs to act to get it sooner, at the cost of whatever the
+ * agents are doing right now.
+ */
+function DaemonUpdateNotice({
+  machine,
+  update,
+  onUpdate,
+}: {
+  readonly machine: Machine;
+  readonly update: DaemonUpdate;
+  readonly onUpdate: () => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (update.installing)
+    return (
+      <div
+        role="status"
+        className="mx-5 mb-5 flex items-start gap-3 rounded-lg bg-muted/30 p-4 sm:mx-6 sm:mb-6"
+      >
+        <LoaderCircle
+          className="mt-0.5 size-4 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none"
+          aria-hidden="true"
+        />
+        <div className="min-w-0 space-y-1">
+          <p className="text-sm font-medium">Updating to version {update.version}</p>
+          <p className="text-sm text-muted-foreground">
+            This machine's agents restart when the update is installed. Your conversations are kept.
+          </p>
+        </div>
+      </div>
+    );
+  return (
+    <div
+      role="group"
+      aria-label="Update available"
+      className="mx-5 mb-5 flex flex-col items-start gap-3 rounded-lg bg-sky-500/5 p-4 sm:mx-6 sm:mb-6 sm:flex-row sm:items-center sm:justify-between"
+    >
+      <div className="flex min-w-0 items-start gap-3">
+        <CircleArrowUp
+          className="mt-0.5 size-4 shrink-0 text-sky-700 dark:text-sky-400"
+          aria-hidden="true"
+        />
+        <div className="min-w-0 space-y-1">
+          <p className="text-sm font-medium">Update available: version {update.version}</p>
+          <p className="text-sm text-muted-foreground">
+            It installs by itself when no agent on this machine is working or waiting for you.
+          </p>
+        </div>
+      </div>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (pending) return;
+          if (next) setError(null);
+          setOpen(next);
+        }}
+      >
+        <DialogTrigger asChild>
+          <Button variant="outline" size="sm" className="shrink-0">
+            Update now
+          </Button>
+        </DialogTrigger>
+        <DialogContent showCloseButton={!pending}>
+          <DialogHeader>
+            <DialogTitle>Update {machine.name} now?</DialogTitle>
+            <DialogDescription>
+              Updating restarts this machine's agents. Anything they're doing right now will stop;
+              your conversations are kept.
+            </DialogDescription>
+          </DialogHeader>
+          {error && (
+            <p role="alert" className="text-sm break-words text-destructive">
+              {error}
+            </p>
+          )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOpen(false)} disabled={pending}>
+              Not now
+            </Button>
+            <Button
+              disabled={pending}
+              onClick={() => {
+                setPending(true);
+                setError(null);
+                onUpdate()
+                  .then(() => setOpen(false))
+                  .catch((cause: unknown) => {
+                    setError(cause instanceof Error ? cause.message : "Could not start the update");
+                  })
+                  .finally(() => setPending(false));
+              }}
+            >
+              {pending ? "Starting update…" : "Update now"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
