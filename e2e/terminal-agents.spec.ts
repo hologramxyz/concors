@@ -33,6 +33,11 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
       "false",
     );
     const shellPaneId = await shellPane.getAttribute("data-pane-id");
+    // Attached is not started: until the shell is running the terminal takes no input, and on a
+    // busy runner keys typed before its prompt appeared were lost. Type once it prompts.
+    await expect(shellPane.getByLabel("Terminal output").filter({ visible: true })).toContainText(
+      "$",
+    );
     await shellPane.locator(".xterm-helper-textarea").focus();
     await page.keyboard.type("codex");
     await page.keyboard.press("Enter");
