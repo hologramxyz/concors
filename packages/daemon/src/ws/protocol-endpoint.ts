@@ -39,6 +39,7 @@ export interface ProtocolEndpointOptions {
   readonly accountBackendFactory?: AccountBackendFactory;
   readonly gitHub?: GitHubSource;
   readonly speechModelsDirectory?: string;
+  readonly claudeHome?: string;
   readonly state: DaemonState;
   readonly workspace: WorkspaceStore;
   /** How long a freshly-opened socket may stay silent before we drop it. */
@@ -120,6 +121,7 @@ export function registerProtocolEndpoint(
     basename(attachments) === "attachments"
       ? join(dirname(attachments), "providers")
       : attachments + "-providers",
+    options.claudeHome,
   );
   const themes = new ThemeRegistry(
     basename(attachments) === "attachments"

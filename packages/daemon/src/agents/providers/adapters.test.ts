@@ -986,3 +986,55 @@ it("shows a Claude sub-agent's tool calls as steps of the call that started it",
   await expect.poll(() => latest()?.["status"]).toBe("completed");
   expect(latest()?.["activity"]).toHaveLength(2);
 });
+
+it("reports a Claude plan limit beside the turn so the chat can offer another account", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-claude-limit-"));
+  cleanup.push(() => rm(directory, { recursive: true, force: true }));
+  await writeFile(join(directory, process.platform === "win32" ? "claude.cmd" : "claude"), "", {
+    mode: 0o755,
+  });
+  vi.stubEnv("PATH", directory);
+  let emit: (value: unknown) => void = () => undefined;
+  const createQuery = vi.fn(() => {
+    const messages = new PassThrough({ objectMode: true });
+    emit = (value) => messages.write(value);
+    return Object.assign(messages, {
+      initializationResult: async () => ({
+        models: [{ value: "default", displayName: "Default" }],
+      }),
+      getContextUsage: async () => ({ model: "claude-sonnet-5" }),
+      setModel: async () => undefined,
+      setPermissionMode: async () => undefined,
+      close: () => {
+        messages.end();
+      },
+    }) as unknown as Query;
+  });
+  const provider = new ClaudeProvider(directory, vi.fn(), createQuery);
+  const { notifications } = observe(provider);
+  await provider.initialize();
+  await provider.request("thread/start");
+  await provider.request("turn/start", turn);
+  const limits = () => notifications.filter((n) => n.method === "account/limitReached");
+
+  // Approaching a limit is not reaching it.
+  emit({
+    type: "rate_limit_event",
+    rate_limit_info: { status: "allowed_warning", resetsAt: 1_900_000_000, utilization: 0.9 },
+  });
+  emit({
+    type: "rate_limit_event",
+    rate_limit_info: { status: "rejected", resetsAt: 1_900_000_000 },
+  });
+  await expect.poll(() => limits()).toHaveLength(1);
+  expect(limits()[0]?.params["resetsAt"]).toBe(new Date(1_900_000_000_000).toISOString());
+
+  // Claude's own limit reply keeps the reset time the event gave.
+  emit({
+    type: "assistant",
+    error: "rate_limit",
+    message: { id: "limit", content: [{ type: "text", text: "You've hit your limit" }] },
+  });
+  await expect.poll(() => limits()).toHaveLength(2);
+  expect(limits()[1]?.params["resetsAt"]).toBe(new Date(1_900_000_000_000).toISOString());
+});

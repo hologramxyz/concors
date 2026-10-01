@@ -33,6 +33,7 @@ const port = Number(process.env["CONCORS_E2E_DAEMON_PORT"] ?? 7429);
 if (![7429, 7430].includes(port)) throw new Error("Invalid fixture daemon port");
 const server = createDaemonServer(loadDaemonConfig({ port, logLevel: "warn" }, {}), {
   workspacePath: join(directory, "workspace.sqlite"),
+  claudeHome: join(directory, "claude-home"),
   accountBackendFactory: (info) => new TestAccountBackend(info),
   gitHub: fixtureGitHub,
   agentProviderFactory: (cwd, handler, provider) => {

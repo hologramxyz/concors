@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -24,7 +24,7 @@ it("includes the audited six native providers and 38 opt-in ACP presets", () => 
 it("persists private credentials without returning them and rejects stale edits", async () => {
   const root = await mkdtemp(join(tmpdir(), "concors-provider-settings-"));
   directories.push(root);
-  const registry = new ProviderRegistry(root);
+  const registry = new ProviderRegistry(root, join(root, "claude-home"));
   const config = {
     id: "custom-example",
     label: "Example",
@@ -42,9 +42,9 @@ it("persists private credentials without returning them and rejects stale edits"
   expect(result.outcome.status).toBe("ok");
   expect(JSON.stringify(result)).not.toContain("private-test-value");
   expect(registry.request(request)).toEqual(result);
-  expect(new ProviderRegistry(root).config(config.id).env?.["EXAMPLE_KEY"]).toBe(
-    "private-test-value",
-  );
+  expect(
+    new ProviderRegistry(root, join(root, "claude-home")).config(config.id).env?.["EXAMPLE_KEY"],
+  ).toBe("private-test-value");
   if (process.platform !== "win32")
     expect((await stat(join(root, "config.json"))).mode & 0o077).toBe(0);
   const stale = registry.request({ ...request, requestId: randomUUID() });
@@ -71,7 +71,7 @@ it("persists private credentials without returning them and rejects stale edits"
 it("keeps subscriptions in creation order when an older account is renamed", async () => {
   const root = await mkdtemp(join(tmpdir(), "concors-provider-order-"));
   directories.push(root);
-  const registry = new ProviderRegistry(root);
+  const registry = new ProviderRegistry(root, join(root, "claude-home"));
   const save = (id: string, nickname: string, revision: number) =>
     registry.request({
       type: "provider.request",
@@ -102,7 +102,7 @@ it("keeps subscriptions in creation order when an older account is renamed", asy
 it("does not execute npx or download a preset while checking installed providers", async () => {
   const root = await mkdtemp(join(tmpdir(), "concors-provider-discovery-"));
   directories.push(root);
-  const registry = new ProviderRegistry(root);
+  const registry = new ProviderRegistry(root, join(root, "claude-home"));
   const preset = registry.config("acp-gemini");
   expect(registry.installed(preset)).toBe(false);
   expect(() => registry.launcher({ ...preset, enabled: true })).toThrow("not installed");
@@ -120,7 +120,7 @@ it("preserves argv boundaries and credentials for a configured executable", asyn
     script,
     "console.log(JSON.stringify({args:process.argv.slice(2),key:process.env.EXAMPLE_KEY}));",
   );
-  const registry = new ProviderRegistry(root);
+  const registry = new ProviderRegistry(root, join(root, "claude-home"));
   const launch = registry.launcher({
     id: "example",
     label: "Example",
@@ -151,7 +151,7 @@ it("preserves argv boundaries and credentials for a configured executable", asyn
 it("keeps MCP headers and process environment private while preserving existing overrides", async () => {
   const root = await mkdtemp(join(tmpdir(), "concors-mcp-settings-"));
   directories.push(root);
-  const registry = new ProviderRegistry(root);
+  const registry = new ProviderRegistry(root, join(root, "claude-home"));
   const config = {
     ...registry.config("claude"),
     params: {
@@ -191,7 +191,7 @@ it("keeps private OpenCode transport settings authoritative without discarding a
     script,
     "console.log(JSON.stringify([process.env.OPENCODE_SERVER_USERNAME,process.env.OPENCODE_SERVER_PASSWORD,process.env.OPENCODE_CONFIG_CONTENT,process.env.EXAMPLE_ACCOUNT]));",
   );
-  const registry = new ProviderRegistry(root);
+  const registry = new ProviderRegistry(root, join(root, "claude-home"));
   const launch = registry.launcher({
     id: "opencode-profile",
     label: "OpenCode profile",
@@ -228,7 +228,7 @@ it("keeps private OpenCode transport settings authoritative without discarding a
 it("provisions an isolated credential home for a subscription and removes it on delete", async () => {
   const root = await mkdtemp(join(tmpdir(), "concors-subscriptions-"));
   directories.push(root);
-  const registry = new ProviderRegistry(join(root, "providers"));
+  const registry = new ProviderRegistry(join(root, "providers"), join(root, "claude-home"));
   const config = {
     id: "claude-work",
     label: "Claude — Work",
@@ -265,10 +265,77 @@ it("provisions an isolated credential home for a subscription and removes it on 
   expect(removal.outcome.status).toBe("ok");
   await expect(stat(home)).rejects.toThrow();
 });
+it("shares Claude history across accounts and keeps it when a subscription is removed", async () => {
+  const root = await mkdtemp(join(tmpdir(), "concors-subscriptions-history-"));
+  directories.push(root);
+  const machine = join(root, "claude-home");
+  const registry = new ProviderRegistry(join(root, "providers"), machine);
+  const save = (id: string, revision: number) =>
+    registry.request(
+      ProviderRequestSchema.parse({
+        type: "provider.request",
+        requestId: randomUUID(),
+        operation: {
+          kind: "save",
+          expectedRevision: revision,
+          config: {
+            id,
+            label: id,
+            engine: "claude",
+            enabled: true,
+            command: ["claude"],
+            subscription: { nickname: id },
+          },
+        },
+      }),
+    );
+  save("claude-work", 0);
+  save("claude-personal", 1);
+  const work = join(root, "accounts", "claude", "claude-work");
+  const personal = join(root, "accounts", "claude", "claude-personal");
+  // A chat written under one account is found under the other and the default account.
+  await mkdir(join(work, "projects", "-repo"), { recursive: true });
+  await writeFile(join(work, "projects", "-repo", "chat.jsonl"), "{}\n");
+  expect(await readFile(join(personal, "projects", "-repo", "chat.jsonl"), "utf8")).toBe("{}\n");
+  expect(await readFile(join(machine, "projects", "-repo", "chat.jsonl"), "utf8")).toBe("{}\n");
+
+  // An account from before sharing had its own transcripts; they move across on its next use.
+  await rm(join(personal, "projects"));
+  await mkdir(join(personal, "projects", "-repo"), { recursive: true });
+  await writeFile(join(personal, "projects", "-repo", "older.jsonl"), "older\n");
+  registry.request(
+    ProviderRequestSchema.parse({
+      type: "provider.request",
+      requestId: randomUUID(),
+      operation: { kind: "activate", engine: "claude", id: "claude-personal", expectedRevision: 2 },
+    }),
+  );
+  registry.terminalEnvironment();
+  expect(await readFile(join(machine, "projects", "-repo", "older.jsonl"), "utf8")).toBe("older\n");
+
+  // Removing an account signs it out without taking its conversations with it.
+  await rm(join(work, "projects"));
+  await mkdir(join(work, "projects", "-repo"), { recursive: true });
+  await writeFile(join(work, "projects", "-repo", "unlinked.jsonl"), "unlinked\n");
+  const removal = registry.request(
+    ProviderRequestSchema.parse({
+      type: "provider.request",
+      requestId: randomUUID(),
+      operation: { kind: "remove", id: "claude-work", expectedRevision: 3 },
+    }),
+  );
+  expect(removal.outcome.status).toBe("ok");
+  await expect(stat(work)).rejects.toThrow();
+  expect((await readdir(join(machine, "projects", "-repo"))).sort()).toEqual([
+    "chat.jsonl",
+    "older.jsonl",
+    "unlinked.jsonl",
+  ]);
+});
 it("gives Codex subscriptions their own CODEX_HOME and rejects unsupported engines", async () => {
   const root = await mkdtemp(join(tmpdir(), "concors-subscriptions-codex-"));
   directories.push(root);
-  const registry = new ProviderRegistry(join(root, "providers"));
+  const registry = new ProviderRegistry(join(root, "providers"), join(root, "claude-home"));
   const save = (config: object, expectedRevision: number) =>
     registry.request(
       ProviderRequestSchema.parse({
@@ -309,7 +376,7 @@ it("keeps Codex conversation state stable and recovers threads from legacy accou
   directories.push(root);
   const shared = join(root, "shared-codex-state");
   vi.stubEnv("CODEX_SQLITE_HOME", shared);
-  const registry = new ProviderRegistry(join(root, "providers"));
+  const registry = new ProviderRegistry(join(root, "providers"), join(root, "claude-home"));
   const saved = registry.request(
     ProviderRequestSchema.parse({
       type: "provider.request",
@@ -368,7 +435,7 @@ it("resolves a subscription's binaries from its engine's base installation", asy
   await writeFile(join(bin, name), "", { mode: 0o755 });
   vi.stubEnv("PATH", root);
   try {
-    const registry = new ProviderRegistry(join(root, "providers"));
+    const registry = new ProviderRegistry(join(root, "providers"), join(root, "claude-home"));
     const result = registry.request(
       ProviderRequestSchema.parse({
         type: "provider.request",
@@ -398,7 +465,7 @@ it("falls back to the daemon's own node and npm when the machine has none", asyn
   const root = await mkdtemp(join(tmpdir(), "concors-runtime-path-"));
   directories.push(root);
   vi.stubEnv("PATH", root);
-  const registry = new ProviderRegistry(join(root, "providers"));
+  const registry = new ProviderRegistry(join(root, "providers"), join(root, "claude-home"));
   const result = registry.request(
     ProviderRequestSchema.parse({
       type: "provider.request",
@@ -428,7 +495,7 @@ it("falls back to the daemon's own node and npm when the machine has none", asyn
 it("activates one subscription machine-wide and falls back to the default on removal", async () => {
   const root = await mkdtemp(join(tmpdir(), "concors-subscription-active-"));
   directories.push(root);
-  const registry = new ProviderRegistry(join(root, "providers"));
+  const registry = new ProviderRegistry(join(root, "providers"), join(root, "claude-home"));
   const request = (operation: object) =>
     registry.request(
       ProviderRequestSchema.parse({
@@ -489,7 +556,7 @@ it("activates one subscription machine-wide and falls back to the default on rem
     }),
   ).toBe("/custom/home");
   // The machine remembers its choice across restarts.
-  const reloaded = new ProviderRegistry(join(root, "providers"));
+  const reloaded = new ProviderRegistry(join(root, "providers"), join(root, "claude-home"));
   expect(reloaded.credentialDir(reloaded.config("claude"))).toBe(home);
   const removal = request({ kind: "remove", id: "claude-work", expectedRevision: 2 });
   if (removal.outcome.status !== "ok") throw new Error(removal.outcome.message);

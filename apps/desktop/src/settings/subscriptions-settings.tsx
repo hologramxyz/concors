@@ -56,9 +56,10 @@ import { invalidateModelCatalogs } from "@/agents/model-catalog";
 import { copyText } from "@/lib/clipboard";
 import { openExternal } from "@/tauri/open-external";
 import { Section, SettingsCard } from "@/views/settings-primitives";
-import { percentLabel, resetLabel, usageTone } from "@/agents/usage-labels";
+import { currentWindow, percentLabel, resetLabel, usageTone } from "@/agents/usage-labels";
 import { cn } from "cn";
 import {
+  accountName,
   subscriptionConfig,
   portableSubscriptionConfig,
   renamedAccountConfig,
@@ -1039,15 +1040,6 @@ function ProviderAssignment({
   );
 }
 
-function accountName(provider: ProviderStatus, labels: Record<string, string>) {
-  return (
-    provider.accountNickname ??
-    labels[provider.id] ??
-    (provider.subscription?.nickname !== "Account" ? provider.subscription?.nickname : undefined) ??
-    "Account"
-  );
-}
-
 function SubscriptionPicker({
   label,
   engine,
@@ -1218,7 +1210,8 @@ function PickerUsage({ usage: state }: { usage: SubscriptionUsageState | undefin
   if (!usage || usage.status !== "available" || !usage.windows.length) return null;
   return (
     <span className="mt-2 grid grid-cols-[repeat(auto-fit,minmax(7rem,1fr))] gap-2">
-      {usage.windows.map((window) => {
+      {usage.windows.map((measured) => {
+        const window = currentWindow(measured);
         const tone = usageTone(window.usedPercent);
         const reset = resetLabel(window.resetsAt);
         return (
@@ -1492,7 +1485,8 @@ function SubscriptionUsage({ usage: state }: { usage: SubscriptionUsageState | u
     ) : null;
   return (
     <ul aria-label="Plan usage" className="mt-2.5 flex min-h-11 flex-wrap gap-x-4 gap-y-2.5">
-      {usage.windows.map((window) => {
+      {usage.windows.map((measured) => {
+        const window = currentWindow(measured);
         const tone = usageTone(window.usedPercent);
         const reset = resetLabel(window.resetsAt);
         return (
