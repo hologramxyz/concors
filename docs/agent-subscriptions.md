@@ -69,6 +69,18 @@ machine with an active subscription is not asked to sign in to the unused defaul
 per-chat provider catalog: the composer keeps offering "Claude Code" / "Codex", never an account
 choice. Removing the active subscription reverts the machine to the default account.
 
+## Reaching a plan limit
+
+When a turn runs into the account's plan limit, the chat says so and offers the machine's other
+signed-in accounts for that engine, roomiest first, each with its two fullest windows. Choosing
+one is the same machine-wide `activate` Settings performs. Claude reports the limit while the turn
+runs (a `rate_limit_event` with status `rejected`, or its own reply flagged `rate_limit`), which
+the provider forwards as `account/limitReached` with the reset time; Codex fails the turn with
+`codexErrorInfo: "usageLimitExceeded"`. Either way the daemon sets `AgentInfo.limit`, and clears it
+when the chat starts another turn or the machine switches that engine's account. Accounts that are
+not signed in on the machine, or are at a limit themselves, are not offered; with none left the
+chat shows only the provider's own message. Nothing switches automatically.
+
 ## Cross-machine model
 
 Credentials never leave a machine and the control plane stores nothing about provider accounts.
@@ -119,4 +131,6 @@ account flow and catalog exclusion over a real socket;
 cross-machine copies; `e2e/subscriptions.spec.ts` walks library add → sign in → assignment →
 per-machine sign in, including Codex device auth across a background refresh.
 `providers/claude-home.test.ts` covers linking, migration and conflict handling of Claude homes,
-and `registry.test.ts` that history survives switching and removal.
+and `registry.test.ts` that history survives switching and removal. Limits are covered by
+`providers/adapters.test.ts` (Claude's report), `agents/providers.test.ts` (setting and clearing
+`AgentInfo.limit`), `apps/desktop/src/agents/limit-switch.test.ts` and `e2e/usage-limit.spec.ts`.

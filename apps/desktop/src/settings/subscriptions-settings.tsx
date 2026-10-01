@@ -59,6 +59,7 @@ import { Section, SettingsCard } from "@/views/settings-primitives";
 import { currentWindow, percentLabel, resetLabel, usageTone } from "@/agents/usage-labels";
 import { cn } from "cn";
 import {
+  accountName,
   subscriptionConfig,
   portableSubscriptionConfig,
   renamedAccountConfig,
@@ -1036,15 +1037,6 @@ function ProviderAssignment({
         )}
       </div>
     </div>
-  );
-}
-
-function accountName(provider: ProviderStatus, labels: Record<string, string>) {
-  return (
-    provider.accountNickname ??
-    labels[provider.id] ??
-    (provider.subscription?.nickname !== "Account" ? provider.subscription?.nickname : undefined) ??
-    "Account"
   );
 }
 

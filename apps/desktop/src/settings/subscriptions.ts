@@ -80,3 +80,12 @@ export function portableSubscriptionConfig(provider: ProviderStatus): ProviderCo
   if (!provider.subscription) throw new Error("Choose a subscription account.");
   return renamedAccountConfig(provider, provider.accountNickname);
 }
+/** A nickname the person chose, else the signed-in email, else the nickname given when added. */
+export function accountName(provider: ProviderStatus, labels: Record<string, string>): string {
+  return (
+    provider.accountNickname ??
+    labels[provider.id] ??
+    (provider.subscription?.nickname !== "Account" ? provider.subscription?.nickname : undefined) ??
+    "Account"
+  );
+}

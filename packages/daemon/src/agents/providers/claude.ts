@@ -70,6 +70,8 @@ export class ClaudeProvider extends EventProvider {
   private generation = 0;
   /** The open session was created by `thread/resume`, so `thread/start` must not reuse it. */
   private resumed = false;
+  /** When the plan limit this turn ran into resets, in seconds, as Claude reported it. */
+  private limitResetsAt: number | undefined;
   private tools = new Map<string, { name: string; input: unknown }>();
   private messageId = "";
   private text = "";
@@ -531,6 +533,7 @@ export class ClaudeProvider extends EventProvider {
       }
     }
     const result = this.begin();
+    this.limitResetsAt = undefined;
     this.activeCommand = method === "command/execute" ? string(p["name"]) : null;
     this.compactCompleted = false;
     this.tools.clear();
@@ -551,6 +554,13 @@ export class ClaudeProvider extends EventProvider {
       this.reportModel(string(m["model"]));
     if (!this.turnId) return;
     const parent = string(m["parent_tool_use_id"]);
+    if (m["type"] === "rate_limit_event") {
+      const info = object(m["rate_limit_info"]);
+      if (info["status"] === "rejected")
+        this.reportLimit(typeof info["resetsAt"] === "number" ? info["resetsAt"] : undefined);
+    }
+    // Claude's own "You've hit your limit" reply; its text stays in the conversation as usual.
+    if (m["type"] === "assistant" && m["error"] === "rate_limit" && !parent) this.reportLimit();
     if (parent) {
       // A sub-agent's own tool calls are steps of the tool call that started it, shown on its
       // row rather than as the main conversation's. Its final report is that call's result.
@@ -724,6 +734,16 @@ export class ClaudeProvider extends EventProvider {
           : undefined,
       );
     }
+  }
+  /**
+   * A plan limit belongs to the account, not the conversation, so it goes out beside the turn
+   * rather than as its error: the chat uses it to offer the machine's other subscriptions.
+   */
+  private reportLimit(resetsAt?: number) {
+    if (resetsAt) this.limitResetsAt = resetsAt;
+    this.emit("account/limitReached", {
+      resetsAt: this.limitResetsAt ? new Date(this.limitResetsAt * 1000).toISOString() : null,
+    });
   }
   private reportModel(model: string) {
     if (!model) return;
