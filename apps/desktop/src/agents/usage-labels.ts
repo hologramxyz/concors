@@ -41,6 +41,21 @@ export function resetLabel(resetsAt: string | null, now = Date.now()): string | 
   return `resets in ${whole}${size}${rest ? ` ${rest}${smaller}` : ""}`;
 }
 
+/** Whether a window has rolled over since it was measured. */
+export function hasReset(window: AgentUsageWindow, now = Date.now()): boolean {
+  const time = window.resetsAt ? Date.parse(window.resetsAt) : NaN;
+  return !Number.isNaN(time) && time <= now;
+}
+
+/**
+ * A window as it stands now. Past its reset, the figure is what the window that just ended used,
+ * and showing it would make an account that has started over look full; it stays unknown until
+ * the provider is asked again.
+ */
+export function currentWindow(window: AgentUsageWindow, now = Date.now()): AgentUsageWindow {
+  return hasReset(window, now) ? { ...window, usedPercent: null } : window;
+}
+
 /** The trailing text of a bar: "42% · resets in 2h 14m". */
 export function windowSummary(window: AgentUsageWindow, now = Date.now()): string {
   const reset = resetLabel(window.resetsAt, now);
