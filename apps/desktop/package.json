@@ -1,6 +1,6 @@
 {
   "name": "@concors/desktop",
-  "version": "0.6.16",
+  "version": "0.6.17",
   "private": true,
   "description": "Concors desktop client (Tauri 2 + React).",
   "license": "MIT",
