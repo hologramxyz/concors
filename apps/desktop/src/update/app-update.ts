@@ -56,7 +56,8 @@ export function updateQuery(report: InstallationReport): {
 } {
   if (report.kind === "development") return { formats: [], installable: false };
   if (report.formats.length > 0) return { formats: report.formats, installable: true };
-  return { formats: ["tarball"], installable: false };
+  // The format every copy on this platform could use, so a Mac asks about its disk image.
+  return { formats: [report.platform === "darwin" ? "dmg" : "tarball"], installable: false };
 }
 
 export interface AppUpdateDependencies {
