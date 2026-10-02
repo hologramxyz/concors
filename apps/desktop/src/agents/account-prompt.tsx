@@ -3,12 +3,14 @@ import { copyText } from "@/lib/clipboard";
 import { useTabVisible } from "@/workspace/tab-visibility";
 import type { DaemonConnection } from "@concors/daemon-client";
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
-import { Check, Copy, ExternalLink, LoaderCircle, X } from "lucide-react";
+import { Check, Copy, Download, ExternalLink, LoaderCircle, X } from "lucide-react";
 import {
   agentProviderName,
   type AgentAccount,
   type AgentAccountAction,
   type AgentInfo,
+  type ProviderOperation,
+  type ProviderStatus,
 } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { openExternal } from "@/tauri/open-external";
@@ -65,6 +67,21 @@ function AccountPrompt({
   const isDismissed = useRef(hidden);
   const pending = useRef<Promise<void> | null>(null);
   const latest = useRef<AgentAccount | null>(null);
+  // Signing in needs the CLI, so a machine without it is offered the install instead.
+  // Undefined while that is unknown; null when the daemon can't say.
+  const checksInstall = !!(
+    connection.state.status === "ready" &&
+    connection.state.daemon.capabilities?.includes("provider-settings")
+  );
+  const [cli, setCli] = useState<ProviderStatus | null | undefined>(
+    checksInstall ? undefined : null,
+  );
+  const [installError, setInstallError] = useState<string | null>(null);
+  const latestCli = useRef(cli);
+  const failed = useRef(agent.status === "failed");
+  useEffect(() => {
+    failed.current = agent.status === "failed";
+  }, [agent.status]);
   const request = useCallback(
     async (action: AgentAccountAction, background = false) => {
       if (pending.current && action.type === "read") return;
@@ -150,17 +167,63 @@ function AccountPrompt({
           .catch(() => undefined);
     };
   }, [connection, agent.id]);
+  const provider = useCallback(
+    async (operation: ProviderOperation) => {
+      const result = await connection.requestProvider(operation, crypto.randomUUID());
+      if (result.outcome.status === "error") throw new Error(result.outcome.message);
+      const next =
+        result.outcome.providers.find((p) => p.id === (agent.engine ?? agent.provider)) ?? null;
+      const before = latestCli.current;
+      latestCli.current = next;
+      if (!mounted.current) return;
+      setCli(next);
+      if (before && !before.installed && next?.installed) {
+        setInstallError(null);
+        invalidateModelCatalogs(connection);
+        void request({ type: "read" });
+        // The chat failed to start without the CLI; resuming clears that error and
+        // delivers anything that was queued meanwhile.
+        if (failed.current)
+          void connection
+            .requestAgent(
+              { kind: "queue-pause", sessionId: agent.id, paused: false },
+              crypto.randomUUID(),
+            )
+            .catch(() => undefined);
+      }
+    },
+    [connection, agent.id, agent.engine, agent.provider, request],
+  );
+  const checkInstall = useCallback(() => {
+    if (!checksInstall) return;
+    void provider({ kind: "list" }).catch(() => {
+      // Without an answer, fall back to the account check alone.
+      if (latestCli.current !== undefined || !mounted.current) return;
+      latestCli.current = null;
+      setCli(null);
+    });
+  }, [checksInstall, provider]);
+  const installing = cli?.installStatus === "installing";
+  useEffect(() => {
+    if (hidden || !installing) return;
+    const timer = setInterval(checkInstall, 2000);
+    return () => clearInterval(timer);
+  }, [hidden, installing, checkInstall]);
   useEffect(() => {
     if (hidden || !canEdit) return;
     void Promise.resolve().then(() => {
-      if (mounted.current && !isDismissed.current) void request({ type: "read" });
+      if (mounted.current && !isDismissed.current) {
+        checkInstall();
+        void request({ type: "read" });
+      }
     });
     const check = () => {
+      if (latestCli.current?.installed === false) checkInstall();
       if (!latest.current?.challenge) void request({ type: "read" }, true);
     };
     window.addEventListener("focus", check);
     return () => window.removeEventListener("focus", check);
-  }, [hidden, canEdit, request]);
+  }, [hidden, canEdit, request, checkInstall]);
   useEffect(() => {
     if (hidden || account?.status !== "pending") return;
     const timer = setInterval(() => void request({ type: "read" }), 2000);
@@ -198,6 +261,77 @@ function AccountPrompt({
         Connect account
       </Button>
     );
+  if (cli === undefined) return null;
+  const label = agent.providerLabel ?? agentProviderName(agent.provider);
+  if (cli && !cli.installed) {
+    const failure = installError ?? (cli.installStatus === "failed" ? cli.error : undefined);
+    return (
+      <section
+        aria-label={`${label} installation`}
+        className="rounded-xl border bg-muted/30 p-3 text-sm"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="font-medium">Install {cli.label}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {cli.canInstall
+                ? `Concors can install ${cli.label} on this machine for you. It takes about a minute.`
+                : `Install ${cli.label} on this machine using its guide, then come back here.`}
+            </p>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground"
+            aria-label="Dismiss installation"
+            onClick={hide}
+          >
+            <X className="size-4" />
+          </Button>
+        </div>
+        {failure && (
+          <p role="alert" className="mt-2 text-xs text-destructive">
+            {failure}
+          </p>
+        )}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {cli.canInstall && (
+            <Button
+              variant="outline"
+              disabled={installing}
+              onClick={() => {
+                setInstallError(null);
+                void provider({ kind: "install", id: cli.id }).catch((cause: unknown) => {
+                  if (mounted.current)
+                    setInstallError(
+                      cause instanceof Error ? cause.message : `Could not install ${cli.label}`,
+                    );
+                });
+              }}
+            >
+              {installing ? <LoaderCircle className="animate-spin" /> : <Download />}
+              {installing ? "Installing…" : `Install ${cli.label}`}
+            </Button>
+          )}
+          {cli.installLink && (
+            <Button
+              variant="ghost"
+              className="text-muted-foreground"
+              onClick={() => {
+                if (cli.installLink)
+                  void openExternal(cli.installLink).catch(() =>
+                    setInstallError("Could not open the installation guide."),
+                  );
+              }}
+            >
+              Installation guide
+              <ExternalLink className="size-3" />
+            </Button>
+          )}
+        </div>
+      </section>
+    );
+  }
   // An unresolved initial check is not evidence that the user needs to sign in.
   // Keep failures visible so the account check can still be retried.
   if ((!account && !error) || account?.status === "connected") return null;
@@ -206,7 +340,7 @@ function AccountPrompt({
   const challenge = account?.challenge;
   return (
     <section
-      aria-label={`${agent.providerLabel ?? agentProviderName(agent.provider)} account connection`}
+      aria-label={`${label} account connection`}
       className="rounded-xl border bg-muted/30 p-3 text-sm"
     >
       <div className="flex items-start justify-between gap-3">
