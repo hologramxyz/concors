@@ -296,6 +296,37 @@ export const SshKeyResponseSchema = z.object({ sshKey: SshKeySchema });
 /** `GET /api/v1/ssh-keys` */
 export const SshKeyListSchema = z.object({ sshKeys: z.array(SshKeySchema) });
 
+// --- provider subscriptions -------------------------------------------------
+
+/**
+ * An agent provider account in the person's library (Settings → Subscriptions). Public fields only:
+ * sign-in tokens stay on each machine.
+ */
+export const ProviderSubscriptionSchema = z.object({
+  /** The daemon's provider configuration id. */
+  id: z.string(),
+  engine: z.enum(["claude", "codex"]),
+  /** The name given when it was added; the daemon's `subscription.nickname`. */
+  nickname: z.string(),
+  /** A display name chosen instead of the account's email. */
+  accountNickname: z.string().nullable(),
+  /** The signed-in account as the provider reports it, normally an email. */
+  accountLabel: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type ProviderSubscription = z.infer<typeof ProviderSubscriptionSchema>;
+
+/** `PUT /api/v1/subscriptions/:id` */
+export const ProviderSubscriptionResponseSchema = z.object({
+  subscription: ProviderSubscriptionSchema,
+});
+
+/** `GET /api/v1/subscriptions`, `POST /api/v1/subscriptions/import` */
+export const ProviderSubscriptionListSchema = z.object({
+  subscriptions: z.array(ProviderSubscriptionSchema),
+});
+
 // --- billing ----------------------------------------------------------------
 
 export const CardSummarySchema = z.object({

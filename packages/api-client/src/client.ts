@@ -33,6 +33,8 @@ import {
   RedirectSchema,
   SshKeyListSchema,
   SshKeyResponseSchema,
+  ProviderSubscriptionListSchema,
+  ProviderSubscriptionResponseSchema,
   type BillingStatus,
   type Invoice,
   type Machine,
@@ -42,6 +44,7 @@ import {
   type Me,
   type Organization,
   type SshKey,
+  type ProviderSubscription,
 } from "./schemas.ts";
 import { memoryTokenStore, type TokenStore } from "./token-store.ts";
 import {
@@ -89,6 +92,16 @@ export interface AddSshKeyInput extends OrganizationScope {
   readonly name: string;
   /** OpenSSH public key line (`ssh-ed25519 AAAA… comment`). */
   readonly publicKey: string;
+}
+
+/** A provider subscription's public fields; omitted optional ones keep their stored value. */
+export interface SaveProviderSubscriptionInput {
+  readonly engine: ProviderSubscription["engine"];
+  readonly nickname: string;
+  /** null clears it. */
+  readonly accountNickname?: string | null;
+  /** null clears it. */
+  readonly accountLabel?: string | null;
 }
 
 /** Where a native sign-in returns: the desktop loopback port or the mobile URL scheme. */
@@ -407,6 +420,49 @@ export class ApiClient {
     });
   }
 
+  // --- provider subscriptions -----------------------------------------------
+
+  /** The signed-in person's provider accounts, oldest first, the same on every computer. */
+  async listProviderSubscriptions(): Promise<ProviderSubscription[]> {
+    const { data } = await this.#request("GET", "/api/v1/subscriptions", {
+      schema: ProviderSubscriptionListSchema,
+    });
+    return data.subscriptions;
+  }
+
+  /** Adds an account to the library or updates it (404 once removed, 409 to change provider). */
+  async saveProviderSubscription(
+    id: string,
+    input: SaveProviderSubscriptionInput,
+  ): Promise<ProviderSubscription> {
+    const { data } = await this.#request("PUT", `/api/v1/subscriptions/${encodeURIComponent(id)}`, {
+      body: input,
+      schema: ProviderSubscriptionResponseSchema,
+    });
+    return data.subscription;
+  }
+
+  /**
+   * Adds accounts a computer or machine already holds and returns the library. Accounts already
+   * in it, or removed from it, are left alone.
+   */
+  async importProviderSubscriptions(
+    subscriptions: readonly ({ readonly id: string } & SaveProviderSubscriptionInput)[],
+  ): Promise<ProviderSubscription[]> {
+    const { data } = await this.#request("POST", "/api/v1/subscriptions/import", {
+      body: { subscriptions },
+      schema: ProviderSubscriptionListSchema,
+    });
+    return data.subscriptions;
+  }
+
+  /** Removes an account from the library; computers still holding it won't add it back. */
+  async removeProviderSubscription(id: string): Promise<void> {
+    await this.#request("DELETE", `/api/v1/subscriptions/${encodeURIComponent(id)}`, {
+      schema: null,
+    });
+  }
+
   // --- billing --------------------------------------------------------------
 
   /** Card on file, payment trouble and machine prices for an organization. */
@@ -567,7 +623,7 @@ export class ApiClient {
     ).data;
   }
   async #request<T>(
-    method: "GET" | "POST" | "PATCH" | "DELETE",
+    method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
     path: string,
     options: { readonly body?: unknown; readonly schema: z.ZodType<T> | null },
   ): Promise<{ data: T; response: Response }> {
