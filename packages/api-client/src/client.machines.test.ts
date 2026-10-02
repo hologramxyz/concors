@@ -244,6 +244,56 @@ describe("ApiClient ssh keys", () => {
   });
 });
 
+describe("ApiClient provider subscriptions", () => {
+  const SUBSCRIPTION = {
+    id: "claude-work-1a2b3c4d",
+    engine: "claude",
+    nickname: "Work",
+    accountNickname: null,
+    accountLabel: "me@example.com",
+    createdAt: "2026-10-02T00:00:00.000Z",
+    updatedAt: "2026-10-02T00:00:00.000Z",
+  } as const;
+
+  it("lists, saves, imports and removes accounts", async () => {
+    const fetch = vi.fn(async (_url: string, init?: RequestInit) =>
+      init?.method === "DELETE"
+        ? new Response(null, { status: 204 })
+        : init?.method === "PUT"
+          ? json({ subscription: SUBSCRIPTION })
+          : json({ subscriptions: [SUBSCRIPTION] }),
+    );
+    const api = client(fetch as unknown as typeof globalThis.fetch);
+
+    await expect(api.listProviderSubscriptions()).resolves.toEqual([SUBSCRIPTION]);
+    expect(lastCall(fetch).url).toBe("https://api.example/api/v1/subscriptions");
+
+    await expect(
+      api.saveProviderSubscription(SUBSCRIPTION.id, {
+        engine: "claude",
+        nickname: "Work",
+        accountLabel: "me@example.com",
+      }),
+    ).resolves.toEqual(SUBSCRIPTION);
+    expect(lastCall(fetch).url).toBe(
+      "https://api.example/api/v1/subscriptions/claude-work-1a2b3c4d",
+    );
+    expect(lastCall(fetch).init.method).toBe("PUT");
+
+    await expect(
+      api.importProviderSubscriptions([
+        { id: SUBSCRIPTION.id, engine: "claude", nickname: "Work" },
+      ]),
+    ).resolves.toEqual([SUBSCRIPTION]);
+    expect(JSON.parse(lastCall(fetch).init.body as string)).toEqual({
+      subscriptions: [{ id: SUBSCRIPTION.id, engine: "claude", nickname: "Work" }],
+    });
+
+    await expect(api.removeProviderSubscription(SUBSCRIPTION.id)).resolves.toBeUndefined();
+    expect(lastCall(fetch).init.method).toBe("DELETE");
+  });
+});
+
 describe("ApiClient billing", () => {
   it("reads the billing status", async () => {
     const status = {

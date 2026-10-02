@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { ProviderStatus } from "@concors/protocol";
 import {
+  accountName,
+  libraryConfig,
+  libraryFromProviders,
+  libraryFromServer,
   renamedAccountConfig,
-  portableSubscriptionConfig,
   subscriptionConfig,
   subscriptionGroups,
   subscriptionId,
@@ -108,27 +111,70 @@ describe("renamedAccountConfig", () => {
   });
 });
 
-describe("portableSubscriptionConfig", () => {
-  it("copies public account metadata without machine status", () => {
-    const config = portableSubscriptionConfig(
-      status({
-        id: "codex-work",
-        engine: "codex",
-        label: "ChatGPT — Work",
-        command: ["codex"],
-        accountNickname: "Work",
-        subscription: { nickname: "Work" },
-        active: true,
-      }),
-    );
+describe("library accounts", () => {
+  it("installs on another machine as public account metadata only", () => {
+    const config = libraryConfig({
+      id: "codex-work",
+      engine: "codex",
+      nickname: "Work",
+      accountNickname: "Day job",
+      accountLabel: "me@example.com",
+    });
     expect(config).toEqual({
       id: "codex-work",
       engine: "codex",
       label: "ChatGPT — Work",
       command: ["codex"],
       enabled: true,
-      accountNickname: "Work",
+      accountNickname: "Day job",
       subscription: { nickname: "Work" },
     });
+  });
+
+  it("reads a machine's subscriptions, skipping its own sign-ins and other engines", () => {
+    expect(
+      libraryFromProviders([
+        status({}),
+        status({ id: "claude-work", subscription: { nickname: "Work" }, active: true }),
+        status({
+          id: "codex-home",
+          engine: "codex",
+          accountNickname: "Home",
+          subscription: { nickname: "Account" },
+        }),
+      ]),
+    ).toEqual([
+      { id: "claude-work", engine: "claude", nickname: "Work" },
+      { id: "codex-home", engine: "codex", nickname: "Account", accountNickname: "Home" },
+    ]);
+  });
+
+  it("reads the control plane's library", () => {
+    expect(
+      libraryFromServer([
+        {
+          id: "claude-work",
+          engine: "claude",
+          nickname: "Work",
+          accountNickname: null,
+          accountLabel: "me@work.test",
+          createdAt: "2026-10-02T00:00:00.000Z",
+          updatedAt: "2026-10-02T00:00:00.000Z",
+        },
+      ]),
+    ).toEqual([
+      { id: "claude-work", engine: "claude", nickname: "Work", accountLabel: "me@work.test" },
+    ]);
+  });
+
+  it("names an account by its nickname, this machine's sign-in, the last one seen, then when added", () => {
+    const account = { id: "claude-a", engine: "claude", nickname: "Work" } as const;
+    expect(accountName({ ...account, accountNickname: "Mine" }, { "claude-a": "a@x" })).toBe(
+      "Mine",
+    );
+    expect(accountName({ ...account, accountLabel: "old@x" }, { "claude-a": "a@x" })).toBe("a@x");
+    expect(accountName({ ...account, accountLabel: "old@x" }, {})).toBe("old@x");
+    expect(accountName(account, {})).toBe("Work");
+    expect(accountName({ ...account, nickname: "Account" }, {})).toBe("Account");
   });
 });
