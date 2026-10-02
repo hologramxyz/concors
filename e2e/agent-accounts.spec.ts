@@ -10,10 +10,12 @@ for (const result of ["connected", "disconnected", "error"] as const) {
     let requestId: string | undefined;
     let release: (() => void) | undefined;
     let delivered = false;
+    let providerLists = 0;
     await page.routeWebSocket("ws://127.0.0.1:7429/ws", (socket) => {
       const server = socket.connectToServer();
       socket.onMessage((raw) => {
         const event = JSON.parse(String(raw));
+        if (event.type === "provider.request" && event.operation.kind === "list") providerLists++;
         if (
           !delivered &&
           event.type === "agent.request" &&
@@ -63,10 +65,13 @@ for (const result of ["connected", "disconnected", "error"] as const) {
       } else if (result === "disconnected") {
         await expect(prompt.getByRole("button", { name: "Sign in with ChatGPT" })).toBeEnabled();
       } else {
+        // Only a failed check asks whether the CLI is installed; listing holds up the daemon.
+        await expect.poll(() => providerLists).toBe(1);
         await expect(prompt.getByRole("alert")).toContainText("Could not check this account.");
         await prompt.getByRole("button", { name: "Check account", exact: true }).click();
         await expect(prompt.getByRole("button", { name: "Sign in with ChatGPT" })).toBeEnabled();
       }
+      if (result !== "error") expect(providerLists).toBe(0);
     } finally {
       release?.();
       await rm(directory, { recursive: true, force: true });
@@ -209,3 +214,76 @@ for (const [provider, label] of [
     }
   });
 }
+
+test("a missing CLI is offered as a one-click install instead of an account check", async ({
+  page,
+}) => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-account-install-"));
+  // The test daemon's CLIs are fixtures, so a missing Codex and its install are played here.
+  let cli: "missing" | "installing" | "installed" = "missing";
+  let installs = 0;
+  const accountReads = new Set<string>();
+  await page.routeWebSocket("ws://127.0.0.1:7429/ws", (socket) => {
+    const server = socket.connectToServer();
+    socket.onMessage((raw) => {
+      const event = JSON.parse(String(raw));
+      if (event.type === "agent.request" && event.operation.kind === "account")
+        accountReads.add(event.requestId);
+      if (event.type === "provider.request" && event.operation.kind === "install") {
+        installs++;
+        cli = "installing";
+        event.operation = { kind: "list" };
+        server.send(JSON.stringify(event));
+        return;
+      }
+      server.send(raw);
+    });
+    server.onMessage((raw) => {
+      const event = JSON.parse(String(raw));
+      if (event.type === "provider.result" && event.outcome.status === "ok") {
+        const state = cli;
+        // The first check after starting reports the install as still running.
+        if (cli === "installing") cli = "installed";
+        event.outcome.providers = event.outcome.providers.map((p: { id: string }) =>
+          p.id === "codex"
+            ? {
+                ...p,
+                installed: state === "installed",
+                installStatus: state === "missing" ? "idle" : state,
+              }
+            : p,
+        );
+        socket.send(JSON.stringify(event));
+        return;
+      }
+      if (accountReads.delete(event.requestId) && cli !== "installed") {
+        event.outcome = { status: "error", message: "Codex is not installed on this machine." };
+        socket.send(JSON.stringify(event));
+        return;
+      }
+      socket.send(raw);
+    });
+  });
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Missing CLI", directory);
+    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    const install = page.getByRole("region", { name: "Codex installation", exact: true });
+    const account = page.getByRole("region", { name: "Codex account connection", exact: true });
+    await expect(install).toBeVisible();
+    await expect(account).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Check account" })).toHaveCount(0);
+    await expect(page.getByText("Codex is not installed on this machine.")).toHaveCount(0);
+    await expect(install.getByRole("button", { name: "Installation guide" })).toBeVisible();
+    await install.screenshot({ path: test.info().outputPath("install-prompt.png") });
+    await install.getByRole("button", { name: "Install Codex", exact: true }).click();
+    await expect.poll(() => installs).toBe(1);
+    // Once installed, the usual sign-in takes its place.
+    await expect(install).toHaveCount(0, { timeout: 10_000 });
+    await expect(account.getByRole("button", { name: "Sign in with ChatGPT" })).toBeEnabled();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
