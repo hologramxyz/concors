@@ -10,10 +10,12 @@ for (const result of ["connected", "disconnected", "error"] as const) {
     let requestId: string | undefined;
     let release: (() => void) | undefined;
     let delivered = false;
+    let providerLists = 0;
     await page.routeWebSocket("ws://127.0.0.1:7429/ws", (socket) => {
       const server = socket.connectToServer();
       socket.onMessage((raw) => {
         const event = JSON.parse(String(raw));
+        if (event.type === "provider.request" && event.operation.kind === "list") providerLists++;
         if (
           !delivered &&
           event.type === "agent.request" &&
@@ -63,10 +65,13 @@ for (const result of ["connected", "disconnected", "error"] as const) {
       } else if (result === "disconnected") {
         await expect(prompt.getByRole("button", { name: "Sign in with ChatGPT" })).toBeEnabled();
       } else {
+        // Only a failed check asks whether the CLI is installed; listing holds up the daemon.
+        await expect.poll(() => providerLists).toBe(1);
         await expect(prompt.getByRole("alert")).toContainText("Could not check this account.");
         await prompt.getByRole("button", { name: "Check account", exact: true }).click();
         await expect(prompt.getByRole("button", { name: "Sign in with ChatGPT" })).toBeEnabled();
       }
+      if (result !== "error") expect(providerLists).toBe(0);
     } finally {
       release?.();
       await rm(directory, { recursive: true, force: true });

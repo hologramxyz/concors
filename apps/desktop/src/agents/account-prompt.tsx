@@ -67,8 +67,9 @@ function AccountPrompt({
   const isDismissed = useRef(hidden);
   const pending = useRef<Promise<void> | null>(null);
   const latest = useRef<AgentAccount | null>(null);
-  // Signing in needs the CLI, so a machine without it is offered the install instead.
-  // Undefined while that is unknown; null when the daemon can't say.
+  // Signing in needs the CLI, so a failed account check asks whether it is installed, and a
+  // machine without it is offered the install instead. Undefined until a failure asks; null when
+  // the daemon can't say. Only failures ask: listing providers holds up the daemon briefly.
   const checksInstall = !!(
     connection.state.status === "ready" &&
     connection.state.daemon.capabilities?.includes("provider-settings")
@@ -194,15 +195,24 @@ function AccountPrompt({
     },
     [connection, agent.id, agent.engine, agent.provider, request],
   );
+  const listing = useRef(false);
   const checkInstall = useCallback(() => {
-    if (!checksInstall) return;
-    void provider({ kind: "list" }).catch(() => {
-      // Without an answer, fall back to the account check alone.
-      if (latestCli.current !== undefined || !mounted.current) return;
-      latestCli.current = null;
-      setCli(null);
-    });
+    if (!checksInstall || listing.current) return;
+    listing.current = true;
+    void provider({ kind: "list" })
+      .catch(() => {
+        // Without an answer, fall back to the account check alone.
+        if (latestCli.current !== undefined || !mounted.current) return;
+        latestCli.current = null;
+        setCli(null);
+      })
+      .finally(() => {
+        listing.current = false;
+      });
   }, [checksInstall, provider]);
+  useEffect(() => {
+    if (error && cli === undefined) checkInstall();
+  }, [error, cli, checkInstall]);
   const installing = cli?.installStatus === "installing";
   useEffect(() => {
     if (hidden || !installing) return;
@@ -212,10 +222,7 @@ function AccountPrompt({
   useEffect(() => {
     if (hidden || !canEdit) return;
     void Promise.resolve().then(() => {
-      if (mounted.current && !isDismissed.current) {
-        checkInstall();
-        void request({ type: "read" });
-      }
+      if (mounted.current && !isDismissed.current) void request({ type: "read" });
     });
     const check = () => {
       if (latestCli.current?.installed === false) checkInstall();
@@ -261,7 +268,8 @@ function AccountPrompt({
         Connect account
       </Button>
     );
-  if (cli === undefined) return null;
+  // A failed check may only mean the CLI is missing; wait to know before showing it.
+  if (cli === undefined && error) return null;
   const label = agent.providerLabel ?? agentProviderName(agent.provider);
   if (cli && !cli.installed) {
     const failure = installError ?? (cli.installStatus === "failed" ? cli.error : undefined);
