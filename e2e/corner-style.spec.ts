@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Locator } from "@playwright/test";
 import { test, expect, signedIn } from "./signed-in.ts";
+import { chooseProvider } from "./support/agents.ts";
 
 test("corner styles update the live workspace and portaled controls, sync, and persist", async ({
   page,
@@ -20,6 +21,7 @@ test("corner styles update the live workspace and portaled controls, sync, and p
     await seedProject(page, "Corner styles", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
     await page
       .getByRole("textbox", { name: "Message Codex" })

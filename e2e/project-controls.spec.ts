@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
+import { chooseProvider } from "./support/agents.ts";
 
 test("projects open an agent immediately and new tabs start the chosen profile", async ({
   page,
@@ -15,6 +16,7 @@ test("projects open an agent immediately and new tabs start the chosen profile",
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(page.getByRole("banner")).toHaveCount(0);
     await expect(page.getByRole("region", { name: "Agent pane", exact: true })).toBeVisible();
+    await chooseProvider(page);
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     for (const name of ["Terminal", "Agent", "Codex", "Claude Code", "OpenCode"]) {

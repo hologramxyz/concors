@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
+import { chooseProvider } from "./support/agents.ts";
 
 test("visited tabs retain terminal screens and chat drafts without reconnecting or stealing shortcuts", async ({
   page,
@@ -47,6 +48,7 @@ test("visited tabs retain terminal screens and chat drafts without reconnecting 
     const menu = page.getByRole("menu");
     await page.screenshot({ path: "test-results/desktop-tab-menu.png" });
     await menu.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
     const input = page.getByRole("textbox", { name: "Message Codex" });
     await expect(input).toBeEnabled();
     await expect(input).toBeFocused();

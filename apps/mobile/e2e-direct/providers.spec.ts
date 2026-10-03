@@ -10,6 +10,7 @@ import type {
   MobileRendererMessage,
   NativeSurfaceEvent,
 } from "@concors/client-core";
+import { chooseProvider } from "../../../e2e/support/agents.ts";
 
 type Snapshot = Extract<MobileRendererMessage, { type: "native-surfaces" }>;
 type TestWindow = Window & {
@@ -106,6 +107,7 @@ for (const native of [false, true]) {
       await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
       await expect(page.getByRole("button", { name: "Allow AI data sharing" })).toHaveCount(0);
       const ui = page.frameLocator('iframe[title="Concors workspace"]');
+      await chooseProvider(ui);
       let sequence = 0;
       const send = async (label: string, text: string) => {
         if (native) {

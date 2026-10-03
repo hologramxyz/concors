@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DaemonConnection, describeDaemonEndpoint } from "@concors/daemon-client";
 import { swipe } from "../e2e/support/swipe";
+import { chooseProvider } from "../../../e2e/support/agents.ts";
 
 async function setup(page: Page, projectName = "Mobile file test", favicon = false) {
   const root = await mkdtemp(join(tmpdir(), "concors-mobile-files-"));
@@ -66,6 +67,7 @@ async function setup(page: Page, projectName = "Mobile file test", favicon = fal
   );
   await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
   const ui = page.frameLocator('iframe[title="Concors workspace"]');
+  await chooseProvider(ui);
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
   return {
     root,

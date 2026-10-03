@@ -7,8 +7,14 @@ import { TimelineItem } from "./timeline-item";
 import { useViewedAgent } from "@/notifications/context";
 import { CompactLayoutContext, PaneVisibilityContext } from "@/components/compact-layout";
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown } from "lucide-react";
-import type { AgentOperation, LayoutNode, WorkspaceProject, WorkspaceTab } from "@concors/protocol";
+import { ArrowDown, Bot, LoaderCircle } from "lucide-react";
+import type {
+  AgentOperation,
+  LayoutNode,
+  ProviderStatus,
+  WorkspaceProject,
+  WorkspaceTab,
+} from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { Activity } from "./activity";
 import { PlanProgress } from "./plan-progress";
@@ -22,6 +28,9 @@ import { Button } from "@/components/ui/button";
 import { NATIVE_SESSIONS_CAPABILITY } from "@concors/protocol";
 import { AgentDraftScopeContext, useAgentDraft } from "./draft";
 import { ResumeSession } from "./resume-session";
+import { rememberProviders } from "./session-cache";
+import { ControlPicker } from "./control-picker";
+import { ProviderIcon } from "./provider-icon";
 import { timelineView } from "./thinking";
 
 export function ChatPane({
@@ -43,8 +52,40 @@ export function ChatPane({
   const available =
     connection?.state.status === "ready" &&
     connection.state.daemon.capabilities?.includes("agent-chat");
+  // A new chat waits for its provider to be chosen; a daemon that cannot list them picks its own.
+  const choosesProvider =
+    connection?.state.status === "ready" &&
+    !!connection.state.daemon.capabilities?.includes("provider-settings");
+  const [providers, setProviders] = useState<ProviderStatus[] | null>(null);
+  const [provider, setProvider] = useState<string | null>(null);
   useEffect(() => {
-    if (node.sessionId || !canEdit || !available || !connection?.workspace || attempted.current)
+    if (node.sessionId || !canEdit || !choosesProvider || !connection) return;
+    let current = true;
+    void connection
+      .requestProvider({ kind: "list" }, crypto.randomUUID())
+      .then((result) => {
+        if (!current) return;
+        if (result.outcome.status === "error") throw new Error(result.outcome.message);
+        rememberProviders(connection, result.outcome.providers, result.outcome.revision);
+        // Subscriptions are accounts of their engine, which every chat on the machine shares.
+        setProviders(result.outcome.providers.filter((p) => p.enabled && !p.subscription));
+      })
+      .catch((cause: unknown) => {
+        if (current) setError(cause instanceof Error ? cause.message : "Could not load providers");
+      });
+    return () => {
+      current = false;
+    };
+  }, [node.sessionId, canEdit, choosesProvider, connection, retry]);
+  useEffect(() => {
+    if (
+      node.sessionId ||
+      !canEdit ||
+      !available ||
+      !connection?.workspace ||
+      attempted.current ||
+      (choosesProvider && !provider)
+    )
       return;
     attempted.current = true;
     const current = connection.workspace;
@@ -59,19 +100,34 @@ export function ChatPane({
           tabId: tab.id,
           paneId: node.id,
           expectedVersion: currentProject.version,
+          ...(provider ? { provider } : {}),
         },
         startId.current,
       )
       .then((result) => {
         if (result.outcome.status === "error") {
           startId.current = crypto.randomUUID();
+          // A refused start can be tried with another provider.
+          attempted.current = false;
+          setProvider(null);
           throw new Error(result.outcome.message);
         }
       })
       .catch((cause: unknown) => {
         setError(cause instanceof Error ? cause.message : "Could not prepare agent");
       });
-  }, [node.sessionId, node.id, canEdit, available, connection, project.id, tab.id, retry]);
+  }, [
+    node.sessionId,
+    node.id,
+    canEdit,
+    available,
+    choosesProvider,
+    provider,
+    connection,
+    project.id,
+    tab.id,
+    retry,
+  ]);
   if (node.sessionId)
     return <Chat key={node.sessionId} sessionId={node.sessionId} canEdit={canEdit} />;
   return (
@@ -99,10 +155,41 @@ export function ChatPane({
             <textarea
               data-agent-composer
               aria-label="Preparing agent"
-              placeholder="Preparing agent…"
+              placeholder={
+                choosesProvider && !provider ? "Select a provider to start" : "Preparing agent…"
+              }
               disabled
               className="agent-composer-input min-h-16 w-full resize-none bg-transparent px-3 py-3 outline-none"
             />
+            {choosesProvider && (
+              <div className="flex items-center gap-1 px-1">
+                <ControlPicker
+                  label="Providers"
+                  showValue
+                  value={provider ?? ""}
+                  selectedLabel={
+                    provider
+                      ? (providers?.find((p) => p.id === provider)?.label ?? provider)
+                      : "Select a provider"
+                  }
+                  icon={
+                    provider ? (
+                      <LoaderCircle className="size-4 animate-spin" />
+                    ) : (
+                      <Bot className="size-4" />
+                    )
+                  }
+                  disabled={!canEdit || !available || !providers || !!provider}
+                  options={(providers ?? []).map((p) => ({
+                    id: p.id,
+                    label: p.label,
+                    description: p.installed ? undefined : "Not installed yet",
+                    icon: <ProviderIcon provider={p.id} />,
+                  }))}
+                  onSelect={setProvider}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -120,6 +207,7 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
   const conversation = useConversation(sessionId);
   const [busy, setBusy] = useState(false);
   const [resuming, setResuming] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState(false);
   const draft = useAgentDraft(
     useContext(AgentDraftScopeContext) ?? connection,
     sessionId,
@@ -200,7 +288,8 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
       }
     />
   ));
-  const problem = error ?? agent?.error;
+  // A chat that could not start without its CLI is explained by the install prompt instead.
+  const problem = error ?? (installPrompt ? null : agent?.error);
   const feedback = (
     <>
       {pendingInputs}
@@ -345,7 +434,13 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
               Implement plan
             </Button>
           )}
-          {agent && <AgentAccountPrompt agent={agent} canEdit={!!connected} />}
+          {agent && (
+            <AgentAccountPrompt
+              agent={agent}
+              canEdit={!!connected}
+              onInstallPrompt={setInstallPrompt}
+            />
+          )}
           {agent && <AgentLimitPrompt agent={agent} canEdit={!!connected} />}
           {agent && (
             <AgentComposer

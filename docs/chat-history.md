@@ -1,8 +1,11 @@
 # Chat history and default startup
 
-New agent panes start with the daemon's existing default provider (Codex) and its
-configured model. The composer shows the resolved model name and lets the user select a different provider
-or model; there is no initial chooser screen.
+New agent panes wait for a provider: the empty composer shows **Select a provider** and its
+menu lists the machine's enabled providers, including ones not installed yet (choosing one of
+those offers its install). The chat starts once one is picked, with that provider's remembered
+model, and the composer then shows the resolved model name and lets the user switch provider or
+model. A daemon without `provider-settings` cannot list its providers, so its new chats still
+start on the daemon's default provider.
 
 Chat prose and desktop/native composer text use Paseo's default 15px content size
 with 21px line spacing; code uses its 12px size. These values follow

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { Page } from "@playwright/test";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
+import { chooseProvider } from "./support/agents.ts";
 
 test("resume finds older native sessions, protects drafts, and keeps the same pane", async ({
   page,
@@ -17,6 +18,7 @@ test("resume finds older native sessions, protects drafts, and keeps the same pa
     await seedProject(page, "Resume workspace", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
     const composer = page.getByRole("textbox", { name: "Message Codex", exact: true });
     const resume = page.getByRole("button", { name: "Resume session", exact: true });
     await expect(composer).toBeEnabled();
@@ -113,6 +115,7 @@ test("resume focuses an already open session instead of making a duplicate", asy
     const newChat = async () => {
       await page.getByRole("button", { name: "New tab", exact: true }).click();
       await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+      await chooseProvider(page);
       await expect(page.getByRole("textbox", { name: "Message Codex", exact: true })).toBeEnabled();
     };
     const pick = async () => {
@@ -154,6 +157,7 @@ test("a renamed session is listed and resumed under its pane name", async ({ pag
     const pick = async (search: string, name: RegExp) => {
       await page.getByRole("button", { name: "New tab", exact: true }).click();
       await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+      await chooseProvider(page);
       await expect(page.getByRole("textbox", { name: "Message Codex", exact: true })).toBeEnabled();
       await page.getByRole("button", { name: "Resume session", exact: true }).click();
       await dialog
@@ -242,6 +246,7 @@ test("a long session opens at its latest messages when resumed and when reopened
     await seedProject(page, "Long resume", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
     await expect(page.getByRole("textbox", { name: "Message Codex", exact: true })).toBeEnabled();
     let painted = await recordFrames(page);
     await page.getByRole("button", { name: "Resume session", exact: true }).click();

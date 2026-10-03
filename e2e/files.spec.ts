@@ -5,6 +5,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync }
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Page, Locator } from "@playwright/test";
+import { chooseProvider } from "./support/agents.ts";
 
 async function bounds(locator: Locator) {
   const rect = await locator.boundingBox();
@@ -273,6 +274,7 @@ test("agent file links open Markdown and code tabs without leaving the workspace
   try {
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
     await expect(page.getByLabel("Message Codex")).toBeEnabled();
     await page.getByLabel("Message Codex").fill("file-links");
     await page.getByLabel("Message Codex").press("Enter");
@@ -313,6 +315,7 @@ test("agent replies show the images they embed inline and open them full size", 
     );
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
     await expect(page.getByLabel("Message Codex")).toBeEnabled();
     await page.getByLabel("Message Codex").fill("show-image");
     await page.getByLabel("Message Codex").press("Enter");

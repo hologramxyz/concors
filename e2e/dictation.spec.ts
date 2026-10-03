@@ -5,6 +5,7 @@ import type { Page } from "@playwright/test";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
 import { mockDictation } from "./support/dictation.ts";
+import { chooseProvider } from "./support/agents.ts";
 
 test.beforeEach(async ({ page }) => {
   await signedIn(page);
@@ -17,6 +18,7 @@ async function workspace(page: Page) {
   await seedProject(page, "Dictation workspace", directory);
   await page.getByRole("button", { name: "New tab", exact: true }).click();
   await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+  await chooseProvider(page);
   const composer = page.getByRole("textbox", { name: "Message Codex", exact: true });
   await expect(composer).toBeEnabled();
   return { composer, dispose: () => rm(directory, { recursive: true, force: true }) };

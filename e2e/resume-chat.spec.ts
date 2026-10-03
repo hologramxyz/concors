@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
+import { chooseProvider } from "./support/agents.ts";
 
 test("a closed chat is found by its pane name and reopens with its name, model and history", async ({
   page,
@@ -15,6 +16,7 @@ test("a closed chat is found by its pane name and reopens with its name, model a
     await seedProject(page, "Resumable chats", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
     const composer = page.getByRole("textbox", { name: "Message Codex" });
     await expect(composer).toBeEnabled();
     await composer.fill("remember the release checklist");
