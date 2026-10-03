@@ -65,6 +65,12 @@ export const ProviderConfigSchema = z.object({
 });
 export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
 export type ProviderPreset = ProviderConfig & {
+  /**
+   * How Install puts the CLI in the daemon's private provider directory. An `npm` agent CLI names
+   * its bare package and is installed at its newest release: vendors gate new models on the CLI
+   * version, and the daemon offers updates for it anyway. An `npx` ACP adapter names the exact
+   * version its `command` was audited with, because nothing updates it afterwards.
+   */
   install?: { kind: "npm" | "npx"; package: string; bin?: string };
   installLink: string;
 };

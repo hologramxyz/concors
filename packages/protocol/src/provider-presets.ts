@@ -10,7 +10,7 @@ export const providerPresets: ProviderPreset[] = [
     enabled: true,
     install: {
       kind: "npm",
-      package: "@openai/codex@0.154.0",
+      package: "@openai/codex",
       bin: "codex",
     },
     installLink: "https://developers.openai.com/codex/cli/",
@@ -23,7 +23,7 @@ export const providerPresets: ProviderPreset[] = [
     enabled: true,
     install: {
       kind: "npm",
-      package: "@anthropic-ai/claude-code@2.1.268",
+      package: "@anthropic-ai/claude-code",
       bin: "claude",
     },
     installLink: "https://code.claude.com/docs/en/overview",
@@ -36,7 +36,7 @@ export const providerPresets: ProviderPreset[] = [
     enabled: true,
     install: {
       kind: "npm",
-      package: "opencode-ai@1.18.30",
+      package: "opencode-ai",
       bin: "opencode",
     },
     installLink: "https://opencode.ai/docs/",
@@ -49,7 +49,7 @@ export const providerPresets: ProviderPreset[] = [
     enabled: false,
     install: {
       kind: "npm",
-      package: "@earendil-works/pi-coding-agent@0.85.1",
+      package: "@earendil-works/pi-coding-agent",
       bin: "pi",
     },
     installLink: "https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent",
@@ -62,7 +62,7 @@ export const providerPresets: ProviderPreset[] = [
     enabled: false,
     install: {
       kind: "npm",
-      package: "@github/copilot@1.0.83",
+      package: "@github/copilot",
       bin: "copilot",
     },
     installLink: "https://docs.github.com/en/copilot/how-tos/copilot-cli",
@@ -75,7 +75,7 @@ export const providerPresets: ProviderPreset[] = [
     enabled: false,
     install: {
       kind: "npm",
-      package: "@oh-my-pi/pi-coding-agent@18.1.17",
+      package: "@oh-my-pi/pi-coding-agent",
       bin: "omp",
     },
     installLink: "https://github.com/can1357/oh-my-pi",

@@ -146,7 +146,7 @@ export class ProviderRegistry {
           id: config.id,
           label: config.label,
           engine: config.engine,
-          package: preset.install.package.replace(/@[^@/]+$/, ""),
+          package: preset.install.package,
           prefix: join(this.directory, config.id),
           executable: () => {
             try {
@@ -532,17 +532,14 @@ export class ProviderRegistry {
     const npm = resolveTerminalCommand("npm", [], process.platform, env);
     const prefix = join(this.directory, id);
     mkdirSync(prefix, { recursive: true, mode: 0o700 });
+    // An agent CLI starts at its newest release rather than the one current when its preset was
+    // written, which would be reported as outdated straight away and could hide new models.
+    // `--save-exact` records the version that was actually installed.
+    const spec =
+      preset.install.kind === "npm" ? `${preset.install.package}@latest` : preset.install.package;
     const child = spawn(
       process.platform === "win32" ? "npm" : npm.command,
-      [
-        "install",
-        "--prefix",
-        prefix,
-        "--no-audit",
-        "--no-fund",
-        "--save-exact",
-        preset.install.package,
-      ],
+      ["install", "--prefix", prefix, "--no-audit", "--no-fund", "--save-exact", spec],
       { env, cwd: prefix, stdio: "pipe", windowsHide: true },
     );
     const job = {
