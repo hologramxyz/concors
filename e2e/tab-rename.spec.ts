@@ -147,3 +147,60 @@ test("renaming a new Agent tab keeps focus when its chat becomes ready mid-word"
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("renaming a new Terminal tab keeps focus when its terminal takes control mid-word", async ({
+  page,
+}) => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-tab-rename-terminal-"));
+  // A terminal focuses itself once it holds control. Hold the answer to that claim while the tab
+  // is being named, then let it arrive in the middle of a word.
+  let holding = false;
+  const claims = new Set<string>();
+  const held: string[] = [];
+  let deliver: ((raw: string) => void) | undefined;
+  await page.routeWebSocket("ws://127.0.0.1:7429/ws", (socket) => {
+    const server = socket.connectToServer();
+    deliver = (raw) => socket.send(raw);
+    socket.onMessage((raw) => {
+      const event = JSON.parse(String(raw)) as {
+        type?: string;
+        requestId?: string;
+        operation?: { kind?: string };
+      };
+      if (holding && event.type === "terminal.request" && event.operation?.kind === "claim")
+        claims.add(event.requestId ?? "");
+      server.send(raw);
+    });
+    server.onMessage((raw) => {
+      const event = JSON.parse(String(raw)) as { type?: string; requestId?: string };
+      if (event.type === "terminal.result" && claims.has(event.requestId ?? ""))
+        held.push(String(raw));
+      else socket.send(raw);
+    });
+  });
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Renaming a terminal", directory);
+    const tabs = page.getByLabel("Project tabs", { exact: true });
+    holding = true;
+    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
+    await expect.poll(() => held.length).toBeGreaterThan(0);
+    await tabs.getByRole("button", { name: "Tab 2", exact: true }).dblclick();
+    const editor = tabs.getByRole("textbox", { name: "Tab name", exact: true });
+    await expect(editor).toBeFocused();
+    await page.keyboard.type("Bui");
+    holding = false;
+    for (const raw of held.splice(0)) deliver?.(raw);
+    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 300)));
+    await expect(editor).toBeFocused();
+    await page.keyboard.type("ld");
+    await page.keyboard.press("Enter");
+    await expect
+      .poll(() => tabs.locator("[data-tab-id] > button:first-child").allTextContents())
+      .toEqual(["Tab 1", "Build"]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

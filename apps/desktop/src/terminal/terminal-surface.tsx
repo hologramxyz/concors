@@ -16,6 +16,7 @@ import "@xterm/xterm/css/xterm.css";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import { Button } from "@/components/ui/button";
 import { MobileTerminalControls } from "./mobile-controls";
+import { typingOutsidePanes } from "@/workspace/typing-outside-panes";
 
 export function TerminalSurface({
   sessionId,
@@ -195,6 +196,7 @@ export function TerminalSurface({
               '[role="dialog"]:not([data-state="closed"]), [role="alertdialog"], [role="menu"]:not([data-state="closed"])',
             ) &&
             (!focusedPane || focusedPane === ownPane) &&
+            !typingOutsidePanes(focused) &&
             (!pending || pending === ownPane)
           )
             terminal.focus();
