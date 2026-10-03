@@ -1394,6 +1394,44 @@ it("keeps async questions across turns and restart, and durably resolves answers
   expect(c.agents[0]?.pending).toHaveLength(0);
 });
 
+it("steers an async answer into the running turn instead of queueing it", async () => {
+  const { a, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "hold" });
+  const provider = providers[0]!;
+  provider.emit("item/completed", {
+    item: {
+      id: "async-steer",
+      type: "agentMessage",
+      delivery: "async",
+      questions: [{ title: "Which tab?", options: ["Agents", "Audit"] }],
+    },
+  });
+  await expect.poll(() => a.agents[0]?.pending.length).toBe(1);
+  const turnId = a.agents[0]!.turnId;
+  const result = await action(a, {
+    kind: "respond",
+    sessionId: id,
+    pendingId: a.agents[0]!.pending[0]!.id,
+    answers: { "0": ["Audit"] },
+  });
+  expect(result.outcome.status).toBe("ok");
+  expect(provider.requests.find((r) => r.method === "session/steer")?.params).toMatchObject({
+    turnId,
+    text: "Answers to your questions:\n\nWhich tab?\nAudit",
+  });
+  await expect.poll(() => a.agents[0]?.pending.length).toBe(0);
+  expect(a.agents[0]?.queue ?? []).toHaveLength(0);
+  expect(a.agents[0]?.status).toBe("working");
+  const read = await action(a, { kind: "read", sessionId: id });
+  const items = read.outcome.status === "ok" ? read.outcome.conversation.items : [];
+  expect(items.find((i) => i.id === "async-response:async-steer")).toMatchObject({
+    title: "Answered",
+  });
+  expect(items.find((i) => i.kind === "user" && i.title === "You · answer")?.text).toContain(
+    "Audit",
+  );
+});
+
 it("implements only the current completed plan and keeps normal tool permissions", async () => {
   const { a, id } = await setup();
   let info = a.agents[0]!;

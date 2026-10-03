@@ -131,6 +131,8 @@ export class AgentManager {
   readonly #usage = new Map<string, { at: number; usage: Promise<AgentPlanUsage> }>();
   #closed = false;
   private mutations = new Set<string>();
+  /** Async questions whose answer is being steered into the running turn. */
+  private answering = new Set<string>();
   private draining = new Set<string>();
   private deliveries = new Map<string, string>();
   private registry: ProviderRegistry;
@@ -1495,7 +1497,8 @@ export class AgentManager {
         await this.interrupt(info.id, runtime, op.turnId);
       } else {
         const pending = info.pending.find((p) => p.id === op.pendingId);
-        if (pending?.asynchronous) return this.respondAsyncQuestion(request, info, pending, op);
+        if (pending?.asynchronous)
+          return await this.respondAsyncQuestion(request, info, pending, op);
         const runtime = this.#runtimes.get(info.id);
         const resolver = runtime?.pending.get(op.pendingId);
         if (!pending || !resolver || !runtime || pending.turnId !== info.turnId)
@@ -1609,12 +1612,12 @@ export class AgentManager {
       }
     }
   }
-  private respondAsyncQuestion(
+  private async respondAsyncQuestion(
     request: AgentRequest,
     info: AgentInfo,
     pending: AgentPending,
     op: Extract<AgentRequest["operation"], { kind: "respond" }>,
-  ): AgentResult {
+  ): Promise<AgentResult> {
     if (op.decision && op.decision !== "decline")
       throw new Error("Answer or dismiss this question");
     const answers = op.decision ? undefined : questionAnswers(pending.questions, op.answers);
@@ -1625,7 +1628,36 @@ export class AgentManager {
           .join("\n\n")
       : undefined;
     if (prompt && prompt.length > 16000) throw new Error("Shorten the answers before submitting");
-    if (prompt && (info.queue?.length ?? 0) >= 20)
+    // Codex keeps working after asking, so the answer joins its current turn, as it would if typed
+    // while it works. Only when no turn is running does it wait in the queue as the next message.
+    let steered = false;
+    const runtime = this.#runtimes.get(info.id);
+    if (
+      prompt &&
+      runtime &&
+      info.controls?.steer &&
+      info.status === "working" &&
+      info.turnId &&
+      !info.turnId.startsWith("pending:")
+    ) {
+      if (this.answering.has(pending.id))
+        throw new Error("This question is already being answered");
+      this.answering.add(pending.id);
+      try {
+        await runtime.provider.request("session/steer", {
+          threadId: info.threadId,
+          turnId: info.turnId,
+          text: prompt,
+        });
+        steered = true;
+      } catch {
+        // The turn ended in the meantime; the answer becomes the next message instead.
+      } finally {
+        this.answering.delete(pending.id);
+      }
+      info = this.#store.agent(info.id);
+    }
+    if (prompt && !steered && (info.queue?.length ?? 0) >= 20)
       throw new Error("Remove a queued follow-up before answering");
     const next: AgentInfo = {
       ...info,
@@ -1633,7 +1665,7 @@ export class AgentManager {
       attention: info.pending.length > 1 ? info.attention : null,
       updatedAt: new Date().toISOString(),
       revision: info.revision + 1,
-      ...(prompt
+      ...(prompt && !steered
         ? {
             queue: [
               ...(info.queue ?? []),
@@ -1647,13 +1679,14 @@ export class AgentManager {
           }
         : {}),
     };
-    const delivery: AgentRequest | undefined = prompt
-      ? {
-          type: "agent.request",
-          requestId: randomUUID(),
-          operation: { kind: "send", sessionId: info.id, text: prompt },
-        }
-      : undefined;
+    const delivery: AgentRequest | undefined =
+      prompt && !steered
+        ? {
+            type: "agent.request",
+            requestId: randomUUID(),
+            operation: { kind: "send", sessionId: info.id, text: prompt },
+          }
+        : undefined;
     const resolution: AgentItem = {
       id: `async-response:${pending.sourceItemId}`,
       sessionId: info.id,
@@ -1662,7 +1695,7 @@ export class AgentManager {
       revision: 0,
       createdAt: new Date().toISOString(),
       kind: "system",
-      title: prompt ? "Answers queued" : "Question dismissed",
+      title: steered ? "Answered" : prompt ? "Answers queued" : "Question dismissed",
       text: "",
       detail: "",
       status: "completed",
@@ -1673,6 +1706,15 @@ export class AgentManager {
     });
     const savedResolution = this.#store.agentItem(info.id, resolution.id);
     if (savedResolution) this.#emit({ type: "agent.item", item: savedResolution });
+    if (steered && prompt && info.turnId)
+      this.item(info.id, info.turnId, {
+        id: `steer:${request.requestId}`,
+        kind: "user",
+        title: "You · answer",
+        text: prompt,
+        detail: "",
+        status: "completed",
+      });
     this.#emit({ type: "agent.state", agent: next });
     void this.drain(info.id).catch((error) => this.fail(info.id, error));
     return this.result(request, info.id);
@@ -1832,7 +1874,7 @@ export class AgentManager {
                 asynchronous: true,
                 kind: "questions",
                 title: "Codex has a question",
-                summary: "Your answers will be sent as a follow-up. The current work can continue.",
+                summary: "Codex keeps working while it waits. Your answer reaches it right away.",
                 detail: "",
                 decisions: ["decline"],
                 decisionLabels: { decline: "Dismiss" },
