@@ -1,5 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { VERSION_PATTERN, desktopVersion, repoRoot, setDesktopVersion } from "./release-version.ts";
 
@@ -63,7 +64,8 @@ export async function setDaemonVersion(version: string, root = repoRoot): Promis
 
 // `node apps/desktop/scripts/release-plan.ts --component desktop --bump patch [--dry-run]` prints
 // `desktop=<version>` and/or `daemon=<version>`, the lines GitHub Actions reads as step outputs.
-if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
+// Compared as paths: a `file://` URL built by hand matches neither Windows paths nor spaces.
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2);
   const option = (flag: string): string | undefined => {
     const index = args.indexOf(flag);

@@ -74,7 +74,8 @@ pub fn detect(
     }
     let path = executable.to_string_lossy();
     // `cargo build` and `tauri dev` both land here; neither is a published build.
-    if path.contains("/target/debug/") || path.contains("/target/release/") {
+    let slashed = path.replace('\\', "/");
+    if slashed.contains("/target/debug/") || slashed.contains("/target/release/") {
         return Installation::Development;
     }
     if let Some(bundle) = mac_bundle(executable) {
@@ -644,6 +645,11 @@ mod tests {
             detect(debug, None, |_| Some("concors-bin".into())),
             Installation::Development
         );
+        // Read from the path alone, so a Windows build from a checkout is recognised anywhere.
+        let windows = Path::new(
+            r"C:\Users\someone\concors\apps\desktop\src-tauri\target\release\concors-desktop.exe",
+        );
+        assert_eq!(detect(windows, None, |_| None), Installation::Development);
         assert!(Installation::Development.formats().is_empty());
     }
 

@@ -43,8 +43,15 @@ try {
   const manifest = JSON.parse(await readFile(join(lib, "package.json"), "utf8")) as {
     version: string;
   };
-  const command = release ? join(isolated, "bin", "concors-daemon") : process.execPath;
-  const args = release ? [] : [join(lib, "cli.js")];
+  // A Windows release has no launcher script: the app runs its Node with cli.js, and so does this.
+  const windows = process.platform === "win32";
+  const bundledNode = join(isolated, "bin", windows ? "node.exe" : "node");
+  const command = !release
+    ? process.execPath
+    : windows
+      ? bundledNode
+      : join(isolated, "bin", "concors-daemon");
+  const args = !release || windows ? [join(lib, "cli.js")] : [];
   const environment: NodeJS.ProcessEnv = {
     ...process.env,
     CONCORS_DATA_DIR: join(temporary, "data"),
@@ -62,7 +69,7 @@ try {
   // Dictation's native addon must load with the shipped Node on the target system (glibc, rpath).
   assert.equal(
     execFileSync(
-      release ? join(isolated, "bin", "node") : process.execPath,
+      release ? bundledNode : process.execPath,
       [
         "--input-type=module",
         "-e",

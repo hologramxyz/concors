@@ -1,0 +1,14 @@
+{
+  "bundle": {
+    "targets": ["nsis"],
+    "resources": {
+      "resources/local-daemon/concors-daemon/": "daemon/"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "installerHooks": "windows/installer-hooks.nsh"
+      }
+    }
+  }
+}
