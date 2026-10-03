@@ -72,9 +72,23 @@ fn load_or_create(ssh_dir: &Path, create: bool) -> Result<Option<DeviceSshKey>, 
 }
 
 fn ssh_keygen() -> Command {
-    let mut command = Command::new("ssh-keygen");
+    let mut command = windowless("ssh-keygen");
     // No prompt may ever block: a passphrase or overwrite question must fail instead.
     command.stdin(Stdio::null());
+    command
+}
+
+/// A console program started from this GUI app flashes a console window on Windows unless told not
+/// to; these run on their own and print nothing a person needs to see.
+fn windowless(program: &str) -> Command {
+    #[allow(unused_mut)]
+    let mut command = Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
     command
 }
 
@@ -106,7 +120,7 @@ fn normalise_public_key(printed: &str) -> Option<String> {
 }
 
 fn device_name() -> String {
-    Command::new("hostname")
+    windowless("hostname")
         .stdin(Stdio::null())
         .output()
         .ok()

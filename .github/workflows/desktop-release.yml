@@ -298,13 +298,144 @@ jobs:
           compression-level: 0
           retention-days: 7
 
+  # As for the Mac: an unsigned installer is what SmartScreen warns hardest about, and an installer
+  # people are told to click past teaches them to click past. Without credentials the release has
+  # no Windows build, and says so.
+  windows-credentials:
+    name: Check Windows signing credentials
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      present: ${{ steps.check.outputs.present }}
+    steps:
+      - id: check
+        env:
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        run: |
+          if [ -n "${AZURE_CLIENT_SECRET:-}" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Azure Artifact Signing secrets are not set; this release has no Windows build."
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-windows:
+    name: Build and sign Windows release
+    needs: windows-credentials
+    if: needs.windows-credentials.outputs.present == 'true'
+    # x64 only. The daemon runtime bundles the host's Node and native modules, so Windows on Arm
+    # would be a job on an Arm runner; until then it runs this build under emulation.
+    runs-on: windows-2025
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require a commit on main
+        run: git merge-base --is-ancestor HEAD origin/main
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Verify tag matches the desktop version
+        run: |
+          version="$(node apps/desktop/scripts/release-version.ts)"
+          [ "$RELEASE_TAG" = "desktop-v$version" ] || {
+            echo "Tag $RELEASE_TAG must match desktop-v$version" >&2; exit 1; }
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - run: pnpm install --frozen-lockfile
+
+      # What Tauri documents for Artifact Signing; it drives signtool, which the runner has.
+      - name: Install the signing tool
+        run: cargo install artifact-signing-cli --version 0.11.0 --locked
+
+      # Signs the runtime's unsigned binaries and checks it still runs, then builds the installer,
+      # signing the app inside it and the installer itself. See windows-signing.ts.
+      - name: Build the app, its bundled daemon and the installer
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_ARTIFACT_SIGNING_ENDPOINT: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+          AZURE_ARTIFACT_SIGNING_ACCOUNT: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
+          AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE: ${{ vars.AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE }}
+        run: pnpm desktop:package:windows
+
+      - name: Stage the installer
+        run: pnpm desktop:release:windows
+
+      # PowerShell rather than bash: Git's bash rewrites `/S` and `/D=` into paths. What Windows
+      # itself reports is the check that matters: a signature it calls anything but Valid is one
+      # SmartScreen will not credit to us.
+      - name: Check signatures, install silently and run the installed daemon
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = Get-ChildItem apps/desktop/dist/release/Concors-*-x86_64-setup.exe | Select-Object -First 1
+          $dir = Join-Path $env:RUNNER_TEMP 'Concors Install'
+          $process = Start-Process -FilePath $setup.FullName -ArgumentList '/S', "/D=$dir" -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "installer exited with $($process.ExitCode)" }
+          $binaries = @($setup) + @(Get-ChildItem $dir -Recurse -File -Include *.exe, *.dll, *.node)
+          $unsigned = $binaries | Get-AuthenticodeSignature | Where-Object Status -ne 'Valid'
+          if ($unsigned) {
+            $unsigned | Format-Table Status, Path -AutoSize | Out-String -Width 300 | Write-Host
+            throw "not every shipped binary carries a valid signature"
+          }
+          $binaries | Get-AuthenticodeSignature | ForEach-Object { "$($_.SignerCertificate.Subject)  $($_.Path)" }
+          $daemon = Join-Path $dir 'daemon'
+          & "$daemon\bin\node.exe" packages/daemon/scripts/smoke-bundle.ts --release $daemon --in-place
+          if ($LASTEXITCODE -ne 0) { throw "installed daemon failed its smoke test" }
+
+      - name: Sign the installer for the update check
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        # The same detached signature the Linux builds carry; see the Linux job's signing step.
+        run: |
+          if [ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
+            echo "::warning::TAURI_SIGNING_PRIVATE_KEY is not set; publishing an unsigned release."
+            exit 0
+          fi
+          for artifact in "$PWD"/apps/desktop/dist/release/Concors-*-x86_64-setup.exe; do
+            pnpm --filter @concors/desktop exec tauri signer sign "$artifact" > /dev/null
+            test -s "$artifact.sig" || { echo "no signature for $artifact" >&2; exit 1; }
+            echo "signed $(basename "$artifact")"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-windows-x64
+          path: |
+            apps/desktop/dist/release/Concors-*-x86_64-setup.exe
+            apps/desktop/dist/release/Concors-*-x86_64-setup.exe.sha256
+            apps/desktop/dist/release/Concors-*-x86_64-setup.exe.sig
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
   publish:
     name: Publish release
-    needs: [build, apple-credentials, build-macos]
-    # A skipped Mac build (no credentials) still publishes Linux; a failed one publishes nothing.
+    needs: [build, apple-credentials, build-macos, windows-credentials, build-windows]
+    # A skipped Mac or Windows build (no credentials) still publishes Linux; a failed one publishes
+    # nothing.
     if: >-
       always() && needs.build.result == 'success' &&
-      (needs.build-macos.result == 'success' || needs.build-macos.result == 'skipped')
+      (needs.build-macos.result == 'success' || needs.build-macos.result == 'skipped') &&
+      (needs.build-windows.result == 'success' || needs.build-windows.result == 'skipped')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -341,8 +472,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.build.outputs.version }}
         # The directory holds exactly what the build jobs uploaded, plus release.json. The Mac disk
-        # image, the Linux tarball, the AppImage and the Arch package are also published under names
-        # without the version, so the website can link to releases/latest/download/Concors-mac-arm64.dmg,
+        # image, the Windows installer, the Linux tarball, the AppImage and the Arch package are also
+        # published under names without the version, so the website can link to
+        # releases/latest/download/Concors-mac-arm64.dmg, …/Concors-windows-x64-setup.exe,
         # …/Concors-linux-x64.tar.gz, …/Concors-linux-x86_64.AppImage and
         # …/Concors-linux-x86_64.pkg.tar.zst. pacman reads a package's name and version from inside
         # the file, so the fixed name installs as concors-bin all the same. Those follow the release
@@ -352,13 +484,16 @@ jobs:
           if [ -e "Concors-$VERSION-aarch64.dmg" ]; then
             cp "Concors-$VERSION-aarch64.dmg" Concors-mac-arm64.dmg
           fi
+          if [ -e "Concors-$VERSION-x86_64-setup.exe" ]; then
+            cp "Concors-$VERSION-x86_64-setup.exe" Concors-windows-x64-setup.exe
+          fi
           cp "Concors-$VERSION-x64.tar.gz" Concors-linux-x64.tar.gz
           cp "Concors-$VERSION-x86_64.AppImage" Concors-linux-x86_64.AppImage
           cp concors-bin-"$VERSION"-*-x86_64.pkg.tar.zst Concors-linux-x86_64.pkg.tar.zst
           ls -l
           gh release create "$RELEASE_TAG" * \
             --verify-tag --title "Concors $VERSION" --latest=false \
-            --notes "Concors $VERSION. macOS (Apple Silicon): open the .dmg and drag Concors to Applications. Arch/Omarchy: install the .pkg.tar.zst with \`pacman -U\`. Other Linux x86_64: download the .AppImage, make it executable (\`chmod +x\`) and run it; or extract the tarball and run \`bin/concors-desktop\`, keeping \`bin/\` and \`lib/\` siblings. release.json is what the control plane reads to offer in-app updates."
+            --notes "Concors $VERSION. macOS (Apple Silicon): open the .dmg and drag Concors to Applications. Windows (x64): run the -setup.exe. Arch/Omarchy: install the .pkg.tar.zst with \`pacman -U\`. Other Linux x86_64: download the .AppImage, make it executable (\`chmod +x\`) and run it; or extract the tarball and run \`bin/concors-desktop\`, keeping \`bin/\` and \`lib/\` siblings. release.json is what the control plane reads to offer in-app updates."
 
   verify-download:
     name: Verify anonymous release download
@@ -385,10 +520,11 @@ jobs:
           if (manifest.version !== process.env.VERSION)
             throw new Error(`manifest is ${manifest.version}, expected ${process.env.VERSION}`);
           const formats = manifest.artifacts.map((a) => a.format);
-          // Linux always ships; the disk image only when Apple credentials are configured.
+          // Linux always ships; the disk image and the Windows installer only when their signing
+          // credentials are configured.
           for (const required of ['pacman', 'tarball', 'appimage'])
             if (!formats.includes(required)) throw new Error(`no ${required} in the manifest`);
-          const unknown = formats.filter((f) => !['pacman', 'tarball', 'appimage', 'dmg'].includes(f));
+          const unknown = formats.filter((f) => !['pacman', 'tarball', 'appimage', 'dmg', 'nsis'].includes(f));
           if (unknown.length) throw new Error(`unexpected formats: ${unknown.join(',')}`);
           console.log(manifest.artifacts.map((a) => `${a.format} ${a.name} ${a.sha256}`).join('\n'));
           NODE

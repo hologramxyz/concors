@@ -121,6 +121,60 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings
         working-directory: apps/desktop/src-tauri
 
+  # The Windows installer, built the way a release builds it (unsigned here: no secrets reach pull
+  # requests), installed silently and run from where it lands. The release workflow builds it the
+  # same way, but only when someone releases; this is what shows a packaging regression first.
+  windows-installer:
+    name: Windows installer
+    runs-on: windows-2025
+    timeout-minutes: 45
+    env:
+      VITE_CONCORS_API_URL: https://api.concors.dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+      - run: pnpm install --frozen-lockfile
+
+      # Packages the daemon runtime, smoke-tests it, then builds the NSIS installer around it.
+      - run: pnpm desktop:package:windows
+      - run: pnpm desktop:release:windows
+
+      # PowerShell rather than bash: Git's bash rewrites `/S` and `/D=` into paths. The install
+      # path has a space, as "C:\Users\Some One\AppData\Local" would.
+      - name: Install silently and run the installed daemon in place
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = Get-ChildItem apps/desktop/dist/release/Concors-*-x86_64-setup.exe | Select-Object -First 1
+          $dir = Join-Path $env:RUNNER_TEMP 'Concors Install'
+          $install = { (Start-Process -FilePath $setup.FullName -ArgumentList '/S', "/D=$dir" -Wait -PassThru).ExitCode }
+          $code = & $install
+          if ($code -ne 0) { throw "installer exited with $code" }
+          foreach ($file in 'daemon\bin\node.exe', 'daemon\bin\npm.cmd', 'daemon\lib\cli.js', 'uninstall.exe') {
+            if (-not (Test-Path (Join-Path $dir $file))) { throw "missing $file" }
+          }
+          $daemon = Join-Path $dir 'daemon'
+          & "$daemon\bin\node.exe" packages/daemon/scripts/smoke-bundle.ts --release $daemon --in-place
+          if ($LASTEXITCODE -ne 0) { throw "installed daemon failed its smoke test" }
+
+          # A running session host must not make an update fail: Windows will not overwrite a
+          # running node.exe, so the installer's hook stops what runs from the old copy first.
+          $held = Start-Process -FilePath "$daemon\bin\node.exe" -ArgumentList '-e', 'setInterval(() => {}, 1000)' -PassThru -WindowStyle Hidden
+          Start-Sleep -Seconds 1
+          if ($held.HasExited) { throw "the stand-in session host did not start" }
+          $code = & $install
+          if ($code -ne 0) { throw "reinstalling over a running runtime exited with $code" }
+          if (-not $held.HasExited) { throw "the installer left the old runtime running" }
+          & "$daemon\bin\node.exe" --version
+
   # Split across runners: the suite runs one test at a time against one shared daemon, so it
   # cannot run in parallel on one machine, but each runner starts its own daemon.
   workspace-browser:

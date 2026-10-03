@@ -68,13 +68,13 @@ impl LocalDaemon {
                 let _ = previous.child.wait();
             }
         }
-        let Some(path) = bundled_daemon_path(app) else {
+        let Some(runtime) = bundled_runtime(app) else {
             return Ok(LocalDaemonStatus::NotBundled);
         };
         let logs = app.path().app_log_dir().map_err(|e| e.to_string())?;
         fs::create_dir_all(&logs).map_err(|e| e.to_string())?;
         let log_path = logs.join("local-daemon.log");
-        let running = launch(&path, &log_path, &profile, Duration::from_secs(15))?;
+        let running = launch(&runtime, &log_path, &profile, Duration::from_secs(15))?;
         let status = LocalDaemonStatus::Running {
             pid: running.child.id(),
             port: running.port,
@@ -103,7 +103,7 @@ fn ready_port(line: &str) -> Option<u16> {
 }
 
 fn launch(
-    path: &Path,
+    runtime: &Runtime,
     log_path: &Path,
     profile: &Profile,
     timeout: Duration,
@@ -114,7 +114,16 @@ fn launch(
         .open(log_path)
         .map_err(|e| e.to_string())?;
     let stderr = output.try_clone().map_err(|e| e.to_string())?;
-    let mut command = Command::new(path);
+    let mut command = Command::new(&runtime.program);
+    command.args(&runtime.script);
+    #[cfg(windows)]
+    {
+        // The app is a GUI program, so a console program it starts gets a console window of its
+        // own, open for as long as the runtime runs. The runtime's output goes to the log anyway.
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
     for (name, value) in appimage_overrides() {
         match value {
             Some(value) => command.env(name, value),
@@ -233,15 +242,36 @@ fn appimage_overrides() -> Vec<(OsString, Option<OsString>)> {
     appimage_environment(std::env::vars_os(), Path::new(&appdir))
 }
 
-fn bundled_daemon_path(app: &AppHandle) -> Option<PathBuf> {
-    let runtime = if cfg!(windows) {
-        "daemon/bin/concors-daemon.exe"
+/// How to start the bundled runtime: a program, and the script it runs, when it needs one.
+#[derive(Debug, PartialEq, Eq)]
+struct Runtime {
+    program: PathBuf,
+    script: Option<PathBuf>,
+}
+
+/// The runtime inside a resource directory. Unix bundles start through `bin/concors-daemon`, a
+/// shell script; Windows cannot run one, and a `.cmd` wrapper would sit between the app and Node,
+/// so stopping the gateway would stop only the wrapper. There the app runs the bundled Node itself.
+fn runtime_in(resources: &Path, windows: bool) -> Option<Runtime> {
+    let daemon = resources.join("daemon");
+    let runtime = if windows {
+        Runtime {
+            program: daemon.join("bin").join("node.exe"),
+            script: Some(daemon.join("lib").join("cli.js")),
+        }
     } else {
-        "daemon/bin/concors-daemon"
+        Runtime {
+            program: daemon.join("bin").join("concors-daemon"),
+            script: None,
+        }
     };
-    let resource = app.path().resource_dir().ok()?.join(runtime);
-    if resource.is_file() {
-        return Some(resource);
+    let complete = runtime.program.is_file() && runtime.script.as_deref().is_none_or(Path::is_file);
+    complete.then_some(runtime)
+}
+
+fn bundled_runtime(app: &AppHandle) -> Option<Runtime> {
+    if let Some(runtime) = runtime_in(&app.path().resource_dir().ok()?, cfg!(windows)) {
+        return Some(runtime);
     }
     // Older development setups placed a standalone sidecar alongside the app executable.
     let executable = std::env::current_exe().ok()?;
@@ -250,7 +280,10 @@ fn bundled_daemon_path(app: &AppHandle) -> Option<PathBuf> {
     } else {
         "concors-daemon"
     });
-    legacy.is_file().then_some(legacy)
+    legacy.is_file().then_some(Runtime {
+        program: legacy,
+        script: None,
+    })
 }
 
 #[tauri::command]
@@ -260,7 +293,7 @@ pub fn local_daemon_status(
 ) -> Result<LocalDaemonStatus, String> {
     let mut child = daemon.child.lock().map_err(|e| e.to_string())?;
     Ok(LocalDaemon::running(&mut child).unwrap_or_else(|| {
-        if bundled_daemon_path(&app).is_some() {
+        if bundled_runtime(&app).is_some() {
             LocalDaemonStatus::Stopped
         } else {
             LocalDaemonStatus::NotBundled
@@ -294,7 +327,7 @@ pub fn stop_local_daemon(daemon: State<'_, LocalDaemon>) -> Result<LocalDaemonSt
 
 #[cfg(test)]
 mod tests {
-    use super::{appimage_environment, ready_port, Profile};
+    use super::{appimage_environment, ready_port, runtime_in, Profile, Runtime};
     use std::ffi::OsString;
     use std::path::Path;
 
@@ -331,9 +364,13 @@ mod tests {
         let script = root.join("daemon");
         fs::write(&script, "#!/bin/sh\nexec sleep 10\n").unwrap();
         fs::set_permissions(&script, fs::Permissions::from_mode(0o700)).unwrap();
+        let runtime = Runtime {
+            program: script.clone(),
+            script: None,
+        };
         let start = Instant::now();
         assert!(super::launch(
-            &script,
+            &runtime,
             &root.join("log"),
             &profile(),
             Duration::from_millis(100)
@@ -342,12 +379,43 @@ mod tests {
         assert!(start.elapsed() < Duration::from_secs(2));
         fs::write(&script, "#!/bin/sh\nexit 1\n").unwrap();
         assert!(super::launch(
-            &script,
+            &runtime,
             &root.join("log"),
             &profile(),
             Duration::from_secs(1)
         )
         .is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_windows_bundle_runs_its_node_with_the_cli_and_needs_both() {
+        use std::fs;
+        let root =
+            std::env::temp_dir().join(format!("concors-runtime-test-{}", std::process::id()));
+        let daemon = root.join("daemon");
+        fs::create_dir_all(daemon.join("bin")).unwrap();
+        fs::create_dir_all(daemon.join("lib")).unwrap();
+        fs::write(daemon.join("bin").join("node.exe"), "").unwrap();
+        assert_eq!(runtime_in(&root, true), None);
+        fs::write(daemon.join("lib").join("cli.js"), "").unwrap();
+        assert_eq!(
+            runtime_in(&root, true),
+            Some(Runtime {
+                program: daemon.join("bin").join("node.exe"),
+                script: Some(daemon.join("lib").join("cli.js")),
+            })
+        );
+        // A Unix bundle is its launcher script alone.
+        assert_eq!(runtime_in(&root, false), None);
+        fs::write(daemon.join("bin").join("concors-daemon"), "").unwrap();
+        assert_eq!(
+            runtime_in(&root, false),
+            Some(Runtime {
+                program: daemon.join("bin").join("concors-daemon"),
+                script: None,
+            })
+        );
         fs::remove_dir_all(root).unwrap();
     }
 

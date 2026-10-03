@@ -21,7 +21,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "package:linux": "node scripts/package-release.ts linux-x64",
-    "package:macos": "node scripts/package-release.ts darwin"
+    "package:macos": "node scripts/package-release.ts darwin",
+    "package:windows": "node scripts/package-release.ts win32-x64"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "0.17.1",

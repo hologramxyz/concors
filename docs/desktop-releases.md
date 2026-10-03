@@ -45,8 +45,10 @@ which fixes the glibc floor — and produces:
 | `Concors-linux-x64.tar.gz`                        | a stable link to the latest tarball, for the same use |
 | `Concors-linux-x86_64.pkg.tar.zst`                | the website's Arch and Omarchy install command        |
 
-and, on a macOS runner, `Concors-<version>-aarch64.dmg` for Apple Silicon (see [macOS](#macos)).
-The release manifest is written once both have finished, so it describes every build.
+and, on a macOS runner, `Concors-<version>-aarch64.dmg` for Apple Silicon (see [macOS](#macos)),
+and on a Windows runner `Concors-<version>-x86_64-setup.exe` (see [Windows](#windows)), with
+`Concors-mac-arm64.dmg` and `Concors-windows-x64-setup.exe` as their stable links. The release
+manifest is written once all of them have finished, so it describes every build.
 
 Before publishing, the workflow installs the package in a clean `archlinux` container and runs the
 bundled daemon there, so a package that cannot actually be installed never reaches a release.
@@ -113,6 +115,86 @@ checks the digest, then that the app inside is signed by the same developer team
 copy, passes `codesign --verify --deep --strict` and is accepted by Gatekeeper as notarized, and
 only then swaps the bundles. The signature check is what proves the build is ours, which the
 digest alone cannot: the digest comes from the same control plane that serves the download.
+
+## Windows
+
+The Windows build is an NSIS installer, Authenticode-signed with
+[Azure Artifact Signing](https://learn.microsoft.com/en-us/azure/artifact-signing/) (formerly
+Trusted Signing). As for the Mac, without signing credentials the workflow skips the Windows job
+with a warning: SmartScreen warns hardest about an unsigned installer, and teaching people to click
+past that warning is worse than not offering the download. Signing does not make the first
+downloads warning-free either — SmartScreen builds a reputation per publisher, which no
+certificate buys outright any more — but each signed release adds to the same publisher's, and the
+installer names Concors rather than "Unknown publisher".
+
+`package-windows.ts` packages the daemon runtime (Node's own `node.exe`, npm, node-pty with
+ConPTY, the sherpa-onnx addon and ONNX Runtime), signs every executable in it that does not already
+carry a signature (Node and ConPTY arrive signed by their publishers), runs the bundle smoke test,
+and then has Tauri build the installer, signing the app before the installer embeds it and then the
+installer and its uninstaller. The workflow then installs it silently, checks that Windows calls
+every shipped binary's signature Valid, and runs the installed daemon's smoke test where it landed.
+
+Two things differ from the other platforms:
+
+- **There is no `concors-daemon` launcher.** Windows cannot run a shell script, and a `.cmd`
+  wrapper would stand between the app and Node, so stopping the gateway would stop only the
+  wrapper. The app starts `daemon\bin\node.exe daemon\lib\cli.js` itself, without a console
+  window (`daemon.rs`). `bin\npm.cmd` remains, since the daemon finds npm by name.
+- **A running runtime blocks an update.** Windows will not overwrite a running program, and the
+  session host outlives the window on purpose. The installer's hook
+  (`src-tauri/windows/installer-hooks.nsh`) closes the app the way Tauri's installer does, then
+  stops every process running from that installation's `daemon\` before writing or removing files.
+  The heavy-tests job checks this by reinstalling over a running copy of the bundled Node.
+
+The installer installs per user, into `%LOCALAPPDATA%\Concors`, so neither installing nor
+updating asks for an administrator. The `windows-installer` job in `heavy-tests.yml` builds,
+installs and smoke-tests the same installer, unsigned, on every pull request, so a packaging
+regression shows there rather than during a release. Locally, on Windows x64:
+
+```sh
+VITE_CONCORS_API_URL=https://api.concors.dev pnpm desktop:package:windows
+pnpm desktop:release:windows
+```
+
+The build is unsigned unless the six variables below are in the environment, and signing locally
+also needs `cargo install artifact-signing-cli`.
+
+### Setting up Artifact Signing
+
+It costs $9.99 a month (Basic: 5,000 signatures, one certificate profile, which is plenty).
+Organizations in the US, Canada, the EU and the UK can use it; individual developers only in the US
+and Canada, so it is set up for the company. Microsoft verifies the organization before issuing
+anything, which usually takes from a few hours to a few business days.
+
+1. In the [Azure portal](https://portal.azure.com), on a paid (pay-as-you-go) subscription — free
+   and trial subscriptions are refused — register the `Microsoft.CodeSigning` resource provider
+   (Subscription → Resource providers).
+2. Create an **Artifact Signing account**, Basic tier, in a region near the build (for example West
+   Europe, whose endpoint is `https://weu.codesigning.azure.net`). The account's Overview shows
+   its endpoint.
+3. On the account, give yourself the **Identity Verifier** role (Access control (IAM)), then
+   create an **identity validation** of type _Public_ for the organization, with its legal name,
+   address and a contact email on the company's own domain. Wait for it to be approved.
+4. Create a **certificate profile** of type _Public Trust_ from the approved identity.
+5. In Microsoft Entra ID → App registrations, register an app (any name, e.g. `concors-release`)
+   and create a client secret for it. Note its client ID, the tenant ID and the secret.
+6. On the certificate profile, give that app registration the **Certificate Profile Signer**
+   role. Assigning it to yourself instead is the usual mistake, and fails with 403 at signing.
+7. In the GitHub repository's settings, add:
+
+| Kind     | Name                                         | Value                                       |
+| -------- | -------------------------------------------- | ------------------------------------------- |
+| secret   | `AZURE_CLIENT_ID`                            | the app registration's client ID            |
+| secret   | `AZURE_CLIENT_SECRET`                        | its client secret                           |
+| secret   | `AZURE_TENANT_ID`                            | the directory (tenant) ID                   |
+| variable | `AZURE_ARTIFACT_SIGNING_ENDPOINT`            | the account's endpoint, from step 2         |
+| variable | `AZURE_ARTIFACT_SIGNING_ACCOUNT`             | the Artifact Signing account's name         |
+| variable | `AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE` | the certificate profile's name, from step 4 |
+
+The client secret expires (at most after two years); a release after that fails at signing, and a
+new secret is the fix. A Windows copy is told about new releases (it asks for the `nsis` format)
+but does not yet install them itself: the dialog asks the person to run the new installer, which
+updates in place.
 
 ## Offering the release
 
@@ -182,6 +264,7 @@ works out from where its executable lives (`src-tauri/src/update.rs`):
 | a tarball the person unpacked and can write to       | replaces the tree, keeping the old one until the new one is in place |
 | an AppImage in a directory the person can write to   | replaces the file in place, keeping its name, and relaunches it      |
 | a Mac app in a folder the person can write to        | installs the disk image's app over it (signature checked), restarts  |
+| a Windows installation                               | says a new version exists; running the new installer updates it      |
 | a tree it cannot write to, or an unfamiliar location | says a new version exists and leaves it to them                      |
 | a build from a checkout                              | nothing at all; the checkout is the source of truth                  |
 
@@ -230,8 +313,10 @@ plugin is adopted; nothing reads it before then.
 
 ## Not done yet
 
-- **Windows**, and **Intel Macs**. The manifest and the endpoint already carry `platform` and
-  `arch`; only the builds are missing.
+- **Intel Macs**, and **Windows on Arm** (which runs the x64 build under emulation). The manifest
+  and the endpoint already carry `platform` and `arch`; only the builds are missing.
+- **Windows updating itself.** A Windows copy is told a release exists; installing it from the
+  badge (download, check, run the installer passively, restart) is still to do.
 - **`tauri-plugin-updater` itself**, whose one-click path covers AppImage, macOS and Windows. The
   endpoint already answers in the shape the plugin expects, and builds are signed once a key
   exists, so what remains is the plugin and the Windows builds. Until then the badge replaces an
