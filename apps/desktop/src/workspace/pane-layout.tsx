@@ -31,6 +31,7 @@ import {
   type WorkspaceProject,
   type WorkspaceTab,
 } from "@concors/protocol";
+import { typingOutsidePanes } from "./typing-outside-panes";
 
 const PROFILE_LABELS: Record<PaneProfile, string> = {
   shell: "Terminal",
@@ -51,18 +52,6 @@ interface Props {
 /** Overlays that keep focus while pane focus waits; a closing menu or dialog no longer does. */
 const OPEN_OVERLAY =
   '[role="dialog"][data-state="open"], [role="alertdialog"], [role="menu"][data-state="open"]';
-/**
- * Someone typing into a field outside every pane, such as a tab's name, keeps the focus: a composer
- * that becomes usable a moment later must not take it mid-word. Focus in another pane is handled
- * separately, since a split starts out focused in the pane it came from.
- */
-function typingOutsidePanes(focused: Element | null) {
-  return (
-    !!focused &&
-    !focused.closest("[data-pane-id]") &&
-    focused.matches("input, textarea, select, [contenteditable='true'], [role='textbox']")
-  );
-}
 type Placement = "left" | "right" | "top" | "bottom";
 interface PaneDrag {
   paneId: string;
