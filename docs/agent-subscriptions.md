@@ -130,7 +130,11 @@ Connected library accounts also use the provider-level `usage` operation. The da
 short-lived provider without creating a chat, asks the CLI for its native plan windows, caches the
 answer for `AGENT_USAGE_TTL_MS`, and closes it. The UI renders the returned windows and reset times
 without assuming fixed plan names, models, or window counts; assignment selectors include the two
-most-used windows so an account near a limit is visible while choosing it. This requires the
+most-used windows so an account near a limit is visible while choosing it. An account this computer is not signed in to reads
+its limits from a machine that holds it instead, asking the machine using it first and moving on
+when one answers `signed-out`; its row says which machine they came from ("Usage from …"). Each
+cloud machine card reports its live connection to the page for this, once its workspace is ready
+and its daemon has the capability. This requires the
 daemon's `provider-plan-usage` capability (`PROVIDER_USAGE_CAPABILITY`).
 
 The page requires the daemon's `provider-subscriptions` capability
