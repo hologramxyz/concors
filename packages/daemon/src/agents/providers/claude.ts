@@ -25,6 +25,7 @@ import { claudeHistory, claudeThinkingItems } from "./history.ts";
 import { launch } from "./launch.ts";
 import { AGENT_INSTRUCTIONS } from "../instructions.ts";
 import { resolveProfile } from "../../terminal/profiles.ts";
+import { killTree } from "../../host/kill-tree.ts";
 import {
   EventProvider,
   array,
@@ -133,6 +134,16 @@ export class ClaudeProvider extends EventProvider {
       pathToClaudeCodeExecutable: executable,
       spawnClaudeCodeProcess: ({ args, cwd, env, signal }) => {
         const child = this.launcher("claude", args, cwd ?? this.cwd, env);
+        if (process.platform === "win32") {
+          // The SDK stops Claude through this child's kill(), which on Windows would end only
+          // the cmd.exe running npm's shim and leave Claude running (see host/kill-tree.ts).
+          const kill = child.kill.bind(child);
+          child.kill = (signal) => {
+            const { pid, exitCode, signalCode } = child;
+            killTree({ pid, exitCode, signalCode, kill }, signal);
+            return true;
+          };
+        }
         const abort = () => {
           child.kill();
         };

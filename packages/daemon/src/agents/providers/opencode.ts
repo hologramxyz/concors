@@ -8,6 +8,7 @@ import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import { readFile } from "node:fs/promises";
 import { AgentControlsSchema } from "@concors/protocol";
+import { killTree } from "../../host/kill-tree.ts";
 import {
   EventProvider,
   array,
@@ -659,8 +660,8 @@ export class OpenCodeProvider extends EventProvider {
     const child = this.child;
     if (!child || child.exitCode !== null || child.signalCode !== null) return;
     const exit = new Promise<void>((resolve) => child.once("close", () => resolve()));
-    child.kill();
-    const timer = setTimeout(() => child.kill("SIGKILL"), 2000);
+    killTree(child);
+    const timer = setTimeout(() => killTree(child, "SIGKILL"), 2000);
     try {
       await exit;
     } finally {

@@ -65,6 +65,7 @@ export async function directoryIdentity(
     const { stdout } = await execute("git", ["-C", directory, "rev-parse", "--show-toplevel"], {
       timeout: 1500,
       maxBuffer: 16384,
+      windowsHide: true,
       env: {
         ...process.env,
         GIT_OPTIONAL_LOCKS: "0",
