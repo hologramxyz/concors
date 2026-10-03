@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
+import { chooseProvider } from "./support/agents.ts";
 
 test("damaged text attachments show a recoverable error without crashing the conversation", async ({
   page,
@@ -28,6 +29,7 @@ test("damaged text attachments show a recoverable error without crashing the con
     await seedProject(page, "Attachment recovery", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
     const composer = page.getByRole("textbox", { name: "Message Codex" });
     await page.locator('input[type="file"]').setInputFiles({
       name: "notes.txt",

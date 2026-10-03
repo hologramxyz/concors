@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { DaemonConnection, describeDaemonEndpoint } from "@concors/daemon-client";
 import type { WorkspaceOperation } from "@concors/protocol";
 import { mobileDesktopSocket } from "../../../e2e/support/mobile-direct-ports.cjs";
+import { chooseProvider } from "../../../e2e/support/agents.ts";
 
 test("flat mobile tabs stay synced with desktop nested splits without flattening their saved layout", async ({
   page,
@@ -104,6 +105,7 @@ test("flat mobile tabs stay synced with desktop nested splits without flattening
     await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
     const ui = page.frameLocator('iframe[title="Concors workspace"]');
     await expect(ui.getByRole("heading", { name: "Choose an agent" })).toHaveCount(0);
+    await chooseProvider(ui);
     const input = ui.getByRole("textbox", { name: "Message Codex" });
     await input.fill("Keep this draft while switching tabs");
     const picker = ui.getByRole("combobox", { name: "Tabs", exact: true, includeHidden: true });

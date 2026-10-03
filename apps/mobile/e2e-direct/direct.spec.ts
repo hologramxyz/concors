@@ -7,6 +7,7 @@ import { DaemonConnection, describeDaemonEndpoint } from "@concors/daemon-client
 import type { WorkspaceOperation } from "@concors/protocol";
 import { demoMe } from "../src/demo/fixtures";
 import { scrollTimelineUp } from "../e2e/support/swipe";
+import { chooseProvider } from "../../../e2e/support/agents.ts";
 
 test("mobile connects without cloud login and shares real daemon chat, panes and terminal sessions", async ({
   page,
@@ -124,6 +125,7 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await expect(page.getByText("Before you connect", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Allow AI data sharing" })).toHaveCount(0);
     const ui = page.frameLocator('iframe[title="Concors workspace"]');
+    await chooseProvider(ui);
     const input = ui.getByRole("textbox", { name: "Message Codex" });
     await expect(input).toBeEnabled();
     // Main's provider account flow must also cross the mobile relay without a real OAuth login.

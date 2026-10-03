@@ -1,5 +1,6 @@
 import { test, expect, signedIn } from "./signed-in.ts";
 import type { Page } from "@playwright/test";
+import { chooseProvider } from "./support/agents.ts";
 const KEY = "concors.shortcuts.v1";
 const search = "Search workspaces, agents and tabs";
 async function openSettings(page: Page) {
@@ -94,11 +95,14 @@ test("custom sequences split from a terminal and run from an Agent input without
   await expect(terminals.last()).toBeFocused();
   await page.getByRole("button", { name: "New tab", exact: true }).click();
   await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+  await chooseProvider(page);
   const chat = page.getByRole("textbox", { name: "Message Codex", exact: true });
   await expect(chat).toBeEnabled();
   await chat.fill("Keep this draft");
   await page.keyboard.press("Control+Alt+p");
   await page.keyboard.press("Enter");
+  // The new Agent pane waits for its provider, then hands focus to its composer.
+  await chooseProvider(page);
   await expect(chat).toHaveCount(2);
   await expect(chat.last()).toBeFocused();
   // Ctrl+Shift+Arrow selects words in the composer rather than moving to another pane.

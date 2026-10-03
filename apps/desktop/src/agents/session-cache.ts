@@ -1,4 +1,24 @@
-import type { NativeSession, NativeSessionPage } from "@concors/protocol";
+import type { NativeSession, NativeSessionPage, ProviderStatus } from "@concors/protocol";
+import type { SessionProvider } from "./session-catalog";
+
+/** The machine's session providers from the last visit, so reopening lists sessions at once. */
+export const knownProviders = new WeakMap<
+  object,
+  { providers: SessionProvider[]; revision: number }
+>();
+/** Keeps a provider list read elsewhere, so the session check needs no request of its own. */
+export function rememberProviders(scope: object, providers: ProviderStatus[], revision: number) {
+  // Subscriptions share their engine's conversations, which the base provider already
+  // lists; sessions are grouped by harness, never by account.
+  const known = {
+    providers: providers
+      .filter((p) => p.enabled && p.installed && !p.subscription)
+      .map((p) => ({ id: p.id, label: p.label })),
+    revision,
+  };
+  knownProviders.set(scope, known);
+  return known;
+}
 
 /** A page belongs to a connection epoch, workspace directory, provider configuration and query. */
 const caches = new WeakMap<object, Map<string, { expires: number; page: NativeSessionPage }>>();

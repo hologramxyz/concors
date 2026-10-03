@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
+import { chooseProvider } from "./support/agents.ts";
 
 for (const result of ["connected", "disconnected", "error"] as const) {
   test(`initial account check stays quiet until ${result} response`, async ({ page }) => {
@@ -48,6 +49,9 @@ for (const result of ["connected", "disconnected", "error"] as const) {
       await seedProject(page, "Account loading", directory);
       await page.getByRole("button", { name: "New tab", exact: true }).click();
       await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+      await chooseProvider(page);
+      // Choosing the chat's provider lists them once; the account check must not list again.
+      providerLists = 0;
       const prompt = page.getByRole("region", { name: "Codex account connection", exact: true });
       await expect.poll(() => !!release).toBe(true);
       await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
@@ -116,6 +120,7 @@ test("the first sign-in click survives a background focus refresh", async ({ pag
     await seedProject(page, "First-click sign-in", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
     const prompt = page.getByRole("region", { name: "Codex account connection", exact: true });
     const signIn = prompt.getByRole("button", { name: "Sign in with ChatGPT", exact: true });
     await expect(signIn).toBeEnabled();
@@ -149,6 +154,7 @@ for (const [provider, label] of [
       await seedProject(page, "Agent accounts", directory);
       await page.getByRole("button", { name: "New tab", exact: true }).click();
       await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+      await chooseProvider(page);
       await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
       if (provider !== "codex") {
         await page.getByRole("button", { name: "Agent and model", exact: true }).click();
@@ -270,6 +276,7 @@ test("a missing CLI is offered as a one-click install instead of an account chec
     await seedProject(page, "Missing CLI", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
     const install = page.getByRole("region", { name: "Codex installation", exact: true });
     const account = page.getByRole("region", { name: "Codex account connection", exact: true });
     await expect(install).toBeVisible();

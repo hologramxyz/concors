@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DaemonConnection, describeDaemonEndpoint } from "@concors/daemon-client";
 import type { WorkspaceOperation } from "@concors/protocol";
+import { chooseProvider } from "../../../e2e/support/agents.ts";
 
 for (const native of [false, true]) {
   test(`mobile ${native ? "native bridge" : "web composer"} resumes history in the existing pane`, async ({
@@ -62,6 +63,7 @@ for (const native of [false, true]) {
         page.getByRole("button", { name: "Allow AI data sharing", exact: true }),
       ).toHaveCount(0);
       const ui = page.frameLocator('iframe[title="Concors workspace"]');
+      await chooseProvider(ui);
       await ui.getByRole("button", { name: "Resume session", exact: true }).click();
       const dialog = ui.getByRole("dialog", { name: "Resume session", exact: true });
       await expect(dialog).toHaveAttribute("data-mobile-drawer", "true");

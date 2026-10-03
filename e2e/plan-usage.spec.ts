@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
+import { chooseProvider } from "./support/agents.ts";
 
 test("the context ring shows the conversation's window and the plan's usage bars", async ({
   page,
@@ -17,6 +18,7 @@ test("the context ring shows the conversation's window and the plan's usage bars
     await seedProject(page, "Plan usage", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
     const message = page.getByRole("textbox", { name: "Message Codex" });
     // The fixture reports context usage with its "rich" turn.
     await message.fill("rich");

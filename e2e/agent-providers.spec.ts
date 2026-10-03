@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
+import { chooseProvider } from "./support/agents.ts";
 for (const [provider, label] of [
   ["claude", "Claude Code"],
   ["opencode", "OpenCode"],
@@ -20,6 +21,7 @@ for (const [provider, label] of [
       await seedProject(page, "Provider picker", directory);
       await page.getByRole("button", { name: "New tab", exact: true }).click();
       await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+      await chooseProvider(page);
       const original = page.getByRole("textbox", { name: "Message Codex" });
       await expect(original).toBeEnabled();
       await expect(page.getByLabel("Agent and model", { exact: true })).toHaveText("Fixture model");

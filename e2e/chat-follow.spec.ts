@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
 import { mockChatHistory } from "./support/chat-history.ts";
+import { chooseProvider } from "./support/agents.ts";
 
 test("chat stays pinned to the bottom until the user scrolls up, and sending returns there", async ({
   page,
@@ -19,6 +20,7 @@ test("chat stays pinned to the bottom until the user scrolls up, and sending ret
     await seedProject(page, "Follow the bottom", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
     const timeline = page.getByRole("log", { name: "Chat timeline" });
     const latest = page.getByRole("button", { name: "Latest", exact: true });
     await expect(timeline.getByText("History 0 message 639", { exact: true })).toBeVisible();
