@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { copyFile, mkdir, mkdtemp, readdir } from "node:fs/promises";
+import { access, copyFile, mkdir, mkdtemp, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -88,6 +88,12 @@ if (!identity || identity === "-" || !key || !issuer || !keyPath) {
       stdio: "inherit",
     });
     execFileSync("xcrun", ["stapler", "validate", app], { stdio: "inherit" });
+    // Finder records the window's layout in .DS_Store; without it the image opens as a bare
+    // folder, which is what a skipped Finder pass leaves behind without failing the build.
+    for (const name of [".DS_Store", ".background/dmg-background.tiff"])
+      await access(join(mount, name)).catch(() => {
+        throw new Error(`${image} has no ${name}, so its window opens without its layout.`);
+      });
   } finally {
     execFileSync("hdiutil", ["detach", mount], { stdio: "inherit" });
   }

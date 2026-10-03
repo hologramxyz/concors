@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="660" height="440" viewBox="0 0 660 440">
+  <!-- The Finder window of the macOS disk image, in points. Icon positions and the window size in
+       tauri.local-macos.conf.json are laid out against it; it runs 40pt taller than the window so
+       the title bar never uncovers Finder's own background below it. Finder draws the icon labels
+       black in light and dark mode alike, which is why it stays light. Regenerate the .tiff, with
+       Marcellus and Geist installed, from renders at 660x440 and 1320x880 joined into one file
+       with the larger at 144 dpi, which is what `tiffutil -cathidpicheck` does on a Mac. -->
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="44%" r="62%">
+      <stop offset="0" stop-color="#efeee9"/>
+      <stop offset="1" stop-color="#e8e7e1"/>
+    </radialGradient>
+  </defs>
+  <rect width="660" height="440" fill="#e8e7e1"/>
+  <rect width="660" height="400" fill="url(#glow)"/>
+  <!-- Lockup, as in the site header -->
+  <g transform="translate(268 40)" fill="#20211f">
+    <svg x="0" y="0" width="27" height="27" viewBox="0 0 96 96"><path fill-rule="evenodd" d="M12 24L48 10L84 24V33H12ZM19.5 27H76.5L48 16.5Z M18 35H30L28 39.5H20ZM42 35H54L52 39.5H44ZM66 35H78L76 39.5H68Z M20 41.5H28L29.25 72.5H18.75ZM44 41.5H52L53.25 72.5H42.75ZM68 41.5H76L77.25 72.5H66.75Z M17 75H79V77.5H17ZM12 79H84V81.5H12ZM7 83H89V85.5H7Z"/></svg>
+    <text x="33" y="22" font-family="Marcellus" font-size="25" letter-spacing="-0.6">Concors</text>
+  </g>
+  <!-- Arrow from the app to Applications -->
+  <g fill="none" stroke="#20211f" stroke-opacity=".32" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M266 196H392"/>
+    <path d="M384 188L394 196L384 204"/>
+  </g>
+  <text x="330" y="348" text-anchor="middle" font-family="Geist" font-size="13" fill="#65665f">Drag Concors into Applications to install</text>
+</svg>

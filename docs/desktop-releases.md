@@ -88,7 +88,10 @@ the hardened runtime without them. The nodejs.org signature cannot simply be kep
 microphone entitlement dictation depends on.
 
 `pnpm desktop:release:macos` then signs, notarizes and staples the image and asks Gatekeeper about
-it, and about the app inside it, the way a downloading Mac would. Locally:
+it, and about the app inside it, the way a downloading Mac would, and that the image kept its window
+layout: the background in `src-tauri/macos/dmg-background.svg`, with the app and an arrow to
+Applications. Finder writes that layout while Tauri bundles, a step Tauri skips under `CI=true`
+unless `TAURI_BUNDLER_DMG_IGNORE_CI=true`, which the release workflow sets. Locally:
 
 ```sh
 export APPLE_SIGNING_IDENTITY="Developer ID Application: … (TEAMID)"
