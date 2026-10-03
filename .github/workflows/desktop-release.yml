@@ -277,11 +277,14 @@ jobs:
           echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/notary.p8" >> "$GITHUB_ENV"
 
       # Signs the daemon runtime and checks it still runs a PTY under the hardened runtime, then
-      # builds, signs and notarizes the app and wraps it in a disk image.
+      # builds, signs and notarizes the app and wraps it in a disk image. Under CI=true Tauri skips
+      # the Finder pass that lays out the image's window (background, icon positions, the arrow to
+      # Applications), and the image opens as a bare folder; TAURI_BUNDLER_DMG_IGNORE_CI keeps it.
       - name: Build the app and its bundled daemon
         env:
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          TAURI_BUNDLER_DMG_IGNORE_CI: "true"
         run: pnpm desktop:package:macos
 
       - name: Sign, notarize and check the disk image
