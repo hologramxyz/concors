@@ -36,8 +36,13 @@ third-party plugins are not loaded into Concors.
 4. Choose the provider when opening an Agent pane. Use **Configure** for a custom
    executable, account environment, model filter, or supported MCP overrides.
 
-Managed package installs use pinned catalog packages in the daemon's private
-provider directory, with at most two concurrent jobs and a five-minute timeout.
+Managed package installs go into the daemon's private provider directory, with
+at most two concurrent jobs and a five-minute timeout. The npm-published agent
+CLIs (Codex, Claude Code, OpenCode, Pi, Copilot, OMP) install their `latest`
+release, because vendors gate new models on the CLI version and an install that
+starts out of date would immediately show an update; `--save-exact` records the
+version that was installed. The `npx` ACP adapters install the exact version their
+catalog command names, since nothing offers updates for them afterwards.
 They do not replace a system installation. The CLI uses the user's existing
 account and credentials; Concors does not resell inference.
 

@@ -8,6 +8,7 @@ import {
   createProtocolError,
   parseClientMessage,
   parseDaemonMessage,
+  providerPresets,
 } from "./index.ts";
 
 describe("handshake messages", () => {
@@ -87,5 +88,23 @@ describe("health response", () => {
   it("matches the documented shape exactly", () => {
     expect(HealthResponseSchema.parse({ status: "ok" })).toEqual({ status: "ok" });
     expect(HealthResponseSchema.safeParse({ status: "degraded" }).success).toBe(false);
+  });
+});
+
+describe("provider presets", () => {
+  it("names agent CLIs without a version so Install gets their newest release", () => {
+    const npm = providerPresets.flatMap((p) => (p.install?.kind === "npm" ? [p.install] : []));
+    expect(npm.map((install) => install.package)).toEqual(
+      expect.arrayContaining(["@openai/codex", "@anthropic-ai/claude-code", "opencode-ai"]),
+    );
+    for (const install of npm) expect(install.package).toMatch(/^(@[^@/]+\/)?[^@/]+$/);
+  });
+
+  it("keeps each npx adapter on the exact version its command names", () => {
+    for (const preset of providerPresets)
+      if (preset.install?.kind === "npx") {
+        expect(preset.install.package).toMatch(/^(@[^@/]+\/)?[^@/]+@\d+\.\d+\.\d+/);
+        expect(preset.command.slice(0, 3)).toEqual(["npx", "-y", preset.install.package]);
+      }
   });
 });
