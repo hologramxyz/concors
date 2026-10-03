@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
+import { chooseProvider } from "./support/agents.ts";
 
 test("chat presents native forms, plan review, file content and durable attachment previews", async ({
   page,
@@ -14,6 +15,7 @@ test("chat presents native forms, plan review, file content and durable attachme
     await seedProject(page, "Chat primitives", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
     const input = page.getByRole("textbox", { name: "Message Codex" });
     const send = async (text: string) => {
       await input.fill(text);

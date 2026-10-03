@@ -8,7 +8,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { History, LoaderCircle, RefreshCw } from "lucide-react";
-import type { AgentInfo } from "@concors/protocol";
+import type { AgentInfo, NativeSessionPage } from "@concors/protocol";
 import type { DaemonConnection } from "@concors/daemon-client";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,13 @@ import {
 } from "@/components/ui/dialog";
 import { AgentStartedContext } from "./context";
 import { ProviderIcon } from "./provider-icon";
-import { cachedSessions, cacheSessions, sessionsFresh } from "./session-cache";
+import {
+  cachedSessions,
+  cacheSessions,
+  knownProviders,
+  rememberProviders,
+  sessionsFresh,
+} from "./session-cache";
 import {
   SessionCatalog,
   type ProviderSession,
@@ -30,8 +36,111 @@ import {
   type SessionCatalogSnapshot,
 } from "./session-catalog";
 
-/** The machine's session providers from the last visit, so reopening lists sessions at once. */
-const knownProviders = new WeakMap<object, { providers: SessionProvider[]; revision: number }>();
+/** First pages being fetched, so the availability check and the dialog share one request. */
+const pending = new WeakMap<object, Map<string, Promise<NativeSessionPage>>>();
+
+async function listProviders(connection: DaemonConnection) {
+  const result = await connection.requestProvider({ kind: "list" }, crypto.randomUUID());
+  if (result.outcome.status === "error") throw new Error(result.outcome.message);
+  return rememberProviders(connection, result.outcome.providers, result.outcome.revision);
+}
+
+function sessionScope(
+  connection: DaemonConnection,
+  agent: AgentInfo,
+  providers: SessionProvider[] | null,
+  revision: number,
+) {
+  return JSON.stringify([
+    connection.workspace?.epoch,
+    agent.projectId,
+    agent.directory,
+    providers,
+    revision,
+  ]);
+}
+
+async function readSessions(
+  connection: DaemonConnection,
+  agent: AgentInfo,
+  scope: string,
+  provider: string,
+  cursor: string | undefined,
+  refresh: boolean,
+) {
+  const key = JSON.stringify([scope, provider, cursor]);
+  const cached = !refresh && cachedSessions(connection, key);
+  if (cached) return cached;
+  let requests = pending.get(connection);
+  if (!requests) pending.set(connection, (requests = new Map()));
+  const inflight = !refresh && requests.get(key);
+  if (inflight) return inflight;
+  const request = connection
+    .requestProvider(
+      {
+        kind: "sessions-list",
+        projectId: agent.projectId,
+        directory: agent.directory,
+        provider,
+        refresh,
+        ...(cursor ? { cursor } : {}),
+      },
+      crypto.randomUUID(),
+    )
+    .then((result) => {
+      if (result.outcome.status === "error") throw new Error(result.outcome.message);
+      const page = result.outcome.sessions;
+      if (!page) throw new Error("Update this machine's daemon to browse saved sessions.");
+      cacheSessions(connection, key, page);
+      return page;
+    })
+    .finally(() => {
+      if (requests.get(key) === request) requests.delete(key);
+    });
+  requests.set(key, request);
+  return request;
+}
+
+/**
+ * Whether the workspace has a saved session other than this chat's own, so an empty chat only
+ * offers to resume when there is something to resume. Providers are asked one at a time and
+ * the first session found ends the check: listing can mean starting a CLI.
+ */
+function useHasSessions(connection: DaemonConnection | null, agent: AgentInfo) {
+  const [found, setFound] = useState<string | null>(null);
+  const check = connection
+    ? JSON.stringify([
+        connection.workspace?.epoch,
+        agent.projectId,
+        agent.directory,
+        agent.provider,
+        agent.threadId,
+      ])
+    : null;
+  useEffect(() => {
+    if (!connection || !check) return;
+    let current = true;
+    void (async () => {
+      const { providers, revision } =
+        knownProviders.get(connection) ?? (await listProviders(connection));
+      const scope = sessionScope(connection, agent, providers, revision);
+      for (const provider of providers) {
+        const page = await readSessions(connection, agent, scope, provider.id, undefined, false)
+          // One provider failing to list must not hide the others' sessions.
+          .catch(() => undefined);
+        if (!current) return;
+        if (page?.sessions.some((s) => provider.id !== agent.provider || s.id !== agent.threadId))
+          return setFound(check);
+      }
+    })().catch(() => undefined);
+    return () => {
+      current = false;
+    };
+    // The check key holds every agent field the check reads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connection, check]);
+  return !!check && found === check;
+}
 
 export function ResumeSession({
   agent,
@@ -44,6 +153,7 @@ export function ResumeSession({
 }) {
   const connection = useContext(TerminalConnectionContext);
   const onStarted = useContext(AgentStartedContext);
+  const available = useHasSessions(connection, agent);
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("all");
   const [providers, setProviders] = useState<SessionProvider[] | null>(null);
@@ -80,21 +190,15 @@ export function ResumeSession({
   useEffect(() => {
     if (!open || !connection) return;
     let current = true;
-    void connection
-      .requestProvider({ kind: "list" }, crypto.randomUUID())
-      .then((result) => {
+    void listProviders(connection)
+      .then((next) => {
         if (!current) return;
-        if (result.outcome.status === "error") throw new Error(result.outcome.message);
         setCatalogError(null);
-        // Subscriptions share their engine's conversations, which the base provider already
-        // lists; sessions are grouped by harness, never by account.
-        const next = result.outcome.providers
-          .filter((p) => p.enabled && p.installed && !p.subscription)
-          .map((p) => ({ id: p.id, label: p.label }));
-        knownProviders.set(connection, { providers: next, revision: result.outcome.revision });
         // Unchanged providers keep the list mounted instead of starting it over.
-        setProviders((value) => (JSON.stringify(value) === JSON.stringify(next) ? value : next));
-        setRevision(result.outcome.revision);
+        setProviders((value) =>
+          JSON.stringify(value) === JSON.stringify(next.providers) ? value : next.providers,
+        );
+        setRevision(next.revision);
       })
       .catch((cause: unknown) => {
         if (current)
@@ -141,13 +245,9 @@ export function ResumeSession({
     }
   };
   const selected = providers?.some((p) => p.id === filter) ? filter : "all";
-  const scope = JSON.stringify([
-    connection?.workspace?.epoch,
-    agent.projectId,
-    agent.directory,
-    providers,
-    revision,
-  ]);
+  const scope = connection ? sessionScope(connection, agent, providers, revision) : "";
+  // Nothing to resume hides the button; an open dialog stays until it is closed.
+  if (!available && !open) return null;
   return (
     <Dialog open={open} onOpenChange={changeOpen}>
       <DialogTrigger asChild>
@@ -296,26 +396,7 @@ function SessionResults({
     const key = (provider: string, cursor?: string) => JSON.stringify([scope, provider, cursor]);
     return new SessionCatalog(
       providers,
-      async (provider, cursor) => {
-        const cached = !refresh && cachedSessions(connection, key(provider, cursor));
-        if (cached) return cached;
-        const result = await connection.requestProvider(
-          {
-            kind: "sessions-list",
-            projectId: agent.projectId,
-            directory: agent.directory,
-            provider,
-            refresh,
-            ...(cursor ? { cursor } : {}),
-          },
-          crypto.randomUUID(),
-        );
-        if (result.outcome.status === "error") throw new Error(result.outcome.message);
-        const page = result.outcome.sessions;
-        if (!page) throw new Error("Update this machine's daemon to browse saved sessions.");
-        cacheSessions(connection, key(provider, cursor), page);
-        return page;
-      },
+      (provider, cursor) => readSessions(connection, agent, scope, provider, cursor, refresh),
       (provider) => {
         // Refresh was asked for, so it shows as loading rather than as the old list.
         const page = !refresh && cachedSessions(connection, key(provider), true);

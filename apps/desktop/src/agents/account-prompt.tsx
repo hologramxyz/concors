@@ -24,7 +24,16 @@ function dismissed(key: string) {
     return false;
   }
 }
-export function AgentAccountPrompt({ agent, canEdit }: { agent: AgentInfo; canEdit: boolean }) {
+export function AgentAccountPrompt({
+  agent,
+  canEdit,
+  onInstallPrompt,
+}: {
+  agent: AgentInfo;
+  canEdit: boolean;
+  /** Whether the prompt offers to install the CLI, which explains why the chat could not start. */
+  onInstallPrompt?: ((shown: boolean) => void) | undefined;
+}) {
   const connection = useContext(TerminalConnectionContext);
   const paneVisible = useContext(PaneVisibilityContext);
   const tabVisible = useTabVisible();
@@ -43,6 +52,7 @@ export function AgentAccountPrompt({ agent, canEdit }: { agent: AgentInfo; canEd
       agent={agent}
       canEdit={canEdit}
       connection={connection}
+      onInstallPrompt={onInstallPrompt}
     />
   );
 }
@@ -50,10 +60,12 @@ function AccountPrompt({
   agent,
   canEdit,
   connection,
+  onInstallPrompt,
 }: {
   agent: AgentInfo;
   canEdit: boolean;
   connection: DaemonConnection;
+  onInstallPrompt?: ((shown: boolean) => void) | undefined;
 }) {
   const storageKey = `concors:account-prompt:${connection.endpoint.url}:${agent.provider}`;
   const [hidden, setHidden] = useState(() => dismissed(storageKey));
@@ -249,6 +261,12 @@ function AccountPrompt({
       /* In-memory dismissal still works. */
     }
   };
+  // While the CLI is missing, or a failed check is still asking, the chat's start error is noise.
+  const installPrompt = canEdit && !hidden && (cli ? !cli.installed : cli === undefined && !!error);
+  useEffect(() => {
+    onInstallPrompt?.(installPrompt);
+  }, [installPrompt, onInstallPrompt]);
+  useEffect(() => () => onInstallPrompt?.(false), [onInstallPrompt]);
   if (!canEdit) return null;
   if (hidden)
     return (

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
+import { chooseProvider } from "./support/agents.ts";
 
 test("effective models stay selected and warm provider menus reopen without loading", async ({
   page,
@@ -39,6 +40,7 @@ test("effective models stay selected and warm provider menus reopen without load
     await seedProject(page, "Model menus", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
     const picker = page.getByRole("button", { name: "Agent and model", exact: true });
     await expect(picker).toHaveText("GPT-6 Astra");
@@ -162,6 +164,7 @@ test("an outdated agent CLI is flagged in the picker and can be updated from it"
     await seedProject(page, "Provider updates", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
     const notice = page.getByText("Codex 0.156.0 is available.", { exact: false });
     const label = page.getByRole("button", { name: "Codex 0.156.0 available", exact: true });

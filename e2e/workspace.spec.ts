@@ -2,6 +2,7 @@ import { managedHost } from "./support/managed-host.ts";
 import { seedProject } from "./support/projects.ts";
 import type { WebSocketRoute } from "@playwright/test";
 import { test, expect, signedIn } from "./signed-in.ts";
+import { chooseProvider } from "./support/agents.ts";
 
 test("two devices share workspace edits, reconnect, and switch isolated machines", async ({
   browser,
@@ -65,6 +66,7 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
     await expect(first.getByRole("button", { name: "Start terminal", exact: true })).toHaveCount(0);
     await second.getByRole("button", { name: "Pane actions", exact: true }).last().click();
     await second.getByRole("menuitemradio", { name: "Agent", exact: true }).click();
+    await chooseProvider(second);
     await expect(first.getByRole("region", { name: "Agent pane", exact: true })).toHaveCount(1);
     await expect(first.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
     await expect(second.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();

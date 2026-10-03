@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
+import { chooseProvider } from "./support/agents.ts";
 
 test("typing a slash lists the provider's commands and choosing compact compacts", async ({
   page,
@@ -14,6 +15,7 @@ test("typing a slash lists the provider's commands and choosing compact compacts
     await seedProject(page, "Slash commands", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
     const composer = page.getByRole("textbox", { name: "Message Codex" });
     await expect(composer).toBeEnabled();
 
@@ -71,6 +73,7 @@ test("/clear starts over in the same pane and the old chat can be resumed", asyn
     await seedProject(page, "Clearing chats", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
     const composer = page.getByRole("textbox", { name: "Message Codex" });
     await expect(composer).toBeEnabled();
     await composer.fill("remember the old plan");

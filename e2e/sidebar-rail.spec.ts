@@ -5,6 +5,7 @@ import { test, expect, signedIn } from "./signed-in.ts";
 import { managedHost } from "./support/managed-host.ts";
 import { seedProject } from "./support/projects.ts";
 import type { Locator, Page } from "@playwright/test";
+import { chooseProvider } from "./support/agents.ts";
 
 async function hoverControl(page: Page, control: Locator) {
   // Verify dismissal as well as hover, and avoid inheriting another tooltip's
@@ -169,6 +170,7 @@ test("collapsed agents show provider icons and live status without losing chat d
     await seedProject(page, "Rail agents", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
     const codex = page.getByRole("textbox", { name: "Message Codex", exact: true });
     await expect(codex).toBeEnabled();
     await page.getByRole("button", { name: "Collapse sidebar", exact: true }).click();
@@ -188,6 +190,7 @@ test("collapsed agents show provider icons and live status without losing chat d
     await codex.fill("Keep this draft");
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
     await expect(codex).toBeEnabled();
     await page.getByRole("button", { name: "Agent and model", exact: true }).click();
     await page.getByRole("button", { name: "Back to providers", exact: true }).click();

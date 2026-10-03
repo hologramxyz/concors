@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { AgentControlsSchema, type AgentInfo } from "../packages/protocol/src/index.ts";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
+import { chooseProvider } from "./support/agents.ts";
 
 test("chat stays uncluttered even when the provider advertises session tools and commands", async ({
   page,
@@ -49,6 +50,7 @@ test("chat stays uncluttered even when the provider advertises session tools and
     await seedProject(page, "Clean chat", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
     const composer = page.getByRole("textbox", { name: "Message Codex" });
     await expect(composer).toBeEnabled();
     await expect(page.getByRole("region", { name: "Codex account connection" })).toHaveCount(0);

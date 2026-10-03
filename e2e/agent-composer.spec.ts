@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
+import { chooseProvider } from "./support/agents.ts";
 test("agent controls, uploads, tool details, plans, sub-agents, dictation and queued prompts work together", async ({
   page,
 }) => {
@@ -40,6 +41,7 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     await seedProject(page, "Composer acceptance", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
     await page.getByRole("textbox", { name: "Message Codex" }).waitFor();
     await expect(page.getByLabel("Agent and model")).toBeEnabled();
     await page.getByLabel("Agent and model", { exact: true }).click();
