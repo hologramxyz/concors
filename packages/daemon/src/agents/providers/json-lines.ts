@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { JsonlFrameDecoder } from "./jsonl-frame-decoder.ts";
+import { killTree } from "../../host/kill-tree.ts";
 export class JsonLines {
   private pending = new Map<
     string,
@@ -67,7 +68,7 @@ export class JsonLines {
     }
     this.pending.clear();
     this.failure(error);
-    this.child.kill();
+    killTree(this.child);
   }
   write(value: unknown) {
     if (this.ended) throw new Error("Provider is disconnected");
@@ -102,7 +103,7 @@ export class JsonLines {
   }
   async close() {
     this.fail(new Error("Provider connection closed"));
-    const timer = setTimeout(() => this.child.kill("SIGKILL"), 2000);
+    const timer = setTimeout(() => killTree(this.child, "SIGKILL"), 2000);
     try {
       await this.exit;
     } finally {

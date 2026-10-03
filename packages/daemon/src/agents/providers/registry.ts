@@ -24,6 +24,8 @@ import {
   type ProviderStatus,
 } from "@concors/protocol";
 import { resolveTerminalCommand } from "../../terminal/profiles.ts";
+import { withPath } from "../../terminal/environment.ts";
+import { killTree } from "../../host/kill-tree.ts";
 import { shareClaudeHome } from "./claude-home.ts";
 import type { launch } from "./launch.ts";
 import { ProviderVersions, type VersionTarget } from "./versions.ts";
@@ -105,11 +107,10 @@ export class ProviderRegistry {
       return base ? Object.entries(this.credentialOverlay(base)) : [];
     });
     this.shareClaudeHome(Object.fromEntries(credentials)["CLAUDE_CONFIG_DIR"]);
-    return {
-      ...process.env,
-      ...Object.fromEntries(credentials),
-      PATH: [...bins, withRuntime(process.env["PATH"])].join(delimiter),
-    };
+    return withPath(
+      { ...process.env, ...Object.fromEntries(credentials) },
+      [...bins, withRuntime(process.env["PATH"])].join(delimiter),
+    );
   }
   /** A subscription runs its engine's regular CLI; resolve binaries from the base configuration. */
   baseId(config: ProviderConfig): string {
@@ -297,11 +298,10 @@ export class ProviderRegistry {
   }
   private env(config: ProviderConfig): NodeJS.ProcessEnv {
     const bin = join(this.directory, this.baseId(config), "node_modules", ".bin");
-    return {
-      ...process.env,
-      ...config.env,
-      PATH: bin + delimiter + withRuntime(config.env?.["PATH"] ?? process.env["PATH"]),
-    };
+    return withPath(
+      { ...process.env, ...config.env },
+      bin + delimiter + withRuntime(config.env?.["PATH"] ?? process.env["PATH"]),
+    );
   }
   private argv(config: ProviderConfig): string[] {
     const preset = providerPresets.find((p) => p.id === config.id);
@@ -528,7 +528,7 @@ export class ProviderRegistry {
     const preset = providerPresets.find((p) => p.id === id);
     if (!preset?.install)
       throw new Error("Use the provider's installation guide, then configure its executable here.");
-    const env = { ...process.env, PATH: withRuntime(process.env["PATH"]) };
+    const env = withPath(process.env, withRuntime(process.env["PATH"]));
     const npm = resolveTerminalCommand("npm", [], process.platform, env);
     const prefix = join(this.directory, id);
     mkdirSync(prefix, { recursive: true, mode: 0o700 });
@@ -555,7 +555,7 @@ export class ProviderRegistry {
     child.stderr?.resume();
     const timer = setTimeout(() => {
       job.error = "Installation timed out. Check the machine's network and retry.";
-      child.kill();
+      killTree(child);
     }, 300000);
     child.once("error", () => {
       clearTimeout(timer);
@@ -587,6 +587,7 @@ export class ProviderRegistry {
   }
   close() {
     this.versions?.close();
-    for (const job of this.jobs.values()) if (job.status === "installing") job.child?.kill();
+    for (const job of this.jobs.values())
+      if (job.status === "installing" && job.child) killTree(job.child);
   }
 }

@@ -9,6 +9,7 @@ import { afterEach, expect, it } from "vitest";
 import { DaemonConnection, describeDaemonEndpoint } from "@concors/daemon-client";
 import type { TerminalEvent, TerminalOperation, WorkspaceOperation } from "@concors/protocol";
 import { countHostSessions } from "../managed/sessions.ts";
+import { defaultShellIsPowerShell } from "../terminal/testing/shell.ts";
 import { createPersistentGateway } from "./gateway.ts";
 import { ensureSessionHost, stopSessionHost } from "./session-host.ts";
 
@@ -142,9 +143,11 @@ it("preserves a real process, shell environment, cwd, screen, and bindings acros
   await terminal(c, { kind: "claim", sessionId, cols: 80, rows: 24 });
   const quote = (value: string) => `"${value}"`;
   const command =
-    process.platform === "win32"
-      ? `set CONCORS_CONTINUITY=kept\r\ncd /d ${quote(cwd)}\r\n${quote(process.execPath)} ${quote(script)}\r\n`
-      : `export CONCORS_CONTINUITY=kept\rcd ${quote(cwd)}\r${quote(process.execPath)} ${quote(script)}\r`;
+    process.platform !== "win32"
+      ? `export CONCORS_CONTINUITY=kept\rcd ${quote(cwd)}\r${quote(process.execPath)} ${quote(script)}\r`
+      : defaultShellIsPowerShell()
+        ? `$env:CONCORS_CONTINUITY = "kept"\rcd ${quote(cwd)}\r& ${quote(process.execPath)} ${quote(script)}\r`
+        : `set CONCORS_CONTINUITY=kept\r\ncd /d ${quote(cwd)}\r\n${quote(process.execPath)} ${quote(script)}\r\n`;
   c.sendTerminalInput(sessionId, command);
   const state = async (): Promise<{ pid: number; n: number; cwd: string; env: string } | null> => {
     try {

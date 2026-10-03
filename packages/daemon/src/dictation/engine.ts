@@ -101,6 +101,7 @@ function spawnSpeechWorker(): ChildProcess {
   return spawn(process.execPath, args, {
     stdio: ["ignore", "ignore", "inherit", "ipc"],
     serialization: "advanced",
+    windowsHide: true,
   });
 }
 
