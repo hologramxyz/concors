@@ -360,6 +360,12 @@ function Pane({
     renameRef.current = value;
     setRenaming(value);
   };
+  // The menu goes with its tab. Opened on the shown tab while a new one launches (when every item
+  // is disabled), it otherwise outlived the switch: still disabled, for a pane nobody could see,
+  // and with its anchor hidden it jumped to the window's corner.
+  const tabVisible = useTabVisible();
+  const [menuOpen, setMenuOpen] = useState(false);
+  if (menuOpen && !tabVisible) setMenuOpen(false);
   const agent = useAgents().find((agent) => agent.id === node.sessionId);
   const profiles = useTerminalProfiles();
   const options = paneProfiles(profiles.profiles);
@@ -449,7 +455,7 @@ function Pane({
             {title}
           </span>
         )}
-        <DropdownMenu>
+        <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
           <DropdownMenuTrigger
             aria-label="Pane actions"
             className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
