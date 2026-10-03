@@ -62,3 +62,55 @@ test("tabs are numbered per workspace and keep custom names across pane changes 
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("closing a tab still works when a new pane's session started a moment before", async ({
+  page,
+}) => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-tab-close-race-"));
+  // A new pane starts its own session as soon as it appears. Hold the workspace update that
+  // records which session the pane shows, so the tab is closed from the layout as it looked just
+  // before; that update changed nothing a tab close depends on.
+  let armed = false;
+  let holding = false;
+  const held: string[] = [];
+  await page.routeWebSocket("ws://127.0.0.1:7429/ws", (socket) => {
+    const server = socket.connectToServer();
+    socket.onMessage((raw) => {
+      const event = JSON.parse(String(raw)) as { type?: string; operation?: { kind?: string } };
+      if (armed && event.type === "terminal.request" && event.operation?.kind === "start")
+        holding = true;
+      server.send(raw);
+    });
+    server.onMessage((raw) => {
+      const type = (JSON.parse(String(raw)) as { type?: string }).type;
+      if (holding && type === "workspace.snapshot") held.push(String(raw));
+      else if (holding && type === "workspace.result") {
+        // The answer to the close: deliver what was held first, in the order it was sent.
+        holding = false;
+        for (const message of held.splice(0)) socket.send(message);
+        socket.send(raw);
+      } else socket.send(raw);
+    });
+  });
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Closing while starting", directory);
+    const tabs = page.getByLabel("Project tabs", { exact: true });
+    const labels = () => tabs.locator("[data-tab-id] > button:first-child").allTextContents();
+    await expect.poll(labels).toEqual(["Tab 1"]);
+    armed = true;
+    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
+    await expect(tabs.getByRole("button", { name: "Tab 2", exact: true })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect.poll(() => held.length).toBeGreaterThan(0);
+    await tabs.getByRole("button", { name: "Close Tab 1 tab", exact: true }).click();
+    await expect.poll(labels).toEqual(["Tab 2"]);
+    await expect(page.getByText("Project changed on another client")).toHaveCount(0);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

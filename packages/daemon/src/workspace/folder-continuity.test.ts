@@ -92,12 +92,12 @@ it("follows only the original shell and saves open files to their original folde
     expect(store.snapshot().projects[0]).toMatchObject({
       name: "second",
       directory: second,
-      version: 2,
+      version: 1,
       followPaneId: paneId,
     });
     expect(store.terminal(sessionId).directory).toBe(first);
-    // Directory observations must not invalidate an in-flight layout command.
-    run({ kind: "tab.rename", projectId, tabId, expectedVersion: 2, name: "Still running" });
+    // Neither the session start nor directory observations may invalidate a layout command.
+    run({ kind: "tab.rename", projectId, tabId, expectedVersion: 1, name: "Still running" });
     store.close();
     store = new WorkspaceStore(database);
     expect(
