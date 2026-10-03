@@ -106,9 +106,11 @@ it("preserves a real process, shell environment, cwd, screen, and bindings acros
   await mkdir(cwd);
   const probe = join(directory, "probe.json");
   const script = join(directory, "counter.cjs");
+  // The probe is replaced in one rename: a plain rewrite empties the file first, and a read caught
+  // in between parsed nothing (a release failed on "expected undefined to be <pid>").
   await writeFile(
     script,
-    `const fs=require('node:fs'); let n=0; setInterval(()=>{const s={pid:process.pid,n:++n,cwd:process.cwd(),env:process.env.CONCORS_CONTINUITY};fs.writeFileSync(${JSON.stringify(probe)},JSON.stringify(s));process.stdout.write('HOST_COUNTER:'+n+'\\r\\n')},100);`,
+    `const fs=require('node:fs'); let n=0; setInterval(()=>{const s={pid:process.pid,n:++n,cwd:process.cwd(),env:process.env.CONCORS_CONTINUITY};fs.writeFileSync(${JSON.stringify(probe + ".tmp")},JSON.stringify(s));fs.renameSync(${JSON.stringify(probe + ".tmp")},${JSON.stringify(probe)});process.stdout.write('HOST_COUNTER:'+n+'\\r\\n')},100);`,
   );
   const first = await gateway(directory);
   expect(await countHostSessions(await ensureSessionHost(directory, launch))).toBe(0);
