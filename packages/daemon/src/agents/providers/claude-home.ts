@@ -1,6 +1,7 @@
 import {
   appendFileSync,
   cpSync,
+  linkSync,
   lstatSync,
   mkdirSync,
   readFileSync,
@@ -28,8 +29,16 @@ import { join, resolve } from "node:path";
  * under and refuses a marketplace recorded under another directory, so a shared plugin directory
  * breaks in every account but the one that installed it.
  *
- * Everything here is best effort. An entry that cannot be linked (a filesystem without symlinks,
- * a permission problem) leaves that account on its own copy, as before.
+ * Everything here is best effort, and nothing of the account's is moved until the link that
+ * replaces it exists: an entry that cannot be linked (a filesystem without links, a permission
+ * problem) leaves that account on its own copy, as before.
+ *
+ * Windows lets anyone make a directory junction but a file symlink only with Developer Mode or as
+ * administrator, so a file that cannot be symlinked is hard-linked instead: one file under both
+ * names, which needs both directories on one volume (the usual case, both under the home). That
+ * still gives every account the person's settings and instructions, where leaving or copying the
+ * file would not. A hard link lasts only until a program replaces the file rather than writing
+ * into it; the next launch then sees two copies and treats them as on first sharing.
  */
 
 /** Created in the machine's directory when missing, so a new account never starts its own. */
@@ -69,17 +78,48 @@ function share(home: string, shared: string, name: string, directory: boolean, a
   if (directory) mkdirSync(target, { recursive: true, mode: 0o700 });
   else if (!lstat(target)) {
     if (!current) return;
+    // The account's copy becomes the machine's. A hard link needs the file in place first, so
+    // it moves before linking, and moves back if no link can be made.
     mkdirSync(shared, { recursive: true, mode: 0o700 });
     move(link, target);
+    try {
+      linkEntry(target, link, false);
+    } catch (error) {
+      move(target, link);
+      throw error;
+    }
+    return;
   }
-  if (lstat(link)) {
-    const existing = lstat(target);
-    if (directory && current?.isDirectory() && existing?.isDirectory())
+  const existing = lstat(target);
+  if (current && !directory && sameFile(link, target)) return;
+  // Made beside the entry and renamed over it once the entry is out of the way.
+  const pending = join(home, `.concors-link-${name}`);
+  if (lstat(pending)) unlinkSync(pending);
+  linkEntry(target, pending, directory);
+  if (current) {
+    if (directory && current.isDirectory() && existing?.isDirectory())
       mergeDirectory(link, target, join(aside, name));
-    else if (!directory && current?.isFile() && APPENDABLE.has(name)) appendFile(link, target);
+    else if (!directory && current.isFile() && APPENDABLE.has(name)) appendFile(link, target);
     else setAside(link, join(aside, name));
   }
-  symlinkSync(target, link, directory ? "junction" : "file");
+  renameSync(pending, link);
+}
+
+function linkEntry(target: string, path: string, directory: boolean) {
+  if (directory) return symlinkSync(target, path, "junction");
+  try {
+    symlinkSync(target, path, "file");
+  } catch {
+    linkSync(target, path);
+  }
+}
+
+/** A hard link from an earlier launch: both names are one file. */
+function sameFile(a: string, b: string): boolean {
+  // Windows file ids exceed 2^53, so they are compared as bigints.
+  const first = lstatSync(a, { bigint: true });
+  const second = lstatSync(b, { bigint: true });
+  return first.isFile() && first.dev === second.dev && first.ino === second.ino;
 }
 
 /** Moves every entry across; a name the machine already has keeps the machine's copy. */

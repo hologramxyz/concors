@@ -6,16 +6,38 @@ import {
   readdir,
   readlink,
   rm,
+  stat,
   symlink,
   writeFile,
 } from "node:fs/promises";
+import type * as NodeFs from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { shareClaudeHome, UNSHARED_DIRECTORY } from "./claude-home.ts";
+
+// Windows without Developer Mode refuses file symlinks; some filesystems refuse hard links too.
+const refuse = vi.hoisted(() => ({ fileSymlinks: false, hardLinks: false }));
+vi.mock("node:fs", async (original) => {
+  const fs = await original<typeof NodeFs>();
+  const denied = (syscall: string) =>
+    Object.assign(new Error(`EPERM: operation not permitted, ${syscall}`), { code: "EPERM" });
+  return {
+    ...fs,
+    symlinkSync: (...args: Parameters<typeof fs.symlinkSync>) => {
+      if (refuse.fileSymlinks && args[2] === "file") throw denied("symlink");
+      return fs.symlinkSync(...args);
+    },
+    linkSync: (...args: Parameters<typeof fs.linkSync>) => {
+      if (refuse.hardLinks) throw denied("link");
+      return fs.linkSync(...args);
+    },
+  };
+});
 
 const directories: string[] = [];
 afterEach(async () => {
+  refuse.fileSymlinks = refuse.hardLinks = false;
   await Promise.all(directories.map((p) => rm(p, { recursive: true, force: true })));
   directories.length = 0;
 });
@@ -116,4 +138,60 @@ it("does nothing when the account already is the machine's directory", async () 
   await mkdir(join(shared, "projects"), { recursive: true });
   shareClaudeHome(shared, shared);
   expect(await isLink(join(shared, "projects"))).toBe(false);
+});
+
+/** Both paths name one file, as a hard link leaves them. */
+const sameFile = async (a: string, b: string) =>
+  (await stat(a, { bigint: true })).ino === (await stat(b, { bigint: true })).ino;
+
+async function populated() {
+  const { shared, home } = await homes();
+  await mkdir(shared, { recursive: true });
+  await writeFile(join(shared, "settings.json"), "machine settings");
+  await writeFile(join(shared, "history.jsonl"), '{"display":"one"}\n');
+  await writeFile(join(home, "settings.json"), "account settings");
+  await writeFile(join(home, "history.jsonl"), '{"display":"two"}\n');
+  await writeFile(join(home, "CLAUDE.md"), "account instructions");
+  return { shared, home };
+}
+
+it("hard-links files where symlinks are refused, and later launches change nothing", async () => {
+  refuse.fileSymlinks = true;
+  const { shared, home } = await populated();
+
+  for (let launch = 0; launch < 3; launch++) shareClaudeHome(home, shared);
+
+  for (const name of ["settings.json", "history.jsonl", "CLAUDE.md"])
+    expect(await sameFile(join(home, name), join(shared, name))).toBe(true);
+  expect(await readFile(join(home, "settings.json"), "utf8")).toBe("machine settings");
+  expect(await readFile(join(home, "CLAUDE.md"), "utf8")).toBe("account instructions");
+  expect(await readFile(join(home, "history.jsonl"), "utf8")).toBe(
+    '{"display":"one"}\n{"display":"two"}\n',
+  );
+  // Directories are still linked, and the one conflict was set aside once, not once per launch.
+  expect(await isLink(join(home, "projects"))).toBe(true);
+  const runs = await readdir(join(home, UNSHARED_DIRECTORY));
+  expect(runs).toHaveLength(1);
+  const aside = join(home, UNSHARED_DIRECTORY, runs[0] ?? "");
+  expect(await readFile(join(aside, "settings.json"), "utf8")).toBe("account settings");
+  // An edit on either side is the other side's too.
+  await writeFile(join(home, "CLAUDE.md"), "edited in the account");
+  expect(await readFile(join(shared, "CLAUDE.md"), "utf8")).toBe("edited in the account");
+});
+
+it("leaves an account's files in place when no link can be made", async () => {
+  refuse.fileSymlinks = refuse.hardLinks = true;
+  const { shared, home } = await populated();
+
+  for (let launch = 0; launch < 3; launch++) shareClaudeHome(home, shared);
+
+  expect(await readFile(join(home, "settings.json"), "utf8")).toBe("account settings");
+  expect(await readFile(join(home, "history.jsonl"), "utf8")).toBe('{"display":"two"}\n');
+  expect(await readFile(join(home, "CLAUDE.md"), "utf8")).toBe("account instructions");
+  expect(await readFile(join(shared, "settings.json"), "utf8")).toBe("machine settings");
+  expect(await readFile(join(shared, "history.jsonl"), "utf8")).toBe('{"display":"one"}\n');
+  await expect(lstat(join(shared, "CLAUDE.md"))).rejects.toThrow();
+  await expect(lstat(join(home, UNSHARED_DIRECTORY))).rejects.toThrow();
+  expect((await readdir(home)).filter((name) => name.startsWith(".concors-link"))).toEqual([]);
+  expect(await isLink(join(home, "projects"))).toBe(true);
 });

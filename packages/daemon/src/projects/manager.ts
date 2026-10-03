@@ -7,6 +7,7 @@ import { isAbsolute, dirname, basename, join, sep } from "node:path";
 import type { ProjectRequest, ProjectResult, ProjectSetup } from "@concors/protocol";
 import { nextWorkspaceTabName } from "@concors/protocol";
 import type { WorkspaceStore } from "../workspace/store.ts";
+import { killTree } from "../host/kill-tree.ts";
 
 export function validateRepository(repository: string): void {
   if (isAbsolute(repository)) return; // Local repositories are useful without internet access.
@@ -272,6 +273,7 @@ export class ProjectManager {
         {
           shell: false,
           detached: process.platform !== "win32",
+          windowsHide: true,
           stdio: ["ignore", "ignore", "pipe"],
           env: {
             ...process.env,
@@ -306,12 +308,8 @@ export class ProjectManager {
     const child = this.#children.get(id);
     if (!child?.pid) return;
     const pid = child.pid;
-    if (process.platform === "win32") {
-      const killer = spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
-        stdio: "ignore",
-      });
-      killer.on("error", () => child.kill());
-    } else {
+    if (process.platform === "win32") killTree(child);
+    else {
       try {
         process.kill(-child.pid, "SIGTERM");
       } catch {

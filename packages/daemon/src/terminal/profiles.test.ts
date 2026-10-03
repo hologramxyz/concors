@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync, chmodSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { expect, it } from "vitest";
-import { resolveProfile } from "./profiles.ts";
+import { defaultShell, resolveProfile } from "./profiles.ts";
 
 it("resolves installed agent executables and rejects missing profiles", () => {
   const directory = mkdtempSync(join(tmpdir(), "concors-profiles-"));
@@ -42,4 +42,41 @@ it("routes Windows npm CLI shims through cmd with escaped metacharacters", () =>
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+it("opens PowerShell on Windows, preferring PowerShell 7, and cmd only without either", () => {
+  const pwsh = "C:\\Program Files\\PowerShell\\7\\pwsh.exe";
+  const windowsPowerShell = "D:\\Win\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
+  const env = {
+    Path: "C:\\Windows\\system32;C:\\Program Files\\PowerShell\\7\\",
+    SystemRoot: "D:\\Win",
+    ComSpec: "D:\\Win\\system32\\cmd.exe",
+  };
+  const installed =
+    (...files: string[]) =>
+    (path: string) =>
+      files.includes(path);
+  expect(defaultShell("win32", env, installed(pwsh, windowsPowerShell))).toEqual({
+    command: pwsh,
+    args: ["-NoLogo"],
+  });
+  expect(defaultShell("win32", env, installed(windowsPowerShell))).toEqual({
+    command: windowsPowerShell,
+    args: ["-NoLogo"],
+  });
+  expect(defaultShell("win32", env, installed())).toEqual({
+    command: "D:\\Win\\system32\\cmd.exe",
+    args: [],
+  });
+  // Variable names are matched regardless of case, as Windows does.
+  const builtIn = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
+  expect(
+    defaultShell("win32", { PATH: "C:\\Program Files\\PowerShell\\7" }, installed(pwsh)),
+  ).toMatchObject({ command: pwsh });
+  expect(defaultShell("win32", {}, installed(builtIn))).toMatchObject({ command: builtIn });
+  // Elsewhere the person's own shell, and nothing is probed.
+  expect(defaultShell("linux", { SHELL: "/usr/bin/fish" }, installed(pwsh))).toEqual({
+    command: "/usr/bin/fish",
+    args: [],
+  });
+  expect(defaultShell("darwin", {}, installed())).toMatchObject({ command: "/bin/sh" });
 });
