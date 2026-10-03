@@ -31,6 +31,7 @@ import {
   type WorkspaceProject,
   type WorkspaceTab,
 } from "@concors/protocol";
+import { typingOutsidePanes } from "./typing-outside-panes";
 
 const PROFILE_LABELS: Record<PaneProfile, string> = {
   shell: "Terminal",
@@ -109,6 +110,10 @@ export function PaneLayout(props: Props) {
     const focus = () => {
       const focused = document.activeElement;
       if (focused?.closest(OPEN_OVERLAY)) return;
+      if (typingOutsidePanes(focused)) {
+        settle();
+        return;
+      }
       const focusedPane = focused?.closest<HTMLElement>("[data-pane-id]");
       if (!initial && focusedPane && focusedPane !== pane && focusedPane.getClientRects().length) {
         settle();
@@ -209,7 +214,10 @@ export function PaneLayout(props: Props) {
       // animation when a quick agent's composer arrives; waiting for it then never saw the input
       // again, and a later change in the pane moved focus from whatever had it to the pane.
       if (focused?.closest(OPEN_OVERLAY)) return;
-      if (!initial && focusedPane && focusedPane !== pane && focusedPane.getClientRects().length) {
+      if (
+        typingOutsidePanes(focused) ||
+        (!initial && focusedPane && focusedPane !== pane && focusedPane.getClientRects().length)
+      ) {
         observer.disconnect();
         return;
       }
