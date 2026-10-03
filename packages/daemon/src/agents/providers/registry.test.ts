@@ -112,6 +112,57 @@ it("does not execute npx or download a preset while checking installed providers
     installStatus: "idle",
   });
 });
+it("installs an agent CLI's newest release and an npx adapter's audited version", async () => {
+  const root = await mkdtemp(join(tmpdir(), "concors-provider-install-"));
+  directories.push(root);
+  // A stand-in npm that records its arguments in the prefix it was asked to install into.
+  const script = join(root, "npm.cjs");
+  await writeFile(
+    script,
+    "const a=process.argv.slice(2);require('fs').writeFileSync(require('path').join(a[a.indexOf('--prefix')+1],'npm-args.json'),JSON.stringify(a));",
+  );
+  const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";
+  await writeFile(
+    join(root, process.platform === "win32" ? "npm.cmd" : "npm"),
+    process.platform === "win32"
+      ? `@echo off\r\n"${process.execPath}" "${script}" %*\r\n`
+      : `#!/bin/sh\nexec ${quote(process.execPath)} ${quote(script)} "$@"\n`,
+    { mode: 0o755 },
+  );
+  vi.stubEnv("PATH", root);
+  const providers = join(root, "providers");
+  const registry = new ProviderRegistry(providers, join(root, "claude-home"));
+  const install = async (id: string) => {
+    const result = registry.request(
+      ProviderRequestSchema.parse({
+        type: "provider.request",
+        requestId: randomUUID(),
+        operation: { kind: "install", id },
+      }),
+    );
+    if (result.outcome.status !== "ok") throw new Error(result.outcome.message);
+    await vi.waitFor(
+      () => expect(registry.statuses().find((p) => p.id === id)?.installStatus).toBe("installed"),
+      { timeout: 10_000 },
+    );
+    return JSON.parse(await readFile(join(providers, id, "npm-args.json"), "utf8")) as string[];
+  };
+  const flags = ["--no-audit", "--no-fund", "--save-exact"];
+  expect(await install("codex")).toEqual([
+    "install",
+    "--prefix",
+    join(providers, "codex"),
+    ...flags,
+    "@openai/codex@latest",
+  ]);
+  expect(await install("acp-gemini")).toEqual([
+    "install",
+    "--prefix",
+    join(providers, "acp-gemini"),
+    ...flags,
+    "@google/gemini-cli@0.52.0",
+  ]);
+});
 it("preserves argv boundaries and credentials for a configured executable", async () => {
   const root = await mkdtemp(join(tmpdir(), "concors-provider-argv-"));
   directories.push(root);
