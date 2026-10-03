@@ -3,6 +3,7 @@ import { Readable, Writable } from "node:stream";
 import { readFile, writeFile, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import spawn from "cross-spawn";
+import { killTree } from "../../host/kill-tree.ts";
 import {
   ClientSideConnection,
   ndJsonStream,
@@ -181,12 +182,12 @@ export class AcpProvider extends EventProvider {
       },
       waitForTerminalExit: async (p) => this.terminal(p.sessionId, p.terminalId).done,
       killTerminal: async (p) => {
-        this.terminal(p.sessionId, p.terminalId).child.kill();
+        killTree(this.terminal(p.sessionId, p.terminalId).child);
         return {};
       },
       releaseTerminal: async (p) => {
         const entry = this.terminal(p.sessionId, p.terminalId);
-        entry.child.kill();
+        killTree(entry.child);
         this.terminals.delete(p.terminalId);
         return {};
       },
@@ -794,12 +795,12 @@ export class AcpProvider extends EventProvider {
   }
   async close() {
     this.closed = true;
-    for (const entry of this.terminals.values()) entry.child.kill();
+    for (const entry of this.terminals.values()) killTree(entry.child);
     const child = this.child;
     if (!child || child.exitCode !== null || child.signalCode !== null) return;
     const exit = new Promise<void>((done) => child.once("close", () => done()));
-    child.kill();
-    const timer = setTimeout(() => child.kill("SIGKILL"), 2000);
+    killTree(child);
+    const timer = setTimeout(() => killTree(child, "SIGKILL"), 2000);
     try {
       await exit;
     } finally {

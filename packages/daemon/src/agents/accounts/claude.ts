@@ -1,6 +1,7 @@
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { stripVTControlCharacters } from "node:util";
 import { z } from "zod";
+import { killTree } from "../../host/kill-tree.ts";
 import { launch } from "../providers/launch.ts";
 import { browserUrl, type AccountBackend, type AccountChallenge } from "./backend.ts";
 
@@ -27,13 +28,13 @@ export class ClaudeAccount implements AccountBackend {
     const output = await new Promise<string>((resolve, reject) => {
       let text = "";
       const timer = setTimeout(() => {
-        child.kill();
+        killTree(child);
         reject(new Error("Claude account check timed out"));
       }, 10000);
       child.stdout.on("data", (data: Buffer) => {
         text += data.toString();
         if (text.length > 64000) {
-          child.kill();
+          killTree(child);
           reject(new Error("Invalid Claude account response"));
         }
       });
@@ -69,7 +70,7 @@ export class ClaudeAccount implements AccountBackend {
       let output = "";
       let found = false;
       const timer = setTimeout(() => {
-        child.kill();
+        killTree(child);
         reject(new Error("Claude did not provide a sign-in link. Try again."));
       }, 20000);
       const read = (data: Buffer) => {
@@ -98,7 +99,7 @@ export class ClaudeAccount implements AccountBackend {
               "Sign in in your browser. If it shows an authorization code, paste it below.",
           });
         } catch {
-          child.kill();
+          killTree(child);
           reject(new Error("Could not read Claude's sign-in link"));
         }
       };
@@ -134,12 +135,12 @@ export class ClaudeAccount implements AccountBackend {
         (child) =>
           new Promise<void>((resolve) => {
             if (child.exitCode !== null || child.signalCode !== null) return resolve();
-            const timer = setTimeout(() => child.kill("SIGKILL"), 2000);
+            const timer = setTimeout(() => killTree(child, "SIGKILL"), 2000);
             child.once("close", () => {
               clearTimeout(timer);
               resolve();
             });
-            child.kill();
+            killTree(child);
           }),
       ),
     );

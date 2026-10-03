@@ -1,6 +1,50 @@
 import { accessSync, constants, readFileSync, statSync } from "node:fs";
-import { delimiter, extname, join, resolve } from "node:path";
+import { delimiter, extname, join, resolve, win32 } from "node:path";
 import type { TerminalProfile, AgentProviderId } from "@concors/protocol";
+
+function isFile(path: string): boolean {
+  try {
+    return statSync(path).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/** Windows variable names ignore case, and a copied environment keeps whichever spelling it had. */
+function variable(env: NodeJS.ProcessEnv, name: string): string | undefined {
+  return (
+    env[name] ?? Object.entries(env).find(([key]) => key.toUpperCase() === name.toUpperCase())?.[1]
+  );
+}
+
+/**
+ * The shell a new terminal opens: the person's `SHELL`, and on Windows PowerShell rather than
+ * cmd.exe, as Windows Terminal and VS Code open. PowerShell 7 (`pwsh`) when it is installed,
+ * else the Windows PowerShell every Windows ships; cmd.exe only where neither can be found.
+ */
+export function defaultShell(
+  platform: NodeJS.Platform,
+  env: NodeJS.ProcessEnv,
+  exists: (path: string) => boolean = isFile,
+): { command: string; args: string[] } {
+  if (platform !== "win32") return { command: env["SHELL"] ?? "/bin/sh", args: [] };
+  const pwsh = (variable(env, "PATH") ?? "")
+    .split(";")
+    .filter(Boolean)
+    .map((directory) => win32.join(directory, "pwsh.exe"))
+    .find(exists);
+  const windowsPowerShell = win32.join(
+    variable(env, "SystemRoot") ?? "C:\\Windows",
+    "System32",
+    "WindowsPowerShell",
+    "v1.0",
+    "powershell.exe",
+  );
+  const powerShell = pwsh ?? (exists(windowsPowerShell) ? windowsPowerShell : undefined);
+  // -NoLogo drops the banner (and Windows PowerShell's upgrade advert) from every new tab.
+  if (powerShell) return { command: powerShell, args: ["-NoLogo"] };
+  return { command: variable(env, "ComSpec") ?? "cmd.exe", args: [] };
+}
 
 export function resolveProfile(
   profile: TerminalProfile | AgentProviderId,
@@ -8,14 +52,7 @@ export function resolveProfile(
   env = process.env,
   resume = false,
 ): { command: string; args: string[] | string } {
-  if (profile === "shell")
-    return {
-      command:
-        platform === "win32"
-          ? (env["ComSpec"] ?? env["COMSPEC"] ?? "cmd.exe")
-          : (env["SHELL"] ?? "/bin/sh"),
-      args: [],
-    };
+  if (profile === "shell") return defaultShell(platform, env);
   // Open the provider's conversation picker; never guess a conversation or replay a prompt.
   const args = resume
     ? profile === "codex"

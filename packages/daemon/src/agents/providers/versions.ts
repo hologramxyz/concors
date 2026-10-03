@@ -11,6 +11,7 @@ import { closeSync, openSync, readSync, realpathSync } from "node:fs";
 import { basename, dirname, sep } from "node:path";
 import spawn from "cross-spawn";
 import type { ProviderVersion } from "@concors/protocol";
+import { killTree } from "../../host/kill-tree.ts";
 
 /** How often installed versions and the registry are re-read while the daemon runs. */
 const CHECK_INTERVAL_MS = 30 * 60_000;
@@ -117,7 +118,7 @@ export const runCommand: Run = (argv, env, timeoutMs) =>
     };
     child.stdout?.on("data", collect);
     child.stderr?.on("data", collect);
-    const timer = setTimeout(() => child.kill(), timeoutMs);
+    const timer = setTimeout(() => killTree(child), timeoutMs);
     child.once("error", () => {
       clearTimeout(timer);
       resolve({ code: null, output });

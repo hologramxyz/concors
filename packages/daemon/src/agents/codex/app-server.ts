@@ -3,6 +3,7 @@ import type { AgentPlanUsage } from "@concors/protocol";
 import { object } from "../providers/contract.ts";
 import { readCodexPlanUsage } from "../usage/codex-usage.ts";
 import { AGENT_INSTRUCTIONS } from "../instructions.ts";
+import { killTree } from "../../host/kill-tree.ts";
 import { z } from "zod";
 import { codexMcp } from "../providers/mcp.ts";
 import type { McpServer } from "@concors/protocol";
@@ -433,14 +434,14 @@ export class CodexAppServer {
     this.#buffer = "";
     for (const listener of this.#failures) listener(error);
     this.#failures.clear();
-    if (this.#child.exitCode === null && !this.#child.killed) this.#child.kill();
+    if (this.#child.exitCode === null && !this.#child.killed) killTree(this.#child);
   }
   close(): Promise<void> {
     this.#closing ??= (async () => {
       this.fail(new Error("Codex connection closed"));
       this.#child.stdin.end();
       const timer = setTimeout(() => {
-        this.#child.kill("SIGKILL");
+        killTree(this.#child, "SIGKILL");
       }, 2000);
       try {
         await this.#exit;
