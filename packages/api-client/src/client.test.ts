@@ -351,3 +351,46 @@ describe("account GitHub API", () => {
     expect(tokens.get()).toBe("concors-session");
   });
 });
+
+describe("ApiClient desktop updates", () => {
+  // What production answers a Mac on 0.6.18; a closed format list once discarded it.
+  const MAC_UPDATE = {
+    version: "0.6.19",
+    pub_date: "2026-10-03T02:13:00.437Z",
+    notes: "Notes",
+    url: "https://api.concors.dev/api/v1/releases/desktop/assets/Concors-0.6.19-aarch64.dmg",
+    signature: "",
+    format: "dmg",
+    size: 59119635,
+    sha256: "2d1a94216e316fc8af081e7204a1b7f0a1dbcb1f5a6ae07f9dbc9fda46bbecfa",
+  };
+
+  it.each(["dmg", "nsis", "pacman"])("accepts a %s update", async (format) => {
+    const fetch = vi.fn(async () => json({ ...MAC_UPDATE, format }));
+    const { api } = client(fetch as unknown as typeof globalThis.fetch);
+    await expect(
+      api.getDesktopUpdate({
+        version: "0.6.18",
+        platform: "darwin",
+        arch: "aarch64",
+        formats: [format],
+      }),
+    ).resolves.toMatchObject({ version: "0.6.19", format, publishedAt: MAC_UPDATE.pub_date });
+    expect(String(fetch.mock.calls[0]?.[0 as never])).toContain(
+      `/api/v1/releases/desktop/darwin/aarch64/0.6.18?formats=${format}`,
+    );
+  });
+
+  it("reads nothing to offer as no update", async () => {
+    const fetch = vi.fn(async () => new Response(null, { status: 204 }));
+    const { api } = client(fetch as unknown as typeof globalThis.fetch);
+    await expect(
+      api.getDesktopUpdate({
+        version: "0.6.19",
+        platform: "darwin",
+        arch: "aarch64",
+        formats: ["dmg"],
+      }),
+    ).resolves.toBeNull();
+  });
+});

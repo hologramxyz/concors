@@ -62,7 +62,13 @@ export const DesktopUpdateSchema = z.object({
   notes: z.string(),
   url: z.string().min(1),
   signature: z.string(),
-  format: z.enum(["tarball", "pacman", "appimage"]),
+  /**
+   * The release format (`pacman`, `tarball`, `appimage`, `dmg`, `nsis`, …). Any name is accepted:
+   * the control plane only offers formats the caller asked for, and the native side refuses to
+   * install one its installation cannot apply. A closed list here once made every Mac discard its
+   * `dmg` update as an invalid response, so no badge appeared.
+   */
+  format: z.string().min(1),
   size: z.number().int().positive(),
   sha256: z.string().regex(/^[0-9a-f]{64}$/),
 });
