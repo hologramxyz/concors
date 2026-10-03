@@ -156,6 +156,14 @@ it("preserves a real process, shell environment, cwd, screen, and bindings acros
       return null;
     }
   };
+  // The script rewrites the probe every 100 ms, and a rewrite empties the file first: a single read
+  // can catch it half written (a release failed on "expected undefined to be <pid>"). Checks that
+  // read it once wait for a whole report instead.
+  const report = async () => {
+    let read: Awaited<ReturnType<typeof state>> = null;
+    await expect.poll(async () => (read = await state())).not.toBeNull();
+    return read!;
+  };
   // The probe reports process.cwd() exactly as the OS spells it, which need not match the path we
   // created: macOS puts the temp directory behind the /var → /private/var symlink, and Windows may
   // hand the shell an 8.3 short name (RUNNER~1). Canonicalize both sides before comparing.
@@ -166,7 +174,7 @@ it("preserves a real process, shell environment, cwd, screen, and bindings acros
   await expect
     .poll(async () => canonical(await state()), { timeout: 10_000 })
     .toMatchObject({ cwd: await realpath(cwd), env: "kept" });
-  const before = (await state())!;
+  const before = await report();
   const host = await ensureSessionHost(directory, launch);
   expect(await countHostSessions(host)).toBe(1);
   await first.close();
@@ -193,7 +201,7 @@ it("preserves a real process, shell environment, cwd, screen, and bindings acros
   const reattached = await connect(third.url);
   await terminal(reattached.c, { kind: "attach", sessionId });
   await terminal(reattached.c, { kind: "claim", sessionId, cols: 90, rows: 30 });
-  expect((await state())?.pid).toBe(before.pid);
+  expect((await report()).pid).toBe(before.pid);
   expect((await ensureSessionHost(directory, launch)).pid).toBe(host.pid);
   await expect
     .poll(() => reattached.events.findLast((event) => event.type === "terminal.snapshot"))
