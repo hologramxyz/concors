@@ -7,7 +7,13 @@
     "macOS": {
       "minimumSystemVersion": "13.5",
       "hardenedRuntime": true,
-      "entitlements": "macos/app.entitlements"
+      "entitlements": "macos/app.entitlements",
+      "dmg": {
+        "background": "macos/dmg-background.tiff",
+        "windowSize": { "width": 660, "height": 420 },
+        "appPosition": { "x": 170, "y": 196 },
+        "applicationFolderPosition": { "x": 490, "y": 196 }
+      }
     }
   }
 }
