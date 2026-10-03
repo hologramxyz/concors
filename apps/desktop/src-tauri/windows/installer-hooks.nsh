@@ -15,7 +15,10 @@
   !insertmacro CheckIfAppIsRunning "$INSTDIR\${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
   ; Through the environment, so an apostrophe in the install path cannot break the command.
   System::Call 'Kernel32::SetEnvironmentVariable(t "CONCORS_INSTALL_DIR", t "$INSTDIR")'
-  nsExec::Exec `powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$runtime = Join-Path $$env:CONCORS_INSTALL_DIR 'daemon\'; $$running = Get-Process -ErrorAction SilentlyContinue | Where-Object { $$_.Path -and $$_.Path.StartsWith($$runtime, [StringComparison]::OrdinalIgnoreCase) }; $$running | Stop-Process -Force -ErrorAction SilentlyContinue; $$running | Wait-Process -Timeout 10 -ErrorAction SilentlyContinue"`
+  ; From WMI rather than Get-Process: the installer is a 32-bit program, so the PowerShell it
+  ; starts is too, and a 32-bit process cannot read a 64-bit one's path, which leaves
+  ; Get-Process with nothing to match. WMI reports every process's path to either.
+  nsExec::Exec `powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$runtime = Join-Path $$env:CONCORS_INSTALL_DIR 'daemon\'; $$ids = @(Get-CimInstance Win32_Process | Where-Object { $$_.ExecutablePath -and $$_.ExecutablePath.StartsWith($$runtime, [StringComparison]::OrdinalIgnoreCase) } | ForEach-Object { $$_.ProcessId }); if ($$ids.Count) { Stop-Process -Id $$ids -Force -ErrorAction SilentlyContinue; Wait-Process -Id $$ids -Timeout 10 -ErrorAction SilentlyContinue }"`
   Pop $0
 !macroend
 
