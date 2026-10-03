@@ -57,8 +57,11 @@ export function updateQuery(report: InstallationReport): {
   if (report.kind === "development") return { formats: [], installable: false };
   if (report.formats.length > 0) return { formats: report.formats, installable: true };
   // The format every copy on this platform could use, so a Mac asks about its disk image.
-  return { formats: [report.platform === "darwin" ? "dmg" : "tarball"], installable: false };
+  return { formats: [FALLBACK_FORMATS[report.platform] ?? "tarball"], installable: false };
 }
+
+/** Per platform, the build a person can install by hand; Linux's is the tarball. */
+const FALLBACK_FORMATS: Readonly<Record<string, string>> = { darwin: "dmg", windows: "nsis" };
 
 export interface AppUpdateDependencies {
   installation(): Promise<InstallationReport>;

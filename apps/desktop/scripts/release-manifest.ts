@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { desktopVersion, repoRoot } from "./release-version.ts";
 
@@ -12,7 +13,7 @@ import { desktopVersion, repoRoot } from "./release-version.ts";
 // Formats are recognised from the file name, which is what the build scripts and PKGBUILD produce.
 // An unrecognised file in the release directory is ignored rather than guessed at.
 
-export type DesktopFormat = "tarball" | "pacman" | "appimage" | "dmg";
+export type DesktopFormat = "tarball" | "pacman" | "appimage" | "dmg" | "nsis";
 
 export interface ArtifactKind {
   format: DesktopFormat;
@@ -52,6 +53,8 @@ export function describeArtifact(name: string, version: string): ArtifactKind | 
   // Named with the control plane's arch, not Node's (`arm64`), since that is what it matches on.
   const dmg = new RegExp(`^Concors-${escape(version)}-(aarch64|x86_64)\\.dmg$`).exec(name);
   if (dmg?.[1]) return { format: "dmg", platform: "darwin", arch: dmg[1] };
+  if (name === `Concors-${version}-x86_64-setup.exe`)
+    return { format: "nsis", platform: "windows", arch: "x86_64" };
   return null;
 }
 
@@ -87,7 +90,8 @@ export async function collectArtifacts(
   return artifacts;
 }
 
-if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
+// Compared as paths: a `file://` URL built by hand matches neither Windows paths nor spaces.
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2);
   const option = (flag: string): string | undefined => {
     const index = args.indexOf(flag);

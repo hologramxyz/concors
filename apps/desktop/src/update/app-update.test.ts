@@ -86,6 +86,14 @@ describe("updateQuery", () => {
     });
   });
 
+  // Without its own format, a Windows copy would ask for a tarball no Windows release has, and
+  // never hear about an update at all.
+  it("asks a Windows copy about the installer, to be able to say a version exists", () => {
+    expect(
+      updateQuery(report({ kind: "unknown", formats: [], platform: "windows", arch: "x86_64" })),
+    ).toEqual({ formats: ["nsis"], installable: false });
+  });
+
   it("asks for an AppImage for an AppImage it can replace, and only says so otherwise", () => {
     const appimage = { kind: "appimage", path: "/home/someone/Concors.AppImage" } as const;
     expect(updateQuery(report({ ...appimage, writable: true, formats: ["appimage"] }))).toEqual({

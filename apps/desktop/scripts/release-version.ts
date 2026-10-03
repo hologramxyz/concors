@@ -109,7 +109,8 @@ export async function setDesktopVersion(version: string, root = repoRoot): Promi
 // `node apps/desktop/scripts/release-version.ts` prints the version and fails loudly when the files
 // have drifted apart; `--set <version>` rewrites all four. The release workflow runs the check
 // before building anything.
-if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
+// Compared as paths: a `file://` URL built by hand matches neither Windows paths nor spaces.
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const set = process.argv.indexOf("--set");
   if (set === -1) {
     process.stdout.write(`${await desktopVersion()}\n`);
