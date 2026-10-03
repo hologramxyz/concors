@@ -155,6 +155,18 @@ describe("describeArtifact", () => {
     expect(describeArtifact("Concors_0.2.0_aarch64.dmg", "0.2.0")).toBeNull();
   });
 
+  it("recognises the Windows installer under its release name only", () => {
+    expect(describeArtifact("Concors-0.2.0-x86_64-setup.exe", "0.2.0")).toEqual({
+      format: "nsis",
+      platform: "windows",
+      arch: "x86_64",
+    });
+    // Tauri's own name, and the unversioned copy the website links to.
+    expect(describeArtifact("Concors_0.2.0_x64-setup.exe", "0.2.0")).toBeNull();
+    expect(describeArtifact("Concors-windows-x64-setup.exe", "0.2.0")).toBeNull();
+    expect(describeArtifact("Concors-0.2.0-x86_64-setup.exe.sig", "0.2.0")).toBeNull();
+  });
+
   it("ignores checksums, signatures and builds of another version", () => {
     expect(describeArtifact("Concors-0.2.0-x64.tar.gz.sha256", "0.2.0")).toBeNull();
     expect(describeArtifact("Concors-0.2.0-x64.tar.gz.sig", "0.2.0")).toBeNull();

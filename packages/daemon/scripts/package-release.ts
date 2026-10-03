@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { chmod, cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // Pin the official runtime and its published SHA-256, independent of the build host's libc.
@@ -10,8 +10,9 @@ import { fileURLToPath } from "node:url";
 const NODE_VERSION = "24.20.0";
 
 /**
- * One entry per runtime we publish. `tarFlag` differs because nodejs.org ships Linux as .tar.xz
- * and macOS as .tar.gz, and `tar -xJf` on a gzip archive fails rather than falling back.
+ * One entry per runtime we publish. `tarFlag` differs because nodejs.org ships Linux as .tar.xz,
+ * macOS as .tar.gz and Windows as .zip, and `tar -xJf` on a gzip archive fails rather than falling
+ * back (Windows' own bsdtar reads a zip with plain `-xf`).
  */
 const TARGETS = {
   "linux-x64": {
@@ -29,7 +30,32 @@ const TARGETS = {
     nodeSha256: "9e5b2644cf107befb6aefca676b96d3296bc10138096f022ed378d6233ed81f4",
     tarFlag: "-xzf",
   },
+  "win32-x64": {
+    nodeArchive: `node-v${NODE_VERSION}-win-x64.zip`,
+    nodeSha256: "6cac9ffbca8f6a47091e4b5c772e0606049c3871cb67d900c0cedde630e545ba",
+    tarFlag: "-xf",
+  },
 } as const;
+
+/**
+ * The tar to run. On Windows that is the system's bsdtar, by full path: Git's GNU tar is often
+ * first on PATH there, reads `C:\...` as a remote `host:path` and cannot open a zip.
+ */
+export function tarCommand(platform: string, env: NodeJS.ProcessEnv): string {
+  return platform === "win32"
+    ? win32.join(env["SystemRoot"] ?? "C:\\Windows", "System32", "tar.exe")
+    : "tar";
+}
+
+/**
+ * Where the official archive keeps Node and npm. The Windows zip is flat (`node.exe` beside
+ * `node_modules/`); the others follow the Unix prefix layout.
+ */
+export function nodeLayout(target: string): { node: string; npm: string } {
+  return target.startsWith("win32-")
+    ? { node: "node.exe", npm: join("node_modules", "npm") }
+    : { node: join("bin", "node"), npm: join("lib", "node_modules", "npm") };
+}
 
 type TargetKey = keyof typeof TARGETS;
 
@@ -74,8 +100,10 @@ async function main(): Promise<void> {
     if (createHash("sha256").update(bytes).digest("hex") !== nodeSha256)
       throw new Error("Node archive SHA-256 does not match the pinned release");
     await writeFile(join(temporary, nodeArchive), bytes);
-    execFileSync("tar", [tarFlag, join(temporary, nodeArchive), "-C", temporary]);
+    const tar = tarCommand(process.platform, process.env);
+    execFileSync(tar, [tarFlag, join(temporary, nodeArchive), "-C", temporary]);
 
+    const windows = target.startsWith("win32-");
     const directory = join(temporary, "concors-daemon");
     await mkdir(join(directory, "bin"), { recursive: true });
     await mkdir(join(directory, "lib"));
@@ -84,35 +112,57 @@ async function main(): Promise<void> {
         recursive: true,
         dereference: true,
       });
-    const nodeDirectory = join(temporary, nodeArchive.replace(/\.tar\.(gz|xz)$/, ""));
-    await cp(join(nodeDirectory, "bin", "node"), join(directory, "bin", "node"));
+    const nodeDirectory = join(temporary, nodeArchive.replace(/\.(tar\.(gz|xz)|zip)$/, ""));
+    const layout = nodeLayout(target);
+    await cp(
+      join(nodeDirectory, layout.node),
+      join(directory, "bin", windows ? "node.exe" : "node"),
+    );
     // npm lets the daemon install and update npm-published agent CLIs on machines without Node.
-    await cp(join(nodeDirectory, "lib", "node_modules", "npm"), join(directory, "npm"), {
-      recursive: true,
-    });
+    await cp(join(nodeDirectory, layout.npm), join(directory, "npm"), { recursive: true });
     await cp(join(nodeDirectory, "LICENSE"), join(directory, "NODE_LICENSE"));
     await cp(join(root, "..", "..", "LICENSE"), join(directory, "LICENSE"));
-    await writeFile(
-      join(directory, "bin", "concors-daemon"),
-      `#!/bin/sh
+    if (windows) {
+      // No concors-daemon launcher: Windows cannot run a script as a program, and a .cmd wrapper
+      // would stand between the app and Node, so stopping it would leave Node running. The app
+      // starts bin\node.exe with lib\cli.js itself. npm, though, is found by name on PATH (the
+      // daemon puts bin\ there), which is what a .cmd is for.
+      await writeFile(
+        join(directory, "bin", "npm.cmd"),
+        [
+          "@echo off",
+          "setlocal",
+          // Package scripts run `node`: give them the bundled one, like npm's own runtime. The
+          // bundled npm moves with daemon releases, so its own upgrade notice does not apply.
+          'set "PATH=%~dp0;%PATH%"',
+          "set NPM_CONFIG_UPDATE_NOTIFIER=false",
+          '"%~dp0node.exe" "%~dp0..\\npm\\bin\\npm-cli.js" %*',
+          "",
+        ].join("\r\n"),
+      );
+    } else {
+      await writeFile(
+        join(directory, "bin", "concors-daemon"),
+        `#!/bin/sh
 set -eu
 DAEMON_BIN_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 exec "$DAEMON_BIN_DIR/node" "$DAEMON_BIN_DIR/../lib/cli.js" "$@"
 `,
-    );
-    await writeFile(
-      join(directory, "bin", "npm"),
-      `#!/bin/sh
+      );
+      await writeFile(
+        join(directory, "bin", "npm"),
+        `#!/bin/sh
 set -eu
 DAEMON_BIN_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 # Package scripts run \`node\`: give them the bundled one, like npm's own runtime. The bundled
 # npm moves with daemon releases, so its own upgrade notice does not apply.
 PATH="$DAEMON_BIN_DIR:$PATH" NPM_CONFIG_UPDATE_NOTIFIER=false exec "$DAEMON_BIN_DIR/node" "$DAEMON_BIN_DIR/../npm/bin/npm-cli.js" "$@"
 `,
-    );
-    await chmod(join(directory, "bin", "concors-daemon"), 0o755);
-    await chmod(join(directory, "bin", "npm"), 0o755);
-    await chmod(join(directory, "bin", "node"), 0o755);
+      );
+      await chmod(join(directory, "bin", "concors-daemon"), 0o755);
+      await chmod(join(directory, "bin", "npm"), 0o755);
+      await chmod(join(directory, "bin", "node"), 0o755);
+    }
     const manifest = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as {
       version: string;
     };
@@ -126,7 +176,7 @@ PATH="$DAEMON_BIN_DIR:$PATH" NPM_CONFIG_UPDATE_NOTIFIER=false exec "$DAEMON_BIN_
       ) + "\n",
     );
     const archive = join(output, `concors-daemon-${target}.tar.gz`);
-    execFileSync("tar", ["-czf", archive, "-C", temporary, "concors-daemon"], {
+    execFileSync(tar, ["-czf", archive, "-C", temporary, "concors-daemon"], {
       // Apple's tar otherwise stores resource forks, which extract as stray ._ files elsewhere.
       env: { ...process.env, COPYFILE_DISABLE: "1" },
     });
