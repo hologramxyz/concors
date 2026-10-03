@@ -6,7 +6,6 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import type { DaemonMessage, TerminalOperation, WorkspaceOperation } from "@concors/protocol";
-import { defaultShellIsPowerShell } from "../src/terminal/testing/shell.ts";
 
 // This check has no runtime npm dependencies. It also runs using the Node shipped in the tarball.
 const args = process.argv.slice(2);
@@ -180,13 +179,13 @@ try {
   assert.equal(session.status, "running", session.error ?? undefined);
   await terminal({ kind: "attach", sessionId: session.id });
   await terminal({ kind: "claim", sessionId: session.id, cols: 90, rows: 30 });
-  // Split the expected marker so echoed input alone cannot satisfy the assertion.
+  // Split the expected marker so echoed input alone cannot satisfy the assertion. A Windows
+  // terminal opens PowerShell, which every Windows ships (see defaultShell in profiles.ts); this
+  // file runs on its own in the release check, so it cannot import that.
   const input =
-    process.platform !== "win32"
-      ? "printf 'CONCORS_%s_OK\\n' PTY\r"
-      : defaultShellIsPowerShell(environment)
-        ? '$env:D2_MARKER = "PTY"\recho "CONCORS_$($env:D2_MARKER)_OK"\r'
-        : "set D2_MARKER=PTY\r\necho CONCORS_%D2_MARKER%_OK\r\n";
+    process.platform === "win32"
+      ? '$env:D2_MARKER = "PTY"\recho "CONCORS_$($env:D2_MARKER)_OK"\r'
+      : "printf 'CONCORS_%s_OK\\n' PTY\r";
   send({ type: "terminal.input", sessionId: session.id, data: input });
   await waitFor(() =>
     messages

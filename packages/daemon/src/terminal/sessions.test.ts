@@ -339,6 +339,19 @@ it.each(["codex", "claude"] as const)(
     const id = session!.id;
     await request(first.connection, { kind: "attach", sessionId: id });
     await request(first.connection, { kind: "claim", sessionId: id, cols: 80, rows: 24 });
+    // Type once the prompt is up, as a person would. PowerShell, Windows' default shell, takes a
+    // few seconds to start on a cold CI runner and can miss what is typed before it reads input.
+    if (process.platform === "win32")
+      await expect
+        .poll(
+          () =>
+            first.events
+              .filter((e) => e.type === "terminal.output" || e.type === "terminal.snapshot")
+              .map((e) => e.data)
+              .join(""),
+          { timeout: 20000 },
+        )
+        .toMatch(/[A-Za-z]:\\[^\r\n]*>/);
     first.connection.sendTerminalInput(id, `${agent}\r`);
     // Detection depends on a process-list scan; on Windows CI the first PowerShell/CIM query
     // alone can take most of ten seconds.
