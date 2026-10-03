@@ -167,7 +167,8 @@ jobs:
 
           # A running session host must not make an update fail: Windows will not overwrite a
           # running node.exe, so the installer's hook stops what runs from the old copy first.
-          $held = Start-Process -FilePath "$daemon\bin\node.exe" -ArgumentList '-e', 'setInterval(() => {}, 1000)' -PassThru -WindowStyle Hidden
+          # No spaces in the script: Start-Process joins its arguments without quoting them.
+          $held = Start-Process -FilePath "$daemon\bin\node.exe" -ArgumentList '-e', 'setInterval(()=>{},1000)' -PassThru -WindowStyle Hidden
           Start-Sleep -Seconds 1
           if ($held.HasExited) { throw "the stand-in session host did not start" }
           $code = & $install
