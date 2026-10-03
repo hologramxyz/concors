@@ -192,9 +192,15 @@ anything, which usually takes from a few hours to a few business days.
 | variable | `AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE` | the certificate profile's name, from step 4 |
 
 The client secret expires (at most after two years); a release after that fails at signing, and a
-new secret is the fix. A Windows copy is told about new releases (it asks for the `nsis` format)
-but does not yet install them itself: the dialog asks the person to run the new installer, which
-updates in place.
+new secret is the fix.
+
+A Windows copy updates itself with the next release's installer (see the table below). `update.rs`
+recognises an installation by the uninstaller beside the program, downloads the installer, checks
+its digest with `certutil`, then that Windows calls its signature valid and names the same
+publisher as the running copy's (an unsigned copy, which only a local or CI build is, skips that
+check). It starts the installer with `/P /UPDATE /R` — a progress bar only, the person's earlier
+choices kept, Concors started again at the end — and exits, since nothing can replace a running
+program on Windows. The installer's hook stops the runtime the old copy left behind.
 
 ## Offering the release
 
@@ -264,7 +270,7 @@ works out from where its executable lives (`src-tauri/src/update.rs`):
 | a tarball the person unpacked and can write to       | replaces the tree, keeping the old one until the new one is in place |
 | an AppImage in a directory the person can write to   | replaces the file in place, keeping its name, and relaunches it      |
 | a Mac app in a folder the person can write to        | installs the disk image's app over it (signature checked), restarts  |
-| a Windows installation                               | says a new version exists; running the new installer updates it      |
+| a Windows installation in a folder it can write to   | runs the new installer (signature checked), which restarts Concors   |
 | a tree it cannot write to, or an unfamiliar location | says a new version exists and leaves it to them                      |
 | a build from a checkout                              | nothing at all; the checkout is the source of truth                  |
 
@@ -315,10 +321,8 @@ plugin is adopted; nothing reads it before then.
 
 - **Intel Macs**, and **Windows on Arm** (which runs the x64 build under emulation). The manifest
   and the endpoint already carry `platform` and `arch`; only the builds are missing.
-- **Windows updating itself.** A Windows copy is told a release exists; installing it from the
-  badge (download, check, run the installer passively, restart) is still to do.
 - **`tauri-plugin-updater` itself**, whose one-click path covers AppImage, macOS and Windows. The
   endpoint already answers in the shape the plugin expects, and builds are signed once a key
-  exists, so what remains is the plugin and the Windows builds. Until then the badge replaces an
-  AppImage or a tarball itself after checking the digest but not a signature; a Mac app is checked
-  against Apple's code signature and notarization instead.
+  exists, so what remains is the plugin. Until then the badge replaces an AppImage or a tarball
+  itself after checking the digest but not a signature; a Mac app is checked against Apple's code
+  signature and notarization, and a Windows installer against its Authenticode publisher, instead.

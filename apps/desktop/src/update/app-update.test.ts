@@ -88,7 +88,21 @@ describe("updateQuery", () => {
 
   // Without its own format, a Windows copy would ask for a tarball no Windows release has, and
   // never hear about an update at all.
-  it("asks a Windows copy about the installer, to be able to say a version exists", () => {
+  it("asks a Windows copy about the installer, installing it where the folder is writable", () => {
+    const windows = {
+      kind: "windowsApp",
+      path: "C:\\Users\\someone\\AppData\\Local\\Concors",
+      platform: "windows",
+      arch: "x86_64",
+    } as const;
+    expect(updateQuery(report({ ...windows, writable: true, formats: ["nsis"] }))).toEqual({
+      formats: ["nsis"],
+      installable: true,
+    });
+    expect(updateQuery(report({ ...windows, writable: false, formats: [] }))).toEqual({
+      formats: ["nsis"],
+      installable: false,
+    });
     expect(
       updateQuery(report({ kind: "unknown", formats: [], platform: "windows", arch: "x86_64" })),
     ).toEqual({ formats: ["nsis"], installable: false });
