@@ -12,6 +12,8 @@ import {
   OrganizationListSchema,
   SshKeyListSchema,
   SshKeyResponseSchema,
+  ProviderSubscriptionListSchema,
+  ProviderSubscriptionResponseSchema,
 } from "./schemas.ts";
 
 /**
@@ -35,6 +37,9 @@ const ENDPOINTS: readonly [method: string, path: string, status: string, schema:
   ["get", "/api/v1/machines/costs", "200", MachineCostsSchema],
   ["get", "/api/v1/ssh-keys", "200", SshKeyListSchema],
   ["post", "/api/v1/ssh-keys", "201", SshKeyResponseSchema],
+  ["get", "/api/v1/subscriptions", "200", ProviderSubscriptionListSchema],
+  ["put", "/api/v1/subscriptions/{id}", "200", ProviderSubscriptionResponseSchema],
+  ["post", "/api/v1/subscriptions/import", "200", ProviderSubscriptionListSchema],
   ["get", "/api/v1/billing", "200", BillingStatusSchema],
   ["get", "/api/v1/billing/invoices", "200", InvoiceListSchema],
 ];

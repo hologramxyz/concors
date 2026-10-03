@@ -10,6 +10,7 @@ export {
   ApiClient,
   createApiClient,
   type AddSshKeyInput,
+  type SaveProviderSubscriptionInput,
   type ApiClientOptions,
   type CreateMachineInput,
   type NativeSignInChoice,
@@ -54,6 +55,9 @@ export {
   SshKeyListSchema,
   SshKeyResponseSchema,
   SshKeySchema,
+  ProviderSubscriptionListSchema,
+  ProviderSubscriptionResponseSchema,
+  ProviderSubscriptionSchema,
   type ApiSession,
   type ApiUser,
   type SignInProviders,
@@ -70,6 +74,7 @@ export {
   type Money,
   type Organization,
   type SshKey,
+  type ProviderSubscription,
 } from "./schemas.ts";
 export { memoryTokenStore, type TokenStore } from "./token-store.ts";
 export {

@@ -83,12 +83,19 @@ chat shows only the provider's own message. Nothing switches automatically.
 
 ## Cross-machine model
 
-Credentials never leave a machine and the control plane stores nothing about provider accounts.
-Each machine holds its own independently minted sign-in per subscription — the provider's
-supported multi-device model — so the same subscription can be active on several machines at once
-without refresh-token rotation conflicts. Connecting a subscription on a machine where it has
-never signed in costs one device-code login there; after that, switching between signed-in
-subscriptions is instant and local.
+Credentials never leave a machine. Each machine holds its own independently minted sign-in per
+subscription — the provider's supported multi-device model — so the same subscription can be
+active on several machines at once without refresh-token rotation conflicts. Connecting a
+subscription on a machine where it has never signed in costs one device-code login there; after
+that, switching between signed-in subscriptions is instant and local.
+
+The library itself — which accounts a person has — belongs to the person, so the control plane
+keeps it (`/api/v1/subscriptions`, in `concors-server`) and every computer they sign in on lists
+the same accounts. It holds public fields only: the provider configuration id every machine
+installs the account under, the engine, the nickname given when it was added, an optional display
+name (`accountNickname`), and the signed-in account as the provider last reported it on any
+machine (`accountLabel`, normally an email), so another computer can name an account before it
+signs in there. Removal keeps a tombstone without the names or email.
 
 ## Settings → Subscriptions
 
@@ -102,8 +109,18 @@ independently on that machine, so an assignment that has not signed in there sho
 action. The page opens live management connections while visible; machine status reflects those
 connections instead of the control plane's last heartbeat timestamp.
 
-The local daemon holds the library's public account definitions. An account displays its signed-in
-email by default; `accountNickname` stores an optional override. Sign-in state
+Signed in, the library comes from the control plane; without an account (the mobile settings
+drawer) it is the local daemon's subscription configurations, as before the control plane kept it.
+The page imports what this computer's daemon and the person's own cloud machines
+(`createdByUserId`) already hold, so a library made before it was kept online is not lost; the
+server skips accounts already listed or removed, so another computer that still holds a removed
+account cannot bring it back. Machines in a shared organization that someone else created are
+never read for this. An account displays its signed-in email by default (this computer's sign-in,
+else the email last reported anywhere); `accountNickname` stores an optional override. Adding an
+account saves it on this computer's daemon and in the library; renaming updates the library and,
+if this computer holds it, the daemon. An account this computer does not hold shows "Not set up on
+this computer", and Connect first installs its public configuration here, then signs in. Every
+account read that reports an email updates the library's copy. Sign-in state
 without an open session uses the provider-level `account` operation on `provider.request`
 (`AgentManager.providerAccount`), which reuses the session account backends and their privacy
 rules: flows are socket-scoped, transient, and never enter receipts or broadcasts. A successful
@@ -118,8 +135,9 @@ daemon's `provider-plan-usage` capability (`PROVIDER_USAGE_CAPABILITY`).
 
 The page requires the daemon's `provider-subscriptions` capability
 (`PROVIDER_SUBSCRIPTIONS_CAPABILITY`); older daemons show an update hint. Release and install the
-updated daemon on managed machines as well as deploying the client. No control-plane changes or
-database migrations are needed.
+updated daemon on managed machines as well as deploying the client. The library needs the
+control plane's `/api/v1/subscriptions` (deploy `concors-server` first); against a control plane
+without it, the page says it could not load the library and shows this computer's accounts.
 
 ## Validation
 
@@ -127,9 +145,12 @@ database migrations are needed.
 engine restrictions, base-install binary resolution, activation and its credential redirection,
 and removal cleanup; `packages/daemon/src/agents/providers.test.ts` covers the provider-level
 account flow and catalog exclusion over a real socket;
-`apps/desktop/src/settings/subscriptions.test.ts` covers grouping, configuration building and safe
-cross-machine copies; `e2e/subscriptions.spec.ts` walks library add → sign in → assignment →
-per-machine sign in, including Codex device auth across a background refresh.
+`apps/desktop/src/settings/subscriptions.test.ts` covers grouping, configuration building, library
+accounts and safe cross-machine copies; `e2e/subscriptions.spec.ts` walks library add → sign in →
+assignment → per-machine sign in, including Codex device auth across a background refresh, checks
+the control plane received the library with its emails, and plays a second computer: the library
+and the second machine's assignment show there, what that computer held is imported, a removed
+account stays removed, and Connect sets an account up on it.
 `providers/claude-home.test.ts` covers linking, migration and conflict handling of Claude homes,
 and `registry.test.ts` that history survives switching and removal. Limits are covered by
 `providers/adapters.test.ts` (Claude's report), `agents/providers.test.ts` (setting and clearing

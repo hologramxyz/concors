@@ -1,3 +1,4 @@
+import type { ProviderSubscription } from "@concors/api-client";
 import {
   ProviderConfigSchema,
   SUBSCRIPTION_ENGINES,
@@ -75,17 +76,76 @@ export function renamedAccountConfig(
   });
 }
 
-/** Public subscription fields that can be installed on another machine without moving secrets. */
-export function portableSubscriptionConfig(provider: ProviderStatus): ProviderConfig {
-  if (!provider.subscription) throw new Error("Choose a subscription account.");
-  return renamedAccountConfig(provider, provider.accountNickname);
+/**
+ * One account in the person's subscription library: public fields only, the same on every
+ * computer. Sign-in state belongs to each machine and is read from it.
+ */
+export interface LibraryAccount {
+  /** The provider configuration id it is installed under on every machine. */
+  id: string;
+  engine: SubscriptionEngine;
+  /** The name given when it was added; the configuration's `subscription.nickname`. */
+  nickname: string;
+  /** A display name chosen instead of the account's email. */
+  accountNickname?: string;
+  /** The signed-in account last seen on any machine, normally an email. */
+  accountLabel?: string;
 }
-/** A nickname the person chose, else the signed-in email, else the nickname given when added. */
-export function accountName(provider: ProviderStatus, labels: Record<string, string>): string {
+
+export function isSubscriptionEngine(engine: string): engine is SubscriptionEngine {
+  return (SUBSCRIPTION_ENGINES as readonly string[]).includes(engine);
+}
+
+/** The library as the control plane keeps it. */
+export function libraryFromServer(rows: readonly ProviderSubscription[]): LibraryAccount[] {
+  return rows.map((row) => ({
+    id: row.id,
+    engine: row.engine,
+    nickname: row.nickname,
+    ...(row.accountNickname ? { accountNickname: row.accountNickname } : {}),
+    ...(row.accountLabel ? { accountLabel: row.accountLabel } : {}),
+  }));
+}
+
+/** Subscriptions a machine holds, as library accounts. */
+export function libraryFromProviders(providers: readonly ProviderStatus[]): LibraryAccount[] {
+  return providers.flatMap((provider) =>
+    provider.subscription && isSubscriptionEngine(provider.engine)
+      ? [
+          {
+            id: provider.id,
+            engine: provider.engine,
+            nickname: provider.subscription.nickname,
+            ...(provider.accountNickname ? { accountNickname: provider.accountNickname } : {}),
+          },
+        ]
+      : [],
+  );
+}
+
+/** The configuration that installs a library account on a machine, without moving secrets. */
+export function libraryConfig(account: LibraryAccount): ProviderConfig {
+  return ProviderConfigSchema.parse({
+    id: account.id,
+    label: `${subscriptionEngineLabels[account.engine]} — ${account.nickname}`,
+    engine: account.engine,
+    command: [account.engine],
+    enabled: true,
+    subscription: { nickname: account.nickname },
+    ...(account.accountNickname ? { accountNickname: account.accountNickname } : {}),
+  });
+}
+
+/**
+ * A nickname the person chose, else the signed-in email (this machine's, else the one last seen
+ * anywhere), else the nickname given when added.
+ */
+export function accountName(account: LibraryAccount, labels: Record<string, string>): string {
   return (
-    provider.accountNickname ??
-    labels[provider.id] ??
-    (provider.subscription?.nickname !== "Account" ? provider.subscription?.nickname : undefined) ??
+    account.accountNickname ??
+    labels[account.id] ??
+    account.accountLabel ??
+    (account.nickname !== "Account" ? account.nickname : undefined) ??
     "Account"
   );
 }

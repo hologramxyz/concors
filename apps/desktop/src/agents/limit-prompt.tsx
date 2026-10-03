@@ -1,6 +1,6 @@
 import { PaneVisibilityContext } from "@/components/compact-layout";
 import { useTabVisible } from "@/workspace/tab-visibility";
-import { accountName } from "@/settings/subscriptions";
+import { accountName, libraryFromProviders } from "@/settings/subscriptions";
 import type { DaemonConnection } from "@concors/daemon-client";
 import { useContext, useEffect, useState } from "react";
 import { X } from "lucide-react";
@@ -180,11 +180,9 @@ function LimitPrompt({
       )}
       <ul className="mt-3 space-y-2">
         {available.map((choice) => {
-          const name = choice.provider.subscription
-            ? accountName(
-                choice.provider,
-                choice.label ? { [choice.provider.id]: choice.label } : {},
-              )
+          const entry = libraryFromProviders([choice.provider])[0];
+          const name = entry
+            ? accountName(entry, choice.label ? { [entry.id]: choice.label } : {})
             : (choice.label ?? "Default account");
           const detail = choice.provider.subscription
             ? usageGlance(choice.usage)

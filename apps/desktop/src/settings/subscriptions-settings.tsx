@@ -18,6 +18,7 @@ import {
   type AgentAccount,
   type AgentAccountAction,
   type AgentPlanUsage,
+  type ProviderConfig,
   type ProviderOperation,
   type ProviderStatus,
 } from "@concors/protocol";
@@ -27,7 +28,7 @@ import {
   type DaemonConnection,
   type DaemonEndpoint,
 } from "@concors/daemon-client";
-import type { Machine } from "@concors/api-client";
+import { ApiError, type Machine, type ProviderSubscription } from "@concors/api-client";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,12 +59,18 @@ import { openExternal } from "@/tauri/open-external";
 import { Section, SettingsCard } from "@/views/settings-primitives";
 import { currentWindow, percentLabel, resetLabel, usageTone } from "@/agents/usage-labels";
 import { cn } from "cn";
+import { api } from "@/auth/api";
+import { useProviderSubscriptions } from "@/data/provider-subscriptions";
 import {
   accountName,
+  libraryConfig,
+  libraryFromProviders,
+  libraryFromServer,
+  isSubscriptionEngine,
   subscriptionConfig,
-  portableSubscriptionConfig,
   renamedAccountConfig,
   subscriptionEngineLabels,
+  type LibraryAccount,
   type SubscriptionEngine,
 } from "./subscriptions";
 
@@ -149,7 +156,35 @@ export function SubscriptionsSettings({
   const [savingAssignments, setSavingAssignments] = useState(false);
   const [assignmentError, setAssignmentError] = useState<string | null>(null);
   const assignmentTargets = useRef(new Map<string, AssignmentTarget>());
-  const subscriptions = (local.data?.providers ?? []).filter((provider) => provider.subscription);
+  // Signed in, the library is the person's, kept by the control plane, so every computer lists
+  // the same accounts. Without an account (the mobile drawer) it is this computer's daemon's.
+  const signedIn = !!auth;
+  const server = useProviderSubscriptions(signedIn);
+  const setServerLibrary = server.resource.set;
+  const localSubscriptions = useMemo(
+    () => (local.data?.providers ?? []).filter((provider) => provider.subscription),
+    [local.data],
+  );
+  const localLibrary = useMemo(
+    () => libraryFromProviders(localSubscriptions),
+    [localSubscriptions],
+  );
+  const subscriptions = useMemo(
+    () =>
+      !signedIn
+        ? localLibrary
+        : server.data
+          ? libraryFromServer(server.data)
+          : server.error
+            ? localLibrary
+            : [],
+    [localLibrary, server.data, server.error, signedIn],
+  );
+  const libraryReady = signedIn ? !!server.data || !!server.error : !!local.data;
+  const libraryError =
+    signedIn && server.error && !server.data
+      ? "Could not load your subscriptions. Showing this computer's."
+      : null;
   const accounts = useMemo(
     () =>
       accountState.cacheKey === localCacheKey
@@ -187,19 +222,100 @@ export function SubscriptionsSettings({
   );
   const availableMachines =
     machineList.data?.filter((machine) => machine.status !== "deleted") ?? [];
+  // Accounts this computer or the person's own machines already hold join the library, so one
+  // set up before the library was kept online is not lost. Others' machines are never read.
+  const userId = auth?.user.id;
+  const ownMachines = availableMachines
+    .filter((machine) => machine.createdByUserId === userId)
+    .map((machine) => machine.id)
+    .join("\n");
+  const importing = useRef(new Set<string>());
+  useEffect(() => {
+    if (!signedIn || !server.data) return;
+    const known = new Set(server.data.map((row) => row.id));
+    const own = new Set(ownMachines.split("\n"));
+    const held = libraryFromProviders([
+      ...localSubscriptions,
+      ...Object.entries(machineData).flatMap(([id, data]) =>
+        own.has(id) ? (data?.providers ?? []) : [],
+      ),
+    ]);
+    const batch = held
+      .filter(
+        (account, index) =>
+          !known.has(account.id) &&
+          !importing.current.has(account.id) &&
+          held.findIndex((other) => other.id === account.id) === index,
+      )
+      .slice(0, 64);
+    if (!batch.length) return;
+    for (const account of batch) importing.current.add(account.id);
+    void api
+      .importProviderSubscriptions(
+        batch.map((account) => {
+          const label = accountLabels[account.id];
+          return {
+            id: account.id,
+            engine: account.engine,
+            nickname: account.nickname,
+            ...(account.accountNickname ? { accountNickname: account.accountNickname } : {}),
+            ...(label ? { accountLabel: label.slice(0, 320) } : {}),
+          };
+        }),
+      )
+      .then(setServerLibrary, () => {
+        // Another change to what the machines hold tries again.
+        for (const account of batch) importing.current.delete(account.id);
+      });
+  }, [
+    accountLabels,
+    localSubscriptions,
+    machineData,
+    ownMachines,
+    server.data,
+    setServerLibrary,
+    signedIn,
+  ]);
   const reportMachine = useCallback((machineId: string, data: ProviderSnapshot | null) => {
     setMachineData((current) =>
       current[machineId] === data ? current : { ...current, [machineId]: data },
     );
   }, []);
+  // The signed-in email is kept with the library, so other computers can show it before they
+  // sign in themselves.
+  const serverRows = useRef<ProviderSubscription[] | null>(server.data);
+  useEffect(() => {
+    serverRows.current = server.data;
+  }, [server.data]);
+  const savingLabels = useRef(new Set<string>());
+  const rememberLabel = useCallback(
+    (id: string, label: string) => {
+      const row = serverRows.current?.find((candidate) => candidate.id === id);
+      const accountLabel = label.slice(0, 320);
+      if (!row || row.accountLabel === accountLabel || savingLabels.current.has(id)) return;
+      savingLabels.current.add(id);
+      void api
+        .saveProviderSubscription(id, { engine: row.engine, nickname: row.nickname, accountLabel })
+        .then(
+          (saved) =>
+            setServerLibrary((rows) =>
+              (rows ?? []).map((candidate) => (candidate.id === saved.id ? saved : candidate)),
+            ),
+          () => undefined,
+        )
+        .finally(() => savingLabels.current.delete(id));
+    },
+    [setServerLibrary],
+  );
   const reportAccount = useCallback(
     (id: string, account: AgentAccount) => {
       setAccountState({
         cacheKey: localCacheKey,
         accounts: rememberAccount(localCacheKey, id, account),
       });
+      if (account.label) rememberLabel(id, account.label);
     },
-    [localCacheKey],
+    [localCacheKey, rememberLabel],
   );
   const accountChanged = useCallback(() => setAccountEpoch((epoch) => epoch + 1), []);
   const stageAssignment = useCallback(
@@ -288,7 +404,51 @@ export function SubscriptionsSettings({
   const connectingProvider = connecting
     ? local.data?.providers.find((provider) => provider.id === connecting)
     : undefined;
-  const visibleError = pageError ?? local.error;
+  const localHolds = (id: string) => localSubscriptions.find((provider) => provider.id === id);
+  /** Signing in on this computer first installs the account here, without its secrets. */
+  const connectHere = async (account: LibraryAccount) => {
+    setPageError(null);
+    if (!localHolds(account.id))
+      await local.execute({
+        kind: "save",
+        config: libraryConfig(account),
+        expectedRevision: local.data?.revision ?? 0,
+      });
+    setConnecting(account.id);
+  };
+  const rename = async (account: LibraryAccount, accountNickname: string | undefined) => {
+    if (signedIn) {
+      const saved = await api.saveProviderSubscription(account.id, {
+        engine: account.engine,
+        nickname: account.nickname,
+        accountNickname: accountNickname ?? null,
+      });
+      setServerLibrary((rows) => (rows ?? []).map((row) => (row.id === saved.id ? saved : row)));
+    }
+    const held = localHolds(account.id);
+    if (held)
+      await local.execute({
+        kind: "save",
+        config: renamedAccountConfig(held, accountNickname),
+        expectedRevision: local.data?.revision ?? 0,
+      });
+  };
+  const remove = async (account: LibraryAccount) => {
+    if (signedIn) {
+      await api.removeProviderSubscription(account.id).catch((cause: unknown) => {
+        // Already removed elsewhere is what was asked for.
+        if (!(cause instanceof ApiError && cause.status === 404)) throw cause;
+      });
+      setServerLibrary((rows) => (rows ?? []).filter((row) => row.id !== account.id));
+    }
+    if (localHolds(account.id))
+      await local.execute({
+        kind: "remove",
+        id: account.id,
+        expectedRevision: local.data?.revision ?? 0,
+      });
+  };
+  const visibleError = pageError ?? libraryError ?? local.error;
   return (
     <Section
       title="Subscriptions"
@@ -331,6 +491,7 @@ export function SubscriptionsSettings({
             drafts={assignmentDrafts}
             onDraft={stageAssignment}
             onRegister={registerAssignmentTarget}
+            onLabel={rememberLabel}
           />
           {availableMachines.map((machine) => (
             <RemoteMachineAssignment
@@ -344,6 +505,7 @@ export function SubscriptionsSettings({
               onDraft={stageAssignment}
               onRegister={registerAssignmentTarget}
               onSnapshot={reportMachine}
+              onLabel={rememberLabel}
             />
           ))}
           {machineList.data === null && !machineList.error && (
@@ -365,57 +527,55 @@ export function SubscriptionsSettings({
           <Button
             variant="outline"
             size="sm"
-            disabled={!local.supported || !local.data}
+            disabled={!local.supported || !local.data || !libraryReady}
             onClick={() => setAdding(true)}
           >
             <Plus /> Add subscription
           </Button>
         </div>
         <SettingsCard className="divide-y">
-          {subscriptions.map((provider) => (
+          {subscriptions.map((entry) => (
             <SubscriptionLibraryRow
-              key={provider.id}
+              key={entry.id}
               connection={localConnection}
-              provider={provider}
-              account={accounts[provider.id]}
+              entry={entry}
+              provider={localHolds(entry.id)}
+              localSupported={local.supported && !!local.data}
+              account={accounts[entry.id]}
               epoch={accountEpoch}
               busy={local.busy}
               workspaceReady={local.workspaceReady}
-              usedOn={assignedMachines(provider.id)}
-              usage={usages[provider.id]}
+              usedOn={assignedMachines(entry.id)}
+              usage={usages[entry.id]}
               usageSupported={usageSupported}
               onAccount={reportAccount}
-              onConnect={() => setConnecting(provider.id)}
-              onRename={(current, accountNickname) =>
-                local.execute({
-                  kind: "save",
-                  config: renamedAccountConfig(current, accountNickname),
-                  expectedRevision: local.data?.revision ?? 0,
-                })
-              }
-              onRemove={() => {
-                const count = assignedMachines(provider.id).length;
-                if (count) {
+              onConnect={() =>
+                void connectHere(entry).catch((cause: unknown) =>
                   setPageError(
-                    `Unassign ${accountName(provider, accountLabels)} before removing it.`,
-                  );
+                    cause instanceof Error ? cause.message : "Could not set up the account here.",
+                  ),
+                )
+              }
+              onRename={rename}
+              onRemove={() => {
+                const count = assignedMachines(entry.id).length;
+                if (count) {
+                  setPageError(`Unassign ${accountName(entry, accountLabels)} before removing it.`);
                   return;
                 }
                 setPageError(null);
-                void local
-                  .execute({
-                    kind: "remove",
-                    id: provider.id,
-                    expectedRevision: local.data?.revision ?? 0,
-                  })
-                  .catch(() => undefined);
+                void remove(entry).catch((cause: unknown) =>
+                  setPageError(
+                    cause instanceof Error ? cause.message : "Could not remove the account.",
+                  ),
+                );
               }}
             />
           ))}
-          {local.data && subscriptions.length === 0 && (
+          {libraryReady && subscriptions.length === 0 && (
             <p className="px-4 py-5 text-sm text-muted-foreground">No subscriptions added yet.</p>
           )}
-          {!local.data && <p className="px-4 py-5 text-sm text-muted-foreground">Connecting…</p>}
+          {!libraryReady && <p className="px-4 py-5 text-sm text-muted-foreground">Connecting…</p>}
         </SettingsCard>
       </div>
 
@@ -424,9 +584,28 @@ export function SubscriptionsSettings({
           providers={local.data.providers}
           revision={local.data.revision}
           onSave={local.execute}
-          onCreated={(id) => {
+          onCreated={(config) => {
             setAdding(false);
-            setConnecting(id);
+            setConnecting(config.id);
+            if (signedIn && config.subscription && isSubscriptionEngine(config.engine)) {
+              // Saved directly; the import of what this computer holds need not race it.
+              importing.current.add(config.id);
+              void api
+                .saveProviderSubscription(config.id, {
+                  engine: config.engine,
+                  nickname: config.subscription.nickname,
+                  ...(config.accountNickname ? { accountNickname: config.accountNickname } : {}),
+                })
+                .then(
+                  (saved) =>
+                    setServerLibrary((rows) => [
+                      ...(rows ?? []).filter((row) => row.id !== saved.id),
+                      saved,
+                    ]),
+                  // Kept on this computer, it is imported on the next try.
+                  () => importing.current.delete(config.id),
+                );
+            }
           }}
           onClose={() => setAdding(false)}
         />
@@ -727,10 +906,11 @@ function RemoteMachineAssignment({
   onDraft,
   onRegister,
   onSnapshot,
+  onLabel,
 }: {
   machine: Machine;
   hostScope: string;
-  subscriptions: ProviderStatus[];
+  subscriptions: LibraryAccount[];
   accountLabels: Record<string, string>;
   usages: Record<string, SubscriptionUsageState>;
   drafts: Record<string, AssignmentChange>;
@@ -743,6 +923,7 @@ function RemoteMachineAssignment({
   ) => void;
   onRegister: (machineId: string, target: AssignmentTarget | null) => void;
   onSnapshot: (machineId: string, data: ProviderSnapshot | null) => void;
+  onLabel: (id: string, label: string) => void;
 }) {
   const endpoint = useMemo(
     () =>
@@ -772,6 +953,7 @@ function RemoteMachineAssignment({
       drafts={drafts}
       onDraft={onDraft}
       onRegister={onRegister}
+      onLabel={onLabel}
       unavailable={!endpoint}
     />
   );
@@ -791,6 +973,7 @@ function MachineAssignmentCard({
   drafts,
   onDraft,
   onRegister,
+  onLabel,
   unavailable = false,
 }: {
   machineId: string;
@@ -800,7 +983,7 @@ function MachineAssignmentCard({
   connection: DaemonConnection | null;
   machine: ProviderMachineState;
   cacheKey: string;
-  subscriptions: ProviderStatus[];
+  subscriptions: LibraryAccount[];
   accountLabels: Record<string, string>;
   usages: Record<string, SubscriptionUsageState>;
   drafts: Record<string, AssignmentChange>;
@@ -812,6 +995,7 @@ function MachineAssignmentCard({
     id: string,
   ) => void;
   onRegister: (machineId: string, target: AssignmentTarget | null) => void;
+  onLabel: (id: string, label: string) => void;
   unavailable?: boolean;
 }) {
   const [connecting, setConnecting] = useState<string | null>(null);
@@ -838,7 +1022,7 @@ function MachineAssignmentCard({
           if (!source) throw new Error("Choose an available subscription.");
           snapshot = await machine.execute({
             kind: "save",
-            config: portableSubscriptionConfig(source),
+            config: libraryConfig(source),
             expectedRevision: snapshot.revision,
           });
         }
@@ -890,6 +1074,7 @@ function MachineAssignmentCard({
               epoch={accountEpoch}
               onConnect={setConnecting}
               onDraft={onDraft}
+              onLabel={onLabel}
             />
           ))}
         </div>
@@ -925,6 +1110,7 @@ function ProviderAssignment({
   epoch,
   onConnect,
   onDraft,
+  onLabel,
 }: {
   machineId: string;
   machineName: string;
@@ -932,12 +1118,13 @@ function ProviderAssignment({
   connection: DaemonConnection | null;
   machine: ProviderMachineState;
   cacheKey: string;
-  subscriptions: ProviderStatus[];
+  subscriptions: LibraryAccount[];
   accountLabels: Record<string, string>;
   usages: Record<string, SubscriptionUsageState>;
   draftId: string | undefined;
   epoch: number;
   onConnect: (id: string) => void;
+  onLabel: (id: string, label: string) => void;
   onDraft: (
     machineId: string,
     machineName: string,
@@ -976,6 +1163,7 @@ function ProviderAssignment({
         if (cancelled) return;
         rememberAccount(cacheKey, active.id, next);
         setAccountResult({ connection, providerId: active.id, account: next, failed: false });
+        if (next.label) onLabel(active.id, next.label);
       },
       () =>
         !cancelled &&
@@ -992,6 +1180,7 @@ function ProviderAssignment({
     connection,
     epoch,
     machine.workspaceReady,
+    onLabel,
   ]);
   const status = !active
     ? null
@@ -1053,7 +1242,7 @@ function SubscriptionPicker({
   label: string;
   engine: SubscriptionEngine;
   selectedId: string;
-  choices: ProviderStatus[];
+  choices: LibraryAccount[];
   accountLabels: Record<string, string>;
   usages: Record<string, SubscriptionUsageState>;
   disabled: boolean;
@@ -1179,12 +1368,12 @@ function PickerAccountDetails({
   accountLabels,
   usage: state,
 }: {
-  provider: ProviderStatus;
+  provider: LibraryAccount;
   accountLabels: Record<string, string>;
   usage: SubscriptionUsageState | undefined;
 }) {
   const name = accountName(provider, accountLabels);
-  const accountLabel = accountLabels[provider.id];
+  const accountLabel = accountLabels[provider.id] ?? provider.accountLabel;
   const detail = accountLabel && !name.includes(accountLabel) ? accountLabel : null;
   const usage = state?.usage;
   return (
@@ -1241,7 +1430,9 @@ function PickerUsage({ usage: state }: { usage: SubscriptionUsageState | undefin
 
 function SubscriptionLibraryRow({
   connection,
+  entry,
   provider,
+  localSupported,
   account,
   epoch,
   busy,
@@ -1255,7 +1446,10 @@ function SubscriptionLibraryRow({
   onRemove,
 }: {
   connection: DaemonConnection | null;
-  provider: ProviderStatus;
+  entry: LibraryAccount;
+  /** The account as this computer holds it; absent until it is set up here. */
+  provider: ProviderStatus | undefined;
+  localSupported: boolean;
   account: AgentAccount | undefined;
   epoch: number;
   busy: boolean;
@@ -1265,7 +1459,7 @@ function SubscriptionLibraryRow({
   usageSupported: boolean;
   onAccount: (id: string, account: AgentAccount) => void;
   onConnect: () => void;
-  onRename: (provider: ProviderStatus, name: string | undefined) => Promise<unknown>;
+  onRename: (entry: LibraryAccount, name: string | undefined) => Promise<unknown>;
   onRemove: () => void;
 }) {
   const [failure, setFailure] = useState<{
@@ -1279,61 +1473,53 @@ function SubscriptionLibraryRow({
   useEffect(() => {
     accountRef.current = account;
   }, [account]);
+  const usable = !!provider?.installed && !!provider.enabled;
   useEffect(() => {
-    if (!connection || !workspaceReady || !provider.installed || !provider.enabled) return;
+    if (!connection || !workspaceReady || !usable) return;
     let cancelled = false;
-    requestAccount(connection, provider.id, { type: "read" }).then(
+    requestAccount(connection, entry.id, { type: "read" }).then(
       (next) => {
         if (cancelled) return;
-        onAccount(provider.id, next);
+        onAccount(entry.id, next);
         setFailure(null);
       },
       () => {
         if (!cancelled && !accountRef.current)
-          setFailure({ connection, providerId: provider.id, epoch });
+          setFailure({ connection, providerId: entry.id, epoch });
       },
     );
     return () => {
       cancelled = true;
     };
-  }, [
-    connection,
-    provider.id,
-    provider.installed,
-    provider.enabled,
-    epoch,
-    onAccount,
-    workspaceReady,
-  ]);
+  }, [connection, entry.id, usable, epoch, onAccount, workspaceReady]);
   const failed =
     failure?.connection === connection &&
-    failure.providerId === provider.id &&
+    failure.providerId === entry.id &&
     failure.epoch === epoch;
-  const connected = account?.status === "connected";
-  const providerFallback = provider.subscription?.nickname;
-  const name =
-    provider.accountNickname ??
-    account?.label ??
-    (providerFallback && providerFallback !== "Account" ? providerFallback : "Account");
-  const status = !provider.installed
-    ? "Not installed on this machine"
-    : !provider.enabled
-      ? "Disabled on this machine"
-      : failed
-        ? "Could not check the sign-in"
-        : !account
-          ? "Checking sign-in…"
-          : connected
-            ? `Connected${account.label && account.label !== name ? ` · ${account.label}` : ""}`
-            : "Not connected";
-  const checkingAccount = provider.installed && provider.enabled && !account && !failed;
+  const connected = !!provider && account?.status === "connected";
+  const name = accountName(entry, account?.label ? { [entry.id]: account.label } : {});
+  const { accountNickname: _, ...unnamed } = entry;
+  const status = !provider
+    ? "Not set up on this computer"
+    : !provider.installed
+      ? "Not installed on this machine"
+      : !provider.enabled
+        ? "Disabled on this machine"
+        : failed
+          ? "Could not check the sign-in"
+          : !account
+            ? "Checking sign-in…"
+            : connected
+              ? `Connected${account.label && account.label !== name ? ` · ${account.label}` : ""}`
+              : "Not connected";
+  const checkingAccount = usable && !account && !failed;
   return (
     <div
       role="group"
-      aria-label={`${subscriptionEngineLabels[provider.engine as SubscriptionEngine]} subscription ${name}`}
+      aria-label={`${subscriptionEngineLabels[entry.engine]} subscription ${name}`}
       className="flex flex-wrap items-start gap-3 px-4 py-3"
     >
-      <ProviderIcon provider={provider.engine} />
+      <ProviderIcon provider={entry.engine} />
       <div className="min-w-0 flex-1 basis-32">
         <div className="flex flex-wrap items-baseline gap-x-2">
           <p className="font-medium">{name}</p>
@@ -1355,7 +1541,7 @@ function SubscriptionLibraryRow({
         )}
       </div>
       <div className="flex shrink-0 items-center gap-1">
-        {provider.installed && provider.enabled && (
+        {(usable || (!provider && localSupported)) && (
           <Button variant="outline" size="sm" disabled={busy} onClick={onConnect}>
             {connected ? "Manage" : "Connect"}
           </Button>
@@ -1405,9 +1591,9 @@ function SubscriptionLibraryRow({
       </div>
       {renaming && (
         <RenameAccountDialog
-          name={provider.accountNickname ?? ""}
-          fallbackName={account?.label ?? providerFallback ?? "Account"}
-          onSave={(nextName) => onRename(provider, nextName)}
+          name={entry.accountNickname ?? ""}
+          fallbackName={accountName(unnamed, account?.label ? { [entry.id]: account.label } : {})}
+          onSave={(nextName) => onRename(entry, nextName)}
           onClose={() => setRenaming(false)}
         />
       )}
@@ -1599,7 +1785,7 @@ function AddSubscriptionDialog({
   providers: ProviderStatus[];
   revision: number;
   onSave: (op: ProviderOperation) => Promise<unknown>;
-  onCreated: (id: string) => void;
+  onCreated: (config: ProviderConfig) => void;
   onClose: () => void;
 }) {
   const [engine, setEngine] = useState<SubscriptionEngine>("claude");
@@ -1613,7 +1799,7 @@ function AddSubscriptionDialog({
       const base = providers.find((p) => p.id === engine && !p.subscription);
       const config = subscriptionConfig(engine, nickname, base);
       await onSave({ kind: "save", config, expectedRevision: revision });
-      onCreated(config.id);
+      onCreated(config);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not add the subscription");
     } finally {
