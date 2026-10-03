@@ -294,6 +294,13 @@ test("another computer lists the same accounts, and what each machine uses", asy
 
     const work = section.getByRole("group", { name: "Claude subscription work@example.test" });
     await expect(work).toContainText("Not set up on this computer");
+    // Its limits come from the machine using it, since this computer is not signed in to it.
+    await expect(work.getByRole("progressbar", { name: "Session" })).toHaveAttribute(
+      "aria-valuenow",
+      "42",
+    );
+    await expect(work).toContainText("Usage from Second machine");
+    await work.screenshot({ path: test.info().outputPath("remote-usage.png") });
     const second = section.getByRole("group", { name: "Second machine assignments" });
     await expect(second.getByText("Online", { exact: true })).toBeVisible();
     const secondClaude = second.getByRole("button", { name: "Second machine Claude subscription" });
