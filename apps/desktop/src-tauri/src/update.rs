@@ -6,9 +6,10 @@
 //! AppImage saved in one, or a Mac app bundle in a folder we can write to is ours to replace. The
 //! second is applying an update, which means touching files the webview cannot.
 //!
-//! Downloading and verifying use the system's `curl` and `sha256sum` rather than HTTP and digest
-//! crates, for the same reason `ssh_key.rs` uses `ssh-keygen`: they are present wherever this app
-//! runs, and their behaviour around redirects and proxies is the one users already configured.
+//! Downloading and verifying use the system's `curl` and `sha256sum` (`certutil` on Windows, which
+//! has had `curl` since Windows 10 1803 but has no `sha256sum`) rather than HTTP and digest crates,
+//! for the same reason `ssh_key.rs` uses `ssh-keygen`: they are present wherever this app runs, and
+//! their behaviour around redirects and proxies is the one users already configured.
 //! `curl` is told not to carry our credential across a redirect, so the session token reaches the
 //! control plane and never the host storing the build.
 
@@ -38,6 +39,9 @@ pub enum Installation {
     AppImage { path: String, writable: bool },
     /// A macOS app bundle (`path` is the `.app`), which we can swap if its folder is writable.
     MacApp { path: String, writable: bool },
+    /// A Windows installation made by our installer (`path` is its folder), which the next
+    /// installer updates in place.
+    WindowsApp { path: String, writable: bool },
     /// Built from a checkout. Nothing is offered: the checkout is the source of truth.
     Development,
     /// Somewhere we do not recognise; the app can still say a version exists.
@@ -52,6 +56,7 @@ impl Installation {
             Installation::Tarball { writable: true, .. } => &["tarball"],
             Installation::AppImage { writable: true, .. } => &["appimage"],
             Installation::MacApp { writable: true, .. } => &["dmg"],
+            Installation::WindowsApp { writable: true, .. } => &["nsis"],
             _ => &[],
         }
     }
@@ -77,6 +82,19 @@ pub fn detect(
     let slashed = path.replace('\\', "/");
     if slashed.contains("/target/debug/") || slashed.contains("/target/release/") {
         return Installation::Development;
+    }
+    // The NSIS installer leaves its uninstaller beside the program; nothing else puts one there.
+    if let Some(folder) = executable.parent() {
+        if executable
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("exe"))
+            && folder.join("uninstall.exe").is_file()
+        {
+            return Installation::WindowsApp {
+                path: folder.to_string_lossy().into_owned(),
+                writable: is_writable(folder),
+            };
+        }
     }
     if let Some(bundle) = mac_bundle(executable) {
         // Gatekeeper runs an app opened straight from a download from a randomised read-only
@@ -240,10 +258,18 @@ pub async fn install_app_update(app: AppHandle, request: UpdateRequest) -> Resul
     }
 
     let handle = app.clone();
+    let windows = matches!(installation, Installation::WindowsApp { .. });
     tauri::async_runtime::spawn_blocking(move || apply(&installation, &request))
         .await
         .map_err(|error| error.to_string())??;
-    handle.restart();
+    if !windows {
+        handle.restart();
+    }
+    // The installer is running and will start the new build itself once it has replaced this one,
+    // which it cannot do while this one runs. Exiting (rather than `std::process::exit`) still
+    // stops the local gateway on the way out. Nothing is answered: the window is about to close.
+    handle.exit(0);
+    std::future::pending().await
 }
 
 fn apply(installation: &Installation, request: &UpdateRequest) -> Result<(), String> {
@@ -251,10 +277,35 @@ fn apply(installation: &Installation, request: &UpdateRequest) -> Result<(), Str
     let directory = std::env::temp_dir().join(format!("concors-update-{}", std::process::id()));
     fs::create_dir_all(&directory)
         .map_err(|error| format!("Could not stage the update: {error}"))?;
+    remove_stale_staging(&directory);
     let result = download_and_install(installation, request, &directory);
-    // The build is large; leaving it behind after a failed update helps nobody.
-    let _ = fs::remove_dir_all(&directory);
+    // The build is large; leaving it behind after a failed update helps nobody. A Windows installer
+    // that started is still running from here, so its folder goes on the next update instead.
+    if result.is_err() || !matches!(installation, Installation::WindowsApp { .. }) {
+        let _ = fs::remove_dir_all(&directory);
+    }
     result
+}
+
+/// Staging folders earlier updates left behind: a Windows installer's, which was still running when
+/// its update finished, or any whose app was stopped mid-download.
+fn remove_stale_staging(current: &Path) {
+    let Some(parent) = current.parent() else {
+        return;
+    };
+    let Ok(entries) = fs::read_dir(parent) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let ours = path
+            .file_name()
+            .and_then(OsStr::to_str)
+            .is_some_and(|name| name.starts_with("concors-update-"));
+        if ours && path != current {
+            let _ = fs::remove_dir_all(&path);
+        }
+    }
 }
 
 fn download_and_install(
@@ -266,6 +317,7 @@ fn download_and_install(
         Installation::Pacman { .. } => format!("concors-{}.pkg.tar.zst", request.version),
         Installation::AppImage { .. } => format!("concors-{}.AppImage", request.version),
         Installation::MacApp { .. } => format!("concors-{}.dmg", request.version),
+        Installation::WindowsApp { .. } => format!("Concors-{}-setup.exe", request.version),
         _ => format!("concors-{}.tar.gz", request.version),
     };
     let file = directory.join(name);
@@ -278,6 +330,7 @@ fn download_and_install(
         Installation::AppImage { path, .. } => replace_appimage(&file, Path::new(path)),
         // The restart starts the program at the bundle's path, which is now the new build's.
         Installation::MacApp { path, .. } => replace_mac_app(&file, Path::new(path), directory),
+        Installation::WindowsApp { .. } => run_installer(&file),
         _ => Err("This copy of Concors cannot install updates.".into()),
     }
 }
@@ -286,7 +339,7 @@ fn download_and_install(
 fn download(url: &str, token: &str, destination: &Path) -> Result<(), String> {
     use std::io::Write;
 
-    let mut child = Command::new("curl")
+    let mut child = windowless("curl")
         .args([
             "--fail",
             "--silent",
@@ -346,16 +399,11 @@ fn verify(file: &Path, sha256: &str, expected_size: u64) -> Result<(), String> {
         ));
     }
 
-    let output = digest_command()
-        .arg(file)
+    let output = digest_command(file)
         .stdin(Stdio::null())
         .output()
         .map_err(|error| format!("Could not check the download: {error}"))?;
-    let digest = String::from_utf8_lossy(&output.stdout)
-        .split_whitespace()
-        .next()
-        .unwrap_or_default()
-        .to_owned();
+    let digest = read_digest(&String::from_utf8_lossy(&output.stdout)).unwrap_or_default();
     if !output.status.success() || digest != sha256 {
         log::warn!("update digest {digest} does not match the published {sha256}");
         return Err("The downloaded update did not match its checksum and was discarded.".into());
@@ -365,15 +413,115 @@ fn verify(file: &Path, sha256: &str, expected_size: u64) -> Result<(), String> {
 }
 
 /// `sha256sum` only arrived with recent macOS releases; `shasum` has always been there, and prints
-/// the digest the same way.
-fn digest_command() -> Command {
-    if cfg!(target_os = "macos") {
+/// the digest the same way. Windows has neither, and `certutil` has been part of it for decades.
+fn digest_command(file: &Path) -> Command {
+    let mut command = if cfg!(target_os = "macos") {
         let mut command = Command::new("shasum");
         command.args(["-a", "256"]);
         command
+    } else if cfg!(windows) {
+        let mut command = windowless("certutil");
+        command.arg("-hashfile");
+        command
     } else {
         Command::new("sha256sum")
+    };
+    command.arg(file);
+    if cfg!(windows) {
+        command.arg("SHA256");
     }
+    command
+}
+
+/// The lowercase hex digest in a digest tool's output. `sha256sum` and `shasum` print it first on
+/// their line; `certutil` prints a title line, then the digest (in pairs separated by spaces on
+/// older Windows releases, in capitals on some), then a status line.
+fn read_digest(output: &str) -> Option<String> {
+    output.lines().find_map(|line| {
+        let first = line.split_whitespace().next()?;
+        let candidates = [
+            first.to_owned(),
+            line.split_whitespace().collect::<String>(),
+        ];
+        candidates
+            .into_iter()
+            .find(|text| text.len() == 64 && text.chars().all(|c| c.is_ascii_hexdigit()))
+            .map(|text| text.to_ascii_lowercase())
+    })
+}
+
+/// A console program started from this GUI app flashes a console window on Windows unless told
+/// not to; the ones an update runs print nothing a person needs to see.
+fn windowless(program: &str) -> Command {
+    #[allow(unused_mut)]
+    let mut command = Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    command
+}
+
+/// Starts the downloaded installer, once it is known to come from whoever signed this copy.
+///
+/// `/P` shows only a progress bar and accepts every default, `/UPDATE` keeps the person's own
+/// choices from the first install (a deleted desktop shortcut stays deleted), and `/R` starts
+/// Concors again when it is done. Its hook closes this app if it is still open and stops the
+/// runtime the old copy left running (`windows/installer-hooks.nsh`), so the caller only exits.
+fn run_installer(installer: &Path) -> Result<(), String> {
+    let running = std::env::current_exe()
+        .map_err(|error| format!("Could not locate this copy of Concors: {error}"))?;
+    match (
+        authenticode_signer(&running),
+        authenticode_signer(installer),
+    ) {
+        // An unsigned copy is a local or CI build; there is no publisher to hold the update to.
+        (None, _) => log::warn!("this copy is unsigned; installing the update on its checksum"),
+        (Some(ours), Some(theirs)) if ours == theirs => {
+            log::info!("update installer is signed by {theirs}")
+        }
+        (Some(ours), theirs) => {
+            log::warn!("update installer is signed by {theirs:?}, this copy by {ours}");
+            return Err(
+                "The update is not signed by the publisher of this copy, so nothing was installed."
+                    .into(),
+            );
+        }
+    }
+    Command::new(installer)
+        .args(["/P", "/UPDATE", "/R"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|error| format!("Could not start the installer: {error}"))?;
+    log::info!("installer started; exiting so it can replace this copy");
+    Ok(())
+}
+
+/// Who signed a Windows program, as its certificate's subject, when Windows calls the signature
+/// valid. Through PowerShell, which every supported Windows has, rather than the WinTrust API; the
+/// path goes through the environment so no quoting can break the command.
+fn authenticode_signer(file: &Path) -> Option<String> {
+    let output = windowless("powershell.exe")
+        .args([
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            "$s = Get-AuthenticodeSignature -LiteralPath $env:CONCORS_SIGNED_FILE; \
+             if ($s.Status -eq 'Valid') { $s.SignerCertificate.Subject }",
+        ])
+        .env("CONCORS_SIGNED_FILE", file)
+        .stdin(Stdio::null())
+        .output()
+        .ok()?;
+    let subject = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    (output.status.success() && !subject.is_empty()).then_some(subject)
 }
 
 /// pacman keeps its own record of what is installed, so an update must go through it.
@@ -687,6 +835,64 @@ mod tests {
             }
         );
         fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn a_windows_installation_is_recognised_by_the_uninstaller_beside_it() {
+        let folder = temp("windows");
+        fs::create_dir_all(folder.join("daemon")).unwrap();
+        let executable = folder.join("Concors.exe");
+        fs::write(&executable, "").unwrap();
+        // A program on its own, say one copied out of an installation, is not one.
+        assert_eq!(detect(&executable, None, |_| None), Installation::Unknown);
+
+        fs::write(folder.join("uninstall.exe"), "").unwrap();
+        let installation = detect(&executable, None, |_| None);
+        assert_eq!(
+            installation,
+            Installation::WindowsApp {
+                path: folder.to_string_lossy().into_owned(),
+                writable: true
+            }
+        );
+        assert_eq!(installation.formats(), ["nsis"]);
+        assert_eq!(
+            serde_json::to_value(&installation).unwrap()["kind"],
+            serde_json::json!("windowsApp")
+        );
+        let read_only = Installation::WindowsApp {
+            path: folder.to_string_lossy().into_owned(),
+            writable: false,
+        };
+        assert!(read_only.formats().is_empty());
+        fs::remove_dir_all(&folder).unwrap();
+    }
+
+    #[test]
+    fn the_digest_is_read_from_each_platform_tool() {
+        let digest = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08";
+        assert_eq!(
+            read_digest(&format!("{digest}  /tmp/concors-0.7.0.tar.gz\n")).as_deref(),
+            Some(digest)
+        );
+        // certutil: a title, the digest, then a status line.
+        let certutil = format!(
+            "SHA256 hash of C:\\Users\\Some One\\AppData\\Local\\Temp\\Concors-0.7.0-setup.exe:\r\n{}\r\nCertUtil: -hashfile command completed successfully.\r\n",
+            digest.to_uppercase()
+        );
+        assert_eq!(read_digest(&certutil).as_deref(), Some(digest));
+        // Older Windows releases print it in spaced pairs.
+        let pairs: Vec<String> = digest
+            .as_bytes()
+            .chunks(2)
+            .map(|pair| String::from_utf8(pair.to_vec()).unwrap())
+            .collect();
+        let spaced = format!("SHA256 hash of file C:\\x.exe:\r\n{}\r\n", pairs.join(" "));
+        assert_eq!(read_digest(&spaced).as_deref(), Some(digest));
+        assert_eq!(
+            read_digest("CertUtil: The system cannot find the file specified."),
+            None
+        );
     }
 
     #[test]

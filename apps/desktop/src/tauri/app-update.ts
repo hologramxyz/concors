@@ -14,6 +14,8 @@ const InstallationSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("appimage"), path: z.string(), writable: z.boolean() }),
   /** `path` is the `.app` bundle, which an update swaps for the one in the release's disk image. */
   z.object({ kind: z.literal("macApp"), path: z.string(), writable: z.boolean() }),
+  /** `path` is the installation folder, which the next release's installer updates in place. */
+  z.object({ kind: z.literal("windowsApp"), path: z.string(), writable: z.boolean() }),
   z.object({ kind: z.literal("development") }),
   z.object({ kind: z.literal("unknown") }),
 ]);
