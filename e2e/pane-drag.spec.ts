@@ -17,6 +17,12 @@ test("dragging moves panes across the workspace without replacing sessions", asy
     await seedProject(page, "Pane dragging", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
+    // Tab 1's terminal is visible too until the new tab arrives, and so is its "Pane actions".
+    await expect(
+      page
+        .getByLabel("Project tabs", { exact: true })
+        .getByRole("button", { name: "Tab 2", exact: true }),
+    ).toHaveAttribute("aria-pressed", "true");
     await expect(page.locator(".xterm").filter({ visible: true })).toBeVisible();
     await page.getByRole("button", { name: "Pane actions" }).click();
     await page.getByRole("menuitem", { name: "Split horizontally" }).click();
@@ -85,6 +91,56 @@ test("dragging moves panes across the workspace without replacing sessions", asy
     await expect(page.getByRole("alert")).toHaveCount(0);
   } finally {
     await context.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("a pane menu opened while a new tab launches closes when that tab takes over", async ({
+  page,
+}) => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-pane-menu-launch-"));
+  // The new tab appears once the daemon answers. Hold that answer so the shown tab's pane menu
+  // can be opened in the meantime, as a quick hand (or test) does.
+  let holding = false;
+  const held: string[] = [];
+  let deliver: ((raw: string) => void) | undefined;
+  await page.routeWebSocket("ws://127.0.0.1:7429/ws", (socket) => {
+    const server = socket.connectToServer();
+    deliver = (raw) => socket.send(raw);
+    socket.onMessage((raw) => server.send(raw));
+    server.onMessage((raw) => {
+      const type = (JSON.parse(String(raw)) as { type?: string }).type;
+      if (holding && (type === "workspace.snapshot" || type === "workspace.result"))
+        held.push(String(raw));
+      else socket.send(raw);
+    });
+  });
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Menu during launch", directory);
+    holding = true;
+    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
+    await expect.poll(() => held.some((raw) => raw.includes('"workspace.result"'))).toBe(true);
+    await page.getByRole("button", { name: "Pane actions" }).click();
+    const split = page.getByRole("menuitem", { name: "Split horizontally" });
+    await expect(split).toBeDisabled();
+    holding = false;
+    for (const raw of held.splice(0)) deliver?.(raw);
+    // CSS, not roles: an open menu hides the rest of the page from the accessibility tree.
+    await expect(
+      page.locator('[aria-label="Project tabs"] [data-tab-id] > button:first-child', {
+        hasText: "Tab 2",
+      }),
+    ).toHaveAttribute("aria-pressed", "true");
+    // The menu belonged to a pane that is now hidden; left open it hung in the window's corner
+    // with every item disabled.
+    await expect(page.getByRole("menu", { name: "Pane actions" })).toHaveCount(0);
+    await page.getByRole("button", { name: "Pane actions" }).click();
+    await split.click();
+    await expect(page.locator(".xterm").filter({ visible: true })).toHaveCount(2);
+  } finally {
     await rm(directory, { recursive: true, force: true });
   }
 });

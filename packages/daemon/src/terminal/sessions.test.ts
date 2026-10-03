@@ -151,8 +151,9 @@ it("shares a real PTY, transfers control, replays its screen, rebinds and record
     data: expect.stringContaining("concors-pty-alive"),
     session: { status: "running" },
   });
-  // Closing a tab detaches the view, leaving a discoverable process that can be rebound.
-  await edit(first.connection, { kind: "tab.close", projectId, tabId, expectedVersion: 2 });
+  // Closing a tab detaches the view, leaving a discoverable process that can be rebound. Starting
+  // the session was no layout edit, so the version the tab was created at still applies.
+  await edit(first.connection, { kind: "tab.close", projectId, tabId, expectedVersion: 1 });
   const newTab = randomUUID(),
     newPane = randomUUID();
   await edit(first.connection, {
@@ -160,7 +161,7 @@ it("shares a real PTY, transfers control, replays its screen, rebinds and record
     projectId,
     tabId: newTab,
     paneId: newPane,
-    expectedVersion: 3,
+    expectedVersion: 2,
     name: "Reattach",
     profile: "shell",
   });
@@ -169,7 +170,7 @@ it("shares a real PTY, transfers control, replays its screen, rebinds and record
     projectId,
     tabId: newTab,
     paneId: newPane,
-    expectedVersion: 4,
+    expectedVersion: 3,
     sessionId,
   });
   expect(first.connection.workspace!.projects[0]!.tabs[0]!.nodes[0]).toMatchObject({ sessionId });
@@ -178,7 +179,8 @@ it("shares a real PTY, transfers control, replays its screen, rebinds and record
     ...start,
     tabId: newTab,
     paneId: newPane,
-    expectedVersion: 5,
+    // Binding a session that already ran changes the pane's profile, so that one does count.
+    expectedVersion: 4,
     expectedSessionId: sessionId,
   });
   expect(next[0]?.status).toBe("running");
@@ -282,7 +284,7 @@ it("broadcasts Codex profile lifecycle to unattached clients and restores it on 
     .toBe("failed");
   const [next] = await request(first.connection, {
     ...start,
-    expectedVersion: 2,
+    expectedVersion: 1,
     expectedSessionId: id,
   });
   expect(next?.status).toBe("running");
