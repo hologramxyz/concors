@@ -222,6 +222,33 @@ export function SubscriptionsSettings({
   );
   const availableMachines =
     machineList.data?.filter((machine) => machine.status !== "deleted") ?? [];
+  // An account not signed in on this computer can still show its limits, read from a machine that
+  // is signed in to it: the one using it first.
+  const [usageHosts, setUsageHosts] = useState<Record<string, DaemonConnection | null>>({});
+  const reportUsageHost = useCallback((machineId: string, connection: DaemonConnection | null) => {
+    setUsageHosts((current) =>
+      current[machineId] === connection ? current : { ...current, [machineId]: connection },
+    );
+  }, []);
+  const remoteSources = subscriptions
+    .filter((account) => accounts[account.id]?.status !== "connected")
+    .map((account) => ({
+      id: account.id,
+      hosts: availableMachines
+        .flatMap((machine) => {
+          const connection = usageHosts[machine.id];
+          const held = machineData[machine.id]?.providers.find(
+            (provider) => provider.id === account.id,
+          );
+          return connection && held
+            ? [{ machineId: machine.id, name: machine.name, connection, active: !!held.active }]
+            : [];
+        })
+        .sort((a, b) => Number(b.active) - Number(a.active)),
+    }))
+    .filter((source) => source.hosts.length > 0);
+  const remoteUsages = useRemoteUsages(remoteSources);
+  const allUsages = useMemo(() => ({ ...remoteUsages, ...usages }), [remoteUsages, usages]);
   // Accounts this computer or the person's own machines already hold join the library, so one
   // set up before the library was kept online is not lost. Others' machines are never read.
   const userId = auth?.user.id;
@@ -487,7 +514,7 @@ export function SubscriptionsSettings({
             cacheKey={localCacheKey}
             subscriptions={subscriptions}
             accountLabels={accountLabels}
-            usages={usages}
+            usages={allUsages}
             drafts={assignmentDrafts}
             onDraft={stageAssignment}
             onRegister={registerAssignmentTarget}
@@ -500,11 +527,12 @@ export function SubscriptionsSettings({
               hostScope={hostScope}
               subscriptions={subscriptions}
               accountLabels={accountLabels}
-              usages={usages}
+              usages={allUsages}
               drafts={assignmentDrafts}
               onDraft={stageAssignment}
               onRegister={registerAssignmentTarget}
               onSnapshot={reportMachine}
+              onUsageHost={reportUsageHost}
               onLabel={rememberLabel}
             />
           ))}
@@ -546,7 +574,7 @@ export function SubscriptionsSettings({
               busy={local.busy}
               workspaceReady={local.workspaceReady}
               usedOn={assignedMachines(entry.id)}
-              usage={usages[entry.id]}
+              usage={allUsages[entry.id]}
               usageSupported={usageSupported}
               onAccount={reportAccount}
               onConnect={() =>
@@ -689,6 +717,79 @@ interface SubscriptionUsageState {
   usage: AgentPlanUsage | null;
   loading: boolean;
   error: string | null;
+  /** The machine it was read from, when not this computer. */
+  from?: string;
+}
+
+interface RemoteUsageSource {
+  id: string;
+  hosts: { machineId: string; name: string; connection: DaemonConnection }[];
+}
+/** Limits last read from another machine, by account; kept across visits like the local ones. */
+const remoteUsageSnapshots = new Map<string, SubscriptionUsageState>();
+
+/**
+ * Limits of accounts this computer is not signed in to, read from the first machine that reports
+ * them. A machine where the account is not signed in answers `signed-out`, so the next is asked.
+ */
+function useRemoteUsages(sources: RemoteUsageSource[]) {
+  const key = sources
+    .map((source) => `${source.id}@${source.hosts.map((host) => host.machineId).join(",")}`)
+    .join("\n");
+  const latest = useRef(sources);
+  useEffect(() => {
+    latest.current = sources;
+  });
+  const [usages, setUsages] = useState<Record<string, SubscriptionUsageState>>(() =>
+    Object.fromEntries(
+      sources.flatMap((source) => {
+        const cached = remoteUsageSnapshots.get(source.id);
+        return cached ? [[source.id, cached]] : [];
+      }),
+    ),
+  );
+  useEffect(() => {
+    if (!key) return;
+    let cancelled = false;
+    const read = async (source: RemoteUsageSource) => {
+      for (const host of source.hosts) {
+        try {
+          const { outcome } = await host.connection.requestProvider(
+            { kind: "usage", id: source.id },
+            crypto.randomUUID(),
+          );
+          const usage = outcome.status === "ok" ? outcome.usage : undefined;
+          if (!usage || usage.status === "signed-out" || usage.status === "error") continue;
+          return { usage, loading: false, error: null, from: host.name };
+        } catch {
+          // Unreachable or too old to say; ask the next machine.
+        }
+      }
+      return null;
+    };
+    const refresh = () => {
+      for (const source of latest.current)
+        void read(source).then((state) => {
+          if (cancelled || !state) return;
+          remoteUsageSnapshots.set(source.id, state);
+          setUsages((current) => ({ ...current, [source.id]: state }));
+        });
+    };
+    refresh();
+    const timer = setInterval(refresh, AGENT_USAGE_TTL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [key]);
+  return useMemo(
+    () =>
+      Object.fromEntries(
+        sources.flatMap((source) => (usages[source.id] ? [[source.id, usages[source.id]]] : [])),
+      ) as Record<string, SubscriptionUsageState>,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [key, usages],
+  );
 }
 
 /** Limits refresh while this page is open; the last read prevents a reflow when the user returns. */
@@ -907,6 +1008,7 @@ function RemoteMachineAssignment({
   onRegister,
   onSnapshot,
   onLabel,
+  onUsageHost,
 }: {
   machine: Machine;
   hostScope: string;
@@ -924,6 +1026,7 @@ function RemoteMachineAssignment({
   onRegister: (machineId: string, target: AssignmentTarget | null) => void;
   onSnapshot: (machineId: string, data: ProviderSnapshot | null) => void;
   onLabel: (id: string, label: string) => void;
+  onUsageHost: (machineId: string, connection: DaemonConnection | null) => void;
 }) {
   const endpoint = useMemo(
     () =>
@@ -939,6 +1042,16 @@ function RemoteMachineAssignment({
     () => onSnapshot(machine.id, providerMachine.data),
     [machine.id, onSnapshot, providerMachine.data],
   );
+  const usageHost =
+    providerMachine.workspaceReady &&
+    handle.state?.status === "ready" &&
+    !!handle.state.daemon.capabilities?.includes(PROVIDER_USAGE_CAPABILITY)
+      ? handle.transport
+      : null;
+  useEffect(() => {
+    onUsageHost(machine.id, usageHost);
+    return () => onUsageHost(machine.id, null);
+  }, [machine.id, onUsageHost, usageHost]);
   return (
     <MachineAssignmentCard
       machineId={machine.id}
@@ -1513,6 +1626,9 @@ function SubscriptionLibraryRow({
               ? `Connected${account.label && account.label !== name ? ` · ${account.label}` : ""}`
               : "Not connected";
   const checkingAccount = usable && !account && !failed;
+  // Not signed in here: limits read from a machine that is.
+  const remoteUsage =
+    !(usageSupported && (connected || checkingAccount)) && usage?.from ? usage : undefined;
   return (
     <div
       role="group"
@@ -1535,9 +1651,17 @@ function SubscriptionLibraryRow({
               <MachineAssignmentsHover machines={usedOn} />
             </>
           )}
+          {remoteUsage && (
+            <>
+              <span aria-hidden="true">·</span>
+              <span>Usage from {remoteUsage.from}</span>
+            </>
+          )}
         </div>
-        {usageSupported && (connected || checkingAccount) && (
+        {usageSupported && (connected || checkingAccount) ? (
           <SubscriptionUsage usage={connected ? usage : undefined} />
+        ) : (
+          remoteUsage && <SubscriptionUsage usage={remoteUsage} />
         )}
       </div>
       <div className="flex shrink-0 items-center gap-1">
