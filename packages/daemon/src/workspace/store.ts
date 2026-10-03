@@ -283,7 +283,15 @@ export class WorkspaceStore {
     return TerminalInfoSchema.parse(JSON.parse(String(row["info"])));
   }
 
-  /** Reserve the launch and bind its pane before spawning, so crashes never duplicate a launch. */
+  /**
+   * Reserve the launch and bind its pane before spawning, so crashes never duplicate a launch.
+   *
+   * Showing a newly started session in its pane leaves the project's version alone, as selection
+   * does. Every new pane starts its session on its own a moment after it appears, so counting that
+   * as an edit made the next layout command, built from the snapshot just before, fail as changed
+   * on another client: closing or renaming a tab right after splitting a pane did nothing. Two
+   * starts for one pane still exclude each other through the pane's session ID.
+   */
   reserveTerminal(request: TerminalRequest, info: TerminalInfo): WorkspaceSnapshot {
     const op = request.operation;
     if (op.kind !== "start") throw new Error("Expected a terminal start request");
@@ -308,7 +316,6 @@ export class WorkspaceStore {
       if (this.terminals().length >= 256)
         throw new Error("Terminal history limit reached (256 sessions)");
       pane.sessionId = info.id;
-      project.version++;
       state.revision++;
       this.#db
         .prepare("INSERT INTO terminals (id, request_id, request, info) VALUES (?, ?, ?, ?)")
@@ -751,8 +758,8 @@ export class WorkspaceStore {
       if (!project || !pane || pane.kind !== "pane")
         throw new Error("This agent's pane has been closed or changed.");
       this.makeRoomForAgent(state);
+      // Not a layout edit; see reserveTerminal.
       pane.sessionId = info.id;
-      project.version++;
       state.revision++;
       this.#db
         .prepare("INSERT INTO agents (id, info) VALUES (?, ?)")
@@ -883,8 +890,9 @@ export class WorkspaceStore {
       )
         throw new Error("Select an empty chat pane");
       if (!restoring) this.makeRoomForAgent(state);
+      // Not a layout edit; see reserveTerminal. An imported or forked chat's new tab already
+      // counted as one.
       pane.sessionId = info.id;
-      project.version++;
       state.revision++;
       if (restoring) this.saveAgent(info);
       else

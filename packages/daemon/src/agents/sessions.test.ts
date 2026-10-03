@@ -113,6 +113,24 @@ async function setup(resumeError?: string) {
   expect(providers).toHaveLength(1);
   return { a, b, id, url };
 }
+it("starting a chat in its pane leaves a layout edit made from the snapshot before it valid", async () => {
+  const { a } = await setup();
+  const project = a.workspace!.projects[0]!;
+  // The chat was started at version 1, which the tab was created at; closing the tab from there
+  // must not fail as changed on another client.
+  const result = await a.executeWorkspace({
+    type: "workspace.command",
+    commandId: randomUUID(),
+    epoch: a.workspace!.epoch,
+    operation: {
+      kind: "tab.close",
+      projectId: project.id,
+      expectedVersion: 1,
+      tabId: project.tabs[0]!.id,
+    },
+  });
+  expect(result.outcome).toMatchObject({ status: "accepted" });
+});
 it("pages saved chat history in both directions without skipping byte-limited messages", async () => {
   const { a, id } = await setup();
   await action(a, { kind: "send", sessionId: id, text: "hold history" });
