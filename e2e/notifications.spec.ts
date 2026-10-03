@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { DaemonConnection, describeDaemonEndpoint } from "../packages/daemon-client/src/index.ts";
+import { chooseProvider } from "./support/agents.ts";
 
 test("notifications deduplicate across windows, open chat, and sync unread without replay", async ({
   page,
@@ -52,6 +53,7 @@ test("notifications deduplicate across windows, open chat, and sync unread witho
     await seedProject(page, "Notifications acceptance", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
     await expect(page.getByLabel("Agent status: Ready").first()).toBeVisible();
     // A ready label can belong to an older project, and this separate socket may
     // receive the new workspace/session after the browser. Await this test's agent.

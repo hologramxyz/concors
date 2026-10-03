@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
+import { chooseProvider } from "./support/agents.ts";
 
 test("tabs are numbered per workspace and keep custom names across pane changes and reloads", async ({
   page,
@@ -38,6 +39,7 @@ test("tabs are numbered per workspace and keep custom names across pane changes 
     await expect(renamed).toHaveAttribute("aria-pressed", "true");
     await page.getByRole("button", { name: "Pane actions", exact: true }).click();
     await page.getByRole("menuitemradio", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
     await page.getByRole("button", { name: "Pane actions", exact: true }).click();
     await page.getByRole("menuitem", { name: "Split horizontally", exact: true }).click();

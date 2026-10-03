@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
+import { chooseProvider } from "./support/agents.ts";
 
 test("double-clicking a tab renames it inline, and the name persists and syncs", async ({
   page,
@@ -20,6 +21,7 @@ test("double-clicking a tab renames it inline, and the name persists and syncs",
     const labels = () => tabs.locator("[data-tab-id] > button:first-child").allTextContents();
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
     await expect.poll(labels).toEqual(["Tab 1", "Tab 2"]);
 
     // Double-click opens an inline editor with the current name selected; Enter commits.
@@ -130,6 +132,7 @@ test("renaming a new Agent tab keeps focus when its chat becomes ready mid-word"
     holding = true;
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
     await tabs.getByRole("button", { name: "Tab 2", exact: true }).dblclick();
     const editor = tabs.getByRole("textbox", { name: "Tab name", exact: true });
     await expect(editor).toBeFocused();

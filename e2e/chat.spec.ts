@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
+import { chooseProvider } from "./support/agents.ts";
 
 test("shared chat streams, handles approvals and removes detached sidebar entries", async ({
   page,
@@ -22,6 +23,7 @@ test("shared chat streams, handles approvals and removes detached sidebar entrie
     await seedProject(page, "Chat acceptance", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
     await expect(page.getByLabel("Agent status: Ready").first()).toBeVisible();
     const agentList = page
       .getByRole("navigation", { name: "Primary" })
@@ -115,6 +117,7 @@ test("shared chat streams, handles approvals and removes detached sidebar entrie
     await expect(remoteAgents.getByRole("list").getByRole("button")).toHaveCount(0);
     await page.getByRole("button", { name: "Pane actions" }).click();
     await page.getByRole("menuitemradio", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
     await expect(agentList.getByRole("list").getByRole("button")).toHaveCount(1);
     await page.getByRole("button", { name: "Close pane", exact: true }).click();

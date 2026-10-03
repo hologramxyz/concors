@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { DaemonConnection, describeDaemonEndpoint } from "@concors/daemon-client";
 import type { WorkspaceOperation } from "@concors/protocol";
 import { mockChatHistory } from "../../../e2e/support/chat-history.ts";
+import { chooseProvider } from "../../../e2e/support/agents.ts";
 
 for (const native of [false, true]) {
   test(`mobile ${native ? "native bridge" : "web"} automatically loads earlier and newer history`, async ({
@@ -62,6 +63,7 @@ for (const native of [false, true]) {
       await page.goto("/");
       await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
       const ui = page.frameLocator('iframe[title="Concors workspace"]');
+      await chooseProvider(ui);
       const timeline = ui.getByRole("log", { name: "Chat timeline" });
       const scrollToEdge = (edge: "top" | "bottom") =>
         timeline.evaluate((viewport, edge) => {

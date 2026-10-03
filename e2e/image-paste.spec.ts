@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
+import { chooseProvider } from "./support/agents.ts";
 
 test("pasted images attach, and screenshots over 1 MB are shrunk instead of refused", async ({
   page,
@@ -14,6 +15,7 @@ test("pasted images attach, and screenshots over 1 MB are shrunk instead of refu
     await seedProject(page, "Image paste", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
     const composer = page.getByRole("textbox", { name: "Message Codex" });
     await expect(composer).toBeEnabled();
 
@@ -84,6 +86,7 @@ test("sent images show as square thumbnails at once, after a reload, and open fu
     await seedProject(page, "Image thumbnails", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
     const composer = page.getByRole("textbox", { name: "Message Codex" });
     await expect(composer).toBeEnabled();
     await page.getByLabel("Upload files").setInputFiles([
