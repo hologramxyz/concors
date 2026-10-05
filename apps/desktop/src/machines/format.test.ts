@@ -6,6 +6,7 @@ import {
   formatMoney,
   formatMonthly,
   isExternal,
+  isRelayed,
   isSettling,
   isRegionSoldOut,
   isSoldOut,
@@ -97,6 +98,11 @@ describe("sshCommand", () => {
     expect(sshCommand(READY)).toBe("ssh ubuntu@147.135.1.2");
     expect(sshCommand({ ...READY, accessReadyAt: null })).toBeNull();
     expect(sshCommand({ ...READY, ipv4: null })).toBeNull();
+    // Through the relay there is no address this computer can reach.
+    expect(sshCommand({ ...READY, connection: "relay" })).toBeNull();
+    expect(isRelayed({ connection: "relay" })).toBe(true);
+    expect(isRelayed({ connection: "direct" })).toBe(false);
+    expect(isRelayed({})).toBe(false);
     expect(sshCommand({ ...READY, status: "provisioning" })).toBeNull();
   });
 

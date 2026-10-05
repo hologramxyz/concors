@@ -57,6 +57,7 @@ import {
   describeStatus,
   formatMonthly,
   isExternal,
+  isRelayed,
   isUndeployed,
   sshCommand,
   STATUS_TONE,
@@ -579,7 +580,11 @@ function MachineCard({
               <dt className="mb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
                 Address
               </dt>
-              <dd className="selectable font-mono break-all">{machine.ipv4 ?? "Assigning…"}</dd>
+              {isRelayed(machine) ? (
+                <dd>Through the Concors relay</dd>
+              ) : (
+                <dd className="selectable font-mono break-all">{machine.ipv4 ?? "Assigning…"}</dd>
+              )}
             </div>
             {machine.paidUntil && (
               <div>
@@ -801,6 +806,13 @@ function readableRegion(region: string): string {
  * elsewhere a command appears once the person has added a key of their own in Settings.
  */
 function SshAccess({ machine, ssh }: { readonly machine: Machine; readonly ssh: DeviceSsh }) {
+  if (isRelayed(machine))
+    return (
+      <span className="text-muted-foreground">
+        This server is reached through the Concors relay, so plain SSH from this computer doesn't
+        reach it. Use your own way in, or the terminal in Concors.
+      </span>
+    );
   const plain = sshCommand(machine);
   if (plain === null) return <span className="text-muted-foreground">—</span>;
 
