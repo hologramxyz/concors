@@ -5,8 +5,11 @@ import {
   describeStatus,
   formatMoney,
   formatMonthly,
+  connectStage,
   isExternal,
   isRelayed,
+  isSettingUp,
+  statusTone,
   isSettling,
   isRegionSoldOut,
   isSoldOut,
@@ -177,6 +180,29 @@ describe("isUndeployed", () => {
   });
 });
 
+describe("own server setup", () => {
+  const own = { provider: "external", status: "running" } as const;
+
+  it("is waiting, then installing, then ready", () => {
+    expect(connectStage({ status: "provisioning", agentInstalledAt: null })).toBe("waiting");
+    expect(connectStage({ status: "running", agentInstalledAt: null })).toBe("installing");
+    expect(connectStage({ status: "running", agentInstalledAt: "2026-10-05" })).toBe("ready");
+  });
+
+  it("shows a connected own server as setting up until Concors is installed", () => {
+    expect(isSettingUp({ ...own, agentInstalledAt: null })).toBe(true);
+    expect(
+      describeStatus({ ...own, ovhState: null, serviceName: null, agentInstalledAt: null }),
+    ).toBe("Setting up");
+    expect(statusTone({ ...own, agentInstalledAt: null })).toBe("pending");
+    expect(isSettling({ ...own, agentInstalledAt: null })).toBe(true);
+    expect(isSettingUp({ ...own, agentInstalledAt: "2026-10-05" })).toBe(false);
+    expect(statusTone({ ...own, agentInstalledAt: "2026-10-05" })).toBe("success");
+    // A Concors VPS keeps its own meaning of running.
+    expect(isSettingUp({ ...own, provider: "ovh", agentInstalledAt: null })).toBe(false);
+  });
+});
+
 describe("own servers", () => {
   const waiting = {
     status: "provisioning",
@@ -193,6 +219,9 @@ describe("own servers", () => {
 
   it("wait for the server rather than an order", () => {
     expect(describeStatus(waiting)).toBe("Waiting for server");
-    expect(describeStatus({ ...waiting, status: "running" })).toBe("Running");
+    expect(describeStatus({ ...waiting, status: "running" })).toBe("Setting up");
+    expect(describeStatus({ ...waiting, status: "running", agentInstalledAt: "2026-10-05" })).toBe(
+      "Running",
+    );
   });
 });

@@ -100,29 +100,75 @@ async function openMachines(page: Page) {
   await expect(page.getByRole("heading", { name: "Machines", exact: true }).first()).toBeVisible();
 }
 
-test("connecting your own server hands out its setup command", async ({ page }) => {
-  await machinesApi(page);
+test("connecting your own server hands out its setup command and follows the setup", async ({
+  page,
+}) => {
+  const state = await machinesApi(page);
   await openMachines(page);
 
   await page.getByRole("button", { name: "New machine", exact: true }).first().click();
   await page.getByRole("menuitem", { name: /^Connect your own server/ }).click();
   const dialog = page.getByRole("dialog", { name: "Connect your own server" });
-  await expect(dialog).toContainText("Ubuntu or Debian, on x86_64");
-  await dialog.getByRole("textbox", { name: "Name", exact: true }).fill("home-box");
-  await dialog.getByRole("button", { name: "Get setup command", exact: true }).click();
+  // Requirements are there for whoever wants them, folded away.
+  const servers = dialog.getByText("Which servers work?", { exact: true });
+  await expect(dialog.getByText("uname -m", { exact: true })).toBeHidden();
+  await servers.click();
+  await expect(dialog.getByText("uname -m", { exact: true })).toBeVisible();
+  await expect(dialog).toContainText("ARM servers aren't supported yet");
+  await dialog.getByRole("textbox", { name: "Name", exact: true }).fill("Home-Box");
+  await expect(dialog.getByRole("textbox", { name: "Name", exact: true })).toHaveValue("home-box");
+  await dialog.getByRole("button", { name: "Continue", exact: true }).click();
 
   const added = page.getByRole("dialog", { name: "Connect home-box" });
   await expect(added.getByText(COMMAND, { exact: true })).toBeVisible();
   await expect(added.getByRole("button", { name: "Copy setup command" })).toBeVisible();
-  await expect(added.getByRole("status")).toContainText("Waiting for your server");
+  const progress = added.getByRole("status", { name: "Setup progress" });
+  await expect(progress).toContainText("Waiting for your server");
+
+  // The dialog re-reads the machine every few seconds and moves along with it.
+  state.machines = [{ ...connected, agentInstalledAt: null }];
+  await expect(progress).toContainText("Server connected", { timeout: 10_000 });
+  await expect(progress).toContainText("Installing Concors");
+  state.machines = [{ ...connected, agentInstalledAt: "2026-10-05T00:03:00.000Z" }];
+  await expect(progress).toContainText("home-box is ready", { timeout: 10_000 });
   await added.getByRole("button", { name: "Done", exact: true }).click();
 
   const card = page.locator("#cloud-machine-own-1");
   await expect(card).toContainText("Your own server");
-  await expect(card).toContainText("Waiting for server");
+  await expect(card).toContainText("Running");
   // Nothing about a price, a size or a renewal: the server is not Concors'.
   await expect(card).not.toContainText("/month");
   await expect(card).not.toContainText("Renews on");
+});
+
+test("a failed attempt shows in the app, next to the command", async ({ page }) => {
+  const reason = "Concors could not log in to 203.0.113.7 over SSH (port 22) as ubuntu with sudo";
+  await machinesApi(page, [{ ...waiting, lastError: reason }]);
+  await openMachines(page);
+
+  const card = page.locator("#cloud-machine-own-1");
+  await expect(card).toContainText("The last attempt didn't work");
+  await expect(card).toContainText(reason);
+  await expect(card).toContainText("run the same setup command again");
+  await card.getByRole("button", { name: "Show setup command", exact: true }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Connect home-box" }).getByRole("status", {
+      name: "Setup progress",
+    }),
+  ).toContainText(reason);
+});
+
+test("a connected server shows Concors installing, and any problem with it", async ({ page }) => {
+  await machinesApi(page, [
+    { ...connected, agentInstalledAt: null, agentError: "the server ran out of disk space" },
+  ]);
+  await openMachines(page);
+
+  const card = page.locator("#cloud-machine-own-1");
+  await expect(card).toContainText("Setting up");
+  await expect(card).toContainText("Installing Concors hit a problem");
+  await expect(card).toContainText("the server ran out of disk space");
+  await expect(card).toContainText("tries again by itself");
 });
 
 test("a server still waiting can get a new setup command", async ({ page }) => {
@@ -148,6 +194,8 @@ test("a server behind a router shows it goes through the relay", async ({ page }
 
   const card = page.locator("#cloud-machine-own-1");
   await expect(card).toContainText("Through the Concors relay");
+  await card.getByText("Through the Concors relay").first().hover();
+  await expect(page.getByRole("tooltip")).toContainText("encrypted end to end");
   await card.getByText("Advanced", { exact: true }).click();
   await expect(card).toContainText("plain SSH from this computer doesn't reach it");
   await expect(card.getByRole("button", { name: "Copy SSH command" })).toHaveCount(0);
