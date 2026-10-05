@@ -22,6 +22,8 @@ import {
   type MachineSubscription,
   ErrorBodySchema,
   InvoiceListSchema,
+  ConnectCommandSchema,
+  type ConnectCommand,
   MachineCatalogSchema,
   MachineCostsSchema,
   MachineListSchema,
@@ -86,6 +88,11 @@ export interface CreateMachineInput extends OrganizationScope {
   readonly region: string;
   /** Size id from the catalog. */
   readonly size: string;
+}
+
+export interface CreateExternalMachineInput extends OrganizationScope {
+  /** Lowercase letters, digits and hyphens; unique among the organization's live machines. */
+  readonly name: string;
 }
 
 export interface AddSshKeyInput extends OrganizationScope {
@@ -333,6 +340,28 @@ export class ApiClient {
       schema: MachineResponseSchema,
     });
     return data.machine;
+  }
+
+  /**
+   * Adds the person's own server as a machine, never billed. Returns it (`provisioning`) with the
+   * command to run as root on the server; the machine turns `running` once that command has run.
+   */
+  async createExternalMachine(input: CreateExternalMachineInput): Promise<ConnectCommand> {
+    const { data } = await this.#request("POST", "/api/v1/machines/external", {
+      body: input,
+      schema: ConnectCommandSchema,
+    });
+    return data;
+  }
+
+  /** A new setup command for an external machine still waiting for its server; the old one stops working. */
+  async renewConnectCommand(id: string): Promise<ConnectCommand> {
+    const { data } = await this.#request(
+      "POST",
+      `/api/v1/machines/${encodeURIComponent(id)}/connect-command`,
+      { body: {}, schema: ConnectCommandSchema },
+    );
+    return data;
   }
 
   /** One machine, refreshed from OVH. 404 for machines of other organizations. */

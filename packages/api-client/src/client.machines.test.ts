@@ -170,6 +170,29 @@ describe("ApiClient machines", () => {
     expect(call.init.method).toBe("POST");
   });
 
+  it("adds the person's own server and renews its setup command", async () => {
+    const external = { ...MACHINE, provider: "external", region: "external", size: "external" };
+    const command = "curl -fsSL https://api.example/api/v1/connect/tok | sudo bash";
+    const fetch = vi.fn(() => Promise.resolve(json({ machine: external, command })));
+    const api = client(fetch);
+
+    await expect(
+      api.createExternalMachine({ name: "home-box", organizationId: "org1" }),
+    ).resolves.toEqual({ machine: external, command });
+    let call = lastCall(fetch);
+    expect(call.url).toBe("https://api.example/api/v1/machines/external");
+    expect(call.init.method).toBe("POST");
+    expect(JSON.parse(call.init.body as string)).toEqual({
+      name: "home-box",
+      organizationId: "org1",
+    });
+
+    await expect(api.renewConnectCommand("m1")).resolves.toEqual({ machine: external, command });
+    call = lastCall(fetch);
+    expect(call.url).toBe("https://api.example/api/v1/machines/m1/connect-command");
+    expect(call.init.method).toBe("POST");
+  });
+
   it("surfaces a payment failure as ApiError 402", async () => {
     const fetch = vi.fn(async () =>
       json(

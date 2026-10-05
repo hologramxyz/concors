@@ -28,6 +28,11 @@ export function formatMonthly(money: Money | null, locale?: string): string {
   return money === null ? "—" : `${formatMoney(money, locale)}/month`;
 }
 
+/** The person's own server, connected with a setup command: no region, size, price or renewal. */
+export function isExternal(machine: Pick<Machine, "provider">): boolean {
+  return machine.provider === "external";
+}
+
 export type StatusTone = "neutral" | "pending" | "success" | "danger";
 
 export const STATUS_TONE: Record<MachineStatus, StatusTone> = {
@@ -40,9 +45,12 @@ export const STATUS_TONE: Record<MachineStatus, StatusTone> = {
 };
 
 /** Short, human status. `provisioning` is refined with what the server is waiting on. */
-export function describeStatus(machine: Pick<Machine, "status" | "ovhState" | "serviceName">) {
+export function describeStatus(
+  machine: Pick<Machine, "status" | "ovhState" | "serviceName" | "provider">,
+) {
   switch (machine.status) {
     case "provisioning":
+      if (isExternal(machine)) return "Waiting for server";
       if (machine.ovhState === "order:documentsRequested") return "Waiting for OVH review";
       if (machine.ovhState?.startsWith("order:")) return "Ordering server";
       if (machine.serviceName === null) return "Provisioning";
@@ -64,8 +72,15 @@ export function describeStatus(machine: Pick<Machine, "status" | "ovhState" | "s
  * The order failed before the provider took it: no server was ever created and nothing is billed.
  * Same rule as the server's `neverOrdered`, which lets these be removed outright.
  */
-export function isUndeployed(machine: Pick<Machine, "status" | "orderId" | "serviceName">) {
-  return machine.status === "error" && machine.orderId === null && machine.serviceName === null;
+export function isUndeployed(
+  machine: Pick<Machine, "status" | "orderId" | "serviceName" | "provider">,
+) {
+  return (
+    !isExternal(machine) &&
+    machine.status === "error" &&
+    machine.orderId === null &&
+    machine.serviceName === null
+  );
 }
 
 /**
