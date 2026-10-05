@@ -20,6 +20,7 @@ import {
   Settings2,
   Terminal,
   Trash2,
+  Waypoints,
   Undo2,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
@@ -58,9 +59,10 @@ import {
   formatMonthly,
   isExternal,
   isRelayed,
+  isSettingUp,
+  statusTone,
   isUndeployed,
   sshCommand,
-  STATUS_TONE,
   type StatusTone,
 } from "./format.ts";
 import { describeMachinesError, useMachines } from "./use-machines.ts";
@@ -314,6 +316,7 @@ export function MachinesView({
           organizationName={organization.name}
           machine={machines.find((machine) => machine.id === connecting.machineId) ?? null}
           command={connecting.command}
+          onRefresh={state.refreshMachines}
           onAdd={async (name) => {
             const added = await state.addServer(name).catch((cause: unknown) => {
               throw new Error(describeMachinesError(cause));
@@ -393,7 +396,7 @@ function MachineCard({
   readonly onRetry: () => void;
   readonly removing: boolean;
 }) {
-  const tone = STATUS_TONE[machine.status];
+  const tone = statusTone(machine);
   // No server and no bill: nothing ends, renews or can be connected to.
   const undeployed = isUndeployed(machine);
   const ending = undeployed ? null : describeEnding(machine);
@@ -438,10 +441,30 @@ function MachineCard({
             </div>
             <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
               {external ? (
-                <span className="inline-flex items-center gap-1.5">
-                  <Server className="size-3.5 shrink-0" aria-hidden="true" />
-                  {location}
-                </span>
+                <>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Server className="size-3.5 shrink-0" aria-hidden="true" />
+                    {location}
+                  </span>
+                  {isRelayed(machine) && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span
+                          tabIndex={0}
+                          className="inline-flex cursor-help items-center gap-1.5 underline decoration-dotted underline-offset-4"
+                        >
+                          <Waypoints className="size-3.5 shrink-0" aria-hidden="true" />
+                          Through the Concors relay
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-64">
+                        The internet can&apos;t reach this server directly, for example behind a
+                        home router or a firewall, so Concors connects to it through its relay. Your
+                        traffic stays encrypted end to end.
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                </>
               ) : (
                 <>
                   <span className="inline-flex items-center gap-1.5" title={machine.region}>
@@ -486,7 +509,7 @@ function MachineCard({
         </div>
       </div>
 
-      {machine.lastError && !undeployed && (
+      {machine.lastError && !undeployed && !(external && machine.status === "provisioning") && (
         <p role="alert" className="selectable mx-5 mb-5 text-xs text-destructive sm:mx-6 sm:mb-6">
           {machine.lastError}
         </p>
@@ -516,24 +539,32 @@ function MachineCard({
         </div>
       ) : external && machine.status === "provisioning" ? (
         <div className="border-t p-5 sm:p-6">
-          <div role="status" className="flex items-start gap-3 rounded-lg bg-muted/30 p-4">
-            <LoaderCircle
-              className="mt-0.5 size-4 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none"
-              aria-hidden="true"
-            />
-            <div className="min-w-0 space-y-3">
-              <div className="space-y-1">
-                <p className="text-sm font-medium">Waiting for your server</p>
-                <p className="text-sm text-muted-foreground">
-                  Run the setup command on your server to connect it.
-                </p>
-              </div>
-              <Button variant="outline" size="sm" onClick={onShowConnectCommand}>
-                <Terminal data-icon="inline-start" aria-hidden="true" />
-                Show setup command
-              </Button>
-            </div>
-          </div>
+          <SetupPanel
+            problem={machine.lastError}
+            title={machine.lastError ? "The last attempt didn't work" : "Waiting for your server"}
+            detail={
+              machine.lastError
+                ? "Fix this, then run the same setup command again."
+                : "Run the setup command on your server to connect it."
+            }
+          >
+            <Button variant="outline" size="sm" onClick={onShowConnectCommand}>
+              <Terminal data-icon="inline-start" aria-hidden="true" />
+              Show setup command
+            </Button>
+          </SetupPanel>
+        </div>
+      ) : isSettingUp(machine) ? (
+        <div className="border-t p-5 sm:p-6">
+          <SetupPanel
+            problem={machine.agentError ?? null}
+            title={machine.agentError ? "Installing Concors hit a problem" : "Installing Concors"}
+            detail={
+              machine.agentError
+                ? "Concors tries again by itself in a few minutes."
+                : "Your server is connected. This takes a few minutes; nothing to do on your side."
+            }
+          />
         </div>
       ) : machine.status === "provisioning" ? (
         <div className="border-t p-5 sm:p-6">
@@ -745,6 +776,51 @@ function AdvancedDetails({ children }: { readonly children: ReactNode }) {
       </summary>
       <div className="border-t bg-muted/10 px-5 py-4 sm:px-6">{children}</div>
     </details>
+  );
+}
+
+/** Where an own server is in its setup: live, or what went wrong and what happens next. */
+function SetupPanel({
+  title,
+  detail,
+  problem,
+  children,
+}: {
+  readonly title: string;
+  readonly detail: string;
+  /** What went wrong, in Concors' words; `null` while all is well. */
+  readonly problem: string | null;
+  readonly children?: ReactNode;
+}) {
+  return (
+    <div
+      role="status"
+      className={cn(
+        "flex items-start gap-3 rounded-lg p-4",
+        problem ? "bg-amber-500/10" : "bg-muted/30",
+      )}
+    >
+      {problem ? (
+        <CircleAlert className="mt-0.5 size-4 shrink-0 text-amber-500" aria-hidden="true" />
+      ) : (
+        <LoaderCircle
+          className="mt-0.5 size-4 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none"
+          aria-hidden="true"
+        />
+      )}
+      <div className="min-w-0 space-y-3">
+        <div className="space-y-1">
+          <p className="text-sm font-medium">{title}</p>
+          {problem && (
+            <p className="selectable text-sm break-words text-amber-800 dark:text-amber-300">
+              {problem}
+            </p>
+          )}
+          <p className="text-sm text-muted-foreground">{detail}</p>
+        </div>
+        {children}
+      </div>
+    </div>
   );
 }
 

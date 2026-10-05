@@ -25,6 +25,8 @@ export interface MachinesState {
   readonly error: string | null;
   readonly loading: boolean;
   reload(): void;
+  /** Re-reads the machine list only (not the catalog); stable across renders. */
+  refreshMachines(): void;
   create(input: Omit<CreateMachineInput, "organizationId">): Promise<Machine>;
   /** Adds the person's own server; resolves to the command that connects it. */
   addServer(name: string): Promise<ConnectCommand>;
@@ -81,7 +83,14 @@ export function useMachines(organizationId: string | undefined): MachinesState {
     [list.resource],
   );
 
+  // On the resource, which is stable, so callers' timers are not reset by every render.
+  const refreshMachines = useCallback(
+    () => void list.resource.load(SETTLING_POLL_MS, true),
+    [list.resource],
+  );
+
   return {
+    refreshMachines,
     machines,
     catalog: catalog.data,
     error: list.error || catalog.error ? describeMachinesError(list.error ?? catalog.error) : null,
