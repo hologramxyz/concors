@@ -170,7 +170,12 @@ export const MachineSchema = z.object({
   organizationId: z.string(),
   createdByUserId: z.string().nullable(),
   name: z.string(),
-  /** Catalog region id, e.g. `US-EAST-VA`. */
+  /**
+   * `ovh`: a VPS Concors ordered and bills for. `external`: the person's own server, connected with
+   * a setup command (see `createExternalMachine`). Absent from control planes that predate it.
+   */
+  provider: z.string().optional(),
+  /** Catalog region id, e.g. `US-EAST-VA`; `external` for the person's own server. */
   region: z.string(),
   /** Catalog size id, e.g. `small`. */
   size: z.string(),
@@ -217,6 +222,14 @@ export type Machine = z.infer<typeof MachineSchema>;
 
 /** `GET/POST/DELETE /api/v1/machines[/:id]` and `POST /api/v1/machines/:id/resume` */
 export const MachineResponseSchema = z.object({ machine: MachineSchema });
+
+/** `POST /api/v1/machines/external` and `POST /api/v1/machines/:id/connect-command` */
+export const ConnectCommandSchema = z.object({
+  machine: MachineSchema,
+  /** `curl … | sudo bash`, to run on the server. Works once. */
+  command: z.string().min(1),
+});
+export type ConnectCommand = z.infer<typeof ConnectCommandSchema>;
 
 /** `POST /api/v1/machines/:id/token` */
 export const MachineTokenSchema = z.object({ token: z.string().min(1) });

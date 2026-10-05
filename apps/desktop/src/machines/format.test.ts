@@ -5,6 +5,7 @@ import {
   describeStatus,
   formatMoney,
   formatMonthly,
+  isExternal,
   isSettling,
   isRegionSoldOut,
   isSoldOut,
@@ -163,5 +164,29 @@ describe("isUndeployed", () => {
     expect(isUndeployed({ ...failed, orderId: "777" })).toBe(false);
     expect(isUndeployed({ ...failed, serviceName: "vps-1.vps.ovh.us" })).toBe(false);
     expect(isUndeployed({ ...failed, status: "provisioning" })).toBe(false);
+  });
+
+  it("never matches the person's own server, which has no order to fail", () => {
+    expect(isUndeployed({ ...failed, provider: "external" })).toBe(false);
+  });
+});
+
+describe("own servers", () => {
+  const waiting = {
+    status: "provisioning",
+    ovhState: null,
+    serviceName: null,
+    provider: "external",
+  } as const;
+
+  it("are told apart from VPS, including on control planes without providers", () => {
+    expect(isExternal(waiting)).toBe(true);
+    expect(isExternal({ provider: "ovh" })).toBe(false);
+    expect(isExternal({})).toBe(false);
+  });
+
+  it("wait for the server rather than an order", () => {
+    expect(describeStatus(waiting)).toBe("Waiting for server");
+    expect(describeStatus({ ...waiting, status: "running" })).toBe("Running");
   });
 });

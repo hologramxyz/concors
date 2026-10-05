@@ -18,6 +18,7 @@ import {
   Server,
   RotateCcw,
   Settings2,
+  Terminal,
   Trash2,
   Undo2,
 } from "lucide-react";
@@ -29,6 +30,12 @@ import { PaymentFailedWarning } from "@/billing/payment-failed-warning";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { copyText } from "@/lib/clipboard";
 import {
   Dialog,
@@ -44,10 +51,12 @@ import { DaemonDetails, type DaemonConnectionInfo } from "./daemon-details.tsx";
 import { MachineUsage } from "./machine-usage.tsx";
 import { RenameMachineDialog } from "./rename-machine-dialog.tsx";
 import { CreateMachineDialog, type MachineDraft } from "./create-machine-dialog.tsx";
+import { ConnectServerDialog } from "./connect-server-dialog.tsx";
 import {
   describeEnding,
   describeStatus,
   formatMonthly,
+  isExternal,
   isUndeployed,
   sshCommand,
   STATUS_TONE,
@@ -86,6 +95,11 @@ export function MachinesView({
   const [cancelling, setCancelling] = useState<Machine | null>(null);
   const [resuming, setResuming] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  /** The own-server dialog: the machine it connects once added, and its command when known. */
+  const [connecting, setConnecting] = useState<{
+    machineId: string | null;
+    command: string | null;
+  } | null>(null);
 
   useEffect(() => {
     if (focusedMachineId)
@@ -115,7 +129,19 @@ export function MachinesView({
   const atRisk =
     state.machines === null
       ? null
-      : machines.filter((machine) => machine.status !== "deleted").length;
+      : machines.filter((machine) => machine.status !== "deleted" && !isExternal(machine)).length;
+  const newVps = () => {
+    setDraft(null);
+    setCreating(true);
+  };
+  const connectServer = () => setConnecting({ machineId: null, command: null });
+  const showConnectCommand = (machine: Machine) => {
+    setActionError(null);
+    void state.connectCommand(machine.id).then(
+      ({ command }) => setConnecting({ machineId: machine.id, command }),
+      (cause: unknown) => setActionError(describeMachinesError(cause)),
+    );
+  };
 
   return (
     <section
@@ -137,18 +163,13 @@ export function MachinesView({
             >
               <RefreshCw className={cn(state.loading && "animate-spin")} aria-hidden="true" />
             </Button>
-            <Button
+            <NewMachineMenu
               variant="outline"
               size="sm"
-              onClick={() => {
-                setDraft(null);
-                setCreating(true);
-              }}
               disabled={state.catalog === null || !organization}
-            >
-              <Plus data-icon="inline-start" aria-hidden="true" />
-              New machine
-            </Button>
+              onNewVps={newVps}
+              onConnectServer={connectServer}
+            />
           </>
         }
       />
@@ -214,13 +235,11 @@ export function MachinesView({
           <p className="max-w-sm text-sm text-muted-foreground">
             Create a machine to run agents, clone repositories, and keep your work in one place.
           </p>
-          <Button
-            onClick={() => setCreating(true)}
+          <NewMachineMenu
             disabled={state.catalog === null || !organization}
-          >
-            <Plus data-icon="inline-start" aria-hidden="true" />
-            New machine
-          </Button>
+            onNewVps={newVps}
+            onConnectServer={connectServer}
+          />
         </div>
       ) : (
         <ul aria-label="Cloud machines" className="flex flex-col gap-5">
@@ -238,10 +257,13 @@ export function MachinesView({
                 onRename={(name) => state.rename(machine.id, name)}
                 onIconChange={(icon) => state.setIcon(machine.id, icon)}
                 location={
-                  state.catalog?.regions.find((region) => region.id === machine.region)?.location ??
-                  readableRegion(machine.region)
+                  isExternal(machine)
+                    ? "Your own server"
+                    : (state.catalog?.regions.find((region) => region.id === machine.region)
+                        ?.location ?? readableRegion(machine.region))
                 }
                 onCancel={() => setCancelling(machine)}
+                onShowConnectCommand={() => showConnectCommand(machine)}
                 onUpdateDaemon={() =>
                   state.updateDaemon(machine.id).catch((cause: unknown) => {
                     throw new Error(describeMachinesError(cause));
@@ -286,6 +308,21 @@ export function MachinesView({
         />
       )}
 
+      {connecting && organization && (
+        <ConnectServerDialog
+          organizationName={organization.name}
+          machine={machines.find((machine) => machine.id === connecting.machineId) ?? null}
+          command={connecting.command}
+          onAdd={async (name) => {
+            const added = await state.addServer(name).catch((cause: unknown) => {
+              throw new Error(describeMachinesError(cause));
+            });
+            setConnecting({ machineId: added.machine.id, command: added.command });
+          }}
+          onClose={() => setConnecting(null)}
+        />
+      )}
+
       {cancelling && (
         <CancelMachineDialog
           machine={cancelling}
@@ -326,6 +363,7 @@ function MachineCard({
   onRename,
   onIconChange,
   onCancel,
+  onShowConnectCommand,
   onUpdateDaemon,
   onResume,
   resuming,
@@ -343,6 +381,8 @@ function MachineCard({
   readonly onRename: (name: string) => Promise<void>;
   readonly onIconChange: (icon: string | null) => Promise<void>;
   readonly onCancel: () => void;
+  /** For the person's own server still waiting to connect: shows a new setup command. */
+  readonly onShowConnectCommand: () => void;
   /** Installs the pending daemon update now; the owner has confirmed. Rejects with a message. */
   readonly onUpdateDaemon: () => Promise<void>;
   readonly onResume: () => void;
@@ -356,6 +396,8 @@ function MachineCard({
   // No server and no bill: nothing ends, renews or can be connected to.
   const undeployed = isUndeployed(machine);
   const ending = undeployed ? null : describeEnding(machine);
+  // The person's own server: no region, size, price or renewal, and removing it is immediate.
+  const external = isExternal(machine);
   return (
     <div className="overflow-hidden rounded-xl border bg-card/40">
       <div className="p-5 sm:p-6">
@@ -378,27 +420,40 @@ function MachineCard({
               </Badge>
               {connection && <Badge variant="secondary">Current</Badge>}
               {ending && <Badge variant="secondary">{ending}</Badge>}
-              {paymentFailed && !ending && !undeployed && machine.status !== "deleted" && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Badge variant="destructive">At risk</Badge>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    This machine is deleted, with everything on it, if the payment keeps failing.
-                  </TooltipContent>
-                </Tooltip>
-              )}
+              {paymentFailed &&
+                !ending &&
+                !undeployed &&
+                !external &&
+                machine.status !== "deleted" && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Badge variant="destructive">At risk</Badge>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      This machine is deleted, with everything on it, if the payment keeps failing.
+                    </TooltipContent>
+                  </Tooltip>
+                )}
             </div>
             <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
-              <span className="inline-flex items-center gap-1.5" title={machine.region}>
-                <MapPin className="size-3.5 shrink-0" aria-hidden="true" />
-                {location}
-              </span>
-              <span className="inline-flex items-center gap-1.5 capitalize">
-                <Server className="size-3.5 shrink-0" aria-hidden="true" />
-                {machine.size}
-              </span>
-              {!undeployed && <span>{formatMonthly(machine.monthlyPrice)}</span>}
+              {external ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <Server className="size-3.5 shrink-0" aria-hidden="true" />
+                  {location}
+                </span>
+              ) : (
+                <>
+                  <span className="inline-flex items-center gap-1.5" title={machine.region}>
+                    <MapPin className="size-3.5 shrink-0" aria-hidden="true" />
+                    {location}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 capitalize">
+                    <Server className="size-3.5 shrink-0" aria-hidden="true" />
+                    {machine.size}
+                  </span>
+                  {!undeployed && <span>{formatMonthly(machine.monthlyPrice)}</span>}
+                </>
+              )}
             </div>
           </div>
           {undeployed ? (
@@ -422,9 +477,9 @@ function MachineCard({
               variant="ghost"
               size="icon-sm"
               onClick={onCancel}
-              aria-label={`Cancel ${machine.name}`}
+              aria-label={`${external ? "Remove" : "Cancel"} ${machine.name}`}
             >
-              <CalendarX aria-hidden="true" />
+              {external ? <Trash2 aria-hidden="true" /> : <CalendarX aria-hidden="true" />}
             </Button>
           )}
         </div>
@@ -455,6 +510,27 @@ function MachineCard({
                 {machine.monthlyPrice ? " and its payment was refunded" : ""}. Try again to pick
                 another region or size, or remove it.
               </p>
+            </div>
+          </div>
+        </div>
+      ) : external && machine.status === "provisioning" ? (
+        <div className="border-t p-5 sm:p-6">
+          <div role="status" className="flex items-start gap-3 rounded-lg bg-muted/30 p-4">
+            <LoaderCircle
+              className="mt-0.5 size-4 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none"
+              aria-hidden="true"
+            />
+            <div className="min-w-0 space-y-3">
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Waiting for your server</p>
+                <p className="text-sm text-muted-foreground">
+                  Run the setup command on your server to connect it.
+                </p>
+              </div>
+              <Button variant="outline" size="sm" onClick={onShowConnectCommand}>
+                <Terminal data-icon="inline-start" aria-hidden="true" />
+                Show setup command
+              </Button>
             </div>
           </div>
         </div>
@@ -667,6 +743,51 @@ function AdvancedDetails({ children }: { readonly children: ReactNode }) {
   );
 }
 
+/** Buy a VPS from Concors, or connect a server the person already has. */
+function NewMachineMenu({
+  variant,
+  size,
+  disabled,
+  onNewVps,
+  onConnectServer,
+}: {
+  readonly variant?: "outline";
+  readonly size?: "sm";
+  readonly disabled: boolean;
+  readonly onNewVps: () => void;
+  readonly onConnectServer: () => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant={variant} size={size} disabled={disabled}>
+          <Plus data-icon="inline-start" aria-hidden="true" />
+          New machine
+          <ChevronDown data-icon="inline-end" aria-hidden="true" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" sideOffset={6} className="w-72 p-1.5">
+        <DropdownMenuItem onSelect={onNewVps} className="items-start gap-3 py-2">
+          <Cloud className="mt-0.5" aria-hidden="true" />
+          <span className="space-y-0.5">
+            <span className="block font-medium">New VPS</span>
+            <span className="block text-xs text-muted-foreground">
+              From Concors, billed monthly
+            </span>
+          </span>
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onConnectServer} className="items-start gap-3 py-2">
+          <Server className="mt-0.5" aria-hidden="true" />
+          <span className="space-y-0.5">
+            <span className="block font-medium">Connect your own server</span>
+            <span className="block text-xs text-muted-foreground">Run one command on it, free</span>
+          </span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function readableRegion(region: string): string {
   return region
     .split("-")
@@ -781,6 +902,7 @@ function CancelMachineDialog({
   const until = machine.paidUntil
     ? new Date(machine.paidUntil).toLocaleDateString(undefined, { dateStyle: "medium" })
     : "the end of the paid month";
+  const external = isExternal(machine);
   return (
     <Dialog
       open
@@ -790,10 +912,13 @@ function CancelMachineDialog({
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Cancel {machine.name}?</DialogTitle>
+          <DialogTitle>
+            {external ? "Remove" : "Cancel"} {machine.name}?
+          </DialogTitle>
           <DialogDescription>
-            The machine keeps running until {until}, then it is deleted and nothing is charged
-            again. You can change your mind until then. The current month is not refunded.
+            {external
+              ? "Concors stops its services on the server and removes its access. The server itself, your files and your own SSH keys stay as they are."
+              : `The machine keeps running until ${until}, then it is deleted and nothing is charged again. You can change your mind until then. The current month is not refunded.`}
           </DialogDescription>
         </DialogHeader>
         {error && (
@@ -814,12 +939,22 @@ function CancelMachineDialog({
               onConfirm()
                 .then(onClose)
                 .catch((cause: unknown) => {
-                  setError(cause instanceof Error ? cause.message : "Could not cancel the machine");
+                  setError(
+                    cause instanceof Error
+                      ? cause.message
+                      : `Could not ${external ? "remove" : "cancel"} the machine`,
+                  );
                 })
                 .finally(() => setPending(false));
             }}
           >
-            {pending ? "Cancelling…" : "Cancel machine"}
+            {external
+              ? pending
+                ? "Removing…"
+                : "Remove machine"
+              : pending
+                ? "Cancelling…"
+                : "Cancel machine"}
           </Button>
         </DialogFooter>
       </DialogContent>

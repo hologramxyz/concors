@@ -1,5 +1,6 @@
 import {
   ApiError,
+  type ConnectCommand,
   type CreateMachineInput,
   type Machine,
   type MachineCatalog,
@@ -25,7 +26,14 @@ export interface MachinesState {
   readonly loading: boolean;
   reload(): void;
   create(input: Omit<CreateMachineInput, "organizationId">): Promise<Machine>;
-  /** Stops the renewals; the machine keeps running until its paid month ends. */
+  /** Adds the person's own server; resolves to the command that connects it. */
+  addServer(name: string): Promise<ConnectCommand>;
+  /** A new setup command for an own server still waiting to connect; the old one stops working. */
+  connectCommand(id: string): Promise<ConnectCommand>;
+  /**
+   * Stops the renewals; the machine keeps running until its paid month ends. The person's own
+   * server is removed at once instead.
+   */
   cancel(id: string): Promise<void>;
   /** Undoes `cancel` while the month is still running. */
   resume(id: string): Promise<void>;
@@ -89,6 +97,19 @@ export function useMachines(organizationId: string | undefined): MachinesState {
         ...(current ?? []).filter((item) => item.id !== machine.id),
       ]);
       return machine;
+    },
+    addServer: async (name) => {
+      const connect = await api.createExternalMachine({ name, ...scope });
+      list.resource.set((current) => [
+        connect.machine,
+        ...(current ?? []).filter((item) => item.id !== connect.machine.id),
+      ]);
+      return connect;
+    },
+    connectCommand: async (id) => {
+      const connect = await api.renewConnectCommand(id);
+      replace(connect.machine);
+      return connect;
     },
     cancel: async (id) => replace(await api.cancelMachine(id)),
     resume: async (id) => replace(await api.resumeMachine(id)),
