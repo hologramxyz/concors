@@ -306,6 +306,47 @@ it.each(["claude", "opencode"] as const)(
     expect(TestAgentProvider.turns).toBe(turns);
   },
 );
+it("offers the main agents before they are installed and opens a chat that can install them", async () => {
+  const { c, id } = await setup();
+  for (const missing of ["claude", "opencode"])
+    await rm(join(directory, missing + (process.platform === "win32" ? ".cmd" : "")));
+  // Only the fixture directory, so CLIs installed on the machine running the tests do not count.
+  vi.stubEnv("PATH", directory);
+  const catalog = await c.requestAgent({ kind: "provider-catalog", sessionId: id }, randomUUID());
+  if (catalog.outcome.status !== "ok") throw new Error("Catalog failed");
+  expect(catalog.outcome.providers?.map((p) => [p.id, p.installed])).toEqual([
+    ["codex", undefined],
+    ["claude", false],
+    ["opencode", false],
+  ]);
+  const selected = await c.requestAgent(
+    { kind: "provider-catalog", sessionId: id, provider: "claude" },
+    randomUUID(),
+  );
+  if (selected.outcome.status !== "ok") throw new Error("Catalog failed");
+  expect(selected.outcome.providers?.find((p) => p.id === "claude")).toMatchObject({
+    installed: false,
+    loaded: true,
+    models: [],
+  });
+  // Nothing is spawned to discover the models of a CLI that is not there.
+  expect(instances.map((i) => i.provider)).toEqual(["codex"]);
+  const switched = await c.requestAgent(
+    {
+      kind: "switch-provider",
+      sessionId: id,
+      provider: "claude",
+      model: null,
+      expectedRevision: c.agents[0]!.revision,
+    },
+    randomUUID(),
+  );
+  if (switched.outcome.status !== "ok") throw new Error("Switch failed");
+  // The pane moves to the new chat. Outside this fixture its launcher fails for the missing CLI,
+  // which is what the chat's install card answers with an install.
+  expect(switched.outcome.conversation.agent.provider).toBe("claude");
+});
+
 it("rejects stale provider switches and unavailable models without adding tabs", async () => {
   const { c, id } = await setup();
   const original = c.agents[0]!;

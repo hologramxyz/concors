@@ -16,6 +16,7 @@ import { DAEMON_VERSION } from "./version.ts";
 import { applyResolvedDataDir, ProfileError, resolveDataDir } from "./profile.ts";
 import { adoptLegacyData } from "./profile-migration.ts";
 import { runSpeechWorker } from "./dictation/engine.ts";
+import { adoptLoginPath } from "./host/login-path.ts";
 
 const USAGE = `concors-daemon ${DAEMON_VERSION}
 
@@ -187,6 +188,8 @@ export async function main(argv: readonly string[]): Promise<number> {
       await waitForSessionHost(resolveDataDir(profileEnv(cli)));
       return 0;
     case "session-host":
+      // Agent CLIs and terminals run here, and restored chats start right away.
+      await adoptLoginPath();
       await runSessionHost(
         resolveDataDir(profileEnv(cli)),
         loadDaemonConfig({ logLevel: cli.logLevel }),

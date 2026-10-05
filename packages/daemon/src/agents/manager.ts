@@ -75,6 +75,8 @@ const Scope = z.object({ threadId: z.string(), turnId: z.string() });
  * conversation and the old one is kept to resume, as Codex and Claude Code keep a cleared session.
  */
 const CLEARABLE_ENGINES = ["codex", "claude", "opencode"];
+/** Providers the model picker lists while not installed; a chat's install card can install them. */
+const OFFERED_UNINSTALLED = ["codex", "claude", "opencode"];
 function withClear(controls: AgentControls, engine: string): AgentControls {
   if (!CLEARABLE_ENGINES.includes(engine)) return controls;
   return {
@@ -2326,14 +2328,23 @@ export class AgentManager {
   }
   private async catalog(info: AgentInfo, selected?: string): Promise<AgentProviderCatalog[]> {
     // Subscriptions are a machine-wide choice made in Settings, never a per-chat one.
+    // The main agents are offered even before their CLI is on the machine: choosing one opens a
+    // chat whose install card installs it. Other providers appear once installed from Settings.
     const configs = this.registry
       .configs()
-      .filter((c) => c.enabled && !c.subscription && this.registry.installed(c));
+      .map((config) => ({ config, installed: this.registry.installed(config) }))
+      .filter(
+        ({ config, installed }) =>
+          config.enabled &&
+          !config.subscription &&
+          (installed || OFFERED_UNINSTALLED.includes(config.id)),
+      );
     return Promise.all(
-      configs.map(async (config): Promise<AgentProviderCatalog> => {
+      configs.map(async ({ config, installed }): Promise<AgentProviderCatalog> => {
         const id = config.id,
           label = config.label;
         const revision = `${this.registry.revision}:${this.catalogGeneration}`;
+        if (!installed) return { id, label, revision, models: [], loaded: true, installed: false };
         const key = JSON.stringify([info.directory, id, revision]);
         const cached = this.catalogs.get(key);
         if (id !== selected) {
