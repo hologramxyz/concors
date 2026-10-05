@@ -101,8 +101,10 @@ export function ConnectServerDialog({
               <p className="font-medium">Your server needs</p>
               <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
                 <li>Ubuntu or Debian, on x86_64</li>
-                <li>A public IPv4 address, reachable on SSH (port 22)</li>
-                <li>Port 443 free: Concors serves its connection there</li>
+                <li>An SSH server and internet access</li>
+                <li>
+                  That's it: behind a home router or a firewall works too, through the Concors relay
+                </li>
               </ul>
             </div>
           </form>

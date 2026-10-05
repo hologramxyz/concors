@@ -4,7 +4,7 @@ import { test, expect, signedIn } from "./signed-in.ts";
 const COMMAND = "curl -fsSL https://api.concors.dev/api/v1/connect/token-1 | sudo bash";
 const RENEWED = "curl -fsSL https://api.concors.dev/api/v1/connect/token-2 | sudo bash";
 
-const waiting = {
+const waiting: Record<string, unknown> & { id: string } = {
   id: "own-1",
   organizationId: "e2e-org",
   createdByUserId: "e2e-user",
@@ -38,7 +38,7 @@ const connected = {
 };
 
 /** The control plane, for an organization whose machines are the person's own servers. */
-async function machinesApi(page: Page, initial: (typeof waiting)[] = []) {
+async function machinesApi(page: Page, initial: Record<string, unknown>[] = []) {
   await signedIn(page);
   const state = { machines: initial, requests: [] as { method: string; path: string }[] };
   await page.route("**/api/v1/{machines,billing,ssh-keys}**", async (route) => {
@@ -140,6 +140,17 @@ test("a server still waiting can get a new setup command", async ({ page }) => {
     method: "POST",
     path: "/api/v1/machines/own-1/connect-command",
   });
+});
+
+test("a server behind a router shows it goes through the relay", async ({ page }) => {
+  await machinesApi(page, [{ ...connected, ipv4: null, connection: "relay" }]);
+  await openMachines(page);
+
+  const card = page.locator("#cloud-machine-own-1");
+  await expect(card).toContainText("Through the Concors relay");
+  await card.getByText("Advanced", { exact: true }).click();
+  await expect(card).toContainText("plain SSH from this computer doesn't reach it");
+  await expect(card.getByRole("button", { name: "Copy SSH command" })).toHaveCount(0);
 });
 
 test("removing your own server says what stays on it", async ({ page }) => {
