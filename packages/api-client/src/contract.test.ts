@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   BillingStatusSchema,
+  ConnectCommandSchema,
   InvoiceListSchema,
   MachineCatalogSchema,
   MachineCostsSchema,
@@ -33,6 +34,7 @@ const ENDPOINTS: readonly [method: string, path: string, status: string, schema:
   ["get", "/api/v1/machines/catalog", "200", MachineCatalogSchema],
   ["get", "/api/v1/machines", "200", MachineListSchema],
   ["post", "/api/v1/machines", "201", MachineResponseSchema],
+  ["post", "/api/v1/machines/external", "201", ConnectCommandSchema],
   ["get", "/api/v1/machines/{id}", "200", MachineResponseSchema],
   ["get", "/api/v1/machines/costs", "200", MachineCostsSchema],
   ["get", "/api/v1/ssh-keys", "200", SshKeyListSchema],

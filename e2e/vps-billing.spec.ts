@@ -236,6 +236,7 @@ async function openCreation(page: Page) {
   ).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.getByRole("button", { name: "New machine", exact: true }).first().click();
+  await page.getByRole("menuitem", { name: /^New VPS/ }).click();
   await expect(page.getByRole("dialog", { name: "New VPS" })).toBeVisible();
   await page.getByRole("textbox", { name: "Name", exact: true }).fill("build-agent");
   await page.getByRole("button", { name: "Continue", exact: true }).click();
@@ -299,6 +300,7 @@ test("missing Stripe prices cannot be mistaken for a free VPS", async ({ page })
   await page.getByRole("button", { name: "Switch machine", exact: true }).click();
   await page.getByRole("menuitem", { name: "Manage machines", exact: true }).click();
   await page.getByRole("button", { name: "New machine", exact: true }).first().click();
+  await page.getByRole("menuitem", { name: /^New VPS/ }).click();
   await expect(page.getByText("Unavailable", { exact: true }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Continue", exact: true })).toBeDisabled();
   await expect(page.getByText("Free", { exact: true })).toHaveCount(0);
