@@ -406,6 +406,16 @@ export function AgentComposer({
           options: nativeProvider
             ? [
                 { id: "__providers__", label: "← Back to providers", selected: false },
+                // Choosing it opens a chat that offers to install the CLI.
+                ...(nativeProvider.installed === false
+                  ? [
+                      {
+                        id: "",
+                        label: `Install ${nativeProvider.label ?? agentProviderName(nativeProvider.id)}`,
+                        selected: false,
+                      },
+                    ]
+                  : []),
                 ...(!nativeProvider.error || nativeProvider.models.length
                   ? [
                       ...(nativeProvider.id === agent.provider
@@ -427,7 +437,11 @@ export function AgentComposer({
                   id: provider.id,
                   label:
                     (provider.label ?? agentProviderName(provider.id)) +
-                    (provider.id === agent.provider ? " · Current chat" : " · Use in this pane"),
+                    (provider.installed === false
+                      ? " · Not installed"
+                      : provider.id === agent.provider
+                        ? " · Current chat"
+                        : " · Use in this pane"),
                   selected: provider.id === agent.provider,
                 })),
         },
