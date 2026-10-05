@@ -38,6 +38,13 @@ export function isExternal(machine: Pick<Machine, "provider">): boolean {
   return machine.provider === "external";
 }
 
+/** An own server that has connected while Concors is still installing itself on it. */
+export function isSettingUp(
+  machine: Pick<Machine, "provider" | "status" | "agentInstalledAt">,
+): boolean {
+  return isExternal(machine) && machine.status === "running" && !machine.agentInstalledAt;
+}
+
 export type StatusTone = "neutral" | "pending" | "success" | "danger";
 
 export const STATUS_TONE: Record<MachineStatus, StatusTone> = {
@@ -49,9 +56,16 @@ export const STATUS_TONE: Record<MachineStatus, StatusTone> = {
   unknown: "neutral",
 };
 
+/** Like `STATUS_TONE`, but an own server still being set up is not shown as ready yet. */
+export function statusTone(
+  machine: Pick<Machine, "provider" | "status" | "agentInstalledAt">,
+): StatusTone {
+  return isSettingUp(machine) ? "pending" : STATUS_TONE[machine.status];
+}
+
 /** Short, human status. `provisioning` is refined with what the server is waiting on. */
 export function describeStatus(
-  machine: Pick<Machine, "status" | "ovhState" | "serviceName" | "provider">,
+  machine: Pick<Machine, "status" | "ovhState" | "serviceName" | "provider" | "agentInstalledAt">,
 ) {
   switch (machine.status) {
     case "provisioning":
@@ -61,7 +75,7 @@ export function describeStatus(
       if (machine.serviceName === null) return "Provisioning";
       return "Installing";
     case "running":
-      return "Running";
+      return isSettingUp(machine) ? "Setting up" : "Running";
     case "stopped":
       return "Stopped";
     case "error":
@@ -92,9 +106,12 @@ export function isUndeployed(
  * Machines the server may still change on its own, including one installing a new daemon; the
  * list keeps polling while any exist.
  */
-export function isSettling(machine: Pick<Machine, "status" | "daemonUpdate">): boolean {
+export function isSettling(
+  machine: Pick<Machine, "status" | "daemonUpdate" | "provider" | "agentInstalledAt">,
+): boolean {
   return (
     machine.status === "provisioning" ||
+    isSettingUp(machine) ||
     machine.status === "unknown" ||
     machine.daemonUpdate?.installing === true
   );
@@ -160,4 +177,15 @@ export function orderableSize(
   )
     return current;
   return sizes.find((size) => !isSoldOut(size, region))?.id ?? current;
+}
+
+/** How often the connect dialog re-reads an own server while it follows the setup. */
+export const CONNECT_POLL_MS = 3_000;
+
+export type ConnectStage = "waiting" | "installing" | "ready";
+
+/** Where an own server is in its setup, as far as the person needs to know. */
+export function connectStage(machine: Pick<Machine, "status" | "agentInstalledAt">): ConnectStage {
+  if (machine.status === "provisioning") return "waiting";
+  return machine.agentInstalledAt ? "ready" : "installing";
 }
