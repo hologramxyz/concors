@@ -28,6 +28,11 @@ export function formatMonthly(money: Money | null, locale?: string): string {
   return money === null ? "—" : `${formatMoney(money, locale)}/month`;
 }
 
+/** Reached through the Concors relay: it has no address of its own that this computer can reach. */
+export function isRelayed(machine: Pick<Machine, "connection">): boolean {
+  return machine.connection === "relay";
+}
+
 /** The person's own server, connected with a setup command: no region, size, price or renewal. */
 export function isExternal(machine: Pick<Machine, "provider">): boolean {
   return machine.provider === "external";
@@ -113,9 +118,10 @@ export function describeEnding(
  * `identityPath` the command names this computer's Concors key, which `ssh` would not try by default.
  */
 export function sshCommand(
-  machine: Pick<Machine, "sshUser" | "ipv4" | "accessReadyAt" | "status">,
+  machine: Pick<Machine, "sshUser" | "ipv4" | "accessReadyAt" | "status" | "connection">,
   identityPath?: string,
 ): string | null {
+  if (isRelayed(machine)) return null;
   if (machine.ipv4 === null || machine.accessReadyAt === null) return null;
   if (machine.status !== "running" && machine.status !== "stopped") return null;
   const identity = identityPath === undefined ? "" : `-i ${quotePath(identityPath)} `;

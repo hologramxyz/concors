@@ -175,6 +175,12 @@ export const MachineSchema = z.object({
    * a setup command (see `createExternalMachine`). Absent from control planes that predate it.
    */
   provider: z.string().optional(),
+  /**
+   * `relay`: an own server the internet cannot reach directly (behind a router or firewall),
+   * reached through the Concors relay. It has no `ipv4` and plain `ssh` does not reach it.
+   * Absent from control planes that predate it.
+   */
+  connection: z.string().optional(),
   /** Catalog region id, e.g. `US-EAST-VA`; `external` for the person's own server. */
   region: z.string(),
   /** Catalog size id, e.g. `small`. */
