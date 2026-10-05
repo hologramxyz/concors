@@ -1,5 +1,5 @@
 import { modelOptions } from "@concors/client-core";
-import { LoaderCircle } from "lucide-react";
+import { Download, LoaderCircle } from "lucide-react";
 import { agentProviderName, type AgentInfo } from "@concors/protocol";
 import { ControlPicker } from "./control-picker";
 import { ProviderIcon } from "./provider-icon";
@@ -44,7 +44,10 @@ export function AgentModelPicker({
         groups={providers.map((p) => ({
           id: p.id,
           label: p.label ?? agentProviderName(p.id),
-          description: `${p.id === agent.provider ? "Current conversation" : "Use in this pane"}${p.version?.updateAvailable ? ` · Update available (${p.version.latest})` : ""}`,
+          description:
+            p.installed === false
+              ? "Not installed on this machine"
+              : `${p.id === agent.provider ? "Current conversation" : "Use in this pane"}${p.version?.updateAvailable ? ` · Update available (${p.version.latest})` : ""}`,
           icon: <ProviderIcon provider={p.id} />,
           emptyMessage:
             p.error ??
@@ -60,13 +63,19 @@ export function AgentModelPicker({
             />
           ),
           options: [
-            // An empty catalog must still allow opening a provider to sign in.
+            // An empty catalog must still allow opening a provider to sign in, and a missing
+            // CLI to be installed: the chat it opens offers the install.
             ...(!p.models.length
               ? [
                   {
                     id: "",
-                    label: `Use ${p.label ?? agentProviderName(p.id)}`,
-                    icon: <ProviderIcon provider={p.id} />,
+                    label: `${p.installed === false ? "Install" : "Use"} ${p.label ?? agentProviderName(p.id)}`,
+                    icon:
+                      p.installed === false ? (
+                        <Download className="size-4" />
+                      ) : (
+                        <ProviderIcon provider={p.id} />
+                      ),
                   },
                 ]
               : []),
