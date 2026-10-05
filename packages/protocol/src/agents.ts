@@ -45,6 +45,8 @@ export const AgentProviderCatalogSchema = z.object({
   label: z.string().optional(),
   loaded: z.boolean().optional(),
   error: z.string().optional(),
+  /** False for a provider offered before its CLI is on the machine; choosing it offers the install. */
+  installed: z.boolean().optional(),
   /** New models often need a newer CLI, so the picker surfaces pending updates. */
   version: ProviderVersionSchema.optional(),
 });
