@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Ellipsis, Trash2 } from "lucide-react";
+import { Ellipsis, Pencil, Trash2 } from "lucide-react";
+import { cn } from "cn";
 import type { WorkspaceOperation, WorkspaceProject } from "@concors/protocol";
 import {
   DropdownMenu,
@@ -21,10 +22,18 @@ export function ProjectActions({
   project,
   canEdit,
   execute,
+  renaming,
+  onRename,
+  onCloseAutoFocus,
 }: {
   project: WorkspaceProject;
   canEdit: boolean;
   execute: (operation: WorkspaceOperation) => Promise<void>;
+  /** The row is editing the name in place of its button. */
+  renaming: boolean;
+  /** Absent when the workspace cannot be renamed right now; the item is then disabled. */
+  onRename: (() => void) | undefined;
+  onCloseAutoFocus: (event: Event) => void;
 }) {
   const [confirming, setConfirming] = useState(false);
   const [pending, setPending] = useState(false);
@@ -34,11 +43,18 @@ export function ProjectActions({
       <DropdownMenu>
         <DropdownMenuTrigger
           aria-label={`Actions for ${project.name}`}
-          className="rounded p-1 text-muted-foreground opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 hover:text-sidebar-foreground data-[state=open]:opacity-100 [@media(hover:none)]:opacity-100"
+          className={cn(
+            "rounded p-1 text-muted-foreground opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 hover:text-sidebar-foreground data-[state=open]:opacity-100 [@media(hover:none)]:opacity-100",
+            // Kept mounted while renaming so closing the menu can hand focus to the input.
+            renaming && "invisible",
+          )}
         >
           <Ellipsis className="size-4" />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-56">
+        <DropdownMenuContent align="start" className="w-56" onCloseAutoFocus={onCloseAutoFocus}>
+          <DropdownMenuItem disabled={!onRename} onSelect={() => onRename?.()}>
+            <Pencil /> Rename workspace
+          </DropdownMenuItem>
           <DropdownMenuItem
             disabled={!canEdit}
             variant="destructive"

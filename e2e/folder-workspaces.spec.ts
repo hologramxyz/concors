@@ -91,3 +91,51 @@ test("new workspaces follow the original shell, inherit folders and preserve ope
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("a renamed workspace keeps its name when the shell changes folder", async ({ page }) => {
+  test.setTimeout(60_000);
+  const root = mkdtempSync(join(tmpdir(), "concors-folder-rename-"));
+  const first = join(root, "first-folder"),
+    other = join(root, "other-folder");
+  mkdirSync(first);
+  mkdirSync(other);
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await page
+      .getByRole("navigation", { name: "Primary" })
+      .getByRole("button", { name: "Open workspace menu", exact: true })
+      .click();
+    await page.getByRole("menuitem", { name: "New workspace", exact: true }).click();
+    const panes = page.getByRole("region", { name: "Terminal pane", exact: true });
+    await expect(panes).toHaveCount(1);
+    await cd(page, panes.first(), first);
+    const heading = (name: string) => page.getByRole("heading", { name, exact: true });
+    await expect(heading("first-folder")).toBeVisible();
+
+    await page.getByRole("button", { name: "Actions for first-folder", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Rename workspace", exact: true }).click();
+    const editor = page.getByRole("textbox", { name: "Workspace name", exact: true });
+    await expect(editor).toBeFocused();
+    await expect(editor).toHaveValue("first-folder");
+    await editor.fill("My workspace");
+    await editor.press("Enter");
+    await expect(heading("My workspace")).toBeVisible();
+
+    await cd(page, panes.first(), other);
+    await expect(panes.first().getByLabel("Terminal output")).toContainText(other);
+    await page.waitForTimeout(650);
+    await expect(heading("My workspace")).toBeVisible();
+    await page.reload();
+    await expect(heading("My workspace")).toBeVisible();
+
+    // Clearing the name hands it back to the shell's folder.
+    await page.getByRole("button", { name: "Actions for My workspace", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Rename workspace", exact: true }).click();
+    await editor.fill("");
+    await editor.press("Enter");
+    await expect(heading("other-folder")).toBeVisible();
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

@@ -347,6 +347,7 @@ export function createDemoServer() {
                   "terminal-recovery",
                   "directional-pane-split",
                   "pane-rename",
+                  "project-rename",
                   "workspace-pane-rearrangement",
                   "folder-workspaces",
                   AGENT_USAGE_CAPABILITY,
