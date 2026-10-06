@@ -188,6 +188,7 @@ export function AppSidebar(props: AppSidebarProps) {
                     onSelect={props.onSelectProject}
                     onOpenPullRequests={props.onOpenPullRequests}
                     execute={props.execute}
+                    onCommand={props.onCommand}
                   />
                 ))}
               </ul>

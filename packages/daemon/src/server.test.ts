@@ -100,6 +100,7 @@ describe("WebSocket handshake", () => {
           "workspace-pane-rearrangement",
           "directional-pane-split",
           "pane-rename",
+          "project-rename",
           "terminal-recovery",
           "terminal-image-paste",
         ],

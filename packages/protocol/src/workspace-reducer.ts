@@ -1,4 +1,5 @@
 import {
+  folderName,
   WorkspaceSnapshotSchema,
   type WorkspaceOperation,
   type WorkspaceSnapshot,
@@ -147,6 +148,14 @@ export function applyWorkspaceOperation(
       if (op.kind === "project.remove") {
         state.projects = state.projects.filter((p) => p.id !== project.id);
         if (state.selection?.projectId === project.id) state.selection = null;
+      } else if (op.kind === "project.rename") {
+        if (op.name === null) {
+          delete project.renamed;
+          project.name = folderName(project.directory);
+        } else {
+          project.name = op.name;
+          project.renamed = true;
+        }
       } else if (op.kind === "tab.create") {
         claim(op.tabId);
         claim(op.paneId);

@@ -617,6 +617,7 @@ function MobileWorkspaceContent({
                             onSelect={selectProject}
                             onOpenPullRequests={openPullRequests}
                             execute={execute}
+                            onCommand={command}
                           />
                         ))}
                       </ul>
