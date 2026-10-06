@@ -105,6 +105,61 @@ test("a pane is renamed from its title or its menu, and clearing the name restor
   }
 });
 
+test("an agent is renamed from the sidebar, and its pane title follows", async ({ page }) => {
+  test.setTimeout(60_000);
+  const directory = await mkdtemp(join(tmpdir(), "concors-agent-rename-"));
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Renamable agents", directory);
+    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
+    const agents = page
+      .getByRole("navigation", { name: "Primary" })
+      .getByRole("region", { name: "Agents", exact: true });
+    const row = agents.getByRole("listitem").first();
+    const title = page
+      .getByRole("region", { name: "Agent pane", exact: true })
+      .locator("header .truncate");
+    const editor = agents.getByRole("textbox", { name: "Agent name", exact: true });
+    await expect(row.locator("button[data-agent-id]")).toBeVisible();
+    const original = await row.locator("button[data-agent-id] .truncate").innerText();
+    await expect(title).toHaveText(original);
+
+    await row.hover();
+    await row.getByRole("button", { name: /^Actions for / }).click();
+    await page.getByRole("menuitem", { name: "Rename agent" }).click();
+    await expect(editor).toBeFocused();
+    await expect(editor).toHaveValue(original);
+    await page.keyboard.type("Release notes");
+    await page.keyboard.press("Enter");
+    await expect(editor).toHaveCount(0);
+    await expect(row.locator("button[data-agent-id] .truncate")).toHaveText("Release notes");
+    await expect(title).toHaveText("Release notes");
+
+    // Escape discards; clearing the name gives the agent and its pane their default back.
+    await row.hover();
+    await row.getByRole("button", { name: /^Actions for / }).click();
+    await page.getByRole("menuitem", { name: "Rename agent" }).click();
+    await expect(editor).toBeFocused();
+    await page.keyboard.type("Not this");
+    await page.keyboard.press("Escape");
+    await expect(editor).toHaveCount(0);
+    await expect(title).toHaveText("Release notes");
+    await row.hover();
+    await row.getByRole("button", { name: /^Actions for / }).click();
+    await page.getByRole("menuitem", { name: "Rename agent" }).click();
+    await expect(editor).toBeFocused();
+    await editor.fill("");
+    await page.keyboard.press("Enter");
+    await expect(row.locator("button[data-agent-id] .truncate")).toHaveText(original);
+    await expect(title).toHaveText(original);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("renaming a new Agent tab keeps focus when its chat becomes ready mid-word", async ({
   page,
 }) => {
