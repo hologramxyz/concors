@@ -48,6 +48,7 @@ import { NativeSurfaceContext, useNativeSurface } from "@/components/native-surf
 import { matchCommands, needsArguments, slashQuery } from "./slash-commands";
 import { SlashCommandMenu } from "./slash-menu";
 import { readClipboardImage } from "@/tauri";
+import { carriesFiles } from "@/window/file-drops";
 import { fileBase64, fitImage, fitImageFile } from "./image-attachment";
 import { ImageViewer } from "./attachment-preview";
 import { rememberSentAttachments } from "./attachment-cache";
@@ -376,6 +377,12 @@ export function AgentComposer({
   );
   const effortModel = findAgentModel(nativeModels.currentModels, nativeModels.selection.value);
   const controlsDisabled = !advanced || !connected || busy || configuring;
+  // Same conditions as the attach button; while they fail, the window refuses the drop.
+  const canDrop =
+    !!advanced && connected && !busy && !uploading && !uncertain && !dictation.active && !native;
+  // dragenter and dragleave fire for every child the pointer crosses, so count them.
+  const dragDepth = useRef(0);
+  const [dropping, setDropping] = useState(false);
   useNativeSurface(
     nativeField,
     {
@@ -830,15 +837,41 @@ export function AgentComposer({
               else void submit();
             }
           }}
+          onDragEnter={(e) => {
+            if (!canDrop || !carriesFiles(e.dataTransfer)) return;
+            dragDepth.current++;
+            setDropping(true);
+          }}
+          onDragLeave={(e) => {
+            if (!carriesFiles(e.dataTransfer) || dragDepth.current === 0) return;
+            if (--dragDepth.current === 0) setDropping(false);
+          }}
           onDragOver={(e) => {
-            if (e.dataTransfer.types.includes("Files")) e.preventDefault();
+            if (!canDrop || !carriesFiles(e.dataTransfer)) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "copy";
           }}
           onDrop={(e) => {
+            dragDepth.current = 0;
+            setDropping(false);
+            if (!canDrop || !carriesFiles(e.dataTransfer)) return;
             e.preventDefault();
-            if (!busy && !uncertain && !dictation.active) void addFiles(e.dataTransfer.files);
+            const { files, folders } = droppedFiles(e.dataTransfer);
+            if (files.length) void addFiles(files);
+            else if (folders)
+              setError("Folders cannot be attached. Drop the files inside instead.");
           }}
-          className={`rounded-2xl border bg-background p-2 shadow-sm focus-within:border-primary/40 ${compact ? "mobile-composer" : ""}`}
+          data-dropping={dropping || undefined}
+          className={`relative rounded-2xl border bg-background p-2 shadow-sm focus-within:border-primary/40 data-[dropping]:border-primary ${compact ? "mobile-composer" : ""}`}
         >
+          {dropping && (
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-background/90 text-sm font-medium text-primary"
+            >
+              Drop files to attach
+            </div>
+          )}
           {(attachments.length > 0 || reading > 0) && (
             <div data-composer-attachments className="flex flex-wrap gap-2 px-2 pt-1 pb-2">
               {attachments.map((file, i) => (
@@ -1012,7 +1045,7 @@ export function AgentComposer({
                 <button
                   type="button"
                   aria-label="Attach files"
-                  title="Attach files or paste an image (up to three, 1 MB each)"
+                  title="Attach files, or drop or paste them here (up to three, 1 MB each)"
                   className="agent-control mobile-composer-attach"
                   disabled={!advanced || !connected || busy || uploading || uncertain}
                   onClick={() => picker.current?.click()}
@@ -1231,4 +1264,19 @@ export function AgentComposer({
       </div>
     </ComposerSurfaceContext>
   );
+}
+
+/** Dropped folders arrive as empty files that cannot be read, so they are left out and counted. */
+function droppedFiles(data: DataTransfer) {
+  const files: File[] = [];
+  let folders = 0;
+  for (const item of Array.from(data.items)) {
+    if (item.kind !== "file") continue;
+    if (item.webkitGetAsEntry()?.isDirectory) folders++;
+    else {
+      const file = item.getAsFile();
+      if (file) files.push(file);
+    }
+  }
+  return { files, folders };
 }
