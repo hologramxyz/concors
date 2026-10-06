@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 
 import { WindowChromeProvider } from "./window/provider";
 import { suppressNativeContextMenu } from "./window/context-menu";
+import { guardFileDrops } from "./window/file-drops";
 
 import { App } from "./App.tsx";
 import "./styles.css";
@@ -13,6 +14,7 @@ if (container === null) {
 }
 
 suppressNativeContextMenu();
+guardFileDrops();
 
 createRoot(container).render(
   <StrictMode>
