@@ -119,7 +119,7 @@ test("shared chat streams, handles approvals and removes detached sidebar entrie
     await page.getByRole("menuitemradio", { name: "Agent", exact: true }).click();
     await chooseProvider(page);
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
-    await expect(agentList.getByRole("list").getByRole("button")).toHaveCount(1);
+    await expect(agentList.locator("button[data-agent-id]")).toHaveCount(1);
     await page.getByRole("button", { name: "Close pane", exact: true }).click();
     await expect(agentList.getByRole("list").getByRole("button")).toHaveCount(0);
     await expect(remoteAgents.getByRole("list").getByRole("button")).toHaveCount(0);

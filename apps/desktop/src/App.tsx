@@ -446,6 +446,7 @@ function AppContent() {
                         collapsed={sidebarCollapsed}
                         onCollapse={() => toggleSidebar(!sidebarCollapsed)}
                         execute={execute}
+                        onCommand={command}
                         onSelectAgent={openAgent}
                         view={view}
                         onOpenSettings={() => openSettings("account")}
