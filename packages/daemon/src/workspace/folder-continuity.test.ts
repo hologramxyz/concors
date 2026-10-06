@@ -133,6 +133,19 @@ it("follows only the original shell and saves open files to their original folde
       name: "first",
       directoryMode: "follow",
     });
+    // A name the user chose stays through later moves, while the folder (and its icon) follow.
+    run({ kind: "project.rename", projectId, expectedVersion: 2, name: "Named by hand" });
+    expect(store.observeDirectory(sessionId, second, second)).toBe(true);
+    expect(store.snapshot().projects[0]).toMatchObject({
+      name: "Named by hand",
+      renamed: true,
+      directory: second,
+    });
+    run({ kind: "project.rename", projectId, expectedVersion: 3, name: null });
+    expect(store.snapshot().projects[0]).toMatchObject({ name: "second", directory: second });
+    expect(store.snapshot().projects[0]).not.toHaveProperty("renamed");
+    store.observeDirectory(sessionId, first, first);
+    expect(store.snapshot().projects[0]).toMatchObject({ name: "first", directory: first });
     expect(store.observeDirectory(id(), root, root)).toBe(false);
   } finally {
     store.close();

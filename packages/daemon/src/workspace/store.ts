@@ -23,6 +23,7 @@ import {
   type TerminalInfo,
   type TerminalRequest,
   applyWorkspaceOperation,
+  folderName,
   isDefaultTabName,
   nextWorkspaceTabName,
   WorkspaceOperationError,
@@ -212,8 +213,8 @@ export class WorkspaceStore {
       pane.directory = directory;
       if (project.directoryMode === "follow" && project.followPaneId === pane.id) {
         project.directory = root;
-        project.name =
-          root.split(/[\\/]/).filter(Boolean).at(-1)?.trim().slice(0, 120) || "Workspace";
+        // A name the user chose outlives the move; the icon still follows `directory`.
+        if (!project.renamed) project.name = folderName(root);
       }
       state.revision++;
       WorkspaceSnapshotSchema.parse(state);

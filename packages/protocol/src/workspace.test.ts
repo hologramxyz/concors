@@ -72,6 +72,25 @@ describe("workspace commands", () => {
     expect(pane(next)).not.toHaveProperty("name");
   });
 
+  it("renames a project and returns to its folder's name", () => {
+    const { state, projectId } = fixture();
+    let next = applyWorkspaceOperation(state, {
+      kind: "project.rename",
+      projectId,
+      expectedVersion: 1,
+      name: "Main app",
+    });
+    expect(next.projects[0]).toMatchObject({ name: "Main app", renamed: true, version: 2 });
+    next = applyWorkspaceOperation(next, {
+      kind: "project.rename",
+      projectId,
+      expectedVersion: 2,
+      name: null,
+    });
+    expect(next.projects[0]).toMatchObject({ name: "concors", version: 3 });
+    expect(next.projects[0]).not.toHaveProperty("renamed");
+  });
+
   it("splits, resizes and collapses a nested tree without changing the input", () => {
     const { state, projectId, tabId, paneId } = fixture();
     const second = id(),

@@ -7,6 +7,8 @@ import {
 
 /** The daemon accepts `pane.rename` and keeps pane names. */
 export const PANE_RENAME_CAPABILITY = "pane-rename";
+/** The daemon accepts `project.rename` and stops a renamed workspace following its shell's folder. */
+export const PROJECT_RENAME_CAPABILITY = "project-rename";
 
 const Id = z.string().uuid();
 const Name = z.string().trim().min(1).max(120);
@@ -49,10 +51,17 @@ export const WorkspaceProjectSchema = z.object({
   directory: z.string().min(1).max(4096),
   directoryMode: z.enum(["follow", "pinned"]).optional(),
   followPaneId: Id.optional(),
+  /** Set when the user named the workspace; the name then stays put when its folder changes. */
+  renamed: z.literal(true).optional(),
   version: Version,
   tabs: z.array(WorkspaceTabSchema).max(32),
 });
 export type WorkspaceProject = z.infer<typeof WorkspaceProjectSchema>;
+
+/** The automatic name of a workspace: the last segment of its folder. */
+export function folderName(directory: string): string {
+  return directory.split(/[\\/]/).filter(Boolean).at(-1)?.trim().slice(0, 120) || "Workspace";
+}
 export const WorkspaceSnapshotSchema = z.object({
   schemaVersion: z.literal(1),
   machineId: Id,
@@ -85,6 +94,8 @@ export const WorkspaceOperationSchema = z.discriminatedUnion("kind", [
     directoryMode: z.enum(["follow", "pinned"]).optional(),
   }),
   z.object({ kind: z.literal("project.remove"), ...ProjectTarget }),
+  // `null` returns to the folder's name. Daemons without the "project-rename" capability reject this.
+  z.object({ kind: z.literal("project.rename"), ...ProjectTarget, name: Name.nullable() }),
   z.object({
     kind: z.literal("tab.create"),
     terminalProfileId: TerminalProfileIdSchema.optional(),
