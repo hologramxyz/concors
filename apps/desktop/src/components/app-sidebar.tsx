@@ -46,6 +46,8 @@ interface AppSidebarProps {
   auth: SignedInAuth;
   onSignOut: () => void;
   execute: (operation: WorkspaceOperation) => Promise<void>;
+  /** Like `execute`, but a failure is shown in the window's error banner. */
+  onCommand: (operation: WorkspaceOperation) => void;
 }
 
 export function AppSidebar(props: AppSidebarProps) {
@@ -198,7 +200,12 @@ export function AppSidebar(props: AppSidebarProps) {
             <AgentSidebar compact onSelect={props.onSelectAgent} workspace={props.workspace} />
           ) : (
             <SidebarSection title="Agents">
-              <AgentSidebar onSelect={props.onSelectAgent} workspace={props.workspace} />
+              <AgentSidebar
+                onSelect={props.onSelectAgent}
+                workspace={props.workspace}
+                canEdit={props.canEdit}
+                onCommand={props.onCommand}
+              />
             </SidebarSection>
           )}
           <PreviewsSidebar compact={props.collapsed} />
