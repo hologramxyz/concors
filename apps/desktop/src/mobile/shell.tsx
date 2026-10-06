@@ -625,7 +625,12 @@ function MobileWorkspaceContent({
                       )}
                     </SidebarSection>
                     <SidebarSection title="Agents">
-                      <AgentSidebar onSelect={openAgent} workspace={workspace} />
+                      <AgentSidebar
+                        onSelect={openAgent}
+                        workspace={workspace}
+                        canEdit={canEdit}
+                        onCommand={command}
+                      />
                     </SidebarSection>
                     <PreviewsSidebar />
                   </nav>

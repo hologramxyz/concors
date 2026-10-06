@@ -1,4 +1,11 @@
-import type { AgentInfo, TerminalInfo, WorkspaceSnapshot } from "@concors/protocol";
+import type {
+  AgentInfo,
+  LayoutNode,
+  TerminalInfo,
+  WorkspaceProject,
+  WorkspaceSnapshot,
+  WorkspaceTab,
+} from "@concors/protocol";
 import { isLiveTerminalAgent } from "./agent-status";
 
 /** The sidebar navigates to panes; saved, detached sessions are not active entries. */
@@ -34,4 +41,22 @@ export function paneNames(workspace: WorkspaceSnapshot | null): Map<string, stri
         if (node.kind === "pane" && node.sessionId && node.name)
           names.set(node.sessionId, node.name);
   return names;
+}
+
+/**
+ * The pane a sidebar entry stands for, so renaming the entry renames that pane: the one whose name
+ * `paneNames` shows, or else the first pane holding the session.
+ */
+export function agentPane(workspace: WorkspaceSnapshot | null, sessionId: string) {
+  let found: {
+    project: WorkspaceProject;
+    tab: WorkspaceTab;
+    pane: Extract<LayoutNode, { kind: "pane" }>;
+  } | null = null;
+  for (const project of workspace?.projects ?? [])
+    for (const tab of project.tabs)
+      for (const node of tab.nodes)
+        if (node.kind === "pane" && node.sessionId === sessionId && (!found || node.name))
+          found = { project, tab, pane: node };
+  return found;
 }
