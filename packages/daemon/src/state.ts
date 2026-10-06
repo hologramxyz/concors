@@ -13,6 +13,7 @@ import {
   PROTOCOL_VERSION,
   DICTATION_CAPABILITY,
   PANE_RENAME_CAPABILITY,
+  PROJECT_RENAME_CAPABILITY,
   TERMINAL_IMAGE_PASTE_CAPABILITY,
 } from "@concors/protocol";
 
@@ -77,6 +78,7 @@ export class DaemonState {
         "workspace-pane-rearrangement",
         "directional-pane-split",
         PANE_RENAME_CAPABILITY,
+        PROJECT_RENAME_CAPABILITY,
         "terminal-recovery",
         TERMINAL_IMAGE_PASTE_CAPABILITY,
         ...(this.#dictation ? [DICTATION_CAPABILITY] : []),
