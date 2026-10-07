@@ -1038,3 +1038,87 @@ it("reports a Claude plan limit beside the turn so the chat can offer another ac
   await expect.poll(() => limits()).toHaveLength(2);
   expect(limits()[1]?.params["resetsAt"]).toBe(new Date(1_900_000_000_000).toISOString());
 });
+
+it("shows the turn Claude starts by itself when a background task reports back", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-claude-background-"));
+  cleanup.push(() => rm(directory, { recursive: true, force: true }));
+  await writeFile(join(directory, process.platform === "win32" ? "claude.cmd" : "claude"), "", {
+    mode: 0o755,
+  });
+  vi.stubEnv("PATH", directory);
+  let emit: (value: unknown) => void = () => undefined;
+  const prompts: unknown[] = [];
+  const createQuery = vi.fn(({ prompt }: Parameters<typeof query>[0]) => {
+    void (async () => {
+      for await (const message of prompt as AsyncIterable<unknown>) prompts.push(message);
+    })();
+    const messages = new PassThrough({ objectMode: true });
+    emit = (value) => messages.write(value);
+    return Object.assign(messages, {
+      initializationResult: async () => ({
+        models: [{ value: "default", displayName: "Default" }],
+      }),
+      getContextUsage: async () => ({ model: "claude-sonnet-5" }),
+      setModel: async () => undefined,
+      setPermissionMode: async () => undefined,
+      close: () => {
+        messages.end();
+      },
+    }) as unknown as Query;
+  });
+  const provider = new ClaudeProvider(directory, vi.fn(), createQuery);
+  const { notifications } = observe(provider);
+  await provider.initialize();
+  await provider.request("thread/start");
+  const started = object(await provider.request("turn/start", turn));
+  const first = object(started["turn"])["id"];
+  emit({ type: "system", subtype: "init", model: "claude-opus-5-5" });
+  emit({
+    type: "assistant",
+    message: { id: "waiting", content: [{ type: "text", text: "Waiting on the checks" }] },
+  });
+  emit({ type: "result", subtype: "success", result: "Waiting on the checks" });
+  const turns = (method: string) =>
+    notifications.filter((n) => n.method === method).map((n) => object(n.params["turn"]));
+  await expect.poll(() => turns("turn/completed").map((t) => t["id"])).toEqual([first]);
+
+  // Nothing is reported while Claude waits, and the background task finishing is not a turn yet.
+  emit({ type: "system", subtype: "task_notification", task_id: "checks", status: "completed" });
+  emit({ type: "system", subtype: "init", model: "claude-opus-5-5" });
+  emit({
+    type: "assistant",
+    message: { id: "passed", content: [{ type: "text", text: "All checks passed" }] },
+  });
+  await expect.poll(() => turns("turn/started")).toHaveLength(2);
+  const second = turns("turn/started")[1]?.["id"];
+  expect(second).not.toBe(first);
+  await expect
+    .poll(() =>
+      notifications
+        .filter((n) => n.method === "item/completed")
+        .map((n) => [n.params["turnId"], object(n.params["item"])["text"]]),
+    )
+    .toContainEqual([second, "All checks passed"]);
+
+  // A message sent as Claude woke up waits behind its turn instead of failing.
+  expect(object(object(await provider.request("turn/start", turn))["turn"])["id"]).toBe(second);
+  await expect.poll(() => prompts).toHaveLength(2);
+  emit({ type: "result", subtype: "success", result: "All checks passed" });
+  await expect
+    .poll(() => turns("turn/completed").map((t) => [t["id"], t["status"]]))
+    .toEqual([
+      [first, "completed"],
+      [second, "completed"],
+    ]);
+
+  // Its reply then arrives as the next turn Claude starts.
+  emit({ type: "system", subtype: "init", model: "claude-opus-5-5" });
+  await expect.poll(() => turns("turn/started")).toHaveLength(3);
+  // A sub-agent starting is part of the turn, not a new one.
+  emit({ type: "system", subtype: "init", parent_tool_use_id: "task", model: "claude-opus-5-5" });
+  emit({ type: "result", subtype: "success", result: "Done" });
+  await expect.poll(() => turns("turn/completed")).toHaveLength(3);
+  emit({ type: "system", subtype: "init", parent_tool_use_id: "task", model: "claude-opus-5-5" });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(turns("turn/started")).toHaveLength(3);
+});
