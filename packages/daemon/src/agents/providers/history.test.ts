@@ -70,3 +70,28 @@ it("groups OpenCode replies by parent and excludes model-authored compaction sum
   expect(turns).toHaveLength(1);
   expect(turns[0]?.items.map((i) => i["id"])).toEqual(["user:msg-user", "p-reply"]);
 });
+it("replays the turn a background task started without showing its notification as a prompt", () => {
+  const turns = claudeHistory([
+    { type: "user", uuid: "prompt", message: { content: "Run the checks in the background" } },
+    {
+      type: "assistant",
+      uuid: "a",
+      message: { id: "waiting", content: [{ type: "text", text: "Waiting" }] },
+    },
+    {
+      type: "user",
+      uuid: "notification",
+      origin: { kind: "task-notification" },
+      message: { content: "<task-notification>\n<task-id>b1</task-id>\n</task-notification>" },
+    },
+    {
+      type: "assistant",
+      uuid: "b",
+      message: { id: "passed", content: [{ type: "text", text: "Passed" }] },
+    },
+  ]);
+  expect(turns.map((t) => [t.id, t.items.map((i) => i["id"])])).toEqual([
+    ["prompt", ["user:prompt", "waiting"]],
+    ["notification", ["passed"]],
+  ]);
+});
