@@ -87,6 +87,8 @@ export class ClaudeProvider extends EventProvider {
   private compactCompleted = false;
   private activeCommand: string | null = null;
   private lastBoundary = "";
+  /** The turn Claude Code started without a prompt from Concors, while it runs. */
+  private selfStartedTurn = "";
   private readonly cwd: string;
   private launcher: typeof launch;
   private mcp: McpServer[];
@@ -511,6 +513,7 @@ export class ClaudeProvider extends EventProvider {
       }
     }
     this.controlsChanged();
+    const command = method === "command/execute" ? string(p["name"]) : null;
     const content: SDKUserMessage["message"]["content"] = [];
     for (const value of array(p["input"])) {
       const item = object(value);
@@ -543,13 +546,12 @@ export class ClaudeProvider extends EventProvider {
         });
       }
     }
-    const result = this.begin();
-    this.limitResetsAt = undefined;
-    this.activeCommand = method === "command/execute" ? string(p["name"]) : null;
-    this.compactCompleted = false;
-    this.tools.clear();
-    this.messageId = "";
-    this.text = "";
+    // A message sent just as Claude woke up by itself waits behind that turn in Claude Code, and
+    // its reply arrives as the next turn Claude starts.
+    const result =
+      this.turnId && this.turnId === this.selfStartedTurn
+        ? { turn: { id: this.turnId, status: "inProgress", items: [] } }
+        : this.startTurn(command);
     this.pending.push({
       type: "user",
       uuid: this.turnId as `${string}-${string}-${string}-${string}-${string}`,
@@ -560,9 +562,22 @@ export class ClaudeProvider extends EventProvider {
     this.wake?.();
     return result;
   }
+  private startTurn(command: string | null = null) {
+    const result = this.begin();
+    this.limitResetsAt = undefined;
+    this.activeCommand = command;
+    this.compactCompleted = false;
+    this.tools.clear();
+    this.messageId = "";
+    this.text = "";
+    return result;
+  }
   private event(m: Record<string, unknown>) {
-    if (m["type"] === "system" && m["subtype"] === "init" && m["model"] && !m["parent_tool_use_id"])
-      this.reportModel(string(m["model"]));
+    const turnStart = m["type"] === "system" && m["subtype"] === "init" && !m["parent_tool_use_id"];
+    if (turnStart && m["model"]) this.reportModel(string(m["model"]));
+    // Claude Code starts a turn of its own when a background command, monitor or sub-agent it
+    // left running reports back. Without a turn here, all of that work would go unseen.
+    if (turnStart && !this.turnId) this.selfStartedTurn = this.startTurn().turn.id;
     if (!this.turnId) return;
     const parent = string(m["parent_tool_use_id"]);
     if (m["type"] === "rate_limit_event") {

@@ -90,10 +90,15 @@ export function claudeHistory(messages: unknown[]): NativeTurn[] {
     )
       continue;
     if (entry["type"] === "user" && !content.some((c) => c["type"] === "tool_result")) {
+      // A background command, monitor or sub-agent reporting back starts a turn of Claude's own,
+      // which the live chat shows without a prompt.
+      const notification = object(entry["origin"] ?? {})["kind"] === "task-notification";
       turn = {
         id: string(entry["uuid"]),
         status: "completed",
-        items: [{ id: `user:${string(entry["uuid"])}`, type: "userMessage", content }],
+        items: notification
+          ? []
+          : [{ id: `user:${string(entry["uuid"])}`, type: "userMessage", content }],
       };
       turns.push(turn);
     }

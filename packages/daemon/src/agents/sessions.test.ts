@@ -1564,3 +1564,34 @@ it("reports on /activity whether chats are working or waiting, and not when they
   await expect.poll(() => a.agents[0]?.status).toBe("done");
   expect(await activity()).toEqual({ busy: false, agents: { working: 0, waiting: 0 } });
 });
+
+it("follows a turn the agent starts by itself after the last one finished", async () => {
+  const { a, b, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "hello" });
+  await expect.poll(() => b.agents[0]?.status).toBe("done");
+  const provider = providers[0]!;
+  const turn = { id: "woken", status: "inProgress", items: [] };
+  provider.emit("turn/started", { turnId: turn.id, turn });
+  await expect.poll(() => b.agents[0]?.status).toBe("working");
+  expect(b.agents[0]?.turnId).toBe(turn.id);
+  // Messages queue behind it like behind any running turn.
+  expect((await action(a, { kind: "send", sessionId: id, text: "next" })).outcome.status).toBe(
+    "error",
+  );
+  provider.emit("item/completed", {
+    turnId: turn.id,
+    item: { id: "checks", type: "agentMessage", text: "All checks passed" },
+  });
+  provider.emit("turn/completed", {
+    turnId: turn.id,
+    turn: { ...turn, status: "completed", error: null },
+  });
+  await expect.poll(() => b.agents[0]?.status).toBe("done");
+  expect(b.agents[0]?.attention?.kind).toBe("done");
+  const result = await action(b, { kind: "read", sessionId: id });
+  if (result.outcome.status !== "ok") throw new Error("read failed");
+  expect(result.outcome.conversation.items.find((i) => i.id === "checks")).toMatchObject({
+    turnId: turn.id,
+    text: "All checks passed",
+  });
+});
