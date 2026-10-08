@@ -2186,6 +2186,12 @@ function AccountConnectDialog({
               <Button
                 variant="outline"
                 onClick={() => {
+                  // The sign-in page asks for the code, so have it on the clipboard there.
+                  if (challenge.code)
+                    void copyText(challenge.code).then(
+                      () => setCopied(true),
+                      () => undefined,
+                    );
                   if (challenge.url)
                     void openExternal(challenge.url).catch(() =>
                       setError("Could not open sign-in. Try again."),
