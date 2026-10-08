@@ -91,8 +91,12 @@ export function claudeHistory(messages: unknown[]): NativeTurn[] {
       continue;
     if (entry["type"] === "user" && !content.some((c) => c["type"] === "tool_result")) {
       // A background command, monitor or sub-agent reporting back starts a turn of Claude's own,
-      // which the live chat shows without a prompt.
-      const notification = object(entry["origin"] ?? {})["kind"] === "task-notification";
+      // which the live chat shows without a prompt. getSessionMessages drops the transcript's
+      // origin field, so the notification is recognised by its text. Claude Code also records one
+      // when it resumes a session whose background command was cut off.
+      const notification = /^<task-notification>/.test(
+        textContent(content.filter((c) => c["type"] === "text")).trim(),
+      );
       turn = {
         id: string(entry["uuid"]),
         status: "completed",
