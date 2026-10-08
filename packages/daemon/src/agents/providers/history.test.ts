@@ -81,7 +81,6 @@ it("replays the turn a background task started without showing its notification 
     {
       type: "user",
       uuid: "notification",
-      origin: { kind: "task-notification" },
       message: { content: "<task-notification>\n<task-id>b1</task-id>\n</task-notification>" },
     },
     {
@@ -94,4 +93,25 @@ it("replays the turn a background task started without showing its notification 
     ["prompt", ["user:prompt", "waiting"]],
     ["notification", ["passed"]],
   ]);
+});
+it("does not show the notification Claude Code records on resume for a cut-off command", () => {
+  // getSessionMessages returns the entry without the transcript's origin field.
+  const turns = claudeHistory([
+    {
+      type: "user",
+      uuid: "orphan",
+      message: {
+        role: "user",
+        content:
+          "<task-notification>\n<task-id>b1</task-id>\n<status>stopped</status>\n<summary>Background shell command didn't finish before the previous session ended</summary>\n</task-notification>",
+      },
+    },
+    { type: "user", uuid: "prompt", message: { role: "user", content: "done" } },
+    {
+      type: "assistant",
+      uuid: "a",
+      message: { id: "reply", content: [{ type: "text", text: "Checking" }] },
+    },
+  ]);
+  expect(turns.flatMap((t) => t.items.map((i) => i["id"]))).toEqual(["user:prompt", "reply"]);
 });
