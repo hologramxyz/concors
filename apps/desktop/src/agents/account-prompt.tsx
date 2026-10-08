@@ -123,7 +123,9 @@ function AccountPrompt({
         const next = result.outcome.account;
         if (!next) throw new Error("This machine needs a daemon update to connect accounts here.");
         if (!mounted.current || isDismissed.current) {
-          if (next.challenge)
+          // Only a dismissal abandons the sign-in. A prompt that merely left the screen picks the
+          // pending code up again from the daemon when it comes back.
+          if (isDismissed.current && next.challenge)
             void connection
               .requestAgent(
                 {
@@ -164,22 +166,13 @@ function AccountPrompt({
   );
   useEffect(() => {
     mounted.current = true;
+    // Switching tabs or covering the pane unmounts the prompt while the user is entering the code
+    // in their browser, so leaving the screen keeps the sign-in running. The daemon ends it when it
+    // expires or the connection closes.
     return () => {
       mounted.current = false;
-      const challenge = latest.current?.challenge;
-      if (challenge)
-        void connection
-          .requestAgent(
-            {
-              kind: "account",
-              sessionId: agent.id,
-              action: { type: "cancel", flowId: challenge.flowId },
-            },
-            crypto.randomUUID(),
-          )
-          .catch(() => undefined);
     };
-  }, [connection, agent.id]);
+  }, []);
   const provider = useCallback(
     async (operation: ProviderOperation) => {
       const result = await connection.requestProvider(operation, crypto.randomUUID());
@@ -436,6 +429,12 @@ function AccountPrompt({
             <Button
               variant="outline"
               onClick={() => {
+                // The sign-in page asks for the code, so have it on the clipboard there.
+                if (challenge.code)
+                  void copyText(challenge.code).then(
+                    () => setCopied(true),
+                    () => undefined,
+                  );
                 if (challenge.url)
                   void openExternal(challenge.url).catch(() =>
                     setError("Could not open sign-in. Try again."),
