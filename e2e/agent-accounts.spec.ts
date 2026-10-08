@@ -294,3 +294,58 @@ test("a missing CLI is offered as a one-click install instead of an account chec
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("Codex sign-in keeps its code across a tab switch and copies it for the sign-in page", async ({
+  page,
+}) => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-account-code-"));
+  let cancels = 0;
+  let connected = false;
+  await page.routeWebSocket("ws://127.0.0.1:7429/ws", (socket) => {
+    const server = socket.connectToServer();
+    socket.onMessage((raw) => {
+      const event = JSON.parse(String(raw));
+      if (
+        event.type === "agent.request" &&
+        event.operation.kind === "account" &&
+        event.operation.action.type === "cancel"
+      )
+        cancels++;
+      server.send(raw);
+    });
+    server.onMessage((raw) => {
+      const event = JSON.parse(String(raw));
+      if (event.type === "agent.result" && event.outcome?.account?.status === "connected")
+        connected = true;
+      socket.send(raw);
+    });
+  });
+  try {
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await signedIn(page);
+    await page.goto("/");
+    // The sign-in page itself is out of scope; only the code handed to it matters here.
+    await page.evaluate(() => {
+      window.open = () => null;
+    });
+    await seedProject(page, "Sign-in code", directory);
+    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
+    const prompt = page.getByRole("region", { name: "Codex account connection", exact: true });
+    await prompt.getByRole("button", { name: "Sign in with ChatGPT", exact: true }).click();
+    await expect(prompt).toContainText("TEST-CODE");
+    await prompt.getByRole("button", { name: "Open sign-in page", exact: true }).click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("TEST-CODE");
+    // Leaving the tab while entering the code in the browser must not cancel the sign-in: the
+    // fixture approves it a moment later, and the chat comes back connected.
+    await page.getByRole("button", { name: "Tab 1", exact: true }).click();
+    await expect(prompt).toHaveCount(0);
+    await page.getByRole("button", { name: "Tab 2", exact: true }).click();
+    await expect.poll(() => connected, { timeout: 10_000 }).toBe(true);
+    await expect(prompt).toHaveCount(0);
+    expect(cancels).toBe(0);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
