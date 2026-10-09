@@ -1,5 +1,5 @@
 import { useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { LoaderCircle } from "lucide-react";
+import { CircleArrowUp, LoaderCircle } from "lucide-react";
 import { Popover } from "radix-ui";
 import { agentProviderName, type AgentInfo, type ProviderVersion } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
@@ -117,18 +117,27 @@ export function ProviderUpdateLabel({ agent, compact }: { agent: AgentInfo; comp
   const version = row?.version;
   if (!version?.updateAvailable && !version?.updating) return null;
   const label = agent.providerLabel ?? row?.label ?? agentProviderName(agent.provider);
+  const text = version.updating
+    ? `Updating ${label}…`
+    : compact
+      ? "Update available"
+      : `${label} ${version.latest} available`;
   return (
     <Popover.Root>
       <Popover.Trigger
         type="button"
+        aria-label={text}
         title={`${label} ${version.latest} is available`}
-        className="rounded px-1.5 py-1 text-xs whitespace-nowrap text-muted-foreground hover:bg-muted hover:text-foreground"
+        className="composer-update-label inline-flex min-w-0 items-center gap-1 rounded px-1.5 py-1 text-xs whitespace-nowrap text-muted-foreground hover:bg-muted hover:text-foreground"
       >
-        {version.updating
-          ? `Updating ${label}…`
-          : compact
-            ? "Update available"
-            : `${label} ${version.latest} available`}
+        {/* A narrow desktop composer keeps only the icon, so the controls stay on one row. */}
+        {!compact &&
+          (version.updating ? (
+            <LoaderCircle className="size-3.5 shrink-0 animate-spin" aria-hidden="true" />
+          ) : (
+            <CircleArrowUp className="size-3.5 shrink-0" aria-hidden="true" />
+          ))}
+        <span className="truncate">{text}</span>
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
