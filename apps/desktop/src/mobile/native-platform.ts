@@ -22,6 +22,18 @@ export async function readClipboardImage(): Promise<ImageData | null> {
   return null;
 }
 
+// Saving needs the app's own share sheet, which the web view cannot reach yet; the shared UI hides
+// its Download buttons here.
+export const canSaveFiles = false;
+export interface FileToSave {
+  name: string;
+  mime: string;
+  data: string;
+}
+export async function saveFile(): Promise<never> {
+  throw new Error("Save files from the Concors desktop app.");
+}
+
 // A phone cannot keep an SSH private key for the person's own terminal. With no device key the
 // shared machine UI shows the plain command once a key exists, or points to Settings.
 export const deviceSshKey = {
