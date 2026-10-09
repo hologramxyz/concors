@@ -84,9 +84,20 @@ global npm prefix, Homebrew, or the CLI's own updater for Claude Code's and
 OpenCode's native installs. Managed VPSs start with Codex, Claude Code and OpenCode
 in Concors' own prefix, and packaged daemons bundle npm, so Update works there without
 a system Node. Anything else gets no command, and the user updates it the way they
-installed it. The daemon never updates on its own. If an update exits
+installed it. If an update exits
 cleanly but the version does not move (a minimum release age, a pin), the error says
 so. On Windows, versions are shown but the install method is not inferred.
+
+Copies in Concors' own prefix (every managed VPS, and anything installed from
+Settings → Providers) update on their own after a check finds a new release, but only
+while nothing uses that CLI: no chat of that provider is starting, working or waiting
+for an answer, and no terminal runs it (as its profile or typed into a shell). npm
+rewrites the package in place, which a live CLI would not survive. Otherwise the
+update waits for a later check, and Update stays available meanwhile. Each release is
+tried once automatically, so a failed or held-back update leaves its error for the
+user instead of retrying every 30 minutes. While any update runs, new chats of that
+provider wait for it before launching the CLI. Installs Concors does not own are never
+updated without the user pressing Update.
 
 When an installed version changes, the daemon drops its catalogs and restarts idle
 runtimes of that provider on the new binary; running turns finish first. Chats keep
