@@ -3,9 +3,12 @@
  * models on the CLI version (Claude Code's catalog carries a minimum version, Codex filters its
  * remote list by client version), so an outdated CLI quietly hides the models people expect.
  *
- * It only reads versions on its own. An update runs only when a user asks for it, and only with a
- * command scoped to that one tool; installs the daemon cannot attribute get no command, and the
- * user updates them the way they installed them.
+ * Copies Concors installed itself (Settings → Providers → Install, and every managed machine) are
+ * updated automatically once nothing is using that CLI: npm rewrites the package in place, which a
+ * running turn or a CLI open in a terminal would not survive. Every other install, and any update
+ * deferred because the CLI is busy, waits for the user to press Update, and only with a command
+ * scoped to that one tool; installs the daemon cannot attribute get no command, and the user
+ * updates them the way they installed them.
  */
 import { closeSync, openSync, readSync, realpathSync } from "node:fs";
 import { basename, dirname, sep } from "node:path";
@@ -48,6 +51,14 @@ export interface Install {
   prefix: string;
 }
 
+/** Whether Concors installed this copy itself, into its own per-provider npm prefix. */
+export function installedByConcors(install: Pick<Install, "path" | "prefix">): boolean {
+  return install.path
+    .split(sep)
+    .join("/")
+    .startsWith(install.prefix.split(sep).join("/") + "/");
+}
+
 /**
  * The command that updates exactly this install, or undefined when the install method is unknown.
  * Package managers are only used when the path proves they own the install: a global `npm -g`
@@ -56,7 +67,7 @@ export interface Install {
 export function updateCommand(install: Install): string[] | undefined {
   const path = install.path.split(sep).join("/");
   const latest = `${install.package}@latest`;
-  if (path.startsWith(install.prefix.split(sep).join("/") + "/"))
+  if (installedByConcors(install))
     return [
       "npm",
       "install",
@@ -190,12 +201,17 @@ interface Entry {
   installed?: string | undefined;
   latest?: string | undefined;
   command?: string[] | undefined;
+  /** Concors installed this copy, so it updates it without being asked. */
+  automatic?: boolean;
+  /** The release an automatic update last tried, so a failed or held-back one is not retried. */
+  attempted?: string | undefined;
   updating?: boolean;
   updateError?: string | undefined;
 }
 
 export class ProviderVersions {
   private entries = new Map<string, Entry>();
+  private updates = new Map<string, Promise<void>>();
   private checking: Promise<void> | undefined;
   private timer: ReturnType<typeof setInterval> | undefined;
   private closed = false;
@@ -203,17 +219,21 @@ export class ProviderVersions {
   private readonly changed: (ids: string[]) => void;
   private readonly run: Run;
   private readonly latest: (pkg: string) => Promise<string | undefined>;
+  private readonly busy: (target: VersionTarget) => boolean;
   constructor(
     targets: () => VersionTarget[],
     /** Called with provider ids whose installed CLI version changed since the previous check. */
     changed: (ids: string[]) => void,
     run: Run = runCommand,
     latest: (pkg: string) => Promise<string | undefined> = npmLatest,
+    /** Whether a turn or a terminal is using this CLI right now; automatic updates wait for it. */
+    busy: (target: VersionTarget) => boolean = () => true,
   ) {
     this.targets = targets;
     this.changed = changed;
     this.run = run;
     this.latest = latest;
+    this.busy = busy;
   }
   get(id: string): ProviderVersion | undefined {
     const entry = this.entries.get(id);
@@ -251,6 +271,19 @@ export class ProviderVersions {
       if (await this.probe(target)) changed.push(target.id);
     }
     if (changed.length && !this.closed) this.changed(changed);
+    for (const target of this.targets()) {
+      if (this.closed) return;
+      const entry = this.entries.get(target.id);
+      const version = this.get(target.id);
+      if (!entry?.automatic || !version?.updateAvailable || entry.updating) continue;
+      if (entry.attempted === version.latest || this.busy(target)) continue;
+      this.entries.set(target.id, { ...entry, attempted: version.latest });
+      this.update(target);
+    }
+  }
+  /** The running update of this provider's CLI, which settles (never rejects) once it ends. */
+  pending(id: string): Promise<void> | undefined {
+    return this.updates.get(id);
   }
   /** Returns whether a previously known installed version changed. */
   private async probe(target: VersionTarget): Promise<boolean> {
@@ -285,6 +318,7 @@ export class ProviderVersions {
       // A failed registry lookup keeps the last known release rather than hiding an update.
       latest: latest ?? previous?.latest,
       command,
+      automatic: !!path && installedByConcors({ path, prefix: target.prefix }),
     });
     return !!previous?.installed && !!installed && previous.installed !== installed;
   }
@@ -299,7 +333,7 @@ export class ProviderVersions {
     const executable = target.executable();
     const env = executable?.env ?? process.env;
     this.entries.set(target.id, { ...entry, updating: true, updateError: undefined });
-    void this.run(entry.command, env, UPDATE_TIMEOUT_MS).then(async ({ code, output }) => {
+    const done = this.run(entry.command, env, UPDATE_TIMEOUT_MS).then(async ({ code, output }) => {
       const current = this.entries.get(target.id) ?? {};
       const tail = output.trim().split("\n").slice(-3).join("\n");
       this.entries.set(target.id, {
@@ -318,6 +352,12 @@ export class ProviderVersions {
           updateError: `The update finished, but ${target.label} is still ${after.installed}. Its installer may be holding ${after.latest} back.`,
         });
     });
+    const settled = done
+      .catch(() => undefined)
+      .then(() => {
+        if (this.updates.get(target.id) === settled) this.updates.delete(target.id);
+      });
+    this.updates.set(target.id, settled);
   }
   close() {
     this.closed = true;

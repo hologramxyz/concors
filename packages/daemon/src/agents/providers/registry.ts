@@ -118,16 +118,24 @@ export class ProviderRegistry {
   }
   /**
    * Starts periodic version checks of the npm-published CLIs. Only the serving daemon opts in, so
-   * tests and short-lived registries never spawn CLIs or reach the network.
+   * tests and short-lived registries never spawn CLIs or reach the network. `busy` tells whether a
+   * chat turn or a terminal is using a CLI; Concors-installed copies update once it is not.
    */
-  startVersionChecks() {
+  startVersionChecks(busy: (id: string, engine: string) => boolean = () => true) {
     this.versions ??= new ProviderVersions(
       () => this.versionTargets(),
       (ids) => {
         for (const listener of this.versionListeners) listener(ids);
       },
+      undefined,
+      undefined,
+      (target) => busy(target.id, target.engine),
     );
     this.versions.start();
+  }
+  /** The update of this provider's CLI in progress, if any; nothing should launch it until then. */
+  pendingUpdate(config: ProviderConfig): Promise<void> | undefined {
+    return this.versions?.pending(this.baseId(config));
   }
   /** Notified with base provider ids whose installed CLI changed version. */
   onVersionChange(listener: (ids: string[]) => void): () => void {
