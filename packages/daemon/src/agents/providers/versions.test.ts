@@ -1,6 +1,6 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 import {
   compareVersions,
@@ -190,4 +190,97 @@ it("refuses to update installs it cannot attribute", async () => {
     updateAvailable: true,
   });
   expect(() => versions.update(target("/nonexistent/codex"))).toThrow(/installed/);
+});
+
+async function concorsInstall() {
+  const root = await realpath(await mkdtemp(join(tmpdir(), "concors-versions-")));
+  directories.push(root);
+  const prefix = join(root, "providers", "codex");
+  const script = join(prefix, "node_modules", "@openai", "codex", "bin", "codex.js");
+  await mkdir(dirname(script), { recursive: true });
+  await writeFile(script, "#!/usr/bin/env node\n");
+  return { ...target(script), prefix };
+}
+
+it("updates Concors-installed CLIs on its own once nothing is using them", async () => {
+  const codex = await concorsInstall();
+  let installed = "1.0.0";
+  let busy = true;
+  let finish: () => void = () => undefined;
+  const npm = new Promise<void>((resolve) => (finish = resolve));
+  const run = vi.fn(async (argv: string[]) => {
+    if (argv[0] === "npm") {
+      await npm;
+      installed = "1.1.0";
+      return { code: 0, output: "added 1 package" };
+    }
+    return { code: 0, output: installed };
+  });
+  const changed = vi.fn();
+  const versions = new ProviderVersions(
+    () => [codex],
+    changed,
+    run,
+    async () => "1.1.0",
+    () => busy,
+  );
+  // A turn or a terminal using the CLI defers the update; the button stays available meanwhile.
+  await versions.check();
+  expect(run.mock.calls.some(([argv]) => argv[0] === "npm")).toBe(false);
+  expect(versions.get("codex")).toMatchObject({ updateAvailable: true });
+  expect(versions.pending("codex")).toBeUndefined();
+
+  busy = false;
+  await versions.check();
+  expect(versions.get("codex")?.updating).toBe(true);
+  const pending = versions.pending("codex");
+  expect(pending).toBeDefined();
+  finish();
+  await pending;
+  expect(changed).toHaveBeenCalledWith(["codex"]);
+  expect(versions.get("codex")).toMatchObject({ installed: "1.1.0", updateAvailable: false });
+  expect(versions.pending("codex")).toBeUndefined();
+  versions.close();
+});
+
+it("tries each release once and leaves installs it does not own to the user", async () => {
+  const codex = await concorsInstall();
+  const run = vi.fn(async (argv: string[]) =>
+    argv[0] === "npm" ? { code: 1, output: "npm error network" } : { code: 0, output: "1.0.0" },
+  );
+  const versions = new ProviderVersions(
+    () => [codex],
+    () => undefined,
+    run,
+    async () => "1.1.0",
+    () => false,
+  );
+  await versions.check();
+  await versions.pending("codex");
+  expect(versions.get("codex")?.updateError).toMatch(/Update failed/);
+  await versions.check();
+  expect(run.mock.calls.filter(([argv]) => argv[0] === "npm")).toHaveLength(1);
+  versions.close();
+
+  // A mise-managed copy belongs to the user's own tooling, idle or not.
+  const root = await mkdtemp(join(tmpdir(), "concors-versions-"));
+  directories.push(root);
+  const binary = join(root, "mise", "installs", "codex", "1.0.0", "codex");
+  await mkdir(dirname(binary), { recursive: true });
+  await writeFile(binary, "binary");
+  const runs: string[][] = [];
+  const theirs = new ProviderVersions(
+    () => [target(binary)],
+    () => undefined,
+    async (argv) => {
+      runs.push(argv);
+      return { code: 0, output: "1.0.0" };
+    },
+    async () => "1.1.0",
+    () => false,
+  );
+  await theirs.check();
+  expect(theirs.get("codex")).toMatchObject({ updateAvailable: true });
+  expect(runs.some((argv) => argv[0] === "mise")).toBe(false);
+  theirs.close();
 });
