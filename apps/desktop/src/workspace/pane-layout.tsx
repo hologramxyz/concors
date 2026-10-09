@@ -1,6 +1,7 @@
 import { ProjectFileLinks } from "@/files/provider";
 import { neighborPane, type Direction } from "./pane-navigation";
 import { useTabVisible } from "./tab-visibility";
+import { clampRatio, splitRatio } from "./split-ratio";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { useTerminalProfiles } from "@/terminal/profiles-context";
 import { paneProfiles, TAB_PROFILES } from "./tab-profiles";
@@ -592,11 +593,44 @@ function Split({
   onResize: (ratio: number) => void;
 }) {
   const container = useRef<HTMLDivElement>(null);
-  const dragging = useRef<number | null>(null);
+  const drag = useRef<{ ratio: number; grab: number; frame: number | null } | null>(null);
   const [preview, setPreview] = useState<number | null>(null);
+  // The ratio just committed, shown until the workspace reports it: the resize goes through the
+  // daemon (over the network for a cloud machine), and without this the split snapped back to
+  // where it was for that round trip.
+  const [committed, setCommitted] = useState<{ ratio: number; from: number } | null>(null);
+  useEffect(() => {
+    if (!committed) return;
+    // A rejected resize never comes back; fall back to the workspace's own ratio.
+    const timer = setTimeout(() => setCommitted(null), 3000);
+    return () => clearTimeout(timer);
+  }, [committed]);
   const horizontal = node.axis === "horizontal";
-  const ratio = preview ?? node.ratio;
-  const clamp = (value: number) => Math.min(0.9, Math.max(0.1, value));
+  // Once the workspace's ratio moves, it is the answer, whether it is ours or another client's.
+  const pending = committed?.from === node.ratio ? committed.ratio : null;
+  const ratio = preview ?? pending ?? node.ratio;
+  const resize = (value: number) => {
+    if (value === (pending ?? node.ratio)) return;
+    setCommitted({ ratio: value, from: node.ratio });
+    onResize(value);
+  };
+  const end = (commit: boolean) => {
+    const current = drag.current;
+    if (!current) return;
+    if (current.frame !== null) cancelAnimationFrame(current.frame);
+    drag.current = null;
+    delete document.documentElement.dataset["paneResizing"];
+    setPreview(null);
+    if (commit && canEdit) resize(current.ratio);
+  };
+  // A drag still running when the split goes away must not leave the whole app unselectable.
+  useEffect(
+    () => () => {
+      if (drag.current?.frame != null) cancelAnimationFrame(drag.current.frame);
+      if (drag.current) delete document.documentElement.dataset["paneResizing"];
+    },
+    [],
+  );
   return (
     <div
       ref={container}
@@ -617,41 +651,62 @@ function Split({
         tabIndex={canEdit ? 0 : -1}
         className={`pane-resize-handle shrink-0 touch-none ${horizontal ? "w-2 cursor-col-resize" : "h-2 cursor-row-resize"}`}
         onPointerDown={(event) => {
-          if (!canEdit) return;
-          dragging.current = node.ratio;
-          setPreview(node.ratio);
+          if (!canEdit || event.button !== 0) return;
+          // Otherwise the press starts a text selection that sweeps across both panes as the
+          // pointer moves; the handle is still focused for the arrow keys.
+          event.preventDefault();
+          window.getSelection()?.removeAllRanges();
+          event.currentTarget.focus({ preventScroll: true });
+          const handle = event.currentTarget.getBoundingClientRect();
+          drag.current = {
+            ratio: ratio,
+            grab: horizontal
+              ? event.clientX - (handle.left + handle.width / 2)
+              : event.clientY - (handle.top + handle.height / 2),
+            frame: null,
+          };
+          // Keeps the resize cursor and blocks selection everywhere, not only over the handle.
+          document.documentElement.dataset["paneResizing"] = horizontal ? "column" : "row";
+          setPreview(ratio);
           event.currentTarget.setPointerCapture(event.pointerId);
         }}
         onPointerMove={(event) => {
-          if (dragging.current === null || !container.current) return;
-          const rect = container.current.getBoundingClientRect();
-          const value = clamp(
-            horizontal
-              ? (event.clientX - rect.left) / rect.width
-              : (event.clientY - rect.top) / rect.height,
-          );
-          dragging.current = value;
-          setPreview(value);
+          const current = drag.current;
+          if (!current || !container.current) return;
+          const split = container.current.getBoundingClientRect();
+          const handle = event.currentTarget.getBoundingClientRect();
+          current.ratio = splitRatio({
+            pointer: horizontal ? event.clientX : event.clientY,
+            start: horizontal ? split.left : split.top,
+            size: horizontal ? split.width : split.height,
+            handle: horizontal ? handle.width : handle.height,
+            grab: current.grab,
+          });
+          // Laying out two chat panes is the expensive part; do it at most once per frame.
+          current.frame ??= requestAnimationFrame(() => {
+            current.frame = null;
+            if (drag.current === current) setPreview(current.ratio);
+          });
         }}
         onPointerUp={(event) => {
-          const value = dragging.current;
-          dragging.current = null;
-          setPreview(null);
           if (event.currentTarget.hasPointerCapture(event.pointerId))
             event.currentTarget.releasePointerCapture(event.pointerId);
-          if (value !== null && canEdit) onResize(value);
+          end(true);
         }}
-        onPointerCancel={() => {
-          dragging.current = null;
-          setPreview(null);
-        }}
+        onPointerCancel={() => end(false)}
+        onLostPointerCapture={() => end(true)}
         onKeyDown={(event) => {
+          if (event.key === "Escape" && drag.current) {
+            event.preventDefault();
+            end(false);
+            return;
+          }
           if (!canEdit) return;
           const backward = horizontal ? "ArrowLeft" : "ArrowUp",
             forward = horizontal ? "ArrowRight" : "ArrowDown";
           if (event.key === backward || event.key === forward) {
             event.preventDefault();
-            onResize(clamp(node.ratio + (event.key === forward ? 0.05 : -0.05)));
+            resize(clampRatio(ratio + (event.key === forward ? 0.05 : -0.05)));
           }
         }}
       />
