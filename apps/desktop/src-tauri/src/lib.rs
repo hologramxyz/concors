@@ -10,6 +10,7 @@
 //! over the Concors protocol. No product or agent-orchestration logic belongs here.
 
 mod daemon;
+mod downloads;
 mod microphone;
 mod notifications;
 mod sign_in;
@@ -48,6 +49,7 @@ pub fn run() {
             ssh_key::device_ssh_key,
             update::app_installation,
             update::install_app_update,
+            downloads::save_download,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Concors")

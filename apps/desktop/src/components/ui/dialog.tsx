@@ -49,7 +49,8 @@ function DialogContent({
   onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
-  size?: "default" | "wide";
+  /** `media` grows with what it shows (an image at its own size) up to the window's edges. */
+  size?: "default" | "wide" | "media";
   showCloseButton?: boolean;
   closeLabel?: string;
   headerActions?: React.ReactNode;
@@ -88,7 +89,13 @@ function DialogContent({
         }}
         className={cn(
           "chat-scroll fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] min-w-0 -translate-x-1/2 -translate-y-1/2 flex-col gap-5 overflow-y-auto overscroll-contain rounded-xl bg-popover p-6 text-[15px] text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none motion-reduce:animate-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
-          size === "wide" ? "max-w-3xl" : "max-w-xl",
+          size === "media"
+            ? // Centred by its margins: a fit-content box placed at left: 50% could only grow
+              // into the right half of the window.
+              "inset-x-0 mx-auto w-fit max-w-[calc(100vw-2rem)] min-w-[min(28rem,calc(100vw-2rem))] translate-x-0"
+            : size === "wide"
+              ? "max-w-3xl"
+              : "max-w-xl",
           className,
         )}
         {...props}
