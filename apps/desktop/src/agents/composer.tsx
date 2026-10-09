@@ -874,7 +874,7 @@ export function AgentComposer({
               setError("Folders cannot be attached. Drop the files inside instead.");
           }}
           data-dropping={dropping || undefined}
-          className={`relative rounded-2xl border bg-background p-2 shadow-sm focus-within:border-primary/40 data-[dropping]:border-primary ${compact ? "mobile-composer" : ""}`}
+          className={`relative rounded-2xl border bg-background p-2 shadow-sm focus-within:border-primary/40 data-[dropping]:border-primary ${compact ? "mobile-composer" : "agent-composer-form"}`}
         >
           {dropping && (
             <div
@@ -1041,7 +1041,7 @@ export function AgentComposer({
                 className={`agent-composer-input ${compact ? "max-h-48" : "max-h-[min(40vh,26rem)]"} min-h-16 w-full resize-none bg-transparent px-3 py-3 outline-none disabled:opacity-50`}
               />
               <div
-                className={`flex items-center gap-1 px-1 ${compact ? "mobile-composer-toolbar" : "flex-wrap"}`}
+                className={`flex items-center gap-1 px-1 ${compact ? "mobile-composer-toolbar" : "agent-composer-toolbar"}`}
               >
                 <input
                   ref={picker}
@@ -1214,7 +1214,7 @@ export function AgentComposer({
                     {utilityControls}
                   </div>
                 )}
-                <div className="mobile-composer-primary ml-auto flex items-center gap-1">
+                <div className="mobile-composer-primary ml-auto flex shrink-0 items-center gap-1">
                   {!compact && utilityControls}
                   {showStop && (
                     <button

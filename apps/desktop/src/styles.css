@@ -464,6 +464,44 @@
 .agent-control > svg {
   flex-shrink: 0;
 }
+/*
+ * The desktop composer keeps every control and the send button on one row at any pane width.
+ * Labelled pickers give up width first, truncating their labels; once even those would crowd the
+ * row they show only their icons. Their names stay in the tooltip and the accessible name. The
+ * form is the container because a container query cannot restyle the toolbar's own gap; the
+ * toolbar is 26px narrower than the form (its padding, border and inset).
+ */
+.agent-composer-form {
+  container: agent-composer / inline-size;
+}
+.agent-composer-toolbar {
+  flex-wrap: nowrap;
+}
+.agent-composer-toolbar .agent-control-value {
+  flex-shrink: 1;
+}
+.agent-composer-toolbar .agent-control-value > span {
+  min-width: 0;
+}
+@container agent-composer (max-width: 585px) {
+  .agent-composer-toolbar .agent-control-value {
+    width: 28px;
+    min-width: 28px;
+    padding-inline: 0;
+    flex-shrink: 0;
+  }
+  .agent-composer-toolbar .agent-control-value > span,
+  .agent-composer-toolbar .composer-update-label > span {
+    display: none;
+  }
+}
+@container agent-composer (max-width: 345px) {
+  /* The narrowest panes fit every icon only once the gaps between them go. */
+  .agent-composer-toolbar,
+  .agent-composer-toolbar .mobile-composer-primary {
+    gap: 0;
+  }
+}
 .agent-control:hover,
 .agent-control[data-state="open"] {
   background: var(--muted);
