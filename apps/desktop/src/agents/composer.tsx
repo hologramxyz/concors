@@ -823,6 +823,18 @@ export function AgentComposer({
             >
               Retry same message
             </button>
+            {/* Without this, a retry that keeps failing would leave the message locked for good. */}
+            <button
+              className="text-primary"
+              onClick={() => {
+                // The message stays where it was, now editable: in the composer, or in the queue.
+                attemptRef.current = null;
+                setUncertain(false);
+                setError(null);
+              }}
+            >
+              Stop retrying
+            </button>
           </div>
         )}
         <form
