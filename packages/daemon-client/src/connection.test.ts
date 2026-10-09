@@ -12,6 +12,7 @@ class FakeWebSocket implements WebSocketLike {
 
   readonly url: string;
   readyState = FakeWebSocket.CONNECTING;
+  bufferedAmount = 0;
   readonly sent: string[] = [];
   readonly closed: { code: number | undefined; reason: string | undefined }[] = [];
   readonly #listeners = new Map<string, ((event: never) => void)[]>();
@@ -625,6 +626,53 @@ describe("workspace replica lifecycle", () => {
     ).rejects.toThrow("plan usage");
     expect(socket.sent.some((raw) => JSON.parse(raw).type === "agent.request")).toBe(false);
     connection.disconnect();
+  });
+
+  it("times agent requests from when their upload finishes, not from when it starts", async () => {
+    vi.useFakeTimers();
+    try {
+      const { connection, socket, ready } = startConnection();
+      connection.subscribeWorkspace(() => undefined);
+      socket.serverOpen();
+      socket.serverSend(READY);
+      await ready;
+      socket.serverSend({ type: "workspace.snapshot", snapshot });
+      const send = (requestId: string) =>
+        connection.requestAgent(
+          { kind: "send", sessionId: "00000000-0000-4000-8000-000000000004", text: "Read this" },
+          requestId,
+        );
+      // A large prompt that takes 50 seconds to upload, still moving every few seconds.
+      socket.bufferedAmount = 1_000_000;
+      let settled = false;
+      const slow = send("00000000-0000-4000-8000-000000000005");
+      void slow.then(
+        () => (settled = true),
+        () => (settled = true),
+      );
+      for (let second = 0; second < 50; second += 5) {
+        await vi.advanceTimersByTimeAsync(5_000);
+        socket.bufferedAmount = Math.max(0, socket.bufferedAmount - 100_000);
+      }
+      socket.bufferedAmount = 0;
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(settled).toBe(false);
+      // Once it has left, the daemon gets the usual time to answer.
+      const timedOut = expect(slow).rejects.toThrow("Agent request timed out");
+      await vi.advanceTimersByTimeAsync(10_000);
+      await timedOut;
+
+      // An upload that stops moving times out as before.
+      socket.bufferedAmount = 500_000;
+      const stalled = expect(send("00000000-0000-4000-8000-000000000006")).rejects.toThrow(
+        "Agent request timed out",
+      );
+      await vi.advanceTimersByTimeAsync(36_000);
+      await stalled;
+      connection.disconnect();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("ignores stale snapshots and rejects pending commands on disconnect", async () => {

@@ -235,3 +235,62 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("an unconfirmed message can stop retrying, to edit it or remove its attachment", async ({
+  page,
+}) => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-composer-unconfirmed-"));
+  let swallow = false;
+  await page.routeWebSocket("ws://127.0.0.1:7429/ws", (socket) => {
+    const server = socket.connectToServer();
+    socket.onMessage((raw) => {
+      const event = JSON.parse(String(raw));
+      // The daemon never hears of the prompt, so its delivery cannot be confirmed.
+      if (swallow && event.type === "agent.request" && event.operation.kind === "send") return;
+      server.send(raw);
+    });
+  });
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Unconfirmed delivery", directory);
+    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
+    const composer = page.getByRole("textbox", { name: "Message Codex" });
+    await expect(composer).toBeEnabled();
+    await page
+      .locator('input[type="file"]')
+      .first()
+      .setInputFiles({
+        name: "spec.pdf",
+        mimeType: "application/pdf",
+        buffer: Buffer.from("%PDF-1.4\n% fixture\n"),
+      });
+    const remove = page.getByRole("button", { name: "Remove spec.pdf", exact: true });
+    await expect(remove).toBeVisible();
+    await composer.fill("Here is the full context");
+    await page.clock.install();
+    swallow = true;
+    await page.getByRole("button", { name: "Send message", exact: true }).click();
+    await page.clock.runFor(36_000);
+    await expect(page.getByText("Delivery could not be confirmed.")).toBeVisible();
+    await expect(page.getByRole("alert")).toContainText("Agent request timed out");
+    // Locked so that a retry sends exactly the same message.
+    await expect(remove).toBeDisabled();
+
+    await page.getByRole("button", { name: "Stop retrying", exact: true }).click();
+    await expect(page.getByText("Delivery could not be confirmed.")).toHaveCount(0);
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    await expect(composer).toHaveValue("Here is the full context");
+    await remove.click();
+    await expect(remove).toHaveCount(0);
+    await composer.fill("Just the text");
+    swallow = false;
+    await page.getByRole("button", { name: "Send message", exact: true }).click();
+    await expect(page.getByRole("log")).toContainText("Just the text");
+    await expect(page.getByRole("log").getByRole("button", { name: "spec.pdf" })).toHaveCount(0);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
