@@ -8,10 +8,56 @@ import {
   DialogDescription,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { File, ImageOff } from "lucide-react";
+import { Check, Download, File, ImageOff, LoaderCircle } from "lucide-react";
 import type { AgentAttachment, AgentItem } from "@concors/protocol";
+import { Button } from "@/components/ui/button";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
+import { canSaveFiles, saveFile, type FileToSave } from "@/tauri";
 import { cachedAttachment, isPreviewableImage, loadAttachment } from "./attachment-cache";
+import { downloadName } from "./download-name";
+
+/** Saving a file from a preview, with its progress for the button and any error for the dialog. */
+function useSave(file: FileToSave | null) {
+  const [state, setState] = useState<"idle" | "saving" | "saved">("idle");
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (state !== "saved") return;
+    const timer = setTimeout(() => setState("idle"), 2000);
+    return () => clearTimeout(timer);
+  }, [state]);
+  const save = async () => {
+    if (!file || state === "saving") return;
+    setState("saving");
+    setError(null);
+    try {
+      await saveFile({ ...file, name: downloadName(file.name, file.mime) });
+      setState("saved");
+    } catch (cause) {
+      setState("idle");
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  };
+  const button =
+    canSaveFiles && file ? (
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={`Download ${file.name}`}
+        title={state === "saved" ? "Saved to Downloads" : "Download"}
+        disabled={state === "saving"}
+        onClick={() => void save()}
+      >
+        {state === "saving" ? (
+          <LoaderCircle className="size-4.5 animate-spin" />
+        ) : state === "saved" ? (
+          <Check className="size-4.5" />
+        ) : (
+          <Download className="size-4.5" />
+        )}
+      </Button>
+    ) : null;
+  return { button, error };
+}
 
 /** A message's attachments: images as square thumbnails side by side, other files after them. */
 export function MessageAttachments({
@@ -67,34 +113,77 @@ function useAttachmentImage(item: AgentItem, index: number) {
       current = false;
     };
   }, [connection, item.sessionId, item.id, index, value]);
-  return { source: value && `data:${value.mime};base64,${value.data}`, error };
+  return { file: value, source: value && `data:${value.mime};base64,${value.data}`, error };
 }
 
-/** Opens `source` at full size when `children`, the trigger, is clicked. */
+/**
+ * Opens an image as large as the window allows when `children`, the trigger, is clicked, with a
+ * button to save it unless `downloadable` is off.
+ */
 export function ImageViewer({
-  source,
-  name,
+  file,
+  name = file.name,
   description,
+  downloadable = true,
   children,
 }: {
-  source: string;
-  name: string;
+  file: FileToSave;
+  /** The title to show, when it differs from the file's own name. */
+  name?: string;
   description: string;
+  downloadable?: boolean;
   children: ReactNode;
 }) {
   return (
     <Dialog>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent size="wide" closeLabel="Close image" className="overflow-hidden">
-        <DialogHeader>
-          <DialogTitle>{name}</DialogTitle>
-          <DialogDescription className="sr-only">{description}</DialogDescription>
-        </DialogHeader>
-        <DialogBody>
-          <img className="mx-auto max-w-full" src={source} alt={name} />
-        </DialogBody>
-      </DialogContent>
+      <ImageViewerContent
+        file={file}
+        name={name}
+        description={description}
+        downloadable={downloadable}
+      />
     </Dialog>
+  );
+}
+
+function ImageViewerContent({
+  file,
+  name,
+  description,
+  downloadable,
+}: {
+  file: FileToSave;
+  name: string;
+  description: string;
+  downloadable: boolean;
+}) {
+  const save = useSave(downloadable ? file : null);
+  return (
+    <DialogContent
+      size="media"
+      closeLabel="Close image"
+      className="overflow-hidden"
+      headerActions={save.button}
+    >
+      <DialogHeader className={save.button ? "pr-20" : undefined}>
+        <DialogTitle className="truncate">{name}</DialogTitle>
+        <DialogDescription className="sr-only">{description}</DialogDescription>
+      </DialogHeader>
+      <DialogBody className="flex flex-col items-center gap-3">
+        {/* As large as the image itself, never past the window: tall images scale to fit. */}
+        <img
+          className="block max-h-[calc(100dvh-9rem)] max-w-full object-contain"
+          src={`data:${file.mime};base64,${file.data}`}
+          alt={name}
+        />
+        {save.error && (
+          <p role="alert" className="text-sm text-destructive">
+            {save.error}
+          </p>
+        )}
+      </DialogBody>
+    </DialogContent>
   );
 }
 
@@ -104,9 +193,9 @@ export function ImageViewer({
  */
 export function InlineImage({ item, index, alt }: { item: AgentItem; index: number; alt: string }) {
   const attachment = item.attachments?.[index];
-  const { source, error } = useAttachmentImage(item, index);
+  const { file, source, error } = useAttachmentImage(item, index);
   const name = alt || attachment?.name || "Image";
-  if (!source)
+  if (!file || !source)
     return (
       <span
         data-inline-image={error ? "failed" : "loading"}
@@ -119,7 +208,7 @@ export function InlineImage({ item, index, alt }: { item: AgentItem; index: numb
       </span>
     );
   return (
-    <ImageViewer source={source} name={name} description="Image the agent showed in its reply.">
+    <ImageViewer file={file} name={name} description="Image the agent showed in its reply.">
       <button
         type="button"
         data-inline-image="ready"
@@ -146,10 +235,10 @@ function ImageThumbnail({
   attachment: { name: string; mime: string };
   index: number;
 }) {
-  const { source, error } = useAttachmentImage(item, index);
+  const { file, source, error } = useAttachmentImage(item, index);
   const tile =
     "relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted/60";
-  if (!source)
+  if (!file || !source)
     return (
       <div
         data-image-attachment={error ? "failed" : "loading"}
@@ -162,7 +251,7 @@ function ImageThumbnail({
       </div>
     );
   return (
-    <ImageViewer source={source} name={attachment.name} description="Image sent with this message.">
+    <ImageViewer file={file} name={attachment.name} description="Image sent with this message.">
       <button
         type="button"
         data-image-attachment="ready"
@@ -190,6 +279,7 @@ export function AttachmentPreview({
   const [value, setValue] = useState<AgentAttachment | null>(null);
   const [text, setText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const save = useSave(value);
   const show = async () => {
     setError(null);
     if (value) return;
@@ -227,9 +317,14 @@ export function AttachmentPreview({
           <span className="truncate">{attachment.name}</span>
         </button>
       </DialogTrigger>
-      <DialogContent size="wide" closeLabel="Close attachment" className="overflow-hidden">
-        <DialogHeader>
-          <DialogTitle>{attachment.name}</DialogTitle>
+      <DialogContent
+        size="wide"
+        closeLabel="Close attachment"
+        className="max-w-5xl overflow-hidden"
+        headerActions={save.button}
+      >
+        <DialogHeader className={save.button ? "pr-20" : undefined}>
+          <DialogTitle className="truncate">{attachment.name}</DialogTitle>
           <DialogDescription className="sr-only">
             Attachment sent with this message.
           </DialogDescription>
@@ -243,7 +338,13 @@ export function AttachmentPreview({
             <pre className="text-sm break-words whitespace-pre-wrap">{text}</pre>
           ) : (
             <p className="text-sm">
-              This file is attached to the conversation. Its format cannot be previewed here.
+              This file is attached to the conversation. Its format cannot be previewed here
+              {canSaveFiles ? "; download it to open it." : "."}
+            </p>
+          )}
+          {save.error && (
+            <p role="alert" className="mt-3 text-sm text-destructive">
+              {save.error}
             </p>
           )}
         </DialogBody>

@@ -896,9 +896,9 @@ export function AgentComposer({
                   <div className="size-full overflow-hidden rounded-lg border bg-muted/40">
                     {file.mime.startsWith("image/") ? (
                       <ImageViewer
-                        source={`data:${file.mime};base64,${file.data}`}
-                        name={file.name}
+                        file={file}
                         description="Image attached to the message you are writing."
+                        downloadable={false}
                       >
                         <button
                           type="button"
