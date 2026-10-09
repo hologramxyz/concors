@@ -79,8 +79,13 @@ import type { DaemonEndpoint } from "./endpoint.ts";
  * Minimal subset of the WHATWG WebSocket used by `DaemonConnection`. Browsers, React Native and
  * Node ≥ 22 all provide a compatible global `WebSocket`; tests can inject a fake.
  */
+/** How often a request still uploading checks whether its bytes have left the socket. */
+const UPLOAD_POLL_MS = 250;
+
 export interface WebSocketLike {
   readonly readyState: number;
+  /** Bytes queued by `send` that have not reached the network yet (absent in some test doubles). */
+  readonly bufferedAmount?: number;
   send(data: string): void;
   close(code?: number, reason?: string): void;
   addEventListener(type: "open" | "error", listener: () => void): void;
@@ -363,7 +368,7 @@ export class DaemonConnection {
     {
       resolve: (result: AgentResult) => void;
       reject: (error: Error) => void;
-      timer: ReturnType<typeof setTimeout>;
+      timer: ReturnType<typeof setTimeout> | undefined;
     }
   >();
   readonly #fileRequests = new Map<
@@ -702,27 +707,51 @@ export class DaemonConnection {
     if (this.#agentRequests.has(requestId))
       return Promise.reject(new Error("Request is already pending"));
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(
-        () => {
-          this.#agentRequests.delete(requestId);
-          reject(
-            new Error(
-              "Agent request timed out. Reconnect and check the conversation before retrying with the same request ID.",
-            ),
-          );
-        },
+      const timeout =
         operation.kind === "provider-catalog" || operation.kind === "switch-provider"
           ? 100000
-          : 35000,
-      );
-      this.#agentRequests.set(requestId, { resolve, reject, timer });
+          : 35000;
+      const pending = {
+        resolve,
+        reject,
+        timer: undefined as ReturnType<typeof setTimeout> | undefined,
+      };
+      const expire = () => {
+        if (this.#agentRequests.get(requestId) !== pending) return;
+        this.#agentRequests.delete(requestId);
+        reject(
+          new Error(
+            "Agent request timed out. Reconnect and check the conversation before retrying with the same request ID.",
+          ),
+        );
+      };
+      this.#agentRequests.set(requestId, pending);
+      const socket = this.#socket;
       try {
-        this.#socket?.send(JSON.stringify(request));
+        socket?.send(JSON.stringify(request));
       } catch (error) {
-        clearTimeout(timer);
         this.#agentRequests.delete(requestId);
         reject(error);
+        return;
       }
+      // The daemon can only answer once the whole request has arrived, and a prompt with
+      // attachments can take a while to upload on a slow link. Count from when the socket has
+      // sent it; an upload that stops moving for as long still times out.
+      let queued = socket?.bufferedAmount ?? 0,
+        movedAt = Date.now();
+      const sent = () => {
+        if (this.#agentRequests.get(requestId) !== pending) return;
+        const left = socket === this.#socket ? (socket?.bufferedAmount ?? 0) : 0;
+        if (left === 0) {
+          pending.timer = setTimeout(expire, timeout);
+          return;
+        }
+        if (left < queued) movedAt = Date.now();
+        queued = left;
+        if (Date.now() - movedAt >= timeout) expire();
+        else pending.timer = setTimeout(sent, UPLOAD_POLL_MS);
+      };
+      sent();
     });
   }
 
