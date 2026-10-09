@@ -62,6 +62,13 @@ export class TerminalManager {
       }
   }
 
+  /** Whether a terminal is running this agent's CLI, as its profile or typed into a shell. */
+  runningAgent(engine: string): boolean {
+    return [...this.#runtimes.values()].some(
+      ({ info }) => info.status === "running" && (info.detectedAgent ?? info.profile) === engine,
+    );
+  }
+
   private async scanAgents(): Promise<void> {
     if (this.#closed || this.#scanning) return;
     const shells = [...this.#runtimes.values()].filter(

@@ -380,6 +380,14 @@ export class AgentManager {
     const existing = this.#runtimes.get(id);
     if (existing) return existing.ready;
     if (this.#closed) return Promise.reject(new Error("Daemon is shutting down"));
+    // npm rewrites the package while it updates; a CLI launched mid-write would not start.
+    let updating: Promise<void> | undefined;
+    try {
+      updating = this.registry.pendingUpdate(this.registry.config(this.#store.agent(id).provider));
+    } catch {
+      // A provider that is no longer set up fails below with its own explanation.
+    }
+    if (updating) return updating.then(() => this.provider(id));
     if (this.#runtimes.size >= 8) {
       const idle = [...this.#runtimes].find(([key]) =>
         ["idle", "done", "failed", "interrupted"].includes(this.#store.agent(key).status),
@@ -2482,6 +2490,17 @@ export class AgentManager {
         this.#emit({ type: "agent.state", agent: next });
       }
     }
+  }
+  /** Whether a chat on this provider's CLI is mid-turn or waiting for an answer. */
+  usingProvider(baseId: string): boolean {
+    return this.#store.agents().some((info) => {
+      if (!["starting", "working", "needs_input"].includes(info.status)) return false;
+      try {
+        return this.registry.baseId(this.registry.config(info.provider)) === baseId;
+      } catch {
+        return false;
+      }
+    });
   }
   /**
    * Stops the CLI behind every agent that no pane shows any more, once it has nothing left to do.
