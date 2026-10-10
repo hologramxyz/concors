@@ -209,6 +209,7 @@ test("shortcuts have a dedicated settings page and the account menu only shows i
   const main = page.getByRole("main");
   await expect(main.getByRole("heading", { level: 2 })).toHaveText([
     "Keyboard shortcuts",
+    "Follow-ups",
     "Workspace",
     "Tabs",
     "Panes",
