@@ -1011,6 +1011,50 @@ it("shows a Claude sub-agent's tool calls as steps of the call that started it",
   expect(items().some((item) => JSON.stringify(item).includes("nested-agent"))).toBe(false);
 });
 
+it("steers a running Claude turn with a message Claude reads at its next step", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-claude-steer-"));
+  cleanup.push(() => rm(directory, { recursive: true, force: true }));
+  await writeFile(join(directory, process.platform === "win32" ? "claude.cmd" : "claude"), "", {
+    mode: 0o755,
+  });
+  vi.stubEnv("PATH", directory);
+  const prompts: unknown[] = [];
+  const createQuery = vi.fn(({ prompt }: Parameters<typeof query>[0]) => {
+    void (async () => {
+      for await (const message of prompt as AsyncIterable<unknown>) prompts.push(message);
+    })();
+    const messages = new PassThrough({ objectMode: true });
+    return Object.assign(messages, {
+      initializationResult: async () => ({
+        models: [{ value: "default", displayName: "Default" }],
+      }),
+      getContextUsage: async () => ({ model: "claude-sonnet-5" }),
+      setModel: async () => undefined,
+      setPermissionMode: async () => undefined,
+      close: () => {
+        messages.end();
+      },
+    }) as unknown as Query;
+  });
+  const provider = new ClaudeProvider(directory, vi.fn(), createQuery);
+  await provider.initialize();
+  await provider.request("thread/start");
+  expect(object(await provider.request("session/controls"))["steer"]).toBe(true);
+  const started = object(await provider.request("turn/start", turn));
+  const turnId = object(started["turn"])["id"];
+  await expect(
+    provider.request("session/steer", { turnId: "another-turn", text: "Too late" }),
+  ).rejects.toThrow(/active turn/);
+  await provider.request("session/steer", { turnId, text: "Focus on the parser" });
+  await expect.poll(() => prompts).toHaveLength(2);
+  expect(prompts[1]).toMatchObject({
+    type: "user",
+    priority: "next",
+    parent_tool_use_id: null,
+    message: { role: "user", content: [{ type: "text", text: "Focus on the parser" }] },
+  });
+});
+
 it("reports a Claude plan limit beside the turn so the chat can offer another account", async () => {
   const directory = await mkdtemp(join(tmpdir(), "concors-claude-limit-"));
   cleanup.push(() => rm(directory, { recursive: true, force: true }));

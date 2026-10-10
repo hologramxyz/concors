@@ -68,6 +68,7 @@ export class DaemonState {
         AGENT_USAGE_CAPABILITY,
         "agent-composer",
         "agent-queue",
+        "agent-queue-steer",
         "agent-providers",
         "provider-settings",
         PROVIDER_SUBSCRIPTIONS_CAPABILITY,

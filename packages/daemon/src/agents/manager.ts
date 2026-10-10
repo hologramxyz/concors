@@ -1322,6 +1322,55 @@ export class AgentManager {
           });
         return this.result(request, info.id);
       }
+      if (op.kind === "queue-steer") {
+        const entry = info.queue?.find((queued) => queued.id === op.id);
+        if (!entry) throw new Error("That follow-up is no longer queued.");
+        if (
+          !info.controls?.steer ||
+          info.turnId !== op.turnId ||
+          info.status !== "working" ||
+          entry.attachments.length ||
+          !entry.text.trim() ||
+          entry.text.trim().startsWith("/")
+        )
+          throw new Error(
+            "Only a text follow-up can steer, and only while the agent works. It stays queued.",
+          );
+        // Held like a delivery, so the queue cannot also send it should the turn end meanwhile.
+        if (this.draining.has(info.id)) throw new Error("That follow-up is being sent already.");
+        const runtime = this.#runtimes.get(info.id);
+        if (!runtime) throw new Error("Agent disconnected. The follow-up stays queued.");
+        this.draining.add(info.id);
+        try {
+          await runtime.provider.request("session/steer", {
+            threadId: info.threadId,
+            turnId: op.turnId,
+            text: entry.text,
+          });
+          const current = this.#store.agent(info.id);
+          const next = {
+            ...current,
+            queue: (current.queue ?? []).filter((queued) => queued.id !== op.id),
+            revision: current.revision + 1,
+          };
+          this.#store.reserveAgentAction(request, next, { remove: op.id });
+          this.#emit({ type: "agent.state", agent: next });
+          this.item(info.id, op.turnId, {
+            id: `steer:${request.requestId}`,
+            kind: "user",
+            title: "You · steering",
+            text: entry.text,
+            detail: "",
+            status: "completed",
+          });
+        } finally {
+          this.draining.delete(info.id);
+          queueMicrotask(() => {
+            void this.drain(info.id).catch((error) => this.fail(info.id, error));
+          });
+        }
+        return this.result(request, info.id);
+      }
       if (op.kind === "queue-add" || op.kind === "queue-remove" || op.kind === "queue-pause") {
         let queue = info.queue ?? [],
           paused = info.queuePaused ?? false;

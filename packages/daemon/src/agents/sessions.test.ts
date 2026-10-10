@@ -1063,6 +1063,49 @@ it("steers an active turn once without scheduling another turn", async () => {
   expect(providers[0]?.requests.filter((r) => r.method === "turn/start")).toHaveLength(1);
 });
 
+it("steers a queued follow-up into the running turn once, and takes it off the queue", async () => {
+  const { a, b, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "hold the turn" });
+  await expect.poll(() => a.agents[0]?.turnId?.startsWith("turn-")).toBe(true);
+  await action(a, { kind: "queue-add", sessionId: id, text: "Also check the docs" });
+  await action(a, {
+    kind: "queue-add",
+    sessionId: id,
+    text: "",
+    attachments: [{ name: "notes.txt", mime: "text/plain", data: btoa("notes") }],
+  });
+  await expect.poll(() => a.agents[0]?.queue?.length).toBe(2);
+  const [text, file] = a.agents[0]!.queue!;
+  const turnId = a.agents[0]!.turnId!;
+  // A follow-up with files cannot steer; it stays queued for after the turn.
+  expect(
+    (await action(a, { kind: "queue-steer", sessionId: id, id: file!.id, turnId })).outcome.status,
+  ).toBe("error");
+  const req = randomUUID(),
+    op: AgentOperation = { kind: "queue-steer", sessionId: id, id: text!.id, turnId };
+  expect((await action(a, op, req)).outcome.status).toBe("ok");
+  await action(b, op, req);
+  expect(
+    providers[0]?.requests.filter((r) => r.method === "session/steer").map((r) => r.params),
+  ).toEqual([expect.objectContaining({ turnId, text: "Also check the docs" })]);
+  await expect.poll(() => b.agents[0]?.queue?.map((entry) => entry.id)).toEqual([file!.id]);
+  const read = await action(a, { kind: "read", sessionId: id });
+  if (read.outcome.status !== "ok") throw new Error(read.outcome.message);
+  expect(read.outcome.conversation.items).toContainEqual(
+    expect.objectContaining({ title: "You · steering", text: "Also check the docs" }),
+  );
+  // Once the turn ends, only the follow-up still queued runs; the steered one is not sent again.
+  await action(a, { kind: "interrupt", sessionId: id, turnId });
+  await action(a, { kind: "queue-pause", sessionId: id, paused: false });
+  await expect
+    .poll(() => providers[0]?.requests.filter((r) => r.method === "turn/start").length)
+    .toBe(2);
+  const sent = providers[0]!.requests
+    .filter((r) => r.method === "turn/start")
+    .map((r) => JSON.stringify(r.params));
+  expect(sent.some((params) => params.includes("Also check the docs"))).toBe(false);
+});
+
 it("holds the source session steady while a native fork is in flight", async () => {
   const { a, b, id } = await setup();
   const provider = providers[0]!;

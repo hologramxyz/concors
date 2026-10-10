@@ -140,7 +140,19 @@ export function AgentComposer({
   const durableQueue =
     connection?.state.status === "ready" &&
     connection.state.daemon.capabilities?.includes("agent-queue");
+  const queueSteer =
+    connection?.state.status === "ready" &&
+    connection.state.daemon.capabilities?.includes("agent-queue-steer");
   const active = ["starting", "working", "needs_input"].includes(agent.status);
+  /** Whether a follow-up can go into the running turn now, as the Codex app's Steer does. */
+  const canSteer = (text: string, files: number) =>
+    agent.status === "working" &&
+    !!agent.controls?.steer &&
+    !!agent.turnId &&
+    !agent.turnId.startsWith("pending:") &&
+    !!text.trim() &&
+    !text.trim().startsWith("/") &&
+    !files;
   const showStop = active && (!compact || (!draft.trim() && !attachments.length));
   const settings = agent.settings ?? defaults;
   const dictationBase = useRef("");
@@ -755,6 +767,24 @@ export function AgentComposer({
                 <span className="min-w-0 flex-1 truncate">
                   {entry.text || entry.attachments.map((a) => a.name).join(", ")}
                 </span>
+                {queueSteer && canSteer(entry.text, entry.attachments.length) && (
+                  <button
+                    type="button"
+                    className="text-primary"
+                    title="Send it into the current turn now instead of after it"
+                    disabled={!connected}
+                    onClick={() =>
+                      void queueAction({
+                        kind: "queue-steer",
+                        sessionId: agent.id,
+                        id: entry.id,
+                        turnId: agent.turnId ?? "",
+                      })
+                    }
+                  >
+                    Steer
+                  </button>
+                )}
                 <button
                   type="button"
                   aria-label="Remove queued message"
@@ -792,6 +822,19 @@ export function AgentComposer({
                     Send now
                   </button>
                 )}
+                {connected &&
+                  !busy &&
+                  !uncertain &&
+                  canSteer(entry.message, entry.attachments.length) && (
+                    <button
+                      type="button"
+                      className="text-primary"
+                      title="Send it into the current turn now instead of after it"
+                      onClick={() => void submit(entry, true, true)}
+                    >
+                      Steer
+                    </button>
+                  )}
                 <button
                   type="button"
                   aria-label="Remove queued message"
