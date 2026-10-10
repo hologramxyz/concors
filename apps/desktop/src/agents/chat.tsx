@@ -32,6 +32,8 @@ import { rememberProviders } from "./session-cache";
 import { ControlPicker } from "./control-picker";
 import { ProviderIcon } from "./provider-icon";
 import { timelineView } from "./thinking";
+import { SubAgentViewContext, type SubAgentTarget } from "./sub-agent-context";
+import { SubAgentPanel } from "./sub-agent-view";
 
 export function ChatPane({
   project,
@@ -214,6 +216,7 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
     connection?.workspace?.machineId,
   );
   const [error, setError] = useState<string | null>(null);
+  const [subAgent, setSubAgent] = useState<SubAgentTarget | null>(null);
   const { scroll, onScroll, atBottom, latest, jumpToMessage } = useConversationScroll(
     conversation,
     visible,
@@ -301,165 +304,181 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
     </>
   );
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="Agent conversation">
-      <div className="chat-timeline-shell relative flex min-h-0 flex-1">
-        <div
-          ref={scroll}
-          role="log"
-          aria-label="Chat timeline"
-          aria-live="off"
-          className="chat-scroll selectable min-h-0 min-w-0 flex-1 overflow-y-auto px-3 py-4 [overflow-anchor:none]"
-          onScroll={onScroll}
-        >
-          <div className="mx-auto max-w-5xl space-y-5">
-            {canResume &&
-              connection?.state.status === "ready" &&
-              connection.state.daemon.capabilities?.includes(NATIVE_SESSIONS_CAPABILITY) && (
-                <div className="flex justify-center py-6">
-                  <ResumeSession
-                    agent={agent}
-                    disabled={!connected || busy || hasDraft}
-                    onOpenChange={setResuming}
+    <SubAgentViewContext value={agent?.controls?.childHistory ? setSubAgent : null}>
+      <div className="chat-with-sub-agent relative flex min-h-0 min-w-0 flex-1">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="Agent conversation">
+          <div className="chat-timeline-shell relative flex min-h-0 flex-1">
+            <div
+              ref={scroll}
+              role="log"
+              aria-label="Chat timeline"
+              aria-live="off"
+              className="chat-scroll selectable min-h-0 min-w-0 flex-1 overflow-y-auto px-3 py-4 [overflow-anchor:none]"
+              onScroll={onScroll}
+            >
+              <div className="mx-auto max-w-5xl space-y-5">
+                {canResume &&
+                  connection?.state.status === "ready" &&
+                  connection.state.daemon.capabilities?.includes(NATIVE_SESSIONS_CAPABILITY) && (
+                    <div className="flex justify-center py-6">
+                      <ResumeSession
+                        agent={agent}
+                        disabled={!connected || busy || hasDraft}
+                        onOpenChange={setResuming}
+                      />
+                    </div>
+                  )}
+                {agent?.nativeImport &&
+                  agent.status === "starting" &&
+                  !conversation.items.length &&
+                  !conversation.loading && (
+                    // A resumed session's history arrives once its CLI has loaded it, as one page.
+                    <p className="py-6 text-center text-xs text-muted-foreground" role="status">
+                      Loading conversation…
+                    </p>
+                  )}
+                {(conversation.hasEarlier || conversation.loading === "latest") && (
+                  <div className="h-5 text-center text-xs text-muted-foreground" role="status">
+                    {conversation.loading === "earlier"
+                      ? "Loading earlier messages…"
+                      : conversation.loading === "latest"
+                        ? "Loading messages…"
+                        : ""}
+                  </div>
+                )}
+                {conversation.error && conversation.error.direction !== "newer" && (
+                  <HistoryError
+                    message={conversation.error.message}
+                    onRetry={() =>
+                      void conversation.load(conversation.error?.direction ?? "latest")
+                    }
                   />
-                </div>
-              )}
-            {agent?.nativeImport &&
-              agent.status === "starting" &&
-              !conversation.items.length &&
-              !conversation.loading && (
-                // A resumed session's history arrives once its CLI has loaded it, as one page.
-                <p className="py-6 text-center text-xs text-muted-foreground" role="status">
-                  Loading conversation…
-                </p>
-              )}
-            {(conversation.hasEarlier || conversation.loading === "latest") && (
-              <div className="h-5 text-center text-xs text-muted-foreground" role="status">
-                {conversation.loading === "earlier"
-                  ? "Loading earlier messages…"
-                  : conversation.loading === "latest"
-                    ? "Loading messages…"
-                    : ""}
+                )}
+                {view.map((item) => (
+                  <div
+                    key={item.id}
+                    data-message-id={item.id}
+                    data-message-position={item.position}
+                    data-user-message={item.kind === "user" ? item.id : undefined}
+                    tabIndex={item.kind === "user" ? -1 : undefined}
+                    className="outline-none"
+                  >
+                    <TimelineItem
+                      item={item}
+                      workedFor={footers.durations.get(item.id)}
+                      live={!!active && item.turnId === agent.turnId}
+                    />
+                  </div>
+                ))}
+                {conversation.hasNewer && (
+                  <div className="h-5 text-center text-xs text-muted-foreground" role="status">
+                    {conversation.loading === "newer" ? "Loading newer messages…" : ""}
+                  </div>
+                )}
+                {conversation.error?.direction === "newer" && (
+                  <HistoryError
+                    message={conversation.error.message}
+                    onRetry={() => void conversation.load("newer")}
+                  />
+                )}
+                {compact && feedback}
+                {active && !conversation.hasNewer && (
+                  <Activity startedAt={agent.turnStartedAt}>
+                    {agent?.status === "needs_input" ? "Waiting for your input" : "Working…"}
+                  </Activity>
+                )}
               </div>
-            )}
-            {conversation.error && conversation.error.direction !== "newer" && (
-              <HistoryError
-                message={conversation.error.message}
-                onRetry={() => void conversation.load(conversation.error?.direction ?? "latest")}
-              />
-            )}
-            {view.map((item) => (
-              <div
-                key={item.id}
-                data-message-id={item.id}
-                data-message-position={item.position}
-                data-user-message={item.kind === "user" ? item.id : undefined}
-                tabIndex={item.kind === "user" ? -1 : undefined}
-                className="outline-none"
+            </div>
+            <MessageNavigation
+              entries={messageIndex.entries}
+              viewport={scroll}
+              onJump={jumpToMessage}
+              loading={messageIndex.loading}
+              error={messageIndex.error}
+              onRetry={messageIndex.retry}
+              hasEarlier={
+                !(
+                  connection?.state.status === "ready" &&
+                  connection.state.daemon.capabilities?.includes("agent-message-navigation")
+                ) && conversation.hasEarlier
+              }
+              hasNewer={conversation.hasNewer}
+            />
+            {/* Floats so showing it never resizes the timeline under a pinned reader. */}
+            {!atBottom && (
+              <Button
+                variant="outline"
+                className="absolute bottom-2 left-1/2 z-10 -translate-x-1/2 shadow"
+                onClick={latest}
               >
-                <TimelineItem
-                  item={item}
-                  workedFor={footers.durations.get(item.id)}
-                  live={!!active && item.turnId === agent.turnId}
-                />
-              </div>
-            ))}
-            {conversation.hasNewer && (
-              <div className="h-5 text-center text-xs text-muted-foreground" role="status">
-                {conversation.loading === "newer" ? "Loading newer messages…" : ""}
-              </div>
-            )}
-            {conversation.error?.direction === "newer" && (
-              <HistoryError
-                message={conversation.error.message}
-                onRetry={() => void conversation.load("newer")}
-              />
-            )}
-            {compact && feedback}
-            {active && !conversation.hasNewer && (
-              <Activity startedAt={agent.turnStartedAt}>
-                {agent?.status === "needs_input" ? "Waiting for your input" : "Working…"}
-              </Activity>
+                <ArrowDown className="size-3" />
+                Latest
+              </Button>
             )}
           </div>
-        </div>
-        <MessageNavigation
-          entries={messageIndex.entries}
-          viewport={scroll}
-          onJump={jumpToMessage}
-          loading={messageIndex.loading}
-          error={messageIndex.error}
-          onRetry={messageIndex.retry}
-          hasEarlier={
-            !(
-              connection?.state.status === "ready" &&
-              connection.state.daemon.capabilities?.includes("agent-message-navigation")
-            ) && conversation.hasEarlier
-          }
-          hasNewer={conversation.hasNewer}
-        />
-        {/* Floats so showing it never resizes the timeline under a pinned reader. */}
-        {!atBottom && (
-          <Button
-            variant="outline"
-            className="absolute bottom-2 left-1/2 z-10 -translate-x-1/2 shadow"
-            onClick={latest}
+          <div
+            data-chat-footer
+            className={`${compact ? "" : "max-h-[55%] overflow-y-auto"} shrink-0 px-3 pt-2 pb-3`}
           >
-            <ArrowDown className="size-3" />
-            Latest
-          </Button>
+            <div className="mx-auto max-w-5xl space-y-3">
+              {!compact && feedback}
+              {latestPlan && <PlanProgress compact item={latestPlan} />}
+              {canImplement && (
+                <Button
+                  variant="outline"
+                  disabled={!connected || busy}
+                  onClick={() =>
+                    void run(() =>
+                      perform({
+                        kind: "implement-plan",
+                        sessionId,
+                        itemId: proposal.id,
+                        expectedRevision: agent.revision,
+                      }),
+                    )
+                  }
+                >
+                  Implement plan
+                </Button>
+              )}
+              {agent && (
+                <AgentAccountPrompt
+                  agent={agent}
+                  canEdit={!!connected}
+                  onInstallPrompt={setInstallPrompt}
+                />
+              )}
+              {agent && <AgentLimitPrompt agent={agent} canEdit={!!connected} />}
+              {agent && (
+                <AgentComposer
+                  key={agent.id}
+                  agent={agent}
+                  connected={!!connected && !busy && !resuming}
+                  reachable={connection?.state.status === "ready"}
+                  onSend={latest}
+                  onInterrupt={() => {
+                    if (agent.turnId)
+                      void run(() =>
+                        perform({ kind: "interrupt", sessionId, turnId: agent.turnId ?? "" }),
+                      );
+                  }}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+        {subAgent && (
+          <SubAgentPanel
+            key={`${subAgent.item.id}:${subAgent.childId}`}
+            sessionId={sessionId}
+            target={subAgent}
+            item={conversation.items.find((item) => item.id === subAgent.item.id)}
+            turnActive={!!active}
+            onClose={() => setSubAgent(null)}
+          />
         )}
       </div>
-      <div
-        data-chat-footer
-        className={`${compact ? "" : "max-h-[55%] overflow-y-auto"} shrink-0 px-3 pt-2 pb-3`}
-      >
-        <div className="mx-auto max-w-5xl space-y-3">
-          {!compact && feedback}
-          {latestPlan && <PlanProgress compact item={latestPlan} />}
-          {canImplement && (
-            <Button
-              variant="outline"
-              disabled={!connected || busy}
-              onClick={() =>
-                void run(() =>
-                  perform({
-                    kind: "implement-plan",
-                    sessionId,
-                    itemId: proposal.id,
-                    expectedRevision: agent.revision,
-                  }),
-                )
-              }
-            >
-              Implement plan
-            </Button>
-          )}
-          {agent && (
-            <AgentAccountPrompt
-              agent={agent}
-              canEdit={!!connected}
-              onInstallPrompt={setInstallPrompt}
-            />
-          )}
-          {agent && <AgentLimitPrompt agent={agent} canEdit={!!connected} />}
-          {agent && (
-            <AgentComposer
-              key={agent.id}
-              agent={agent}
-              connected={!!connected && !busy && !resuming}
-              reachable={connection?.state.status === "ready"}
-              onSend={latest}
-              onInterrupt={() => {
-                if (agent.turnId)
-                  void run(() =>
-                    perform({ kind: "interrupt", sessionId, turnId: agent.turnId ?? "" }),
-                  );
-              }}
-            />
-          )}
-        </div>
-      </div>
-    </div>
+    </SubAgentViewContext>
   );
 }
 

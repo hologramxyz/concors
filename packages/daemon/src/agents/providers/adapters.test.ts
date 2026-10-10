@@ -938,6 +938,26 @@ it("shows a Claude sub-agent's tool calls as steps of the call that started it",
       ],
     },
   });
+  // The CLI names the sub-agent's conversation as it starts, long before the call's result does.
+  emit({
+    type: "system",
+    subtype: "task_started",
+    task_id: "a1b2c3d4",
+    tool_use_id: "task",
+    task_type: "local_agent",
+    spawn_depth: 1,
+    description: "Survey the tests",
+  });
+  // A sub-agent the sub-agent starts stays one of its steps.
+  emit({
+    type: "system",
+    subtype: "task_started",
+    task_id: "nested-agent",
+    tool_use_id: "grep",
+    task_type: "local_agent",
+    spawn_depth: 2,
+    description: "Nested",
+  });
   emit({
     type: "assistant",
     parent_tool_use_id: "task",
@@ -968,6 +988,8 @@ it("shows a Claude sub-agent's tool calls as steps of the call that started it",
       agentType: "Explore",
       prompt: "Survey the tests",
       status: "inProgress",
+      receiverThreadIds: ["a1b2c3d4"],
+      agentsStates: { a1b2c3d4: { status: "running" } },
       activity: [
         { id: "read", title: "Read", text: "/repo/a.test.ts", status: "completed" },
         { id: "grep", title: "Grep", text: "describe\\(", status: "running" },
@@ -985,6 +1007,8 @@ it("shows a Claude sub-agent's tool calls as steps of the call that started it",
   });
   await expect.poll(() => latest()?.["status"]).toBe("completed");
   expect(latest()?.["activity"]).toHaveLength(2);
+  expect(latest()?.["receiverThreadIds"]).toEqual(["a1b2c3d4"]);
+  expect(items().some((item) => JSON.stringify(item).includes("nested-agent"))).toBe(false);
 });
 
 it("reports a Claude plan limit beside the turn so the chat can offer another account", async () => {
