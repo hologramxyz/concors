@@ -324,6 +324,7 @@ export class ClaudeProvider extends EventProvider {
     this.controls = AgentControlsSchema.parse({
       history: true,
       childHistory: true,
+      steer: true,
       importSessions: true,
       fork: true,
       rewind: ["files"],
@@ -476,6 +477,22 @@ export class ClaudeProvider extends EventProvider {
         this.disconnected();
       }
       this.finish();
+      return {};
+    }
+    if (method === "session/steer") {
+      if (!this.turnId || p["turnId"] !== this.turnId)
+        throw new Error("Steering is only available during an active turn.");
+      // Claude Code reads a "next" message at its next step, inside the running turn, as its own
+      // terminal does with a message typed while it works. Should the turn end first, it runs as
+      // a turn of its own, which arrives like any turn Claude starts by itself.
+      this.pending.push({
+        type: "user",
+        session_id: this.threadId,
+        parent_tool_use_id: null,
+        priority: "next",
+        message: { role: "user", content: [{ type: "text", text: string(p["text"]) }] },
+      });
+      this.wake?.();
       return {};
     }
     if (method !== "turn/start" && method !== "command/execute")
