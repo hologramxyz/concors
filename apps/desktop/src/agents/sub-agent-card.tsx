@@ -1,24 +1,12 @@
 import { useContext, useEffect, useState } from "react";
-import { Bot, Check, ChevronRight, X } from "lucide-react";
+import { Bot, Check, ChevronRight, PanelRightOpen, X } from "lucide-react";
 import type { AgentActivityStep, AgentItem } from "@concors/protocol";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { BrailleSpinner } from "./activity";
-import { useAgents } from "./context";
 import { formatDuration } from "./duration";
 import { AgentMarkdown, CopyButton } from "./markdown";
+import { LIVE_SUB_AGENT, SubAgentViewContext } from "./sub-agent-context";
 
-const LIVE = ["running", "pending", "inProgress"];
+const LIVE = LIVE_SUB_AGENT;
 
 /** Seconds since `since`, ticking while `running`. */
 function useElapsed(since: string, running: boolean) {
@@ -59,54 +47,67 @@ export function SubAgentCard({ item, running }: { item: AgentItem; running: bool
       aria-label="Sub-agent activity"
       className="overflow-hidden rounded-xl border border-transparent bg-muted/20"
     >
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-        className="flex w-full items-start gap-2.5 px-3 py-2.5 text-left"
-      >
-        {/* A robot badge sets sub-agents apart from the tool calls around them. */}
-        <span
-          data-sub-agent-badge
-          aria-hidden="true"
-          className={`flex size-5 shrink-0 items-center justify-center rounded-md shadow-sm ${
-            failed ? "bg-destructive text-white" : "bg-primary text-primary-foreground"
-          } ${running ? "animate-pulse" : ""}`}
+      <div className="flex items-start">
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          aria-expanded={open}
+          className="flex min-w-0 flex-1 items-start gap-2.5 px-3 py-2.5 text-left"
         >
-          <Bot className="size-3.5" />
-        </span>
-        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="flex min-w-0 items-center gap-2 text-sm">
-            <span className={`shrink-0 font-medium ${running ? "agent-shimmer" : ""}`}>
-              {label}
-            </span>
-            <span
-              className={`min-w-0 flex-1 truncate text-muted-foreground ${running ? "agent-shimmer" : ""}`}
-            >
-              {item.text}
-            </span>
-            {summary && (
-              <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{summary}</span>
-            )}
-            {(failed || item.status === "interrupted") && (
-              <span className="shrink-0 text-xs text-muted-foreground">{item.status}</span>
-            )}
-            <ChevronRight
-              className={`size-3 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
-            />
+          {/* A robot badge sets sub-agents apart from the tool calls around them. */}
+          <span
+            data-sub-agent-badge
+            aria-hidden="true"
+            className={`flex size-5 shrink-0 items-center justify-center rounded-md shadow-sm ${
+              failed ? "bg-destructive text-white" : "bg-primary text-primary-foreground"
+            } ${running ? "animate-pulse" : ""}`}
+          >
+            <Bot className="size-3.5" />
           </span>
-          {current && (
-            <span
-              data-sub-agent-current
-              className="truncate text-xs text-muted-foreground"
-              title={`${current.title} ${current.text}`}
-            >
-              {current.title}
-              {current.text ? ` · ${current.text}` : ""}
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span className="flex min-w-0 items-center gap-2 text-sm">
+              <span className={`shrink-0 font-medium ${running ? "agent-shimmer" : ""}`}>
+                {label}
+              </span>
+              <span
+                className={`min-w-0 flex-1 truncate text-muted-foreground ${running ? "agent-shimmer" : ""}`}
+              >
+                {item.text}
+              </span>
+              {summary && (
+                <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                  {summary}
+                </span>
+              )}
+              {(failed || item.status === "interrupted") && (
+                <span className="shrink-0 text-xs text-muted-foreground">{item.status}</span>
+              )}
+              <ChevronRight
+                className={`size-3 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
+              />
             </span>
-          )}
-        </span>
-      </button>
+            {current && (
+              <span
+                data-sub-agent-current
+                className="truncate text-xs text-muted-foreground"
+                title={`${current.title} ${current.text}`}
+              >
+                {current.title}
+                {current.text ? ` · ${current.text}` : ""}
+              </span>
+            )}
+          </span>
+        </button>
+        {children.length === 1 && children[0] && (
+          <OpenConversation
+            item={item}
+            childId={children[0].id}
+            className="m-1 flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <PanelRightOpen className="size-4" />
+          </OpenConversation>
+        )}
+      </div>
       {open && (
         <div className="space-y-3 border-t px-3 py-3">
           {children.length > 1 ? (
@@ -121,6 +122,7 @@ export function SubAgentCard({ item, running }: { item: AgentItem; running: bool
                 <Report
                   item={item}
                   childId={child.id}
+                  index={index}
                   message={child.message}
                   done={!LIVE.includes(child.status)}
                 />
@@ -181,11 +183,13 @@ function Steps({ steps }: { steps: readonly AgentActivityStep[] }) {
 function Report({
   item,
   childId,
+  index,
   message,
   done,
 }: {
   item: AgentItem;
   childId: string | undefined;
+  index?: number;
   message: string | null | undefined;
   done: boolean;
 }) {
@@ -203,80 +207,48 @@ function Report({
           </div>
         </>
       )}
-      {childId && <ChildConversation parent={item} childId={childId} />}
+      {/* A single sub-agent opens from its row's own button. */}
+      {childId && index !== undefined && (
+        <OpenConversation
+          item={item}
+          childId={childId}
+          index={index}
+          className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+        >
+          Open agent conversation
+        </OpenConversation>
+      )}
     </div>
   );
 }
 
-function ChildConversation({ parent, childId }: { parent: AgentItem; childId: string }) {
-  const connection = useContext(TerminalConnectionContext),
-    agent = useAgents().find((a) => a.id === parent.sessionId);
-  const [open, setOpen] = useState(false),
-    [items, setItems] = useState<AgentItem[]>([]),
-    [error, setError] = useState<string | null>(null),
-    [loading, setLoading] = useState(false);
-  if (!agent?.controls?.childHistory) return null;
-  const load = async () => {
-    if (!connection) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await connection.requestAgent(
-        { kind: "child-history", sessionId: parent.sessionId, itemId: parent.id, childId },
-        crypto.randomUUID(),
-      );
-      if (result.outcome.status === "error") throw new Error(result.outcome.message);
-      setItems(result.outcome.childItems ?? []);
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "Could not read child session");
-    } finally {
-      setLoading(false);
-    }
-  };
+/** Opens the sub-agent's conversation beside the chat, where its provider keeps one. */
+function OpenConversation({
+  item,
+  childId,
+  index,
+  className,
+  children,
+}: {
+  item: AgentItem;
+  childId: string;
+  index?: number | undefined;
+  className: string;
+  children: React.ReactNode;
+}) {
+  const open = useContext(SubAgentViewContext);
+  if (!open) return null;
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <button
-          type="button"
-          className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-          onClick={() => {
-            void load();
-          }}
-        >
-          Open agent conversation
-        </button>
-      </DialogTrigger>
-      <DialogContent size="wide" className="overflow-hidden">
-        <DialogHeader>
-          <DialogTitle>Agent conversation</DialogTitle>
-          <DialogDescription>
-            Recent messages from this child agent. Reading them does not send a prompt.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogBody className="space-y-4">
-          {loading ? (
-            <p className="text-sm">Reading conversation…</p>
-          ) : error ? (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          ) : items.length ? (
-            items.map((item) => (
-              <article key={item.id} className="space-y-1 text-sm">
-                <p className="text-xs text-muted-foreground">{item.title}</p>
-                <AgentMarkdown>{item.text || item.detail}</AgentMarkdown>
-              </article>
-            ))
-          ) : (
-            <p className="text-sm text-muted-foreground">No messages reported yet.</p>
-          )}
-        </DialogBody>
-        <DialogFooter>
-          <Button type="button" variant="outline" disabled={loading} onClick={() => void load()}>
-            Reload conversation
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <button
+      type="button"
+      aria-label={
+        index === undefined ? "Open agent conversation" : `Open agent ${index + 1} conversation`
+      }
+      title="Open its conversation beside this chat"
+      className={className}
+      onClick={() => open({ item, childId, index })}
+    >
+      {children}
+    </button>
   );
 }
