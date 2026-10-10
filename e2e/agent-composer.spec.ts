@@ -178,7 +178,8 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     await page.getByRole("button", { name: /^Edit/ }).click();
     await expect(page.getByText("+new line", { exact: true })).toBeVisible();
     await page.getByRole("textbox", { name: "Message Codex" }).fill("queued follow-up");
-    await page.getByRole("button", { name: "Queue message", exact: true }).click();
+    // Enter would steer the running turn; ⌘/Ctrl+Enter queues the follow-up instead.
+    await page.getByRole("textbox", { name: "Message Codex" }).press("ControlOrMeta+Enter");
     await expect(page.getByText("Queued", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Interrupt agent", exact: true }).click();
     await expect(page.getByText("Queue paused", { exact: true })).toBeVisible();
