@@ -51,6 +51,8 @@ import { readClipboardImage } from "@/tauri";
 import { carriesFiles } from "@/window/file-drops";
 import { fileBase64, fitImage, fitImageFile } from "./image-attachment";
 import { ImageViewer } from "./attachment-preview";
+import { useFollowUpMode } from "./follow-ups";
+import { MOD_KEY } from "@/lib/platform";
 import { rememberSentAttachments } from "./attachment-cache";
 const defaults: AgentSettings = { model: null, effort: null, mode: "default" };
 const nativeProviderIcons: Record<string, "model" | "claude" | "opencode" | "pi"> = {
@@ -140,6 +142,7 @@ export function AgentComposer({
   const durableQueue =
     connection?.state.status === "ready" &&
     connection.state.daemon.capabilities?.includes("agent-queue");
+  const followUps = useFollowUpMode();
   const queueSteer =
     connection?.state.status === "ready" &&
     connection.state.daemon.capabilities?.includes("agent-queue-steer");
@@ -163,8 +166,8 @@ export function AgentComposer({
       onFinish: (text, action) => {
         const message = appendDictation(dictationBase.current, text);
         setDraft(message);
-        // Send goes the normal way, queueing behind a running turn; Edit leaves it to review.
-        if (action === "send" && connected && !uncertain) void submit({ message, attachments });
+        // Send goes the normal way, steering or queueing behind a running turn; Edit leaves it.
+        if (action === "send" && connected && !uncertain) void followUp({ message, attachments });
       },
       onCancel: () => setDraft(dictationBase.current),
     },
@@ -289,6 +292,18 @@ export function AgentComposer({
       sendingRef.current = false;
     }
   };
+  /**
+   * Sends a message the way the Follow-ups setting says, or the other way when `alternate`
+   * (⌘/Ctrl+Enter): into the running turn, or onto the queue. Messages that cannot steer queue.
+   */
+  const followUp = (input: Draft = { message: draft, attachments }, alternate = false) =>
+    submit(
+      input,
+      false,
+      active &&
+        (followUps === "steer") !== alternate &&
+        canSteer(input.message, input.attachments.length),
+    );
   // Escape hides the list for the exact draft it was pressed on; typing brings it back.
   const [slashDismissed, setSlashDismissed] = useState<string | null>(null);
   const [slashActive, setSlashActive] = useState(0);
@@ -403,7 +418,11 @@ export function AgentComposer({
       editAck,
       expanded,
       editable: connected && !busy && !uncertain && !!agent.threadId,
-      placeholder: active ? "Add a follow-up to the queue…" : "Message your agent",
+      placeholder: active
+        ? followUps === "steer" && canSteer("steer", 0)
+          ? "Steer the current turn…"
+          : "Add a follow-up to the queue…"
+        : "Message your agent",
       active,
       canSend: connected && !uploading && !busy && !configuring && !uncertain && !!agent.threadId,
       canStop: connected && !!agent.turnId && !agent.turnId.startsWith("pending:"),
@@ -585,7 +604,7 @@ export function AgentComposer({
       } else if (event.kind === "press") {
         if (event.control === "send") {
           // Carry the native field's current value: a final keystroke can race a React render.
-          if (!uncertain) void submit({ message: event.text ?? draft, attachments });
+          if (!uncertain) void followUp({ message: event.text ?? draft, attachments });
         } else if (event.control === "stop") {
           if (connected && agent.turnId && !agent.turnId.startsWith("pending:")) onInterrupt();
         } else if (event.control === "context" || event.control === "context-refresh") {
@@ -719,27 +738,13 @@ export function AgentComposer({
   return (
     <ComposerSurfaceContext value={owner}>
       <div className="space-y-2">
-        {!dictation.active &&
-          active &&
-          agent.controls?.steer &&
-          !!draft.trim() &&
-          !attachments.length && (
-            <button
-              type="button"
-              className="rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted disabled:opacity-40"
-              disabled={
-                !connected ||
-                busy ||
-                uncertain ||
-                !agent.turnId ||
-                agent.turnId.startsWith("pending:") ||
-                draft.trim().startsWith("/")
-              }
-              onClick={() => void submit({ message: draft, attachments: [] }, false, true)}
-            >
-              Steer the current turn
-            </button>
-          )}
+        {!dictation.active && !compact && active && canSteer(draft, attachments.length) && (
+          <p data-follow-up-hint className="px-2 text-xs text-muted-foreground">
+            {followUps === "steer"
+              ? `Enter steers the current turn · ${MOD_KEY}+Enter queues it for after`
+              : `Enter queues it for after this turn · ${MOD_KEY}+Enter steers the current turn`}
+          </p>
+        )}
         {durableQueue && !!agent.queue?.length && (
           <div data-composer-queue className="max-h-28 space-y-2 overflow-y-auto">
             <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -889,7 +894,7 @@ export function AgentComposer({
             e.preventDefault();
             if (!uncertain) {
               if (dictation.active) dictation.stop();
-              else void submit();
+              else void followUp();
             }
           }}
           onDragEnter={(e) => {
@@ -1008,7 +1013,9 @@ export function AgentComposer({
                   compact && !expanded
                     ? "Message your agent"
                     : active
-                      ? "Add a follow-up to the queue…"
+                      ? followUps === "steer" && canSteer("steer", 0)
+                        ? "Steer the current turn…"
+                        : "Add a follow-up to the queue…"
                       : "Ask your agent to build something…"
                 }
                 value={draft}
@@ -1078,7 +1085,8 @@ export function AgentComposer({
                     (!compact || e.metaKey || e.ctrlKey)
                   ) {
                     e.preventDefault();
-                    if (!uncertain) void submit();
+                    // On a phone ⌘/Ctrl+Enter is how a keyboard sends at all, not the other way.
+                    if (!uncertain) void followUp(undefined, !compact && (e.metaKey || e.ctrlKey));
                   }
                 }}
                 className={`agent-composer-input ${compact ? "max-h-48" : "max-h-[min(40vh,26rem)]"} min-h-16 w-full resize-none bg-transparent px-3 py-3 outline-none disabled:opacity-50`}
@@ -1272,7 +1280,13 @@ export function AgentComposer({
                   )}
                   {(!compact || !showStop) && (
                     <button
-                      aria-label={active ? "Queue message" : "Send message"}
+                      aria-label={
+                        !active
+                          ? "Send message"
+                          : followUps === "steer" && canSteer(draft, attachments.length)
+                            ? "Steer message"
+                            : "Queue message"
+                      }
                       disabled={
                         !connected ||
                         uploading ||
