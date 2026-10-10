@@ -356,6 +356,13 @@ export const AgentOperationSchema = z.discriminatedUnion("kind", [
     })
     .refine((v) => v.text.length > 0 || !!v.attachments?.length, "Add a message or attachment"),
   z.object({ kind: z.literal("queue-remove"), sessionId: Id, id: Id }),
+  /** Moves a queued follow-up into the running turn instead of waiting for it to end. */
+  z.object({
+    kind: z.literal("queue-steer"),
+    sessionId: Id,
+    id: Id,
+    turnId: z.string().min(1),
+  }),
   z.object({ kind: z.literal("queue-pause"), sessionId: Id, paused: z.boolean() }),
   z.object({
     kind: z.literal("provider-catalog"),
