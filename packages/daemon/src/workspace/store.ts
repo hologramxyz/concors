@@ -650,14 +650,8 @@ export class WorkspaceStore {
         (existing.projectId !== project.id || existing.directory !== previous.directory)
       )
         throw new Error("This session belongs to another workspace. Open it there.");
-      if (
-        existing &&
-        !existingBound &&
-        (["starting", "working", "needs_input"].includes(existing.status) ||
-          existing.pending.length ||
-          existing.queue?.length)
-      )
-        throw new Error("That session is still active. Finish it before resuming here.");
+      // A session that already has a chat comes back as that chat, even mid-turn: closing a tab
+      // leaves its turn running, and this only shows it again, without starting another CLI.
       if (existing) info = existing;
       if (!existingBound) {
         if (!existing) this.makeRoomForAgent(state);

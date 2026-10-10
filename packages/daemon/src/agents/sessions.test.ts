@@ -891,6 +891,75 @@ it("resuming a session again brings back the pane and tab names it was given", a
   });
 });
 
+it("resuming a session whose tab was closed mid-turn brings back the running chat", async () => {
+  vi.spyOn(ProviderRegistry.prototype, "installed").mockReturnValue(true);
+  const { a, id } = await setup();
+  const projectId = a.workspace!.projects[0]!.id;
+  const edit = async (operation: Record<string, unknown>) => {
+    const result = await a.executeWorkspace({
+      type: "workspace.command",
+      commandId: randomUUID(),
+      epoch: a.workspace!.epoch,
+      operation: {
+        ...operation,
+        projectId,
+        expectedVersion: a.workspace!.projects.find((p) => p.id === projectId)!.version,
+      } as never,
+    });
+    expect(result.outcome.status).toBe("accepted");
+  };
+  const resume = async (sessionId: string) => {
+    await a.requestProvider(
+      { kind: "sessions-list", projectId, directory, provider: "codex" },
+      randomUUID(),
+    );
+    const result = await action(a, {
+      kind: "resume-session",
+      sessionId,
+      nativeSessionId: "external-thread",
+      provider: "codex",
+      expectedRevision: a.agents.find((agent) => agent.id === sessionId)!.revision,
+    });
+    if (result.outcome.status !== "ok") throw new Error(result.outcome.message);
+    return result.outcome.conversation.agent.id;
+  };
+  const resumed = await resume(id);
+  await expect.poll(() => a.agents.find((agent) => agent.id === resumed)?.status).toBe("idle");
+  // "hold" keeps the turn running; closing its tab does not stop it.
+  await action(a, { kind: "send", sessionId: resumed, text: "Long task, hold" });
+  await expect.poll(() => a.agents.find((agent) => agent.id === resumed)?.status).toBe("working");
+  await edit({ kind: "tab.close", tabId: a.workspace!.projects[0]!.tabs[0]!.id });
+  const runtimes = providers.length;
+
+  const tabId = randomUUID(),
+    paneId = randomUUID();
+  await edit({ kind: "tab.create", tabId, paneId, name: "Tab 1", profile: "chat" });
+  const started = await action(a, {
+    kind: "start",
+    epoch: a.workspace!.epoch,
+    projectId,
+    tabId,
+    paneId,
+    expectedVersion: a.workspace!.projects[0]!.version,
+  });
+  if (started.outcome.status !== "ok") throw new Error(started.outcome.message);
+  const empty = started.outcome.conversation.agent.id;
+  await expect.poll(() => a.agents.find((agent) => agent.id === empty)?.status).toBe("idle");
+
+  expect(await resume(empty)).toBe(resumed);
+  const tab = a.workspace!.projects[0]!.tabs.find((t) => t.id === tabId)!;
+  expect(tab.nodes[0]).toMatchObject({ sessionId: resumed });
+  // The same turn, on the same CLI: nothing was restarted or replayed.
+  expect(a.agents.find((agent) => agent.id === resumed)?.status).toBe("working");
+  expect(
+    providers
+      .slice(runtimes)
+      .some((p) =>
+        p.requests.some((r) => r.method === "thread/resume" || r.method === "turn/start"),
+      ),
+  ).toBe(false);
+});
+
 it("rejects unlisted native IDs and protects conversations when a stale picker is submitted", async () => {
   vi.spyOn(ProviderRegistry.prototype, "installed").mockReturnValue(true);
   const { a, id } = await setup();
