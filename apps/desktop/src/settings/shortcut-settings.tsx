@@ -1,7 +1,21 @@
 import { useContext, useState } from "react";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import { BINDINGS, isCompactCommand, isMac, type CommandId } from "@/shortcuts/bindings";
-import { Section, SettingsCard } from "@/views/settings-primitives";
+import { Row, Section, SettingsCard } from "@/views/settings-primitives";
+import { Check, ChevronDown } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  FOLLOW_UP_MODES,
+  setFollowUpMode,
+  useFollowUpMode,
+  type FollowUpMode,
+} from "@/agents/follow-ups";
+import { MOD_KEY } from "@/lib/platform";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ShortcutEditor } from "@/shortcuts/editor";
@@ -54,6 +68,53 @@ const GROUPS: readonly {
     ],
   },
 ];
+
+const FOLLOW_UP_LABEL: Record<FollowUpMode, string> = {
+  steer: "Steer the current turn",
+  queue: "Queue for after the turn",
+};
+
+/** What Enter does with a message written while an agent works. */
+function FollowUpSettings() {
+  const mode = useFollowUpMode();
+  const compact = useContext(CompactLayoutContext);
+  return (
+    <Section
+      title="Follow-ups"
+      description="Messages you send while an agent is working. Messages with attachments or slash commands, and agents that cannot be steered, always queue."
+    >
+      <SettingsCard>
+        <Row
+          label={compact ? "Sending while an agent works" : "Enter while an agent works"}
+          // On a phone, ⌘/Ctrl+Enter is how an external keyboard sends at all.
+          {...(compact ? {} : { hint: `${MOD_KEY}+Enter does the other.` })}
+        >
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                aria-label="Follow-ups"
+                variant="outline"
+                size="sm"
+                className="min-w-48 justify-between"
+              >
+                {FOLLOW_UP_LABEL[mode]}
+                <ChevronDown className="opacity-60" aria-hidden="true" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-48">
+              {FOLLOW_UP_MODES.map((option) => (
+                <DropdownMenuItem key={option} onSelect={() => setFollowUpMode(option)}>
+                  {FOLLOW_UP_LABEL[option]}
+                  {option === mode && <Check className="ml-auto" aria-hidden="true" />}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </Row>
+      </SettingsCard>
+    </Section>
+  );
+}
 
 export function ShortcutSettings() {
   const compact = useContext(CompactLayoutContext);
@@ -116,6 +177,7 @@ export function ShortcutSettings() {
           )}
         </SettingsCard>
       </Section>
+      <FollowUpSettings />
       {!BINDINGS.some(
         (binding) => matches(binding.id) && (!compact || isCompactCommand(binding.id)),
       ) && (

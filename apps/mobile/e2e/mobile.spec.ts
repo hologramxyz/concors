@@ -1007,6 +1007,7 @@ test("mobile Shortcuts settings preserve supported commands and all entry points
   await expect(settings.getByRole("heading", { level: 2 })).toHaveText([
     "Settings",
     "Keyboard shortcuts",
+    "Follow-ups",
     "Workspace",
     "Tabs",
   ]);
