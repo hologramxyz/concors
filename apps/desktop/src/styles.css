@@ -407,6 +407,23 @@
   position: relative;
   outline: none;
 }
+/*
+ * The gap between panes is only a few pixels wide, so a press just beside it landed in a pane and
+ * started selecting text. The grab area reaches 4px into each pane without moving the layout.
+ */
+.pane-resize-handle[aria-disabled="false"]::before {
+  content: "";
+  position: absolute;
+  z-index: 20;
+}
+.pane-resize-handle[aria-orientation="vertical"]::before {
+  inset-block: 0;
+  inset-inline: -4px;
+}
+.pane-resize-handle[aria-orientation="horizontal"]::before {
+  inset-inline: 0;
+  inset-block: -4px;
+}
 /* Keep the full grab area while highlighting only a fine line at its center. */
 .pane-resize-handle::after {
   content: "";
@@ -436,6 +453,17 @@
 }
 .pane-resize-handle[aria-disabled="true"] {
   cursor: default;
+}
+/* While a split is dragged nothing else selects text or shows its own cursor. */
+html[data-pane-resizing] * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+html[data-pane-resizing="column"] * {
+  cursor: col-resize !important;
+}
+html[data-pane-resizing="row"] * {
+  cursor: row-resize !important;
 }
 @media (prefers-reduced-motion: reduce) {
   .pane-resize-handle::after {
