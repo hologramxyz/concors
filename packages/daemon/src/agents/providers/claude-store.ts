@@ -1,5 +1,5 @@
 import { appendFile, mkdir, readFile, readdir, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join, sep } from "node:path";
 import type { SessionStore } from "@anthropic-ai/claude-agent-sdk";
 
 /** Keeps SDK transcript helpers in the same account directory as the configured CLI. */
@@ -10,13 +10,19 @@ export function claudeStore(directory: string): SessionStore {
     return value;
   };
   const project = (key: string) => join(directory, "projects", component(key));
-  const file = (key: { projectKey: string; sessionId: string; subpath?: string }) => {
-    if (key.subpath) throw new Error("Subagent store access is not supported here");
-    return join(project(key.projectKey), component(key.sessionId) + ".jsonl");
-  };
+  // Sub-agent transcripts sit beside their session as the CLI writes them:
+  // <session>/subagents/agent-<id>.jsonl for the subpath "subagents/agent-<id>".
+  const file = (key: { projectKey: string; sessionId: string; subpath?: string }) =>
+    key.subpath
+      ? join(
+          project(key.projectKey),
+          component(key.sessionId),
+          ...key.subpath.split("/").map(component),
+        ) + ".jsonl"
+      : join(project(key.projectKey), component(key.sessionId) + ".jsonl");
   return {
     async append(key, entries) {
-      await mkdir(project(key.projectKey), { recursive: true, mode: 0o700 });
+      await mkdir(dirname(file(key)), { recursive: true, mode: 0o700 });
       await appendFile(file(key), entries.map((e) => JSON.stringify(e)).join("\n") + "\n", {
         mode: 0o600,
       });
@@ -37,6 +43,18 @@ export function claudeStore(directory: string): SessionStore {
         });
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+        throw error;
+      }
+    },
+    async listSubkeys(key) {
+      try {
+        const dir = join(project(key.projectKey), component(key.sessionId));
+        const names = await readdir(dir, { recursive: true });
+        return names
+          .filter((name) => name.endsWith(".jsonl"))
+          .map((name) => name.slice(0, -6).split(sep).join("/"));
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
         throw error;
       }
     },
