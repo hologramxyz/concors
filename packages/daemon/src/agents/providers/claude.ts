@@ -582,6 +582,20 @@ export class ClaudeProvider extends EventProvider {
     if (turnStart && !this.turnId) this.selfStartedTurn = this.startTurn().turn.id;
     if (!this.turnId) return;
     const parent = string(m["parent_tool_use_id"]);
+    // A sub-agent's task id is its agent id, which names its transcript; the tool call only
+    // reports it when the sub-agent finishes. Nested sub-agents stay steps of their parent.
+    if (
+      m["type"] === "system" &&
+      m["subtype"] === "task_started" &&
+      m["task_type"] === "local_agent" &&
+      (m["spawn_depth"] ?? 1) === 1
+    ) {
+      const call = string(m["tool_use_id"]),
+        owner = this.tools.get(call);
+      this.subAgentStarted(call, string(m["task_id"]));
+      if (owner) this.tool(call, owner.name, owner.input, null, false);
+      return;
+    }
     if (m["type"] === "rate_limit_event") {
       const info = object(m["rate_limit_info"]);
       if (info["status"] === "rejected")

@@ -12,6 +12,7 @@ export class TestAgentProvider implements AgentProvider {
   cwd = process.cwd();
   turnId = "";
   closed = false;
+  private childReads = 0;
   readonly provider: AgentProviderId;
   constructor(onRequest: Parameters<AgentProviderFactory>[1], provider: AgentProviderId = "codex") {
     this.provider = provider;
@@ -43,11 +44,38 @@ export class TestAgentProvider implements AgentProvider {
         rewind: ["conversation"],
         steer: true,
         compact: true,
+        childHistory: true,
         commands: [
           { name: "compact", description: "Summarize earlier context" },
           { name: "review", description: "Review a change", argumentHint: "<target>" },
         ],
       };
+    if (method === "session/child-history") {
+      // The sub-agent's conversation grows between reads, as a running one does.
+      const reads = ++this.childReads;
+      const items: Record<string, unknown>[] = [
+        {
+          id: "child-prompt",
+          type: "userMessage",
+          content: [{ type: "text", text: "Check the test coverage" }],
+        },
+        {
+          id: "child-read",
+          type: "commandExecution",
+          command: "rg --files tests",
+          status: "completed",
+          aggregatedOutput: "tests/app.test.ts",
+        },
+      ];
+      if (reads > 1)
+        items.push({ id: "child-reply", type: "agentMessage", text: "Coverage is **82%**." });
+      return {
+        thread: {
+          id: (params as { childId?: string }).childId,
+          turns: [{ id: "child-turn", status: "inProgress", items }],
+        },
+      };
+    }
     if (method === "command/execute") {
       // Mirrors a native compaction: a turn whose only item is the compaction's running/result.
       this.turnId = `turn-${++TestAgentProvider.turns}`;
