@@ -323,7 +323,7 @@ export class ClaudeProvider extends EventProvider {
     }
     this.controls = AgentControlsSchema.parse({
       history: true,
-      childHistory: !this.transcriptStore,
+      childHistory: true,
       importSessions: true,
       fork: true,
       rewind: ["files"],
@@ -382,6 +382,8 @@ export class ClaudeProvider extends EventProvider {
             await getSubagentMessages(this.threadId, string(p["childId"]), {
               dir: this.cwd,
               limit: 1000,
+              // A non-default account keeps its transcripts in its own directory.
+              ...(this.transcriptStore ? { sessionStore: this.transcriptStore } : {}),
             }),
           ),
         },
