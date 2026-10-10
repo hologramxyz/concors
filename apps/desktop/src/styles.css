@@ -682,6 +682,25 @@ html[data-pane-resizing="row"] * {
   }
 }
 
+/*
+ * A sub-agent's conversation sits beside the chat that started it when the pane has room for
+ * both, and over it when it does not.
+ */
+.chat-with-sub-agent {
+  container: chat-with-sub-agent / inline-size;
+}
+.sub-agent-panel {
+  flex: 0 0 50%;
+}
+@container chat-with-sub-agent (max-width: 760px) {
+  .sub-agent-panel {
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    border-left-width: 0;
+  }
+}
+
 /* Sent-message navigation shares the timeline's width, including split panes. */
 .chat-timeline-shell {
   container-type: inline-size;

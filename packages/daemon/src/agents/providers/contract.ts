@@ -73,6 +73,8 @@ export abstract class EventProvider implements ConversationProvider {
   protected tasks = new TaskState();
   /** The steps each running sub-agent has taken, by the tool call that started it. */
   private subAgentSteps = new Map<string, AgentActivityStep[]>();
+  /** The conversation each running sub-agent keeps, by the tool call that started it. */
+  private subAgentChildren = new Map<string, string>();
   protected controls: AgentControls = AgentControlsSchema.parse({});
   protected compactionId: string | null = null;
   private ended = new Set<() => void>();
@@ -205,8 +207,28 @@ export abstract class EventProvider implements ConversationProvider {
     const steps = this.subAgentSteps.get(id);
     if (item["type"] === "collabAgentToolCall" && steps && !item["activity"])
       item["activity"] = steps;
-    if (done) this.subAgentSteps.delete(id);
+    // A CLI that names the sub-agent's conversation only in the call's result still lets it be
+    // opened while it runs, once the CLI has said which conversation it started.
+    const child = this.subAgentChildren.get(id);
+    if (
+      item["type"] === "collabAgentToolCall" &&
+      child &&
+      !(item["receiverThreadIds"] as unknown[]).length
+    ) {
+      item["receiverThreadIds"] = [child];
+      item["agentsStates"] = {
+        [child]: { status: failed ? "failed" : done ? "completed" : "running", message: null },
+      };
+    }
+    if (done) {
+      this.subAgentSteps.delete(id);
+      this.subAgentChildren.delete(id);
+    }
     this.item(item, done);
+  }
+  /** Records the conversation the sub-agent started by tool call `parentId` keeps. */
+  protected subAgentStarted(parentId: string, childId: string) {
+    if (parentId && childId) this.subAgentChildren.set(parentId, childId);
   }
   /**
    * Records a step the sub-agent under `parentId` took, or a change to one it already took, so
