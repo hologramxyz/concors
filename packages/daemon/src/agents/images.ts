@@ -110,3 +110,34 @@ function readImageFile(path: string): Buffer | null {
     if (descriptor !== undefined) closeSync(descriptor);
   }
 }
+
+/**
+ * An image Codex generated, from the base64 it sends with the finished item. It names the file it
+ * saved (`savedPath`), which becomes the Markdown source the chat matches; one too large for the
+ * attachment limit, or not an image at all, is left out and named by its path instead.
+ */
+export function generatedImage(item: {
+  id: string;
+  result?: unknown;
+  savedPath?: unknown;
+}): MessageImage | null {
+  const data = typeof item.result === "string" ? item.result : "";
+  if (!data || (data.length * 3) / 4 > MAX_IMAGE_BYTES + 3) return null;
+  const bytes = Buffer.from(data, "base64");
+  const mime = imageMime(bytes);
+  if (!mime || bytes.length > MAX_IMAGE_BYTES) return null;
+  return {
+    source: generatedImageSource(item),
+    attachment: {
+      name: basename(generatedImageSource(item)).slice(0, 200) || "generated-image.png",
+      mime,
+      data: bytes.toString("base64"),
+    },
+  };
+}
+
+export function generatedImageSource(item: { id: string; savedPath?: unknown }): string {
+  return typeof item.savedPath === "string" && item.savedPath
+    ? item.savedPath
+    : `generated-image-${item.id.replace(/[^\w.-]/g, "_").slice(0, 80)}.png`;
+}

@@ -341,6 +341,24 @@ test("right-clicking an agent's file link offers Concors actions, and Download s
   }
 });
 
+test("an image Codex generates shows inline in its reply and opens full size", async ({ page }) => {
+  const root = await project(page);
+  try {
+    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
+    await expect(page.getByLabel("Message Codex")).toBeEnabled();
+    await page.getByLabel("Message Codex").fill("generate-image");
+    await page.getByLabel("Message Codex").press("Enter");
+    const image = page.getByRole("button", { name: "Open A brand library", exact: true });
+    await expect(image).toHaveAttribute("data-inline-image", "ready");
+    await image.click();
+    await expect(page.getByRole("dialog", { name: "A brand library" })).toBeVisible();
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("agent replies show the images they embed inline and open them full size", async ({
   page,
 }) => {
