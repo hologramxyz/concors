@@ -5,6 +5,8 @@ import type { AgentProvider, AgentProviderFactory } from "../manager.ts";
 /** Deterministic provider used only by integration tests and the acceptance-test server. */
 export class TestAgentProvider implements AgentProvider {
   static turns = 0;
+  /** Like Codex, takes attachments mid-turn; a test turns it off for agents that cannot. */
+  static steerAttachments = true;
   readonly listeners = new Set<(method: string, params: unknown) => void>();
   readonly onRequest: Parameters<AgentProviderFactory>[1];
   readonly requests: { method: string; params: unknown }[] = [];
@@ -43,6 +45,7 @@ export class TestAgentProvider implements AgentProvider {
         fork: true,
         rewind: ["conversation"],
         steer: true,
+        steerAttachments: TestAgentProvider.steerAttachments,
         compact: true,
         childHistory: true,
         commands: [
