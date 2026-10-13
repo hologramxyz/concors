@@ -28,6 +28,7 @@ export function ControlPicker({
   selectedGroupId,
   showValue = false,
   primary = false,
+  tooltip = false,
   selectedLabel,
   onOpen,
   onGroupChange,
@@ -44,6 +45,8 @@ export function ControlPicker({
   showValue?: boolean;
   /** Keeps its label in narrow composers, where the other pickers show only their icons. */
   primary?: boolean;
+  /** Names an icon-only control in the app's tooltip; labelled pickers keep the plain `title`. */
+  tooltip?: boolean;
   selectedLabel?: string;
   onOpen?: () => void;
   onGroupChange?: (id: string) => void;
@@ -53,6 +56,8 @@ export function ControlPicker({
     [query, setQuery] = useState(""),
     [active, setActive] = useState(0),
     [groupId, setGroupId] = useState(selectedGroupId),
+    // Closing returns focus to the trigger, which would reopen its tooltip on its own; `quiet`
+    // holds it back until the pointer returns or focus moves on. Every close must set it.
     [quiet, setQuiet] = useState(false);
   const id = useId();
   const composerSurface = useContext(ComposerSurfaceContext);
@@ -91,13 +96,29 @@ export function ControlPicker({
     restoreFocus.current = true;
     onSelect(next, group?.id);
     setOpen(false);
+    setQuiet(true);
   };
+  const triggerButton = (
+    <Popover.Trigger
+      ref={trigger}
+      type="button"
+      aria-label={label}
+      data-value={value}
+      title={tooltip ? undefined : `${label}: ${currentLabel}`}
+      disabled={disabled}
+      className={`agent-control ${showValue ? "agent-control-value" : ""} ${primary ? "agent-control-primary" : ""}`}
+      onPointerEnter={() => setQuiet(false)}
+      onBlur={() => setQuiet(false)}
+    >
+      {icon}
+      {showValue && <span className="truncate">{currentLabel}</span>}
+    </Popover.Trigger>
+  );
   return (
     <Popover.Root
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        // Closing returns focus to the trigger, which would reopen the tooltip on its own.
         if (!next) setQuiet(true);
         if (next) onOpen?.();
         setQuery("");
@@ -105,21 +126,13 @@ export function ControlPicker({
         setGroupId(selectedGroupId);
       }}
     >
-      <ControlTooltip text={`${label}: ${currentLabel}`} hidden={open || quiet}>
-        <Popover.Trigger
-          ref={trigger}
-          type="button"
-          aria-label={label}
-          data-value={value}
-          disabled={disabled}
-          className={`agent-control ${showValue ? "agent-control-value" : ""} ${primary ? "agent-control-primary" : ""}`}
-          onPointerEnter={() => setQuiet(false)}
-          onBlur={() => setQuiet(false)}
-        >
-          {icon}
-          {showValue && <span className="truncate">{currentLabel}</span>}
-        </Popover.Trigger>
-      </ControlTooltip>
+      {tooltip ? (
+        <ControlTooltip text={`${label}: ${currentLabel}`} hidden={open || quiet}>
+          {triggerButton}
+        </ControlTooltip>
+      ) : (
+        triggerButton
+      )}
       <Popover.Portal>
         <Popover.Content
           data-composer-surface={composerSurface}
