@@ -15,6 +15,16 @@ export async function onNativeNotificationClick() {
 export async function playNativeSound() {
   /* isTauri() is false, so mobile plays through Web Audio. */
 }
+export type NativeNotificationAccess = "allowed" | "quiet" | "blocked" | "not_asked" | "unknown";
+export async function nativeNotificationAccess(): Promise<NativeNotificationAccess> {
+  return "unknown";
+}
+export async function requestNativeNotificationAccess(): Promise<NativeNotificationAccess> {
+  return "unknown";
+}
+export async function openNativeNotificationSettings() {
+  throw new Error("Use native mobile push settings");
+}
 
 export { readText as readClipboardText, copyText as writeClipboardText } from "@/lib/clipboard";
 // Mobile paste events carry images as files, so there is nothing to read natively.
