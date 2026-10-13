@@ -1,12 +1,4 @@
-import {
-  lazy,
-  Suspense,
-  useCallback,
-  useContext,
-  useEffect,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { lazy, Suspense, useContext, useEffect, useState, useSyncExternalStore } from "react";
 import { RefreshCw, Save, WrapText, Search, Ellipsis, Copy } from "lucide-react";
 import {
   DropdownMenu,
@@ -16,16 +8,17 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { AgentMarkdown, CopyButton } from "@/agents/markdown";
 import { Button } from "@/components/ui/button";
 import { copyText } from "@/lib/clipboard";
-import type { FileOperation } from "@concors/protocol";
 import { useFiles, type OpenFile } from "./context";
 import { FileTypeIcon } from "./file-type-icon";
 import { loadCodeEditor } from "./editor-loader";
 import { useFilePrompts } from "./prompts";
 import { CompactLayoutContext } from "@/components/compact-layout";
+import { MediaFileTab } from "./media-tab";
+import { previewKind } from "./preview-kind";
+import { useFileRequest } from "./use-file-request";
 const CodeEditor = lazy(loadCodeEditor);
 
 export function FileTabLabel({ file }: { file: OpenFile }) {
@@ -60,9 +53,12 @@ export function FileTabLabel({ file }: { file: OpenFile }) {
   );
 }
 export function FileTab({ file }: { file: OpenFile }) {
+  const kind = previewKind(file.path);
+  return kind ? <MediaFileTab file={file} kind={kind} /> : <TextFileTab file={file} />;
+}
+function TextFileTab({ file }: { file: OpenFile }) {
   const prompts = useFilePrompts();
   const compact = useContext(CompactLayoutContext);
-  const connection = useContext(TerminalConnectionContext);
   const state = useSyncExternalStore(file.document.subscribe, file.document.getSnapshot);
   const [mode, setMode] = useState({
     preview: /\.(md|markdown)$/i.test(file.path) && !file.location.line,
@@ -79,25 +75,7 @@ export function FileTab({ file }: { file: OpenFile }) {
       return false;
     }
   });
-  const available =
-    connection?.state.status === "ready" &&
-    connection.workspace?.epoch === file.document.target.epoch &&
-    connection.workspace.projects.some(
-      (project) =>
-        project.id === file.projectId &&
-        (project.directory === file.directory ||
-          (connection.state.status === "ready" &&
-            connection.state.daemon.capabilities?.includes("folder-workspaces"))),
-    ) &&
-    !!connection.state.daemon.capabilities?.includes("project-files");
-  const request = useCallback(
-    async (operation: FileOperation) => {
-      if (!connection || !available)
-        throw new Error("Reconnect to this machine before saving. Your draft is kept.");
-      return (await connection.requestFile(operation, crypto.randomUUID())).outcome;
-    },
-    [connection, available],
-  );
+  const { available, request } = useFileRequest(file);
   useEffect(() => {
     if (!available) return;
     if (!file.document.getSnapshot().base) void file.document.load(request);

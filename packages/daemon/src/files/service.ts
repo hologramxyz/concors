@@ -4,6 +4,7 @@ import { lstat, mkdir, open, opendir, realpath, rename, unlink } from "node:fs/p
 import { basename, dirname, join, relative, sep } from "node:path";
 import { projectPath, resolveProjectPath } from "./paths.ts";
 import { readProjectIcon } from "./project-icon.ts";
+import { readProjectPreview } from "./preview.ts";
 import {
   MAX_DIRECTORY_ENTRIES,
   MAX_FILE_BYTES,
@@ -78,6 +79,8 @@ export class ProjectFiles {
         outcome = { status: "listed", entries, truncated };
       } else if (operation.kind === "read") {
         outcome = { status: "read", file: await readProjectFile(file, operation.path) };
+      } else if (operation.kind === "preview") {
+        outcome = { status: "preview", preview: await readProjectPreview(file, operation.path) };
       } else {
         const previous = this.queues.get(file) ?? Promise.resolve();
         const write = previous
