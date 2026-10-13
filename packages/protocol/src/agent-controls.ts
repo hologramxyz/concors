@@ -32,6 +32,8 @@ export const AgentControlsSchema = z.object({
   compact: z.boolean().default(false),
   contextUsage: z.boolean().default(false),
   steer: z.boolean().default(false),
+  /** Whether a steered message may carry attachments, as a sent one can. */
+  steerAttachments: z.boolean().default(false),
   rewind: z.array(z.enum(["conversation", "files", "both"])).default([]),
   fork: z.boolean().default(false),
   childHistory: z.boolean().default(false),

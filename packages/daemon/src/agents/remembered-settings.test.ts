@@ -82,6 +82,7 @@ it("drops remembered choices the provider no longer offers", () => {
           compact: false,
           contextUsage: false,
           steer: false,
+          steerAttachments: false,
           rewind: [],
           fork: false,
           childHistory: false,

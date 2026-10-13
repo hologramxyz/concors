@@ -148,15 +148,18 @@ export function AgentComposer({
     connection?.state.status === "ready" &&
     connection.state.daemon.capabilities?.includes("agent-queue-steer");
   const active = ["starting", "working", "needs_input"].includes(agent.status);
-  /** Whether a follow-up can go into the running turn now, as the Codex app's Steer does. */
+  /**
+   * Whether a follow-up can go into the running turn now, as the Codex app's Steer does. One with
+   * attachments can when the agent takes them mid-turn (Codex, Claude Code); elsewhere it queues.
+   */
   const canSteer = (text: string, files: number) =>
     agent.status === "working" &&
     !!agent.controls?.steer &&
     !!agent.turnId &&
     !agent.turnId.startsWith("pending:") &&
-    !!text.trim() &&
+    (!!text.trim() || files > 0) &&
     !text.trim().startsWith("/") &&
-    !files;
+    (!files || !!agent.controls.steerAttachments);
   const showStop = active && (!compact || (!draft.trim() && !attachments.length));
   const settings = agent.settings ?? defaults;
   const dictationBase = useRef("");
