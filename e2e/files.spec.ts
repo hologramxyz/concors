@@ -301,6 +301,46 @@ test("agent file links open Markdown and code tabs without leaving the workspace
   }
 });
 
+test("right-clicking an agent's file link offers Concors actions, and Download saves the file", async ({
+  page,
+}) => {
+  const root = await project(page);
+  try {
+    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
+    await expect(page.getByLabel("Message Codex")).toBeEnabled();
+    await page.getByLabel("Message Codex").fill("file-links");
+    await page.getByLabel("Message Codex").press("Enter");
+    const link = page.getByRole("link", { name: "the code", exact: true });
+    // Selected link text is where the webview's own menu used to appear, with a Download Linked
+    // File that could not work; the app's menu replaces it and keeps Copy for the selection.
+    await link.selectText();
+    await link.click({ button: "right" });
+    const menu = page.getByRole("menu");
+    await expect(menu.getByRole("menuitem")).toHaveText([
+      "Copy",
+      "Open file",
+      "Download",
+      "Copy path",
+    ]);
+    const saved = page.waitForEvent("download");
+    await menu.getByRole("menuitem", { name: "Download", exact: true }).click();
+    const download = await saved;
+    expect(download.suggestedFilename()).toBe("main.ts");
+    expect(readFileSync(await download.path(), "utf8")).toBe(
+      readFileSync(join(root, "src", "main.ts"), "utf8"),
+    );
+    await expect(page.getByRole("status").filter({ hasText: "Saved to Downloads" })).toBeVisible();
+    // Open still opens the tab in place.
+    await link.click({ button: "right" });
+    await page.getByRole("menuitem", { name: "Open file", exact: true }).click();
+    await expect(page.getByRole("textbox", { name: "Code editor: src/main.ts" })).toBeVisible();
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("agent replies show the images they embed inline and open them full size", async ({
   page,
 }) => {

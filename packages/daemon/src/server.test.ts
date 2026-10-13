@@ -78,6 +78,7 @@ describe("WebSocket handshake", () => {
           "project-files",
           "project-icons",
           "file-previews",
+          "file-downloads",
           "workspace-pull-requests",
           "pull-request-actions",
           "pull-request-states",

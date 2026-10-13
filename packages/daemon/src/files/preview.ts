@@ -1,6 +1,11 @@
 import { constants } from "node:fs";
 import { open } from "node:fs/promises";
-import { MAX_PREVIEW_BYTES, type FilePreview } from "@concors/protocol";
+import {
+  MAX_DOWNLOAD_BYTES,
+  MAX_PREVIEW_BYTES,
+  type FileDownload,
+  type FilePreview,
+} from "@concors/protocol";
 
 /**
  * Reads a PDF or image for a read-only file tab. The type comes from the file's own signature,
@@ -8,38 +13,56 @@ import { MAX_PREVIEW_BYTES, type FilePreview } from "@concors/protocol";
  * for a misleading extension. Anything else stays with the text editor's rules.
  */
 export async function readProjectPreview(file: string, path: string): Promise<FilePreview> {
+  const bytes = await readWholeFile(file, MAX_PREVIEW_BYTES, "preview");
+  const mime = previewMime(bytes);
+  if (!mime)
+    throw new Error(
+      "Concors can preview PDF, PNG, JPEG, GIF and WebP files. Open this one in a terminal.",
+    );
+  return { path, mime, data: bytes.toString("base64"), size: bytes.length };
+}
+
+/** Reads any regular file so a link to it can be saved on the person's device. */
+export async function readProjectDownload(file: string, path: string): Promise<FileDownload> {
+  const bytes = await readWholeFile(file, MAX_DOWNLOAD_BYTES, "download");
+  return { path, data: bytes.toString("base64"), size: bytes.length };
+}
+
+/**
+ * The whole file, refusing links, anything but a regular file, files over the limit, and files
+ * that change while being read, which would otherwise arrive as a mix of two versions.
+ */
+async function readWholeFile(file: string, limit: number, purpose: "preview" | "download") {
+  const tooLarge = `This file exceeds the ${limit / 1024 / 1024} MB ${purpose} limit. Open it in a terminal.`;
   const handle = await open(
     file,
     constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0),
   );
   try {
     const before = await handle.stat();
-    if (!before.isFile()) throw new Error("Only regular files can be previewed.");
-    if (before.size > MAX_PREVIEW_BYTES) throw new Error(tooLarge);
-    const buffer = Buffer.alloc(MAX_PREVIEW_BYTES + 1);
+    if (!before.isFile())
+      throw new Error(
+        purpose === "preview"
+          ? "Only regular files can be previewed."
+          : "Only regular files can be downloaded.",
+      );
+    if (before.size > limit) throw new Error(tooLarge);
+    const buffer = Buffer.alloc(limit + 1);
     let size = 0;
     while (size < buffer.length) {
       const { bytesRead } = await handle.read(buffer, size, buffer.length - size, size);
       if (!bytesRead) break;
       size += bytesRead;
     }
-    if (size > MAX_PREVIEW_BYTES) throw new Error(tooLarge);
+    if (size > limit) throw new Error(tooLarge);
     const after = await handle.stat();
     if (before.mtimeMs !== after.mtimeMs || before.size !== after.size)
       throw new Error("File changed while loading. Try again.");
-    const bytes = buffer.subarray(0, size);
-    const mime = previewMime(bytes);
-    if (!mime)
-      throw new Error(
-        "Concors can preview PDF, PNG, JPEG, GIF and WebP files. Open this one in a terminal.",
-      );
-    return { path, mime, data: bytes.toString("base64"), size };
+    return buffer.subarray(0, size);
   } finally {
     await handle.close();
   }
 }
-
-const tooLarge = `This file exceeds the ${MAX_PREVIEW_BYTES / 1024 / 1024} MB preview limit. Open it in a terminal.`;
 
 const starts = (bytes: Uint8Array, signature: number[], offset = 0) =>
   signature.every((byte, index) => bytes[offset + index] === byte);
