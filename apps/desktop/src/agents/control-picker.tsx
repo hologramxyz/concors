@@ -97,7 +97,8 @@ export function ControlPicker({
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        if (next) setQuiet(true);
+        // Closing returns focus to the trigger, which would reopen the tooltip on its own.
+        if (!next) setQuiet(true);
         if (next) onOpen?.();
         setQuery("");
         setActive(0);
@@ -112,7 +113,7 @@ export function ControlPicker({
           data-value={value}
           disabled={disabled}
           className={`agent-control ${showValue ? "agent-control-value" : ""} ${primary ? "agent-control-primary" : ""}`}
-          onPointerLeave={() => setQuiet(false)}
+          onPointerEnter={() => setQuiet(false)}
           onBlur={() => setQuiet(false)}
         >
           {icon}
