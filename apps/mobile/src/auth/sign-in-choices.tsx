@@ -1,16 +1,14 @@
 import type { NativeSignInChoice } from "@concors/api-client";
 import { useState } from "react";
-import { Pressable, View } from "react-native";
-import { Button, Copy, Field, useTheme } from "../ui";
-
-type Intent = NativeSignInChoice["intent"];
+import { View } from "react-native";
+import { Button, Copy, Field } from "../ui";
 
 /** Loose on purpose: the API validates properly, this only catches a half-typed address. */
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
- * Sign in or sign up, then how: GitHub, Google or an emailed code. The in-app browser sheet opens
- * straight on that method, on the API's own page.
+ * How to continue: GitHub, Google or an emailed code. Signing in and signing up are one step. The
+ * in-app browser sheet opens straight on that method, on the API's own page.
  */
 export function SignInChoices({
   disabled,
@@ -19,58 +17,22 @@ export function SignInChoices({
   disabled: boolean;
   onChoose(choice: NativeSignInChoice): void;
 }) {
-  const theme = useTheme();
-  const [intent, setIntent] = useState<Intent>("sign-in");
   const [email, setEmail] = useState("");
   const address = email.trim();
   const validEmail = EMAIL_PATTERN.test(address);
 
   return (
     <View style={{ gap: 12 }}>
-      <View
-        accessibilityRole="tablist"
-        style={{
-          flexDirection: "row",
-          padding: 3,
-          borderRadius: theme.radius * 1.6,
-          borderWidth: 1,
-          borderColor: theme.border,
-          backgroundColor: theme.tint,
-        }}
-      >
-        {(["sign-in", "sign-up"] as const).map((option) => (
-          <Pressable
-            key={option}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: intent === option, disabled }}
-            testID={option}
-            disabled={disabled}
-            onPress={() => setIntent(option)}
-            style={{
-              flex: 1,
-              minHeight: 36,
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: theme.radius * 1.2,
-              backgroundColor: intent === option ? theme.surface : "transparent",
-            }}
-          >
-            <Copy size={14} weight={intent === option ? "600" : "500"} muted={intent !== option}>
-              {option === "sign-in" ? "Sign in" : "Sign up"}
-            </Copy>
-          </Pressable>
-        ))}
-      </View>
       <Copy muted>
-        {intent === "sign-up"
-          ? "Choose how you want to sign up. You'll finish in your browser."
-          : "Use the method you signed up with. You'll finish in your browser."}
+        {
+          "Use the account you signed up with. If you're new, this creates one. You'll finish in your browser."
+        }
       </Copy>
       <Button
         secondary
         testID="sign-in-github"
         disabled={disabled}
-        onPress={() => onChoose({ method: "github", intent })}
+        onPress={() => onChoose({ method: "github" })}
       >
         Continue with GitHub
       </Button>
@@ -78,7 +40,7 @@ export function SignInChoices({
         secondary
         testID="sign-in-google"
         disabled={disabled}
-        onPress={() => onChoose({ method: "google", intent })}
+        onPress={() => onChoose({ method: "google" })}
       >
         Continue with Google
       </Button>
@@ -95,13 +57,13 @@ export function SignInChoices({
         returnKeyType="go"
         editable={!disabled}
         onSubmitEditing={() => {
-          if (validEmail && !disabled) onChoose({ method: "email", email: address, intent });
+          if (validEmail && !disabled) onChoose({ method: "email", email: address });
         }}
       />
       <Button
         testID="sign-in-email"
         disabled={disabled || !validEmail}
-        onPress={() => onChoose({ method: "email", email: address, intent })}
+        onPress={() => onChoose({ method: "email", email: address })}
       >
         Continue with email
       </Button>

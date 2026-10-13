@@ -76,7 +76,7 @@ test("the sign-in screen remains scrollable in short windows", async ({ page }) 
   await mockApi(page);
   await page.setViewportSize({ width: 640, height: 320 });
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Sign in to Concors" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Continue to Concors" })).toBeVisible();
   const main = page.getByRole("main");
   await main.evaluate((element) => {
     element.scrollTop = 0;
@@ -102,7 +102,7 @@ test("the app is gated behind sign-in: restore a saved session, reload, sign out
 }) => {
   const api = await mockApi(page);
   const sidebar = page.getByRole("navigation", { name: "Primary" });
-  const signInHeading = page.getByRole("heading", { name: "Sign in to Concors" });
+  const signInHeading = page.getByRole("heading", { name: "Continue to Concors" });
 
   // Signed out: only the sign-in screen exists, offering no form of its own.
   await page.goto("/");
