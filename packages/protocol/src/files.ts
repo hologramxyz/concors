@@ -7,6 +7,9 @@ export const MAX_PROJECT_ICON_BYTES = 256 * 1024;
 /** PDFs and images open read-only in a file tab, sent whole as base64. */
 export const FILE_PREVIEW_CAPABILITY = "file-previews";
 export const MAX_PREVIEW_BYTES = 20 * 1024 * 1024;
+/** Any regular file, sent whole as base64 so a link to it can be saved to the person's device. */
+export const FILE_DOWNLOAD_CAPABILITY = "file-downloads";
+export const MAX_DOWNLOAD_BYTES = MAX_PREVIEW_BYTES;
 export const PREVIEW_MIME_TYPES = [
   "application/pdf",
   "image/png",
@@ -38,6 +41,7 @@ export const FileRequestSchema = z.object({
     z.object({ kind: z.literal("list"), ...Target }),
     z.object({ kind: z.literal("read"), ...Target }),
     z.object({ kind: z.literal("preview"), ...Target }),
+    z.object({ kind: z.literal("download"), ...Target }),
     z.object({
       kind: z.literal("create"),
       ...Target,
@@ -71,6 +75,15 @@ export const FilePreviewSchema = z.object({
   size: z.number().int().nonnegative(),
 });
 export type FilePreview = z.infer<typeof FilePreviewSchema>;
+export const FileDownloadSchema = z.object({
+  path: Path,
+  data: z
+    .string()
+    .max(Math.ceil(MAX_DOWNLOAD_BYTES / 3) * 4)
+    .regex(/^[A-Za-z0-9+/]*=*$/),
+  size: z.number().int().nonnegative(),
+});
+export type FileDownload = z.infer<typeof FileDownloadSchema>;
 export const FileEntrySchema = z.object({
   name: z.string(),
   path: Path,
@@ -89,6 +102,7 @@ export const FileResultSchema = z.object({
     }),
     z.object({ status: z.literal("read"), file: ProjectFileSchema }),
     z.object({ status: z.literal("preview"), preview: FilePreviewSchema }),
+    z.object({ status: z.literal("downloaded"), download: FileDownloadSchema }),
     z.object({ status: z.literal("written"), file: ProjectFileSchema }),
     z.object({ status: z.literal("created"), entry: FileEntrySchema }),
     z.object({ status: z.literal("conflict"), message: z.string() }),

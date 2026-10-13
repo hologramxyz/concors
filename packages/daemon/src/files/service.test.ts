@@ -3,7 +3,12 @@ import { mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from "node:fs/
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { MAX_FILE_BYTES, MAX_PREVIEW_BYTES, type FileOperation } from "@concors/protocol";
+import {
+  MAX_DOWNLOAD_BYTES,
+  MAX_FILE_BYTES,
+  MAX_PREVIEW_BYTES,
+  type FileOperation,
+} from "@concors/protocol";
 import { WorkspaceStore } from "../workspace/store.ts";
 import { ProjectFiles } from "./service.ts";
 
@@ -130,6 +135,30 @@ describe("project files", () => {
     await writeFile(join(directory, "outside.pdf"), pdf);
     await symlink(join(directory, "outside.pdf"), join(root, "linked.pdf"));
     expect((await preview("linked.pdf")).status).toBe("error");
+  });
+  it("downloads any regular file whole, without following links or growing past the limit", async () => {
+    const download = (path: string) => request({ kind: "download", projectId, epoch, path });
+    const archive = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0xff, 0x00, 0x10]);
+    await writeFile(join(root, "bundle.zip"), archive);
+    expect(await download("bundle.zip")).toEqual({
+      status: "downloaded",
+      download: { path: "bundle.zip", data: archive.toString("base64"), size: archive.length },
+    });
+    expect(await download("hello.ts")).toMatchObject({
+      status: "downloaded",
+      download: { data: Buffer.from("export const hello = 1;\n").toString("base64") },
+    });
+    await writeFile(join(root, "huge.bin"), Buffer.alloc(MAX_DOWNLOAD_BYTES + 1));
+    expect(await download("huge.bin")).toMatchObject({
+      status: "error",
+      message: expect.stringContaining("download limit"),
+    });
+    await mkdir(join(root, "folder"));
+    expect(await download("folder")).toMatchObject({ status: "error" });
+    await writeFile(join(directory, "secret.txt"), "outside");
+    await symlink(join(directory, "secret.txt"), join(root, "secret.txt"));
+    expect((await download("secret.txt")).status).toBe("error");
+    expect((await download("../secret.txt")).status).toBe("error");
   });
   it("creates empty files and folders inside existing project directories", async () => {
     expect(
