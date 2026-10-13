@@ -32,6 +32,10 @@ export {
   dismissNativeNotification,
   onNativeNotificationClick,
   playNativeSound,
+  nativeNotificationAccess,
+  requestNativeNotificationAccess,
+  openNativeNotificationSettings,
+  type NativeNotificationAccess,
 } from "./notifications";
 
 export { nativeWindow, type WindowChromeState, type ResizeDirection } from "./window";
