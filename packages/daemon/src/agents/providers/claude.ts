@@ -325,6 +325,7 @@ export class ClaudeProvider extends EventProvider {
       history: true,
       childHistory: true,
       steer: true,
+      steerAttachments: true,
       importSessions: true,
       fork: true,
       rewind: ["files"],
@@ -490,7 +491,12 @@ export class ClaudeProvider extends EventProvider {
         session_id: this.threadId,
         parent_tool_use_id: null,
         priority: "next",
-        message: { role: "user", content: [{ type: "text", text: string(p["text"]) }] },
+        message: {
+          role: "user",
+          content: p["input"]
+            ? await this.content(array(p["input"]))
+            : [{ type: "text", text: string(p["text"]) }],
+        },
       });
       this.wake?.();
       return {};
@@ -533,8 +539,27 @@ export class ClaudeProvider extends EventProvider {
     }
     this.controlsChanged();
     const command = method === "command/execute" ? string(p["name"]) : null;
+    const content = await this.content(array(p["input"]));
+    // A message sent just as Claude woke up by itself waits behind that turn in Claude Code, and
+    // its reply arrives as the next turn Claude starts.
+    const result =
+      this.turnId && this.turnId === this.selfStartedTurn
+        ? { turn: { id: this.turnId, status: "inProgress", items: [] } }
+        : this.startTurn(command);
+    this.pending.push({
+      type: "user",
+      uuid: this.turnId as `${string}-${string}-${string}-${string}-${string}`,
+      session_id: this.threadId,
+      parent_tool_use_id: null,
+      message: { role: "user", content },
+    });
+    this.wake?.();
+    return result;
+  }
+  /** Message content from Concors input items; images go as images to models that read them. */
+  private async content(input: unknown[]): Promise<SDKUserMessage["message"]["content"]> {
     const content: SDKUserMessage["message"]["content"] = [];
-    for (const value of array(p["input"])) {
+    for (const value of input) {
       const item = object(value);
       if (item["type"] === "text") content.push({ type: "text", text: string(item["text"]) });
       if (item["type"] === "localImage") {
@@ -565,21 +590,7 @@ export class ClaudeProvider extends EventProvider {
         });
       }
     }
-    // A message sent just as Claude woke up by itself waits behind that turn in Claude Code, and
-    // its reply arrives as the next turn Claude starts.
-    const result =
-      this.turnId && this.turnId === this.selfStartedTurn
-        ? { turn: { id: this.turnId, status: "inProgress", items: [] } }
-        : this.startTurn(command);
-    this.pending.push({
-      type: "user",
-      uuid: this.turnId as `${string}-${string}-${string}-${string}-${string}`,
-      session_id: this.threadId,
-      parent_tool_use_id: null,
-      message: { role: "user", content },
-    });
-    this.wake?.();
-    return result;
+    return content;
   }
   private startTurn(command: string | null = null) {
     const result = this.begin();

@@ -167,11 +167,12 @@ export class CodexAppServer {
       return this.rpc("thread/rollback", { threadId: p.threadId, numTurns: p.numTurns });
     }
     if (method === "session/steer") {
-      const p = params as { threadId: string; turnId: string; text: string };
+      const p = params as { threadId: string; turnId: string; text: string; input?: unknown[] };
+      // turn/steer takes the same input items as turn/start, so images arrive as they would there.
       return this.rpc("turn/steer", {
         threadId: p.threadId,
         expectedTurnId: p.turnId,
-        input: [{ type: "text", text: p.text }],
+        input: p.input ?? [{ type: "text", text: p.text }],
       });
     }
     if (method === "session/controls")
@@ -185,6 +186,7 @@ export class CodexAppServer {
           fork: true,
           rewind: ["conversation"],
           steer: true,
+          steerAttachments: true,
           mcp: true,
           mcpStatus: true,
           commands: [{ name: "compact", description: "Summarize earlier context in this session" }],

@@ -254,6 +254,53 @@ export class AgentManager {
       });
     }
   }
+  /**
+   * Sends a message into the running turn, with any attachments saved as a sent message's are.
+   * A queued follow-up leaves the queue only once the agent has taken it. The message is shown
+   * as its own item, which keeps the attachments so the chat can open them later.
+   */
+  private async steer(
+    info: AgentInfo,
+    runtime: Runtime,
+    turnId: string,
+    requestId: string,
+    text: string,
+    attachments: AgentAttachment[],
+    queued?: { remove: string; request: AgentRequest },
+  ): Promise<void> {
+    const uploaded = attachments.length
+      ? await saveAttachments(this.#store.attachmentsDirectory, info.id, attachments)
+      : [];
+    await runtime.provider.request("session/steer", {
+      threadId: info.threadId,
+      turnId,
+      text,
+      input: [...(text ? [{ type: "text", text }] : []), ...uploaded],
+    });
+    if (queued) {
+      const current = this.#store.agent(info.id);
+      const next = {
+        ...current,
+        queue: (current.queue ?? []).filter((entry) => entry.id !== queued.remove),
+        revision: current.revision + 1,
+      };
+      this.#store.reserveAgentAction(queued.request, next, { remove: queued.remove });
+      this.#emit({ type: "agent.state", agent: next });
+    }
+    const itemId = `steer:${requestId}`;
+    if (attachments.length) this.#store.saveAgentItemImages(info.id, itemId, attachments);
+    this.item(info.id, turnId, {
+      id: itemId,
+      kind: "user",
+      title: "You · steering",
+      ...(attachments.length
+        ? { attachments: attachments.map(({ name, mime }) => ({ name, mime })) }
+        : {}),
+      text,
+      detail: "",
+      status: "completed",
+    });
+  }
   private update(id: string, patch: Partial<AgentInfo>): AgentInfo {
     const prior = this.#store.agent(id);
     const next = {
@@ -1258,22 +1305,21 @@ export class AgentManager {
           throw new Error(
             "Steering is only available during an active turn and does not run slash commands.",
           );
+        if (op.attachments?.length && !info.controls.steerAttachments)
+          throw new Error(
+            "This agent cannot take attachments mid-turn. Queue the message instead.",
+          );
         this.#store.reserveAgentAction(request, info);
         const runtime = this.#runtimes.get(info.id);
         if (!runtime) throw new Error("Agent disconnected. The steering message was not replayed.");
-        await runtime.provider.request("session/steer", {
-          threadId: info.threadId,
-          turnId: op.turnId,
-          text: op.text,
-        });
-        this.item(info.id, op.turnId, {
-          id: `steer:${request.requestId}`,
-          kind: "user",
-          title: "You · steering",
-          text: op.text,
-          detail: "",
-          status: "completed",
-        });
+        await this.steer(
+          info,
+          runtime,
+          op.turnId,
+          request.requestId,
+          op.text,
+          op.attachments ?? [],
+        );
         return this.result(request, info.id);
       }
       if (op.kind === "rewind") {
@@ -1329,39 +1375,28 @@ export class AgentManager {
           !info.controls?.steer ||
           info.turnId !== op.turnId ||
           info.status !== "working" ||
-          entry.attachments.length ||
-          !entry.text.trim() ||
+          (entry.attachments.length && !info.controls.steerAttachments) ||
+          (!entry.text.trim() && !entry.attachments.length) ||
           entry.text.trim().startsWith("/")
         )
           throw new Error(
-            "Only a text follow-up can steer, and only while the agent works. It stays queued.",
+            entry.attachments.length && !info.controls?.steerAttachments
+              ? "This agent cannot take attachments mid-turn. The follow-up stays queued."
+              : "A follow-up can steer only while the agent works, and not as a slash command. It stays queued.",
           );
+        const queued = this.#store.queuedRequest(entry.id, info.id)?.operation;
+        const attachments = queued?.kind === "send" ? (queued.attachments ?? []) : [];
+        if (attachments.length !== entry.attachments.length)
+          throw new Error("Queued message is unavailable. Remove it and try again.");
         // Held like a delivery, so the queue cannot also send it should the turn end meanwhile.
         if (this.draining.has(info.id)) throw new Error("That follow-up is being sent already.");
         const runtime = this.#runtimes.get(info.id);
         if (!runtime) throw new Error("Agent disconnected. The follow-up stays queued.");
         this.draining.add(info.id);
         try {
-          await runtime.provider.request("session/steer", {
-            threadId: info.threadId,
-            turnId: op.turnId,
-            text: entry.text,
-          });
-          const current = this.#store.agent(info.id);
-          const next = {
-            ...current,
-            queue: (current.queue ?? []).filter((queued) => queued.id !== op.id),
-            revision: current.revision + 1,
-          };
-          this.#store.reserveAgentAction(request, next, { remove: op.id });
-          this.#emit({ type: "agent.state", agent: next });
-          this.item(info.id, op.turnId, {
-            id: `steer:${request.requestId}`,
-            kind: "user",
-            title: "You · steering",
-            text: entry.text,
-            detail: "",
-            status: "completed",
+          await this.steer(info, runtime, op.turnId, request.requestId, entry.text, attachments, {
+            remove: op.id,
+            request,
           });
         } finally {
           this.draining.delete(info.id);

@@ -1053,6 +1053,34 @@ it("steers a running Claude turn with a message Claude reads at its next step", 
     parent_tool_use_id: null,
     message: { role: "user", content: [{ type: "text", text: "Focus on the parser" }] },
   });
+  // A steered message carries its attachments as a sent one does: images as image blocks.
+  expect(object(await provider.request("session/controls"))["steerAttachments"]).toBe(true);
+  const png = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==",
+    "base64",
+  );
+  await writeFile(join(directory, "shot.png"), png);
+  await provider.request("session/steer", {
+    turnId,
+    text: "i mean for this",
+    input: [
+      { type: "text", text: "i mean for this" },
+      { type: "localImage", path: join(directory, "shot.png") },
+    ],
+  });
+  await expect.poll(() => prompts).toHaveLength(3);
+  expect(prompts[2]).toMatchObject({
+    priority: "next",
+    message: {
+      content: [
+        { type: "text", text: "i mean for this" },
+        {
+          type: "image",
+          source: { type: "base64", media_type: "image/png", data: png.toString("base64") },
+        },
+      ],
+    },
+  });
 });
 
 it("reports a Claude plan limit beside the turn so the chat can offer another account", async () => {
