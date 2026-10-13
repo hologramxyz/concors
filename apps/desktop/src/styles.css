@@ -496,6 +496,8 @@ html[data-pane-resizing="row"] * {
  * The desktop composer keeps every control and the send button on one row at any pane width.
  * Labelled pickers give up width first, truncating their labels; once even those would crowd the
  * row they show only their icons. Their names stay in the tooltip and the accessible name. The
+ * model is the exception: it is the one label people read at a glance, so it keeps truncating and
+ * gives way to its icon only in the narrowest panes. The
  * form is the container because a container query cannot restyle the toolbar's own gap; the
  * toolbar is 26px narrower than the form (its padding, border and inset).
  */
@@ -512,14 +514,25 @@ html[data-pane-resizing="row"] * {
   min-width: 0;
 }
 @container agent-composer (max-width: 585px) {
-  .agent-composer-toolbar .agent-control-value {
+  .agent-composer-toolbar .agent-control-value:not(.agent-control-primary) {
     width: 28px;
     min-width: 28px;
     padding-inline: 0;
     flex-shrink: 0;
   }
-  .agent-composer-toolbar .agent-control-value > span,
+  .agent-composer-toolbar .agent-control-value:not(.agent-control-primary) > span,
   .agent-composer-toolbar .composer-update-label > span {
+    display: none;
+  }
+}
+@container agent-composer (max-width: 400px) {
+  .agent-composer-toolbar .agent-control-primary {
+    width: 28px;
+    min-width: 28px;
+    padding-inline: 0;
+    flex-shrink: 0;
+  }
+  .agent-composer-toolbar .agent-control-primary > span {
     display: none;
   }
 }
