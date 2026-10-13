@@ -3,19 +3,30 @@ import {
   showNativeNotification,
   dismissNativeNotification,
   onNativeNotificationClick,
+  nativeNotificationAccess,
+  requestNativeNotificationAccess,
+  openNativeNotificationSettings,
 } from "@/tauri";
+import type { NotificationAccess } from "./access";
 import type { Notice } from "./engine";
 const clicks = new Map<string, () => void>();
 let listening: Promise<() => void> | null = null;
-export function notificationPermission(): NotificationPermission | "unsupported" {
-  if (isTauri()) return "granted";
-  return typeof Notification === "undefined" ? "unsupported" : Notification.permission;
+function browserAccess(): NotificationAccess {
+  if (typeof Notification === "undefined") return "unsupported";
+  if (Notification.permission === "granted") return "allowed";
+  return Notification.permission === "denied" ? "blocked" : "not_asked";
 }
-export async function requestNotificationPermission(): Promise<boolean> {
-  if (isTauri()) return true;
-  return (
-    typeof Notification !== "undefined" && (await Notification.requestPermission()) === "granted"
-  );
+export async function notificationAccess(): Promise<NotificationAccess> {
+  return isTauri() ? nativeNotificationAccess() : browserAccess();
+}
+/** Shows the system or browser prompt when it has not been answered yet. */
+export async function requestNotificationAccess(): Promise<NotificationAccess> {
+  if (isTauri()) return requestNativeNotificationAccess();
+  if (typeof Notification !== "undefined") await Notification.requestPermission();
+  return browserAccess();
+}
+export async function openNotificationSettings(): Promise<void> {
+  await openNativeNotificationSettings();
 }
 export async function desktopNotice(notice: Notice, onClick: () => void): Promise<() => void> {
   if (isTauri()) {
@@ -33,7 +44,13 @@ export async function desktopNotice(notice: Notice, onClick: () => void): Promis
       void dismissNativeNotification(notice.id).catch(() => undefined);
     };
   }
-  if (notificationPermission() !== "granted") return () => undefined;
+  const access = browserAccess();
+  if (access === "blocked")
+    throw new Error(
+      "Your browser is blocking notifications from Concors. Allow them in this site’s settings, then reload.",
+    );
+  if (access !== "allowed")
+    throw new Error("Turn on Desktop notifications in Settings → Notifications to allow them.");
   const notification = new Notification(notice.title, {
     body: notice.body,
     tag: notice.id,

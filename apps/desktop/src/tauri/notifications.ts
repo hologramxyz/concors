@@ -22,3 +22,14 @@ export async function onNativeNotificationClick(
 ): Promise<() => void> {
   return listen<string>("agent-notification-click", (event) => listener(event.payload));
 }
+/** What the operating system lets Concors show; see `Access` in `notifications.rs`. */
+export type NativeNotificationAccess = "allowed" | "quiet" | "blocked" | "not_asked" | "unknown";
+export async function nativeNotificationAccess(): Promise<NativeNotificationAccess> {
+  return invoke("notification_access");
+}
+export async function requestNativeNotificationAccess(): Promise<NativeNotificationAccess> {
+  return invoke("request_notification_access");
+}
+export async function openNativeNotificationSettings(): Promise<void> {
+  await invoke("open_notification_settings");
+}
