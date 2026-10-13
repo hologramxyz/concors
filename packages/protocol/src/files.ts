@@ -4,6 +4,16 @@ export const MAX_FILE_BYTES = 1024 * 1024;
 export const MAX_DIRECTORY_ENTRIES = 2000;
 export const PROJECT_ICON_CAPABILITY = "project-icons";
 export const MAX_PROJECT_ICON_BYTES = 256 * 1024;
+/** PDFs and images open read-only in a file tab, sent whole as base64. */
+export const FILE_PREVIEW_CAPABILITY = "file-previews";
+export const MAX_PREVIEW_BYTES = 20 * 1024 * 1024;
+export const PREVIEW_MIME_TYPES = [
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+] as const;
 export const ProjectIconSchema = z.object({
   isGit: z.boolean(),
   source: z
@@ -27,6 +37,7 @@ export const FileRequestSchema = z.object({
     z.object({ kind: z.literal("project-icon"), ...Target, path: z.literal("") }),
     z.object({ kind: z.literal("list"), ...Target }),
     z.object({ kind: z.literal("read"), ...Target }),
+    z.object({ kind: z.literal("preview"), ...Target }),
     z.object({
       kind: z.literal("create"),
       ...Target,
@@ -50,6 +61,16 @@ export const ProjectFileSchema = z.object({
   size: z.number().int().nonnegative(),
 });
 export type ProjectFile = z.infer<typeof ProjectFileSchema>;
+export const FilePreviewSchema = z.object({
+  path: Path,
+  mime: z.enum(PREVIEW_MIME_TYPES),
+  data: z
+    .string()
+    .max(Math.ceil(MAX_PREVIEW_BYTES / 3) * 4)
+    .regex(/^[A-Za-z0-9+/]*=*$/),
+  size: z.number().int().nonnegative(),
+});
+export type FilePreview = z.infer<typeof FilePreviewSchema>;
 export const FileEntrySchema = z.object({
   name: z.string(),
   path: Path,
@@ -67,6 +88,7 @@ export const FileResultSchema = z.object({
       truncated: z.boolean(),
     }),
     z.object({ status: z.literal("read"), file: ProjectFileSchema }),
+    z.object({ status: z.literal("preview"), preview: FilePreviewSchema }),
     z.object({ status: z.literal("written"), file: ProjectFileSchema }),
     z.object({ status: z.literal("created"), entry: FileEntrySchema }),
     z.object({ status: z.literal("conflict"), message: z.string() }),

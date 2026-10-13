@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from "node:fs/
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { MAX_FILE_BYTES, type FileOperation } from "@concors/protocol";
+import { MAX_FILE_BYTES, MAX_PREVIEW_BYTES, type FileOperation } from "@concors/protocol";
 import { WorkspaceStore } from "../workspace/store.ts";
 import { ProjectFiles } from "./service.ts";
 
@@ -97,6 +97,39 @@ describe("project files", () => {
     const content = "\uFEFFconst café = 1;\r\n";
     await writeFile(join(root, "hello.ts"), content);
     expect(await read()).toMatchObject({ status: "read", file: { content } });
+  });
+  it("previews PDFs and images by their contents, whole and read-only", async () => {
+    const preview = (path: string) => request({ kind: "preview", projectId, epoch, path });
+    const pdf = Buffer.from("%PDF-1.7\n%\xe2\xe3\xcf\xd3\n1 0 obj\n<<>>\nendobj\n", "latin1");
+    await writeFile(join(root, "doc.pdf"), pdf);
+    expect(await preview("doc.pdf")).toEqual({
+      status: "preview",
+      preview: {
+        path: "doc.pdf",
+        mime: "application/pdf",
+        data: pdf.toString("base64"),
+        size: pdf.length,
+      },
+    });
+    // The signature decides, not the name: a renamed PNG previews, renamed text does not.
+    await writeFile(
+      join(root, "shot.pdf"),
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]),
+    );
+    expect(await preview("shot.pdf")).toMatchObject({ preview: { mime: "image/png" } });
+    await writeFile(join(root, "notes.pdf"), "just text");
+    expect(await preview("notes.pdf")).toMatchObject({
+      status: "error",
+      message: expect.stringContaining("PDF, PNG, JPEG, GIF and WebP"),
+    });
+    await writeFile(join(root, "huge.pdf"), Buffer.alloc(MAX_PREVIEW_BYTES + 1));
+    expect(await preview("huge.pdf")).toMatchObject({
+      status: "error",
+      message: expect.stringContaining("preview limit"),
+    });
+    await writeFile(join(directory, "outside.pdf"), pdf);
+    await symlink(join(directory, "outside.pdf"), join(root, "linked.pdf"));
+    expect((await preview("linked.pdf")).status).toBe("error");
   });
   it("creates empty files and folders inside existing project directories", async () => {
     expect(
