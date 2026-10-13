@@ -1,10 +1,8 @@
 import { StartupScreen } from "@/startup/startup-screen";
 import { BrandMark } from "@/components/brand-mark";
 import type { NativeSignInChoice } from "@concors/api-client";
-import { ACCOUNT_NOT_FOUND } from "@concors/client-core";
 import { Mail, RefreshCw } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { cn } from "cn";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,8 +10,6 @@ import { Input } from "@/components/ui/input";
 import { describeAuthError, type AuthState } from "./auth-state.ts";
 import { GitHubIcon, GoogleIcon } from "./provider-icons.tsx";
 import { SignInError } from "./sign-in.ts";
-
-type Intent = NativeSignInChoice["intent"];
 
 interface AuthScreenProps {
   /** Anything but `signed-in`; the app itself renders once the session is valid. */
@@ -34,14 +30,14 @@ const WAITING: Record<NativeSignInChoice["method"], string> = {
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
- * The only thing a signed-out user sees. They choose to sign in or sign up, then how: GitHub,
- * Google or an emailed code. The system browser opens straight on that method, on the API's own
- * page. While a saved session is being checked it shows a quiet splash instead.
+ * The only thing a signed-out user sees. They choose how to continue: GitHub, Google or an emailed
+ * code. There is no separate sign-up; a returning person reaches their account and anyone new gets
+ * one. The system browser opens straight on that method, on the API's own page. While a saved
+ * session is being checked it shows a quiet splash instead.
  */
 export function AuthScreen({ state, onSignIn, signInUnavailable, onRetry }: AuthScreenProps) {
-  const [intent, setIntent] = useState<Intent>("sign-in");
   const [email, setEmail] = useState("");
-  const [error, setError] = useState<{ message: string; noAccount: boolean } | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [waiting, setWaiting] = useState<NativeSignInChoice["method"] | null>(null);
   const attempt = useRef<AbortController | null>(null);
 
@@ -59,10 +55,7 @@ export function AuthScreen({ state, onSignIn, signInUnavailable, onRetry }: Auth
       .catch((cause: unknown) => {
         // Cancelling is a choice, not a failure worth an error message.
         if (controller.signal.aborted || (cause instanceof SignInError && cause.cancelled)) return;
-        setError({
-          message: describeAuthError(cause),
-          noAccount: cause instanceof SignInError && cause.code === ACCOUNT_NOT_FOUND,
-        });
+        setError(describeAuthError(cause));
       })
       .finally(() => {
         if (attempt.current === controller) attempt.current = null;
@@ -70,22 +63,15 @@ export function AuthScreen({ state, onSignIn, signInUnavailable, onRetry }: Auth
       });
   };
 
-  const switchTo = (next: Intent) => {
-    setIntent(next);
-    setError(null);
-  };
-
   const submitEmail = (event: FormEvent) => {
     event.preventDefault();
     const address = email.trim();
     if (!EMAIL_PATTERN.test(address)) {
-      setError({ message: "Enter a valid email address.", noAccount: false });
+      setError("Enter a valid email address.");
       return;
     }
-    signIn({ method: "email", email: address, intent });
+    signIn({ method: "email", email: address });
   };
-
-  const signingUp = intent === "sign-up";
 
   return (
     <main className="flex h-dvh scroll-py-6 items-start justify-center overflow-y-auto bg-background p-6">
@@ -95,38 +81,11 @@ export function AuthScreen({ state, onSignIn, signInUnavailable, onRetry }: Auth
           <span className="text-[23px] font-semibold tracking-[-.06em]">concors</span>
         </div>
 
-        <div
-          role="tablist"
-          aria-label="Sign in or sign up"
-          className="mb-6 grid grid-cols-2 rounded-lg border bg-muted/40 p-0.5"
-        >
-          {(["sign-in", "sign-up"] as const).map((option) => (
-            <button
-              key={option}
-              type="button"
-              role="tab"
-              aria-selected={intent === option}
-              disabled={waiting !== null}
-              onClick={() => switchTo(option)}
-              className={cn(
-                "flex h-7 items-center justify-center rounded-md text-ui font-medium disabled:opacity-60",
-                intent === option
-                  ? "bg-background text-foreground shadow-xs"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {option === "sign-in" ? "Sign in" : "Sign up"}
-            </button>
-          ))}
-        </div>
-
-        <h1 className="text-xl font-semibold tracking-tight">
-          {signingUp ? "Create your Concors account" : "Sign in to Concors"}
-        </h1>
+        <h1 className="text-xl font-semibold tracking-tight">Continue to Concors</h1>
         <p className="mt-1.5 text-sm text-muted-foreground">
-          {signingUp
-            ? "Choose how you want to sign up. You'll finish in your browser."
-            : "Use the method you signed up with. You'll finish in your browser."}
+          {
+            "Use the account you signed up with. If you're new, this creates one. You'll finish in your browser."
+          }
         </p>
 
         {state.status === "unavailable" && (
@@ -164,7 +123,7 @@ export function AuthScreen({ state, onSignIn, signInUnavailable, onRetry }: Auth
             <Button
               variant="outline"
               className="min-h-9 w-full"
-              onClick={() => signIn({ method: "github", intent })}
+              onClick={() => signIn({ method: "github" })}
             >
               <GitHubIcon className="size-4" />
               Continue with GitHub
@@ -172,7 +131,7 @@ export function AuthScreen({ state, onSignIn, signInUnavailable, onRetry }: Auth
             <Button
               variant="outline"
               className="min-h-9 w-full"
-              onClick={() => signIn({ method: "google", intent })}
+              onClick={() => signIn({ method: "google" })}
             >
               <GoogleIcon className="size-4" />
               Continue with Google
@@ -204,16 +163,7 @@ export function AuthScreen({ state, onSignIn, signInUnavailable, onRetry }: Auth
 
         {error && (
           <div role="alert" className="mt-4 text-sm text-destructive">
-            {error.message}
-            {error.noAccount && (
-              <Button
-                variant="link"
-                className="ml-1 h-auto min-h-0 p-0 align-baseline"
-                onClick={() => switchTo("sign-up")}
-              >
-                Sign up instead
-              </Button>
-            )}
+            {error}
           </div>
         )}
       </div>

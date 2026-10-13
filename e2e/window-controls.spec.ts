@@ -79,11 +79,11 @@ test("browser and decorated native windows retain their own window controls", as
     route.fulfill({ status: 401, json: { message: "Sign in" } }),
   );
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Sign in to Concors" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Continue to Concors" })).toBeVisible();
   await expect(page.getByRole("group", { name: "Window controls" })).toHaveCount(0);
   await native(page, 7430, true);
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Sign in to Concors" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Continue to Concors" })).toBeVisible();
   await expect(page.getByRole("group", { name: "Window controls" })).toHaveCount(0);
 });
 
