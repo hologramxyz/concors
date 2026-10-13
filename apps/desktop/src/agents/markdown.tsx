@@ -1,5 +1,5 @@
 import { useContext } from "react";
-import { FileLinkContext } from "@/files/context";
+import { FileLinkContext, FileLinkTargetContext } from "@/files/context";
 import {
   Children,
   createContext,
@@ -13,10 +13,12 @@ import {
 import Markdown, { defaultUrlTransform, type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Check, Copy, ImageOff } from "lucide-react";
-import type { AgentItem } from "@concors/protocol";
+import { FILE_DOWNLOAD_CAPABILITY, type AgentItem } from "@concors/protocol";
 import { copyText } from "@/lib/clipboard";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
-import { openPreview } from "@/tauri/open-external";
+import { openExternal, openPreview } from "@/tauri/open-external";
+import { canSaveFiles, saveFile } from "@/tauri";
+import { LinkMenu } from "./link-menu";
 import { isFileLink, localPreviewLink, previewLinkUrl } from "./preview-links";
 import { InlineImage } from "./attachment-preview";
 import { messageImageIndex } from "./message-images";
@@ -108,6 +110,7 @@ function MarkdownImage({ src, alt }: ComponentProps<"img">) {
 
 function MarkdownLink({ children: content, href, node: _node, ...props }: LinkProps) {
   const openFile = useContext(FileLinkContext);
+  const fileTarget = useContext(FileLinkTargetContext);
   const connection = useContext(TerminalConnectionContext);
   const { sourcePath } = useContext(MarkdownScope);
   const preview = href && connection ? localPreviewLink(href) : null;
@@ -117,23 +120,26 @@ function MarkdownLink({ children: content, href, node: _node, ...props }: LinkPr
       : null;
   // The preview address carries access in its fragment, so it is only used on click and never
   // lands in the DOM. A preview that stopped listening simply does not open.
-  if (previewUrl && preview)
+  if (href && previewUrl && preview) {
+    const openLink = () =>
+      void openPreview(preview.preview, previewLinkUrl(preview, previewUrl)).catch(() => undefined);
     return (
-      <a
-        {...props}
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer"
-        onClick={(event) => {
-          event.preventDefault();
-          void openPreview(preview.preview, previewLinkUrl(preview, previewUrl)).catch(
-            () => undefined,
-          );
-        }}
-      >
-        {content}
-      </a>
+      <LinkMenu open={openLink} openLabel="Open preview" copy={href} copyLabel="Copy link">
+        <a
+          {...props}
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(event) => {
+            event.preventDefault();
+            openLink();
+          }}
+        >
+          {content}
+        </a>
+      </LinkMenu>
     );
+  }
   const open = href && openFile ? openFile(href, sourcePath) : null;
   // A file the chat cannot open (outside the project, or no project at all) reads as plain text:
   // following it would only land on a broken page inside the app.
@@ -146,20 +152,56 @@ function MarkdownLink({ children: content, href, node: _node, ...props }: LinkPr
         {content}
       </span>
     );
+  const target = open && fileTarget ? fileTarget(href, sourcePath) : null;
+  const download =
+    target && connection && canSaveFiles
+      ? async () => {
+          if (
+            connection.state.status !== "ready" ||
+            !connection.state.daemon.capabilities?.includes(FILE_DOWNLOAD_CAPABILITY)
+          )
+            throw new Error(
+              connection.state.status === "ready"
+                ? "Update this machine’s Concors service from Machines to download files."
+                : "Reconnect to this machine to download the file.",
+            );
+          const { outcome } = await connection.requestFile(
+            { kind: "download", ...target },
+            crypto.randomUUID(),
+          );
+          if (outcome.status !== "downloaded")
+            throw new Error(
+              "message" in outcome ? outcome.message : "Could not download this file.",
+            );
+          await saveFile({
+            name: target.path.split("/").pop() || "download",
+            mime: "application/octet-stream",
+            data: outcome.download.data,
+          });
+        }
+      : undefined;
   return (
-    <a
-      {...props}
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      onClick={(event) => {
-        if (!open) return;
-        event.preventDefault();
-        open();
-      }}
+    <LinkMenu
+      open={open ?? (() => void openExternal(href).catch(() => undefined))}
+      openLabel={open ? "Open file" : "Open in browser"}
+      copy={target?.path ?? href}
+      copyLabel={open ? "Copy path" : "Copy link"}
+      download={download}
     >
-      {content}
-    </a>
+      <a
+        {...props}
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(event) => {
+          if (!open) return;
+          event.preventDefault();
+          open();
+        }}
+      >
+        {content}
+      </a>
+    </LinkMenu>
   );
 }
 type LinkProps = ComponentProps<"a"> & { node?: unknown };
