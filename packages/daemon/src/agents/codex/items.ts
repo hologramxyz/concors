@@ -2,6 +2,7 @@ import { planSteps } from "../providers/plans.ts";
 import { z } from "zod";
 import { AgentActivityStepSchema, SUB_AGENT_STEPS, type AgentItem } from "@concors/protocol";
 import { normalizeCommandExecutionCommand } from "./command-display.ts";
+import { generatedImage, generatedImageSource } from "../images.ts";
 
 const Item = z
   .object({ id: z.string(), type: z.string(), status: z.string().optional() })
@@ -210,6 +211,39 @@ export function mapCodexItem(
         title: text(item["title"]) || "Agent update",
         text: text(item["text"]),
       };
+    case "imageGeneration": {
+      // Shown as Codex's own message with the picture in it, where the chat keeps and enlarges
+      // images. The base64 result never goes into the item: it is megabytes the chat stores and
+      // sends to every client. The daemon keeps the image itself beside the item.
+      const saved = text(item["savedPath"]);
+      const failure = z.object({ type: z.string() }).safeParse(item["failure"]);
+      if (failure.success || status === "failed")
+        return {
+          ...base,
+          status: "failed",
+          kind: "assistant",
+          title: "Codex",
+          text:
+            failure.success && failure.data.type === "usageLimitExceeded"
+              ? "The image could not be generated: the image generation limit was reached."
+              : "The image could not be generated.",
+        };
+      if (!completed)
+        return { ...base, kind: "assistant", title: "Codex", text: "Generating an image…" };
+      const alt = (text(item["revisedPrompt"]) || "Generated image")
+        .replace(/[[\]\\\n]/g, " ")
+        .slice(0, 300);
+      return {
+        ...base,
+        kind: "assistant",
+        title: "Codex",
+        text: generatedImage(item)
+          ? `![${alt}](<${generatedImageSource(item)}>)`
+          : saved
+            ? `Generated an image, saved to \`${saved}\`. It is too large to show here.`
+            : "Generated an image that is too large to show here.",
+      };
+    }
     case "contextCompaction":
       return {
         ...base,

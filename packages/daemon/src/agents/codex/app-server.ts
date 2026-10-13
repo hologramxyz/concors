@@ -30,6 +30,13 @@ interface Pending {
 /** Codex's newline-delimited JSON-RPC transport, following Paseo's app-server separation.
  * Owns only transport lifetime. Session persistence and UI decisions belong to the caller.
  */
+/**
+ * The largest line Codex may send. An image Codex generates arrives whole, as base64, in one
+ * item frame, and a thread read repeats it for every image in the history; 2 MiB ended the whole
+ * connection on the first picture. What the daemon writes to Codex stays at 2 MiB.
+ */
+const MAX_READ_FRAME = 64 * 1024 * 1024;
+
 export class CodexAppServer {
   private mcp: McpServer[];
   readonly #child: ChildProcessWithoutNullStreams;
@@ -317,8 +324,8 @@ export class CodexAppServer {
     while ((boundary = this.#buffer.indexOf("\n")) >= 0) {
       const line = this.#buffer.slice(0, boundary);
       this.#buffer = this.#buffer.slice(boundary + 1);
-      if (Buffer.byteLength(line) > 2 * 1024 * 1024) {
-        this.fail(new Error("Codex frame exceeds 2 MiB"));
+      if (Buffer.byteLength(line) > MAX_READ_FRAME) {
+        this.fail(new Error("Codex frame exceeds 64 MiB"));
         return;
       }
       if (!line.trim()) continue;
@@ -329,8 +336,8 @@ export class CodexAppServer {
         return;
       }
     }
-    if (Buffer.byteLength(this.#buffer) > 2 * 1024 * 1024)
-      this.fail(new Error("Codex frame exceeds 2 MiB"));
+    if (Buffer.byteLength(this.#buffer) > MAX_READ_FRAME)
+      this.fail(new Error("Codex frame exceeds 64 MiB"));
   }
   private receive(frame: z.infer<typeof Frame>): void {
     if (frame.method) {

@@ -41,7 +41,8 @@ readline.createInterface({input:process.stdin}).on('line', line => {
     case 'hang':break;
     case 'exit':process.exit(2);break;
     case 'bad':process.stdout.write('not-json\\n');break;
-    case 'large':process.stdout.write('x'.repeat(2*1024*1024+1));break;
+    case 'large':process.stdout.write('x'.repeat(64*1024*1024+1));break;
+    case 'image':send({method:'item/completed',params:{item:{id:'img',type:'imageGeneration',status:'completed',result:'A'.repeat(3*1024*1024)}}});send({id:frame.id,result:{}});break;
   }
 });
 `;
@@ -149,7 +150,20 @@ it("does not replay timed out requests and rejects all pending work on exit", as
 it.each(["bad", "large"])("fails closed on %s frames", async (method) => {
   const client = open();
   await client.initialize();
-  await expect(client.request(method)).rejects.toThrow(method === "bad" ? "Invalid" : "2 MiB");
+  await expect(client.request(method)).rejects.toThrow(method === "bad" ? "Invalid" : "64 MiB");
+});
+it("takes a generated image's multi-megabyte frame without ending the connection", async () => {
+  const client = open();
+  await client.initialize();
+  const items: unknown[] = [];
+  client.onNotification((method, params) => {
+    if (method === "item/completed") items.push(params);
+  });
+  await expect(client.request("image")).resolves.toEqual({});
+  expect(items).toHaveLength(1);
+  await expect(client.request("echo", { still: "connected" })).resolves.toEqual({
+    still: "connected",
+  });
 });
 
 it("rejects auto-review when the provider does not report a supported version", async () => {
