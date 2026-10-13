@@ -27,6 +27,7 @@ export function AgentModelPicker({
       <ControlPicker
         label="Agent and model"
         showValue={showValue}
+        primary
         selectedLabel={selection.label}
         value={selection.value}
         icon={

@@ -22,6 +22,9 @@ test("the composer keeps its controls and send button on one row at every width"
     await expect(composer).toBeEnabled();
     const effort = page.getByRole("button", { name: "Thinking effort", exact: true });
     const effortLabel = effort.locator("span");
+    const modelLabel = page
+      .getByRole("button", { name: "Agent and model", exact: true })
+      .locator("span");
     const toolbar = page.locator(".agent-composer-toolbar");
     /** Every visible control's vertical centre, and whether any control spills past the row. */
     const layout = () =>
@@ -49,6 +52,17 @@ test("the composer keeps its controls and send button on one row at every width"
     await expect(effort).toHaveAttribute("title", /^Thinking effort: /);
     await page.screenshot({ path: test.info().outputPath("composer-narrow.png") });
 
+    // A pane of about 470px, like three side by side: the model keeps its name, truncated if
+    // need be, after the other pickers have become icons.
+    await page.setViewportSize({ width: 760, height: 850 });
+    await expect.poll(layout).toEqual({ rows: 1, overflows: false });
+    await expect(effortLabel).toBeHidden();
+    await expect(modelLabel).toBeVisible();
+    expect(
+      await modelLabel.evaluate((label) => label.getBoundingClientRect().width),
+    ).toBeGreaterThan(40);
+    await page.screenshot({ path: test.info().outputPath("composer-pane.png") });
+
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole("button", { name: "Collapse sidebar", exact: true }).click();
     // Sidebar width animates after the click; wait for the composer to fit the viewport.
@@ -59,6 +73,7 @@ test("the composer keeps its controls and send button on one row at every width"
       })
       .toBeLessThanOrEqual(390);
     await expect.poll(layout).toEqual({ rows: 1, overflows: false });
+    await expect(modelLabel).toBeHidden();
     await page.screenshot({ path: test.info().outputPath("composer-phone.png") });
 
     await page.setViewportSize({ width: 1360, height: 850 });
