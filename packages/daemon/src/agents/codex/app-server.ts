@@ -45,7 +45,9 @@ export class CodexAppServer {
   readonly #requestHandler: RequestHandler | undefined;
   readonly #failures = new Set<(error: Error) => void>();
   #nextId = 0;
-  #buffer = "";
+  /** The unfinished line so far, as the chunks it arrived in, and its size in bytes. */
+  #partial: string[] = [];
+  #partialBytes = 0;
   #stderr = "";
   #failure: Error | null = null;
   #ready = false;
@@ -319,12 +321,18 @@ export class CodexAppServer {
   }
   private read(chunk: string): void {
     if (this.#failure) return;
-    this.#buffer += chunk;
+    // Only the new chunk is searched and measured, so a multi-megabyte frame (a generated image)
+    // costs time in proportion to its size rather than to its size squared.
+    let start = 0;
     let boundary: number;
-    while ((boundary = this.#buffer.indexOf("\n")) >= 0) {
-      const line = this.#buffer.slice(0, boundary);
-      this.#buffer = this.#buffer.slice(boundary + 1);
-      if (Buffer.byteLength(line) > MAX_READ_FRAME) {
+    while ((boundary = chunk.indexOf("\n", start)) >= 0) {
+      const tail = chunk.slice(start, boundary);
+      const bytes = this.#partialBytes + Buffer.byteLength(tail);
+      const line = this.#partial.length ? this.#partial.join("") + tail : tail;
+      this.#partial = [];
+      this.#partialBytes = 0;
+      start = boundary + 1;
+      if (bytes > MAX_READ_FRAME) {
         this.fail(new Error("Codex frame exceeds 64 MiB"));
         return;
       }
@@ -336,8 +344,11 @@ export class CodexAppServer {
         return;
       }
     }
-    if (Buffer.byteLength(this.#buffer) > MAX_READ_FRAME)
-      this.fail(new Error("Codex frame exceeds 64 MiB"));
+    const rest = chunk.slice(start);
+    if (!rest) return;
+    this.#partial.push(rest);
+    this.#partialBytes += Buffer.byteLength(rest);
+    if (this.#partialBytes > MAX_READ_FRAME) this.fail(new Error("Codex frame exceeds 64 MiB"));
   }
   private receive(frame: z.infer<typeof Frame>): void {
     if (frame.method) {
@@ -440,7 +451,8 @@ export class CodexAppServer {
       pending.reject(error);
     }
     this.#pending.clear();
-    this.#buffer = "";
+    this.#partial = [];
+    this.#partialBytes = 0;
     for (const listener of this.#failures) listener(error);
     this.#failures.clear();
     if (this.#child.exitCode === null && !this.#child.killed) killTree(this.#child);
