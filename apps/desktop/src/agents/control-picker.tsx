@@ -26,6 +26,7 @@ export function ControlPicker({
   groups,
   selectedGroupId,
   showValue = false,
+  primary = false,
   selectedLabel,
   onOpen,
   onGroupChange,
@@ -40,6 +41,8 @@ export function ControlPicker({
   groups?: ControlGroup[];
   selectedGroupId?: string;
   showValue?: boolean;
+  /** Keeps its label in narrow composers, where the other pickers show only their icons. */
+  primary?: boolean;
   selectedLabel?: string;
   onOpen?: () => void;
   onGroupChange?: (id: string) => void;
@@ -105,7 +108,7 @@ export function ControlPicker({
         data-value={value}
         title={`${label}: ${currentLabel}`}
         disabled={disabled}
-        className={`agent-control ${showValue ? "agent-control-value" : ""}`}
+        className={`agent-control ${showValue ? "agent-control-value" : ""} ${primary ? "agent-control-primary" : ""}`}
       >
         {icon}
         {showValue && <span className="truncate">{currentLabel}</span>}
