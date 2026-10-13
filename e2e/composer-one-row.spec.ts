@@ -43,13 +43,27 @@ test("the composer keeps its controls and send button on one row at every width"
     expect(await layout()).toEqual({ rows: 1, overflows: false });
     await page.screenshot({ path: test.info().outputPath("composer-wide.png") });
 
+    // Hovering names a control straight away. Its menu hides the tooltip, and picking an option
+    // does not bring it back as focus returns to the control.
+    const tooltip = page.getByRole("tooltip");
+    await effort.hover();
+    await expect(tooltip).toHaveText(/^Thinking effort: /);
+    await effort.click();
+    await expect(tooltip).toHaveCount(0);
+    await page.getByRole("option").last().click();
+    await expect(page.getByRole("option")).toHaveCount(0);
+    await expect(tooltip).toHaveCount(0);
+    await page.mouse.move(0, 0);
+
     // Labels give way to icons rather than pushing the send button onto a second row.
     for (const width of [900, 760, 640]) {
       await page.setViewportSize({ width, height: 850 });
       await expect.poll(layout).toEqual({ rows: 1, overflows: false });
     }
     await expect(effortLabel).toBeHidden();
-    await expect(effort).toHaveAttribute("title", /^Thinking effort: /);
+    await effort.hover();
+    await expect(page.getByRole("tooltip")).toHaveText(/^Thinking effort: /);
+    await page.mouse.move(0, 0);
     await page.screenshot({ path: test.info().outputPath("composer-narrow.png") });
 
     // A pane of about 470px, like three side by side: the model keeps its name, truncated if

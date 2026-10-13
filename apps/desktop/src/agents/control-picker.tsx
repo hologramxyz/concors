@@ -1,4 +1,5 @@
 import { useContext, useId, useState, useRef, useEffect, type ReactNode } from "react";
+import { ControlTooltip } from "./control-tooltip";
 import { ComposerSurfaceContext } from "./composer-expansion";
 import { Popover } from "radix-ui";
 import { ArrowLeft, Check, ChevronRight, Search } from "lucide-react";
@@ -51,7 +52,8 @@ export function ControlPicker({
   const [open, setOpen] = useState(false),
     [query, setQuery] = useState(""),
     [active, setActive] = useState(0),
-    [groupId, setGroupId] = useState(selectedGroupId);
+    [groupId, setGroupId] = useState(selectedGroupId),
+    [quiet, setQuiet] = useState(false);
   const id = useId();
   const composerSurface = useContext(ComposerSurfaceContext);
   const trigger = useRef<HTMLButtonElement>(null),
@@ -95,24 +97,28 @@ export function ControlPicker({
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
+        if (next) setQuiet(true);
         if (next) onOpen?.();
         setQuery("");
         setActive(0);
         setGroupId(selectedGroupId);
       }}
     >
-      <Popover.Trigger
-        ref={trigger}
-        type="button"
-        aria-label={label}
-        data-value={value}
-        title={`${label}: ${currentLabel}`}
-        disabled={disabled}
-        className={`agent-control ${showValue ? "agent-control-value" : ""} ${primary ? "agent-control-primary" : ""}`}
-      >
-        {icon}
-        {showValue && <span className="truncate">{currentLabel}</span>}
-      </Popover.Trigger>
+      <ControlTooltip text={`${label}: ${currentLabel}`} hidden={open || quiet}>
+        <Popover.Trigger
+          ref={trigger}
+          type="button"
+          aria-label={label}
+          data-value={value}
+          disabled={disabled}
+          className={`agent-control ${showValue ? "agent-control-value" : ""} ${primary ? "agent-control-primary" : ""}`}
+          onPointerLeave={() => setQuiet(false)}
+          onBlur={() => setQuiet(false)}
+        >
+          {icon}
+          {showValue && <span className="truncate">{currentLabel}</span>}
+        </Popover.Trigger>
+      </ControlTooltip>
       <Popover.Portal>
         <Popover.Content
           data-composer-surface={composerSurface}

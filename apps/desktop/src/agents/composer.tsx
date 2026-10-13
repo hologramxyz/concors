@@ -34,6 +34,7 @@ import { ContextMeter } from "./context-meter";
 import { usageView } from "./context-window";
 import { usePlanUsage } from "./use-plan-usage";
 import { AgentModelPicker } from "./model-picker";
+import { ControlTooltip } from "./control-tooltip";
 import { ProviderUpdateLabel } from "./provider-update";
 import { findAgentModel } from "@concors/protocol";
 import { useAgentModelSelection } from "./use-model-selection";
@@ -663,17 +664,20 @@ export function AgentComposer({
   const extraControls = (
     <>
       {agent.supportsPlan && (
-        <button
-          type="button"
-          aria-label="Plan mode"
-          aria-pressed={!!settings.planMode}
-          title="Plan mode: explore and plan with read-only access"
-          className={`agent-control ${settings.planMode ? "bg-primary/10 text-primary!" : ""}`}
-          disabled={!connected || busy || configuring}
-          onClick={() => void configure({ ...settings, planMode: !settings.planMode })}
+        <ControlTooltip
+          text={`Plan mode${settings.planMode ? " (on)" : ""}: explore and plan with read-only access`}
         >
-          <ListTodo className="size-4" />
-        </button>
+          <button
+            type="button"
+            aria-label="Plan mode"
+            aria-pressed={!!settings.planMode}
+            className={`agent-control ${settings.planMode ? "bg-primary/10 text-primary!" : ""}`}
+            disabled={!connected || busy || configuring}
+            onClick={() => void configure({ ...settings, planMode: !settings.planMode })}
+          >
+            <ListTodo className="size-4" />
+          </button>
+        </ControlTooltip>
       )}
       {(agent.engine ?? agent.provider) === "codex" && !!effortModel?.serviceTiers?.length && (
         <ControlPicker
@@ -1105,16 +1109,17 @@ export function AgentComposer({
                     e.target.value = "";
                   }}
                 />
-                <button
-                  type="button"
-                  aria-label="Attach files"
-                  title="Attach files, or drop or paste them here (up to three, 1 MB each)"
-                  className="agent-control mobile-composer-attach"
-                  disabled={!advanced || !connected || busy || uploading || uncertain}
-                  onClick={() => picker.current?.click()}
-                >
-                  <Plus className="size-4" />
-                </button>
+                <ControlTooltip text="Attach files, or drop or paste them here (up to three, 1 MB each)">
+                  <button
+                    type="button"
+                    aria-label="Attach files"
+                    className="agent-control mobile-composer-attach"
+                    disabled={!advanced || !connected || busy || uploading || uncertain}
+                    onClick={() => picker.current?.click()}
+                  >
+                    <Plus className="size-4" />
+                  </button>
+                </ControlTooltip>
                 <div
                   className={compact ? "mobile-composer-settings" : "contents"}
                   hidden={compact && !expanded}
