@@ -34,6 +34,7 @@ import { ContextMeter } from "./context-meter";
 import { usageView } from "./context-window";
 import { usePlanUsage } from "./use-plan-usage";
 import { AgentModelPicker } from "./model-picker";
+import { ControlTooltip } from "./control-tooltip";
 import { ProviderUpdateLabel } from "./provider-update";
 import { findAgentModel } from "@concors/protocol";
 import { useAgentModelSelection } from "./use-model-selection";
@@ -663,21 +664,25 @@ export function AgentComposer({
   const extraControls = (
     <>
       {agent.supportsPlan && (
-        <button
-          type="button"
-          aria-label="Plan mode"
-          aria-pressed={!!settings.planMode}
-          title="Plan mode: explore and plan with read-only access"
-          className={`agent-control ${settings.planMode ? "bg-primary/10 text-primary!" : ""}`}
-          disabled={!connected || busy || configuring}
-          onClick={() => void configure({ ...settings, planMode: !settings.planMode })}
+        <ControlTooltip
+          text={`Plan mode${settings.planMode ? " (on)" : ""}: explore and plan with read-only access`}
         >
-          <ListTodo className="size-4" />
-        </button>
+          <button
+            type="button"
+            aria-label="Plan mode"
+            aria-pressed={!!settings.planMode}
+            className={`agent-control ${settings.planMode ? "bg-primary/10 text-primary!" : ""}`}
+            disabled={!connected || busy || configuring}
+            onClick={() => void configure({ ...settings, planMode: !settings.planMode })}
+          >
+            <ListTodo className="size-4" />
+          </button>
+        </ControlTooltip>
       )}
       {(agent.engine ?? agent.provider) === "codex" && !!effortModel?.serviceTiers?.length && (
         <ControlPicker
           label="Speed"
+          tooltip
           value={settings.serviceTier ?? ""}
           icon={<Zap className={`size-4 ${settings.serviceTier ? "text-amber-500" : ""}`} />}
           disabled={!connected || busy || configuring}
