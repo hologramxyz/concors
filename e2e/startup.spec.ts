@@ -71,7 +71,7 @@ test("one branded splash stays mounted through auth, saved machine restoration a
     ).toBe(true);
     await expect(page.getByRole("navigation", { name: "Primary" })).toHaveCount(0);
     await expect(
-      page.getByText(/Restoring your session|Connect to your workspace|Sign in to Concors/),
+      page.getByText(/Restoring your session|Connect to your workspace|Continue to Concors/),
     ).toHaveCount(0);
   };
   await quiet();

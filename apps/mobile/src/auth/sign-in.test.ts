@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { SignInError, signInWithAuthSession, type SignInPlatform } from "./sign-in";
 
 const CODE = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJ0123456";
-const GOOGLE = { method: "google", intent: "sign-up" } as const;
+const GOOGLE = { method: "google" } as const;
 
 function harness(session: { type: string; url?: string }) {
   const tokens = memoryTokenStore();
@@ -37,7 +37,7 @@ describe("mobile sign-in", () => {
     expect(start.pathname).toBe("/api/v1/native-auth/start");
     expect(start.searchParams.get("app")).toBe("concors");
     expect(start.searchParams.get("method")).toBe("google");
-    expect(start.searchParams.get("intent")).toBe("sign-up");
+    expect(start.searchParams.has("intent")).toBe(false);
     expect(opened[0]!.redirectUrl).toBe("concors://native-auth/callback");
     const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
     const body = JSON.parse(init.body as string) as { code: string; verifier: string };

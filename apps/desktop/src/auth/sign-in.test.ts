@@ -16,7 +16,7 @@ import {
 } from "./sign-in.ts";
 import type { SignInCallback } from "@/tauri";
 
-const GITHUB = { method: "github", intent: "sign-in" } as const;
+const GITHUB = { method: "github" } as const;
 
 function harness(
   callback: SignInCallback,
@@ -71,7 +71,8 @@ describe("signInWithBrowser", () => {
     expect(start.pathname).toBe("/api/v1/native-auth/start");
     expect(start.searchParams.get("port")).toBe("49152");
     expect(start.searchParams.get("method")).toBe("github");
-    expect(start.searchParams.get("intent")).toBe("sign-in");
+    // Signing in and signing up are one step, so the app no longer says which it wants.
+    expect(start.searchParams.has("intent")).toBe(false);
     const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
     const body = JSON.parse(init.body as string) as { code: string; verifier: string };
     expect(body.code).toBe("k".repeat(43));
