@@ -12,7 +12,14 @@ import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { useFileSidebar } from "./sidebar-state";
 import { FileDocument } from "./document";
 import { resolveFileLink, type FileLocation } from "./links";
-import { FilesContext, FileLinkContext, fileScope, useFiles, type OpenFile } from "./context";
+import {
+  FilesContext,
+  FileLinkContext,
+  FileLinkTargetContext,
+  fileScope,
+  useFiles,
+  type OpenFile,
+} from "./context";
 import { useFilePrompts } from "./prompts";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import { DirectoryCache } from "./directory-cache";
@@ -153,6 +160,8 @@ export function ProjectFileLinks({
   children: ReactNode;
 }) {
   const files = useFiles();
+  const connection = useContext(TerminalConnectionContext);
+  const epoch = connection?.workspace?.epoch;
   return (
     <FileLinkContext
       value={(href, sourcePath) => {
@@ -160,7 +169,16 @@ export function ProjectFileLinks({
         return location ? () => files.open(project, location) : null;
       }}
     >
-      {children}
+      <FileLinkTargetContext
+        value={(href, sourcePath) => {
+          const location = resolveFileLink(href, project.directory, sourcePath);
+          return location && epoch
+            ? { projectId: project.id, epoch, directory: project.directory, path: location.path }
+            : null;
+        }}
+      >
+        {children}
+      </FileLinkTargetContext>
     </FileLinkContext>
   );
 }

@@ -30,6 +30,16 @@ export const FilesContext = createContext<FilesState | null>(null);
 export const FileLinkContext = createContext<
   ((href: string, sourcePath?: string) => (() => void) | null) | null
 >(null);
+/** The project file a link names, for acting on it without opening it (downloading it). */
+export interface FileLinkTarget {
+  projectId: string;
+  epoch: string;
+  directory: string;
+  path: string;
+}
+export const FileLinkTargetContext = createContext<
+  ((href: string, sourcePath?: string) => FileLinkTarget | null) | null
+>(null);
 export function useFiles() {
   const state = useContext(FilesContext);
   if (!state) throw new Error("File provider is missing");
