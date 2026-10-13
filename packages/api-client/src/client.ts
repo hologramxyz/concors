@@ -119,13 +119,12 @@ export type SignInMethod = "github" | "google" | "email";
 
 /**
  * What the person chose in the app. The sign-in page goes straight to that method: GitHub or
- * Google at once, or the emailed code. `sign-in` never creates an account (the page returns
- * `account_not_found` instead); `sign-up` creates one, or signs in when it already exists.
+ * Google at once, or the emailed code. Signing in and signing up are one step: the API matches a
+ * returning person to their account and creates one for anyone new.
  */
 export type NativeSignInChoice =
-  | { readonly intent: "sign-in" | "sign-up"; readonly method: "github" | "google" }
+  | { readonly method: "github" | "google" }
   | {
-      readonly intent: "sign-in" | "sign-up";
       readonly method: "email";
       /** Where the code goes; without it the page asks. */
       readonly email?: string;
@@ -220,7 +219,6 @@ export class ApiClient {
     if (choice) {
       url.searchParams.set("method", choice.method);
       if (choice.method === "email" && choice.email) url.searchParams.set("email", choice.email);
-      url.searchParams.set("intent", choice.intent);
     }
     return url.toString();
   }

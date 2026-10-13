@@ -26,12 +26,9 @@ const MESSAGES: Readonly<Record<string, string>> = {
   // Accounts are keyed by a verified email, so a sign-in without one cannot be matched or created.
   email_required:
     "This account has no verified email address. Sign in with email, Google, or a GitHub account with a verified email.",
-  account_not_found:
-    "There's no Concors account for that login yet. Sign in the way you signed up, or create an account.",
+  // Signing in creates a missing account now; this remains for an account removed mid-sign-in.
+  account_not_found: "That Concors account could not be found. Try signing in again.",
 };
-
-/** The person chose sign-in but has no account yet; clients offer to sign up instead. */
-export const ACCOUNT_NOT_FOUND = "account_not_found";
 
 export function describeSignInError(code: string): string {
   return MESSAGES[code] ?? "Sign-in did not complete. Try again.";
