@@ -22,6 +22,8 @@ pub struct Notifications {
 /// Whether the operating system shows Concors notifications.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
+// Only macOS can read the permission; elsewhere every answer is `Unknown`.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub enum Access {
     Allowed,
     /// Allowed, but delivered to Notification Center without a banner.
