@@ -39,6 +39,23 @@ test("Enter steers the running turn, ⌘/Ctrl+Enter queues, and a queued follow-
     await expect(queue).toHaveCount(0);
     await expect(interrupt).toBeEnabled();
 
+    // A message with an attachment steers too, rather than waiting in the queue.
+    await page.getByLabel("Upload files").setInputFiles({
+      name: "shot.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==",
+        "base64",
+      ),
+    });
+    await composer.fill("i mean for this");
+    await expect(page.getByRole("button", { name: "Steer message", exact: true })).toBeVisible();
+    await composer.press("Enter");
+    await expect(log).toContainText("i mean for this");
+    await expect(log.locator("[data-message-attachments]").last()).toBeVisible();
+    await expect(queue).toHaveCount(0);
+    await expect(interrupt).toBeEnabled();
+
     // The other way queues it, and a queued follow-up can still steer.
     await composer.fill("Also update the docs");
     await composer.press("ControlOrMeta+Enter");

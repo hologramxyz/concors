@@ -24,6 +24,7 @@ afterEach(async () => {
   await server?.close();
   if (directory) await rm(directory, { recursive: true, force: true });
   providers.length = 0;
+  TestAgentProvider.steerAttachments = true;
   vi.restoreAllMocks();
 });
 async function boot(resumeError?: string) {
@@ -1064,6 +1065,7 @@ it("steers an active turn once without scheduling another turn", async () => {
 });
 
 it("steers a queued follow-up into the running turn once, and takes it off the queue", async () => {
+  TestAgentProvider.steerAttachments = false;
   const { a, b, id } = await setup();
   await action(a, { kind: "send", sessionId: id, text: "hold the turn" });
   await expect.poll(() => a.agents[0]?.turnId?.startsWith("turn-")).toBe(true);
@@ -1077,7 +1079,7 @@ it("steers a queued follow-up into the running turn once, and takes it off the q
   await expect.poll(() => a.agents[0]?.queue?.length).toBe(2);
   const [text, file] = a.agents[0]!.queue!;
   const turnId = a.agents[0]!.turnId!;
-  // A follow-up with files cannot steer; it stays queued for after the turn.
+  // An agent that cannot take files mid-turn leaves a follow-up with files queued for after it.
   expect(
     (await action(a, { kind: "queue-steer", sessionId: id, id: file!.id, turnId })).outcome.status,
   ).toBe("error");
@@ -1104,6 +1106,70 @@ it("steers a queued follow-up into the running turn once, and takes it off the q
     .filter((r) => r.method === "turn/start")
     .map((r) => JSON.stringify(r.params));
   expect(sent.some((params) => params.includes("Also check the docs"))).toBe(false);
+});
+
+it("steers a message with attachments into the running turn, directly or from the queue", async () => {
+  const { a, b, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "hold the turn" });
+  await expect.poll(() => a.agents[0]?.turnId?.startsWith("turn-")).toBe(true);
+  const turnId = a.agents[0]!.turnId!;
+  const png = {
+    name: "shot.png",
+    mime: "image/png",
+    data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==",
+  };
+  const notes = { name: "notes.txt", mime: "text/plain", data: btoa("notes") };
+  const direct = randomUUID();
+  expect(
+    (
+      await action(
+        a,
+        { kind: "steer", sessionId: id, turnId, text: "i mean for this", attachments: [png] },
+        direct,
+      )
+    ).outcome.status,
+  ).toBe("ok");
+  await action(a, { kind: "queue-add", sessionId: id, text: "", attachments: [notes] });
+  await expect.poll(() => a.agents[0]?.queue?.length).toBe(1);
+  const queued = a.agents[0]!.queue![0]!;
+  const fromQueue = randomUUID();
+  const op: AgentOperation = { kind: "queue-steer", sessionId: id, id: queued.id, turnId };
+  expect((await action(a, op, fromQueue)).outcome.status).toBe("ok");
+  await action(b, op, fromQueue);
+  await expect.poll(() => b.agents[0]?.queue).toEqual([]);
+  // The agent gets the files as it would in a sent message: images as images, others by path.
+  const steers = providers[0]!.requests
+    .filter((r) => r.method === "session/steer")
+    .map(
+      (r) => r.params as { text: string; input: { type: string; path?: string; text?: string }[] },
+    );
+  expect(steers).toHaveLength(2);
+  expect(steers[0]!.input).toEqual([
+    { type: "text", text: "i mean for this" },
+    { type: "localImage", path: expect.stringContaining("shot.png") },
+  ]);
+  expect(steers[1]!.input).toEqual([
+    { type: "text", text: expect.stringContaining('attached "notes.txt"') },
+  ]);
+  // The chat shows each steered message with its attachments, and can open them.
+  const read = await action(a, { kind: "read", sessionId: id });
+  if (read.outcome.status !== "ok") throw new Error(read.outcome.message);
+  const steered = read.outcome.conversation.items.filter((i) => i.title === "You · steering");
+  expect(steered.map((i) => [i.text, i.attachments])).toEqual([
+    ["i mean for this", [{ name: "shot.png", mime: "image/png" }]],
+    ["", [{ name: "notes.txt", mime: "text/plain" }]],
+  ]);
+  const opened = await action(a, {
+    kind: "read-attachment",
+    sessionId: id,
+    itemId: `steer:${direct}`,
+    index: 0,
+  });
+  expect(opened.outcome).toMatchObject({ status: "ok", attachment: { data: png.data } });
+  // Nothing steered runs again once the turn ends.
+  providers[0]!.finish();
+  await expect.poll(() => a.agents[0]?.status).toBe("done");
+  expect(providers[0]!.requests.filter((r) => r.method === "turn/start")).toHaveLength(1);
 });
 
 it("holds the source session steady while a native fork is in flight", async () => {

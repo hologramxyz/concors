@@ -341,12 +341,15 @@ export const AgentOperationSchema = z.discriminatedUnion("kind", [
     mode: z.enum(["conversation", "files", "both"]),
     expectedRevision: z.number().int().nonnegative(),
   }),
-  z.object({
-    kind: z.literal("steer"),
-    sessionId: Id,
-    turnId: z.string().min(1),
-    text: z.string().trim().min(1).max(16000),
-  }),
+  z
+    .object({
+      kind: z.literal("steer"),
+      sessionId: Id,
+      turnId: z.string().min(1),
+      text: z.string().trim().max(16000),
+      attachments: z.array(AgentAttachmentSchema).max(3).optional(),
+    })
+    .refine((v) => v.text.length > 0 || !!v.attachments?.length, "Add a message or attachment"),
   z
     .object({
       kind: z.literal("queue-add"),

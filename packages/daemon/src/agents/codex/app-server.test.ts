@@ -29,7 +29,7 @@ readline.createInterface({input:process.stdin}).on('line', line => {
       send({method:'thread/compacted',params:{threadId:frame.params.threadId,turnId:'compact-turn'}});
       break;
     }
-    case 'thread/start': case 'thread/resume': case 'thread/fork':send({id:frame.id,result:frame.params});break;
+    case 'thread/start': case 'thread/resume': case 'thread/fork': case 'turn/steer':send({id:frame.id,result:frame.params});break;
     case 'echo':setTimeout(()=>send({id:frame.id,result:frame.params}),frame.params.delay || 0);break;
     case 'notify': {
       const data=Buffer.from(JSON.stringify({method:'item/agentMessage/delta',params:{delta:'hello 🌍'}})+'\\n');
@@ -80,6 +80,21 @@ it("gives every Codex thread Concors's instructions alongside its MCP servers", 
       cwd: "/repo",
       developerInstructions: AGENT_INSTRUCTIONS,
     });
+});
+it("steers a turn with the same input items a turn starts with, images included", async () => {
+  const client = open();
+  await client.initialize();
+  const input = [
+    { type: "text", text: "i mean for this" },
+    { type: "localImage", path: "/tmp/shot.png" },
+  ];
+  expect(
+    await client.request("session/steer", { threadId: "t", turnId: "turn", text: "x", input }),
+  ).toEqual({ threadId: "t", expectedTurnId: "turn", input });
+  // A client that sends only text still steers with it.
+  expect(
+    await client.request("session/steer", { threadId: "t", turnId: "turn", text: "focus" }),
+  ).toEqual({ threadId: "t", expectedTurnId: "turn", input: [{ type: "text", text: "focus" }] });
 });
 it("loads every visible Codex model page", async () => {
   const client = open();

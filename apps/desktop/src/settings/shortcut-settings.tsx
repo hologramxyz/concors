@@ -81,7 +81,7 @@ function FollowUpSettings() {
   return (
     <Section
       title="Follow-ups"
-      description="Messages you send while an agent is working. Messages with attachments or slash commands, and agents that cannot be steered, always queue."
+      description="Messages you send while an agent is working. Slash commands, and agents that cannot be steered, always queue, as do attachments for agents that cannot take them mid-turn."
     >
       <SettingsCard>
         <Row
