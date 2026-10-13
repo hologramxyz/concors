@@ -682,6 +682,7 @@ export function AgentComposer({
       {(agent.engine ?? agent.provider) === "codex" && !!effortModel?.serviceTiers?.length && (
         <ControlPicker
           label="Speed"
+          tooltip
           value={settings.serviceTier ?? ""}
           icon={<Zap className={`size-4 ${settings.serviceTier ? "text-amber-500" : ""}`} />}
           disabled={!connected || busy || configuring}
@@ -1109,17 +1110,16 @@ export function AgentComposer({
                     e.target.value = "";
                   }}
                 />
-                <ControlTooltip text="Attach files, or drop or paste them here (up to three, 1 MB each)">
-                  <button
-                    type="button"
-                    aria-label="Attach files"
-                    className="agent-control mobile-composer-attach"
-                    disabled={!advanced || !connected || busy || uploading || uncertain}
-                    onClick={() => picker.current?.click()}
-                  >
-                    <Plus className="size-4" />
-                  </button>
-                </ControlTooltip>
+                <button
+                  type="button"
+                  aria-label="Attach files"
+                  title="Attach files, or drop or paste them here (up to three, 1 MB each)"
+                  className="agent-control mobile-composer-attach"
+                  disabled={!advanced || !connected || busy || uploading || uncertain}
+                  onClick={() => picker.current?.click()}
+                >
+                  <Plus className="size-4" />
+                </button>
                 <div
                   className={compact ? "mobile-composer-settings" : "contents"}
                   hidden={compact && !expanded}
