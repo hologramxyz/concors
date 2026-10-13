@@ -131,23 +131,61 @@ fn play_file(path: &Path) -> Result<(), String> {
 }
 
 fn run(command: &mut Command) -> Result<(), String> {
+    let program = command.get_program().to_string_lossy().into_owned();
+    // stderr carries the player's own reason (e.g. afplay's "AudioQueueStart failed"), which is
+    // what someone needs to fix their audio; a bare exit code tells them nothing.
     let mut child = command
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| format!("could not start {program}: {error}"))?;
     let deadline = Instant::now() + TIMEOUT;
     loop {
         match child.try_wait().map_err(|error| error.to_string())? {
             Some(status) if status.success() => return Ok(()),
-            Some(status) => return Err(format!("exited with {status}")),
+            Some(status) => {
+                let mut stderr = String::new();
+                if let Some(mut pipe) = child.stderr.take() {
+                    let _ = std::io::Read::read_to_string(&mut pipe, &mut stderr);
+                }
+                return Err(failure(&program, &status.to_string(), &stderr));
+            }
             None if Instant::now() >= deadline => {
                 let _ = child.kill();
                 let _ = child.wait();
-                return Err("timed out".into());
+                return Err(format!("{program} timed out"));
             }
             None => std::thread::sleep(Duration::from_millis(25)),
         }
+    }
+}
+
+/// One readable line: the player's first line of stderr, or its exit status when it said nothing.
+fn failure(program: &str, status: &str, stderr: &str) -> String {
+    match stderr.lines().map(str::trim).find(|line| !line.is_empty()) {
+        Some(line) => format!("{program}: {}", line.chars().take(200).collect::<String>()),
+        None => format!("{program} {status}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::failure;
+
+    #[test]
+    fn failure_prefers_the_players_own_reason() {
+        assert_eq!(
+            failure(
+                "afplay",
+                "exit status: 1",
+                "\nError: AudioQueueStart failed ('!dev')\n"
+            ),
+            "afplay: Error: AudioQueueStart failed ('!dev')"
+        );
+        assert_eq!(
+            failure("afplay", "exit status: 1", "  \n"),
+            "afplay exit status: 1"
+        );
     }
 }

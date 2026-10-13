@@ -3,7 +3,9 @@ import type { DaemonConnection } from "@concors/daemon-client";
 import { NotificationContext } from "./context";
 import { AttentionEngine, type Notice } from "./engine";
 import { claimNotification, getNotificationPreferences } from "./preferences";
-import { desktopNotice } from "./platform";
+import { desktopNotice, notificationAccess, openNotificationSettings } from "./platform";
+import { errorMessage } from "./access";
+import { isTauri } from "@/tauri";
 import { Button } from "@/components/ui/button";
 import { playAgentSound, unlockAudio } from "./sound";
 import { terminalAgentSound } from "./terminal";
@@ -24,7 +26,7 @@ export function NotificationProvider({
   const dismiss = useRef<(id: string) => void>(() => undefined);
   const acknowledge = useRef<() => void>(() => undefined);
   const [notices, setNotices] = useState<Notice[]>([]);
-  const [problem, setProblem] = useState<string | null>(null);
+  const [problem, setProblem] = useState<{ message: string; settings?: boolean } | null>(null);
   const view = useCallback((id: string) => {
     views.current.set(id, (views.current.get(id) ?? 0) + 1);
     acknowledge.current();
@@ -49,9 +51,15 @@ export function NotificationProvider({
     };
     dismiss.current = clear;
     const sound = (kind: Notice["kind"]) => {
-      void playAgentSound(kind).catch(() => {
-        if (!disposed)
-          setProblem("Sound could not play. Use Test sound in Settings to enable audio.");
+      void playAgentSound(kind).catch((cause: unknown) => {
+        if (disposed) return;
+        // The desktop app plays through the system, so a failure there is about the sound
+        // output; only a browser needs a click before it may play audio.
+        setProblem({
+          message: isTauri()
+            ? `The agent sound could not play (${errorMessage(cause, "unknown error")}). Check your sound output, then use Test completion sound in Settings → Notifications.`
+            : "Sound could not play. Use Test completion sound in Settings → Notifications to enable audio.",
+        });
       });
     };
     const engine = new AttentionEngine({
@@ -85,11 +93,13 @@ export function NotificationProvider({
             if (disposed || closes.get(notice.sessionId)?.id !== notice.id) close();
             else closes.set(notice.sessionId, { id: notice.id, close });
           })
-          .catch(() => {
-            if (!disposed)
-              setProblem(
-                "Desktop notification could not be shown. Check notification permissions in Settings.",
-              );
+          .catch(async (cause: unknown) => {
+            const access = await notificationAccess().catch(() => "unknown");
+            if (disposed) return;
+            setProblem({
+              message: `A desktop notification could not be shown: ${errorMessage(cause, "unknown error")}`,
+              settings: isTauri() && (access === "blocked" || access === "quiet"),
+            });
           });
       },
     });
@@ -233,10 +243,21 @@ export function NotificationProvider({
         ))}
         {problem && (
           <div role="status" className="rounded-lg border bg-card p-3 text-xs shadow-lg">
-            {problem}
-            <Button variant="ghost" className="ml-2" onClick={() => setProblem(null)}>
-              Dismiss
-            </Button>
+            {problem.message}
+            <div className="mt-2 flex justify-end gap-2">
+              {problem.settings && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void openNotificationSettings().catch(() => undefined)}
+                >
+                  Open System Settings
+                </Button>
+              )}
+              <Button variant="ghost" size="sm" onClick={() => setProblem(null)}>
+                Dismiss
+              </Button>
+            </div>
           </div>
         )}
       </aside>

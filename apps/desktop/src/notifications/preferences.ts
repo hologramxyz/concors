@@ -1,16 +1,20 @@
 import { useSyncExternalStore } from "react";
+import { isTauri } from "@/tauri";
 export interface NotificationPreferences {
   sound: boolean;
   desktop: boolean;
 }
-export const PREFERENCES_KEY = "concors.notifications.v1";
-// Sound is on by default, as in Herdr; desktop banners need an explicit browser permission.
-const defaults: NotificationPreferences = { sound: true, desktop: false };
-let current: NotificationPreferences = read();
+export const PREFERENCES_KEY = "concors.notifications.v2";
+const LEGACY_KEY = "concors.notifications.v1";
+// Sound is on by default, as in Herdr. The desktop app turns banners on too, because it asks the
+// system for permission itself and an off switch nobody found meant notifications never came.
+// Browsers can only ask from a click, so there banners wait for an explicit opt-in.
+const defaults = (): NotificationPreferences => ({ sound: true, desktop: isTauri() });
+let current: NotificationPreferences = readNotificationPreferences();
 const listeners = new Set<() => void>();
-function read(): NotificationPreferences {
+function parse(key: string): NotificationPreferences | null {
   try {
-    const value: unknown = JSON.parse(localStorage.getItem(PREFERENCES_KEY) ?? "null");
+    const value: unknown = JSON.parse(localStorage.getItem(key) ?? "null");
     if (
       value &&
       typeof value === "object" &&
@@ -23,7 +27,16 @@ function read(): NotificationPreferences {
   } catch {
     /* Storage may be unavailable. */
   }
-  return defaults;
+  return null;
+}
+export function readNotificationPreferences(): NotificationPreferences {
+  const stored = parse(PREFERENCES_KEY);
+  if (stored) return stored;
+  // Version 1 saved the old default-off banners whenever sound was toggled, so its `false` was
+  // almost never a choice; the desktop app moves those to the new default.
+  const legacy = parse(LEGACY_KEY);
+  if (legacy) return { ...legacy, desktop: legacy.desktop || defaults().desktop };
+  return defaults();
 }
 function notify() {
   for (const listener of listeners) listener();
@@ -43,7 +56,7 @@ export function setNotificationPreferences(value: NotificationPreferences) {
 if (typeof window !== "undefined")
   window.addEventListener("storage", (event) => {
     if (event.key === PREFERENCES_KEY) {
-      current = read();
+      current = readNotificationPreferences();
       notify();
     }
   });
