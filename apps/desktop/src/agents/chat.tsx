@@ -218,6 +218,7 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
   );
   const [error, setError] = useState<string | null>(null);
   const [subAgent, setSubAgent] = useState<SubAgentTarget | null>(null);
+  const root = useRef<HTMLDivElement>(null);
   const { scroll, onScroll, atBottom, latest, jumpToMessage } = useConversationScroll(
     conversation,
     visible,
@@ -282,6 +283,40 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
       setBusy(false);
     }
   };
+  const interrupt = () => {
+    if (agent?.turnId)
+      void run(() => perform({ kind: "interrupt", sessionId, turnId: agent.turnId ?? "" }));
+  };
+  useEffect(() => {
+    if (!visible || !active || !connected || busy || !agent?.turnId) return;
+    const keydown = (event: KeyboardEvent) => {
+      if (
+        event.key !== "Escape" ||
+        event.repeat ||
+        event.isComposing ||
+        event.defaultPrevented ||
+        event.ctrlKey ||
+        event.altKey ||
+        event.metaKey ||
+        event.shiftKey
+      )
+        return;
+      const pane = root.current?.closest("[data-pane-id]");
+      if (!pane?.contains(document.activeElement)) return;
+      // Escape dismisses menus, dialogs and shortcut sequences before stopping a turn.
+      if (
+        document.querySelector(
+          ':is([role="dialog"], [role="alertdialog"], [role="menu"]):not([data-state="closed"])',
+        )
+      )
+        return;
+      event.preventDefault();
+      // Leave propagation intact so an in-progress dictation is canceled too.
+      interrupt();
+    };
+    window.addEventListener("keydown", keydown, true);
+    return () => window.removeEventListener("keydown", keydown, true);
+  });
   const pendingInputs = agent?.pending.map((pending) => (
     <PendingInput
       key={pending.id}
@@ -306,7 +341,7 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
   );
   return (
     <SubAgentViewContext value={agent?.controls?.childHistory ? setSubAgent : null}>
-      <div className="chat-with-sub-agent relative flex min-h-0 min-w-0 flex-1">
+      <div ref={root} className="chat-with-sub-agent relative flex min-h-0 min-w-0 flex-1">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="Agent conversation">
           <div className="chat-timeline-shell relative flex min-h-0 flex-1">
             <div
@@ -460,12 +495,7 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
                   connected={!!connected && !busy && !resuming}
                   reachable={connection?.state.status === "ready"}
                   onSend={latest}
-                  onInterrupt={() => {
-                    if (agent.turnId)
-                      void run(() =>
-                        perform({ kind: "interrupt", sessionId, turnId: agent.turnId ?? "" }),
-                      );
-                  }}
+                  onInterrupt={interrupt}
                 />
               )}
             </div>
