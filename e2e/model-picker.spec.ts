@@ -42,6 +42,8 @@ test("effective models stay selected and warm provider menus reopen without load
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
     await chooseProvider(page);
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
+    // A prompt typed before switching provider stays in the composer of the agent that replaces it.
+    await page.getByRole("textbox", { name: "Message Codex" }).fill("Draft a brand library");
     const picker = page.getByRole("button", { name: "Agent and model", exact: true });
     await expect(picker).toHaveText("GPT-6 Astra");
     await picker.click();
@@ -67,6 +69,9 @@ test("effective models stay selected and warm provider menus reopen without load
     expect(requests.length - warmed).toBeLessThanOrEqual(3);
     await page.getByRole("option", { name: "Opus 5", exact: true }).click();
     await expect(page.getByRole("textbox", { name: "Message Claude Code" })).toBeEnabled();
+    await expect(page.getByRole("textbox", { name: "Message Claude Code" })).toHaveValue(
+      "Draft a brand library",
+    );
     await expect(picker).toHaveText("Opus 5");
     await picker.click();
     await expect(page.getByRole("option", { name: "Opus 5", exact: true })).toHaveAttribute(
