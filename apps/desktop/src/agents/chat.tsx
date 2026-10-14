@@ -20,6 +20,7 @@ import { Activity } from "./activity";
 import { PlanProgress } from "./plan-progress";
 import { useAgents } from "./context";
 import { useConversation } from "./conversation";
+import { ProviderSwitchNotice } from "./provider-switch-notice";
 import { useConversationScroll } from "./conversation-scroll";
 import { useTabVisible } from "@/workspace/tab-visibility";
 import { MessageNavigation } from "./message-navigation";
@@ -317,6 +318,9 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
               onScroll={onScroll}
             >
               <div className="mx-auto max-w-5xl space-y-5">
+                {canResume && agent && (
+                  <ProviderSwitchNotice agent={agent} disabled={!connected || busy} />
+                )}
                 {canResume &&
                   connection?.state.status === "ready" &&
                   connection.state.daemon.capabilities?.includes(NATIVE_SESSIONS_CAPABILITY) && (

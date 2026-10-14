@@ -35,6 +35,8 @@ import { usageView } from "./context-window";
 import { usePlanUsage } from "./use-plan-usage";
 import { AgentModelPicker } from "./model-picker";
 import { ControlTooltip } from "./control-tooltip";
+import { useAgents } from "./context";
+import { switchDescription } from "./provider-switch";
 import { ProviderUpdateLabel } from "./provider-update";
 import { findAgentModel } from "@concors/protocol";
 import { useAgentModelSelection } from "./use-model-selection";
@@ -388,6 +390,7 @@ export function AgentComposer({
       const image = await readClipboardImage();
       return image ? [await fitImage(image, "Pasted image")] : [];
     });
+  const agents = useAgents();
   const nativeModels = useAgentModelSelection(
     agent,
     (model) =>
@@ -481,9 +484,7 @@ export function AgentComposer({
                     (provider.label ?? agentProviderName(provider.id)) +
                     (provider.installed === false
                       ? " · Not installed"
-                      : provider.id === agent.provider
-                        ? " · Current chat"
-                        : " · Use in this pane"),
+                      : ` · ${switchDescription(agents, agent, provider.id)}`),
                   selected: provider.id === agent.provider,
                 })),
         },
