@@ -56,6 +56,8 @@ import { fileBase64, fitImage, fitImageFile } from "./image-attachment";
 import { ImageViewer } from "./attachment-preview";
 import { useFollowUpMode } from "./follow-ups";
 import { MOD_KEY } from "@/lib/platform";
+import { useCommand } from "@/shortcuts/context";
+import { useShortcutLabels } from "@/shortcuts/preferences-context";
 import { rememberSentAttachments } from "./attachment-cache";
 const defaults: AgentSettings = { model: null, effort: null, mode: "default" };
 const nativeProviderIcons: Record<string, "model" | "claude" | "opencode" | "pi"> = {
@@ -121,6 +123,7 @@ export function AgentComposer({
   const textarea = useRef<HTMLTextAreaElement>(null),
     picker = useRef<HTMLInputElement>(null);
   const form = useRef<HTMLFormElement>(null);
+  const shortcutLabel = useShortcutLabels();
   useLayoutEffect(() => {
     if (!native) return;
     const footer = form.current?.closest<HTMLElement>("[data-chat-footer]");
@@ -180,6 +183,27 @@ export function AgentComposer({
     visible,
     reachable,
     connection,
+  );
+  const canDictate =
+    (compact || (dictation.supported && !dictation.preparing)) &&
+    connected &&
+    !busy &&
+    !uncertain &&
+    !uploading &&
+    !configuring &&
+    !!agent.threadId &&
+    draft.length < 16000;
+  const startDictation = () => {
+    dictationBase.current = draft;
+    dictation.start();
+  };
+  useCommand(
+    "start-dictation",
+    visible && !compact && canDictate,
+    () => {
+      if (!dictation.active) startDictation();
+    },
+    () => !!form.current?.closest("[data-pane-id]")?.contains(document.activeElement),
   );
   useLayoutEffect(() => {
     const el = textarea.current;
@@ -716,26 +740,16 @@ export function AgentComposer({
             ? "Use dictation on your phone's keyboard."
             : (dictation.preparing ??
               (dictation.supported
-                ? "Dictate a message. Stop to review, edit, or press Enter to send."
+                ? `Dictate a message (${shortcutLabel("start-dictation")}). Enter puts the words in the message to edit.`
                 : "Dictation is not supported by this browser."))
         }
-        disabled={
-          (!compact && (!dictation.supported || !!dictation.preparing)) ||
-          !connected ||
-          busy ||
-          uncertain ||
-          uploading ||
-          configuring ||
-          !agent.threadId ||
-          draft.length >= 16000
-        }
+        disabled={!canDictate}
         onClick={() => {
           if (compact) {
             textarea.current?.focus();
             setKeyboardHelp((value) => !value);
           } else {
-            dictationBase.current = draft;
-            dictation.start();
+            startDictation();
           }
         }}
         className="agent-control text-muted-foreground hover:bg-muted"
@@ -1072,6 +1086,11 @@ export function AgentComposer({
                   if (
                     e.key === "Tab" &&
                     e.shiftKey &&
+                    !e.ctrlKey &&
+                    !e.metaKey &&
+                    !e.altKey &&
+                    !e.nativeEvent.isComposing &&
+                    !e.repeat &&
                     !configuring &&
                     advanced &&
                     (agent.engine ?? agent.provider) === "codex"
@@ -1280,6 +1299,7 @@ export function AgentComposer({
                     <button
                       type="button"
                       aria-label="Interrupt agent"
+                      title="Stop agent (Escape)"
                       disabled={!connected || !agent.turnId || agent.turnId.startsWith("pending:")}
                       onClick={onInterrupt}
                       className="rounded-lg border p-2"
