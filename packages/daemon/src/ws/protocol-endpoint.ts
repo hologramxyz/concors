@@ -1,7 +1,11 @@
 import { ScheduleManager } from "../schedules/manager.ts";
 import { ScheduleStore } from "../schedules/store.ts";
 import { ScheduleTools } from "../schedules/tools.ts";
-import { DICTATION_CAPABILITY, SCHEDULES_CAPABILITY } from "@concors/protocol";
+import {
+  DICTATION_CAPABILITY,
+  HEARTBEAT_INTERVAL_MS,
+  SCHEDULES_CAPABILITY,
+} from "@concors/protocol";
 import { DictationService } from "../dictation/service.ts";
 import { ThemeRegistry } from "../themes/registry.ts";
 import { dirname, join, basename } from "node:path";
@@ -215,7 +219,15 @@ export function registerProtocolEndpoint(
       send: (event: TerminalEvent) => send(socket, event),
       active: () => socket.readyState === socket.OPEN,
     };
+    // Heartbeats tell the client this socket still reaches the daemon, and pings tell the daemon
+    // the client is still there: a connection that died without closing is noticed at both ends.
+    let heartbeat: ReturnType<typeof setInterval> | undefined;
+    let missedPongs = 0;
+    socket.on("pong", () => {
+      missedPongs = 0;
+    });
     socket.on("close", () => {
+      clearInterval(heartbeat);
       unsubscribeUsage?.();
       connections.delete(socket);
       subscribers.delete(socket);
@@ -227,6 +239,21 @@ export function registerProtocolEndpoint(
 
     new ConnectionHandler(socket, log, options.state, handshakeTimeoutMs, (message) => {
       if (message.type === "client.hello") {
+        // Only after the handshake: a client still handshaking rejects messages it does not know.
+        heartbeat ??= setInterval(() => {
+          if (missedPongs >= 2) {
+            log.info("closing a connection that stopped answering pings");
+            socket.terminate();
+            return;
+          }
+          missedPongs++;
+          try {
+            socket.ping();
+          } catch {
+            // The close handler cleans up a socket that is already gone.
+          }
+          send(socket, { type: "daemon.heartbeat" });
+        }, HEARTBEAT_INTERVAL_MS);
         if (message.capabilities?.includes("agent-providers-v2")) agentV2.add(socket);
         if (message.capabilities?.includes(SCHEDULES_CAPABILITY)) scheduleClients.add(socket);
         if (dictation && message.capabilities?.includes(DICTATION_CAPABILITY))

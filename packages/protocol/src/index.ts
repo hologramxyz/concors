@@ -31,6 +31,7 @@ export * from "./agent-controls.ts";
 export * from "./agent-usage.ts";
 
 export * from "./files.ts";
+export * from "./heartbeat.ts";
 
 export * from "./providers.ts";
 export * from "./provider-presets.ts";

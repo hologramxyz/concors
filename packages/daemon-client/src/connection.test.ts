@@ -675,8 +675,25 @@ describe("workspace replica lifecycle", () => {
     }
   });
 
-  it("ignores stale snapshots and rejects pending commands on disconnect", async () => {
-    const { connection, socket, ready } = startConnection();
+  const command = {
+    type: "workspace.command" as const,
+    commandId: "00000000-0000-4000-8000-000000000003",
+    epoch: snapshot.epoch,
+    operation: {
+      kind: "project.add" as const,
+      projectId: "00000000-0000-4000-8000-000000000004",
+      name: "Test",
+      directory: "/test",
+    },
+  };
+  const result = {
+    type: "workspace.result" as const,
+    commandId: command.commandId,
+    outcome: { status: "accepted" as const, revision: 3 },
+  };
+
+  it("ignores stale snapshots, and sends a pending command again after a reconnect", async () => {
+    const { connection, socket, sockets, ready } = startConnection();
     const listener = vi.fn();
     connection.subscribeWorkspace(listener);
     socket.serverOpen();
@@ -687,22 +704,87 @@ describe("workspace replica lifecycle", () => {
     socket.serverSend({ type: "workspace.snapshot", snapshot: { ...snapshot, revision: 1 } });
     expect(connection.workspace?.revision).toBe(2);
     expect(listener).toHaveBeenCalledTimes(1);
-    const pending = connection.executeWorkspace({
-      type: "workspace.command",
-      commandId: "00000000-0000-4000-8000-000000000003",
-      epoch: snapshot.epoch,
-      operation: {
-        kind: "project.add",
-        projectId: "00000000-0000-4000-8000-000000000004",
-        name: "Test",
-        directory: "/test",
-      },
-    });
-    const rejection = expect(pending).rejects.toThrow("outcome may be unknown");
+    const pending = connection.executeWorkspace(command);
+    expect(socket.sent.map((raw) => JSON.parse(raw))).toContainEqual(command);
+    // The socket drops before the answer: the outcome is unknown, so the command is kept.
     socket.serverClose();
-    await rejection;
     expect(connection.workspace).toBeNull();
+    const reconnected = connection.connect();
+    const next = sockets[1]!;
+    next.serverOpen();
+    next.serverSend(READY);
+    await reconnected;
+    expect(next.sent.map((raw) => JSON.parse(raw))).not.toContainEqual(command);
+    // Once the workspace is back it goes again under the same ID, which the daemon deduplicates.
+    next.serverSend({ type: "workspace.snapshot", snapshot });
+    expect(next.sent.map((raw) => JSON.parse(raw))).toContainEqual(command);
+    next.serverSend(result);
+    await expect(pending).resolves.toEqual(result);
     connection.disconnect();
+  });
+
+  it("reports a command lost only once its deadline passes without a machine to answer", async () => {
+    vi.useFakeTimers();
+    try {
+      const { connection, socket, ready } = startConnection();
+      connection.subscribeWorkspace(() => undefined);
+      socket.serverOpen();
+      socket.serverSend(READY);
+      await ready;
+      socket.serverSend({ type: "workspace.snapshot", snapshot });
+      const pending = connection.executeWorkspace(command);
+      const lost = expect(pending).rejects.toThrow("Lost contact with this machine");
+      socket.serverClose();
+      await vi.advanceTimersByTimeAsync(29_000);
+      await vi.advanceTimersByTimeAsync(2_000);
+      await lost;
+      connection.disconnect();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("abandons a socket that stops delivering heartbeats, so the host reconnects", async () => {
+    vi.useFakeTimers();
+    try {
+      const { connection, socket, ready } = startConnection();
+      const states: string[] = [];
+      connection.subscribe((state) => states.push(state.status));
+      socket.serverOpen();
+      socket.serverSend({ ...READY, capabilities: ["heartbeat"] });
+      await ready;
+      await vi.advanceTimersByTimeAsync(30_000);
+      socket.serverSend({ type: "daemon.heartbeat" });
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(connection.state.status).toBe("ready");
+      // Then nothing at all: a socket that died without closing.
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(connection.state).toMatchObject({ status: "disconnected", closeCode: 4000 });
+      expect(socket.closed.at(-1)?.code).toBe(4000);
+      connection.disconnect();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("replaces a socket that goes silent after a command, even without heartbeats", async () => {
+    vi.useFakeTimers();
+    try {
+      const { connection, socket, ready } = startConnection();
+      connection.subscribeWorkspace(() => undefined);
+      socket.serverOpen();
+      socket.serverSend(READY);
+      await ready;
+      socket.serverSend({ type: "workspace.snapshot", snapshot });
+      void connection.executeWorkspace(command).catch(() => undefined);
+      await vi.advanceTimersByTimeAsync(9_000);
+      expect(connection.state.status).toBe("ready");
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(connection.state).toMatchObject({ status: "disconnected", closeCode: 4000 });
+      connection.disconnect();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
