@@ -1544,6 +1544,77 @@ it("keeps the images an agent shows, serving them once the file is gone and afte
   ).toBe("error");
 });
 
+it("shows a Codex-generated image as Codex's message, without its base64 in the chat", async () => {
+  const { a, b, id } = await setup();
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 9, 9, 9]);
+  const saved = "/home/ubuntu/.codex/generated_images/thread/ig_1.png";
+  await action(a, { kind: "send", sessionId: id, text: "hold" });
+  const provider = providers[0]!;
+  provider.emit("item/started", {
+    item: { id: "ig_1", type: "imageGeneration", status: "in_progress", result: "" },
+  });
+  provider.emit("item/completed", {
+    item: {
+      id: "ig_1",
+      type: "imageGeneration",
+      status: "completed",
+      revisedPrompt: "A clearer brand library",
+      result: png.toString("base64"),
+      savedPath: saved,
+    },
+  });
+  // Too large to keep: the chat names where Codex saved it instead.
+  provider.emit("item/completed", {
+    item: {
+      id: "ig_2",
+      type: "imageGeneration",
+      status: "completed",
+      result: Buffer.alloc(1024 * 1024 + 16, 1).toString("base64"),
+      savedPath: "/home/ubuntu/.codex/generated_images/thread/ig_2.png",
+    },
+  });
+  provider.emit("item/completed", {
+    item: {
+      id: "ig_3",
+      type: "imageGeneration",
+      status: "failed",
+      result: "",
+      failure: { type: "usageLimitExceeded", limitId: "images" },
+    },
+  });
+  provider.finish();
+  await expect.poll(() => a.agents[0]?.status).toBe("done");
+  const read = await action(b, { kind: "read", sessionId: id });
+  if (read.outcome.status !== "ok") throw new Error(read.outcome.message);
+  const items = read.outcome.conversation.items;
+  expect(items.find((i) => i.id === "ig_1")).toMatchObject({
+    kind: "assistant",
+    status: "completed",
+    text: `![A clearer brand library](<${saved}>)`,
+    attachments: [{ name: "ig_1.png", mime: "image/png", source: saved }],
+  });
+  expect(items.find((i) => i.id === "ig_2")).toMatchObject({
+    text: expect.stringContaining("ig_2.png`. It is too large to show here."),
+  });
+  expect(items.find((i) => i.id === "ig_3")).toMatchObject({
+    status: "failed",
+    text: expect.stringContaining("image generation limit was reached"),
+  });
+  // The picture travels only when asked for, never inside the conversation.
+  expect(JSON.stringify(read)).not.toContain(png.toString("base64"));
+  const image = await action(a, {
+    kind: "read-attachment",
+    sessionId: id,
+    itemId: "ig_1",
+    index: 0,
+  });
+  expect(image.outcome.status === "ok" && image.outcome.attachment).toEqual({
+    name: "ig_1.png",
+    mime: "image/png",
+    data: png.toString("base64"),
+  });
+});
+
 it("keeps async questions across turns and restart, and durably resolves answers once", async () => {
   const { a, b, id } = await setup();
   await action(a, { kind: "send", sessionId: id, text: "hold" });

@@ -336,6 +336,21 @@ export class TestAgentProvider implements AgentProvider {
           },
         });
       }
+      if (text.includes("generate-image")) {
+        // Codex's image generation sends the picture inline and names the file it saved, which
+        // sits outside the project and may have spaces in its path.
+        this.emit("item/completed", {
+          item: {
+            id: `generated-${this.turnId}`,
+            type: "imageGeneration",
+            status: "completed",
+            revisedPrompt: "A brand library",
+            result:
+              "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==",
+            savedPath: "/home/ubuntu/.codex/generated images/ig_1.png",
+          },
+        });
+      }
       if (text.includes("rich")) {
         this.emit("item/completed", {
           item: {

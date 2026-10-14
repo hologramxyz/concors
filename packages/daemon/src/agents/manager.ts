@@ -10,7 +10,7 @@ import {
 import { defaultSettings, parseModels, turnControls } from "./controls.ts";
 import { initialSettings, rememberable, supportedSettings } from "./remembered-settings.ts";
 import { saveAttachments } from "./attachments.ts";
-import { readMessageImages } from "./images.ts";
+import { generatedImage, readMessageImages, type MessageImage } from "./images.ts";
 import type { AgentAttachment } from "@concors/protocol";
 import { AGENT_USAGE_TTL_MS, unsupportedPlanUsage, type AgentPlanUsage } from "@concors/protocol";
 import { normalizeCommandExecutionCommand } from "./codex/command-display.ts";
@@ -1983,9 +1983,17 @@ export class AgentManager {
     // Locally submitted prompts are reserved before dispatch; replace their turn identity, not their
     // text. Replayed history carries its own prompt id, so a second copy would sort to the bottom.
     if (mapped.kind === "user" && this.#store.hasAgentTurnPrompt(id, turnId)) return;
+    const generated = z.object({ type: z.literal("imageGeneration") }).safeParse(raw).success
+      ? generatedImage(raw as { id: string })
+      : undefined;
     const attachments =
       mapped.kind === "assistant" && completed
-        ? this.messageImages(id, mapped.id, mapped.text)
+        ? this.messageImages(
+            id,
+            mapped.id,
+            mapped.text,
+            generated === undefined ? undefined : generated ? [generated] : [],
+          )
         : undefined;
     this.item(id, turnId, {
       ...mapped,
@@ -1999,10 +2007,16 @@ export class AgentManager {
    * Copies the images an agent showed in a message once it completes, since the files are often
    * temporary. A replayed message keeps the copy taken the first time.
    */
-  private messageImages(id: string, itemId: string, text: string): AgentItem["attachments"] {
+  private messageImages(
+    id: string,
+    itemId: string,
+    text: string,
+    /** Images the item carries itself, as a Codex-generated one does, instead of files it names. */
+    carried?: MessageImage[],
+  ): AgentItem["attachments"] {
     const previous = this.#store.agentItem(id, itemId)?.attachments;
     if (previous?.some((attachment) => attachment.source)) return previous;
-    const images = readMessageImages(text, this.#store.agent(id).directory);
+    const images = carried ?? readMessageImages(text, this.#store.agent(id).directory);
     if (!images.length) return undefined;
     this.#store.saveAgentItemImages(
       id,
