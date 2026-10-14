@@ -24,7 +24,7 @@ async function workspace(page: Page) {
   return { composer, dispose: () => rm(directory, { recursive: true, force: true }) };
 }
 
-test("live waveform replaces input and Enter puts the final words in the prompt box without sending", async ({
+test("live waveform replaces input and Enter sends the final transcript exactly once", async ({
   page,
 }) => {
   const { composer, dispose } = await workspace(page);
@@ -62,11 +62,10 @@ test("live waveform replaces input and Enter puts the final words in the prompt 
       window.testDictation.end();
     });
     await expect(recording).toHaveCount(0);
-    await expect(composer).toHaveValue("Fix the login bug.");
-    await expect(composer).toBeFocused();
+    await expect(composer).toHaveValue("");
     await expect(
       page.getByRole("log").getByText("Fix the login bug.", { exact: true }),
-    ).toHaveCount(0);
+    ).toHaveCount(1);
     await expect.poll(() => page.evaluate(() => window.testDictation.capture.tracks)).toBe(0);
     await expect
       .poll(() => page.evaluate(() => window.testDictation.capture.contexts))
@@ -76,7 +75,7 @@ test("live waveform replaces input and Enter puts the final words in the prompt 
   }
 });
 
-test("Done appends dictation to a focused draft; Cancel preserves the original draft and attachment", async ({
+test("Edit appends dictation to a focused draft; Cancel preserves the original draft and attachment", async ({
   page,
 }) => {
   const { composer, dispose } = await workspace(page);
@@ -113,7 +112,7 @@ test("Done appends dictation to a focused draft; Cancel preserves the original d
   }
 });
 
-test("the recording bar fits a narrow pane and Done keeps the words for sending as usual", async ({
+test("the recording bar fits a narrow pane and Edit keeps the words for sending as usual", async ({
   page,
 }) => {
   const { composer, dispose } = await workspace(page);
