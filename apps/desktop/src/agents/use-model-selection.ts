@@ -1,5 +1,6 @@
 import { useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { AgentStartedContext } from "./context";
+import { AgentDraftScopeContext, moveAgentDraft } from "./draft";
 import { AgentProviderIdSchema, type AgentInfo } from "@concors/protocol";
 import { modelSelection } from "@concors/client-core";
 import { modelCatalog } from "./model-catalog";
@@ -20,6 +21,7 @@ export function useAgentModelSelection(
   const paneVisible = useContext(PaneVisibilityContext);
   const tabVisible = useTabVisible();
   const onStarted = useContext(AgentStartedContext);
+  const draftScope = useContext(AgentDraftScopeContext) ?? connection;
   const generation = useRef(0);
   useEffect(
     () => () => {
@@ -100,6 +102,15 @@ export function useAgentModelSelection(
         },
         crypto.randomUUID(),
       );
+      // The pane shows the new agent, often before this answer arrives and this picker has
+      // unmounted; what was typed for the old one goes with it either way.
+      if (result.outcome.status === "ok")
+        moveAgentDraft(
+          draftScope,
+          connection.workspace?.machineId,
+          agent.id,
+          result.outcome.conversation.agent.id,
+        );
       // A late switch must not navigate a different pane, account or machine.
       if (attempt !== generation.current) return;
       if (result.outcome.status === "error") throw new Error(result.outcome.message);
