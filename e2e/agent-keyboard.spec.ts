@@ -91,7 +91,7 @@ test("Ctrl+D dictates in the focused agent pane, preserves drafts, and remains t
     await page.keyboard.press("Control+d");
     await expect(panes.last().getByRole("group", { name: "Dictation" })).toBeFocused();
     await page.evaluate(() => window.testDictation.result("more words", true));
-    await page.keyboard.press("Enter");
+    await page.getByRole("button", { name: "Edit dictated message", exact: true }).click();
     await page.evaluate(() => window.testDictation.end());
     await expect(inputs.last()).toBeFocused();
     await expect(inputs.last()).toHaveValue("Right draft more words");
