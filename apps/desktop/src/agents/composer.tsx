@@ -740,7 +740,7 @@ export function AgentComposer({
             ? "Use dictation on your phone's keyboard."
             : (dictation.preparing ??
               (dictation.supported
-                ? `Dictate a message (${shortcutLabel("start-dictation")}). Enter puts the words in the message to edit.`
+                ? `Dictate a message (${shortcutLabel("start-dictation")}). Enter sends; Edit lets you review the words.`
                 : "Dictation is not supported by this browser."))
         }
         disabled={!canDictate}
