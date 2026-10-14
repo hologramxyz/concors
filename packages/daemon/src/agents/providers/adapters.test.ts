@@ -435,6 +435,22 @@ it("reads OpenCode SSE deltas, scopes events, forwards decisions, and interrupts
     notifications.some((n) => n.params["item"] && object(n.params["item"])["text"] === "Hi there"),
   ).toBe(true);
   expect(requests.every((r) => r.auth?.startsWith("Basic "))).toBe(true);
+  // An event far over the old 2 MiB limit (a long tool output, an image as a data URL), written
+  // in pieces and with CRLF line ends, arrives whole instead of ending the stream.
+  const long = "x".repeat(3 * 1024 * 1024);
+  const huge = `data: ${JSON.stringify({
+    type: "message.part.updated",
+    properties: {
+      part: { sessionID: "session", messageID: "message", id: "long", type: "text", text: long },
+    },
+  })}\r\n\r\n`;
+  for (let at = 0; at < huge.length; at += 256 * 1024)
+    stream!.write(huge.slice(at, at + 256 * 1024));
+  await expect
+    .poll(() =>
+      notifications.some((n) => n.params["item"] && object(n.params["item"])["text"] === long),
+    )
+    .toBe(true);
   input.mockResolvedValueOnce({ decision: "accept", actionId: "always" });
   event("permission.asked", {
     sessionID: "session",

@@ -18,6 +18,9 @@ import {
   type InputHandler,
 } from "./contract.ts";
 import { launch } from "./launch.ts";
+import { LineBuffer } from "./line-buffer.ts";
+
+const MAX_EVENT_BYTES = 64 * 1024 * 1024;
 /**
  * The sessions worth offering to resume in `directory`. Sub-agent sessions belong to their
  * parent, and a session nothing was ever sent to (OpenCode stamps both times at creation and
@@ -444,25 +447,31 @@ export class OpenCodeProvider extends EventProvider {
   private async events(body: ReadableStream<Uint8Array>) {
     const reader = body.getReader();
     const decoder = new TextDecoder();
-    let buffer = "";
+    // An event can carry a whole file or image as a data URL, or a long tool output, so it may be
+    // far larger than a line of chat; the limit only stops a stream that never ends an event.
+    const tooLarge = () => new Error("OpenCode event exceeds 64 MiB");
+    const lines = new LineBuffer(MAX_EVENT_BYTES, tooLarge);
+    let data: string[] = [];
+    let dataBytes = 0;
     try {
       while (!this.closed) {
         const { done, value } = await reader.read();
         if (done) break;
-        buffer += decoder.decode(value, { stream: true }).replaceAll("\r\n", "\n");
-        let boundary;
-        while ((boundary = buffer.indexOf("\n\n")) >= 0) {
-          const block = buffer.slice(0, boundary);
-          buffer = buffer.slice(boundary + 2);
-          const data = block
-            .split("\n")
-            .filter((line) => line.startsWith("data:"))
-            .map((line) => line.slice(5).trimStart())
-            .join("\n");
-          if (data) await this.event(object(JSON.parse(data)));
+        // Server-sent events: `data:` lines gather until a blank line ends the event.
+        for (const line of lines.push(decoder.decode(value, { stream: true }))) {
+          if (line) {
+            if (!line.startsWith("data:")) continue;
+            const part = line.slice(5).trimStart();
+            data.push(part);
+            dataBytes += Buffer.byteLength(part);
+            if (dataBytes > MAX_EVENT_BYTES) throw tooLarge();
+            continue;
+          }
+          const event = data.join("\n");
+          data = [];
+          dataBytes = 0;
+          if (event) await this.event(object(JSON.parse(event)));
         }
-        if (Buffer.byteLength(buffer) > 2 * 1024 * 1024)
-          throw new Error("OpenCode event exceeds size limit");
       }
       if (!this.closed) throw new Error("OpenCode event stream disconnected");
     } finally {
