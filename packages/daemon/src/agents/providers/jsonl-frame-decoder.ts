@@ -1,4 +1,5 @@
 // Adapted from Paseo d7c7044 (Apache-2.0); see third-party/paseo-LICENSE.
+import { LineBuffer } from "./line-buffer.ts";
 const V2_FRAME_BYTES = 1024 * 1024;
 const V2_REASSEMBLED_BYTES = 64 * 1024 * 1024;
 const V2_CHUNK_BYTES = 256 * 1024;
@@ -79,7 +80,12 @@ function chunkBytes(data: string): Buffer | null {
 }
 
 export class JsonlFrameDecoder {
-  private lineBuffer = "";
+  // A single line may carry a provider's whole message (an image, a long tool output) when the
+  // provider does not split it into protocol v2 chunks, so it gets the reassembled limit.
+  private readonly lines = new LineBuffer(
+    V2_REASSEMBLED_BYTES,
+    () => new Error("Provider frame too large"),
+  );
   private assembly: ChunkAssembly | null = null;
 
   private readonly receiver: {
@@ -91,17 +97,7 @@ export class JsonlFrameDecoder {
   }
 
   write(text: string): void {
-    this.lineBuffer += text;
-    let newline = this.lineBuffer.indexOf("\n");
-    while (newline !== -1) {
-      const line = this.lineBuffer.slice(0, newline).replace(/\r$/, "");
-      this.lineBuffer = this.lineBuffer.slice(newline + 1);
-      if (Buffer.byteLength(line) > 2 * 1024 * 1024) throw new Error("Provider frame too large");
-      if (line.trim()) this.consumeLine(line);
-      newline = this.lineBuffer.indexOf("\n");
-    }
-    if (Buffer.byteLength(this.lineBuffer) > 2 * 1024 * 1024)
-      throw new Error("Provider frame too large");
+    for (const line of this.lines.push(text)) if (line.trim()) this.consumeLine(line);
   }
 
   private consumeLine(line: string): void {
