@@ -18,6 +18,13 @@ export const BINDINGS = [
   { id: "close-tab", label: "Close tab", key: "t", then: "Backspace" },
   { id: "settings", label: "Settings", key: "," },
   { id: "shortcuts", label: "Shortcuts", key: "/" },
+  {
+    id: "start-dictation",
+    label: "Start dictation",
+    key: "d",
+    modifiers: ["Control"],
+    context: "outside-terminal",
+  },
   { id: "rename-tab", label: "Rename tab", key: "F2", modifiers: [], context: "tab" },
   {
     id: "move-tab-left",
