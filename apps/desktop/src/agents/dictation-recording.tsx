@@ -6,8 +6,8 @@ import type { DictationAction, DictationState } from "./dictation-session";
 import "./dictation.css";
 
 /**
- * Stands in for the prompt box while you speak. Edit (or Enter) puts the words into the prompt
- * box to read over; Send (or Ctrl+Enter) sends them as a message. No recording is kept.
+ * Stands in for the prompt box while you speak. Edit puts the words into the prompt
+ * box to read over; Send or Enter sends them as a message. No recording is kept.
  */
 export function DictationRecording({
   state,
@@ -74,10 +74,7 @@ export function DictationRecording({
         ) {
           event.preventDefault();
           event.stopPropagation();
-          // Plain Enter only fills the prompt box, so a stray key never sends a message.
-          if (event.ctrlKey || event.metaKey) {
-            if (canSend) stop("send");
-          } else stop("insert");
+          if (canSend) stop("send");
         }
       }}
     >
@@ -151,7 +148,7 @@ export function DictationRecording({
           size="icon"
           className="rounded-full"
           aria-label="Edit dictated message"
-          title="Put the words in the message to edit (Enter)"
+          title="Put the words in the message to edit"
           disabled={stopping}
           onClick={() => stop("insert")}
         >
@@ -166,7 +163,7 @@ export function DictationRecording({
           size="icon"
           className="rounded-full"
           aria-label={queued ? "Queue dictated message" : "Send dictated message"}
-          title={queued ? "Queue the message (Ctrl+Enter)" : "Send the message (Ctrl+Enter)"}
+          title={queued ? "Queue the message (Enter)" : "Send the message (Enter)"}
           disabled={stopping || !canSend}
           onClick={() => stop("send")}
         >
