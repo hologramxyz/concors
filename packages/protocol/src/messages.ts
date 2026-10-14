@@ -24,6 +24,7 @@ import { ClientInfoSchema } from "./client.ts";
 import { DaemonInfoSchema } from "./daemon.ts";
 import { HostSubscribeSchema, HostUsageMessageSchema } from "./host.ts";
 import { AuthRefreshedMessageSchema } from "./auth-refresh.ts";
+import { DaemonHeartbeatSchema } from "./heartbeat.ts";
 import { ProtocolErrorSchema } from "./errors.ts";
 import { ProtocolVersionSchema } from "./version.ts";
 import {
@@ -93,6 +94,7 @@ export type ErrorMessage = z.infer<typeof ErrorMessageSchema>;
 export const DaemonMessageSchema = z.discriminatedUnion("type", [
   DaemonReadyMessageSchema,
   AuthRefreshedMessageSchema,
+  DaemonHeartbeatSchema,
   HostUsageMessageSchema,
   ErrorMessageSchema,
   WorkspaceSnapshotMessageSchema,
