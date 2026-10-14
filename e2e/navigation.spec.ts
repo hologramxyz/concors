@@ -64,7 +64,7 @@ test("directional pane sequences, tab cycling, project memory and immediate Agen
     await expect.poll(() => focusedPane(page)).toBe(upperId);
     await page.keyboard.press("Control+Shift+ArrowLeft");
     await expect.poll(() => focusedPane(page)).toBe(left);
-    // Navigating into an Agent pane focuses its composer, where Ctrl+Shift+Arrow selects words.
+    // Navigation works in both directions between terminal and Agent inputs.
     await upper.getByRole("button", { name: "Pane actions" }).click();
     await page.getByRole("menuitemradio", { name: "Agent", exact: true }).click();
     // A closing menu hands focus back to its button when its exit animation ends, and still
@@ -73,22 +73,44 @@ test("directional pane sequences, tab cycling, project memory and immediate Agen
     await chooseProvider(upper, "Codex", page);
     const composer = upper.getByRole("textbox", { name: "Message Codex" });
     await expect(composer).toBeEnabled();
+    // A queued-message editor or pending-input field must not become navigation's target.
+    await upper.evaluate((pane) => {
+      const field = document.createElement("textarea");
+      field.setAttribute("aria-label", "Secondary pane field");
+      pane.prepend(field);
+    });
     await panes.first().locator("textarea").focus();
     await page.keyboard.press("Control+Shift+ArrowRight");
     await expect.poll(() => focusedPane(page)).toBe(upperId);
     await expect(composer).toBeFocused();
     await composer.fill("draft stays while navigating");
     await page.keyboard.press("Control+Shift+ArrowLeft");
-    await expect(composer).toBeFocused();
-    expect(
-      await composer.evaluate(
-        (node: HTMLTextAreaElement) => node.selectionEnd - node.selectionStart,
-      ),
-    ).toBeGreaterThan(0);
-    await panes.first().locator("textarea").focus();
+    await expect(panes.first().locator("textarea")).toBeFocused();
     await page.keyboard.press("Control+Shift+ArrowRight");
     await expect(composer).toBeFocused();
     await expect(composer).toHaveValue("draft stays while navigating");
+    await page.keyboard.press("Control+Shift+ArrowDown");
+    await expect(panes.last().locator("textarea")).toBeFocused();
+    await page.keyboard.press("Control+Shift+ArrowUp");
+    await expect(composer).toBeFocused();
+    // An input can be temporarily disabled while its agent reconnects/configures.
+    await composer.evaluate((input: HTMLTextAreaElement) => (input.disabled = true));
+    await page.keyboard.press("Control+Shift+ArrowLeft");
+    await expect(panes.first().locator("textarea")).toBeFocused();
+    await page.keyboard.press("Control+Shift+ArrowRight");
+    await expect(upper).toBeFocused();
+    await composer.evaluate((input: HTMLTextAreaElement) => (input.disabled = false));
+    await expect(composer).toBeFocused();
+    await composer.evaluate((input: HTMLTextAreaElement) => (input.disabled = true));
+    await page.keyboard.press("Control+Shift+ArrowLeft");
+    await page.keyboard.press("Control+Shift+ArrowRight");
+    await expect(upper).toBeFocused();
+    await page.keyboard.press("Control+Shift+ArrowLeft");
+    await composer.evaluate((input: HTMLTextAreaElement) => (input.disabled = false));
+    await expect(panes.first().locator("textarea")).toBeFocused();
+    await upper
+      .getByRole("textbox", { name: "Secondary pane field" })
+      .evaluate((field) => field.remove());
     await panes.first().locator("textarea").focus();
     // Held directional keys may repeat; creation/close sequences may not.
     await page.evaluate(() =>
@@ -119,9 +141,6 @@ test("directional pane sequences, tab cycling, project memory and immediate Agen
     await page.keyboard.press("Control+Shift+ArrowLeft");
     await expect(input).toBeFocused();
     await expect(input).toHaveValue("keep these words");
-    expect(
-      await input.evaluate((node: HTMLTextAreaElement) => node.selectionEnd - node.selectionStart),
-    ).toBeGreaterThan(0);
     await expect(shortcutActions(page, "p")).toHaveCount(0);
     // P/T sequences work directly in the composer without inserting their follow-up keys.
     await sequence(page, "p", "Escape");
