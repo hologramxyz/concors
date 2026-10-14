@@ -53,6 +53,9 @@ interface Props {
 /** Overlays that keep focus while pane focus waits; a closing menu or dialog no longer does. */
 const OPEN_OVERLAY =
   '[role="dialog"][data-state="open"], [role="alertdialog"], [role="menu"][data-state="open"]';
+// Queue editing and pending-input forms can also contain textareas; navigation targets the prompt.
+const PANE_INPUT =
+  "textarea.agent-composer-input:not(:disabled), textarea.xterm-helper-textarea:not(:disabled)";
 type Placement = "left" | "right" | "top" | "bottom";
 interface PaneDrag {
   paneId: string;
@@ -65,6 +68,11 @@ export function PaneLayout(props: Props) {
   const [drop, setDrop] = useState<Placement | null>(null);
   const container = useRef<HTMLDivElement>(null);
   const pendingFocus = useRef<string | null>(null);
+  const navigationFocus = useRef<MutationObserver | null>(null);
+  useEffect(() => {
+    if (!visible) navigationFocus.current?.disconnect();
+    return () => navigationFocus.current?.disconnect();
+  }, [visible]);
   const [activePaneId, setActivePaneId] = useState<string | null>(null);
   const activePane =
     props.tab.nodes.find((node) => node.kind === "pane" && node.id === activePaneId) ??
@@ -120,7 +128,7 @@ export function PaneLayout(props: Props) {
         settle();
         return;
       }
-      const input = pane.querySelector<HTMLTextAreaElement>("textarea:not(:disabled)");
+      const input = pane.querySelector<HTMLTextAreaElement>(PANE_INPUT);
       (input ?? pane).focus({ preventScroll: true });
       initial = false;
       if (input) settle();
@@ -145,6 +153,8 @@ export function PaneLayout(props: Props) {
     connection?.state.status === "ready" ? connection.state.daemon : null
   )?.capabilities?.includes("directional-pane-split");
   const focusNeighbor = (direction: Direction) => {
+    navigationFocus.current?.disconnect();
+    pendingFocus.current = null;
     const panes = [...(container.current?.querySelectorAll<HTMLElement>("[data-pane-id]") ?? [])];
     const current =
       panes.find((pane) => pane.contains(document.activeElement))?.dataset.paneId ?? activePane?.id;
@@ -163,10 +173,30 @@ export function PaneLayout(props: Props) {
       current,
       direction,
     );
-    const pane = panes.find((pane) => pane.dataset.paneId === next);
+    const pane = panes.find((pane) => pane.dataset.paneId === (next ?? current));
     // Focus the input immediately; both terminal and Agent inputs allow pane shortcuts.
-    const target = pane?.querySelector<HTMLElement>("textarea:not(:disabled)") ?? pane;
-    target?.focus({ preventScroll: true });
+    const input = pane?.querySelector<HTMLElement>(PANE_INPUT);
+    // A connecting agent may not have an enabled input yet. Complete navigation when it arrives.
+    (input ?? pane)?.focus({ preventScroll: true });
+    if (input || !pane) return;
+    const observer = new MutationObserver(() => {
+      if (!pane.contains(document.activeElement)) {
+        observer.disconnect();
+        return;
+      }
+      const input = pane.querySelector<HTMLElement>(PANE_INPUT);
+      if (input) {
+        input.focus({ preventScroll: true });
+        observer.disconnect();
+      }
+    });
+    observer.observe(pane, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["disabled"],
+    });
+    navigationFocus.current = observer;
   };
   useCommand("focus-left", visible && !!activePane, () => focusNeighbor("left"));
   useCommand("focus-right", visible && !!activePane, () => focusNeighbor("right"));
@@ -208,7 +238,7 @@ export function PaneLayout(props: Props) {
       const pane = container.current?.querySelector<HTMLElement>(
         `[data-pane-id="${target.paneId}"]`,
       );
-      const input = pane?.querySelector<HTMLTextAreaElement>("textarea:not(:disabled)");
+      const input = pane?.querySelector<HTMLTextAreaElement>(PANE_INPUT);
       const focused = document.activeElement;
       const focusedPane = focused?.closest<HTMLElement>("[data-pane-id]");
       // Only an open menu or dialog keeps focus. The New tab menu is still playing its exit
