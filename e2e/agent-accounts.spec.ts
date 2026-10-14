@@ -159,7 +159,12 @@ for (const [provider, label] of [
       if (provider !== "codex") {
         await page.getByRole("button", { name: "Agent and model", exact: true }).click();
         await page.getByRole("button", { name: "Back to providers", exact: true }).click();
-        await page.getByRole("option", { name: `${label} Use in this pane`, exact: true }).click();
+        await page
+          .getByRole("option", {
+            name: `${label} Starts a new conversation in this pane`,
+            exact: true,
+          })
+          .click();
         await page.getByRole("option", { name: `Fixture ${provider} model`, exact: true }).click();
       }
       const prompt = page.getByRole("region", { name: `${label} account connection` });

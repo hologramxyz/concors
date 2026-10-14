@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { modelOptions } from "@concors/client-core";
 import { Download, LoaderCircle } from "lucide-react";
 import { agentProviderName, type AgentInfo } from "@concors/protocol";
@@ -5,6 +6,17 @@ import { ControlPicker } from "./control-picker";
 import { ProviderIcon } from "./provider-icon";
 import { useAgentModelSelection } from "./use-model-selection";
 import { ProviderUpdateNotice } from "./provider-update";
+import { useAgents } from "./context";
+import { hasConversation, switchConfirmation, switchDescription } from "./provider-switch";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export function AgentModelPicker({
   agent,
@@ -22,6 +34,18 @@ export function AgentModelPicker({
     onSelect,
     !disabled && agent.status !== "starting",
   );
+  const agents = useAgents();
+  // A switch that would set a conversation with content aside is confirmed first.
+  const [confirming, setConfirming] = useState<{ model: string; provider: string } | null>(null);
+  const confirmation =
+    confirming &&
+    switchConfirmation(
+      agents,
+      agent,
+      confirming.provider,
+      providers.find((p) => p.id === confirming.provider)?.label ??
+        agentProviderName(confirming.provider),
+    );
   return (
     <>
       <ControlPicker
@@ -48,7 +72,7 @@ export function AgentModelPicker({
           description:
             p.installed === false
               ? "Not installed on this machine"
-              : `${p.id === agent.provider ? "Current conversation" : "Use in this pane"}${p.version?.updateAvailable ? ` · Update available (${p.version.latest})` : ""}`,
+              : `${switchDescription(agents, agent, p.id)}${p.version?.updateAvailable ? ` · Update available (${p.version.latest})` : ""}`,
           icon: <ProviderIcon provider={p.id} />,
           emptyMessage:
             p.error ??
@@ -87,8 +111,35 @@ export function AgentModelPicker({
             })),
           ],
         }))}
-        onSelect={(value, provider) => void choose(value, provider)}
+        onSelect={(value, provider) => {
+          if (provider && provider !== agent.provider && hasConversation(agent))
+            setConfirming({ model: value, provider });
+          else void choose(value, provider);
+        }}
       />
+      <Dialog open={!!confirming} onOpenChange={(open) => !open && setConfirming(null)}>
+        {confirmation && (
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{confirmation.title}</DialogTitle>
+              <DialogDescription>{confirmation.description}</DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setConfirming(null)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (confirming) void choose(confirming.model, confirming.provider);
+                  setConfirming(null);
+                }}
+              >
+                {confirmation.action}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        )}
+      </Dialog>
       {error && (
         <p role="alert" className="w-full px-2 text-xs text-destructive">
           {error}
