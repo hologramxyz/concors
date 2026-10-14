@@ -8,13 +8,17 @@ import {
 } from "react";
 import { BINDINGS, type CommandId } from "./bindings";
 export function createCommands() {
-  const handlers = new Map<CommandId, () => void>();
+  // Several visible panes can provide the same command. Resolve its scope at keydown time,
+  // so rapid pane navigation cannot run the previous pane's action before React re-renders.
+  const handlers = new Map<CommandId, Set<{ handler: () => void; scope: () => boolean }>>();
   const listeners = new Set<() => void>();
   let available: readonly CommandId[] = [];
   const update = () => {
     available = [...handlers.keys()];
     for (const listener of listeners) listener();
   };
+  const getAction = (id: CommandId) =>
+    [...(handlers.get(id) ?? [])].findLast((entry) => entry.scope())?.handler;
   return {
     subscribe: (listener: () => void) => {
       listeners.add(listener);
@@ -23,30 +27,42 @@ export function createCommands() {
       };
     },
     snapshot: () => available,
-    run: (id: CommandId) => handlers.get(id)?.(),
-    getAction: (id: CommandId) => handlers.get(id),
-    register: (id: CommandId, handler: () => void) => {
-      handlers.set(id, handler);
+    run: (id: CommandId) => getAction(id)?.(),
+    getAction,
+    register: (id: CommandId, handler: () => void, scope = () => true) => {
+      const entries = handlers.get(id) ?? new Set();
+      const entry = { handler, scope };
+      entries.add(entry);
+      handlers.set(id, entries);
       update();
       return () => {
-        if (handlers.get(id) === handler) {
-          handlers.delete(id);
-          update();
-        }
+        entries.delete(entry);
+        if (!entries.size) handlers.delete(id);
+        update();
       };
     },
   };
 }
 export const Context = createContext<ReturnType<typeof createCommands> | null>(null);
-export function useCommand(id: CommandId, enabled: boolean, handler: () => void) {
+export function useCommand(
+  id: CommandId,
+  enabled: boolean,
+  handler: () => void,
+  scope?: () => boolean,
+) {
   const commands = useContext(Context);
   if (!commands) throw new Error("ShortcutProvider is missing");
-  const latest = useRef(handler);
+  const latest = useRef({ handler, scope });
   useLayoutEffect(() => {
-    latest.current = handler;
+    latest.current = { handler, scope };
   });
   useEffect(() => {
-    if (enabled) return commands.register(id, () => latest.current());
+    if (enabled)
+      return commands.register(
+        id,
+        () => latest.current.handler(),
+        () => latest.current.scope?.() ?? true,
+      );
   }, [commands, id, enabled]);
 }
 export function useCommands() {
