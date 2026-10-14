@@ -61,6 +61,10 @@ describe("default workspace shortcuts", () => {
     expect(
       matchKeymap(key({ key: "Tab", shiftKey: false }), defaultKeymap(), true, true)[0]?.id,
     ).toBe("next-tab");
+    expect(matchKeymap(key({ key: "Tab" }), defaultKeymap(), false, true)[0]?.id).toBe(
+      "previous-tab",
+    );
+    expect(matchKeymap(key({ key: "Tab" }), defaultKeymap(), false, false)).toEqual([]);
     expect(
       matchKeymap(
         key({ key: "F2", ctrlKey: false, shiftKey: false }),
@@ -78,6 +82,15 @@ describe("default workspace shortcuts", () => {
         true,
       )[0]?.id,
     ).toBe("rename-tab");
+  });
+  it("starts dictation with physical Ctrl+D in chat while leaving terminal EOF alone", () => {
+    const dictation = key({ key: "d", code: "KeyD", shiftKey: false });
+    for (const mac of [false, true]) {
+      expect(matchKeymap(dictation, defaultKeymap(mac), false, true)[0]?.id).toBe(
+        "start-dictation",
+      );
+      expect(matchKeymap(dictation, defaultKeymap(mac), true, true)).toEqual([]);
+    }
   });
   it("recognizes shifted punctuation without claiming browser window close", () => {
     expect(
