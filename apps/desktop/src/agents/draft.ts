@@ -36,15 +36,63 @@ interface DraftStore {
 }
 const stores = new WeakMap<object, DraftStore>();
 const disconnected = {};
-/** Drafts are scoped to a machine/session; storage restores uncertain request IDs without resending. */
-export function useAgentDraft(connection: object | null, id: string, machineId?: string) {
+function storeFor(connection: object | null): DraftStore {
   const key = connection ?? disconnected;
   let cached = stores.get(key);
   if (!cached) {
     cached = { values: new Map(), sessions: new Map(), listeners: new Set(), restored: new Set() };
     stores.set(key, cached);
   }
-  const store = cached;
+  return cached;
+}
+/** Keeps a draft in memory and in storage; an empty one is forgotten in both. */
+function save(store: DraftStore, id: string, storageKey: string | null, draft: Draft) {
+  if (
+    !draft.message &&
+    !draft.attachments.length &&
+    !draft.queue.length &&
+    !draft.uncertain &&
+    !draft.busy
+  )
+    store.values.delete(id);
+  else store.values.set(id, draft);
+  if (storageKey)
+    try {
+      writeDraft(localStorage, storageKey, {
+        version: 1,
+        updatedAt: Date.now(),
+        draft: { message: draft.message, attachments: draft.attachments, queue: draft.queue },
+        attempt: store.sessions.get(id)?.attempt ?? null,
+      });
+    } catch {
+      /* Storage may be unavailable in a native webview. */
+    }
+}
+/**
+ * Carries the unsent message and attachments to the agent that replaces this one, as switching
+ * to another provider's model does: the pane then shows the new agent, whose draft would be empty,
+ * so the prompt seemed to vanish. The queue and any request in flight belong to the old
+ * conversation and stay with it. A draft the new agent already has is left alone.
+ */
+export function moveAgentDraft(
+  connection: object | null,
+  machineId: string | undefined,
+  from: string,
+  to: string,
+) {
+  const store = storeFor(connection);
+  const key = (id: string) => (machineId ? draftStorageKey(machineId, id) : null);
+  const source = store.values.get(from);
+  const target = store.values.get(to) ?? empty;
+  if (!source || (!source.message && !source.attachments.length)) return;
+  if (target.message || target.attachments.length) return;
+  save(store, to, key(to), { ...target, message: source.message, attachments: source.attachments });
+  save(store, from, key(from), { ...source, message: "", attachments: [] });
+  for (const listener of store.listeners) listener();
+}
+/** Drafts are scoped to a machine/session; storage restores uncertain request IDs without resending. */
+export function useAgentDraft(connection: object | null, id: string, machineId?: string) {
+  const store = storeFor(connection);
   const storageKey = machineId ? draftStorageKey(machineId, id) : null;
   if (storageKey && !store.restored.has(storageKey)) {
     store.restored.add(storageKey);
@@ -76,27 +124,7 @@ export function useAgentDraft(connection: object | null, id: string, machineId?:
     () => empty,
   );
   const update = (change: (prior: Draft) => Draft) => {
-    const draft = change(store.values.get(id) ?? empty);
-    if (
-      !draft.message &&
-      !draft.attachments.length &&
-      !draft.queue.length &&
-      !draft.uncertain &&
-      !draft.busy
-    )
-      store.values.delete(id);
-    else store.values.set(id, draft);
-    if (storageKey)
-      try {
-        writeDraft(localStorage, storageKey, {
-          version: 1,
-          updatedAt: Date.now(),
-          draft: { message: draft.message, attachments: draft.attachments, queue: draft.queue },
-          attempt: store.sessions.get(id)?.attempt ?? null,
-        });
-      } catch {
-        /* Storage may be unavailable in a native webview. */
-      }
+    save(store, id, storageKey, change(store.values.get(id) ?? empty));
     for (const listener of store.listeners) listener();
   };
   const sessionRefs = useMemo(() => {
