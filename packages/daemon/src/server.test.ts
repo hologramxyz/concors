@@ -1,13 +1,15 @@
 import { DaemonConnection, describeDaemonEndpoint } from "@concors/daemon-client";
 import {
   HEALTH_PATH,
+  HEARTBEAT_INTERVAL_MS,
   PROTOCOL_VERSION,
   WS_PATH,
   parseDaemonMessage,
   type ClientInfo,
   type DaemonMessage,
 } from "@concors/protocol";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { WebSocket as WsClient } from "ws";
 
 import { loadDaemonConfig } from "./config.ts";
 import { createDaemonServer, type DaemonServer } from "./server.ts";
@@ -56,6 +58,68 @@ describe("GET /health", () => {
   });
 });
 
+describe("connection heartbeat", () => {
+  it("sends a heartbeat after the handshake, and keeps a client that answers pings", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    try {
+      const socket = new WebSocket(`${baseUrl.replace(/^http/, "ws")}${WS_PATH}`);
+      const messages: string[] = [];
+      let closed = false;
+      socket.addEventListener("message", (event) => {
+        const parsed = parseDaemonMessage(String(event.data));
+        if (parsed.success) messages.push(parsed.data.type);
+      });
+      socket.addEventListener("close", () => {
+        closed = true;
+      });
+      await new Promise((resolve) => socket.addEventListener("open", resolve));
+      socket.send(
+        JSON.stringify({ type: "client.hello", protocolVersion: PROTOCOL_VERSION, client }),
+      );
+      await vi.waitFor(() => expect(messages).toContain("daemon.ready"));
+      // Nothing but the handshake until the first interval: a client still handshaking would
+      // reject a message it does not know.
+      expect(messages).toEqual(["daemon.ready"]);
+      for (let beat = 1; beat <= 3; beat++) {
+        vi.advanceTimersByTime(HEARTBEAT_INTERVAL_MS);
+        await vi.waitFor(() =>
+          expect(messages.filter((type) => type === "daemon.heartbeat")).toHaveLength(beat),
+        );
+      }
+      // The client's WebSocket answers each ping, so the daemon keeps the connection.
+      expect(closed).toBe(false);
+      socket.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("closes a connection whose client stops answering pings", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    try {
+      // A client that died without closing never answers a ping.
+      const socket = new WsClient(`${baseUrl.replace(/^http/, "ws")}${WS_PATH}`, {
+        autoPong: false,
+      });
+      const types: string[] = [];
+      socket.on("message", (data) => {
+        const parsed = parseDaemonMessage(String(data));
+        if (parsed.success) types.push(parsed.data.type);
+      });
+      const closed = new Promise((resolve) => socket.on("close", resolve));
+      await new Promise((resolve) => socket.on("open", resolve));
+      socket.send(
+        JSON.stringify({ type: "client.hello", protocolVersion: PROTOCOL_VERSION, client }),
+      );
+      await vi.waitFor(() => expect(types).toContain("daemon.ready"));
+      for (let beat = 0; beat < 3; beat++) vi.advanceTimersByTime(HEARTBEAT_INTERVAL_MS);
+      await closed;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe("WebSocket handshake", () => {
   it("completes end-to-end through DaemonConnection", async () => {
     const connection = new DaemonConnection({
@@ -79,6 +143,7 @@ describe("WebSocket handshake", () => {
           "project-icons",
           "file-previews",
           "file-downloads",
+          "heartbeat",
           "workspace-pull-requests",
           "pull-request-actions",
           "pull-request-states",

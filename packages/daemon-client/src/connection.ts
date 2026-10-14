@@ -7,6 +7,7 @@ import {
 } from "@concors/protocol";
 import { ThemeRequestSchema, type ThemeResult } from "@concors/protocol";
 import { AUTH_REFRESH_CAPABILITY } from "@concors/protocol";
+import { HEARTBEAT_CAPABILITY, HEARTBEAT_SILENCE_MS } from "@concors/protocol";
 import {
   DICTATION_CAPABILITY,
   DictationAudioSchema,
@@ -74,6 +75,12 @@ import {
 } from "@concors/protocol";
 
 import type { DaemonEndpoint } from "./endpoint.ts";
+
+/** How long a workspace command may wait in all, across reconnects, before it is reported lost. */
+const WORKSPACE_COMMAND_DEADLINE_MS = 30_000;
+/** How long after sending a command silence means the socket is dead rather than busy. */
+const WORKSPACE_COMMAND_PROBE_MS = 10_000;
+const WATCHDOG_CHECK_MS = 5_000;
 
 /**
  * Minimal subset of the WHATWG WebSocket used by `DaemonConnection`. Browsers, React Native and
@@ -338,6 +345,8 @@ export class DaemonConnection {
   #state: ConnectionState = { status: "disconnected" };
   #socket: WebSocketLike | null = null;
   #lastMessageAt = 0;
+  /** Messages received on any socket; a command's probe compares it with the count at sending. */
+  #received = 0;
   #authRefresh: ((ok: boolean) => void) | null = null;
   /**
    * Agents and terminals seen since the last `workspace.subscribe`. The daemon answers with
@@ -414,14 +423,23 @@ export class DaemonConnection {
     }
   >();
   readonly #workspaceListeners = new Set<(snapshot: WorkspaceSnapshot) => void>();
+  /**
+   * Workspace commands awaiting their result. They outlive a dropped socket: once the workspace is
+   * back they are sent again under the same ID, which the daemon answers from its receipt instead
+   * of applying twice. `sent` is false while there is no socket to send them on.
+   */
   readonly #commands = new Map<
     string,
     {
+      command: WorkspaceCommand;
       resolve: (result: WorkspaceResult) => void;
       reject: (error: Error) => void;
       timer: ReturnType<typeof setTimeout>;
+      probe: ReturnType<typeof setTimeout> | undefined;
+      sent: boolean;
     }
   >();
+  #watchdog: ReturnType<typeof setInterval> | undefined;
   readonly #listeners = new Set<ConnectionStateListener>();
   readonly #client: ClientInfo;
   readonly #protocolVersion: ProtocolVersion;
@@ -538,18 +556,72 @@ export class DaemonConnection {
       return Promise.reject(new Error("Command is already pending"));
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
+        const pending = this.#commands.get(command.commandId);
+        clearTimeout(pending?.probe);
         this.#commands.delete(command.commandId);
-        reject(new Error("Workspace command timed out; refresh or retry the same command ID"));
-      }, 10_000);
-      this.#commands.set(command.commandId, { resolve, reject, timer });
+        reject(
+          new Error(
+            "Lost contact with this machine, so this change may not have been saved. Check the workspace and try again.",
+          ),
+        );
+      }, WORKSPACE_COMMAND_DEADLINE_MS);
+      this.#commands.set(command.commandId, {
+        command,
+        resolve,
+        reject,
+        timer,
+        probe: undefined,
+        sent: false,
+      });
       try {
-        this.#socket?.send(JSON.stringify(command));
+        this.#sendCommand(command.commandId);
       } catch (error) {
         clearTimeout(timer);
         this.#commands.delete(command.commandId);
         reject(error instanceof Error ? error : new Error(String(error)));
       }
     });
+  }
+
+  /**
+   * Sends a pending command. If nothing at all arrives for a while after it, the socket is taken
+   * to be dead and replaced; the command goes again on the new one. A daemon that is merely slow
+   * keeps sending other traffic, so it is not mistaken for a dead socket.
+   */
+  #sendCommand(commandId: string): void {
+    const pending = this.#commands.get(commandId);
+    if (!pending || !this.#socket) return;
+    this.#socket.send(JSON.stringify(pending.command));
+    pending.sent = true;
+    const received = this.#received;
+    clearTimeout(pending.probe);
+    pending.probe = setTimeout(() => {
+      if (this.#commands.get(commandId) === pending && this.#received === received)
+        this.#abandon("The machine stopped answering");
+    }, WORKSPACE_COMMAND_PROBE_MS);
+  }
+
+  /** Workspace commands that were waiting when the socket dropped go again on this one. */
+  #resendCommands(): void {
+    for (const [commandId, pending] of this.#commands)
+      if (!pending.sent) {
+        try {
+          this.#sendCommand(commandId);
+        } catch {
+          // The next socket sends it; the deadline still bounds the wait.
+        }
+      }
+  }
+
+  /**
+   * Gives up on a socket that has stopped delivering anything, without waiting for a close that
+   * may never come, and reports the connection lost so the host reconnects. Pending workspace
+   * commands are kept for the next socket.
+   */
+  #abandon(reason: string): void {
+    if (this.#state.status !== "ready" || !this.#socket) return;
+    this.#teardown(4000, reason);
+    this.#setState({ status: "disconnected", reason, closeCode: 4000 });
   }
 
   subscribeProjectSetups(listener: (setups: ProjectSetup[]) => void): () => void {
@@ -878,6 +950,7 @@ export class DaemonConnection {
       socket.addEventListener("message", (event) => {
         if (!isCurrent()) return;
         this.#lastMessageAt = Date.now();
+        this.#received++;
         const parsed = parseDaemonMessage(event.data);
         if (!parsed.success) {
           if (this.#state.status === "handshaking") {
@@ -902,6 +975,14 @@ export class DaemonConnection {
               ...(message.capabilities ? { capabilities: message.capabilities } : {}),
             };
             this.#setState({ status: "ready", daemon });
+            if (daemon.capabilities?.includes(HEARTBEAT_CAPABILITY)) {
+              // Timers held back by sleep fire on wake: a socket silent since then is abandoned.
+              clearInterval(this.#watchdog);
+              this.#watchdog = setInterval(() => {
+                if (Date.now() - this.#lastMessageAt > HEARTBEAT_SILENCE_MS)
+                  this.#abandon("No heartbeat from the machine");
+              }, WATCHDOG_CHECK_MS);
+            }
             if (this.#hostUsageListeners.size > 0) this.#subscribeHostUsage(true);
             if (this.#workspaceListeners.size > 0) this.#subscribeWorkspace();
             else this.#forgetSessions();
@@ -1084,11 +1165,13 @@ export class DaemonConnection {
             this.#workspace = message.snapshot;
             if (this.#resync) this.#finishResync(this.#resync);
             for (const listener of this.#workspaceListeners) listener(message.snapshot);
+            this.#resendCommands();
             break;
           case "workspace.result": {
             const pending = this.#commands.get(message.commandId);
             if (pending) {
               clearTimeout(pending.timer);
+              clearTimeout(pending.probe);
               this.#commands.delete(message.commandId);
               pending.resolve(message);
             }
@@ -1202,15 +1285,14 @@ export class DaemonConnection {
         );
       }
       this.#agentRequests.clear();
+      // Workspace commands wait for the next socket; their deadline still runs.
       for (const pending of this.#commands.values()) {
-        clearTimeout(pending.timer);
-        pending.reject(
-          new Error(
-            "Connection lost; command outcome may be unknown. Retry with the same command ID.",
-          ),
-        );
+        clearTimeout(pending.probe);
+        pending.probe = undefined;
+        pending.sent = false;
       }
-      this.#commands.clear();
+      clearInterval(this.#watchdog);
+      this.#watchdog = undefined;
       for (const pending of this.#terminalRequests.values()) {
         clearTimeout(pending.timer);
         pending.reject(new Error("Connection lost; terminal launch outcome may be unknown"));
