@@ -27,6 +27,7 @@ import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { api } from "@/auth/api";
 import { AuthScreen } from "@/auth/auth-screen";
 import { activeOrganization, describeAuthError } from "@/auth/auth-state";
+import { UnreachableHelpButton } from "@/daemon/unreachable-dialog";
 import { useAuth } from "@/auth/use-auth";
 import { useSignInUnavailable } from "@/auth/sign-in";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -515,7 +516,18 @@ function AppContent() {
                           role="alert"
                           className="flex items-center justify-between gap-3 border-b bg-destructive/5 px-4 py-2 text-xs text-destructive"
                         >
-                          <span>{connection.error}</span>
+                          <span className="min-w-0 flex-1">
+                            {connection.error === "Access revoked"
+                              ? connection.error
+                              : `Can't reach ${selectedHost.label}. Concors keeps retrying.`}
+                          </span>
+                          {connection.error !== "Access revoked" && (
+                            <UnreachableHelpButton
+                              host={selectedHost}
+                              organizationId={organizationId}
+                              onRetry={connection.reconnectNow}
+                            />
+                          )}
                           <Button type="button" variant="outline" onClick={connection.reconnectNow}>
                             Retry connection
                           </Button>
@@ -533,6 +545,11 @@ function AppContent() {
                           <span className="min-w-0 flex-1 truncate">
                             Reconnecting to {selectedHost.label}…
                           </span>
+                          <UnreachableHelpButton
+                            host={selectedHost}
+                            organizationId={organizationId}
+                            onRetry={connection.reconnectNow}
+                          />
                           <Button type="button" variant="ghost" onClick={connection.reconnectNow}>
                             Retry now
                           </Button>

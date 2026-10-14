@@ -231,16 +231,23 @@ it("allows later expiry episodes after successful authentication", async () => {
   }
   expect(t.mint).toHaveBeenCalledTimes(4);
 });
-it("bounds opaque browser upgrades without misreporting a network failure as certain revocation", async () => {
+it("keeps retrying a socket that will not open, never reporting a network failure as revocation", async () => {
   const t = setup();
   await flush();
+  // The first may be a stale token the browser cannot report: a fresh one at once.
   t.sockets[0]!.emit("error");
   await flush();
+  expect(t.mint).toHaveBeenCalledTimes(2);
+  // Then the machine or the way to it is down: retried with backoff for as long as it takes.
   t.sockets[1]!.emit("error");
   await flush();
-  expect(t.controller.getSnapshot().message).toContain("offline or access revoked");
-  await vi.advanceTimersByTimeAsync(60_000);
-  expect(t.mint).toHaveBeenCalledTimes(2);
+  expect(t.controller.getSnapshot().message).toContain("Retrying automatically");
+  expect(t.controller.getSnapshot().message).not.toContain("revoked");
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(t.mint).toHaveBeenCalledTimes(3);
+  t.sockets[2]!.emit("error");
+  await vi.advanceTimersByTimeAsync(2_000);
+  expect(t.mint).toHaveBeenCalledTimes(4);
 });
 it.each([403, 404])("does not retry forbidden/missing machines: %s", async (tokenStatus) => {
   const t = setup({ tokenStatus });

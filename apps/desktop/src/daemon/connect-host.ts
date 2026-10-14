@@ -33,6 +33,7 @@ export function connectHost(options: HostConnectionOptions) {
   let disposed = false;
   let blocked = false;
   let authRetried = false;
+  let opaqueRetried = false;
   let generation = 0;
   let delay = 1_000;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -63,24 +64,28 @@ export function connectHost(options: HostConnectionOptions) {
   }
   function retry(authentication: boolean, opaque = false) {
     if (disposed || blocked) return;
-    if (authentication || opaque) {
+    if (authentication) {
       if (authRetried) {
-        stop(
-          authentication
-            ? "Access revoked"
-            : "Could not connect after refreshing access. The machine may be offline or access revoked.",
-        );
+        stop("Access revoked");
         return;
       }
       authRetried = true;
     }
+    // A socket that would not open may have been refused for a stale token (the browser hides the
+    // status), so the first is retried at once with a fresh one. After that the machine or the way
+    // to it is down: keep trying with backoff, since it often comes back (a restart, a server that
+    // ran out of memory) and giving up left a working machine unused until someone noticed. Every
+    // attempt mints a new token, so access that was really revoked still stops it.
+    const fresh = opaque && !opaqueRetried;
+    if (opaque) opaqueRetried = true;
     // A long-lived connection that drops (e.g. the gateway expiring its token) comes straight
     // back; only repeated failures back off.
     const stable = readySince !== null && Date.now() - readySince >= STABLE_MS;
     readySince = null;
     clearTimeout(timer);
-    timer = setTimeout(() => void attempt(), authentication || opaque || stable ? 0 : delay);
-    if (!authentication && !opaque && !stable) delay = Math.min(delay * 2, 30_000);
+    const immediate = authentication || fresh || stable;
+    timer = setTimeout(() => void attempt(), immediate ? 0 : delay);
+    if (!immediate) delay = Math.min(delay * 2, 30_000);
   }
   async function attempt() {
     if (disposed || blocked) return;
@@ -168,6 +173,7 @@ export function connectHost(options: HostConnectionOptions) {
       // A successful authenticated handshake ends this retry episode. Later token expiry
       // gets its own refresh, so a healthy session can outlive multiple 15-minute tokens.
       authRetried = false;
+      opaqueRetried = false;
       scheduleRefresh();
     } else clearTimeout(refreshTimer);
     report(state);
@@ -189,6 +195,7 @@ export function connectHost(options: HostConnectionOptions) {
     reconnect: () => {
       blocked = false;
       authRetried = false;
+      opaqueRetried = false;
       delay = 1_000;
       void attempt();
     },

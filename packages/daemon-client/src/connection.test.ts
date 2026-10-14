@@ -735,7 +735,7 @@ describe("workspace replica lifecycle", () => {
       const pending = connection.executeWorkspace(command);
       const lost = expect(pending).rejects.toThrow("Lost contact with this machine");
       socket.serverClose();
-      await vi.advanceTimersByTimeAsync(29_000);
+      await vi.advanceTimersByTimeAsync(59_000);
       await vi.advanceTimersByTimeAsync(2_000);
       await lost;
       connection.disconnect();
@@ -777,10 +777,34 @@ describe("workspace replica lifecycle", () => {
       await ready;
       socket.serverSend({ type: "workspace.snapshot", snapshot });
       void connection.executeWorkspace(command).catch(() => undefined);
-      await vi.advanceTimersByTimeAsync(9_000);
+      await vi.advanceTimersByTimeAsync(19_000);
       expect(connection.state.status).toBe("ready");
       await vi.advanceTimersByTimeAsync(2_000);
       expect(connection.state).toMatchObject({ status: "disconnected", closeCode: 4000 });
+      connection.disconnect();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not drop a machine that sends heartbeats just because a command is slow", async () => {
+    vi.useFakeTimers();
+    try {
+      const { connection, socket, ready } = startConnection();
+      connection.subscribeWorkspace(() => undefined);
+      socket.serverOpen();
+      socket.serverSend({ ...READY, capabilities: ["heartbeat"] });
+      await ready;
+      socket.serverSend({ type: "workspace.snapshot", snapshot });
+      const pending = connection.executeWorkspace(command);
+      // A small server busy running agents answers late, but its heartbeats keep coming.
+      for (let beat = 0; beat < 3; beat++) {
+        await vi.advanceTimersByTimeAsync(14_000);
+        socket.serverSend({ type: "daemon.heartbeat" });
+      }
+      expect(connection.state.status).toBe("ready");
+      socket.serverSend(result);
+      await expect(pending).resolves.toEqual(result);
       connection.disconnect();
     } finally {
       vi.useRealTimers();

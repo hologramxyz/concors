@@ -29,6 +29,7 @@ export class ConnectionController {
   private generation = 0;
   private failures = 0;
   private authRetried = false;
+  private opaqueRetried = false;
   private blocked = false;
   private abort: AbortController | undefined;
   private timer: ReturnType<typeof setTimeout> | undefined;
@@ -73,6 +74,7 @@ export class ConnectionController {
     this.stopAttempt();
     this.failures = 0;
     this.authRetried = false;
+    this.opaqueRetried = false;
     this.blocked = false;
     void this.attempt();
   };
@@ -95,15 +97,16 @@ export class ConnectionController {
   private failed(cause?: unknown, authentication = false, opaque = false): void {
     if (!this.available || this.disposed || this.blocked) return;
     authentication ||= cause instanceof ApiError && cause.status === 401;
-    if (authentication || opaque) {
-      if (this.authRetried)
-        cause = new ConnectionAccessError(
-          authentication
-            ? "Access revoked"
-            : "Could not connect after refreshing access. The machine may be offline or access revoked.",
-        );
+    if (authentication) {
+      if (this.authRetried) cause = new ConnectionAccessError("Access revoked");
       this.authRetried = true;
     }
+    // A socket that would not open may have been refused for a stale token, so the first is
+    // retried at once with a fresh one; after that the machine or the way to it is down, and it is
+    // retried with backoff until it comes back. Each attempt mints a token, so revoked access
+    // still stops it.
+    const fresh = opaque && !this.opaqueRetried;
+    if (opaque) this.opaqueRetried = true;
     this.stopAttempt();
     this.blocked = cause instanceof ConnectionAccessError;
     this.publish({
@@ -115,7 +118,7 @@ export class ConnectionController {
           : "Could not connect. Retrying automatically; your sessions stay on the machine.",
     });
     if (cause instanceof ConnectionAccessError) return;
-    const delay = authentication || opaque ? 0 : Math.min(1000 * 2 ** this.failures++, 30_000);
+    const delay = authentication || fresh ? 0 : Math.min(1000 * 2 ** this.failures++, 30_000);
     this.timer = setTimeout(() => {
       void this.attempt();
     }, delay);
@@ -143,7 +146,10 @@ export class ConnectionController {
       this.cleanup.push(
         connection.subscribe((state) => {
           if (!current()) return;
-          if (state.status === "ready") this.authRetried = false;
+          if (state.status === "ready") {
+            this.authRetried = false;
+            this.opaqueRetried = false;
+          }
           if (state.status === "disconnected") this.failed(undefined, state.closeCode === 4401);
           if (state.status === "error") {
             const details = state.error.details as Record<string, unknown> | undefined;
