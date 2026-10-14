@@ -35,17 +35,30 @@ for (const [provider, label] of [
         await expect(page.getByRole("button", { name, exact: true })).toHaveCount(0);
       await page.getByLabel("Agent and model", { exact: true }).click();
       await page.getByRole("button", { name: "Back to providers" }).click();
-      await page.getByRole("option", { name: new RegExp(`^${label} Use in this pane$`) }).click();
+      await page
+        .getByRole("option", {
+          name: new RegExp(`^${label} Starts a new conversation in this pane$`),
+        })
+        .click();
       await expect(
         page.getByRole("option", { name: `Fixture ${provider} model`, exact: true }),
       ).toBeVisible();
       // Revisiting a discovered provider retains its model rows during revalidation.
       await page.getByRole("button", { name: "Back to providers" }).click();
-      await page.getByRole("option", { name: new RegExp(`^${label} Use in this pane$`) }).click();
+      await page
+        .getByRole("option", {
+          name: new RegExp(`^${label} Starts a new conversation in this pane$`),
+        })
+        .click();
       await expect(
         page.getByRole("status").filter({ hasText: /Loading providers|Loading models/ }),
       ).toHaveCount(0);
       await page.getByRole("option", { name: `Fixture ${provider} model`, exact: true }).click();
+      // The Codex conversation has content, so the switch says what becomes of it first.
+      await page
+        .getByRole("dialog", { name: `Start a new ${label} conversation?` })
+        .getByRole("button", { name: "Start new conversation", exact: true })
+        .click();
       const composer = page.getByRole("textbox", { name: `Message ${label}` });
       await expect(composer).toBeEnabled();
       await expect(page.getByRole("button", { name: "Tab 2", exact: true })).toHaveAttribute(
@@ -74,8 +87,14 @@ for (const [provider, label] of [
       await expect(page.getByRole("log")).toContainText("new provider conversation");
       await page.getByLabel("Agent and model", { exact: true }).click();
       await page.getByRole("button", { name: "Back to providers" }).click();
-      await page.getByRole("option", { name: "Codex Use in this pane", exact: true }).click();
+      await page
+        .getByRole("option", { name: "Codex Back to its conversation in this pane", exact: true })
+        .click();
       await page.getByRole("option", { name: "Fixture model", exact: true }).click();
+      await page
+        .getByRole("dialog", { name: "Switch to Codex?" })
+        .getByRole("button", { name: "Switch to Codex", exact: true })
+        .click();
       await expect(pane).toHaveAttribute("data-pane-id", paneId);
       await expect(page.getByRole("button", { name: "Tab 3", exact: true })).toHaveCount(0);
       await expect(original).toBeEnabled();
