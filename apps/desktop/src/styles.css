@@ -268,8 +268,24 @@
   }
 }
 
+/*
+ * Reply spacing follows shadcn's typography at chat density: blocks a line apart, list items with
+ * a gap of their own, and headings closer to what follows them than to what came before. A list of
+ * bolded items read as one dense block without the item gap.
+ */
 .chat-markdown > * + * {
-  margin-top: 0.75rem;
+  margin-top: 1rem;
+}
+.chat-markdown li + li,
+.chat-markdown li > ul,
+.chat-markdown li > ol {
+  margin-top: 0.5rem;
+}
+.chat-markdown li > p + p {
+  margin-top: 0.5rem;
+}
+.chat-markdown li::marker {
+  color: var(--muted-foreground);
 }
 .chat-markdown pre {
   overflow-x: auto;
@@ -313,7 +329,13 @@
 .chat-markdown h2,
 .chat-markdown h3 {
   font-weight: 600;
-  margin-top: 1rem;
+  line-height: 1.3;
+}
+.chat-markdown > * + :is(h1, h2, h3) {
+  margin-top: 1.5rem;
+}
+.chat-markdown > :is(h1, h2, h3) + * {
+  margin-top: 0.5rem;
 }
 .chat-markdown blockquote {
   border-left: 2px solid var(--border);
@@ -558,9 +580,13 @@ html[data-pane-resizing="row"] * {
 }
 .chat-markdown,
 .agent-composer-input {
-  /* Paseo's default content typography: 15px with a 1.4 line-height. */
+  /* Paseo's default content typography: 15px. */
   font-size: 15px;
   line-height: 21px;
+}
+.chat-markdown {
+  /* Replies are read at length, so they get more line spacing than the composer's 1.4. */
+  line-height: 24px;
 }
 .chat-markdown pre {
   line-height: 21px;
@@ -582,6 +608,9 @@ html[data-pane-resizing="row"] * {
 }
 .agent-thinking .chat-markdown > * + * {
   margin-top: 0.5rem;
+}
+.agent-thinking .chat-markdown li + li {
+  margin-top: 0.25rem;
 }
 .agent-thinking .chat-markdown strong {
   font-weight: 500;
