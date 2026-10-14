@@ -194,7 +194,12 @@ test("collapsed agents show provider icons and live status without losing chat d
     await expect(codex).toBeEnabled();
     await page.getByRole("button", { name: "Agent and model", exact: true }).click();
     await page.getByRole("button", { name: "Back to providers", exact: true }).click();
-    await page.getByRole("option", { name: "Claude Code Use in this pane", exact: true }).click();
+    await page
+      .getByRole("option", {
+        name: "Claude Code Starts a new conversation in this pane",
+        exact: true,
+      })
+      .click();
     await page.getByRole("option", { name: "Fixture claude model", exact: true }).click();
     await expect(
       page.getByRole("textbox", { name: "Message Claude Code", exact: true }),
