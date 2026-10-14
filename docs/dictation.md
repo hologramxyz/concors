@@ -1,11 +1,10 @@
 # Dictation in agent chat
 
-On desktop, the microphone replaces the composer with a recording view. A volume meter beside the microphone and a waveform spanning the input show the actual microphone signal; the timer shows recording duration. The controls use the app's existing compact button sizes and theme colors.
+On desktop, click the microphone or press **Ctrl+D** in the focused Agent pane to replace the composer with a recording view. The shortcut uses physical Control on Mac too, is customizable in Settings → Shortcuts, and leaves terminal Ctrl+D alone. A volume meter beside the microphone and a waveform spanning the input show the actual microphone signal; the timer shows recording duration. The controls use the app's existing compact button sizes and theme colors.
 
-- **Enter / Send:** stop capture, wait for the final transcript, and send the text through the existing chat submission path. A working agent queues the message as usual. Empty dictation never sends an existing draft or attachment by itself.
-- **Stop:** finish capture and show the transcript for review without sending.
-- **Edit:** finish capture and return the text to a focused, editable composer.
-- **Cancel / Escape:** discard the current dictation and restore the draft from before recording. Existing attachments remain.
+- **Enter / Edit:** finish capture and return the text to a focused, editable composer without sending.
+- **Ctrl+Enter / Send:** stop capture, wait for the final transcript, and send the text through the existing chat submission path. A working agent queues the message as usual. Empty dictation never sends an existing draft or attachment by itself.
+- **Cancel / Escape:** discard the current dictation and restore the draft from before recording. Existing attachments remain. Escape also stops a running agent in that pane.
 
 Dictated words update the session's existing draft storage while recording. Switching tabs, hiding the app, disconnecting, or closing the composer releases capture; a pending Send cannot deliver after leaving the tab or disconnecting. Recognition errors and a finalization timeout (5 seconds for a browser speech service, 30 for the daemon) keep captured words available for review, without sending automatically. Late callbacks from a canceled recording cannot overwrite a newer draft.
 
