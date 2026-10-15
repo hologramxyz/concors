@@ -338,7 +338,12 @@ export function registerProtocolEndpoint(
             void agents.providerUsage(message).then((result) => send(socket, result));
           else if (message.operation.kind === "activate")
             send(socket, agents.activateSubscription(message));
-          else send(socket, providers.request(message));
+          else {
+            const result = providers.request(message);
+            send(socket, result);
+            if (message.operation.kind === "mcp-save" && result.outcome.status === "ok")
+              agents.mcpServersChanged();
+          }
         } else if (message.type === "file.request")
           void files.request(message).then((result) => send(socket, result));
         else if (message.type === "agent.request")

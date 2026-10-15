@@ -1,6 +1,6 @@
 import { ProviderRegistry } from "./registry.ts";
 import { AcpProvider } from "./acp.ts";
-import type { AgentProviderId, McpServer } from "@concors/protocol";
+import type { AgentProviderId, McpServer, ProviderConfig } from "@concors/protocol";
 import { CodexAppServer } from "../codex/app-server.ts";
 import { ClaudeProvider } from "./claude.ts";
 import { OpenCodeProvider } from "./opencode.ts";
@@ -17,17 +17,34 @@ export type AgentProviderFactory = (
   provider?: AgentProviderId,
   tools?: AgentToolContext,
 ) => ConversationProvider;
+/**
+ * Whether an agent can load a machine-wide MCP server. Pi manages MCP itself, a provider may opt
+ * out, and Codex speaks HTTP and stdio but not SSE; those simply go without that server.
+ */
+export function usesMcpServer(config: ProviderConfig, server: McpServer): boolean {
+  if (["pi", "omp"].includes(config.engine)) return false;
+  if (config.params?.supportsMcpServers === false) return false;
+  return !(config.engine === "codex" && server.type === "sse");
+}
 export function providerFactory(registry: ProviderRegistry): AgentProviderFactory {
   return (cwd, onInput, provider = "codex", tools = {}) => {
     const original = registry.config(provider);
+    const own = (original.params?.mcpServers ?? []).filter(
+      (s) => !tools.mcp || s.name !== "concors-schedules",
+    );
     const config = {
       ...original,
       params: {
         ...original.params,
+        // The machine's servers, those set for this provider (which win on a name), then Concors's.
         mcpServers: [
-          ...(original.params?.mcpServers ?? []).filter(
-            (s) => !tools.mcp || s.name !== "concors-schedules",
-          ),
+          ...registry
+            .mcpServers()
+            .filter(
+              (server) =>
+                usesMcpServer(original, server) && !own.some((s) => s.name === server.name),
+            ),
+          ...own,
           ...(tools.mcp ? [tools.mcp] : []),
         ],
       },
