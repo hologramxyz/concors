@@ -46,11 +46,20 @@ export class TestAgentProvider implements AgentProvider {
         rewind: ["conversation"],
         steer: true,
         steerAttachments: TestAgentProvider.steerAttachments,
+        mcpStatus: true,
         compact: true,
         childHistory: true,
         commands: [
           { name: "compact", description: "Summarize earlier context" },
           { name: "review", description: "Review a change", argumentHint: "<target>" },
+        ],
+      };
+    // Statuses as Claude Code reports them: Concors's own tools connect, a server needs sign-in.
+    if (method === "mcp/status")
+      return {
+        servers: [
+          { name: "concors-schedules", status: "connected" },
+          { name: "github", status: "needs-auth" },
         ],
       };
     if (method === "session/child-history") {

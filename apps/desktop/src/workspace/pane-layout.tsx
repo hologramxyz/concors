@@ -23,7 +23,8 @@ import { TerminalPane } from "@/terminal/terminal-pane";
 import { useContext, useEffect, useRef, useState } from "react";
 import { AgentPaneIcon } from "@/agents/activity";
 import { useAgents } from "@/agents/context";
-import { Columns2, Rows2, Ellipsis, Pencil, Terminal, X } from "lucide-react";
+import { Columns2, Rows2, Ellipsis, Pencil, Plug, Terminal, X } from "lucide-react";
+import { McpStatusDialog } from "@/agents/mcp-status-dialog";
 import {
   PANE_RENAME_CAPABILITY,
   type LayoutNode,
@@ -368,6 +369,7 @@ function Pane({
   const [menuOpen, setMenuOpen] = useState(false);
   if (menuOpen && !tabVisible) setMenuOpen(false);
   const agent = useAgents().find((agent) => agent.id === node.sessionId);
+  const [mcpOpen, setMcpOpen] = useState(false);
   const profiles = useTerminalProfiles();
   const options = paneProfiles(profiles.profiles);
   const PaneIcon =
@@ -477,6 +479,11 @@ function Pane({
             <DropdownMenuItem disabled={!canRename} onSelect={startRename}>
               <Pencil /> <span className="whitespace-nowrap">Rename pane</span>
             </DropdownMenuItem>
+            {agent?.controls?.mcpStatus && (
+              <DropdownMenuItem onSelect={() => setMcpOpen(true)}>
+                <Plug /> <span className="whitespace-nowrap">MCP servers…</span>
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem
               disabled={!canEdit || tab.nodes.length >= 63}
@@ -546,6 +553,9 @@ function Pane({
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
+        {agent && mcpOpen && (
+          <McpStatusDialog agent={agent} open={mcpOpen} onOpenChange={setMcpOpen} />
+        )}
         <button
           type="button"
           aria-label="Close pane"
