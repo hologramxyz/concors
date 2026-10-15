@@ -43,8 +43,7 @@ test("the composer keeps its controls and send button on one row at every width"
     expect(await layout()).toEqual({ rows: 1, overflows: false });
     await page.screenshot({ path: test.info().outputPath("composer-wide.png") });
 
-    // The icon-only plan mode and speed controls name themselves in the app's tooltip; the
-    // labelled pickers keep their plain title. Speed's menu hides its tooltip, and choosing an
+    // Every control uses the same app tooltip. A menu hides its tooltip, and choosing an
     // option does not bring it back as focus returns to the control.
     const tooltip = page.getByRole("tooltip");
     await page.getByRole("button", { name: "Plan mode", exact: true }).hover();
@@ -61,9 +60,10 @@ test("the composer keeps its controls and send button on one row at every width"
     await expect(page.getByRole("option")).toHaveCount(0);
     await expect(tooltip).toHaveCount(0);
     await effort.hover();
+    await expect(tooltip).toHaveText(/^Thinking effort: /);
+    await expect(effort).not.toHaveAttribute("title");
+    await page.mouse.move(0, 0, { steps: 5 });
     await expect(tooltip).toHaveCount(0);
-    await expect(effort).toHaveAttribute("title", /^Thinking effort: /);
-    await page.mouse.move(0, 0);
 
     // Labels give way to icons rather than pushing the send button onto a second row.
     for (const width of [900, 760, 640]) {
@@ -71,7 +71,10 @@ test("the composer keeps its controls and send button on one row at every width"
       await expect.poll(layout).toEqual({ rows: 1, overflows: false });
     }
     await expect(effortLabel).toBeHidden();
-    await expect(effort).toHaveAttribute("title", /^Thinking effort: /);
+    await effort.hover();
+    await expect(tooltip).toHaveText(/^Thinking effort: /);
+    await page.mouse.move(0, 0, { steps: 5 });
+    await expect(tooltip).toHaveCount(0);
     await page.screenshot({ path: test.info().outputPath("composer-narrow.png") });
 
     // A pane of about 470px, like three side by side: the model keeps its name, truncated if

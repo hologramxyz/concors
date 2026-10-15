@@ -26,8 +26,11 @@ test("the context ring shows the conversation's window and the plan's usage bars
 
     // The fixture reports 32k of a 128k window with its turn.
     const ring = page.getByRole("button", { name: "Context window", exact: true });
-    await expect(ring).toHaveAttribute("title", "25% context used");
+    await ring.hover();
+    await expect(page.getByRole("tooltip")).toHaveText("25% context used");
+    await expect(ring).not.toHaveAttribute("title");
     await ring.click();
+    await expect(page.getByRole("tooltip")).toHaveCount(0);
     const context = page.getByRole("region", { name: "Context window" });
     await expect(context).toContainText("32k / 128k tokens · 25% used");
 
