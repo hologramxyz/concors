@@ -211,6 +211,7 @@ test("shortcuts have a dedicated settings page and the account menu only shows i
     "Keyboard shortcuts",
     "Follow-ups",
     "Workspace",
+    "Agent chat",
     "Tabs",
     "Panes",
   ]);

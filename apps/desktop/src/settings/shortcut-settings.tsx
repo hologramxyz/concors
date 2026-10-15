@@ -34,6 +34,11 @@ const GROUPS: readonly {
     commands: ["search", "new-project", "settings", "shortcuts"],
   },
   {
+    title: "Agent chat",
+    description: "Dictate in the focused agent pane. Escape stops its running agent.",
+    commands: ["start-dictation"],
+  },
+  {
     title: "Tabs",
     description:
       "Switch between tabs and organize your workspace. Desktop-only bindings leave browser tabs alone.",

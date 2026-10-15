@@ -6,6 +6,7 @@ import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { Button } from "@/components/ui/button";
 import { invalidateModelCatalogs, modelCatalog } from "./model-catalog";
 import { ComposerSurfaceContext } from "./composer-expansion";
+import { ControlTooltip } from "./control-tooltip";
 
 /** Whether a provider row should advertise an update, including one still in progress. */
 function providerUpdatePending(version: ProviderVersion | undefined): boolean {
@@ -70,15 +71,11 @@ export function ProviderUpdateNotice({
             {label} {current.latest} is available. Update to get the latest models.
           </p>
           {current.updateCommand ? (
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-2"
-              title={`Installed: ${current.installed}. Runs on this machine: ${current.updateCommand}`}
-              onClick={() => void update()}
-            >
-              Update
-            </Button>
+            <ControlTooltip text={`Update ${label} · installed: ${current.installed}`}>
+              <Button variant="outline" size="sm" className="mt-2" onClick={() => void update()}>
+                Update
+              </Button>
+            </ControlTooltip>
           ) : (
             <p className="mt-1">Update it the way you installed it.</p>
           )}
@@ -104,6 +101,8 @@ const noSubscription = () => () => undefined;
 export function ProviderUpdateLabel({ agent, compact }: { agent: AgentInfo; compact: boolean }) {
   const connection = useContext(TerminalConnectionContext);
   const composerSurface = useContext(ComposerSurfaceContext);
+  const [open, setOpen] = useState(false),
+    [quiet, setQuiet] = useState(false);
   const epoch = connection?.workspace?.epoch;
   const catalog = useMemo(
     () => (connection ? modelCatalog(connection, agent.directory, epoch) : null),
@@ -123,22 +122,31 @@ export function ProviderUpdateLabel({ agent, compact }: { agent: AgentInfo; comp
       ? "Update available"
       : `${label} ${version.latest} available`;
   return (
-    <Popover.Root>
-      <Popover.Trigger
-        type="button"
-        aria-label={text}
-        title={`${label} ${version.latest} is available`}
-        className="composer-update-label inline-flex min-w-0 items-center gap-1 rounded px-1.5 py-1 text-xs whitespace-nowrap text-muted-foreground hover:bg-muted hover:text-foreground"
-      >
-        {/* A narrow desktop composer keeps only the icon, so the controls stay on one row. */}
-        {!compact &&
-          (version.updating ? (
-            <LoaderCircle className="size-3.5 shrink-0 animate-spin" aria-hidden="true" />
-          ) : (
-            <CircleArrowUp className="size-3.5 shrink-0" aria-hidden="true" />
-          ))}
-        <span className="truncate">{text}</span>
-      </Popover.Trigger>
+    <Popover.Root
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setQuiet(true);
+      }}
+    >
+      <ControlTooltip text={`${label} ${version.latest} is available`} hidden={open || quiet}>
+        <Popover.Trigger
+          type="button"
+          aria-label={text}
+          className="composer-update-label inline-flex min-w-0 items-center gap-1 rounded px-1.5 py-1 text-xs whitespace-nowrap text-muted-foreground hover:bg-muted hover:text-foreground"
+          onPointerEnter={() => setQuiet(false)}
+          onBlur={() => setQuiet(false)}
+        >
+          {/* A narrow desktop composer keeps only the icon, so the controls stay on one row. */}
+          {!compact &&
+            (version.updating ? (
+              <LoaderCircle className="size-3.5 shrink-0 animate-spin" aria-hidden="true" />
+            ) : (
+              <CircleArrowUp className="size-3.5 shrink-0" aria-hidden="true" />
+            ))}
+          <span className="truncate">{text}</span>
+        </Popover.Trigger>
+      </ControlTooltip>
       <Popover.Portal>
         <Popover.Content
           data-composer-surface={composerSurface}

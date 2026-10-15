@@ -1,5 +1,6 @@
 import { useState, type ReactElement } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Kbd } from "@/components/ui/kbd";
 
 /**
  * Names a composer control on hover. Most of them are bare icons, and the webview's own `title`
@@ -9,10 +10,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
  */
 export function ControlTooltip({
   text,
+  shortcut,
   hidden = false,
   children,
 }: {
   text: string;
+  shortcut?: string | undefined;
   hidden?: boolean;
   children: ReactElement;
 }) {
@@ -21,7 +24,8 @@ export function ControlTooltip({
     <Tooltip delayDuration={250} open={open && !hidden} onOpenChange={setOpen}>
       <TooltipTrigger asChild>{children}</TooltipTrigger>
       <TooltipContent side="top" sideOffset={6}>
-        {text}
+        <span className="min-w-0 break-words">{text}</span>
+        {shortcut && <Kbd className="shrink-0">{shortcut}</Kbd>}
       </TooltipContent>
     </Tooltip>
   );
