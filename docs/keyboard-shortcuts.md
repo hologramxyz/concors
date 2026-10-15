@@ -85,6 +85,9 @@ Ctrl+D starts dictation in the focused Agent pane and can be customized in Short
 chat. It retains its shell EOF behavior in terminals. Escape stops the focused pane's running
 agent without sending or clearing its draft; during dictation it also cancels the recording.
 An open menu, dialog or shortcut sequence uses Escape to dismiss itself first.
+Composer controls use matching tooltips on hover or keyboard focus, with shortcut hints for
+dictation, permission cycling, sending and stopping. The dictation hint follows the binding
+saved in Shortcuts; controls without a shortcut show their name and current value.
 Unsent chat text and attachments survive pane/tab navigation in memory for the current daemon connection.
 Outside terminals, Ctrl+K (Command+K on Mac) remains a search alias.
 
