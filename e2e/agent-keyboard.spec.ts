@@ -33,6 +33,13 @@ test("reverse native tab switching preserves permission mode and focuses the des
     await expect(permissions).toHaveAttribute("data-value", "default");
     await composer.press("Shift+Tab");
     await expect(permissions).toHaveAttribute("data-value", "auto-review");
+    await expect(composer).toBeFocused();
+    await composer.press("Shift+Tab");
+    await expect(permissions).toHaveAttribute("data-value", "full-access");
+    await composer.press("Shift+Tab");
+    await expect(permissions).toHaveAttribute("data-value", "default");
+    await composer.press("Shift+Tab");
+    await expect(permissions).toHaveAttribute("data-value", "auto-review");
     await expect(composer).toBeEnabled();
     await composer.fill("Keep my draft");
     // Select only the shortcut dispatcher's native branch; this page keeps its browser runtime.
@@ -56,6 +63,87 @@ test("reverse native tab switching preserves permission mode and focuses the des
     await page.keyboard.press("Control+Shift+Tab");
     await expect(composer).toBeFocused();
     await expect(permissions).toHaveAttribute("data-value", "auto-review");
+  } finally {
+    await dispose();
+  }
+});
+
+test("composer tooltips share Plan mode styling and show the available shortcuts", async ({
+  page,
+}) => {
+  const { composer, dispose } = await workspace(page);
+  try {
+    const tooltip = page.getByRole("tooltip");
+    const hover = async (name: string, text: RegExp, shortcut?: string) => {
+      await page.mouse.move(0, 0, { steps: 5 });
+      await expect(tooltip).toHaveCount(0);
+      const button = page.getByRole("button", { name, exact: true });
+      await button.hover();
+      await expect(tooltip).toContainText(text);
+      await expect(button).not.toHaveAttribute("title");
+      if (shortcut) await expect(tooltip.locator("kbd")).toHaveText(shortcut);
+      else await expect(tooltip.locator("kbd")).toHaveCount(0);
+      return tooltip.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return [style.backgroundColor, style.color, style.borderRadius, style.fontSize];
+      });
+    };
+    const planStyle = await hover("Plan mode", /^Plan mode: explore and plan/);
+    for (const [name, text, shortcut] of [
+      ["Attach files", /^Attach files/, undefined],
+      ["Agent and model", /^Agent and model: /, undefined],
+      ["Thinking effort", /^Thinking effort: /, undefined],
+      ["Permission mode", /^Permission mode: Default permissions/, "Shift+Tab"],
+      ["Speed", /^Speed: /, undefined],
+      ["Start dictation", /^Dictate a message/, "Ctrl+D"],
+      ["Send message", /^Send message/, "Enter"],
+    ] as const) {
+      expect(await hover(name, text, shortcut)).toEqual(planStyle);
+    }
+    await hover("Permission mode", /^Permission mode: Default permissions/, "Shift+Tab");
+    await page.screenshot({ path: test.info().outputPath("composer-permission-tooltip.png") });
+    await composer.fill("hold tooltip turn");
+    await page.getByRole("button", { name: "Send message", exact: true }).click();
+    expect(await hover("Interrupt agent", /^Stop agent/, "Esc")).toEqual(planStyle);
+    expect(await hover("Queue message", /^Queue message/, "Enter")).toEqual(planStyle);
+    await composer.press("Control+d");
+    await expect(page.getByRole("group", { name: "Dictation" })).toBeFocused();
+    await hover("Cancel dictation", /^Cancel dictation/, "Esc");
+    await hover("Edit dictated message", /^Edit dictated message/);
+    await hover("Queue dictated message", /^Queue message/, "Enter");
+    await page.keyboard.press("Escape");
+    await expect(composer).toBeFocused();
+    await page.evaluate(() => {
+      const key = "concors.shortcuts.v1";
+      localStorage.setItem(key, JSON.stringify({ "start-dictation": [] }));
+      window.dispatchEvent(new StorageEvent("storage", { key }));
+    });
+    await page.mouse.move(0, 0, { steps: 5 });
+    await page.getByRole("button", { name: "Start dictation", exact: true }).hover();
+    await expect(page.getByRole("tooltip")).toContainText("Dictate a message");
+    await expect(page.getByRole("tooltip").locator("kbd")).toHaveCount(0);
+  } finally {
+    await dispose();
+  }
+});
+
+test("the dictation tooltip reflects a customized keyboard shortcut", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "concors.shortcuts.v1",
+      JSON.stringify({
+        "start-dictation": [{ keys: [{ key: "d", modifiers: ["Control", "Alt"] }] }],
+      }),
+    );
+  });
+  const { composer, dispose } = await workspace(page);
+  try {
+    await page.getByRole("button", { name: "Start dictation", exact: true }).hover();
+    await expect(page.getByRole("tooltip").locator("kbd")).toHaveText("Ctrl+Alt+D");
+    await composer.press("Control+Alt+d");
+    await expect(page.getByRole("group", { name: "Dictation" })).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(composer).toBeFocused();
   } finally {
     await dispose();
   }
