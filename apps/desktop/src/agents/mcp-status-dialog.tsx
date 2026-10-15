@@ -1,5 +1,5 @@
 import { useContext, useEffect, useState } from "react";
-import type { AgentInfo } from "@concors/protocol";
+import { agentProviderName, type AgentInfo } from "@concors/protocol";
 import {
   Dialog,
   DialogContent,
@@ -56,8 +56,9 @@ export function McpStatusDialog({
         <DialogHeader>
           <DialogTitle>MCP servers</DialogTitle>
           <DialogDescription>
-            The tools {agent.name} can use, as its CLI reports them. Add or change servers for every
-            agent on this machine in Settings → MCP servers.
+            The MCP servers {agent.providerLabel ?? agentProviderName(agent.provider)} has loaded in
+            this conversation. To add or change servers for every agent on this machine, go to
+            Settings → MCP servers.
           </DialogDescription>
         </DialogHeader>
         {error ? (
