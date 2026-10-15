@@ -229,7 +229,12 @@ export function NotificationProvider({
               }}
             >
               <span className="block text-sm font-medium">{notice.title}</span>
-              <span className="block truncate text-xs text-muted-foreground">{notice.body}</span>
+              <span
+                className="line-clamp-3 text-xs break-words text-muted-foreground"
+                title={notice.body}
+              >
+                {notice.body}
+              </span>
               <span className="mt-1 block text-xs text-primary">Open conversation</span>
             </button>
             <button
