@@ -645,6 +645,9 @@ test("mobile file browsing supports Markdown links, safe creation, hidden files 
     if (!link) throw new Error("Markdown file link is missing");
     await swipe(link.x + 5, 350, link.y + link.height / 2);
     await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-files-open", "false");
+    // The swipe started on the link, which must not open its long-press menu afterwards.
+    await page.waitForTimeout(1000);
+    await expect(ui.getByRole("menu")).toHaveCount(0);
     await ui.getByRole("button", { name: "Project files", exact: true }).click();
     await files
       .getByRole("navigation", { name: "Open files" })
