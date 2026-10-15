@@ -15,8 +15,13 @@ import { DatabaseSync } from "node:sqlite";
 import spawn from "cross-spawn";
 import { z } from "zod";
 import {
+  McpServerSchema,
   ProviderConfigSchema,
   providerPresets,
+  RESERVED_MCP_SERVER_NAMES,
+  type McpServer,
+  type McpServerInput,
+  type McpServerSummary,
   SUBSCRIPTION_ENGINES,
   type ProviderConfig,
   type ProviderRequest,
@@ -44,6 +49,8 @@ const Saved = z.object({
   providers: z.array(ProviderConfigSchema).max(128),
   /** Per engine, the subscription every chat on this machine uses; absent = default account. */
   active: z.record(z.string(), z.string()).default({}),
+  /** MCP servers every agent on this machine loads, whichever provider runs it. */
+  mcpServers: z.array(McpServerSchema).max(32).default([]),
 });
 /** Machine-local configuration. Credential values never leave this service. */
 export class ProviderRegistry {
@@ -71,10 +78,77 @@ export class ProviderRegistry {
     const path = join(directory, "config.json");
     this.saved = existsSync(path)
       ? Saved.parse(JSON.parse(readFileSync(path, "utf8")))
-      : { revision: 0, providers: [], active: {} };
+      : { revision: 0, providers: [], active: {}, mcpServers: [] };
   }
   get revision() {
     return this.saved.revision;
+  }
+  /** The machine-wide MCP servers, with their secrets, for the agents this daemon starts. */
+  mcpServers(): McpServer[] {
+    return this.saved.mcpServers;
+  }
+  /** The machine-wide MCP servers as clients see them: secret names without their values. */
+  mcpSummaries(): McpServerSummary[] {
+    return this.saved.mcpServers.map((server) =>
+      server.type === "stdio"
+        ? {
+            name: server.name,
+            type: "stdio",
+            command: server.command,
+            args: server.args,
+            envKeys: Object.keys(server.env ?? {}),
+          }
+        : {
+            name: server.name,
+            type: server.type,
+            url: server.url,
+            headerKeys: Object.keys(server.headers ?? {}),
+          },
+    );
+  }
+  /**
+   * Replaces the machine-wide MCP servers. A secret sent as null keeps the value already stored
+   * for that server under the same name, so clients never need to hold one to edit a server.
+   */
+  private saveMcpServers(servers: McpServerInput[]) {
+    const names = new Set<string>();
+    const next = servers.map((input) => {
+      if ((RESERVED_MCP_SERVER_NAMES as readonly string[]).includes(input.name))
+        throw new Error(`"${input.name}" is the name of Concors's own tools. Choose another.`);
+      if (names.has(input.name)) throw new Error(`Two MCP servers are named "${input.name}".`);
+      names.add(input.name);
+      const previous = this.saved.mcpServers.find((server) => server.name === input.name);
+      const kept = (
+        values: Record<string, string | null> | undefined,
+        stored: Record<string, string> | undefined,
+        what: string,
+      ) => {
+        const result: Record<string, string> = {};
+        for (const [key, value] of Object.entries(values ?? {})) {
+          const known = value ?? stored?.[key];
+          if (known === undefined)
+            throw new Error(`Enter a value for ${what} ${key} of "${input.name}".`);
+          result[key] = known;
+        }
+        return result;
+      };
+      return McpServerSchema.parse(
+        input.type === "stdio"
+          ? {
+              ...input,
+              env: kept(input.env, previous?.type === "stdio" ? previous.env : undefined, "env"),
+            }
+          : {
+              ...input,
+              headers: kept(
+                input.headers,
+                previous && previous.type !== "stdio" ? previous.headers : undefined,
+                "header",
+              ),
+            },
+      );
+    });
+    this.saved.mcpServers = next;
   }
   configs(): ProviderConfig[] {
     return [
@@ -420,10 +494,16 @@ export class ProviderRegistry {
       if (op.kind === "sessions-list") throw new Error("Use the session discovery service");
       if (op.kind === "account") throw new Error("Use the account service");
       if (op.kind === "usage") throw new Error("Use the plan usage service");
-      if (op.kind === "save" || op.kind === "remove" || op.kind === "activate") {
+      if (
+        op.kind === "save" ||
+        op.kind === "remove" ||
+        op.kind === "activate" ||
+        op.kind === "mcp-save"
+      ) {
         if (op.expectedRevision !== this.saved.revision)
           throw new Error("Provider settings changed on another client. Reload before saving.");
-        if (op.kind === "activate") {
+        if (op.kind === "mcp-save") this.saveMcpServers(op.servers);
+        else if (op.kind === "activate") {
           if (op.id) {
             const target = this.saved.providers.find((p) => p.id === op.id);
             if (!target?.subscription || target.engine !== op.engine)
@@ -510,7 +590,12 @@ export class ProviderRegistry {
       result = {
         type: "provider.result",
         requestId: request.requestId,
-        outcome: { status: "ok", revision: this.saved.revision, providers: this.statuses() },
+        outcome: {
+          status: "ok",
+          revision: this.saved.revision,
+          providers: this.statuses(),
+          mcpServers: this.mcpSummaries(),
+        },
       };
     } catch (error) {
       this.saved = savedBefore;

@@ -612,6 +612,13 @@ export class AgentManager {
    * fresh thread straight away, as a new chat does. Chats without a running CLI keep their
    * thread ID: resuming it later starts afresh if the provider never saved it.
    */
+  /**
+   * The machine-wide MCP servers changed. Agents load them when their CLI starts, so idle ones
+   * restart and keep their conversations, and busy ones reload once they are idle.
+   */
+  mcpServersChanged(): void {
+    this.refreshSessions(() => true, false);
+  }
   private refreshSessions(matches: (info: AgentInfo) => boolean, resetEmptyThreads = true): void {
     this.catalogs.clear();
     this.catalogGeneration++;

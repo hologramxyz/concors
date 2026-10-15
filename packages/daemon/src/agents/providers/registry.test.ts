@@ -617,3 +617,97 @@ it("activates one subscription machine-wide and falls back to the default on rem
     process.env["CLAUDE_CONFIG_DIR"],
   );
 });
+
+it("keeps machine-wide MCP servers private, edits them without their secrets, and gives each agent what it can load", async () => {
+  const root = await mkdtemp(join(tmpdir(), "concors-machine-mcp-"));
+  directories.push(root);
+  const registry = new ProviderRegistry(root, join(root, "claude-home"));
+  const save = (servers: unknown[], revision = registry.revision) =>
+    registry.request(
+      ProviderRequestSchema.parse({
+        type: "provider.request",
+        requestId: randomUUID(),
+        operation: { kind: "mcp-save", servers, expectedRevision: revision },
+      }),
+    );
+  const saved = save([
+    {
+      name: "linear",
+      type: "http",
+      url: "https://mcp.linear.app/mcp",
+      headers: { Authorization: "Bearer secret-linear-token" },
+    },
+    {
+      name: "github",
+      type: "stdio",
+      command: "github-mcp",
+      args: ["stdio"],
+      env: { GITHUB_TOKEN: "secret-github-token" },
+    },
+    { name: "events", type: "sse", url: "https://events.example/sse" },
+  ]);
+  expect(saved.outcome).toMatchObject({
+    status: "ok",
+    mcpServers: [
+      { name: "linear", type: "http", headerKeys: ["Authorization"] },
+      { name: "github", type: "stdio", command: "github-mcp", envKeys: ["GITHUB_TOKEN"] },
+      { name: "events", type: "sse", headerKeys: [] },
+    ],
+  });
+  // Secrets stay on the machine: not in any result, but on disk for the agents.
+  expect(JSON.stringify(saved)).not.toContain("secret-");
+  expect(await readFile(join(root, "config.json"), "utf8")).toContain("secret-linear-token");
+  // Editing a server sends null for a secret it keeps, and can add a new one.
+  save([
+    {
+      name: "linear",
+      type: "http",
+      url: "https://mcp.linear.app/v2",
+      headers: { Authorization: null, "X-Team": "core" },
+    },
+    { name: "github", type: "stdio", command: "github-mcp", args: [], env: { GITHUB_TOKEN: null } },
+  ]);
+  expect(registry.mcpServers()).toEqual([
+    {
+      name: "linear",
+      type: "http",
+      url: "https://mcp.linear.app/v2",
+      headers: { Authorization: "Bearer secret-linear-token", "X-Team": "core" },
+    },
+    {
+      name: "github",
+      type: "stdio",
+      command: "github-mcp",
+      args: [],
+      env: { GITHUB_TOKEN: "secret-github-token" },
+    },
+  ]);
+  // A kept secret that was never stored, duplicate names, Concors's own name, and stale revisions fail.
+  const failures = [
+    save([
+      { name: "notion", type: "http", url: "https://n.example/mcp", headers: { Token: null } },
+    ]),
+    save([
+      { name: "a", type: "stdio", command: "x" },
+      { name: "a", type: "stdio", command: "y" },
+    ]),
+    save([{ name: "concors-schedules", type: "stdio", command: "x" }]),
+    save([], registry.revision - 1),
+  ];
+  for (const failure of failures) expect(failure.outcome.status).toBe("error");
+  expect(registry.mcpServers().map((s) => s.name)).toEqual(["linear", "github"]);
+});
+
+it("loads machine MCP servers only where the agent can: no Pi, no opted-out provider, no SSE for Codex", async () => {
+  const { usesMcpServer } = await import("./index.ts");
+  const http = { name: "h", type: "http" as const, url: "https://h.example/mcp" };
+  const sse = { name: "s", type: "sse" as const, url: "https://s.example/sse" };
+  const config = (engine: string, params?: object) =>
+    ({ id: engine, label: engine, engine, command: [engine], enabled: true, params }) as never;
+  expect(usesMcpServer(config("claude"), http)).toBe(true);
+  expect(usesMcpServer(config("claude"), sse)).toBe(true);
+  expect(usesMcpServer(config("codex"), http)).toBe(true);
+  expect(usesMcpServer(config("codex"), sse)).toBe(false);
+  expect(usesMcpServer(config("pi"), http)).toBe(false);
+  expect(usesMcpServer(config("acp", { supportsMcpServers: false }), http)).toBe(false);
+});
