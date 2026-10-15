@@ -56,6 +56,8 @@ account menu even if its shortcut is changed or disabled.
 | Add project                            | Ctrl+Shift+N                               |
 | Settings                               | Ctrl+Shift+,                               |
 | Shortcut reference                     | Ctrl+Shift+/                               |
+| Start dictation in the focused agent   | Ctrl+D                                     |
+| Stop the focused running agent         | Escape                                     |
 | Rename focused tab                     | F2                                         |
 | Reorder focused tab                    | Alt+Shift+Left/Right                       |
 
@@ -71,12 +73,21 @@ focused pane remembered by this client during the current app session; missing t
 back to the first available item. Active project/tab selection continues to sync through the
 workspace; keyboard focus remains local.
 
-Ctrl+Shift+Arrow navigates directly from terminals. In the Agent composer and ordinary form
-fields it keeps its native word-selection behavior, as do the other arrow chords a text field
-uses (Ctrl/Shift+Arrow, or Command/Option/Shift+Arrow on Mac). Pane focus bound to a different
-combination still navigates from the composer, and its other workspace shortcuts, including the
-P/T sequences, work there too. Terminals allow workspace shortcuts, and their
-recognized keys are consumed before reaching the PTY. Forms and dialogs retain their own keys.
+Ctrl+Shift+Arrow navigates directly from both terminals and Agent composers and focuses the
+destination input. If that input is temporarily unavailable, focus moves to it once it is ready;
+navigating elsewhere cancels that pending focus. Ordinary form fields retain their editing keys.
+The P/T sequences also work from the composer. In the desktop app, Ctrl+Shift+Tab switches to the
+previous tab; only plain Shift+Tab cycles Codex permission modes. Terminals allow workspace
+shortcuts, and their recognized keys are consumed before reaching the PTY. Forms and dialogs
+retain their own keys.
+
+Ctrl+D starts dictation in the focused Agent pane and can be customized in Shortcuts under Agent
+chat. It retains its shell EOF behavior in terminals. Escape stops the focused pane's running
+agent without sending or clearing its draft; during dictation it also cancels the recording.
+An open menu, dialog or shortcut sequence uses Escape to dismiss itself first.
+Composer controls use matching tooltips on hover or keyboard focus, with shortcut hints for
+dictation, permission cycling, sending and stopping. The dictation hint follows the binding
+saved in Shortcuts; controls without a shortcut show their name and current value.
 Unsent chat text and attachments survive pane/tab navigation in memory for the current daemon connection.
 Outside terminals, Ctrl+K (Command+K on Mac) remains a search alias.
 
