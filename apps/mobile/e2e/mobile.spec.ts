@@ -1009,6 +1009,7 @@ test("mobile Shortcuts settings preserve supported commands and all entry points
     "Keyboard shortcuts",
     "Follow-ups",
     "Workspace",
+    "Agent chat",
     "Tabs",
   ]);
   await expect(settings).toContainText("An external keyboard");
