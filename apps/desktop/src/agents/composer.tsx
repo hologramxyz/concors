@@ -166,6 +166,11 @@ export function AgentComposer({
     !text.trim().startsWith("/") &&
     (!files || !!agent.controls.steerAttachments);
   const showStop = active && (!compact || (!draft.trim() && !attachments.length));
+  const sendLabel = !active
+    ? "Send message"
+    : followUps === "steer" && canSteer(draft, attachments.length)
+      ? "Steer message"
+      : "Queue message";
   const settings = agent.settings ?? defaults;
   const dictationBase = useRef("");
   const wasDictating = useRef(false);
@@ -721,7 +726,6 @@ export function AgentComposer({
       {(agent.engine ?? agent.provider) === "codex" && !!effortModel?.serviceTiers?.length && (
         <ControlPicker
           label="Speed"
-          tooltip
           value={settings.serviceTier ?? ""}
           icon={<Zap className={`size-4 ${settings.serviceTier ? "text-amber-500" : ""}`} />}
           disabled={!connected || busy || configuring}
@@ -743,30 +747,38 @@ export function AgentComposer({
     <>
       <ProviderUpdateLabel agent={agent} compact={!!compact} />
       <ContextMeter agent={agent} />
-      <button
-        type="button"
-        aria-label="Start dictation"
-        title={
+      <ControlTooltip
+        text={
           compact
             ? "Use dictation on your phone's keyboard."
             : (dictation.preparing ??
               (dictation.supported
-                ? `Dictate a message (${shortcutLabel("start-dictation")}). Enter sends; Edit lets you review the words.`
+                ? "Dictate a message"
                 : "Dictation is not supported by this browser."))
         }
-        disabled={!canDictate}
-        onClick={() => {
-          if (compact) {
-            textarea.current?.focus();
-            setKeyboardHelp((value) => !value);
-          } else {
-            startDictation();
-          }
-        }}
-        className="agent-control text-muted-foreground hover:bg-muted"
+        shortcut={
+          !compact && shortcutLabel("start-dictation") !== "Unassigned"
+            ? shortcutLabel("start-dictation")
+            : undefined
+        }
       >
-        <Mic className="size-4" />
-      </button>
+        <button
+          type="button"
+          aria-label="Start dictation"
+          disabled={!canDictate}
+          onClick={() => {
+            if (compact) {
+              textarea.current?.focus();
+              setKeyboardHelp((value) => !value);
+            } else {
+              startDictation();
+            }
+          }}
+          className="agent-control text-muted-foreground hover:bg-muted"
+        >
+          <Mic className="size-4" />
+        </button>
+      </ControlTooltip>
     </>
   );
   return (
@@ -1144,16 +1156,17 @@ export function AgentComposer({
                     e.target.value = "";
                   }}
                 />
-                <button
-                  type="button"
-                  aria-label="Attach files"
-                  title="Attach files, or drop or paste them here (up to three, 1 MB each)"
-                  className="agent-control mobile-composer-attach"
-                  disabled={!advanced || !connected || busy || uploading || uncertain}
-                  onClick={() => picker.current?.click()}
-                >
-                  <Plus className="size-4" />
-                </button>
+                <ControlTooltip text="Attach files · up to three, 1 MB each">
+                  <button
+                    type="button"
+                    aria-label="Attach files"
+                    className="agent-control mobile-composer-attach"
+                    disabled={!advanced || !connected || busy || uploading || uncertain}
+                    onClick={() => picker.current?.click()}
+                  >
+                    <Plus className="size-4" />
+                  </button>
+                </ControlTooltip>
                 <div
                   className={compact ? "mobile-composer-settings" : "contents"}
                   hidden={compact && !expanded}
@@ -1234,6 +1247,7 @@ export function AgentComposer({
                   {(agent.engine ?? agent.provider) === "codex" && (
                     <ControlPicker
                       label="Permission mode"
+                      shortcut="Shift+Tab"
                       showValue={!compact}
                       value={settings.mode}
                       icon={
@@ -1273,14 +1287,15 @@ export function AgentComposer({
                   )}
                   {compact ? (
                     <Popover.Root>
-                      <Popover.Trigger
-                        type="button"
-                        className="agent-control"
-                        aria-label="More composer options"
-                        title="Plan mode and speed"
-                      >
-                        <SlidersHorizontal className="size-4" />
-                      </Popover.Trigger>
+                      <ControlTooltip text="Plan mode and speed">
+                        <Popover.Trigger
+                          type="button"
+                          className="agent-control"
+                          aria-label="More composer options"
+                        >
+                          <SlidersHorizontal className="size-4" />
+                        </Popover.Trigger>
+                      </ControlTooltip>
                       <Popover.Portal>
                         <Popover.Content
                           data-composer-surface={owner}
@@ -1307,43 +1322,46 @@ export function AgentComposer({
                 <div className="mobile-composer-primary ml-auto flex shrink-0 items-center gap-1">
                   {!compact && utilityControls}
                   {showStop && (
-                    <button
-                      type="button"
-                      aria-label="Interrupt agent"
-                      title="Stop agent (Escape)"
-                      disabled={!connected || !agent.turnId || agent.turnId.startsWith("pending:")}
-                      onClick={onInterrupt}
-                      className="rounded-lg border p-2"
-                    >
-                      <Square className="size-4" />
-                    </button>
+                    <ControlTooltip text="Stop agent" shortcut="Esc">
+                      <button
+                        type="button"
+                        aria-label="Interrupt agent"
+                        disabled={
+                          !connected || !agent.turnId || agent.turnId.startsWith("pending:")
+                        }
+                        onClick={onInterrupt}
+                        className="rounded-lg border p-2"
+                      >
+                        <Square className="size-4" />
+                      </button>
+                    </ControlTooltip>
                   )}
                   {(!compact || !showStop) && (
-                    <button
-                      aria-label={
-                        !active
-                          ? "Send message"
-                          : followUps === "steer" && canSteer(draft, attachments.length)
-                            ? "Steer message"
-                            : "Queue message"
-                      }
-                      disabled={
-                        !connected ||
-                        uploading ||
-                        busy ||
-                        configuring ||
-                        uncertain ||
-                        (!draft.trim() && !attachments.length) ||
-                        !agent.threadId
-                      }
-                      className="rounded-lg bg-primary p-2 text-primary-foreground disabled:opacity-30"
+                    <ControlTooltip
+                      text={sendLabel}
+                      shortcut={compact ? `${MOD_KEY}+Enter` : "Enter"}
                     >
-                      {busy ? (
-                        <LoaderCircle className="size-4 animate-spin" />
-                      ) : (
-                        <ArrowUp className="size-4" />
-                      )}
-                    </button>
+                      <button
+                        type="submit"
+                        aria-label={sendLabel}
+                        disabled={
+                          !connected ||
+                          uploading ||
+                          busy ||
+                          configuring ||
+                          uncertain ||
+                          (!draft.trim() && !attachments.length) ||
+                          !agent.threadId
+                        }
+                        className="rounded-lg bg-primary p-2 text-primary-foreground disabled:opacity-30"
+                      >
+                        {busy ? (
+                          <LoaderCircle className="size-4 animate-spin" />
+                        ) : (
+                          <ArrowUp className="size-4" />
+                        )}
+                      </button>
+                    </ControlTooltip>
                   )}
                 </div>
               </div>
