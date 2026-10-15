@@ -169,6 +169,7 @@ export function AgentComposer({
   const settings = agent.settings ?? defaults;
   const dictationBase = useRef("");
   const wasDictating = useRef(false);
+  const restoreDictationFocus = useRef(false);
   const dictation = useDictation(
     {
       onTranscript: (text) => setDraft(appendDictation(dictationBase.current, text)),
@@ -221,13 +222,23 @@ export function AgentComposer({
   // Runs after the box is sized: the dictated words were added at the end, so show the end.
   useLayoutEffect(() => {
     const el = textarea.current;
-    if (wasDictating.current && !dictation.active && visible && !document.hidden && el) {
-      el.focus();
-      el.setSelectionRange(el.value.length, el.value.length);
-      el.scrollTop = el.scrollHeight;
-    }
+    if (wasDictating.current && !dictation.active) restoreDictationFocus.current = true;
     wasDictating.current = dictation.active;
-  }, [dictation.active, visible]);
+    if (!visible || document.hidden || dictation.active) restoreDictationFocus.current = false;
+    // Escape can cancel dictation while an interrupt temporarily disables the input. Keep the
+    // focus request until it is editable, unless the user has moved to another control or pane.
+    if (restoreDictationFocus.current && el && !el.disabled) {
+      restoreDictationFocus.current = false;
+      if (
+        document.activeElement === document.body ||
+        form.current?.contains(document.activeElement)
+      ) {
+        el.focus();
+        el.setSelectionRange(el.value.length, el.value.length);
+        el.scrollTop = el.scrollHeight;
+      }
+    }
+  }, [dictation.active, visible, connected, busy, uncertain, agent.threadId]);
   useComposerMotion(form, compact && !native, expanded);
   const configure = async (next: AgentSettings) => {
     if (!connection || !advanced) return;
