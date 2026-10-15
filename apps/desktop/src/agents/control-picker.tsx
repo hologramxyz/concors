@@ -28,7 +28,7 @@ export function ControlPicker({
   selectedGroupId,
   showValue = false,
   primary = false,
-  tooltip = false,
+  shortcut,
   selectedLabel,
   onOpen,
   onGroupChange,
@@ -45,8 +45,8 @@ export function ControlPicker({
   showValue?: boolean;
   /** Keeps its label in narrow composers, where the other pickers show only their icons. */
   primary?: boolean;
-  /** Names an icon-only control in the app's tooltip; labelled pickers keep the plain `title`. */
-  tooltip?: boolean;
+  /** Keyboard action available from the composer, when this control has one. */
+  shortcut?: string;
   selectedLabel?: string;
   onOpen?: () => void;
   onGroupChange?: (id: string) => void;
@@ -104,7 +104,6 @@ export function ControlPicker({
       type="button"
       aria-label={label}
       data-value={value}
-      title={tooltip ? undefined : `${label}: ${currentLabel}`}
       disabled={disabled}
       className={`agent-control ${showValue ? "agent-control-value" : ""} ${primary ? "agent-control-primary" : ""}`}
       onPointerEnter={() => setQuiet(false)}
@@ -126,13 +125,9 @@ export function ControlPicker({
         setGroupId(selectedGroupId);
       }}
     >
-      {tooltip ? (
-        <ControlTooltip text={`${label}: ${currentLabel}`} hidden={open || quiet}>
-          {triggerButton}
-        </ControlTooltip>
-      ) : (
-        triggerButton
-      )}
+      <ControlTooltip text={`${label}: ${currentLabel}`} shortcut={shortcut} hidden={open || quiet}>
+        {triggerButton}
+      </ControlTooltip>
       <Popover.Portal>
         <Popover.Content
           data-composer-surface={composerSurface}
