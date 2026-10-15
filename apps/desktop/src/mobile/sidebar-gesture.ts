@@ -1,5 +1,8 @@
 import { useRef, useState, type PointerEvent } from "react";
 
+/** Cancels a claimed drag sends to the element it started on, which the gestures ignore. */
+const handoffs = new WeakSet<Event>();
+
 export function useSidebarGesture(
   open: boolean,
   onChange: (open: boolean) => void,
@@ -16,12 +19,13 @@ export function useSidebarGesture(
     y: number;
     start: number;
     moved: boolean;
+    target: HTMLElement;
   } | null>(null);
   const [offset, setOffset] = useState<number | null>(null);
   const suppressClickUntil = useRef(0);
   const finish = (event: PointerEvent, cancelled = false) => {
     const current = gesture.current;
-    if (!current || current.id !== event.pointerId) return;
+    if (!current || current.id !== event.pointerId || handoffs.has(event.nativeEvent)) return;
     if (!cancelled && current.moved) {
       suppressClickUntil.current = performance.now() + 400;
       const delta = (event.clientX - current.x) * direction;
@@ -76,6 +80,7 @@ export function useSidebarGesture(
           y: event.clientY,
           start: open ? width : 0,
           moved: false,
+          target,
         };
       },
       onPointerMove(event: PointerEvent) {
@@ -93,6 +98,17 @@ export function useSidebarGesture(
         }
         if (Math.abs(x) < 12 && !current.moved) return;
         if (!current.moved && Math.abs(x) < Math.abs(y) * 1.5) return;
+        if (!current.moved) {
+          // Claiming the pointer hides the rest of the drag from where it started, so a long-press
+          // there (a link's menu) would still open after the swipe. Cancel it, as a native pan does.
+          const cancel = new window.PointerEvent("pointercancel", {
+            bubbles: true,
+            pointerId: event.pointerId,
+            pointerType: event.pointerType,
+          });
+          handoffs.add(cancel);
+          current.target.dispatchEvent(cancel);
+        }
         current.moved = true;
         // Run in the shell's capture phase, before terminal handlers can consume
         // the gesture. Vertical scrolling, taps and input are left untouched.
