@@ -183,19 +183,29 @@ describe("managed host connection", () => {
       "concors.bearer.restored-token",
     ]);
   });
-  it("retries an opaque browser upgrade failure only once", async () => {
+  it("keeps retrying a machine whose socket will not open, backing off after a fresh token", async () => {
     const t = setup();
     await flush();
+    // The first failure may be a stale token the browser cannot report: retried at once.
     t.sockets[0]!.emit("error");
     await flush();
-    t.sockets[1]!.emit("error");
-    await vi.advanceTimersByTimeAsync(60_000);
     expect(t.fetch).toHaveBeenCalledTimes(2);
-    expect(t.onState).toHaveBeenLastCalledWith(
+    // After that the machine or the way to it is down: backoff, but never giving up.
+    t.sockets[1]!.emit("error");
+    await vi.advanceTimersByTimeAsync(999);
+    expect(t.fetch).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(t.fetch).toHaveBeenCalledTimes(3);
+    for (let failure = 2; failure < 8; failure++) {
+      t.sockets[failure]!.emit("error");
+      await vi.advanceTimersByTimeAsync(30_000);
+    }
+    expect(t.fetch).toHaveBeenCalledTimes(9);
+    expect(t.onState).not.toHaveBeenCalledWith(
       expect.objectContaining({
-        error: expect.objectContaining({ message: expect.stringContaining("access revoked") }),
+        error: expect.objectContaining({ message: expect.stringContaining("revoked") }),
       }),
-      false,
+      expect.anything(),
     );
   });
   it("reconnects normal drops with a fresh token and backoff", async () => {

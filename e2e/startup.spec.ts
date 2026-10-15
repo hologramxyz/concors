@@ -220,6 +220,13 @@ test("a lasting drop shows a quiet reconnecting notice instead of clearing the w
   await expect(notice).toBeVisible();
   await expect(page.getByText("Start working on this machine", { exact: true })).toBeVisible();
   await expect(page.getByRole("alert")).toHaveCount(0);
+  // The notice explains the wait and what to check, without blocking the workspace.
+  await notice.getByRole("button", { name: "What's wrong?" }).click();
+  const help = page.getByRole("dialog", { name: "Can't reach This computer" });
+  await expect(help).toContainText("Concors keeps trying to reconnect on its own");
+  await expect(help).toContainText("Quit Concors and open it again");
+  await help.getByRole("button", { name: "Close", exact: true }).first().click();
+  await expect(help).toHaveCount(0);
   refuse = false;
   await notice.getByRole("button", { name: "Retry now" }).click();
   await expect(notice).toHaveCount(0);

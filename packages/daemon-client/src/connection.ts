@@ -76,10 +76,17 @@ import {
 
 import type { DaemonEndpoint } from "./endpoint.ts";
 
-/** How long a workspace command may wait in all, across reconnects, before it is reported lost. */
-const WORKSPACE_COMMAND_DEADLINE_MS = 30_000;
-/** How long after sending a command silence means the socket is dead rather than busy. */
-const WORKSPACE_COMMAND_PROBE_MS = 10_000;
+/**
+ * How long a workspace command may wait in all, across reconnects, before it is reported lost:
+ * long enough for a heartbeat watchdog to notice a dead socket and the host to reconnect.
+ */
+const WORKSPACE_COMMAND_DEADLINE_MS = 60_000;
+/**
+ * Against a daemon without heartbeats, how long total silence after a command means the socket is
+ * dead. A slow machine (a small server busy running agents) can go quiet for seconds, so this is
+ * generous; a daemon with heartbeats is judged by the watchdog alone.
+ */
+const WORKSPACE_COMMAND_PROBE_MS = 20_000;
 const WATCHDOG_CHECK_MS = 5_000;
 
 /**
@@ -593,8 +600,15 @@ export class DaemonConnection {
     if (!pending || !this.#socket) return;
     this.#socket.send(JSON.stringify(pending.command));
     pending.sent = true;
-    const received = this.#received;
     clearTimeout(pending.probe);
+    pending.probe = undefined;
+    // A daemon that sends heartbeats is watched by the watchdog: a slow answer is not a dead socket.
+    if (
+      this.#state.status === "ready" &&
+      this.#state.daemon.capabilities?.includes(HEARTBEAT_CAPABILITY)
+    )
+      return;
+    const received = this.#received;
     pending.probe = setTimeout(() => {
       if (this.#commands.get(commandId) === pending && this.#received === received)
         this.#abandon("The machine stopped answering");
