@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowUp, LoaderCircle, Mic, Pencil, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ControlTooltip } from "./control-tooltip";
 import { observeMicrophone } from "./dictation-audio";
 import type { DictationAction, DictationState } from "./dictation-session";
 import "./dictation.css";
@@ -79,16 +80,17 @@ export function DictationRecording({
       }}
     >
       <div className="flex min-w-0 items-center gap-3">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label="Cancel dictation"
-          title="Cancel dictation (Escape)"
-          onClick={onCancel}
-        >
-          <X className="size-4" />
-        </Button>
+        <ControlTooltip text="Cancel dictation" shortcut="Esc">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="Cancel dictation"
+            onClick={onCancel}
+          >
+            <X className="size-4" />
+          </Button>
+        </ControlTooltip>
         <div className="flex shrink-0 items-center gap-2 text-primary">
           <Mic className="size-4" aria-hidden="true" />
           <div
@@ -142,37 +144,39 @@ export function DictationRecording({
         <span role="status" className="sr-only">
           {stopping ? "Finishing dictation…" : "Listening"}
         </span>
-        <Button
-          type="button"
-          variant="secondary"
-          size="icon"
-          className="rounded-full"
-          aria-label="Edit dictated message"
-          title="Put the words in the message to edit"
-          disabled={stopping}
-          onClick={() => stop("insert")}
-        >
-          {stopping && chosen === "insert" ? (
-            <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
-          ) : (
-            <Pencil className="size-4" />
-          )}
-        </Button>
-        <Button
-          type="button"
-          size="icon"
-          className="rounded-full"
-          aria-label={queued ? "Queue dictated message" : "Send dictated message"}
-          title={queued ? "Queue the message (Enter)" : "Send the message (Enter)"}
-          disabled={stopping || !canSend}
-          onClick={() => stop("send")}
-        >
-          {stopping && chosen === "send" ? (
-            <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
-          ) : (
-            <ArrowUp className="size-4" />
-          )}
-        </Button>
+        <ControlTooltip text="Edit dictated message">
+          <Button
+            type="button"
+            variant="secondary"
+            size="icon"
+            className="rounded-full"
+            aria-label="Edit dictated message"
+            disabled={stopping}
+            onClick={() => stop("insert")}
+          >
+            {stopping && chosen === "insert" ? (
+              <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Pencil className="size-4" />
+            )}
+          </Button>
+        </ControlTooltip>
+        <ControlTooltip text={queued ? "Queue message" : "Send message"} shortcut="Enter">
+          <Button
+            type="button"
+            size="icon"
+            className="rounded-full"
+            aria-label={queued ? "Queue dictated message" : "Send dictated message"}
+            disabled={stopping || !canSend}
+            onClick={() => stop("send")}
+          >
+            {stopping && chosen === "send" ? (
+              <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <ArrowUp className="size-4" />
+            )}
+          </Button>
+        </ControlTooltip>
       </div>
     </div>
   );
