@@ -1,7 +1,7 @@
 // DOM adaptation of Paseo components/context-window-meter.tsx; Apache-2.0.
 // Copyright (c) 2025-present Mohamed Boudra. See third-party/paseo-LICENSE.
 import { Popover } from "radix-ui";
-import { useContext } from "react";
+import { useContext, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { cn } from "cn";
 import type { AgentInfo } from "@concors/protocol";
@@ -9,6 +9,7 @@ import type { NativeUsageWindow } from "@concors/client-core";
 import { ComposerSurfaceContext } from "./composer-expansion";
 import { usageView } from "./context-window";
 import { usePlanUsage } from "./use-plan-usage";
+import { ControlTooltip } from "./control-tooltip";
 
 /**
  * The composer's context ring, and behind it what is left of the provider's plan.
@@ -20,38 +21,42 @@ import { usePlanUsage } from "./use-plan-usage";
 export function ContextMeter({ agent }: { agent: AgentInfo }) {
   const composerSurface = useContext(ComposerSurfaceContext);
   const plans = usePlanUsage(agent.provider);
+  const [open, setOpen] = useState(false),
+    [quiet, setQuiet] = useState(false);
   const view = usageView(agent, plans);
   if (!view) return null;
   const { context, plan } = view;
   const percent = context.percent;
   const refresh = (force = false) => plans.refresh(agent.id, force);
   return (
-    <Popover.Root onOpenChange={(open) => open && refresh()}>
-      <Popover.Trigger
-        type="button"
-        aria-label="Context window"
-        title={percent === null ? "Context usage pending" : `${Math.round(percent)}% context used`}
-        className="agent-control"
+    <Popover.Root
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) refresh();
+        else setQuiet(true);
+      }}
+    >
+      <ControlTooltip
+        text={percent === null ? "Context usage pending" : `${Math.round(percent)}% context used`}
+        hidden={open || quiet}
       >
-        <svg
-          aria-hidden="true"
-          viewBox="0 0 16 16"
-          className={cn(
-            "size-4 -rotate-90",
-            context.tone === "danger" && "text-destructive",
-            context.tone === "warning" && "text-amber-500",
-          )}
+        <Popover.Trigger
+          type="button"
+          aria-label="Context window"
+          className="agent-control"
+          onPointerEnter={() => setQuiet(false)}
+          onBlur={() => setQuiet(false)}
         >
-          <circle
-            cx="8"
-            cy="8"
-            r="6"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            opacity="0.2"
-          />
-          {percent !== null && (
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 16 16"
+            className={cn(
+              "size-4 -rotate-90",
+              context.tone === "danger" && "text-destructive",
+              context.tone === "warning" && "text-amber-500",
+            )}
+          >
             <circle
               cx="8"
               cy="8"
@@ -59,15 +64,26 @@ export function ContextMeter({ agent }: { agent: AgentInfo }) {
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
-              strokeDasharray={Math.PI * 12}
-              strokeDashoffset={Math.PI * 12 * (1 - percent / 100)}
+              opacity="0.2"
             />
-          )}
-        </svg>
-        <span className="sr-only">
-          {percent === null ? "Usage pending" : `${Math.round(percent)}% context`}
-        </span>
-      </Popover.Trigger>
+            {percent !== null && (
+              <circle
+                cx="8"
+                cy="8"
+                r="6"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeDasharray={Math.PI * 12}
+                strokeDashoffset={Math.PI * 12 * (1 - percent / 100)}
+              />
+            )}
+          </svg>
+          <span className="sr-only">
+            {percent === null ? "Usage pending" : `${Math.round(percent)}% context`}
+          </span>
+        </Popover.Trigger>
+      </ControlTooltip>
       <Popover.Portal>
         <Popover.Content
           data-composer-surface={composerSurface}
@@ -94,16 +110,17 @@ export function ContextMeter({ agent }: { agent: AgentInfo }) {
                     </span>
                   )}
                 </p>
-                <button
-                  type="button"
-                  aria-label="Refresh plan usage"
-                  title="Refresh plan usage"
-                  disabled={plan.loading}
-                  onClick={() => refresh(true)}
-                  className="rounded p-1 text-muted-foreground hover:text-foreground"
-                >
-                  <RefreshCw className={cn("size-3.5", plan.loading && "animate-spin")} />
-                </button>
+                <ControlTooltip text="Refresh plan usage">
+                  <button
+                    type="button"
+                    aria-label="Refresh plan usage"
+                    disabled={plan.loading}
+                    onClick={() => refresh(true)}
+                    className="rounded p-1 text-muted-foreground hover:text-foreground"
+                  >
+                    <RefreshCw className={cn("size-3.5", plan.loading && "animate-spin")} />
+                  </button>
+                </ControlTooltip>
               </div>
               {plan.error && (
                 <p role="alert" className="mt-2 text-xs text-destructive">
