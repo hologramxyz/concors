@@ -8,6 +8,7 @@ import {
   UserRound,
   Cloud,
   Users,
+  Plug,
   type LucideIcon,
 } from "lucide-react";
 
@@ -17,6 +18,7 @@ export type SettingsPage =
   | "shortcuts"
   | "notifications"
   | "providers"
+  | "mcp-servers"
   | "subscriptions"
   | "machines"
   | "billing"
@@ -59,6 +61,7 @@ export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
       // that. The page and its daemon support remain, so restoring it is this one line.
       // { page: "providers", label: "Providers", icon: Bot },
       { page: "subscriptions", label: "Subscriptions", icon: Users },
+      { page: "mcp-servers", label: "MCP servers", icon: Plug },
       { page: "billing", label: "Billing", icon: CreditCard },
       { page: "ssh-keys", label: "SSH keys", icon: KeyRound },
     ],

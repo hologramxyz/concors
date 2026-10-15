@@ -40,6 +40,53 @@ export const McpServerSchema = z.discriminatedUnion("type", [
   }),
 ]);
 export type McpServer = z.infer<typeof McpServerSchema>;
+/**
+ * MCP servers set once for the whole machine, which every agent that supports MCP loads beside
+ * its own CLI configuration. Their secrets (env values, headers) stay on the machine: clients see
+ * the names, and leave a value null when saving to keep the stored one.
+ */
+export const MACHINE_MCP_SERVERS_CAPABILITY = "machine-mcp-servers";
+/** The schedule tools Concors itself serves to every agent; no user server may take its name. */
+export const RESERVED_MCP_SERVER_NAMES = ["concors-schedules"] as const;
+const McpName = z
+  .string()
+  .min(1)
+  .max(100)
+  .regex(/^[a-zA-Z0-9_-]+$/);
+const SecretKeys = z.array(z.string().max(200)).max(64);
+export const McpServerSummarySchema = z.discriminatedUnion("type", [
+  z.object({
+    name: McpName,
+    type: z.literal("stdio"),
+    command: z.string().max(4096),
+    args: z.array(z.string().max(4096)).max(64),
+    envKeys: SecretKeys,
+  }),
+  z.object({
+    name: McpName,
+    type: z.enum(["http", "sse"]),
+    url: z.string().max(4096),
+    headerKeys: SecretKeys,
+  }),
+]);
+export type McpServerSummary = z.infer<typeof McpServerSummarySchema>;
+const KeptSecrets = z.record(z.string().min(1).max(200), z.string().max(16000).nullable());
+export const McpServerInputSchema = z.discriminatedUnion("type", [
+  z.object({
+    name: McpName,
+    type: z.literal("stdio"),
+    command: z.string().min(1).max(4096),
+    args: z.array(z.string().max(4096)).max(64).default([]),
+    env: KeptSecrets.optional(),
+  }),
+  z.object({
+    name: McpName,
+    type: z.enum(["http", "sse"]),
+    url: z.string().url().max(4096),
+    headers: KeptSecrets.optional(),
+  }),
+]);
+export type McpServerInput = z.infer<typeof McpServerInputSchema>;
 export const ProviderConfigSchema = z.object({
   id: ProviderIdSchema,
   label: z.string().trim().min(1).max(100),
@@ -140,6 +187,12 @@ export const ProviderRequestSchema = z.object({
       id: ProviderIdSchema,
       action: AgentAccountActionSchema,
     }),
+    /** Replaces the machine-wide MCP servers; a null secret keeps the value stored under its name. */
+    z.object({
+      kind: z.literal("mcp-save"),
+      servers: z.array(McpServerInputSchema).max(32),
+      expectedRevision: z.number().int().nonnegative(),
+    }),
     /** Which subscription every chat on this machine uses for an engine; null = default account. */
     z.object({
       kind: z.literal("activate"),
@@ -162,6 +215,8 @@ export const ProviderResultSchema = z.object({
       sessions: NativeSessionPageSchema.optional(),
       account: AgentAccountSchema.optional(),
       usage: AgentPlanUsageSchema.optional(),
+      /** The machine-wide MCP servers, without their secret values. */
+      mcpServers: z.array(McpServerSummarySchema).max(32).optional(),
     }),
     z.object({ status: z.literal("error"), message: z.string() }),
   ]),
