@@ -723,6 +723,65 @@ describe("workspace replica lifecycle", () => {
     connection.disconnect();
   });
 
+  it("shows a new selection at once, then settles on the machine's answer", async () => {
+    const { connection, socket, ready } = startConnection();
+    const shown: (string | undefined)[] = [];
+    connection.subscribeWorkspace((workspace) => shown.push(workspace.selection?.projectId));
+    socket.serverOpen();
+    socket.serverSend(READY);
+    await ready;
+    const [a, b] = ["00000000-0000-4000-8000-000000000020", "00000000-0000-4000-8000-000000000021"];
+    const project = (id: string) => ({
+      id,
+      name: "Project",
+      directory: "/p",
+      version: 1,
+      tabs: [],
+    });
+    const workspace = {
+      ...snapshot,
+      projects: [project(a), project(b)],
+      selection: { projectId: a, tabId: null },
+    };
+    socket.serverSend({ type: "workspace.snapshot", snapshot: workspace });
+    const select = (projectId: string, commandId: string) =>
+      connection.executeWorkspace({
+        type: "workspace.command",
+        commandId,
+        epoch: snapshot.epoch,
+        operation: { kind: "selection.set", projectId, tabId: null },
+      });
+    const accepted = select(b, "00000000-0000-4000-8000-000000000022");
+    expect(connection.workspace?.selection?.projectId).toBe(b);
+    // The daemon sends its state before the result, so settling shows nothing new.
+    socket.serverSend({
+      type: "workspace.snapshot",
+      snapshot: { ...workspace, revision: 3, selection: { projectId: b, tabId: null } },
+    });
+    socket.serverSend({
+      type: "workspace.result",
+      commandId: "00000000-0000-4000-8000-000000000022",
+      outcome: { status: "accepted", revision: 3 },
+    });
+    await accepted;
+    expect(shown).toEqual([a, b, b]);
+    // A rejected change goes back to what the machine has.
+    const rejected = select(a, "00000000-0000-4000-8000-000000000023");
+    socket.serverSend({
+      type: "workspace.snapshot",
+      snapshot: { ...workspace, revision: 3, selection: { projectId: b, tabId: null } },
+    });
+    socket.serverSend({
+      type: "workspace.result",
+      commandId: "00000000-0000-4000-8000-000000000023",
+      outcome: { status: "rejected", code: "CONFLICT", message: "Changed elsewhere" },
+    });
+    await rejected;
+    expect(connection.workspace?.selection?.projectId).toBe(b);
+    expect(shown).toEqual([a, b, b, a, a, b]);
+    connection.disconnect();
+  });
+
   it("reports a command lost only once its deadline passes without a machine to answer", async () => {
     vi.useFakeTimers();
     try {
