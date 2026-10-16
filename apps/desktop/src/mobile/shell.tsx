@@ -515,7 +515,7 @@ function MobileWorkspaceContent({
         }}
       >
         <AgentDraftScopeContext value={draftScope}>
-          <NotificationProvider connection={connection} onOpen={openAgent} inAppOnly>
+          <NotificationProvider connection={connection} onOpen={openAgent} inAppOnly cards={false}>
             <AgentsProvider connection={connection} onStarted={openAgent}>
               <div
                 className="mobile-shell"
