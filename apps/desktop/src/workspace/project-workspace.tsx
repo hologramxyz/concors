@@ -18,6 +18,7 @@ import type { PaneProfile, WorkspaceOperation, WorkspaceSnapshot } from "@concor
 import { Button } from "@/components/ui/button";
 import { PaneLayout } from "./pane-layout";
 import { VisitedTab } from "./visited-tab";
+import { useRetainedProjects } from "./retained-projects";
 import { TabButton } from "./tab-button";
 
 export function ProjectWorkspace({
@@ -75,6 +76,10 @@ export function ProjectWorkspace({
     setRenaming(next);
   };
   const project = workspace.projects.find((p) => p.id === workspace.selection?.projectId);
+  const retained = useRetainedProjects(
+    project?.id ?? null,
+    workspace.projects.map((p) => p.id),
+  );
   const selected = project?.tabs.find((tab) => tab.id === workspace.selection?.tabId);
   const tabCount = (project?.tabs.length ?? 0) + projectFiles.length;
   const cycleTab = (delta: number) => {
@@ -401,29 +406,31 @@ export function ProjectWorkspace({
                 <FileTab key={activeFile.id} file={activeFile} />
               </ProjectFileLinks>
             )}
-            {/* Every project's visited tabs stay mounted, so switching back to a project is instant. */}
-            {workspace.projects.flatMap((owner) =>
-              owner.tabs.map((tab) => {
-                const active = !activeFile && owner.id === project.id && tab.id === selected?.id;
-                return (
-                  <VisitedTab key={tab.id} active={active}>
-                    <ProjectFileLinks project={owner}>
-                      <PaneLayout
-                        focusRequest={active ? (focusRequest ?? null) : null}
-                        onPaneFocus={(paneId) => {
-                          lastFocusedPane.current = paneId;
-                          onPaneFocus?.(paneId);
-                        }}
-                        tab={tab}
-                        project={owner}
-                        canEdit={canEdit && !launching && active}
-                        onCommand={onCommand}
-                      />
-                    </ProjectFileLinks>
-                  </VisitedTab>
-                );
-              }),
-            )}
+            {/* Recent projects' visited tabs stay mounted, so switching back to one is instant. */}
+            {workspace.projects
+              .filter((owner) => retained.has(owner.id))
+              .flatMap((owner) =>
+                owner.tabs.map((tab) => {
+                  const active = !activeFile && owner.id === project.id && tab.id === selected?.id;
+                  return (
+                    <VisitedTab key={tab.id} active={active}>
+                      <ProjectFileLinks project={owner}>
+                        <PaneLayout
+                          focusRequest={active ? (focusRequest ?? null) : null}
+                          onPaneFocus={(paneId) => {
+                            lastFocusedPane.current = paneId;
+                            onPaneFocus?.(paneId);
+                          }}
+                          tab={tab}
+                          project={owner}
+                          canEdit={canEdit && !launching && active}
+                          onCommand={onCommand}
+                        />
+                      </ProjectFileLinks>
+                    </VisitedTab>
+                  );
+                }),
+              )}
             {!activeFile && !selected && (
               <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
                 <p>No tabs in this project yet.</p>
