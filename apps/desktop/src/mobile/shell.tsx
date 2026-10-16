@@ -17,7 +17,7 @@ import {
   useSyncExternalStore,
   type CSSProperties,
 } from "react";
-import { FolderOpen, Menu, Search } from "lucide-react";
+import { FolderOpen, LoaderCircle, Menu, Search } from "lucide-react";
 import type { DaemonConnection } from "@concors/daemon-client";
 import type { MobileState, MobileTarget } from "@concors/client-core";
 import type { PaneProfile, WorkspaceOperation, WorkspaceSnapshot } from "@concors/protocol";
@@ -831,6 +831,17 @@ function MobileWorkspaceContent({
                                 />
                               )}
                             </ProjectFileLinks>
+                          ) : host.capabilities.remoteAccess && host.machineId && !workspace ? (
+                            // Loading, not empty: no folder, no call to action, until the projects arrive.
+                            <div className="mobile-empty" role="status">
+                              <LoaderCircle className="size-6 animate-spin text-muted-foreground" />
+                              <p>
+                                Connecting to{" "}
+                                {host.machines.find((machine) => machine.id === host.machineId)
+                                  ?.name ?? "your machine"}
+                                …
+                              </p>
+                            </div>
                           ) : (
                             <div className="mobile-empty">
                               <FolderOpen className="size-8 text-muted-foreground" />
@@ -846,11 +857,9 @@ function MobileWorkspaceContent({
                               <p>
                                 {!host.capabilities.remoteAccess
                                   ? "Remote access is not available on this Concors server yet."
-                                  : host.machineId && !workspace
-                                    ? "Connecting to your projects and agents…"
-                                    : !host.direct && !host.machines.length
-                                      ? "Your cloud machines appear in the selected organization. Check Machines in Settings or switch organizations from your profile."
-                                      : "Open a project from the sidebar or add one to get started."}
+                                  : !host.direct && !host.machines.length
+                                    ? "Your cloud machines appear in the selected organization. Check Machines in Settings or switch organizations from your profile."
+                                    : "Open a project from the sidebar or add one to get started."}
                               </p>
                               {project ? (
                                 <NewTabMenu
