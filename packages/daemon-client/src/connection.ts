@@ -364,6 +364,11 @@ export class DaemonConnection {
   /** Rejects the in-flight `connect()` promise, if any. */
   #abortPending: ((error: ProtocolError) => void) | null = null;
   #workspace: WorkspaceSnapshot | null = null;
+  /**
+   * A selection change shows at once instead of after a round trip to the machine. The daemon
+   * sends its snapshot before the command's result, so dropping this on the result never flickers.
+   */
+  #selecting: { commandId: string; selection: WorkspaceSnapshot["selection"] } | null = null;
   #projectSetups: ProjectSetup[] = [];
   #agents: AgentInfo[] = [];
   #schedules: AgentSchedule[] | null = null;
@@ -541,14 +546,33 @@ export class DaemonConnection {
   }
 
   get workspace(): WorkspaceSnapshot | null {
-    return this.#workspace;
+    return this.#workspace && this.#shown(this.#workspace);
+  }
+
+  #shown(snapshot: WorkspaceSnapshot): WorkspaceSnapshot {
+    return this.#selecting ? { ...snapshot, selection: this.#selecting.selection } : snapshot;
+  }
+
+  #emitWorkspace(): void {
+    if (!this.#workspace) return;
+    const shown = this.#shown(this.#workspace);
+    for (const listener of this.#workspaceListeners) listener(shown);
+  }
+
+  #settleSelection(commandId: string): void {
+    if (this.#selecting?.commandId !== commandId) return;
+    const { selection } = this.#selecting;
+    this.#selecting = null;
+    const actual = this.#workspace?.selection ?? null;
+    if (actual?.projectId !== selection?.projectId || actual?.tabId !== selection?.tabId)
+      this.#emitWorkspace();
   }
 
   /** A subscription always refreshes from the daemon; cached state is never a write authority. */
   subscribeWorkspace(listener: (snapshot: WorkspaceSnapshot) => void): () => void {
     const first = this.#workspaceListeners.size === 0;
     this.#workspaceListeners.add(listener);
-    if (this.#workspace) listener(this.#workspace);
+    if (this.#workspace) listener(this.#shown(this.#workspace));
     if (first && this.#state.status === "ready") this.#subscribeWorkspace();
     return () => {
       this.#workspaceListeners.delete(listener);
@@ -566,6 +590,7 @@ export class DaemonConnection {
         const pending = this.#commands.get(command.commandId);
         clearTimeout(pending?.probe);
         this.#commands.delete(command.commandId);
+        this.#settleSelection(command.commandId);
         reject(
           new Error(
             "Lost contact with this machine, so this change may not have been saved. Check the workspace and try again.",
@@ -586,6 +611,23 @@ export class DaemonConnection {
         clearTimeout(timer);
         this.#commands.delete(command.commandId);
         reject(error instanceof Error ? error : new Error(String(error)));
+        return;
+      }
+      const { operation } = command;
+      const project =
+        operation.kind === "selection.set"
+          ? this.#workspace?.projects.find((p) => p.id === operation.projectId)
+          : undefined;
+      if (
+        operation.kind === "selection.set" &&
+        project &&
+        (operation.tabId === null || project.tabs.some((tab) => tab.id === operation.tabId))
+      ) {
+        this.#selecting = {
+          commandId: command.commandId,
+          selection: { projectId: operation.projectId, tabId: operation.tabId },
+        };
+        this.#emitWorkspace();
       }
     });
   }
@@ -1178,7 +1220,7 @@ export class DaemonConnection {
               break;
             this.#workspace = message.snapshot;
             if (this.#resync) this.#finishResync(this.#resync);
-            for (const listener of this.#workspaceListeners) listener(message.snapshot);
+            this.#emitWorkspace();
             this.#resendCommands();
             break;
           case "workspace.result": {
@@ -1187,6 +1229,7 @@ export class DaemonConnection {
               clearTimeout(pending.timer);
               clearTimeout(pending.probe);
               this.#commands.delete(message.commandId);
+              this.#settleSelection(message.commandId);
               pending.resolve(message);
             }
             break;

@@ -401,24 +401,29 @@ export function ProjectWorkspace({
                 <FileTab key={activeFile.id} file={activeFile} />
               </ProjectFileLinks>
             )}
-            {project.tabs.map((tab) => {
-              const active = !activeFile && tab.id === selected?.id;
-              return (
-                <VisitedTab key={tab.id} active={active}>
-                  <PaneLayout
-                    focusRequest={active ? (focusRequest ?? null) : null}
-                    onPaneFocus={(paneId) => {
-                      lastFocusedPane.current = paneId;
-                      onPaneFocus?.(paneId);
-                    }}
-                    tab={tab}
-                    project={project}
-                    canEdit={canEdit && !launching && active}
-                    onCommand={onCommand}
-                  />
-                </VisitedTab>
-              );
-            })}
+            {/* Every project's visited tabs stay mounted, so switching back to a project is instant. */}
+            {workspace.projects.flatMap((owner) =>
+              owner.tabs.map((tab) => {
+                const active = !activeFile && owner.id === project.id && tab.id === selected?.id;
+                return (
+                  <VisitedTab key={tab.id} active={active}>
+                    <ProjectFileLinks project={owner}>
+                      <PaneLayout
+                        focusRequest={active ? (focusRequest ?? null) : null}
+                        onPaneFocus={(paneId) => {
+                          lastFocusedPane.current = paneId;
+                          onPaneFocus?.(paneId);
+                        }}
+                        tab={tab}
+                        project={owner}
+                        canEdit={canEdit && !launching && active}
+                        onCommand={onCommand}
+                      />
+                    </ProjectFileLinks>
+                  </VisitedTab>
+                );
+              }),
+            )}
             {!activeFile && !selected && (
               <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
                 <p>No tabs in this project yet.</p>
