@@ -1,9 +1,17 @@
 import { randomUUID } from "node:crypto";
-import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { DaemonConnection, describeDaemonEndpoint } from "@concors/daemon-client";
-import type { AgentOperation, WorkspaceOperation } from "@concors/protocol";
+import {
+  WS_PATH,
+  type AgentInfo,
+  type AgentOperation,
+  type AgentUpload,
+  type DaemonMessage,
+  type WorkspaceOperation,
+} from "@concors/protocol";
 import { afterEach, expect, it, vi } from "vitest";
 import { createDaemonServer, type DaemonServer } from "../server.ts";
 import { loadDaemonConfig } from "../config.ts";
@@ -1791,6 +1799,153 @@ it("previews submitted attachments after restart without broadcasting the bytes 
     (await action(c, { kind: "read-attachment", sessionId: id, itemId: "/etc/passwd", index: 0 }))
       .outcome.status,
   ).toBe("error");
+});
+const PIXEL = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==",
+  "base64",
+);
+it("sends any number of uploaded files, past the old size limit, and opens them after a restart", async () => {
+  const { a, b, id } = await setup();
+  const big = new Uint8Array(2 * 1024 * 1024 + 7).fill(65);
+  const files = [
+    { blob: new Blob([big]), name: "big.txt", mime: "text/plain" },
+    { blob: new Blob([PIXEL]), name: "shot.png", mime: "image/png" },
+    ...[1, 2, 3].map((n) => ({
+      blob: new Blob([`note ${n}`]),
+      name: `note-${n}.md`,
+      mime: "text/markdown",
+    })),
+  ];
+  const uploads: AgentUpload[] = [];
+  for (const file of files)
+    uploads.push(await a.upload(file.blob, { name: file.name, mime: file.mime }));
+  const requestId = randomUUID();
+  expect(
+    (await action(a, { kind: "send", sessionId: id, text: "Read these", uploads }, requestId))
+      .outcome.status,
+  ).toBe("ok");
+  await expect
+    .poll(() => providers[0]!.requests.filter((r) => r.method === "turn/start").length)
+    .toBe(1);
+  const { input } = providers[0]!.requests.find((r) => r.method === "turn/start")!.params as {
+    input: { type: string; text?: string; path?: string }[];
+  };
+  const directoryOf = (index: number) =>
+    join(directory, "attachments", id, uploads[index]!.uploadId);
+  expect(input).toHaveLength(6);
+  expect(input[2]).toEqual({ type: "localImage", path: join(directoryOf(1), "shot.png") });
+  const bigPath = input[1]!.text!.split("Its file on this machine is: ")[1]!;
+  expect(bigPath).toBe(join(directoryOf(0), "big.txt"));
+  expect((await readFile(bigPath)).length).toBe(big.length);
+  // The chat owns the files now; nothing is left waiting to be claimed.
+  expect(await readdir(join(directory, "attachments", "uploads"))).toEqual([]);
+  await expect.poll(() => a.agents[0]?.status).toBe("done");
+  const read = await action(b, { kind: "read", sessionId: id });
+  const prompt =
+    read.outcome.status === "ok" && read.outcome.conversation.items.find((i) => i.kind === "user");
+  expect(prompt && prompt.attachments?.map((file) => file.name)).toEqual(
+    files.map((file) => file.name),
+  );
+  a.disconnect();
+  b.disconnect();
+  await server!.close();
+  const c = await open(await boot());
+  const read2 = (index: number) =>
+    action(c, { kind: "read-attachment", sessionId: id, itemId: `prompt:${requestId}`, index });
+  const opened = await read2(0);
+  if (opened.outcome.status !== "ok") throw new Error(opened.outcome.message);
+  // Too large for the field older clients parse, so it comes in the one they ignore.
+  expect(opened.outcome.attachment).toBeUndefined();
+  expect(opened.outcome.file?.data).toBe(Buffer.from(big).toString("base64"));
+  expect((await read2(1)).outcome).toMatchObject({
+    status: "ok",
+    attachment: { name: "shot.png", mime: "image/png", data: PIXEL.toString("base64") },
+  });
+  expect((await read2(5)).outcome.status).toBe("error");
+});
+/** The agents a client that does not declare attachment uploads is sent when it subscribes. */
+function legacyAgents(url: string): Promise<AgentInfo[]> {
+  return new Promise((resolve, reject) => {
+    const socket = new WebSocket(`${url.replace(/^http/, "ws")}${WS_PATH}`);
+    const agents: AgentInfo[] = [];
+    socket.addEventListener("open", () =>
+      socket.send(
+        JSON.stringify({
+          type: "client.hello",
+          protocolVersion: "v1",
+          client: { kind: "test", name: "legacy", version: "0.0.0" },
+          capabilities: ["agent-providers-v2"],
+        }),
+      ),
+    );
+    socket.addEventListener("message", (event) => {
+      const message = JSON.parse(String(event.data)) as DaemonMessage;
+      if (message.type === "daemon.ready")
+        socket.send(JSON.stringify({ type: "workspace.subscribe" }));
+      if (message.type === "agent.state") agents.push(message.agent);
+      if (message.type === "workspace.snapshot") {
+        socket.close();
+        resolve(agents);
+      }
+    });
+    socket.addEventListener("error", () => reject(new Error("socket error")));
+  });
+}
+it("steers and queues uploaded files, keeping only their references in the database", async () => {
+  const { a, id, url } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "hold the turn" });
+  await expect.poll(() => a.agents[0]?.turnId?.startsWith("turn-")).toBe(true);
+  const turnId = a.agents[0]!.turnId!;
+  const shot = await a.upload(new Blob([PIXEL]), { name: "shot.png", mime: "image/png" });
+  const direct = randomUUID();
+  expect(
+    (
+      await action(
+        a,
+        { kind: "steer", sessionId: id, turnId, text: "look", uploads: [shot] },
+        direct,
+      )
+    ).outcome.status,
+  ).toBe("ok");
+  // Several at once on one connection, as a composer uploads them.
+  const many = await Promise.all(
+    [1, 2, 3, 4, 5].map((n) =>
+      a.upload(new Blob([`file ${n}`]), { name: `f${n}.txt`, mime: "text/plain" }),
+    ),
+  );
+  await action(a, { kind: "queue-add", sessionId: id, text: "", uploads: many });
+  await expect.poll(() => a.agents[0]?.queue?.[0]?.attachments.length).toBe(5);
+  // A client from before uploads parses three at most; it is sent the first three.
+  const legacy = await legacyAgents(url);
+  expect(legacy[0]?.queue?.[0]?.attachments.map((file) => file.name)).toEqual([
+    "f1.txt",
+    "f2.txt",
+    "f3.txt",
+  ]);
+  expect(
+    (
+      await action(a, {
+        kind: "read-attachment",
+        sessionId: id,
+        itemId: `steer:${direct}`,
+        index: 0,
+      })
+    ).outcome,
+  ).toMatchObject({ status: "ok", attachment: { data: PIXEL.toString("base64") } });
+  const database = new DatabaseSync(join(directory, "state.db"), { readOnly: true });
+  const kept = database.prepare("SELECT attachment FROM agent_item_images").all();
+  database.close();
+  expect(kept.map((row) => JSON.parse(String(row["attachment"])))).toEqual([shot]);
+  providers[0]!.finish();
+  await expect
+    .poll(() => providers[0]!.requests.filter((r) => r.method === "turn/start").length)
+    .toBe(2);
+  const delivered = providers[0]!.requests.filter((r) => r.method === "turn/start")[1]!.params as {
+    input: { text?: string }[];
+  };
+  expect(delivered.input.map((item) => item.text)).toEqual(
+    many.map((upload) => expect.stringContaining(`attached "${upload.name}"`)),
+  );
 });
 it("reports on /activity whether chats are working or waiting, and not when they are idle", async () => {
   const { a, id, url } = await setup();

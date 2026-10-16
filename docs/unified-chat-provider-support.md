@@ -145,7 +145,8 @@ is never shown as proof that every server is healthy.
   rollback.
 - Steer is a separate operation for Codex, Pi, and OMP. It is neither a queued
   follow-up nor a way to execute a slash command during a turn.
-- The daemon stores up to 20 queued follow-ups with private attachment bytes.
+- The daemon stores up to 20 queued follow-ups with private attachment bytes,
+  or references to files uploaded ahead (see agent-interface.md).
   Dequeue and request reservation are atomic. A client disconnect does not stop
   delivery; Stop, failure, or daemon restart pauses it until explicitly resumed.
 - Request receipts prevent duplicate sends, queue entries, and session copies.

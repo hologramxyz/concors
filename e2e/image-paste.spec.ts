@@ -4,8 +4,9 @@ import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
 import { chooseProvider } from "./support/agents.ts";
+import { MAX_AGENT_IMAGE_BYTES } from "../packages/protocol/src/index.ts";
 
-test("pasted images attach, and screenshots over 1 MB are shrunk instead of refused", async ({
+test("pasted images attach, and screenshots too large for an agent are shrunk instead of refused", async ({
   page,
 }) => {
   const directory = await mkdtemp(join(tmpdir(), "concors-image-paste-"));
@@ -48,7 +49,8 @@ test("pasted images attach, and screenshots over 1 MB are shrunk instead of refu
         [name, size] as const,
       );
 
-    expect(await paste("screenshot.png", 1400)).toBeGreaterThan(1024 * 1024);
+    // Past what an agent takes as an image (5 MB of base64), not just past the old 1 MB limit.
+    expect(await paste("screenshot.png", 1400)).toBeGreaterThan(MAX_AGENT_IMAGE_BYTES);
     await expect(page.getByRole("button", { name: "Remove screenshot.jpg" })).toBeVisible();
     expect(await paste("icon.png", 64)).toBeLessThan(1024 * 1024);
     await expect(page.getByRole("button", { name: "Remove icon.png" })).toBeVisible();

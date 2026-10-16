@@ -172,6 +172,7 @@ describe("WebSocket handshake", () => {
           "project-rename",
           "terminal-recovery",
           "terminal-image-paste",
+          "attachment-uploads",
         ],
       });
       expect(connection.state.status).toBe("ready");

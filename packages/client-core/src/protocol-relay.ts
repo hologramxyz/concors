@@ -29,6 +29,9 @@ export type RelayConnection = Pick<
   | "requestPullRequests"
   | "requestTerminal"
   | "sendTerminalInput"
+  | "onUpload"
+  | "requestUpload"
+  | "sendUploadChunk"
 >;
 export function createProtocolRelay(
   connection: RelayConnection,
@@ -39,6 +42,8 @@ export function createProtocolRelay(
   let unsubscribeUsage: (() => void) | undefined;
   const subscriptions: (() => void)[] = [];
   const viewers = new Set<string>();
+  /** Uploads begun through this relay; the host's socket outlives it, so they are cancelled. */
+  const uploads = new Set<string>();
   const emit = (message: DaemonMessage) => {
     if (!disposed) deliver(message);
   };
@@ -71,6 +76,11 @@ export function createProtocolRelay(
           }),
           connection.onTerminal(emit),
           connection.subscribeProjectSetups((setups) => emit({ type: "project.setups", setups })),
+          connection.onUpload((event) => {
+            if (!uploads.has(event.uploadId)) return;
+            if (event.type === "upload.error") uploads.delete(event.uploadId);
+            emit(event);
+          }),
         );
         for (const session of connection.terminals) emit({ type: "terminal.state", session });
         return;
@@ -118,6 +128,19 @@ export function createProtocolRelay(
         case "file.request":
           emit(await connection.requestFile(message.operation, message.requestId));
           break;
+        case "upload.request": {
+          const { operation } = message;
+          if (operation.kind === "begin") uploads.add(operation.uploadId);
+          else uploads.delete(operation.uploadId);
+          emit(await connection.requestUpload(operation, message.requestId));
+          break;
+        }
+        case "upload.chunk":
+          // Chunks can still be on their way after an upload failed or was cancelled; like the
+          // daemon, the relay drops them rather than failing the whole connection.
+          if (uploads.has(message.uploadId))
+            connection.sendUploadChunk(message.uploadId, message.seq, message.data);
+          break;
         case "terminal.request": {
           const operation = message.operation;
           if (operation.kind === "attach") viewers.add(operation.sessionId);
@@ -141,6 +164,12 @@ export function createProtocolRelay(
       for (const unsubscribe of subscriptions) unsubscribe();
       for (const sessionId of viewers) detach(sessionId);
       viewers.clear();
+      for (const uploadId of uploads)
+        if (connection.state.status === "ready")
+          void connection
+            .requestUpload({ kind: "cancel", uploadId }, newRequestId())
+            .catch(() => undefined);
+      uploads.clear();
     },
   };
 }

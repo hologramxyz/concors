@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { AgentAttachmentSchema } from "@concors/protocol";
+import {
+  AgentAttachmentSchema,
+  LEGACY_MESSAGE_ATTACHMENTS,
+  MAX_UPLOAD_BYTES,
+} from "@concors/protocol";
 
 const text = z.string().max(16000);
 export const NativeIconSchema = z.enum([
@@ -95,6 +99,11 @@ export const NativeSurfaceContentSchema = z.discriminatedUnion("kind", [
     canStop: z.boolean(),
     hasAttachments: z.boolean(),
     attachEnabled: z.boolean(),
+    /**
+     * The machine takes files uploaded ahead of a message: any number, each up to the upload
+     * limit. Without it, three files of 1 MB at most.
+     */
+    uploads: z.boolean().optional(),
     controls: z.array(NativeControlSchema).max(4),
     /** Null when the provider reports neither context nor plan usage: there is no sheet. */
     usage: NativeUsageSchema.nullable(),
@@ -118,6 +127,16 @@ export const NativeSurfaceSchema = z.object({
   interactive: z.boolean().optional(),
 });
 export type NativeSurface = z.infer<typeof NativeSurfaceSchema>;
+/**
+ * A file the native picker read whole. Where the machine takes uploads the picker sends one per
+ * event, up to the upload limit, and the web composer uploads it; otherwise the old inline limits.
+ */
+const NativeAttachmentSchema = AgentAttachmentSchema.extend({
+  data: z
+    .string()
+    .max(Math.ceil(MAX_UPLOAD_BYTES / 3) * 4)
+    .regex(/^[A-Za-z0-9+/]*={0,2}$/),
+});
 /** UI-only events, never arbitrary JS, selectors, daemon operations, or URLs. */
 export const NativeSurfaceEventSchema = z.discriminatedUnion("kind", [
   z.object({
@@ -129,7 +148,10 @@ export const NativeSurfaceEventSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("text"), text, sequence: z.number().int().positive() }),
   z.object({ kind: z.literal("focus"), focused: z.boolean() }),
   z.object({ kind: z.literal("height"), height: z.number().min(48).max(360) }),
-  z.object({ kind: z.literal("attachments"), attachments: z.array(AgentAttachmentSchema).max(3) }),
+  z.object({
+    kind: z.literal("attachments"),
+    attachments: z.array(NativeAttachmentSchema).max(LEGACY_MESSAGE_ATTACHMENTS),
+  }),
   z.object({ kind: z.literal("swipe"), direction: z.enum(["left", "right"]) }),
 ]);
 export type NativeSurfaceEvent = z.infer<typeof NativeSurfaceEventSchema>;
