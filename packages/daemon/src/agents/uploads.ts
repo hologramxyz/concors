@@ -57,9 +57,10 @@ export class Uploads {
     this.#sweeper.unref?.();
   }
 
-  close(): void {
+  /** Resolves once unfinished uploads are closed and removed; Windows cannot delete open files. */
+  async close(): Promise<void> {
     clearInterval(this.#sweeper);
-    for (const id of [...this.#active.keys()]) void this.#discard(id);
+    await Promise.all([...this.#active.keys()].map((id) => this.#discard(id)));
   }
 
   async request(

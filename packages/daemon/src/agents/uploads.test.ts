@@ -21,7 +21,7 @@ beforeEach(async () => {
   events = [];
 });
 afterEach(async () => {
-  uploads.close();
+  await uploads.close();
   await rm(root, { recursive: true, force: true });
 });
 const request = (operation: UploadOperation, owner = "viewer") =>

@@ -196,7 +196,7 @@ export function registerProtocolEndpoint(
     providers.close();
     hostUsage.close();
     dictation?.close();
-    uploads.close();
+    await uploads.close();
     await agents.close();
     await closingSchedules;
     projects.close();
@@ -425,7 +425,7 @@ export function registerProtocolEndpoint(
     providers.close();
     hostUsage.close();
     dictation?.close();
-    uploads.close();
+    await uploads.close();
     await agents.close();
     projects.close();
     terminals.close();
