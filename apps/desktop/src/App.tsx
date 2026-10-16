@@ -380,6 +380,8 @@ function AppContent() {
   }
   const account = auth.state;
   const execute = async (operation: WorkspaceOperation) => {
+    // A selection shows at once and is not version-checked, so it never holds up the next action.
+    if (operation.kind === "selection.set") return connection.execute(operation);
     setPending(true);
     try {
       await connection.execute(operation);
