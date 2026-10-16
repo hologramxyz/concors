@@ -69,6 +69,16 @@ export class ConnectionController {
         message: "Connection paused. Reconnect when the app is active and online.",
       });
   }
+  /**
+   * The app is back in front. A socket that survived is kept; one that died while the app was
+   * away is replaced now instead of after its backoff.
+   */
+  wake = (): void => {
+    if (!this.available || this.disposed || this.blocked || this.value.phase !== "error") return;
+    this.stopAttempt();
+    this.failures = 0;
+    void this.attempt();
+  };
   retry = (): void => {
     if (!this.available || this.disposed) return;
     this.stopAttempt();

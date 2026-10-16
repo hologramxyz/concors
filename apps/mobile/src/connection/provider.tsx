@@ -166,15 +166,16 @@ function MachineSession({
   );
   useEffect(() => {
     if (!controller) return;
-    let active = AppState.currentState !== "background" && AppState.currentState !== "inactive";
+    // The connection stays open while the app is in the background, as Paseo's does. Closing it
+    // there meant a full reconnect on every return, even from a glance at Control Center. If iOS
+    // kills the socket while the app is suspended, it is replaced as soon as the app is back.
     let online = true;
     let disposed = false;
     const update = () => {
-      if (!disposed) controller.setAvailable(active && (online || config.demo));
+      if (!disposed) controller.setAvailable(online || config.demo);
     };
     const app = AppState.addEventListener("change", (state) => {
-      active = state === "active";
-      update();
+      if (state === "active") controller.wake();
     });
     const network = Network.addNetworkStateListener((state) => {
       online = state.isConnected !== false && state.isInternetReachable !== false;
