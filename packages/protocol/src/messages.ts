@@ -11,6 +11,12 @@ import { PullRequestRequestSchema, PullRequestResultSchema } from "./pull-reques
 import { ProviderRequestSchema, ProviderResultSchema } from "./providers.ts";
 import { FileRequestSchema, FileResultSchema } from "./files.ts";
 import { AgentRequestSchema, AgentResultSchema, AgentEventSchema } from "./agents.ts";
+import {
+  UploadChunkSchema,
+  UploadEventSchema,
+  UploadRequestSchema,
+  UploadResultSchema,
+} from "./uploads.ts";
 import { ProjectRequestSchema, ProjectResultSchema, ProjectSetupsSchema } from "./projects.ts";
 import { z } from "zod";
 import {
@@ -75,6 +81,8 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
   PullRequestRequestSchema,
   DictationRequestSchema,
   DictationAudioSchema,
+  UploadRequestSchema,
+  UploadChunkSchema,
 ]);
 export type ClientMessage = z.infer<typeof ClientMessageSchema>;
 
@@ -114,6 +122,8 @@ export const DaemonMessageSchema = z.discriminatedUnion("type", [
   ...AgentEventSchema.options,
   DictationResultSchema,
   ...DictationEventSchema.options,
+  UploadResultSchema,
+  ...UploadEventSchema.options,
 ]);
 export type DaemonMessage = z.infer<typeof DaemonMessageSchema>;
 

@@ -270,6 +270,8 @@ test("an unconfirmed message can stop retrying, to edit it or remove its attachm
       });
     const remove = page.getByRole("button", { name: "Remove spec.pdf", exact: true });
     await expect(remove).toBeVisible();
+    // Uploaded before the clock stops, so only the prompt itself goes unconfirmed.
+    await expect(page.locator('[data-upload="uploaded"]')).toHaveCount(1);
     await composer.fill("Here is the full context");
     await page.clock.install();
     swallow = true;

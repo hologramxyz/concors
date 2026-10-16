@@ -31,6 +31,18 @@ import {
 } from "@concors/protocol";
 import { FileRequestSchema, type FileOperation, type FileResult } from "@concors/protocol";
 import {
+  ATTACHMENT_UPLOADS_CAPABILITY,
+  MAX_UPLOAD_BYTES,
+  UPLOAD_CHUNK_BYTES,
+  UPLOAD_WINDOW_CHUNKS,
+  UploadChunkSchema,
+  UploadRequestSchema,
+  type AgentUpload,
+  type UploadEvent,
+  type UploadOperation,
+  type UploadResult,
+} from "@concors/protocol";
+import {
   PULL_REQUESTS_CAPABILITY,
   PULL_REQUEST_ACTIONS_CAPABILITY,
   PULL_REQUEST_STATES_CAPABILITY,
@@ -95,6 +107,8 @@ const WATCHDOG_CHECK_MS = 5_000;
  */
 /** How often a request still uploading checks whether its bytes have left the socket. */
 const UPLOAD_POLL_MS = 250;
+/** An upload whose chunks the machine has stopped confirming for this long is given up. */
+const UPLOAD_STALL_MS = 30_000;
 
 export interface WebSocketLike {
   readonly readyState: number;
@@ -320,6 +334,158 @@ export class DaemonConnection {
         DictationAudioSchema.parse({ type: "dictation.audio", dictationId, seq, pcm }),
       ),
     );
+  }
+
+  readonly #uploadRequests = new Map<
+    string,
+    {
+      resolve: (result: UploadResult) => void;
+      reject: (error: Error) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
+  >();
+  readonly #uploadListeners = new Set<(event: UploadEvent) => void>();
+
+  /** Whether this machine takes files uploaded ahead of a message; older ones take them inline. */
+  get uploads(): boolean {
+    return (
+      this.#state.status === "ready" &&
+      !!this.#state.daemon.capabilities?.includes(ATTACHMENT_UPLOADS_CAPABILITY)
+    );
+  }
+
+  /** Progress and failures of every upload on this connection, including relayed ones. */
+  onUpload(listener: (event: UploadEvent) => void): () => void {
+    this.#uploadListeners.add(listener);
+    return () => {
+      this.#uploadListeners.delete(listener);
+    };
+  }
+
+  requestUpload(operation: UploadOperation, requestId: string): Promise<UploadResult> {
+    if (this.#state.status !== "ready" || !this.#workspace)
+      return Promise.reject(new Error("Machine is disconnected"));
+    if (!this.uploads)
+      return Promise.reject(new Error("This machine needs a Concors update to take uploads."));
+    if (this.#uploadRequests.has(requestId))
+      return Promise.reject(new Error("Request is already pending"));
+    const request = UploadRequestSchema.parse({ type: "upload.request", requestId, operation });
+    return new Promise((resolve, reject) => {
+      // Finishing waits for the last chunks to reach the disk, which a busy machine can delay.
+      const timer = setTimeout(() => {
+        this.#uploadRequests.delete(requestId);
+        reject(new Error("The machine did not answer. Attach the file again."));
+      }, 20_000);
+      this.#uploadRequests.set(requestId, { resolve, reject, timer });
+      try {
+        this.#socket?.send(JSON.stringify(request));
+      } catch (error) {
+        clearTimeout(timer);
+        this.#uploadRequests.delete(requestId);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
+  }
+
+  /** Fire-and-forget: a lost chunk surfaces as an `upload.error` for that upload. */
+  sendUploadChunk(uploadId: string, seq: number, data: string): void {
+    if (!this.uploads) throw new Error("This machine needs a Concors update to take uploads.");
+    this.#socket?.send(
+      JSON.stringify(UploadChunkSchema.parse({ type: "upload.chunk", uploadId, seq, data })),
+    );
+  }
+
+  /**
+   * Streams a file to the machine and resolves with the reference a message carries instead of
+   * its bytes. Only a few chunks are ever unconfirmed, so other messages are not held up behind
+   * the file, and progress counts what the machine has written. Aborting `signal`, a dropped
+   * connection or a stalled machine rejects; the machine discards the partial file.
+   *
+   * Reads the file with `Blob.slice`, so it runs where Blobs can be read (browsers, webviews).
+   */
+  async upload(
+    file: Blob,
+    options: {
+      name: string;
+      mime: string;
+      signal?: AbortSignal;
+      onProgress?: (received: number) => void;
+    },
+  ): Promise<AgentUpload> {
+    const { name, mime, signal } = options;
+    if (file.size > MAX_UPLOAD_BYTES)
+      throw new Error(`${name} is larger than ${MAX_UPLOAD_BYTES / 1024 / 1024} MB.`);
+    signal?.throwIfAborted();
+    const uploadId = crypto.randomUUID();
+    const request = async (operation: UploadOperation) => {
+      const result = await this.requestUpload(operation, crypto.randomUUID());
+      if (result.outcome.status === "error") throw new Error(result.outcome.message);
+      return result.outcome;
+    };
+    let confirmed = 0;
+    let failure: Error | null = null;
+    let wake: (() => void) | null = null;
+    const stopEvents = this.onUpload((event) => {
+      if (event.uploadId !== uploadId) return;
+      if (event.type === "upload.progress") {
+        confirmed = event.received;
+        options.onProgress?.(confirmed);
+      } else failure ??= new Error(event.message);
+      wake?.();
+    });
+    const stopState = this.subscribe((state) => {
+      if (state.status === "ready") return;
+      failure ??= new Error(`Connection lost while uploading ${name}.`);
+      wake?.();
+    });
+    const aborted = () => wake?.();
+    signal?.addEventListener("abort", aborted);
+    let begun = false;
+    try {
+      await request({ kind: "begin", uploadId, name, mime, size: file.size });
+      begun = true;
+      let sent = 0;
+      let seq = 0;
+      for (;;) {
+        signal?.throwIfAborted();
+        if (failure) throw failure;
+        if (sent < file.size && sent - confirmed < UPLOAD_WINDOW_CHUNKS * UPLOAD_CHUNK_BYTES) {
+          const end = Math.min(sent + UPLOAD_CHUNK_BYTES, file.size);
+          const data = toBase64(await file.slice(sent, end).arrayBuffer());
+          signal?.throwIfAborted();
+          if (failure) throw failure;
+          this.sendUploadChunk(uploadId, seq++, data);
+          sent = end;
+          continue;
+        }
+        if (confirmed >= file.size) break;
+        await new Promise<void>((resolve) => {
+          const timer = setTimeout(() => {
+            failure ??= new Error(`The machine stopped receiving ${name}. Attach it again.`);
+            resolve();
+          }, UPLOAD_STALL_MS);
+          wake = () => {
+            clearTimeout(timer);
+            wake = null;
+            resolve();
+          };
+        });
+      }
+      const outcome = await request({ kind: "finish", uploadId });
+      if (!outcome.upload) throw new Error(`The machine did not keep ${name}. Attach it again.`);
+      return outcome.upload;
+    } catch (error) {
+      // The machine removes a partial file itself when the connection drops.
+      if (begun && this.uploads)
+        void this.requestUpload({ kind: "cancel", uploadId }, crypto.randomUUID()).catch(
+          () => undefined,
+        );
+      throw error;
+    } finally {
+      stopEvents();
+      stopState();
+      signal?.removeEventListener("abort", aborted);
+    }
   }
 
   #hostUsage: HostUsage | null = null;
@@ -988,7 +1154,12 @@ export class DaemonConnection {
         this.#setState({ status: "handshaking" });
         const hello: ClientHelloMessage = {
           type: "client.hello",
-          capabilities: ["agent-providers-v2", SCHEDULES_CAPABILITY, DICTATION_CAPABILITY],
+          capabilities: [
+            "agent-providers-v2",
+            SCHEDULES_CAPABILITY,
+            DICTATION_CAPABILITY,
+            ATTACHMENT_UPLOADS_CAPABILITY,
+          ],
           protocolVersion: this.#protocolVersion,
           client: this.#client,
         };
@@ -1120,6 +1291,20 @@ export class DaemonConnection {
             }
             break;
           }
+          case "upload.result": {
+            const pending = this.#uploadRequests.get(message.requestId);
+            if (pending) {
+              clearTimeout(pending.timer);
+              this.#uploadRequests.delete(message.requestId);
+              pending.resolve(message);
+            }
+            break;
+          }
+          case "upload.progress":
+          case "upload.error":
+            if (this.#state.status !== "ready") break;
+            for (const listener of this.#uploadListeners) listener(message);
+            break;
           case "dictation.model":
           case "dictation.transcript":
           case "dictation.error":
@@ -1410,11 +1595,25 @@ export class DaemonConnection {
       }
       this.#dictationRequests.clear();
       this.#dictationModel = null;
+      for (const pending of this.#uploadRequests.values()) {
+        clearTimeout(pending.timer);
+        pending.reject(new Error("Connection lost while uploading. Attach the file again."));
+      }
+      this.#uploadRequests.clear();
     }
     for (const listener of this.#listeners) {
       listener(state);
     }
   }
+}
+
+function toBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  // In slices, since spreading a whole chunk into one call can exceed the argument limit.
+  for (let i = 0; i < bytes.length; i += 0x8000)
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(binary);
 }
 
 function defaultWebSocketFactory(url: string, protocols?: string | string[]): WebSocketLike {

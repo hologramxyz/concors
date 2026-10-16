@@ -49,6 +49,7 @@ import {
 import { GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from "expo-glass-effect";
 import * as DocumentPicker from "expo-document-picker";
 import { File, Paths } from "expo-file-system";
+import { MAX_UPLOAD_BYTES } from "@concors/protocol";
 import { cornerRadius, nativeButtonShape, type CornerStyle } from "../appearance";
 import type {
   NativeComposerContent,
@@ -516,22 +517,40 @@ function Composer({
         if (asset.uri.startsWith(Paths.cache.uri)) copies.push(new File(asset.uri));
       }
       if (!alive.current) return;
-      if (result.assets.length > 3) throw new Error("Attach up to three files per message.");
+      // A machine that takes uploads has no count limit; the composer uploads each file.
+      const uploads = !!content.uploads;
+      if (!uploads && result.assets.length > 3)
+        throw new Error(
+          "Attach up to three files per message. This machine needs a Concors update to attach more.",
+        );
+      const limit = uploads ? MAX_UPLOAD_BYTES : 1024 * 1024;
       const attachments = [];
+      const refused: string[] = [];
       for (const asset of result.assets) {
         const file = new File(asset.uri);
         if (!asset.name || asset.name.length > 200)
           throw new Error("The attachment name is too long.");
-        if (file.size > 1024 * 1024 || (asset.size ?? 0) > 1024 * 1024)
-          throw new Error(`${asset.name} is larger than 1 MB.`);
-        attachments.push({
+        if (file.size > limit || (asset.size ?? 0) > limit) {
+          if (!uploads)
+            throw new Error(
+              `${asset.name} is larger than 1 MB. This machine needs a Concors update to attach larger files.`,
+            );
+          refused.push(`${asset.name} is larger than ${MAX_UPLOAD_BYTES / 1024 / 1024} MB.`);
+          continue;
+        }
+        const attachment = {
           name: asset.name,
           mime: asset.mimeType ?? "application/octet-stream",
           data: await file.base64(),
-        });
+        };
+        // One file per event, so a large one is never part of an even larger message.
+        if (!uploads) attachments.push(attachment);
+        else if (alive.current && latest.current.content.attachEnabled)
+          latest.current.emit({ kind: "attachments", attachments: [attachment] });
       }
-      if (alive.current && latest.current.content.attachEnabled)
+      if (attachments.length && alive.current && latest.current.content.attachEnabled)
         latest.current.emit({ kind: "attachments", attachments });
+      if (refused.length) throw new Error(refused.join("\n"));
     } catch (error) {
       if (alive.current)
         Alert.alert(

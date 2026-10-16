@@ -5,6 +5,12 @@ import { AgentControlsSchema, AgentFeatureValueSchema } from "./agent-controls.t
 import { ProviderIdSchema, ProviderEngineSchema, ProviderVersionSchema } from "./providers.ts";
 import { providerPresets } from "./provider-presets.ts";
 import { NativeSessionSchema } from "./native-sessions.ts";
+import { MAX_PREVIEW_BYTES } from "./files.ts";
+import {
+  AgentUploadSchema,
+  LEGACY_MESSAGE_ATTACHMENTS,
+  MAX_MESSAGE_ATTACHMENTS,
+} from "./uploads.ts";
 export { NativeSessionSchema, type NativeSession } from "./native-sessions.ts";
 const Id = z.string().uuid();
 export const MAX_AGENT_MODELS = 4096;
@@ -113,8 +119,9 @@ export const AgentSettingsSchema = z.object({
   features: z.record(z.string().max(128), AgentFeatureValueSchema).optional(),
 });
 export type AgentSettings = z.infer<typeof AgentSettingsSchema>;
-/** Images an agent can show in one reply; a sent prompt still carries at most three files. */
+/** Images an agent can show in one reply. */
 export const MAX_MESSAGE_IMAGES = 8;
+/** A file sent inline in a message, as clients did before uploads: at most 1 MB, three a message. */
 export const AgentAttachmentSchema = z.object({
   name: z.string().min(1).max(200),
   mime: z.string().max(100),
@@ -124,6 +131,32 @@ export const AgentAttachmentSchema = z.object({
     .regex(/^[A-Za-z0-9+/]*={0,2}$/),
 });
 export type AgentAttachment = z.infer<typeof AgentAttachmentSchema>;
+/** Opening an uploaded attachment sends it whole, so only files up to a preview's size open. */
+export const MAX_ATTACHMENT_READ_BYTES = MAX_PREVIEW_BYTES;
+/** An attachment read back too large for `AgentAttachmentSchema`, which older clients still parse. */
+export const AgentFileSchema = AgentAttachmentSchema.extend({
+  data: z
+    .string()
+    .max(Math.ceil(MAX_ATTACHMENT_READ_BYTES / 3) * 4)
+    .regex(/^[A-Za-z0-9+/]*={0,2}$/),
+});
+export type AgentFile = z.infer<typeof AgentFileSchema>;
+/**
+ * What a sent message carries: files inline (older clients) and files uploaded ahead. Both are
+ * optional; together they stay under the sanity bound.
+ */
+const messageFiles = {
+  attachments: z.array(AgentAttachmentSchema).max(LEGACY_MESSAGE_ATTACHMENTS).optional(),
+  uploads: z.array(AgentUploadSchema).max(MAX_MESSAGE_ATTACHMENTS).optional(),
+};
+const hasContent = (v: {
+  text: string;
+  attachments?: unknown[] | undefined;
+  uploads?: unknown[] | undefined;
+}) => v.text.length > 0 || !!v.attachments?.length || !!v.uploads?.length;
+const withinBound = (v: { attachments?: unknown[] | undefined; uploads?: unknown[] | undefined }) =>
+  (v.attachments?.length ?? 0) + (v.uploads?.length ?? 0) <= MAX_MESSAGE_ATTACHMENTS;
+const tooMany = `Attach up to ${MAX_MESSAGE_ATTACHMENTS} files per message`;
 /** The latest steps a sub-agent row keeps; its full conversation stays with the CLI. */
 export const SUB_AGENT_STEPS = 40;
 export const AgentActivityStepSchema = z.object({
@@ -193,7 +226,9 @@ export const AgentInfoSchema = z.object({
       z.object({
         id: Id,
         text: z.string().max(16000),
-        attachments: z.array(z.object({ name: z.string(), mime: z.string() })).max(3),
+        attachments: z
+          .array(z.object({ name: z.string(), mime: z.string() }))
+          .max(MAX_MESSAGE_ATTACHMENTS),
         queuedAt: z.string().datetime(),
       }),
     )
@@ -260,7 +295,7 @@ export const AgentItemSchema = z.object({
         source: z.string().max(4096).optional(),
       }),
     )
-    .max(MAX_MESSAGE_IMAGES)
+    .max(MAX_MESSAGE_ATTACHMENTS)
     .optional(),
   status: z.enum(["running", "completed", "failed", "interrupted"]),
   createdAt: z.string().datetime(),
@@ -307,7 +342,7 @@ export const AgentOperationSchema = z.discriminatedUnion("kind", [
       .number()
       .int()
       .min(0)
-      .max(MAX_MESSAGE_IMAGES - 1),
+      .max(MAX_MESSAGE_ATTACHMENTS - 1),
   }),
   z.object({
     kind: z.literal("implement-plan"),
@@ -347,17 +382,19 @@ export const AgentOperationSchema = z.discriminatedUnion("kind", [
       sessionId: Id,
       turnId: z.string().min(1),
       text: z.string().trim().max(16000),
-      attachments: z.array(AgentAttachmentSchema).max(3).optional(),
+      ...messageFiles,
     })
-    .refine((v) => v.text.length > 0 || !!v.attachments?.length, "Add a message or attachment"),
+    .refine(hasContent, "Add a message or attachment")
+    .refine(withinBound, tooMany),
   z
     .object({
       kind: z.literal("queue-add"),
       sessionId: Id,
       text: z.string().trim().max(16000),
-      attachments: z.array(AgentAttachmentSchema).max(3).optional(),
+      ...messageFiles,
     })
-    .refine((v) => v.text.length > 0 || !!v.attachments?.length, "Add a message or attachment"),
+    .refine(hasContent, "Add a message or attachment")
+    .refine(withinBound, tooMany),
   z.object({ kind: z.literal("queue-remove"), sessionId: Id, id: Id }),
   /** Moves a queued follow-up into the running turn instead of waiting for it to end. */
   z.object({
@@ -426,9 +463,10 @@ export const AgentOperationSchema = z.discriminatedUnion("kind", [
       kind: z.literal("send"),
       sessionId: Id,
       text: z.string().trim().max(16000),
-      attachments: z.array(AgentAttachmentSchema).max(3).optional(),
+      ...messageFiles,
     })
-    .refine((v) => v.text.length > 0 || !!v.attachments?.length, "Add a message or attachment"),
+    .refine(hasContent, "Add a message or attachment")
+    .refine(withinBound, tooMany),
   z.object({ kind: z.literal("interrupt"), sessionId: Id, turnId: z.string().min(1) }),
   z.object({
     kind: z.literal("respond"),
@@ -462,6 +500,8 @@ export const AgentResultSchema = z.object({
         .optional(),
       account: AgentAccountSchema.optional(),
       attachment: AgentAttachmentSchema.optional(),
+      /** An uploaded attachment too large for `attachment`; older clients ignore it. */
+      file: AgentFileSchema.optional(),
       messageIndex: AgentMessageIndexSchema.optional(),
       usage: AgentPlanUsageSchema.optional(),
     }),
