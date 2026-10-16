@@ -665,14 +665,14 @@ describe("workspace replica lifecycle", () => {
       await vi.advanceTimersByTimeAsync(30_000);
       expect(settled).toBe(false);
       // Once it has left, the daemon gets the usual time to answer.
-      const timedOut = expect(slow).rejects.toThrow("Agent request timed out");
+      const timedOut = expect(slow).rejects.toThrow("The machine didn’t answer");
       await vi.advanceTimersByTimeAsync(10_000);
       await timedOut;
 
       // An upload that stops moving times out as before.
       socket.bufferedAmount = 500_000;
       const stalled = expect(send("00000000-0000-4000-8000-000000000006")).rejects.toThrow(
-        "Agent request timed out",
+        "The machine didn’t answer",
       );
       await vi.advanceTimersByTimeAsync(36_000);
       await stalled;
@@ -789,6 +789,66 @@ describe("workspace replica lifecycle", () => {
     connection.disconnect();
   });
 
+  it("sends a waiting agent request again after a reconnect, under the same ID", async () => {
+    const { connection, socket, sockets, ready } = startConnection();
+    connection.subscribeWorkspace(() => undefined);
+    socket.serverOpen();
+    socket.serverSend(READY);
+    await ready;
+    socket.serverSend({ type: "workspace.snapshot", snapshot });
+    const requestId = "00000000-0000-4000-8000-000000000030";
+    const pending = connection.requestAgent(
+      { kind: "send", sessionId: "00000000-0000-4000-8000-000000000004", text: "Hello" },
+      requestId,
+    );
+    const sentRequest = (raw: string) => JSON.parse(raw).requestId === requestId;
+    expect(socket.sent.filter(sentRequest)).toHaveLength(1);
+    // The socket drops before the answer: the request waits instead of failing.
+    socket.serverClose();
+    const reconnected = connection.connect();
+    const next = sockets[1]!;
+    next.serverOpen();
+    next.serverSend(READY);
+    await reconnected;
+    next.serverSend({ type: "workspace.snapshot", snapshot });
+    // The daemon answers a repeat from its receipt, so going again cannot send the message twice.
+    expect(next.sent.filter(sentRequest)).toHaveLength(1);
+    const answer = {
+      type: "agent.result" as const,
+      requestId,
+      outcome: { status: "error" as const, message: "Answered from the receipt" },
+    };
+    next.serverSend(answer);
+    await expect(pending).resolves.toEqual(answer);
+    connection.disconnect();
+  });
+
+  it("abandons a silent socket sooner while a request waits for its answer", async () => {
+    vi.useFakeTimers();
+    try {
+      const { connection, socket, ready } = startConnection();
+      connection.subscribeWorkspace(() => undefined);
+      socket.serverOpen();
+      socket.serverSend({ ...READY, capabilities: ["heartbeat"] });
+      await ready;
+      socket.serverSend({ type: "workspace.snapshot", snapshot });
+      void connection
+        .requestAgent(
+          { kind: "send", sessionId: "00000000-0000-4000-8000-000000000004", text: "Hello" },
+          "00000000-0000-4000-8000-000000000031",
+        )
+        .catch(() => undefined);
+      // A VPN that stops passing traffic: no answer and no heartbeat, but no close either.
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(connection.state.status).toBe("ready");
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(connection.state.status).not.toBe("ready");
+      connection.disconnect();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("reports a command lost only once its deadline passes without a machine to answer", async () => {
     vi.useFakeTimers();
     try {
@@ -799,7 +859,7 @@ describe("workspace replica lifecycle", () => {
       await ready;
       socket.serverSend({ type: "workspace.snapshot", snapshot });
       const pending = connection.executeWorkspace(command);
-      const lost = expect(pending).rejects.toThrow("Lost contact with this machine");
+      const lost = expect(pending).rejects.toThrow("Can’t reach this machine");
       socket.serverClose();
       await vi.advanceTimersByTimeAsync(59_000);
       await vi.advanceTimersByTimeAsync(2_000);
