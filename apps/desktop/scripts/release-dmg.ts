@@ -43,6 +43,23 @@ await copyFile(join(built, builtImage), image);
 const identity = process.env["APPLE_SIGNING_IDENTITY"];
 const key = process.env["APPLE_API_KEY"];
 const issuer = process.env["APPLE_API_ISSUER"];
+/**
+ * `stapler` fetches the ticket from Apple's CloudKit, and a CI runner's connection to it sometimes
+ * drops mid-request ("The network connection was lost", error 68) right after notarization
+ * succeeded. Stapling and validating are safe to repeat, so a dropped request is tried again.
+ */
+async function stapler(action: "staple" | "validate", path: string) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      execFileSync("xcrun", ["stapler", action, path], { stdio: "inherit" });
+      return;
+    } catch (error) {
+      if (attempt === 5) throw error;
+      process.stdout.write(`stapler ${action} failed (attempt ${attempt} of 5); trying again\n`);
+      await new Promise((resolve) => setTimeout(resolve, attempt * 15_000));
+    }
+  }
+}
 const keyPath = process.env["APPLE_API_KEY_PATH"];
 
 if (!identity || identity === "-" || !key || !issuer || !keyPath) {
@@ -69,7 +86,7 @@ if (!identity || identity === "-" || !key || !issuer || !keyPath) {
     });
     throw new Error(`Notarization of ${image} ended ${submission.status}.`);
   }
-  execFileSync("xcrun", ["stapler", "staple", image], { stdio: "inherit" });
+  await stapler("staple", image);
   // What a downloading Mac will conclude, asked the same way it asks: this is the check that fails
   // when anything above quietly did not happen.
   execFileSync(
@@ -87,7 +104,7 @@ if (!identity || identity === "-" || !key || !issuer || !keyPath) {
     execFileSync("spctl", ["--assess", "--type", "execute", "--verbose", app], {
       stdio: "inherit",
     });
-    execFileSync("xcrun", ["stapler", "validate", app], { stdio: "inherit" });
+    await stapler("validate", app);
     // Finder records the window's layout in .DS_Store; without it the image opens as a bare
     // folder, which is what a skipped Finder pass leaves behind without failing the build.
     for (const name of [".DS_Store", ".background/dmg-background.tiff"])
