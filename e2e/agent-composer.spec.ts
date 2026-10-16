@@ -277,13 +277,13 @@ test("an unconfirmed message can stop retrying, to edit it or remove its attachm
     swallow = true;
     await page.getByRole("button", { name: "Send message", exact: true }).click();
     await page.clock.runFor(36_000);
-    await expect(page.getByText("Delivery could not be confirmed.")).toBeVisible();
-    await expect(page.getByRole("alert")).toContainText("Agent request timed out");
+    await expect(page.getByText("Your message may not have arrived.")).toBeVisible();
+    await expect(page.getByRole("alert")).toContainText("The machine didn’t answer");
     // Locked so that a retry sends exactly the same message.
     await expect(remove).toBeDisabled();
 
-    await page.getByRole("button", { name: "Stop retrying", exact: true }).click();
-    await expect(page.getByText("Delivery could not be confirmed.")).toHaveCount(0);
+    await page.getByRole("button", { name: "Edit message", exact: true }).click();
+    await expect(page.getByText("Your message may not have arrived.")).toHaveCount(0);
     await expect(page.getByRole("alert")).toHaveCount(0);
     await expect(composer).toHaveValue("Here is the full context");
     await remove.click();
