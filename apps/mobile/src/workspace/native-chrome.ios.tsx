@@ -48,6 +48,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from "expo-glass-effect";
 import * as DocumentPicker from "expo-document-picker";
+import * as ImagePicker from "expo-image-picker";
 import { File, Paths } from "expo-file-system";
 import { MAX_UPLOAD_BYTES } from "@concors/protocol";
 import { cornerRadius, nativeButtonShape, type CornerStyle } from "../appearance";
@@ -501,32 +502,74 @@ function Composer({
       input.current?.focus();
     }
   };
+  // Like Messages and Paseo: photos and videos first, any file from Files second.
+  const chooseSource = () =>
+    new Promise<"photos" | "files" | null>((resolve) =>
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options: ["Photo Library", "Choose File", "Cancel"], cancelButtonIndex: 2 },
+        (index) => resolve(index === 0 ? "photos" : index === 1 ? "files" : null),
+      ),
+    );
+  const pick = async (source: "photos" | "files") => {
+    if (source === "files") {
+      const result = await DocumentPicker.getDocumentAsync({
+        multiple: true,
+        copyToCacheDirectory: true,
+      });
+      return result.canceled
+        ? null
+        : result.assets.map((asset) => ({
+            uri: asset.uri,
+            name: asset.name,
+            mime: asset.mimeType,
+            size: asset.size,
+          }));
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images", "videos"],
+      allowsMultipleSelection: true,
+      // Agents read JPEG, not the HEIC an iPhone takes photos in.
+      preferredAssetRepresentationMode:
+        ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
+    });
+    return result.canceled
+      ? null
+      : result.assets.map((asset, index) => {
+          const mime = asset.mimeType ?? (asset.type === "video" ? "video/mp4" : "image/jpeg");
+          const name =
+            asset.fileName ?? `${asset.type === "video" ? "Video" : "Photo"} ${index + 1}`;
+          return {
+            uri: asset.uri,
+            name: mime === "image/jpeg" ? name.replace(/\.hei[cf]$/i, ".jpg") : name,
+            mime,
+            size: asset.fileSize,
+          };
+        });
+  };
   const attach = async () => {
     if (!content.attachEnabled || picking) return;
     setPicking(true);
     onPresent(true);
     const copies: File[] = [];
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        multiple: true,
-        copyToCacheDirectory: true,
-      });
-      if (result.canceled) return;
-      for (const asset of result.assets) {
-        // Only remove DocumentPicker-owned cached copies, never the user's source documents.
+      const source = await chooseSource();
+      const assets = source && (await pick(source));
+      if (!assets) return;
+      for (const asset of assets) {
+        // Only remove the pickers' cached copies, never the user's source documents.
         if (asset.uri.startsWith(Paths.cache.uri)) copies.push(new File(asset.uri));
       }
       if (!alive.current) return;
       // A machine that takes uploads has no count limit; the composer uploads each file.
       const uploads = !!content.uploads;
-      if (!uploads && result.assets.length > 3)
+      if (!uploads && assets.length > 3)
         throw new Error(
           "Attach up to three files per message. This machine needs a Concors update to attach more.",
         );
       const limit = uploads ? MAX_UPLOAD_BYTES : 1024 * 1024;
       const attachments = [];
       const refused: string[] = [];
-      for (const asset of result.assets) {
+      for (const asset of assets) {
         const file = new File(asset.uri);
         if (!asset.name || asset.name.length > 200)
           throw new Error("The attachment name is too long.");
@@ -540,7 +583,7 @@ function Composer({
         }
         const attachment = {
           name: asset.name,
-          mime: asset.mimeType ?? "application/octet-stream",
+          mime: asset.mime ?? "application/octet-stream",
           data: await file.base64(),
         };
         // One file per event, so a large one is never part of an even larger message.
