@@ -391,6 +391,17 @@ export function AgentComposer({
       sendingRef.current = false;
     }
   };
+  // A message whose delivery was unknown when the connection dropped goes again once it is back.
+  // The machine keeps a receipt for its request ID, so a message that did arrive is not sent twice.
+  const wasConnected = useRef(connected);
+  useEffect(() => {
+    const reconnected = connected && !wasConnected.current;
+    wasConnected.current = connected;
+    const attempt = attemptRef.current;
+    if (reconnected && uncertain && attempt)
+      void submit(attempt.draft, queue.includes(attempt.draft));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connected]);
   // A message sent while its attachments upload waits for them; what is in the composer once they
   // finish is what goes, as typed by then.
   const [deferred, setDeferred] = useState<{ alternate: boolean } | null>(null);
@@ -1098,7 +1109,7 @@ export function AgentComposer({
         )}
         {uncertain && (
           <div data-composer-delivery className="flex items-center gap-2 text-xs">
-            <span>Delivery could not be confirmed.</span>
+            <span>Your message may not have arrived.</span>
             <button
               className="text-primary"
               onClick={() =>
@@ -1108,7 +1119,7 @@ export function AgentComposer({
                 )
               }
             >
-              Retry same message
+              Send again
             </button>
             {/* Without this, a retry that keeps failing would leave the message locked for good. */}
             <button
@@ -1120,7 +1131,7 @@ export function AgentComposer({
                 setError(null);
               }}
             >
-              Stop retrying
+              Edit message
             </button>
           </div>
         )}

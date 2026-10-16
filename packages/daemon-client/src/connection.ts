@@ -7,7 +7,11 @@ import {
 } from "@concors/protocol";
 import { ThemeRequestSchema, type ThemeResult } from "@concors/protocol";
 import { AUTH_REFRESH_CAPABILITY } from "@concors/protocol";
-import { HEARTBEAT_CAPABILITY, HEARTBEAT_SILENCE_MS } from "@concors/protocol";
+import {
+  HEARTBEAT_CAPABILITY,
+  HEARTBEAT_INTERVAL_MS,
+  HEARTBEAT_SILENCE_MS,
+} from "@concors/protocol";
 import {
   DICTATION_CAPABILITY,
   DictationAudioSchema,
@@ -90,7 +94,8 @@ import type { DaemonEndpoint } from "./endpoint.ts";
 
 /**
  * How long a workspace command may wait in all, across reconnects, before it is reported lost:
- * long enough for a heartbeat watchdog to notice a dead socket and the host to reconnect.
+ * long enough for a heartbeat watchdog to notice a dead socket and the host to reconnect. An agent
+ * request left without a socket waits as long for the next one.
  */
 const WORKSPACE_COMMAND_DEADLINE_MS = 60_000;
 /**
@@ -100,6 +105,12 @@ const WORKSPACE_COMMAND_DEADLINE_MS = 60_000;
  */
 const WORKSPACE_COMMAND_PROBE_MS = 20_000;
 const WATCHDOG_CHECK_MS = 5_000;
+/**
+ * While something waits for an answer, silence this long means the socket is dead: a daemon with
+ * heartbeats is never quiet for more than one interval. A VPN or proxy that stops passing traffic
+ * without closing the socket is noticed in seconds instead of only after `HEARTBEAT_SILENCE_MS`.
+ */
+const ANSWER_SILENCE_MS = HEARTBEAT_INTERVAL_MS + 5_000;
 
 /**
  * Minimal subset of the WHATWG WebSocket used by `DaemonConnection`. Browsers, React Native and
@@ -553,9 +564,14 @@ export class DaemonConnection {
   readonly #agentRequests = new Map<
     string,
     {
+      request: string;
+      timeout: number;
       resolve: (result: AgentResult) => void;
       reject: (error: Error) => void;
       timer: ReturnType<typeof setTimeout> | undefined;
+      /** Runs while there is no socket to send on; see `WORKSPACE_COMMAND_DEADLINE_MS`. */
+      deadline: ReturnType<typeof setTimeout> | undefined;
+      sent: boolean;
     }
   >();
   readonly #fileRequests = new Map<
@@ -759,7 +775,7 @@ export class DaemonConnection {
         this.#settleSelection(command.commandId);
         reject(
           new Error(
-            "Lost contact with this machine, so this change may not have been saved. Check the workspace and try again.",
+            "Can’t reach this machine, so this change may not have been saved. Check your connection, then the workspace, and try again.",
           ),
         );
       }, WORKSPACE_COMMAND_DEADLINE_MS);
@@ -823,8 +839,22 @@ export class DaemonConnection {
     }, WORKSPACE_COMMAND_PROBE_MS);
   }
 
+  #awaitingAnswer(): boolean {
+    for (const pending of this.#agentRequests.values()) if (pending.sent) return true;
+    for (const pending of this.#commands.values()) if (pending.sent) return true;
+    return false;
+  }
+
   /** Workspace commands that were waiting when the socket dropped go again on this one. */
   #resendCommands(): void {
+    for (const [requestId, pending] of this.#agentRequests)
+      if (!pending.sent) {
+        try {
+          this.#sendAgent(requestId);
+        } catch {
+          // The next socket sends it; the deadline still bounds the wait.
+        }
+      }
     for (const [commandId, pending] of this.#commands)
       if (!pending.sent) {
         try {
@@ -1001,52 +1031,67 @@ export class DaemonConnection {
     if (this.#agentRequests.has(requestId))
       return Promise.reject(new Error("Request is already pending"));
     return new Promise((resolve, reject) => {
-      const timeout =
-        operation.kind === "provider-catalog" || operation.kind === "switch-provider"
-          ? 100000
-          : 35000;
-      const pending = {
+      this.#agentRequests.set(requestId, {
+        request: JSON.stringify(request),
+        timeout:
+          operation.kind === "provider-catalog" || operation.kind === "switch-provider"
+            ? 100000
+            : 35000,
         resolve,
         reject,
-        timer: undefined as ReturnType<typeof setTimeout> | undefined,
-      };
-      const expire = () => {
-        if (this.#agentRequests.get(requestId) !== pending) return;
-        this.#agentRequests.delete(requestId);
-        reject(
-          new Error(
-            "Agent request timed out. Reconnect and check the conversation before retrying with the same request ID.",
-          ),
-        );
-      };
-      this.#agentRequests.set(requestId, pending);
-      const socket = this.#socket;
+        timer: undefined,
+        deadline: undefined,
+        sent: false,
+      });
       try {
-        socket?.send(JSON.stringify(request));
+        this.#sendAgent(requestId);
       } catch (error) {
         this.#agentRequests.delete(requestId);
-        reject(error);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
+  }
+
+  /**
+   * Sends a pending agent request. If its socket drops, it waits for the next one and goes again
+   * under the same ID: the daemon keeps a receipt for every request it starts, so it answers a
+   * repeat from that receipt instead of acting twice.
+   */
+  #sendAgent(requestId: string): void {
+    const pending = this.#agentRequests.get(requestId);
+    const socket = this.#socket;
+    if (!pending || !socket) return;
+    socket.send(pending.request);
+    pending.sent = true;
+    clearTimeout(pending.deadline);
+    pending.deadline = undefined;
+    const expire = () => {
+      if (this.#agentRequests.get(requestId) !== pending) return;
+      this.#agentRequests.delete(requestId);
+      pending.reject(
+        new Error(
+          "The machine didn’t answer, so this may not have gone through. Check the conversation, then try again.",
+        ),
+      );
+    };
+    // The daemon can only answer once the whole request has arrived, and a prompt with
+    // attachments can take a while to upload on a slow link. Count from when the socket has
+    // sent it; an upload that stops moving for as long still times out.
+    let queued = socket.bufferedAmount ?? 0,
+      movedAt = Date.now();
+    const sent = () => {
+      if (this.#agentRequests.get(requestId) !== pending || this.#socket !== socket) return;
+      const left = socket.bufferedAmount ?? 0;
+      if (left === 0) {
+        pending.timer = setTimeout(expire, pending.timeout);
         return;
       }
-      // The daemon can only answer once the whole request has arrived, and a prompt with
-      // attachments can take a while to upload on a slow link. Count from when the socket has
-      // sent it; an upload that stops moving for as long still times out.
-      let queued = socket?.bufferedAmount ?? 0,
-        movedAt = Date.now();
-      const sent = () => {
-        if (this.#agentRequests.get(requestId) !== pending) return;
-        const left = socket === this.#socket ? (socket?.bufferedAmount ?? 0) : 0;
-        if (left === 0) {
-          pending.timer = setTimeout(expire, timeout);
-          return;
-        }
-        if (left < queued) movedAt = Date.now();
-        queued = left;
-        if (Date.now() - movedAt >= timeout) expire();
-        else pending.timer = setTimeout(sent, UPLOAD_POLL_MS);
-      };
-      sent();
-    });
+      if (left < queued) movedAt = Date.now();
+      queued = left;
+      if (Date.now() - movedAt >= pending.timeout) expire();
+      else pending.timer = setTimeout(sent, UPLOAD_POLL_MS);
+    };
+    sent();
   }
 
   onTerminal(listener: (event: TerminalEvent) => void): () => void {
@@ -1206,8 +1251,10 @@ export class DaemonConnection {
               // Timers held back by sleep fire on wake: a socket silent since then is abandoned.
               clearInterval(this.#watchdog);
               this.#watchdog = setInterval(() => {
-                if (Date.now() - this.#lastMessageAt > HEARTBEAT_SILENCE_MS)
-                  this.#abandon("No heartbeat from the machine");
+                const silence = Date.now() - this.#lastMessageAt;
+                if (silence > HEARTBEAT_SILENCE_MS) this.#abandon("No heartbeat from the machine");
+                else if (silence > ANSWER_SILENCE_MS && this.#awaitingAnswer())
+                  this.#abandon("The machine stopped answering");
               }, WATCHDOG_CHECK_MS);
             }
             if (this.#hostUsageListeners.size > 0) this.#subscribeHostUsage(true);
@@ -1472,6 +1519,17 @@ export class DaemonConnection {
     if (this.#state.status !== "disconnected") {
       this.#setState({ status: "disconnected", reason: "client disconnect" });
     }
+    // Nothing reconnects this connection, so what still waits will never be answered.
+    for (const pending of this.#agentRequests.values()) {
+      clearTimeout(pending.timer);
+      clearTimeout(pending.deadline);
+      pending.reject(
+        new Error(
+          "Disconnected from this machine, so this may not have gone through. Check the conversation, then try again.",
+        ),
+      );
+    }
+    this.#agentRequests.clear();
     this.#abortPending?.(
       createProtocolError("INTERNAL_ERROR", "Disconnected by client before handshake completed"),
     );
@@ -1518,15 +1576,21 @@ export class DaemonConnection {
       this.#hostUsage = null;
       for (const listener of this.#hostUsageListeners) listener(null);
       this.#workspace = null;
-      for (const pending of this.#agentRequests.values()) {
+      // Agent requests wait for the next socket and go again, like workspace commands.
+      for (const [requestId, pending] of this.#agentRequests) {
         clearTimeout(pending.timer);
-        pending.reject(
-          new Error(
-            "Connection lost; check the conversation after reconnecting. Prompts are never resent automatically.",
-          ),
-        );
+        pending.timer = undefined;
+        pending.sent = false;
+        pending.deadline ??= setTimeout(() => {
+          if (this.#agentRequests.get(requestId) !== pending) return;
+          this.#agentRequests.delete(requestId);
+          pending.reject(
+            new Error(
+              "Can’t reach this machine, so this may not have gone through. Check your connection, then the conversation, and try again.",
+            ),
+          );
+        }, WORKSPACE_COMMAND_DEADLINE_MS);
       }
-      this.#agentRequests.clear();
       // Workspace commands wait for the next socket; their deadline still runs.
       for (const pending of this.#commands.values()) {
         clearTimeout(pending.probe);
