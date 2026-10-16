@@ -474,7 +474,7 @@ test("new workspace completion opens its own project and closes the sidebar", as
     "Keep my original draft",
   );
 });
-test("foreground reconnect preserves an unsent draft without replaying it", async ({ page }) => {
+test("returning to the app keeps the connection and an unsent draft", async ({ page }) => {
   const ui = await enter(page);
   await ui.getByRole("textbox", { name: "Message Codex" }).fill("Do not lose this draft");
   const visibility = async (value: string) =>
@@ -483,8 +483,10 @@ test("foreground reconnect preserves an unsent draft without replaying it", asyn
       document.dispatchEvent(new Event("visibilitychange"));
     }, value);
   await visibility("hidden");
-  await expect(ui.getByText("Reconnecting… Saved workspace is read-only.")).toBeVisible();
   await visibility("visible");
+  // The connection stays open in the background, so coming back needs no reconnect.
+  await page.waitForTimeout(2_500);
+  await expect(ui.getByText("Reconnecting… Saved workspace is read-only.")).toHaveCount(0);
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toHaveValue(
     "Do not lose this draft",
