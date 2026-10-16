@@ -26,8 +26,13 @@ test("the context ring shows the conversation's window and the plan's usage bars
 
     // The fixture reports 32k of a 128k window with its turn.
     const ring = page.getByRole("button", { name: "Context window", exact: true });
-    await ring.hover();
-    await expect(page.getByRole("tooltip")).toHaveText("25% context used");
+    // The ring re-renders when the turn's usage arrives; a hover landing just before that opens
+    // nothing, so hover again, from outside it, until the tooltip shows.
+    await expect(async () => {
+      await page.mouse.move(0, 0);
+      await ring.hover();
+      await expect(page.getByRole("tooltip")).toHaveText("25% context used", { timeout: 1_000 });
+    }).toPass();
     await expect(ring).not.toHaveAttribute("title");
     await ring.click();
     await expect(page.getByRole("tooltip")).toHaveCount(0);
