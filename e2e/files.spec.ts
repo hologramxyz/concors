@@ -275,9 +275,9 @@ test("agent file links open Markdown and code tabs without leaving the workspace
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
     await chooseProvider(page);
-    await expect(page.getByLabel("Message Codex")).toBeEnabled();
-    await page.getByLabel("Message Codex").fill("file-links");
-    await page.getByLabel("Message Codex").press("Enter");
+    await expect(page.getByLabel("Message Codex").filter({ visible: true })).toBeEnabled();
+    await page.getByLabel("Message Codex").filter({ visible: true }).fill("file-links");
+    await page.getByLabel("Message Codex").filter({ visible: true }).press("Enter");
     await expect(page.getByText("the screenshot", { exact: true })).toHaveAttribute(
       "title",
       "Outside this project: /tmp/concors-shot.png",
@@ -309,9 +309,9 @@ test("right-clicking an agent's file link offers Concors actions, and Download s
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
     await chooseProvider(page);
-    await expect(page.getByLabel("Message Codex")).toBeEnabled();
-    await page.getByLabel("Message Codex").fill("file-links");
-    await page.getByLabel("Message Codex").press("Enter");
+    await expect(page.getByLabel("Message Codex").filter({ visible: true })).toBeEnabled();
+    await page.getByLabel("Message Codex").filter({ visible: true }).fill("file-links");
+    await page.getByLabel("Message Codex").filter({ visible: true }).press("Enter");
     const link = page.getByRole("link", { name: "the code", exact: true });
     // Selected link text is where the webview's own menu used to appear, with a Download Linked
     // File that could not work; the app's menu replaces it and keeps Copy for the selection.
@@ -347,9 +347,9 @@ test("an image Codex generates shows inline in its reply and opens full size", a
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
     await chooseProvider(page);
-    await expect(page.getByLabel("Message Codex")).toBeEnabled();
-    await page.getByLabel("Message Codex").fill("generate-image");
-    await page.getByLabel("Message Codex").press("Enter");
+    await expect(page.getByLabel("Message Codex").filter({ visible: true })).toBeEnabled();
+    await page.getByLabel("Message Codex").filter({ visible: true }).fill("generate-image");
+    await page.getByLabel("Message Codex").filter({ visible: true }).press("Enter");
     const image = page.getByRole("button", { name: "Open A brand library", exact: true });
     await expect(image).toHaveAttribute("data-inline-image", "ready");
     await image.click();
@@ -374,9 +374,9 @@ test("agent replies show the images they embed inline and open them full size", 
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
     await chooseProvider(page);
-    await expect(page.getByLabel("Message Codex")).toBeEnabled();
-    await page.getByLabel("Message Codex").fill("show-image");
-    await page.getByLabel("Message Codex").press("Enter");
+    await expect(page.getByLabel("Message Codex").filter({ visible: true })).toBeEnabled();
+    await page.getByLabel("Message Codex").filter({ visible: true }).fill("show-image");
+    await page.getByLabel("Message Codex").filter({ visible: true }).press("Enter");
     const image = page.getByRole("button", { name: "Open The pricing page", exact: true });
     await expect(image).toHaveAttribute("data-inline-image", "ready");
     await expect(page.getByText("a missing one", { exact: true })).toHaveAttribute(
