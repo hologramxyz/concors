@@ -128,6 +128,29 @@ describe("mobile connection lifecycle", () => {
     await vi.advanceTimersByTimeAsync(60_000);
     expect(create).toHaveBeenCalledTimes(2);
   });
+  it("keeps a live socket when the app comes back, and replaces a dead one without waiting", async () => {
+    vi.useFakeTimers();
+    const { controller, sockets, create } = setup();
+    controller.setAvailable(true);
+    await Promise.resolve();
+    sockets[0]!.ready();
+    controller.wake();
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(controller.getSnapshot().phase).toBe("ready");
+    // The socket dies while the app is suspended, and fails again while it is still away.
+    sockets[0]!.event("close");
+    await vi.advanceTimersByTimeAsync(1000);
+    await Promise.resolve();
+    sockets[1]!.event("close");
+    expect(create).toHaveBeenCalledTimes(2);
+    // Back in front: no waiting out the two-second backoff.
+    controller.wake();
+    await Promise.resolve();
+    expect(create).toHaveBeenCalledTimes(3);
+    sockets[2]!.ready();
+    expect(controller.getSnapshot().phase).toBe("ready");
+    controller.dispose();
+  });
   it("discards a connection ticket resolved after the user left the machine", async () => {
     const { sockets, create } = setup();
     let resolve: (connection: DaemonConnection) => void = () => undefined;
