@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { access, copyFile, mkdir, mkdtemp, readdir } from "node:fs/promises";
+import { access, copyFile, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -62,11 +62,37 @@ async function stapler(action: "staple" | "validate", path: string) {
 }
 const keyPath = process.env["APPLE_API_KEY_PATH"];
 
+/**
+ * Tauri staples the app before it builds the image, but carries on when that fails, and the image
+ * then holds an app that cannot open offline (desktop 0.6.30 shipped that way to the check below).
+ * Staple it again inside a writable copy of the image, which keeps Tauri's window layout.
+ */
+async function stapleAppInside(image: string) {
+  const writable = `${image.slice(0, -".dmg".length)}-writable.dmg`;
+  execFileSync("hdiutil", ["convert", image, "-format", "UDRW", "-ov", "-o", writable], {
+    stdio: "inherit",
+  });
+  const mount = await mkdtemp(join(tmpdir(), "concors-app-"));
+  execFileSync("hdiutil", ["attach", writable, "-nobrowse", "-mountpoint", mount], {
+    stdio: "inherit",
+  });
+  try {
+    await stapler("staple", join(mount, "Concors.app"));
+  } finally {
+    execFileSync("hdiutil", ["detach", mount], { stdio: "inherit" });
+  }
+  execFileSync("hdiutil", ["convert", writable, "-format", "UDZO", "-ov", "-o", image], {
+    stdio: "inherit",
+  });
+  await rm(writable);
+}
+
 if (!identity || identity === "-" || !key || !issuer || !keyPath) {
   const message = `${image} is not notarized, so it opens only on this Mac.`;
   if (process.argv.includes("--require-notarized")) throw new Error(message);
   process.stdout.write(`warning: ${message}\n`);
 } else {
+  await stapleAppInside(image);
   execFileSync("codesign", ["--force", "--sign", identity, "--timestamp", image], {
     stdio: "inherit",
   });
