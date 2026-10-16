@@ -102,6 +102,14 @@ const config: ExpoConfig = {
     "expo-font",
     ["expo-dev-client", { addGeneratedScheme: variant === "development" }],
     [
+      "expo-image-picker",
+      {
+        photosPermission: "Concors attaches the photos and videos you choose to your messages.",
+        cameraPermission: false,
+        microphonePermission: false,
+      },
+    ],
+    [
       "expo-splash-screen",
       {
         image: "./assets/splash.png",
