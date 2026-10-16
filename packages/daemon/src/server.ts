@@ -78,7 +78,9 @@ export function createDaemonServer(
 
   app.register(websocket, {
     options: {
-      // Handshake messages are small; agent output will be streamed in frames well below this.
+      // Handshake messages are small, uploads arrive in chunks of a fraction of this, and agent
+      // output is streamed in frames well below it. Older clients still send up to three
+      // attachments of 1 MB inline in one message, which this leaves room for.
       maxPayload: 8 * 1024 * 1024,
     },
   });

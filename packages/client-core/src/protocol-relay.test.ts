@@ -81,6 +81,13 @@ function setup() {
       requestId,
       outcome: { status: "signed-out", message: "fixture" },
     })),
+    onUpload: vi.fn(() => off),
+    requestUpload: vi.fn<RelayConnection["requestUpload"]>(async (_, requestId) => ({
+      type: "upload.result",
+      requestId,
+      outcome: { status: "ok" },
+    })),
+    sendUploadChunk: vi.fn(),
   };
   const messages: DaemonMessage[] = [];
   const relay = createProtocolRelay(connection, (message) => messages.push(message));
@@ -117,7 +124,7 @@ describe("offline UI protocol relay", () => {
     expect(off).toHaveBeenCalledOnce();
     await relay.receive({ type: "host.subscribe", enabled: true });
     relay.dispose();
-    expect(off).toHaveBeenCalledTimes(7);
+    expect(off).toHaveBeenCalledTimes(8);
     const count = messages.length;
     listener(null);
     expect(messages).toHaveLength(count);
@@ -172,7 +179,7 @@ describe("offline UI protocol relay", () => {
     expect(connection.sendTerminalInput).toHaveBeenCalledOnce();
     relay.dispose();
     relay.dispose();
-    expect(off).toHaveBeenCalledTimes(5);
+    expect(off).toHaveBeenCalledTimes(6);
     expect(connection.requestTerminal).toHaveBeenLastCalledWith(
       { kind: "detach", sessionId: id },
       expect.any(String),
@@ -213,6 +220,31 @@ describe("offline UI protocol relay", () => {
     expect(messages).toHaveLength(count);
     expect(connection.requestFile).toHaveBeenCalledTimes(2);
   });
+});
+
+it("relays an upload's requests, chunks and progress, and cancels it when disposed", async () => {
+  const { connection, relay, messages } = setup();
+  const uploadId = "22222222-2222-4222-8222-222222222222";
+  await relay.receive(hello);
+  // Not an upload begun here (or one already over): dropped, not passed on.
+  await relay.receive({ type: "upload.chunk", uploadId, seq: 0, data: "AAAA" });
+  expect(connection.sendUploadChunk).not.toHaveBeenCalled();
+  const begin = { kind: "begin", uploadId, name: "a.bin", mime: "x/y", size: 3 } as const;
+  await relay.receive({ type: "upload.request", requestId: id, operation: begin });
+  expect(connection.requestUpload).toHaveBeenCalledWith(begin, id);
+  expect(messages.at(-1)).toMatchObject({ type: "upload.result", requestId: id });
+  await relay.receive({ type: "upload.chunk", uploadId, seq: 0, data: "AAAA" });
+  expect(connection.sendUploadChunk).toHaveBeenCalledWith(uploadId, 0, "AAAA");
+  const listener = vi.mocked(connection.onUpload).mock.calls[0]![0];
+  listener({ type: "upload.progress", uploadId, received: 3 });
+  // Another renderer's upload on the same machine connection is not this one's to see.
+  listener({ type: "upload.progress", uploadId: id, received: 3 });
+  expect(messages.at(-1)).toEqual({ type: "upload.progress", uploadId, received: 3 });
+  relay.dispose();
+  expect(connection.requestUpload).toHaveBeenLastCalledWith(
+    { kind: "cancel", uploadId },
+    expect.any(String),
+  );
 });
 
 it("relays schedule updates and mutations through the native connection", async () => {
