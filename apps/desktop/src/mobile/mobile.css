@@ -753,10 +753,6 @@ body {
     transform: translateY(0);
   }
 }
-aside[aria-label="Agent notifications"] {
-  top: 64px;
-  bottom: auto;
-}
 .mobile-pane {
   display: flex;
   flex-direction: column;
