@@ -16,11 +16,17 @@ export function NotificationProvider({
   onOpen,
   children,
   inAppOnly = false,
+  cards = true,
 }: {
   connection: DaemonConnection | null;
   onOpen: (id: string) => void;
   children: React.ReactNode;
   inAppOnly?: boolean;
+  /**
+   * Show a card for each notice. Mobile does not, as Paseo does not: a phone has no room for
+   * small pop-ups, and the Agents list already marks what finished or needs input.
+   */
+  cards?: boolean;
 }) {
   const views = useRef(new Map<string, number>());
   const dismiss = useRef<(id: string) => void>(() => undefined);
@@ -76,9 +82,10 @@ export function NotificationProvider({
       clear,
       sound,
       show: (notice) => {
-        setNotices((current) =>
-          [...current.filter((n) => n.sessionId !== notice.sessionId), notice].slice(-5),
-        );
+        if (cards)
+          setNotices((current) =>
+            [...current.filter((n) => n.sessionId !== notice.sessionId), notice].slice(-5),
+          );
         const open = () => {
           if (disposed) return;
           const agent = connection.agents.find((a) => a.id === notice.sessionId);
@@ -204,7 +211,7 @@ export function NotificationProvider({
       window.removeEventListener("pointerdown", unlock);
       window.removeEventListener("keydown", unlock);
     };
-  }, [connection, onOpen, inAppOnly]);
+  }, [connection, onOpen, inAppOnly, cards]);
   return (
     <NotificationContext value={{ view }}>
       {children}
