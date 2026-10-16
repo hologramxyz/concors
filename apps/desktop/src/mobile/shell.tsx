@@ -393,10 +393,14 @@ function MobileWorkspaceContent({
     [host.machineId, connection],
   );
   const execute = async (operation: WorkspaceOperation) => {
-    if (!connection?.workspace || !ready || mutating.current)
+    // A selection shows at once and is not version-checked, so it never holds up the next action.
+    const selecting = operation.kind === "selection.set";
+    if (!connection?.workspace || !ready || (mutating.current && !selecting))
       throw new Error("Wait for the workspace to be ready");
-    mutating.current = true;
-    setPending(true);
+    if (!selecting) {
+      mutating.current = true;
+      setPending(true);
+    }
     try {
       const result = await connection.executeWorkspace({
         type: "workspace.command",
@@ -406,8 +410,10 @@ function MobileWorkspaceContent({
       });
       if (result.outcome.status === "rejected") throw new Error(result.outcome.message);
     } finally {
-      mutating.current = false;
-      setPending(false);
+      if (!selecting) {
+        mutating.current = false;
+        setPending(false);
+      }
     }
   };
   const command = (operation: WorkspaceOperation) => {
