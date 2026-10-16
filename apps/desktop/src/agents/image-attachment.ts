@@ -1,8 +1,10 @@
 /**
- * Makes an image small enough to attach. The daemon accepts at most 1 MB per attachment, and a
- * pasted screenshot is often several times that, so images are re-encoded instead of refused:
- * lossless PNG when it fits, otherwise JPEG, shrinking until it does. Text in screenshots stays
- * legible far longer under JPEG at full size than under aggressive downscaling, hence the order.
+ * Makes an image small enough to attach. A machine that takes uploads gives an agent images up to
+ * `MAX_AGENT_IMAGE_BYTES`, the most every provider accepts; an older machine takes at most 1 MB
+ * per attachment. A pasted screenshot can be larger than either, so images are re-encoded instead
+ * of refused: lossless PNG when it fits, otherwise JPEG, shrinking until it does. Text in
+ * screenshots stays legible far longer under JPEG at full size than under aggressive downscaling,
+ * hence the order.
  */
 export const ATTACHMENT_LIMIT_BYTES = 1024 * 1024;
 

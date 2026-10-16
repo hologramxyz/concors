@@ -2,10 +2,13 @@ import { ScheduleManager } from "../schedules/manager.ts";
 import { ScheduleStore } from "../schedules/store.ts";
 import { ScheduleTools } from "../schedules/tools.ts";
 import {
+  ATTACHMENT_UPLOADS_CAPABILITY,
   DICTATION_CAPABILITY,
   HEARTBEAT_INTERVAL_MS,
   SCHEDULES_CAPABILITY,
 } from "@concors/protocol";
+import { Uploads } from "../agents/uploads.ts";
+import { forLegacyClients } from "../agents/legacy-attachments.ts";
 import { DictationService } from "../dictation/service.ts";
 import { ThemeRegistry } from "../themes/registry.ts";
 import { dirname, join, basename } from "node:path";
@@ -75,6 +78,8 @@ export function registerProtocolEndpoint(
   const agentV2 = new WeakSet<WebSocket>();
   const scheduleClients = new WeakSet<WebSocket>();
   const dictationClients = new Set<WebSocket>();
+  /** Clients that read attachment lists past the old bounds; the rest get them shortened. */
+  const uploadClients = new WeakSet<WebSocket>();
   const hostUsage = createHostUsageMonitor();
   const send = (socket: WebSocket, message: DaemonMessage): void => {
     if (socket.readyState !== socket.OPEN) return;
@@ -95,7 +100,7 @@ export function registerProtocolEndpoint(
       socket.close(1013, "Client must reconnect to catch up");
       return;
     }
-    socket.send(JSON.stringify(message));
+    socket.send(JSON.stringify(uploadClients.has(socket) ? message : forLegacyClients(message)));
   };
 
   const dictation = options.speechModelsDirectory
@@ -121,6 +126,7 @@ export function registerProtocolEndpoint(
     }
   });
   const attachments = options.workspace.attachmentsDirectory;
+  const uploads = new Uploads(attachments);
   const providers = new ProviderRegistry(
     basename(attachments) === "attachments"
       ? join(dirname(attachments), "providers")
@@ -180,6 +186,7 @@ export function registerProtocolEndpoint(
         (id, engine) => agents.usingProvider(id) || terminals.runningAgent(engine),
       );
     dictation?.start();
+    uploads.start();
     await scheduleTools.start(schedules);
     schedules.start();
   });
@@ -189,6 +196,7 @@ export function registerProtocolEndpoint(
     providers.close();
     hostUsage.close();
     dictation?.close();
+    uploads.close();
     await agents.close();
     await closingSchedules;
     projects.close();
@@ -233,6 +241,7 @@ export function registerProtocolEndpoint(
       subscribers.delete(socket);
       dictationClients.delete(socket);
       dictation?.detach(viewer.id);
+      uploads.detach(viewer.id);
       terminals.detach(viewer.id);
       void agents.accounts.detach(viewer.id);
     });
@@ -258,6 +267,8 @@ export function registerProtocolEndpoint(
         if (message.capabilities?.includes(SCHEDULES_CAPABILITY)) scheduleClients.add(socket);
         if (dictation && message.capabilities?.includes(DICTATION_CAPABILITY))
           dictationClients.add(socket);
+        if (message.capabilities?.includes(ATTACHMENT_UPLOADS_CAPABILITY))
+          uploadClients.add(socket);
         return;
       }
       if (message.type === "dictation.request" || message.type === "dictation.audio") {
@@ -309,7 +320,9 @@ export function registerProtocolEndpoint(
         message.type === "theme.request" ||
         message.type === "schedule.request" ||
         message.type === "resource.request" ||
-        message.type === "pull-request.request"
+        message.type === "pull-request.request" ||
+        message.type === "upload.request" ||
+        message.type === "upload.chunk"
       ) {
         if (!subscribers.has(socket)) {
           send(socket, {
@@ -318,7 +331,12 @@ export function registerProtocolEndpoint(
           });
           return;
         }
-        if (message.type === "schedule.request") send(socket, schedules.request(message));
+        if (message.type === "upload.chunk") uploads.chunk(viewer.id, message);
+        else if (message.type === "upload.request")
+          void uploads
+            .request(viewer.id, message, (event) => send(socket, event))
+            .then((result) => send(socket, result));
+        else if (message.type === "schedule.request") send(socket, schedules.request(message));
         else if (message.type === "resource.request")
           void resources.request(message).then((result) => send(socket, result));
         else if (message.type === "pull-request.request")
@@ -407,6 +425,7 @@ export function registerProtocolEndpoint(
     providers.close();
     hostUsage.close();
     dictation?.close();
+    uploads.close();
     await agents.close();
     projects.close();
     terminals.close();

@@ -1,12 +1,15 @@
 import { rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
+import { z } from "zod";
 import {
   AgentAttachmentSchema,
   AgentInfoSchema,
   AgentItemSchema,
   AgentSettingsSchema,
+  AgentUploadSchema,
   type AgentAttachment,
+  type AgentUpload,
   type AgentInfo,
   type AgentSettings,
   type AgentItem,
@@ -40,6 +43,8 @@ import {
  */
 export const AGENT_SESSION_LIMIT = 128;
 const ACTIVE_AGENT = ["starting", "working", "needs_input"];
+/** A kept file: its bytes, for inline attachments and shown images, or an upload's reference. */
+const StoredFileSchema = z.union([AgentAttachmentSchema, AgentUploadSchema]);
 
 /** A single daemon owns this database. Layout and retry receipts commit atomically. */
 export class WorkspaceStore {
@@ -932,8 +937,16 @@ export class WorkspaceStore {
       throw error;
     }
   }
-  /** Keeps the images an agent showed in a message, replacing any kept for it before. */
-  saveAgentItemImages(sessionId: string, itemId: string, images: readonly AgentAttachment[]) {
+  /**
+   * Keeps the images an agent showed in a message, or the files sent with a steering message,
+   * replacing any kept for it before. Uploaded files are kept as references: their bytes stay on
+   * disk, in the chat's own directory.
+   */
+  saveAgentItemImages(
+    sessionId: string,
+    itemId: string,
+    images: readonly (AgentAttachment | AgentUpload)[],
+  ) {
     this.transaction(() => {
       this.#db
         .prepare("DELETE FROM agent_item_images WHERE session_id = ? AND item_id = ?")
@@ -942,11 +955,12 @@ export class WorkspaceStore {
         "INSERT INTO agent_item_images (session_id, item_id, position, attachment) VALUES (?, ?, ?, ?)",
       );
       images.forEach((image, index) =>
-        insert.run(sessionId, itemId, index, JSON.stringify(AgentAttachmentSchema.parse(image))),
+        insert.run(sessionId, itemId, index, JSON.stringify(StoredFileSchema.parse(image))),
       );
     });
   }
-  agentAttachment(sessionId: string, itemId: string, index: number) {
+  /** A message's file by position: inline ones come first, then uploaded ones, as they were sent. */
+  agentAttachment(sessionId: string, itemId: string, index: number): AgentAttachment | AgentUpload {
     if (!this.agentItem(sessionId, itemId)) throw new Error("Attachment is unavailable");
     if (!itemId.startsWith("prompt:")) {
       const image = this.#db
@@ -955,16 +969,17 @@ export class WorkspaceStore {
         )
         .get(sessionId, itemId, index);
       if (!image) throw new Error("Attachment is unavailable");
-      return AgentAttachmentSchema.parse(JSON.parse(String(image["attachment"])));
+      return StoredFileSchema.parse(JSON.parse(String(image["attachment"])));
     }
     const row = this.#db
       .prepare("SELECT request FROM agent_requests WHERE id = ? AND session_id = ?")
       .get(itemId.slice(7), sessionId);
     const request = row ? (JSON.parse(String(row["request"])) as AgentRequest) : undefined;
     const op = request?.operation;
-    if (op?.kind !== "send" || !op.attachments?.[index])
-      throw new Error("Attachment is unavailable");
-    return AgentAttachmentSchema.parse(op.attachments[index]);
+    const file =
+      op?.kind === "send" ? [...(op.attachments ?? []), ...(op.uploads ?? [])][index] : undefined;
+    if (!file) throw new Error("Attachment is unavailable");
+    return StoredFileSchema.parse(file);
   }
   saveAgentItem(item: AgentItem): AgentItem {
     // Keep individual frames bounded, while retaining older items in the paginated history.

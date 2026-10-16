@@ -1,5 +1,6 @@
 import type { DaemonInfo, DaemonStatus } from "@concors/protocol";
 import {
+  ATTACHMENT_UPLOADS_CAPABILITY,
   HOST_USAGE_CAPABILITY,
   RESOURCES_CAPABILITY,
   PREVIEW_NAMES_CAPABILITY,
@@ -90,6 +91,7 @@ export class DaemonState {
         PROJECT_RENAME_CAPABILITY,
         "terminal-recovery",
         TERMINAL_IMAGE_PASTE_CAPABILITY,
+        ATTACHMENT_UPLOADS_CAPABILITY,
         ...(this.#dictation ? [DICTATION_CAPABILITY] : []),
       ],
     };

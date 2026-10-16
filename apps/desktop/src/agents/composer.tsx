@@ -16,9 +16,15 @@ import {
   Square,
   X,
   File as FileIcon,
+  RotateCw,
+  CircleAlert,
 } from "lucide-react";
 import {
   agentProviderName,
+  AgentAttachmentSchema,
+  MAX_AGENT_IMAGE_BYTES,
+  MAX_MESSAGE_ATTACHMENTS,
+  MAX_UPLOAD_BYTES,
   type AgentInfo,
   type AgentSettings,
   type AgentAttachment,
@@ -52,13 +58,33 @@ import { matchCommands, needsArguments, slashQuery } from "./slash-commands";
 import { SlashCommandMenu } from "./slash-menu";
 import { readClipboardImage } from "@/tauri";
 import { carriesFiles } from "@/window/file-drops";
-import { fileBase64, fitImage, fitImageFile } from "./image-attachment";
+import { ATTACHMENT_LIMIT_BYTES, fileBase64, fitImage, fitImageFile } from "./image-attachment";
 import { ImageViewer } from "./attachment-preview";
 import { useFollowUpMode } from "./follow-ups";
 import { MOD_KEY } from "@/lib/platform";
 import { useCommand } from "@/shortcuts/context";
 import { useShortcutLabels } from "@/shortcuts/preferences-context";
 import { rememberSentAttachments } from "./attachment-cache";
+import {
+  filePreview,
+  forgetFile,
+  hasFile,
+  isUpload,
+  keepFile,
+  messageFiles,
+  startUpload,
+  stopUpload,
+  unsent,
+  uploading,
+  useUploadProgress,
+  useUploadsVersion,
+  type DraftAttachment,
+  type UploadAttachment,
+  type UploadOutcome,
+} from "./attachment-uploads";
+/** What an older machine is told when a file is past its limits; it has no uploads. */
+const UPDATE_FOR_MORE = "This machine needs a Concors update to attach more or larger files.";
+const UPLOAD_LIMIT = `${MAX_UPLOAD_BYTES / 1024 / 1024} MB`;
 const defaults: AgentSettings = { model: null, effort: null, mode: "default" };
 const nativeProviderIcons: Record<string, "model" | "claude" | "opencode" | "pi"> = {
   codex: "model",
@@ -117,7 +143,8 @@ export function AgentComposer({
   );
   // How many files are being read; they show as placeholder tiles until they are attached.
   const [reading, setReading] = useState(0);
-  const [uploading, setUploading] = useState(false),
+  // While files are read, before they are attached (and, on a machine with uploads, uploaded).
+  const [attaching, setAttaching] = useState(false),
     [configuring, setConfiguring] = useState(false),
     [error, setError] = useState<string | null>(null);
   const textarea = useRef<HTMLTextAreaElement>(null),
@@ -152,6 +179,13 @@ export function AgentComposer({
   const queueSteer =
     connection?.state.status === "ready" &&
     connection.state.daemon.capabilities?.includes("agent-queue-steer");
+  // Files go to the machine as they are attached; an older machine takes three of 1 MB inline.
+  const uploads = !!connection?.uploads;
+  // Attachments still uploading, or stopped, hold the message back until they are sent or removed.
+  const waiting = unsent(attachments);
+  const failedUpload = attachments.find(
+    (file): file is UploadAttachment => isUpload(file) && !!file.error,
+  );
   const active = ["starting", "working", "needs_input"].includes(agent.status);
   /**
    * Whether a follow-up can go into the running turn now, as the Codex app's Steer does. One with
@@ -195,7 +229,7 @@ export function AgentComposer({
     connected &&
     !busy &&
     !uncertain &&
-    !uploading &&
+    !attaching &&
     !configuring &&
     !!agent.threadId &&
     draft.length < 16000;
@@ -280,11 +314,20 @@ export function AgentComposer({
         turnId: agent.turnId ?? "",
         sessionId: agent.id,
         text: input.message,
-        attachments: input.attachments,
+        ...messageFiles(input.attachments),
       },
     };
     attemptRef.current = next;
-    rememberSentAttachments(agent.id, next.id, input.attachments);
+    // In the order the chat lists them: inline files, then uploaded ones.
+    const listed = [
+      ...input.attachments.filter((file) => !isUpload(file)),
+      ...input.attachments.filter(isUpload),
+    ];
+    rememberSentAttachments(
+      agent.id,
+      next.id,
+      listed.map((file) => (isUpload(file) ? filePreview(file.id) : file)),
+    );
     try {
       const result = await connection.requestAgent(next.operation, next.id);
       if (result.outcome.status === "error") {
@@ -295,6 +338,8 @@ export function AgentComposer({
       setQueue((q) => q.filter((entry) => entry !== next.draft));
       attemptRef.current = null;
       setUncertain(false);
+      // The machine has the files now; the bytes kept to upload them are no longer needed.
+      for (const file of input.attachments) if (isUpload(file)) forgetFile(file.id);
     } catch (e) {
       if (attemptRef.current) setUncertain(true);
       throw e;
@@ -306,8 +351,16 @@ export function AgentComposer({
     steering = false,
   ) => {
     if (sendingRef.current) return;
+    if (unsent(input.attachments)) {
+      setError(
+        input.attachments.some((file) => isUpload(file) && file.error)
+          ? "Remove or retry the attachments that did not upload."
+          : "Wait for the attachments to finish uploading.",
+      );
+      return;
+    }
     sendingRef.current = true;
-    const canSubmit = connected && !busy && !uploading && !configuring && !!agent.threadId;
+    const canSubmit = connected && !busy && !attaching && !configuring && !!agent.threadId;
     if (canSubmit && !queued && (input.message.trim() || input.attachments.length)) onSend?.();
     try {
       return await submitAgentInput({
@@ -338,18 +391,35 @@ export function AgentComposer({
       sendingRef.current = false;
     }
   };
+  // A message sent while its attachments upload waits for them; what is in the composer once they
+  // finish is what goes, as typed by then.
+  const [deferred, setDeferred] = useState<{ alternate: boolean } | null>(null);
   /**
    * Sends a message the way the Follow-ups setting says, or the other way when `alternate`
    * (⌘/Ctrl+Enter): into the running turn, or onto the queue. Messages that cannot steer queue.
    */
-  const followUp = (input: Draft = { message: draft, attachments }, alternate = false) =>
-    submit(
+  const followUp = (input: Draft = { message: draft, attachments }, alternate = false) => {
+    if (unsent(input.attachments) && !input.attachments.some((f) => isUpload(f) && f.error)) {
+      setDeferred({ alternate });
+      return Promise.resolve(undefined);
+    }
+    return submit(
       input,
       false,
       active &&
         (followUps === "steer") !== alternate &&
         canSteer(input.message, input.attachments.length),
     );
+  };
+  useEffect(() => {
+    if (!deferred || (waiting && !failedUpload)) return;
+    // The uploads settled outside React (the machine answered); the wait ends with them.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDeferred(null);
+    if (!failedUpload) void followUp(undefined, deferred.alternate);
+    // Runs when the uploads settle; followUp reads the composer as it is then.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deferred, waiting, failedUpload]);
   // Escape hides the list for the exact draft it was pressed on; typing brings it back.
   const [slashDismissed, setSlashDismissed] = useState<string | null>(null);
   const [slashActive, setSlashActive] = useState(0);
@@ -398,20 +468,49 @@ export function AgentComposer({
       setError(error instanceof Error ? error.message : "Could not update the queue");
     }
   };
+  /**
+   * Attaches files to upload: each starts uploading at once (see the effect below), and one too
+   * large is refused on its own. Images are shrunk only past what an agent takes as an image.
+   */
+  const addUploads = async (files: File[]) => {
+    const refused: string[] = [];
+    const added: UploadAttachment[] = [];
+    // Only a sanity bound, so one message cannot be made enormous.
+    const room = MAX_MESSAGE_ATTACHMENTS - attachments.length;
+    if (files.length > room) {
+      refused.push(`A message can carry up to ${MAX_MESSAGE_ATTACHMENTS} files.`);
+      files = files.slice(0, Math.max(0, room));
+    }
+    for (const original of files) {
+      const file = await fitImageFile(original, MAX_AGENT_IMAGE_BYTES).catch(() => original);
+      if (file.size > MAX_UPLOAD_BYTES) {
+        refused.push(`${original.name} is larger than ${UPLOAD_LIMIT}.`);
+        continue;
+      }
+      const id = crypto.randomUUID();
+      await keepFile(id, file);
+      const mime = file.type || "application/octet-stream";
+      added.push({ id, name: file.name, mime, size: file.size, upload: null });
+    }
+    if (added.length) setAttachments((value) => [...value, ...added]);
+    if (refused.length) setError(refused.join(" "));
+  };
   const attachFiles = async (load: () => Promise<File[]>) => {
-    if (uploading || !advanced) return;
-    setUploading(true);
+    if (attaching || !advanced) return;
+    setAttaching(true);
     setReading(1);
     setError(null);
     try {
       const files = await load();
-      if (attachments.length + files.length > 3)
-        throw new Error("Attach up to three files per message.");
       setReading(files.length);
+      if (uploads) return await addUploads(files);
+      if (attachments.length + files.length > 3)
+        throw new Error(`Attach up to three files per message. ${UPDATE_FOR_MORE}`);
       const incoming: AgentAttachment[] = [];
       for (const original of files) {
         const file = await fitImageFile(original);
-        if (file.size > 1024 * 1024) throw new Error(`${file.name} is larger than 1 MB.`);
+        if (file.size > ATTACHMENT_LIMIT_BYTES)
+          throw new Error(`${file.name} is larger than 1 MB. ${UPDATE_FOR_MORE}`);
         const data = await fileBase64(file);
         incoming.push({ name: file.name, mime: file.type || "application/octet-stream", data });
       }
@@ -419,16 +518,80 @@ export function AgentComposer({
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not attach files");
     } finally {
-      setUploading(false);
+      setAttaching(false);
       setReading(0);
     }
   };
+  const settleUpload = (id: string, outcome: UploadOutcome) => {
+    if ("interrupted" in outcome) return;
+    setAttachments((list) =>
+      list.map((file) =>
+        !isUpload(file) || file.id !== id
+          ? file
+          : "upload" in outcome
+            ? { id, name: file.name, mime: file.mime, size: file.size, upload: outcome.upload }
+            : { ...file, error: outcome.error },
+      ),
+    );
+  };
+  // Uploads attached files, and starts again those a dropped connection or a closed composer
+  // stopped. One whose bytes are gone (the app reloaded) has to be attached again.
+  const uploadsVersion = useUploadsVersion();
+  useEffect(() => {
+    if (!connection?.uploads || !reachable) return;
+    for (const file of attachments) {
+      if (!isUpload(file) || file.upload || file.error || uploading(file.id)) continue;
+      if (hasFile(file.id))
+        startUpload(connection, file, (outcome) => settleUpload(file.id, outcome));
+      else settleUpload(file.id, { error: "Attach this file again." });
+    }
+    // settleUpload only writes to the draft store, which is the same for this agent.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connection, uploads, reachable, attachments, uploadsVersion]);
+  const shown = useRef(attachments);
+  useEffect(() => {
+    shown.current = attachments;
+  }, [attachments]);
+  useEffect(
+    () => () => {
+      // Closing the composer stops its uploads; the draft keeps the files, to upload on return.
+      for (const file of shown.current) if (isUpload(file) && !file.upload) stopUpload(file.id);
+    },
+    [],
+  );
+  const removeAttachment = (index: number) => {
+    const removed = attachments[index];
+    setAttachments((list) => list.filter((_, i) => i !== index));
+    if (!removed || !isUpload(removed)) return;
+    forgetFile(removed.id);
+    // An uploaded file nothing will send is removed from the machine now, not days later.
+    if (removed.upload && connection?.uploads)
+      void connection
+        .requestUpload({ kind: "cancel", uploadId: removed.upload.uploadId }, crypto.randomUUID())
+        .catch(() => undefined);
+  };
+  const retryUpload = (id: string) =>
+    setAttachments((list) =>
+      list.map((file) =>
+        isUpload(file) && file.id === id
+          ? { id, name: file.name, mime: file.mime, size: file.size, upload: null }
+          : file,
+      ),
+    );
   const addFiles = (files: FileList | File[]) => attachFiles(async () => Array.from(files));
   // Only when the paste event carried nothing: see readClipboardImage for why.
   const pasteNativeImage = () =>
     attachFiles(async () => {
       const image = await readClipboardImage();
-      return image ? [await fitImage(image, "Pasted image")] : [];
+      return image
+        ? [
+            await fitImage(
+              image,
+              "Pasted image",
+              uploads ? MAX_AGENT_IMAGE_BYTES : ATTACHMENT_LIMIT_BYTES,
+            ),
+          ]
+        : [];
     });
   const agents = useAgents();
   const nativeModels = useAgentModelSelection(
@@ -453,7 +616,7 @@ export function AgentComposer({
   const controlsDisabled = !advanced || !connected || busy || configuring;
   // Same conditions as the attach button; while they fail, the window refuses the drop.
   const canDrop =
-    !!advanced && connected && !busy && !uploading && !uncertain && !dictation.active && !native;
+    !!advanced && connected && !busy && !attaching && !uncertain && !dictation.active && !native;
   // dragenter and dragleave fire for every child the pointer crosses, so count them.
   const dragDepth = useRef(0);
   const [dropping, setDropping] = useState(false);
@@ -471,10 +634,19 @@ export function AgentComposer({
           : "Add a follow-up to the queue…"
         : "Message your agent",
       active,
-      canSend: connected && !uploading && !busy && !configuring && !uncertain && !!agent.threadId,
+      canSend:
+        connected &&
+        !attaching &&
+        !failedUpload &&
+        !deferred &&
+        !busy &&
+        !configuring &&
+        !uncertain &&
+        !!agent.threadId,
       canStop: connected && !!agent.turnId && !agent.turnId.startsWith("pending:"),
       hasAttachments: !!attachments.length,
-      attachEnabled: !!advanced && connected && !busy && !uploading && !uncertain,
+      attachEnabled: !!advanced && connected && !busy && !attaching && !uncertain,
+      uploads,
       controls: [
         {
           id: "model",
@@ -642,9 +814,19 @@ export function AgentComposer({
       } else if (event.kind === "focus") setNativeExpanded(event.focused);
       else if (event.kind === "height") setNativeHeight(event.height);
       else if (event.kind === "attachments") {
-        if (!advanced || !connected || busy || uploading || uncertain) return;
-        if (attachments.length + event.attachments.length > 3)
-          setError("Attach up to three files per message.");
+        if (!advanced || !connected || busy || attaching || uncertain) return;
+        if (uploads)
+          void addUploads(
+            event.attachments.map(
+              (file) => new File([fromBase64(file.data)], file.name, { type: file.mime }),
+            ),
+          ).catch((cause: unknown) =>
+            setError(cause instanceof Error ? cause.message : "Could not attach files"),
+          );
+        else if (attachments.length + event.attachments.length > 3)
+          setError(`Attach up to three files per message. ${UPDATE_FOR_MORE}`);
+        else if (!event.attachments.every((file) => AgentAttachmentSchema.safeParse(file).success))
+          setError(`Each file can be at most 1 MB. ${UPDATE_FOR_MORE}`);
         else setAttachments((value) => [...value, ...event.attachments].slice(0, 3));
       } else if (event.kind === "press") {
         if (event.control === "send") {
@@ -898,10 +1080,21 @@ export function AgentComposer({
             ))}
           </div>
         )}
-        {(error || dictation.error || nativeModels.error) && (
+        {(error || dictation.error || nativeModels.error || failedUpload) && (
           <p role="alert" className="text-xs text-destructive">
-            {error ?? dictation.error ?? nativeModels.error}
+            {error ??
+              dictation.error ??
+              nativeModels.error ??
+              (failedUpload && `${failedUpload.name}: ${failedUpload.error}`)}
           </p>
+        )}
+        {deferred && (
+          <div data-composer-deferred className="flex items-center gap-2 text-xs">
+            <span role="status">Sending once the attachments finish uploading…</span>
+            <button className="text-primary" onClick={() => setDeferred(null)}>
+              Don’t send yet
+            </button>
+          </div>
         )}
         {uncertain && (
           <div data-composer-delivery className="flex items-center gap-2 text-xs">
@@ -981,48 +1174,16 @@ export function AgentComposer({
           {(attachments.length > 0 || reading > 0) && (
             <div data-composer-attachments className="flex flex-wrap gap-2 px-2 pt-1 pb-2">
               {attachments.map((file, i) => (
-                <div
-                  key={i}
-                  data-composer-attachment
-                  title={file.name}
-                  className="group relative size-12 shrink-0"
-                >
-                  <div className="size-full overflow-hidden rounded-lg border bg-muted/40">
-                    {file.mime.startsWith("image/") ? (
-                      <ImageViewer
-                        file={file}
-                        description="Image attached to the message you are writing."
-                        downloadable={false}
-                      >
-                        <button
-                          type="button"
-                          aria-label={`Open ${file.name}`}
-                          className="block size-full cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                        >
-                          <img
-                            className="size-full object-cover"
-                            alt={file.name}
-                            src={`data:${file.mime};base64,${file.data}`}
-                          />
-                        </button>
-                      </ImageViewer>
-                    ) : (
-                      <div className="flex size-full flex-col items-center justify-center gap-0.5 px-1 text-muted-foreground">
-                        <FileIcon className="size-4 shrink-0" aria-hidden="true" />
-                        <span className="w-full truncate text-center text-[9px]">{file.name}</span>
-                      </div>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    aria-label={`Remove ${file.name}`}
-                    disabled={busy || uncertain}
-                    onClick={() => setAttachments((a) => a.filter((_, index) => index !== i))}
-                    className={`absolute -top-1.5 -left-1.5 flex size-5 items-center justify-center rounded-full border bg-background text-foreground shadow-sm hover:bg-muted focus-visible:opacity-100 disabled:opacity-50 ${compact ? "" : "opacity-0 group-hover:opacity-100"}`}
-                  >
-                    <X className="size-3" />
-                  </button>
-                </div>
+                <AttachmentChip
+                  key={isUpload(file) ? file.id : i}
+                  file={file}
+                  compact={!!compact}
+                  disabled={busy || uncertain}
+                  onRemove={() => removeAttachment(i)}
+                  {...(isUpload(file) && file.error && hasFile(file.id)
+                    ? { onRetry: () => retryUpload(file.id) }
+                    : {})}
+                />
               ))}
               {Array.from({ length: reading }, (_, i) => (
                 <div
@@ -1043,7 +1204,7 @@ export function AgentComposer({
               onStop={dictation.stop}
               onCancel={dictation.cancel}
               canSend={
-                connected && !busy && !uncertain && !uploading && !configuring && !!agent.threadId
+                connected && !busy && !uncertain && !attaching && !configuring && !!agent.threadId
               }
               queued={active}
             />
@@ -1156,12 +1317,18 @@ export function AgentComposer({
                     e.target.value = "";
                   }}
                 />
-                <ControlTooltip text="Attach files · up to three, 1 MB each">
+                <ControlTooltip
+                  text={
+                    uploads
+                      ? `Attach files · up to ${UPLOAD_LIMIT} each`
+                      : "Attach files · up to three, 1 MB each"
+                  }
+                >
                   <button
                     type="button"
                     aria-label="Attach files"
                     className="agent-control mobile-composer-attach"
-                    disabled={!advanced || !connected || busy || uploading || uncertain}
+                    disabled={!advanced || !connected || busy || attaching || uncertain}
                     onClick={() => picker.current?.click()}
                   >
                     <Plus className="size-4" />
@@ -1338,7 +1505,13 @@ export function AgentComposer({
                   )}
                   {(!compact || !showStop) && (
                     <ControlTooltip
-                      text={sendLabel}
+                      text={
+                        failedUpload
+                          ? "Remove or retry the attachments that did not upload"
+                          : waiting
+                            ? `${sendLabel} once the attachments finish uploading`
+                            : sendLabel
+                      }
                       shortcut={compact ? `${MOD_KEY}+Enter` : "Enter"}
                     >
                       <button
@@ -1346,7 +1519,9 @@ export function AgentComposer({
                         aria-label={sendLabel}
                         disabled={
                           !connected ||
-                          uploading ||
+                          attaching ||
+                          !!failedUpload ||
+                          !!deferred ||
                           busy ||
                           configuring ||
                           uncertain ||
@@ -1355,7 +1530,7 @@ export function AgentComposer({
                         }
                         className="rounded-lg bg-primary p-2 text-primary-foreground disabled:opacity-30"
                       >
-                        {busy ? (
+                        {busy || deferred ? (
                           <LoaderCircle className="size-4 animate-spin" />
                         ) : (
                           <ArrowUp className="size-4" />
@@ -1406,4 +1581,125 @@ function droppedFiles(data: DataTransfer) {
     }
   }
   return { files, folders };
+}
+
+/** A file the native picker read, as bytes again, to upload like any other. */
+function fromBase64(data: string): Uint8Array<ArrayBuffer> {
+  const binary = atob(data);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+/**
+ * An attached file in the composer: the image itself when there is one to show, otherwise its
+ * name. An uploading file shows how much of it the machine has; one that failed offers a retry
+ * when its bytes are still here. Removing it stops its upload.
+ */
+function AttachmentChip({
+  file,
+  compact,
+  disabled,
+  onRemove,
+  onRetry,
+}: {
+  file: DraftAttachment;
+  compact: boolean;
+  disabled: boolean;
+  onRemove: () => void;
+  onRetry?: () => void;
+}) {
+  const upload = isUpload(file) ? file : null;
+  const progress = useUploadProgress(upload?.id ?? "");
+  const image = isUpload(file)
+    ? filePreview(file.id)
+    : file.mime.startsWith("image/")
+      ? file
+      : null;
+  const state = !upload
+    ? undefined
+    : upload.upload
+      ? "uploaded"
+      : upload.error
+        ? "failed"
+        : "uploading";
+  const percent =
+    upload && upload.size ? Math.min(100, Math.round((progress.received / upload.size) * 100)) : 0;
+  return (
+    <div
+      data-composer-attachment
+      data-upload={state}
+      title={upload?.error ? `${file.name}: ${upload.error}` : file.name}
+      className="group relative size-12 shrink-0"
+    >
+      <div className="relative size-full overflow-hidden rounded-lg border bg-muted/40">
+        {image ? (
+          <ImageViewer
+            file={image}
+            name={file.name}
+            description="Image attached to the message you are writing."
+            downloadable={false}
+          >
+            <button
+              type="button"
+              aria-label={`Open ${file.name}`}
+              className="block size-full cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+              <img
+                className="size-full object-cover"
+                alt={file.name}
+                src={`data:${image.mime};base64,${image.data}`}
+              />
+            </button>
+          </ImageViewer>
+        ) : (
+          <div className="flex size-full flex-col items-center justify-center gap-0.5 px-1 text-muted-foreground">
+            <FileIcon className="size-4 shrink-0" aria-hidden="true" />
+            <span className="w-full truncate text-center text-[9px]">{file.name}</span>
+          </div>
+        )}
+        {state === "uploading" && (
+          <div
+            role="progressbar"
+            aria-label={`Uploading ${file.name}`}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={percent}
+            className="pointer-events-none absolute inset-0 flex items-end bg-background/50"
+          >
+            <div
+              className="h-1 bg-primary transition-[width]"
+              style={{ width: `${Math.max(percent, progress.running ? 4 : 0)}%` }}
+            />
+          </div>
+        )}
+        {state === "failed" && (
+          <div className="absolute inset-0 flex items-center justify-center bg-background/80 text-destructive">
+            {onRetry ? (
+              <button
+                type="button"
+                aria-label={`Retry uploading ${file.name}`}
+                title="Retry"
+                className="flex size-full items-center justify-center hover:bg-muted/60"
+                onClick={onRetry}
+              >
+                <RotateCw className="size-4" />
+              </button>
+            ) : (
+              <CircleAlert className="size-4" aria-label={`${file.name} did not upload`} />
+            )}
+          </div>
+        )}
+      </div>
+      <button
+        type="button"
+        aria-label={`Remove ${file.name}`}
+        disabled={disabled}
+        onClick={onRemove}
+        className={`absolute -top-1.5 -left-1.5 flex size-5 items-center justify-center rounded-full border bg-background text-foreground shadow-sm hover:bg-muted focus-visible:opacity-100 disabled:opacity-50 ${compact ? "" : "opacity-0 group-hover:opacity-100"}`}
+      >
+        <X className="size-3" />
+      </button>
+    </div>
+  );
 }

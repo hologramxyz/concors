@@ -9,9 +9,9 @@ import {
 } from "./accounts/manager.ts";
 import { defaultSettings, parseModels, turnControls } from "./controls.ts";
 import { initialSettings, rememberable, supportedSettings } from "./remembered-settings.ts";
-import { saveAttachments } from "./attachments.ts";
+import { claimUploads, messageInputs, readUpload } from "./attachments.ts";
 import { generatedImage, readMessageImages, type MessageImage } from "./images.ts";
-import type { AgentAttachment } from "@concors/protocol";
+import type { AgentAttachment, AgentUpload } from "@concors/protocol";
 import { AGENT_USAGE_TTL_MS, unsupportedPlanUsage, type AgentPlanUsage } from "@concors/protocol";
 import { normalizeCommandExecutionCommand } from "./codex/command-display.ts";
 import { randomUUID } from "node:crypto";
@@ -19,6 +19,8 @@ import { homedir } from "node:os";
 import { stat } from "node:fs/promises";
 import { z } from "zod";
 import {
+  AgentAttachmentSchema,
+  AgentFileSchema,
   AgentControlsSchema,
   type AgentControls,
   SUB_AGENT_STEPS,
@@ -69,6 +71,17 @@ const ThreadResponse = z.object({
   model: z.string().optional(),
 });
 const Scope = z.object({ threadId: z.string(), turnId: z.string() });
+
+/** A message's files: inline ones from older clients, and ones uploaded ahead of it. */
+interface MessageFiles {
+  attachments?: AgentAttachment[] | undefined;
+  uploads?: AgentUpload[] | undefined;
+}
+/** In the order the chat lists them, which is the order `read-attachment` counts in. */
+const messageFiles = (files: MessageFiles): (AgentAttachment | AgentUpload)[] => [
+  ...(files.attachments ?? []),
+  ...(files.uploads ?? []),
+];
 
 /**
  * Concors runs `/clear` itself for these agents, whatever the CLI offers: the pane starts a new
@@ -265,11 +278,11 @@ export class AgentManager {
     turnId: string,
     requestId: string,
     text: string,
-    attachments: AgentAttachment[],
+    files: MessageFiles,
     queued?: { remove: string; request: AgentRequest },
   ): Promise<void> {
-    const uploaded = attachments.length
-      ? await saveAttachments(this.#store.attachmentsDirectory, info.id, attachments)
+    const uploaded = messageFiles(files).length
+      ? await messageInputs(this.#store.attachmentsDirectory, info.id, files)
       : [];
     await runtime.provider.request("session/steer", {
       threadId: info.threadId,
@@ -288,6 +301,7 @@ export class AgentManager {
       this.#emit({ type: "agent.state", agent: next });
     }
     const itemId = `steer:${requestId}`;
+    const attachments = messageFiles(files);
     if (attachments.length) this.#store.saveAgentItemImages(info.id, itemId, attachments);
     this.item(info.id, turnId, {
       id: itemId,
@@ -904,10 +918,16 @@ export class AgentManager {
               sessionId: operation.sessionId,
               text: `/${operation.name}${operation.args ? ` ${operation.args}` : ""}`,
               attachments: undefined,
+              uploads: undefined,
             }
           : operation;
       if (op.kind === "read-attachment") {
         const info = this.#store.agent(op.sessionId);
+        const kept = this.#store.agentAttachment(info.id, op.itemId, op.index);
+        const file =
+          "uploadId" in kept
+            ? await readUpload(this.#store.attachmentsDirectory, info.id, kept)
+            : kept;
         return {
           type: "agent.result",
           requestId: request.requestId,
@@ -915,7 +935,10 @@ export class AgentManager {
             status: "ok",
             // Every image thumbnail reads its data this way; the history is not what it asked for.
             conversation: { agent: info, items: [], hasMore: false },
-            attachment: this.#store.agentAttachment(info.id, op.itemId, op.index),
+            // Older clients cannot parse a larger `attachment`, so a large file goes as `file`.
+            ...(AgentAttachmentSchema.safeParse(file).success
+              ? { attachment: file }
+              : { file: AgentFileSchema.parse(file) }),
           },
         };
       }
@@ -1302,6 +1325,13 @@ export class AgentManager {
       let info = this.#store.agent(op.sessionId);
       if (this.mutations.has(info.id))
         throw new Error("This session is being changed. Try again when it finishes.");
+      // Uploaded files become the chat's before anything refers to them, so they cannot be swept
+      // away while a message waits in the queue.
+      if (
+        (op.kind === "send" || op.kind === "steer" || op.kind === "queue-add") &&
+        op.uploads?.length
+      )
+        await claimUploads(this.#store.attachmentsDirectory, info.id, op.uploads);
       if (op.kind === "steer") {
         if (
           !info.controls?.steer ||
@@ -1312,21 +1342,14 @@ export class AgentManager {
           throw new Error(
             "Steering is only available during an active turn and does not run slash commands.",
           );
-        if (op.attachments?.length && !info.controls.steerAttachments)
+        if (messageFiles(op).length && !info.controls.steerAttachments)
           throw new Error(
             "This agent cannot take attachments mid-turn. Queue the message instead.",
           );
         this.#store.reserveAgentAction(request, info);
         const runtime = this.#runtimes.get(info.id);
         if (!runtime) throw new Error("Agent disconnected. The steering message was not replayed.");
-        await this.steer(
-          info,
-          runtime,
-          op.turnId,
-          request.requestId,
-          op.text,
-          op.attachments ?? [],
-        );
+        await this.steer(info, runtime, op.turnId, request.requestId, op.text, op);
         return this.result(request, info.id);
       }
       if (op.kind === "rewind") {
@@ -1392,8 +1415,11 @@ export class AgentManager {
               : "A follow-up can steer only while the agent works, and not as a slash command. It stays queued.",
           );
         const queued = this.#store.queuedRequest(entry.id, info.id)?.operation;
-        const attachments = queued?.kind === "send" ? (queued.attachments ?? []) : [];
-        if (attachments.length !== entry.attachments.length)
+        const files: MessageFiles =
+          queued?.kind === "send"
+            ? { attachments: queued.attachments, uploads: queued.uploads }
+            : {};
+        if (messageFiles(files).length !== entry.attachments.length)
           throw new Error("Queued message is unavailable. Remove it and try again.");
         // Held like a delivery, so the queue cannot also send it should the turn end meanwhile.
         if (this.draining.has(info.id)) throw new Error("That follow-up is being sent already.");
@@ -1401,7 +1427,7 @@ export class AgentManager {
         if (!runtime) throw new Error("Agent disconnected. The follow-up stays queued.");
         this.draining.add(info.id);
         try {
-          await this.steer(info, runtime, op.turnId, request.requestId, entry.text, attachments, {
+          await this.steer(info, runtime, op.turnId, request.requestId, entry.text, files, {
             remove: op.id,
             request,
           });
@@ -1424,7 +1450,7 @@ export class AgentManager {
             {
               id: request.requestId,
               text: op.text,
-              attachments: (op.attachments ?? []).map((a) => ({ name: a.name, mime: a.mime })),
+              attachments: messageFiles(op).map((a) => ({ name: a.name, mime: a.mime })),
               queuedAt: new Date().toISOString(),
             },
           ];
@@ -1436,6 +1462,7 @@ export class AgentManager {
               sessionId: info.id,
               text: op.text,
               attachments: op.attachments,
+              ...(op.uploads ? { uploads: op.uploads } : {}),
             },
           };
         } else if (op.kind === "queue-remove") {
@@ -1545,7 +1572,7 @@ export class AgentManager {
             throw new Error(
               `/${command.name} is not available for this agent. Check its commands or update its CLI.`,
             );
-          if (op.attachments?.length)
+          if (messageFiles(op).length)
             throw new Error("Send attachments in a message, separately from a command.");
           if (command.name === "clear" && CLEARABLE_ENGINES.includes(info.engine ?? info.provider))
             return this.clear(request, info);
@@ -1573,18 +1600,17 @@ export class AgentManager {
         if (queueId) next.queue = (info.queue ?? []).filter((entry) => entry.id !== queueId);
         this.#store.reserveAgentAction(request, next, queueId ? { remove: queueId } : undefined);
         this.#emit({ type: "agent.state", agent: next });
+        const files = messageFiles(op);
         this.item(info.id, turnId, {
           id: `prompt:${request.requestId}`,
           kind: "user",
           title: "You",
-          ...(op.attachments?.length
-            ? { attachments: op.attachments.map(({ name, mime }) => ({ name, mime })) }
-            : {}),
+          ...(files.length ? { attachments: files.map(({ name, mime }) => ({ name, mime })) } : {}),
           text: op.text,
           detail: "",
           status: "completed",
         });
-        void this.send(info.id, op.text, op.attachments ?? [], next.settings).catch((error) =>
+        void this.send(info.id, op.text, op, next.settings).catch((error) =>
           this.fail(info.id, error),
         );
       } else if (op.kind === "interrupt") {
@@ -1893,13 +1919,14 @@ export class AgentManager {
   private async send(
     id: string,
     text: string,
-    attachments: AgentAttachment[],
+    files: MessageFiles,
     settings: AgentInfo["settings"],
   ): Promise<void> {
     const provider = await this.provider(id);
     const info = this.#store.agent(id);
-    const uploaded = attachments.length
-      ? await saveAttachments(this.#store.attachmentsDirectory, id, attachments)
+    // Only awaited with files: a plain prompt reaches the provider as promptly as it always has.
+    const uploaded = messageFiles(files).length
+      ? await messageInputs(this.#store.attachmentsDirectory, id, files)
       : [];
     const command = parseAgentCommand(text);
     const instructions = ["pi", "omp", "acp"].includes(info.engine ?? info.provider)

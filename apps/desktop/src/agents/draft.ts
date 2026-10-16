@@ -5,14 +5,19 @@ import {
   useSyncExternalStore,
   type SetStateAction,
 } from "react";
-import { draftStorageKey, readDraft, writeDraft } from "./draft-storage";
-import type { AgentAttachment, AgentOperation } from "@concors/protocol";
+import { draftStorageKey, readDraft, savedAttachments, writeDraft } from "./draft-storage";
+import type { AgentOperation } from "@concors/protocol";
+import type { DraftAttachment } from "./attachment-uploads";
 /** Mobile keeps a per-machine draft scope while its native socket pauses/reconnects. */
 export const AgentDraftScopeContext = createContext<object | null>(null);
 export interface InputDraft {
   message: string;
-  attachments: AgentAttachment[];
+  attachments: DraftAttachment[];
 }
+const saveable = (draft: InputDraft) => ({
+  message: draft.message,
+  attachments: savedAttachments(draft.attachments),
+});
 export interface ComposerAttempt {
   id: string;
   draft: InputDraft;
@@ -58,11 +63,12 @@ function save(store: DraftStore, id: string, storageKey: string | null, draft: D
   else store.values.set(id, draft);
   if (storageKey)
     try {
+      const attempt = store.sessions.get(id)?.attempt;
       writeDraft(localStorage, storageKey, {
         version: 1,
         updatedAt: Date.now(),
-        draft: { message: draft.message, attachments: draft.attachments, queue: draft.queue },
-        attempt: store.sessions.get(id)?.attempt ?? null,
+        draft: { ...saveable(draft), queue: draft.queue.map(saveable) },
+        attempt: attempt ? { ...attempt, draft: saveable(attempt.draft) } : null,
       });
     } catch {
       /* Storage may be unavailable in a native webview. */
@@ -165,7 +171,7 @@ export function useAgentDraft(connection: object | null, id: string, machineId?:
         ...prior,
         message: typeof next === "function" ? next(prior.message) : next,
       })),
-    setAttachments: (next: SetStateAction<AgentAttachment[]>) =>
+    setAttachments: (next: SetStateAction<DraftAttachment[]>) =>
       update((prior) => ({
         ...prior,
         attachments: typeof next === "function" ? next(prior.attachments) : next,

@@ -1,4 +1,11 @@
-import { parseClientMessage, type ClientInfo, type DaemonMessage } from "@concors/protocol";
+import {
+  ATTACHMENT_UPLOADS_CAPABILITY,
+  MAX_UPLOAD_BYTES,
+  UPLOAD_CHUNK_BYTES,
+  parseClientMessage,
+  type ClientInfo,
+  type DaemonMessage,
+} from "@concors/protocol";
 import { describe, expect, it, vi } from "vitest";
 
 import { DaemonConnection, DaemonConnectionError, type WebSocketLike } from "./connection.ts";
@@ -918,5 +925,155 @@ describe("schedule replica lifecycle", () => {
     ).rejects.toThrow("Update the daemon");
     expect(socket.sent).toHaveLength(count);
     connection.disconnect();
+  });
+});
+
+describe("attachment uploads", () => {
+  const snapshot = {
+    schemaVersion: 1 as const,
+    machineId: "00000000-0000-4000-8000-000000000001",
+    epoch: "00000000-0000-4000-8000-000000000002",
+    revision: 0,
+    projects: [],
+    selection: null,
+  };
+  async function uploading(capabilities = [ATTACHMENT_UPLOADS_CAPABILITY]) {
+    const started = startConnection();
+    started.connection.subscribeWorkspace(() => undefined);
+    started.socket.serverOpen();
+    started.socket.serverSend({
+      type: "daemon.ready",
+      protocolVersion: "v1",
+      daemonVersion: "0.1.0",
+      status: "ready",
+      capabilities,
+    });
+    await started.ready;
+    started.socket.serverSend({ type: "workspace.snapshot", snapshot });
+    return started;
+  }
+  const sentOf = (socket: FakeWebSocket) =>
+    socket.sent.flatMap((raw) => {
+      const parsed = parseClientMessage(raw);
+      return parsed.success ? [parsed.data] : [];
+    });
+  const requests = (socket: FakeWebSocket) =>
+    sentOf(socket).flatMap((message) => (message.type === "upload.request" ? [message] : []));
+  const chunks = (socket: FakeWebSocket) =>
+    sentOf(socket).flatMap((message) => (message.type === "upload.chunk" ? [message] : []));
+  /** Plays the machine: accepts the upload, and answers `finish` with its reference. */
+  function answer(socket: FakeWebSocket, kind: "begin" | "finish") {
+    const request = requests(socket).find((message) => message.operation.kind === kind);
+    if (!request) throw new Error(`No ${kind} sent`);
+    const { operation } = request;
+    socket.serverSend({
+      type: "upload.result",
+      requestId: request.requestId,
+      outcome:
+        operation.kind === "finish"
+          ? {
+              status: "ok",
+              upload: { uploadId: operation.uploadId, name: "a.bin", mime: "x/y", size: 1 },
+            }
+          : { status: "ok" },
+    });
+    return operation.uploadId;
+  }
+
+  it("sends a file in chunks, a few at a time, and returns the machine's reference", async () => {
+    const { connection, socket } = await uploading();
+    const bytes = new Uint8Array(UPLOAD_CHUNK_BYTES * 6 + 10).map((_, i) => i % 251);
+    const progress: number[] = [];
+    const upload = connection.upload(new Blob([bytes]), {
+      name: "a.bin",
+      mime: "x/y",
+      onProgress: (received) => progress.push(received),
+    });
+    await vi.waitFor(() => expect(requests(socket)).toHaveLength(1));
+    expect(requests(socket)[0]).toMatchObject({ operation: { kind: "begin", size: bytes.length } });
+    const uploadId = answer(socket, "begin");
+    // Only the window goes out before the machine confirms anything.
+    await vi.waitFor(() => expect(chunks(socket)).toHaveLength(4));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(chunks(socket)).toHaveLength(4);
+    let received = 0;
+    for (let seq = 0; seq < 7; seq++) {
+      await vi.waitFor(() => expect(chunks(socket).length).toBeGreaterThan(seq));
+      received = Math.min(received + UPLOAD_CHUNK_BYTES, bytes.length);
+      socket.serverSend({ type: "upload.progress", uploadId, received });
+    }
+    expect(chunks(socket).map((chunk) => chunk.seq)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    const joined = chunks(socket).flatMap((chunk) =>
+      Array.from(atob(chunk.data), (c) => c.charCodeAt(0)),
+    );
+    expect(joined).toEqual([...bytes]);
+    await vi.waitFor(() => expect(requests(socket)).toHaveLength(2));
+    answer(socket, "finish");
+    await expect(upload).resolves.toMatchObject({ uploadId, name: "a.bin" });
+    expect(progress.at(-1)).toBe(bytes.length);
+  });
+
+  it("refuses a file over the limit without contacting the machine", async () => {
+    const { connection, socket } = await uploading();
+    const sent = socket.sent.length;
+    await expect(
+      connection.upload({ size: MAX_UPLOAD_BYTES + 1 } as Blob, { name: "big.zip", mime: "" }),
+    ).rejects.toThrow("big.zip is larger than 50 MB.");
+    expect(socket.sent).toHaveLength(sent);
+  });
+
+  it("stops and tells the machine to discard the file when cancelled", async () => {
+    const { connection, socket } = await uploading();
+    const controller = new AbortController();
+    const upload = connection.upload(new Blob([new Uint8Array(UPLOAD_CHUNK_BYTES * 8)]), {
+      name: "a.bin",
+      mime: "x/y",
+      signal: controller.signal,
+    });
+    await vi.waitFor(() => expect(requests(socket)).toHaveLength(1));
+    const uploadId = answer(socket, "begin");
+    await vi.waitFor(() => expect(chunks(socket)).toHaveLength(4));
+    controller.abort();
+    await expect(upload).rejects.toThrow();
+    expect(requests(socket).at(-1)).toMatchObject({ operation: { kind: "cancel", uploadId } });
+    expect(chunks(socket)).toHaveLength(4);
+  });
+
+  it("fails when the machine reports an error or the connection drops", async () => {
+    const first = await uploading();
+    const failed = first.connection.upload(new Blob([new Uint8Array(10)]), {
+      name: "a.bin",
+      mime: "x/y",
+    });
+    await vi.waitFor(() => expect(requests(first.socket)).toHaveLength(1));
+    const uploadId = answer(first.socket, "begin");
+    first.socket.serverSend({ type: "upload.error", uploadId, message: "Disk full" });
+    await expect(failed).rejects.toThrow("Disk full");
+
+    const second = await uploading();
+    const dropped = second.connection.upload(new Blob([new Uint8Array(UPLOAD_CHUNK_BYTES * 8)]), {
+      name: "a.bin",
+      mime: "x/y",
+    });
+    await vi.waitFor(() => expect(requests(second.socket)).toHaveLength(1));
+    answer(second.socket, "begin");
+    await vi.waitFor(() => expect(chunks(second.socket)).toHaveLength(4));
+    second.socket.serverClose();
+    await expect(dropped).rejects.toThrow("Connection lost while uploading a.bin.");
+  });
+
+  it("never sends uploads to an older daemon", async () => {
+    const { connection, socket } = await uploading([]);
+    expect(connection.uploads).toBe(false);
+    const sent = socket.sent.length;
+    await expect(
+      connection.upload(new Blob([new Uint8Array(4)]), { name: "a.bin", mime: "x/y" }),
+    ).rejects.toThrow("needs a Concors update");
+    expect(socket.sent).toHaveLength(sent);
+  });
+
+  it("tells the daemon it reads attachment lists longer than older clients could", async () => {
+    const { socket } = await uploading();
+    expect(JSON.parse(socket.sent[0]!).capabilities).toContain(ATTACHMENT_UPLOADS_CAPABILITY);
   });
 });
