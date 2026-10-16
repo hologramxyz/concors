@@ -172,6 +172,17 @@ function MobileWorkspaceContent({
   const workspace = replica?.machineId === host.machineId ? replica.workspace : null;
   const ready = host.phase === "ready" && connection?.state.status === "ready" && !!workspace;
   const canEdit = !!ready && !pending;
+  // As on desktop, a reconnect that settles within two seconds never flashes a notice.
+  const [reconnectNotice, setReconnectNotice] = useState(false);
+  const reconnecting = !!workspace && !ready;
+  useEffect(() => {
+    if (!reconnecting) return;
+    const timer = setTimeout(() => setReconnectNotice(true), 2_000);
+    return () => {
+      clearTimeout(timer);
+      setReconnectNotice(false);
+    };
+  }, [reconnecting]);
   const draftScope = useMemo(() => ({ machineId: host.machineId }), [host.machineId]);
   const icons = useProjectIcons(workspace);
   const pullRequests = usePullRequests(workspace);
@@ -769,7 +780,7 @@ function MobileWorkspaceContent({
                         </button>
                       </div>
                     )}
-                    {workspace && !ready && (
+                    {workspace && !ready && reconnectNotice && (
                       <p role="status" className="mobile-notice">
                         Reconnecting… Saved workspace is read-only.
                       </p>
