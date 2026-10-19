@@ -1312,7 +1312,7 @@ export function AgentComposer({
                     if (!uncertain) void followUp(undefined, !compact && (e.metaKey || e.ctrlKey));
                   }
                 }}
-                className={`agent-composer-input ${compact ? "max-h-48" : "max-h-[min(40vh,26rem)]"} min-h-16 w-full resize-none bg-transparent px-3 py-3 outline-none disabled:opacity-50`}
+                className={`agent-composer-input ${compact ? "max-h-48" : "max-h-[min(40cqh,26rem)]"} min-h-16 w-full resize-none bg-transparent px-3 py-3 outline-none disabled:opacity-50`}
               />
               <div
                 className={`flex items-center gap-1 px-1 ${compact ? "mobile-composer-toolbar" : "agent-composer-toolbar"}`}
