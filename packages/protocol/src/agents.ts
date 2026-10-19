@@ -367,6 +367,8 @@ export const AgentOperationSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("fork-session"),
     sessionId: Id,
+    /** Keep the chat up to the end of this turn; omitted keeps all of it. */
+    turnId: z.string().min(1).max(4096).optional(),
     expectedRevision: z.number().int().nonnegative(),
   }),
   z.object({
