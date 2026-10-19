@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
-import type { AgentInfo, TerminalInfo, WorkspaceTab } from "@concors/protocol";
-import { tabAgentStatuses } from "./agent-status";
+import type { AgentInfo, TerminalInfo, WorkspaceProject, WorkspaceTab } from "@concors/protocol";
+import { tabAgentStatuses, workspaceAttention, workspaceAttentionLabel } from "./agent-status";
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const pane = (n: number, profile: "chat" | "shell" | "codex", sessionId: string | null) => ({
@@ -72,4 +72,57 @@ it("shows a finished chat agent as Ready once its completion has been seen", () 
   expect(unseen).toMatchObject({ status: "Done", color: "bg-emerald-500", unread: true });
   const [seen] = tabAgentStatuses(tab, [finished(true)], []);
   expect(seen).toMatchObject({ status: "Ready", color: "bg-muted-foreground/60", unread: false });
+});
+
+it("sums a workspace's agents across its tabs, most urgent first, counting updates until seen", () => {
+  // One tab per agent, each holding a single pane.
+  const project = (sessions: [number, "chat" | "codex"][]) =>
+    ({
+      id: id(1),
+      tabs: sessions.map(([session, profile], i) => ({
+        id: id(100 + i),
+        name: `Tab ${i}`,
+        root: id(200 + i),
+        nodes: [pane(200 + i, profile, id(session))],
+      })),
+    }) as WorkspaceProject;
+  const unseen = { kind: "done", seen: false } as AgentInfo["attention"];
+  const seen = { kind: "done", seen: true } as AgentInfo["attention"];
+  const chats = [
+    { ...chat(21, "done"), attention: unseen },
+    { ...chat(22, "done"), attention: seen },
+    { ...chat(23, "failed"), attention: { kind: "failed", seen: false } },
+    chat(24, "working"),
+    chat(25, "needs_input"),
+  ] as AgentInfo[];
+  const terminals = [terminal(26, { agentActivity: "needs_input" })];
+
+  expect(workspaceAttention(project([]), chats, terminals).kind).toBeNull();
+  // A finished agent someone has already looked at is not news.
+  expect(workspaceAttention(project([[22, "chat"]]), chats, terminals).kind).toBeNull();
+  expect(workspaceAttention(project([[24, "chat"]]), chats, terminals).kind).toBe("working");
+  expect(
+    workspaceAttention(
+      project([
+        [24, "chat"],
+        [21, "chat"],
+      ]),
+      chats,
+      terminals,
+    ).kind,
+  ).toBe("done");
+  const all = workspaceAttention(
+    project([
+      [21, "chat"],
+      [22, "chat"],
+      [23, "chat"],
+      [24, "chat"],
+      [25, "chat"],
+      [26, "codex"],
+    ]),
+    chats,
+    terminals,
+  );
+  expect(all.kind).toBe("needs_input");
+  expect(workspaceAttentionLabel(all)).toBe("2 needs input · 1 failed · 1 done · 1 working");
 });
