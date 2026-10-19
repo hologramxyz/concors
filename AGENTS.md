@@ -63,7 +63,10 @@ What the app does with a release, and how the Mac build is signed, is in
 the five Apple ones listed there; `RAILWAY_TOKEN`, a project token for the production environment of
 the `concors` project in the Holoworld AI Railway workspace; and `AUR_SSH_PRIVATE_KEY`, which
 rolling out uses to publish `concors-bin` to the AUR (without it, that one step is skipped with a
-warning).
+warning); and `CONCORS_WEB_TOKEN`, a fine-grained token with Contents read and write on
+`hologramxyz/concors-web`, which rolling out uses to add the release to the website's changelog
+(without it, that step is likewise skipped with a warning). The changelog shows the release notes
+as written, so they are public.
 
 **Once a pull request is ready for review, stop pushing to it.** Anything else, such as a
 follow-up fix, gets its own pull request. A commit pushed to a branch someone is already merging is
