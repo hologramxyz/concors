@@ -15,6 +15,14 @@ import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { WorkspacePullRequestCount } from "@/pull-requests/workspace-count";
 import { pullRequestsLabel } from "@/pull-requests/labels";
 import { workspaceOpenCount } from "@/pull-requests/store";
+import { useAgents } from "@/agents/context";
+import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
+import { AgentLoadingIcon } from "@/agents/activity";
+import {
+  workspaceAttention,
+  workspaceAttentionLabel,
+  type WorkspaceAttention,
+} from "@/agents/agent-status";
 
 export function WorkspaceSidebarItem({
   project,
@@ -42,6 +50,7 @@ export function WorkspaceSidebarItem({
   const mobile = useContext(CompactLayoutContext);
   const connection = useContext(TerminalConnectionContext);
   const openPullRequests = workspaceOpenCount(pullRequests);
+  const attention = workspaceAttention(project, useAgents(), useTerminalSessions());
   // Older daemons reject `project.rename` outright, so the menu item stays disabled for them.
   const canRename =
     canEdit &&
@@ -70,12 +79,15 @@ export function WorkspaceSidebarItem({
     });
   };
   const image = (
-    <ProjectImage
-      key={icon?.source ?? "fallback"}
-      source={icon?.source ?? null}
-      isGit={icon?.isGit ?? false}
-      name={project.name}
-    />
+    <span className="relative flex shrink-0">
+      <ProjectImage
+        key={icon?.source ?? "fallback"}
+        source={icon?.source ?? null}
+        isGit={icon?.isGit ?? false}
+        name={project.name}
+      />
+      <AttentionBadge attention={attention} />
+    </span>
   );
   const button = (
     <button
@@ -137,6 +149,9 @@ export function WorkspaceSidebarItem({
             <div className="min-w-0 break-words">
               <p className="font-medium">{project.name}</p>
               <p className="opacity-75">{project.directory}</p>
+              {attention.kind && (
+                <p className="opacity-75">Agents: {workspaceAttentionLabel(attention)}</p>
+              )}
               {openPullRequests > 0 && (
                 <p className="opacity-75">{pullRequestsLabel(openPullRequests)}</p>
               )}
@@ -168,5 +183,31 @@ export function WorkspaceSidebarItem({
         />
       )}
     </li>
+  );
+}
+
+/** The corner of a workspace's icon: its agents' most urgent state, as their tabs show it. */
+function AttentionBadge({ attention }: { attention: WorkspaceAttention }) {
+  if (!attention.kind) return null;
+  return (
+    <span
+      data-workspace-attention={attention.kind}
+      className="absolute -right-1 -bottom-1 flex size-3 items-center justify-center rounded-full bg-sidebar ring-1 ring-sidebar"
+    >
+      {attention.kind === "working" ? (
+        <AgentLoadingIcon className="size-3" />
+      ) : (
+        <span
+          className={cn(
+            "size-2 rounded-full",
+            attention.kind === "needs_input"
+              ? "bg-amber-500"
+              : attention.kind === "failed"
+                ? "bg-red-500"
+                : "bg-emerald-500",
+          )}
+        />
+      )}
+    </span>
   );
 }
