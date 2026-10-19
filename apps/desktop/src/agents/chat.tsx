@@ -364,7 +364,11 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
   return (
     <SubAgentViewContext value={agent?.controls?.childHistory ? setSubAgent : null}>
       <div ref={root} className="chat-with-sub-agent relative flex min-h-0 min-w-0 flex-1">
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="Agent conversation">
+        <div
+          // A size container, so the composer can size its text box to the pane, not the window.
+          className={`flex min-h-0 min-w-0 flex-1 flex-col ${compact ? "" : "[container-type:size]"}`}
+          aria-label="Agent conversation"
+        >
           <div className="chat-timeline-shell relative flex min-h-0 flex-1">
             <div
               ref={scroll}
@@ -488,37 +492,41 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
           </div>
           <div
             data-chat-footer
-            className={`${compact ? "" : "max-h-[55%] overflow-y-auto"} shrink-0 px-3 pt-2 pb-3`}
+            // In a short pane the timeline gives up its room first. Prompts and notices above the
+            // composer scroll before the composer itself loses any of its height.
+            className={`${compact ? "" : "flex max-h-[min(100%,max(55%,12rem))] flex-col"} shrink-0 px-3 pt-2 pb-3`}
           >
-            <div className="mx-auto max-w-5xl space-y-3">
-              {!compact && feedback}
-              {latestPlan && <PlanProgress compact item={latestPlan} />}
-              {canImplement && (
-                <Button
-                  variant="outline"
-                  disabled={!connected || busy}
-                  onClick={() =>
-                    void run(() =>
-                      perform({
-                        kind: "implement-plan",
-                        sessionId,
-                        itemId: proposal.id,
-                        expectedRevision: agent.revision,
-                      }),
-                    )
-                  }
-                >
-                  Implement plan
-                </Button>
-              )}
-              {agent && (
-                <AgentAccountPrompt
-                  agent={agent}
-                  canEdit={!!connected}
-                  onInstallPrompt={setInstallPrompt}
-                />
-              )}
-              {agent && <AgentLimitPrompt agent={agent} canEdit={!!connected} />}
+            <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-col gap-3">
+              <div className="min-h-0 space-y-3 overflow-y-auto empty:hidden">
+                {!compact && feedback}
+                {latestPlan && <PlanProgress compact item={latestPlan} />}
+                {canImplement && (
+                  <Button
+                    variant="outline"
+                    disabled={!connected || busy}
+                    onClick={() =>
+                      void run(() =>
+                        perform({
+                          kind: "implement-plan",
+                          sessionId,
+                          itemId: proposal.id,
+                          expectedRevision: agent.revision,
+                        }),
+                      )
+                    }
+                  >
+                    Implement plan
+                  </Button>
+                )}
+                {agent && (
+                  <AgentAccountPrompt
+                    agent={agent}
+                    canEdit={!!connected}
+                    onInstallPrompt={setInstallPrompt}
+                  />
+                )}
+                {agent && <AgentLimitPrompt agent={agent} canEdit={!!connected} />}
+              </div>
               {agent && (
                 <AgentComposer
                   key={agent.id}
