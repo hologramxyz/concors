@@ -328,6 +328,7 @@ export class ClaudeProvider extends EventProvider {
       steerAttachments: true,
       importSessions: true,
       fork: true,
+      forkFromTurn: true,
       rewind: ["files"],
       compact: true,
       contextUsage: true,
@@ -411,9 +412,20 @@ export class ClaudeProvider extends EventProvider {
     }
     if (!session) throw new Error("Claude Code is disconnected");
     if (method === "session/fork") {
+      const store = this.transcriptStore ? { sessionStore: this.transcriptStore } : {};
+      let upToMessageId: string | undefined;
+      if (p["before"]) {
+        // The transcript is cut just before the prompt that starts the first dropped turn.
+        const before = string(object(p["before"])["nativeTurnId"]);
+        const messages = await getSessionMessages(this.threadId, { dir: this.cwd, ...store });
+        upToMessageId = messages[messages.findIndex((m) => m.uuid === before) - 1]?.uuid;
+        if (!upToMessageId)
+          throw new Error("Claude Code no longer has that point in its transcript");
+      }
       const result = await forkSession(this.threadId, {
         dir: this.cwd,
-        ...(this.transcriptStore ? { sessionStore: this.transcriptStore } : {}),
+        ...(upToMessageId ? { upToMessageId } : {}),
+        ...store,
       });
       return { thread: { id: result.sessionId, turns: [] } };
     }

@@ -43,6 +43,7 @@ export class TestAgentProvider implements AgentProvider {
       return {
         importSessions: true,
         fork: true,
+        forkFromTurn: true,
         rewind: ["conversation"],
         steer: true,
         steerAttachments: TestAgentProvider.steerAttachments,

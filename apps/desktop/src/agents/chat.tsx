@@ -2,11 +2,20 @@ import { PendingInput } from "./pending-input";
 import { AgentAccountPrompt } from "./account-prompt";
 import { AgentLimitPrompt } from "./limit-prompt";
 import { completedTurnFooters } from "./duration";
+import { canFork, forkReplies, useForkChat } from "./fork";
 import { AgentComposer } from "./composer";
 import { TimelineItem } from "./timeline-item";
 import { useViewedAgent } from "@/notifications/context";
 import { CompactLayoutContext, PaneVisibilityContext } from "@/components/compact-layout";
-import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { ArrowDown, Bot, LoaderCircle } from "lucide-react";
 import type {
   AgentOperation,
@@ -230,6 +239,11 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
     conversation.items,
   );
   const footers = useMemo(() => completedTurnFooters(conversation.items), [conversation.items]);
+  const replies = useMemo(() => forkReplies(conversation.items), [conversation.items]);
+  const latestReply = conversation.hasNewer
+    ? undefined
+    : conversation.items.findLast((item) => item.kind === "assistant")?.id;
+  const forkChat = useForkChat();
   const view = useMemo(
     () => timelineView(conversation.items, footers.hidden),
     [conversation.items, footers.hidden],
@@ -283,6 +297,14 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
       setBusy(false);
     }
   };
+  // Stable across renders so memoized timeline rows only change when forking does.
+  const forkAction = useRef<(turnId: string) => void>(() => undefined);
+  useLayoutEffect(() => {
+    forkAction.current = (turnId) => {
+      if (agent) void run(() => forkChat(agent, turnId));
+    };
+  });
+  const forkFrom = useCallback((turnId: string) => forkAction.current(turnId), []);
   const interrupt = () => {
     if (agent?.turnId)
       void run(() => perform({ kind: "interrupt", sessionId, turnId: agent.turnId ?? "" }));
@@ -406,6 +428,15 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
                       item={item}
                       workedFor={footers.durations.get(item.id)}
                       live={!!active && item.turnId === agent.turnId}
+                      onFork={
+                        connected &&
+                        !busy &&
+                        canFork(agent) &&
+                        replies.has(item.id) &&
+                        (agent.controls?.forkFromTurn || item.id === latestReply)
+                          ? forkFrom
+                          : undefined
+                      }
                     />
                   </div>
                 ))}

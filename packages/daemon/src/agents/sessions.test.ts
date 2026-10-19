@@ -1180,6 +1180,38 @@ it("steers a message with attachments into the running turn, directly or from th
   expect(providers[0]!.requests.filter((r) => r.method === "turn/start")).toHaveLength(1);
 });
 
+it("forks from an earlier turn by cutting the copy before the next prompt", async () => {
+  const { a, id } = await setup();
+  await action(a, { kind: "send", sessionId: id, text: "first prompt" });
+  await expect.poll(() => a.agents[0]?.status).toBe("done");
+  await action(a, { kind: "send", sessionId: id, text: "second prompt" });
+  await expect.poll(() => a.agents[0]?.status).toBe("done");
+  const read = await action(a, { kind: "read", sessionId: id });
+  if (read.outcome.status !== "ok") throw new Error("read failed");
+  const turn = (text: string) =>
+    read.outcome.status === "ok"
+      ? read.outcome.conversation.items.find((i) => i.text === text)!.turnId
+      : "";
+  const fork = (turnId: string) =>
+    action(a, {
+      kind: "fork-session",
+      sessionId: id,
+      turnId,
+      expectedRevision: a.agents.find((agent) => agent.id === id)!.revision,
+    });
+  expect((await fork(turn("first prompt"))).outcome.status).toBe("ok");
+  await expect.poll(() => a.agents.filter((agent) => agent.status === "idle").length).toBe(1);
+  expect((await fork(turn("second prompt"))).outcome.status).toBe("ok");
+  await expect.poll(() => a.agents.filter((agent) => agent.status === "idle").length).toBe(2);
+  const forks = providers[0]!.requests.filter((r) => r.method === "session/fork");
+  expect(forks[0]?.params).toMatchObject({
+    before: { nativeTurnId: turn("second prompt"), numTurns: 1 },
+  });
+  // Forking from the latest turn copies the whole chat.
+  expect(forks[1]?.params).not.toHaveProperty("before");
+  expect((await fork("missing-turn")).outcome).toMatchObject({ status: "error" });
+});
+
 it("holds the source session steady while a native fork is in flight", async () => {
   const { a, b, id } = await setup();
   const provider = providers[0]!;
