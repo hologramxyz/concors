@@ -187,6 +187,10 @@ export function AgentComposer({
     (file): file is UploadAttachment => isUpload(file) && !!file.error,
   );
   const active = ["starting", "working", "needs_input"].includes(agent.status);
+  // A message sent while its attachments upload waits for them. Its text is locked meanwhile, so
+  // what goes is what was sent; removing a slow file still sends the rest sooner. "Don't send yet"
+  // (or Escape) unlocks it.
+  const [deferred, setDeferred] = useState<{ alternate: boolean } | null>(null);
   /**
    * Whether a follow-up can go into the running turn now, as the Codex app's Steer does. One with
    * attachments can when the agent takes them mid-turn (Codex, Claude Code); elsewhere it queues.
@@ -231,6 +235,7 @@ export function AgentComposer({
     !uncertain &&
     !attaching &&
     !configuring &&
+    !deferred &&
     !!agent.threadId &&
     draft.length < 16000;
   const startDictation = () => {
@@ -402,9 +407,6 @@ export function AgentComposer({
       void submit(attempt.draft, queue.includes(attempt.draft));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connected]);
-  // A message sent while its attachments upload waits for them; what is in the composer once they
-  // finish is what goes, as typed by then.
-  const [deferred, setDeferred] = useState<{ alternate: boolean } | null>(null);
   /**
    * Sends a message the way the Follow-ups setting says, or the other way when `alternate`
    * (⌘/Ctrl+Enter): into the running turn, or onto the queue. Messages that cannot steer queue.
@@ -627,7 +629,14 @@ export function AgentComposer({
   const controlsDisabled = !advanced || !connected || busy || configuring;
   // Same conditions as the attach button; while they fail, the window refuses the drop.
   const canDrop =
-    !!advanced && connected && !busy && !attaching && !uncertain && !dictation.active && !native;
+    !!advanced &&
+    connected &&
+    !busy &&
+    !attaching &&
+    !uncertain &&
+    !deferred &&
+    !dictation.active &&
+    !native;
   // dragenter and dragleave fire for every child the pointer crosses, so count them.
   const dragDepth = useRef(0);
   const [dropping, setDropping] = useState(false);
@@ -638,7 +647,7 @@ export function AgentComposer({
       draft,
       editAck,
       expanded,
-      editable: connected && !busy && !uncertain && !!agent.threadId,
+      editable: connected && !busy && !uncertain && !deferred && !!agent.threadId,
       placeholder: active
         ? followUps === "steer" && canSteer("steer", 0)
           ? "Steer the current turn…"
@@ -1243,18 +1252,29 @@ export function AgentComposer({
                 enterKeyHint={compact ? "enter" : "send"}
                 maxLength={16000}
                 disabled={!connected || busy || uncertain || !agent.threadId}
+                // Read-only, not disabled, so focus stays here for Escape and for typing after.
+                readOnly={!!deferred}
                 onChange={(e) => {
                   setDraft(e.target.value);
                   setSlashActive(0);
                   dictation.dismissError();
                 }}
                 onPaste={(e) => {
+                  if (deferred) return;
                   if (e.clipboardData.files.length) {
                     e.preventDefault();
                     void addFiles(e.clipboardData.files);
                   } else if (!e.clipboardData.types.length) void pasteNativeImage();
                 }}
                 onKeyDown={(e) => {
+                  if (deferred) {
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setDeferred(null);
+                    } else if (e.key === "Enter") e.preventDefault();
+                    return;
+                  }
                   const command = slashCommands[slashIndex];
                   if (command && !e.nativeEvent.isComposing) {
                     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
@@ -1312,7 +1332,7 @@ export function AgentComposer({
                     if (!uncertain) void followUp(undefined, !compact && (e.metaKey || e.ctrlKey));
                   }
                 }}
-                className={`agent-composer-input ${compact ? "max-h-48" : "max-h-[min(40cqh,26rem)]"} min-h-16 w-full resize-none bg-transparent px-3 py-3 outline-none disabled:opacity-50`}
+                className={`agent-composer-input ${compact ? "max-h-48" : "max-h-[min(40cqh,26rem)]"} min-h-16 w-full resize-none bg-transparent px-3 py-3 outline-none read-only:opacity-50 disabled:opacity-50`}
               />
               <div
                 className={`flex items-center gap-1 px-1 ${compact ? "mobile-composer-toolbar" : "agent-composer-toolbar"}`}
@@ -1339,7 +1359,9 @@ export function AgentComposer({
                     type="button"
                     aria-label="Attach files"
                     className="agent-control mobile-composer-attach"
-                    disabled={!advanced || !connected || busy || attaching || uncertain}
+                    disabled={
+                      !advanced || !connected || busy || attaching || uncertain || !!deferred
+                    }
                     onClick={() => picker.current?.click()}
                   >
                     <Plus className="size-4" />

@@ -65,8 +65,25 @@ test("attaches more than three files, and files over 1 MB, uploading each before
     // Sending waits for the uploads instead of refusing; until then the message stays put.
     await composer.fill("Read all of these");
     await composer.press("Enter");
-    await expect(page.getByRole("status").filter({ hasText: "Sending once" })).toBeVisible();
+    const waiting = page.getByRole("status").filter({ hasText: "Sending once" });
+    await expect(waiting).toBeVisible();
     await expect(composer).toHaveValue("Read all of these");
+    // The waiting message is locked: no typing into it, no more files.
+    await expect(composer).not.toBeEditable();
+    await composer.press("End");
+    await composer.pressSequentially(" and more");
+    await expect(composer).toHaveValue("Read all of these");
+    await expect(page.getByRole("button", { name: "Attach files", exact: true })).toBeDisabled();
+    // Not sending yet unlocks it, as Escape does.
+    await page.getByRole("button", { name: "Don’t send yet" }).click();
+    await expect(waiting).toHaveCount(0);
+    await expect(composer).toBeEditable();
+    await composer.press("Enter");
+    await expect(waiting).toBeVisible();
+    await composer.press("Escape");
+    await expect(composer).toBeEditable();
+    await composer.press("Enter");
+    await expect(waiting).toBeVisible();
 
     // A file removed while it uploads is gone from the message, and its upload stops.
     await page.getByRole("button", { name: "Remove drop.bin", exact: true }).click();
