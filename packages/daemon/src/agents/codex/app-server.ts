@@ -170,7 +170,15 @@ export class CodexAppServer {
           nextCursor: response.nextCursor ?? null,
         };
       });
-    if (method === "session/fork") return this.rpc("thread/fork", params);
+    if (method === "session/fork") {
+      const { before, ...fork } = params as { before?: { numTurns: number } };
+      return this.rpc("thread/fork", fork).then(async (raw) => {
+        if (!before) return raw;
+        const threadId = z.object({ thread: z.object({ id: z.string() }) }).parse(raw).thread.id;
+        await this.rpc("thread/rollback", { threadId, numTurns: before.numTurns });
+        return raw;
+      });
+    }
     if (method === "session/rewind") {
       const p = params as { threadId: string; numTurns: number };
       return this.rpc("thread/rollback", { threadId: p.threadId, numTurns: p.numTurns });
@@ -193,6 +201,7 @@ export class CodexAppServer {
           childHistory: true,
           importSessions: true,
           fork: true,
+          forkFromTurn: true,
           rewind: ["conversation"],
           steer: true,
           steerAttachments: true,

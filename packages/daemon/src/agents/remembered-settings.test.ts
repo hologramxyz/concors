@@ -85,6 +85,7 @@ it("drops remembered choices the provider no longer offers", () => {
           steerAttachments: false,
           rewind: [],
           fork: false,
+          forkFromTurn: false,
           childHistory: false,
           importSessions: false,
           history: false,

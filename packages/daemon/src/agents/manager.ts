@@ -1192,6 +1192,8 @@ export class AgentManager {
             ["starting", "working", "needs_input"].includes(previous.status))
         )
           throw new Error("Wait for this agent to finish before forking its session.");
+        const before =
+          op.kind === "fork-session" && op.turnId ? this.forkCut(previous, op.turnId) : null;
         if (op.kind === "import-session" && !previous.controls?.importSessions)
           throw new Error("Native session import is not available for this agent.");
         if (
@@ -1236,6 +1238,7 @@ export class AgentManager {
               await provider.request("session/fork", {
                 threadId: previous.threadId,
                 cwd: previous.directory,
+                ...(before ? { before } : {}),
               }),
             );
             this.update(next.id, { threadId: response.thread.id });
@@ -1892,6 +1895,21 @@ export class AgentManager {
       .then(() => this.update(reserved.id, { status: "idle" }))
       .catch((error) => this.fail(reserved.id, error));
     return this.result(request, reserved.id);
+  }
+  /** The first prompt a fork ending with `turnId` leaves out, or null when it keeps every turn. */
+  private forkCut(info: AgentInfo, turnId: string) {
+    const end = this.#store.agentTurnItems(info.id, turnId).at(-1)?.position;
+    if (end === undefined) throw new Error("That turn is no longer available.");
+    const dropped = this.#store
+      .agentPrompts(info.id)
+      .filter((i) => !i.id.startsWith("steer:") && i.position > end);
+    const [next] = dropped;
+    if (!next) return null;
+    if (!info.controls?.forkFromTurn) throw new Error("This agent can only fork the whole chat.");
+    return {
+      nativeTurnId: this.#store.nativeTurnId(info.id, next.turnId),
+      numTurns: dropped.length,
+    };
   }
   private result(request: AgentRequest, id: string, before?: number, after?: number): AgentResult {
     return {

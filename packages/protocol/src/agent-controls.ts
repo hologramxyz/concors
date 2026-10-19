@@ -36,6 +36,8 @@ export const AgentControlsSchema = z.object({
   steerAttachments: z.boolean().default(false),
   rewind: z.array(z.enum(["conversation", "files", "both"])).default([]),
   fork: z.boolean().default(false),
+  /** Whether a fork can end at an earlier turn instead of copying the whole chat. */
+  forkFromTurn: z.boolean().default(false),
   childHistory: z.boolean().default(false),
   importSessions: z.boolean().default(false),
   history: z.boolean().default(false),

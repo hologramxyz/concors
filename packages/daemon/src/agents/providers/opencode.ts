@@ -75,6 +75,7 @@ export class OpenCodeProvider extends EventProvider {
       childHistory: true,
       importSessions: true,
       fork: true,
+      forkFromTurn: true,
       rewind: ["both"],
       compact: true,
       contextUsage: true,
@@ -208,7 +209,10 @@ export class OpenCodeProvider extends EventProvider {
     }
     if (method === "session/fork") {
       const fork = object(
-        await this.call(`/session/${encodeURIComponent(this.threadId)}/fork`, {}),
+        await this.call(
+          `/session/${encodeURIComponent(this.threadId)}/fork`,
+          p["before"] ? { messageID: string(object(p["before"])["nativeTurnId"]) } : {},
+        ),
       );
       return { thread: { id: string(fork["id"]), turns: [] } };
     }
