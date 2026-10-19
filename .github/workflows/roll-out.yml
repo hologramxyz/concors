@@ -86,6 +86,27 @@ jobs:
           echo "The control plane still offers ${offered:-nothing}, not $DESKTOP_VERSION" >&2
           exit 1
 
+  # The website's changelog lists each desktop release once it is offered to everyone. concors-web
+  # reads the notes from the release's tag, so only the version is sent, and it ignores a version
+  # no newer than the one it lists last, so rolling back adds nothing.
+  changelog:
+    name: Add to the website changelog
+    needs: roll-out
+    if: inputs.desktop_version != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      CONCORS_WEB_TOKEN: ${{ secrets.CONCORS_WEB_TOKEN }}
+    steps:
+      - name: Send the version to concors-web
+        run: |
+          if [ -z "$CONCORS_WEB_TOKEN" ]; then
+            echo "::warning::CONCORS_WEB_TOKEN is not set, so the website changelog does not list $DESKTOP_VERSION."
+            exit 0
+          fi
+          GH_TOKEN="$CONCORS_WEB_TOKEN" gh api repos/hologramxyz/concors-web/dispatches \
+            -f event_type=desktop-release -f "client_payload[version]=$DESKTOP_VERSION"
+
   # Arch and Omarchy users install concors-bin from the AUR, and their AUR helper updates it when
   # this job pushes a newer PKGBUILD, so it is part of rolling out like the variables above.
   aur:
