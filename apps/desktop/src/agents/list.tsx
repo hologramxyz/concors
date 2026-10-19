@@ -1,4 +1,4 @@
-import { Clock, Ellipsis, Pencil } from "lucide-react";
+import { Clock, Ellipsis, GitFork, Pencil } from "lucide-react";
 import { useSchedules } from "@/schedules/use-schedules";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import {
@@ -23,6 +23,7 @@ import {
   type WorkspaceSnapshot,
 } from "@concors/protocol";
 import { useAgents } from "./context";
+import { canFork, useForkChat } from "./fork";
 export function AgentSidebar({
   onSelect,
   workspace,
@@ -43,6 +44,7 @@ export function AgentSidebar({
   const terminals = useTerminalSessions();
   const visible = visibleAgentSessions(workspace, chats, terminals);
   const names = paneNames(workspace);
+  const forkChat = useForkChat();
   const canRename =
     canEdit &&
     connection?.state.status === "ready" &&
@@ -98,6 +100,15 @@ export function AgentSidebar({
             scheduled={!!schedules?.some((s) => s.enabled && s.sessionId === agent.id)}
             onSelect={onSelect}
             actions={!!onCommand}
+            onFork={(() => {
+              const chat = chats.find((a) => a.id === agent.id);
+              return canEdit && connection?.state.status === "ready" && canFork(chat)
+                ? () =>
+                    void forkChat(chat).catch((error: unknown) =>
+                      console.error("Could not fork the chat", error),
+                    )
+                : undefined;
+            })()}
             onRename={
               target && onCommand
                 ? (value) => {
@@ -132,6 +143,7 @@ function AgentRow({
   onSelect,
   actions,
   onRename,
+  onFork,
 }: {
   agent: AgentStatus & { name: string };
   compact: boolean;
@@ -141,6 +153,8 @@ function AgentRow({
   actions: boolean;
   /** Absent when this agent cannot be renamed right now; the menu item is then disabled. */
   onRename: ((name: string) => void) | undefined;
+  /** Absent for terminals, and for a chat that cannot be forked right now. */
+  onFork: (() => void) | undefined;
 }) {
   const mobile = useContext(CompactLayoutContext);
   const { status, unread } = agent;
@@ -254,6 +268,11 @@ function AgentRow({
             <DropdownMenuItem disabled={!onRename} onSelect={() => setRename(agent.name)}>
               <Pencil /> Rename agent
             </DropdownMenuItem>
+            {onFork && (
+              <DropdownMenuItem onSelect={onFork}>
+                <GitFork /> Fork chat
+              </DropdownMenuItem>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       )}

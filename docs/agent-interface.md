@@ -47,7 +47,10 @@ Source provenance, adaptation notes, and license locations are recorded in
 - **Import session**, **Fork session**, **Rewind**, **Steer current turn**, and
   **MCP servers** appear only where the adapter exposes them. Rewind states
   whether it changes conversation history, checkpointed files, or both. Forks
-  and imports open a separate chat; they send no prompt.
+  and imports open a separate chat; they send no prompt. **Fork chat** in the
+  agents sidebar copies a whole chat; **Fork from here** on a turn's last reply
+  keeps only the turns up to it (Claude Code, Codex and OpenCode; other agents
+  offer it on the latest reply only).
 - Enter sends; Shift+Enter adds a line. While working, Enter queues a follow-up
   on the daemon. Up to 20 queued messages can continue after all clients close.
   Stop, failure, and a daemon restart pause delivery until explicitly resumed.

@@ -30,6 +30,7 @@ readline.createInterface({input:process.stdin}).on('line', line => {
       break;
     }
     case 'thread/start': case 'thread/resume': case 'thread/fork': case 'turn/steer':send({id:frame.id,result:frame.params});break;
+    case 'thread/rollback':send({method:'rolledBack',params:frame.params});send({id:frame.id,result:{}});break;
     case 'echo':setTimeout(()=>send({id:frame.id,result:frame.params}),frame.params.delay || 0);break;
     case 'notify': {
       const data=Buffer.from(JSON.stringify({method:'item/agentMessage/delta',params:{delta:'hello 🌍'}})+'\\n');
@@ -81,6 +82,19 @@ it("gives every Codex thread Concors's instructions alongside its MCP servers", 
       cwd: "/repo",
       developerInstructions: AGENT_INSTRUCTIONS,
     });
+});
+it("forks from an earlier turn by rolling back only the new thread", async () => {
+  const client = open();
+  await client.initialize();
+  const events: unknown[] = [];
+  client.onNotification((_method, params) => events.push(params));
+  const fork = await client.request("session/fork", {
+    threadId: "source",
+    thread: { id: "copy" },
+    before: { nativeTurnId: "turn-3", numTurns: 2 },
+  });
+  expect(fork).not.toHaveProperty("before");
+  await expect.poll(() => events).toContainEqual({ threadId: "copy", numTurns: 2 });
 });
 it("steers a turn with the same input items a turn starts with, images included", async () => {
   const client = open();

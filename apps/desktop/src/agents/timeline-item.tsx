@@ -4,7 +4,7 @@ import { FileLinkContext } from "@/files/context";
 import { formatDuration } from "./duration";
 import { extractToolCallFilePath } from "./paseo/extract-tool-call-file-path";
 import { useState } from "react";
-import { ChevronRight, FileCode, Terminal, Wrench, XCircle } from "lucide-react";
+import { ChevronRight, FileCode, GitFork, Terminal, Wrench, XCircle } from "lucide-react";
 import { AgentMarkdown, CopyButton } from "./markdown";
 import { PlanProgress } from "./plan-progress";
 import { SubAgentCard } from "./sub-agent-card";
@@ -23,11 +23,14 @@ export const TimelineItem = memo(function TimelineItem({
   item,
   workedFor,
   live,
+  onFork,
 }: {
   item: AgentItem;
   workedFor?: string | undefined;
   /** Whether the item's turn is still in progress; a finished turn has nothing left running. */
   live: boolean;
+  /** Set on a turn's last reply when the chat can be forked from there. */
+  onFork?: ((turnId: string) => void) | undefined;
 }) {
   const openFile = useContext(FileLinkContext);
   const [open, setOpen] = useState(false);
@@ -51,6 +54,17 @@ export const TimelineItem = memo(function TimelineItem({
         {item.kind === "assistant" && !running && (
           <div className="mt-2 flex items-center gap-2">
             <CopyButton text={item.text} />
+            {onFork && (
+              <button
+                type="button"
+                aria-label="Fork from here"
+                title="Fork from here"
+                className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                onClick={() => onFork(item.turnId)}
+              >
+                <GitFork className="size-3.5" />
+              </button>
+            )}
             {workedFor && (
               <span className="text-xs text-muted-foreground">Worked for {workedFor}</span>
             )}
