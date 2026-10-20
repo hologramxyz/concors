@@ -28,7 +28,10 @@ export async function requestNotificationAccess(): Promise<NotificationAccess> {
 export async function openNotificationSettings(): Promise<void> {
   await openNativeNotificationSettings();
 }
-export async function desktopNotice(notice: Notice, onClick: () => void): Promise<() => void> {
+export async function desktopNotice(
+  notice: Pick<Notice, "id" | "title" | "body">,
+  onClick: () => void,
+): Promise<() => void> {
   if (isTauri()) {
     listening ??= onNativeNotificationClick((token) => clicks.get(token)?.());
     await listening;

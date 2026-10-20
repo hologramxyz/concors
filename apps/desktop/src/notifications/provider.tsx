@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { ChevronRight } from "lucide-react";
 import type { DaemonConnection } from "@concors/daemon-client";
+import type { ProjectIcon } from "@concors/protocol";
 import { NotificationContext } from "./context";
 import { AttentionEngine, type Notice } from "./engine";
 import { claimNotification, getNotificationPreferences } from "./preferences";
@@ -9,7 +11,9 @@ import { isTauri } from "@/tauri";
 import { Button } from "@/components/ui/button";
 import { playAgentSound, unlockAudio } from "./sound";
 import { terminalAgentSound } from "./terminal";
-import { paneNames } from "@/agents/visible-sessions";
+import { agentPane, paneNames } from "@/agents/visible-sessions";
+import { ProjectImage } from "@/workspace/project-image";
+import { projectIconKey, projectIcons } from "@/workspace/project-icons";
 
 export function NotificationProvider({
   connection,
@@ -139,13 +143,20 @@ export function NotificationProvider({
       if (event.type === "agent.item") return;
       const agents = event.type === "agent.list" ? event.agents : [event.agent];
       const names = paneNames(connection.workspace);
-      for (const agent of agents)
+      for (const agent of agents) {
+        const pane = agentPane(connection.workspace, agent.id);
         engine.observe(
           // Notifications name an agent the way its renamed pane and the sidebar do.
           { ...agent, name: names.get(agent.id) ?? agent.name },
           live,
-          connection.workspace?.projects.find((p) => p.id === agent.projectId)?.name ?? "",
+          {
+            projectId: agent.projectId,
+            workspace:
+              connection.workspace?.projects.find((p) => p.id === agent.projectId)?.name ?? "",
+            tab: pane?.tab.name ?? "",
+          },
         );
+      }
       seen();
     });
     const offWorkspace = connection.subscribeWorkspace(() => {
@@ -235,12 +246,39 @@ export function NotificationProvider({
                 dismiss.current(notice.sessionId);
               }}
             >
-              <span className="block text-sm font-medium">{notice.title}</span>
+              {notice.place.workspace && (
+                <span
+                  data-notice-place
+                  className="mb-1.5 flex min-w-0 items-center gap-1.5 text-xs"
+                  title={[notice.place.workspace, notice.place.tab].filter(Boolean).join(" › ")}
+                >
+                  <NoticeWorkspaceIcon connection={connection} notice={notice} />
+                  <span className="truncate font-semibold text-foreground">
+                    {notice.place.workspace}
+                  </span>
+                  {notice.place.tab && (
+                    <>
+                      <ChevronRight
+                        aria-hidden="true"
+                        className="size-3 shrink-0 text-muted-foreground"
+                      />
+                      <span className="truncate text-muted-foreground">{notice.place.tab}</span>
+                    </>
+                  )}
+                </span>
+              )}
+              <span className="flex items-center gap-1.5 text-sm font-medium">
+                <span
+                  aria-hidden="true"
+                  className={`size-2 shrink-0 rounded-full ${notice.kind === "done" ? "bg-emerald-500" : "bg-amber-500"}`}
+                />
+                {notice.kind === "done" ? "Agent finished" : "Agent needs input"}
+              </span>
               <span
-                className="line-clamp-3 text-xs break-words text-muted-foreground"
-                title={notice.body}
+                className="line-clamp-2 text-xs break-words text-muted-foreground"
+                title={notice.agent}
               >
-                {notice.body}
+                {notice.agent}
               </span>
               <span className="mt-1 block text-xs text-primary">Open conversation</span>
             </button>
@@ -276,3 +314,33 @@ export function NotificationProvider({
     </NotificationContext>
   );
 }
+
+/** The workspace's own icon, so cards from different workspaces look different at a glance. */
+function NoticeWorkspaceIcon({
+  connection,
+  notice,
+}: {
+  connection: DaemonConnection | null;
+  notice: Notice;
+}) {
+  const cache = connection ? projectIcons(connection) : null;
+  const icons = useSyncExternalStore(
+    cache?.subscribe ?? noSubscription,
+    cache?.getSnapshot ?? noIcons,
+  );
+  const workspace = connection?.workspace;
+  const project = workspace?.projects.find((p) => p.id === notice.place.projectId);
+  const icon =
+    project && workspace ? icons.get(projectIconKey(workspace.epoch, project)) : undefined;
+  return (
+    <ProjectImage
+      source={icon?.source ?? null}
+      isGit={icon?.isGit ?? false}
+      name={notice.place.workspace}
+      size={16}
+    />
+  );
+}
+const empty = new Map<string, ProjectIcon>();
+const noIcons = () => empty;
+const noSubscription = () => () => undefined;

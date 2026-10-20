@@ -171,8 +171,6 @@ export function NotificationSettings({
                   const close = await desktopNotice(
                     {
                       id: crypto.randomUUID(),
-                      sessionId: "test",
-                      kind: "done",
                       title: "Concors notifications are ready",
                       body: "You’ll be notified when an agent needs your attention.",
                     },
