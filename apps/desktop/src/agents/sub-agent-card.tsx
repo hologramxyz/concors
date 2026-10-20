@@ -24,9 +24,18 @@ function useElapsed(since: string, running: boolean) {
  * it works, the step it is on shows underneath; opening the row lists the steps it took and what
  * it reported back.
  */
-export function SubAgentCard({ item, running }: { item: AgentItem; running: boolean }) {
+export function SubAgentCard({
+  item,
+  running: turnRunning,
+}: {
+  item: AgentItem;
+  /** Whether it runs as part of a turn still in progress. */
+  running: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const data = item.presentation;
+  // One sent to the background outlives its turn, and is live until it reports its own end.
+  const running = turnRunning || (!!data?.background && item.status === "running");
   const steps = data?.activity ?? [];
   const children = data?.children ?? [];
   const failed = item.status === "failed";

@@ -72,3 +72,46 @@ test("a sub-agent's conversation opens beside its chat, read-only, and follows i
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("a sub-agent sent to the background stays live after its turn ends, until it reports back", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  const directory = await mkdtemp(join(tmpdir(), "concors-background-sub-agent-"));
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Background sub-agents", directory);
+    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
+    const composer = page.getByRole("textbox", { name: "Message Codex" });
+    await expect(composer).toBeEnabled();
+    await composer.fill("background");
+    await page.getByRole("button", { name: "Send message", exact: true }).click();
+
+    // The turn that started it is over, yet the sub-agent is still working.
+    await expect(page.getByText(/^Worked for /)).toBeVisible();
+    const row = page.getByLabel("Sub-agent activity");
+    await expect(row).toHaveAttribute("aria-busy", "true");
+    await expect(row).toHaveAttribute("data-tool-status", "running");
+    // Its steps keep arriving after the turn ended.
+    await expect(row.locator("[data-sub-agent-current]")).toContainText("pnpm test --coverage");
+    await row.getByRole("button", { name: "Open agent conversation", exact: true }).click();
+    const panel = page.getByRole("complementary", { name: "Sub-agent conversation" });
+    await expect(panel.getByRole("status").filter({ hasText: "Working" }).first()).toBeVisible();
+
+    // It finishes on its own and reports back.
+    await expect(row).toHaveAttribute("data-tool-status", "completed", { timeout: 10_000 });
+    await expect(row).toHaveAttribute("aria-busy", "false");
+    await expect(panel.getByRole("status").filter({ hasText: "Working" })).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await row.getByRole("button", { expanded: false }).click();
+    await expect(row).toContainText("Coverage is 82%.");
+    expect(errors).toEqual([]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

@@ -117,6 +117,8 @@ interface Runtime {
   closed: boolean;
   cancelledTurn: string | null;
   reloadWhenIdle: boolean;
+  /** Sub-agent rows still working in the background, by item id; the CLI must stay up for them. */
+  background: Set<string>;
 }
 
 /** Whether a resume failed only because the provider never saved the thread. */
@@ -232,6 +234,8 @@ export class AgentManager {
           updatedAt: new Date().toISOString(),
         });
       }
+    for (const item of store.runningBackgroundItems())
+      store.saveAgentItem({ ...item, status: "interrupted" });
     queueMicrotask(() => {
       if (!this.#closed)
         for (const info of store.agents())
@@ -338,7 +342,11 @@ export class AgentManager {
     this.#store.saveAgent(next);
     this.#emit({ type: "agent.state", agent: next });
     const runtime = this.#runtimes.get(id);
-    if (runtime?.reloadWhenIdle && !["starting", "working", "needs_input"].includes(next.status)) {
+    if (
+      runtime?.reloadWhenIdle &&
+      !runtime.background.size &&
+      !["starting", "working", "needs_input"].includes(next.status)
+    ) {
       runtime.closed = true;
       this.#runtimes.delete(id);
       void runtime.provider.close().catch(() => undefined);
@@ -398,6 +406,11 @@ export class AgentManager {
     const runtime = this.#runtimes.get(id);
     if (runtime) {
       runtime.closed = true;
+      for (const itemId of runtime.background) {
+        const item = this.#store.agentItem(id, itemId);
+        if (item?.status === "running")
+          this.item(id, item.turnId, { ...item, status: "interrupted" });
+      }
       for (const pending of runtime.pending.values())
         pending.reject(new Error("Agent connection ended"));
       runtime.pending.clear();
@@ -450,8 +463,10 @@ export class AgentManager {
     }
     if (updating) return updating.then(() => this.provider(id));
     if (this.#runtimes.size >= 8) {
-      const idle = [...this.#runtimes].find(([key]) =>
-        ["idle", "done", "failed", "interrupted"].includes(this.#store.agent(key).status),
+      const idle = [...this.#runtimes].find(
+        ([key, runtime]) =>
+          !runtime.background.size &&
+          ["idle", "done", "failed", "interrupted"].includes(this.#store.agent(key).status),
       );
       if (!idle) return Promise.reject(new Error("Up to eight agents can run at once"));
       idle[1].closed = true;
@@ -477,6 +492,7 @@ export class AgentManager {
       closed: false,
       cancelledTurn: null,
       reloadWhenIdle: false,
+      background: new Set(),
     };
     this.#runtimes.set(id, runtime);
     provider.onNotification((method, params) => {
@@ -640,7 +656,10 @@ export class AgentManager {
     const restart: string[] = [];
     for (const current of this.#store.agents()) {
       if (!matches(current)) continue;
-      if (["starting", "working", "needs_input"].includes(current.status)) {
+      if (
+        ["starting", "working", "needs_input"].includes(current.status) ||
+        this.#runtimes.get(current.id)?.background.size
+      ) {
         const runtime = this.#runtimes.get(current.id);
         if (runtime) runtime.reloadWhenIdle = true;
         continue;
@@ -2245,6 +2264,8 @@ export class AgentManager {
         runtime.pending.clear();
       }
       for (const item of this.#store.agentTurnItems(id, turn.id)) {
+        // A sub-agent sent to the background outlives its turn; it reports its own end.
+        if (item.presentation?.background && item.status === "running") continue;
         const status =
           turn.status === "completed"
             ? "completed"
@@ -2302,6 +2323,18 @@ export class AgentManager {
           : {}),
       });
       return;
+    }
+    if (method === "item/started" || method === "item/completed") {
+      const raw = ObjectValue.parse(params["item"]);
+      // A background sub-agent reports into the turn that started it, which may have ended since.
+      if (raw["background"] === true) {
+        const turnId = String(params["turnId"]),
+          itemId = String(raw["id"]);
+        if (turnId !== info.turnId && this.#store.agentItem(id, itemId)?.turnId !== turnId) return;
+        this.lifecycle(id, turnId, raw, method === "item/completed");
+        this.backgroundChanged(id, itemId, method === "item/started");
+        return;
+      }
     }
     if (params["turnId"] !== info.turnId) return;
     if (this.#runtimes.get(id)?.cancelledTurn === params["turnId"]) return;
@@ -2653,11 +2686,31 @@ export class AgentManager {
     });
   }
   /**
+   * Keeps the CLI up while a sub-agent it left in the background works, and lets it go, as any
+   * finished chat, once the last one is done.
+   */
+  private backgroundChanged(id: string, itemId: string, live: boolean): void {
+    const runtime = this.#runtimes.get(id);
+    if (!runtime) return;
+    if (live) {
+      runtime.background.add(itemId);
+      return;
+    }
+    if (!runtime.background.delete(itemId) || runtime.background.size) return;
+    if (["starting", "working", "needs_input"].includes(this.#store.agent(id).status)) return;
+    if (runtime.reloadWhenIdle) {
+      runtime.closed = true;
+      this.#runtimes.delete(id);
+      void runtime.provider.close().catch(() => undefined);
+    } else queueMicrotask(() => this.releaseHidden());
+  }
+  /**
    * Stops the CLI behind every agent that no pane shows any more, once it has nothing left to do.
    * Closing a tab only edits the workspace, so without this each closed chat kept its CLI (often
    * hundreds of MB) running until eight had piled up. The conversation stays saved: reopening it
    * resumes the thread in a fresh process, as after any other eviction. A turn still running, a
-   * pending question or queued messages keep the CLI until they settle.
+   * pending question, queued messages or a sub-agent working in the background keep the CLI until
+   * they settle.
    */
   releaseHidden(snapshot: WorkspaceSnapshot = this.#store.snapshot()): void {
     if (this.#closed || !this.#runtimes.size) return;
@@ -2667,7 +2720,7 @@ export class AgentManager {
         .flatMap((node) => (node.kind === "pane" && node.sessionId ? [node.sessionId] : [])),
     );
     for (const [id, runtime] of this.#runtimes) {
-      if (shown.has(id) || runtime.pending.size) continue;
+      if (shown.has(id) || runtime.pending.size || runtime.background.size) continue;
       if (this.draining.has(id) || this.mutations.has(id)) continue;
       const info = this.#store.agent(id);
       if (["starting", "working", "needs_input"].includes(info.status)) continue;

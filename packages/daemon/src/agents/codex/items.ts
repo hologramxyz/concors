@@ -161,6 +161,7 @@ export function mapCodexItem(
           })),
           ...(text(item["agentType"]) ? { agentType: text(item["agentType"]).slice(0, 100) } : {}),
           ...(activity.length ? { activity } : {}),
+          ...(item["background"] === true ? { background: true } : {}),
         },
       };
     }
