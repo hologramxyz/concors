@@ -4,7 +4,7 @@ import { lstat, mkdir, open, opendir, realpath, rename, unlink } from "node:fs/p
 import { basename, dirname, join, relative, sep } from "node:path";
 import { projectPath, resolveProjectPath } from "./paths.ts";
 import { readProjectIcon } from "./project-icon.ts";
-import { readProjectDownload, readProjectPreview } from "./preview.ts";
+import { readProjectDownload, readProjectPreview, readProjectRange } from "./preview.ts";
 import {
   MAX_DIRECTORY_ENTRIES,
   MAX_FILE_BYTES,
@@ -85,6 +85,17 @@ export class ProjectFiles {
         outcome = {
           status: "downloaded",
           download: await readProjectDownload(file, operation.path),
+        };
+      } else if (operation.kind === "download-range") {
+        outcome = {
+          status: "range",
+          range: await readProjectRange(
+            file,
+            operation.path,
+            operation.offset,
+            operation.length,
+            operation.expected,
+          ),
         };
       } else {
         const previous = this.queues.get(file) ?? Promise.resolve();
