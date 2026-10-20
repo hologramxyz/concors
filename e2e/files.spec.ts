@@ -332,6 +332,17 @@ test("right-clicking an agent's file link offers Concors actions, and Download s
       readFileSync(join(root, "src", "main.ts"), "utf8"),
     );
     await expect(page.getByRole("status").filter({ hasText: "Saved to Downloads" })).toBeVisible();
+    // A file past the 20 MB a single message carries, such as a video, arrives in pieces.
+    const video = Buffer.alloc(25 * 1024 * 1024);
+    for (let i = 0; i < video.length; i += 1024) video[i] = (i / 1024) % 251;
+    writeFileSync(join(root, "src", "main.ts"), video);
+    await expect(page.getByRole("status").filter({ hasText: "Saved to Downloads" })).toHaveCount(0);
+    await link.click({ button: "right" });
+    const large = page.waitForEvent("download");
+    await page.getByRole("menuitem", { name: "Download", exact: true }).click();
+    expect(readFileSync(await (await large).path()).equals(video)).toBe(true);
+    await expect(page.getByRole("status").filter({ hasText: "Saved to Downloads" })).toBeVisible();
+    writeFileSync(join(root, "src", "main.ts"), "export const answer = 42;\n");
     // Open still opens the tab in place.
     await link.click({ button: "right" });
     await page.getByRole("menuitem", { name: "Open file", exact: true }).click();

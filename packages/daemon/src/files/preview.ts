@@ -3,8 +3,10 @@ import { open } from "node:fs/promises";
 import {
   MAX_DOWNLOAD_BYTES,
   MAX_PREVIEW_BYTES,
+  MAX_RANGE_DOWNLOAD_BYTES,
   type FileDownload,
   type FilePreview,
+  type FileRange,
 } from "@concors/protocol";
 
 /**
@@ -26,6 +28,51 @@ export async function readProjectPreview(file: string, path: string): Promise<Fi
 export async function readProjectDownload(file: string, path: string): Promise<FileDownload> {
   const bytes = await readWholeFile(file, MAX_DOWNLOAD_BYTES, "download");
   return { path, data: bytes.toString("base64"), size: bytes.length };
+}
+
+/**
+ * One piece of a regular file, for downloads too large to send whole. `expected` is the file as the
+ * first piece found it; a file that changed since is refused, as the whole-file read refuses one
+ * that changes while it is read.
+ */
+export async function readProjectRange(
+  file: string,
+  path: string,
+  offset: number,
+  length: number,
+  expected?: { size: number; modified: number },
+): Promise<FileRange> {
+  const handle = await open(
+    file,
+    constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0),
+  );
+  try {
+    const stat = await handle.stat();
+    if (!stat.isFile()) throw new Error("Only regular files can be downloaded.");
+    if (stat.size > MAX_RANGE_DOWNLOAD_BYTES)
+      throw new Error(
+        `This file exceeds the ${MAX_RANGE_DOWNLOAD_BYTES / 1024 / 1024 / 1024} GB download limit. Copy it from a terminal.`,
+      );
+    if (expected && (expected.size !== stat.size || expected.modified !== stat.mtimeMs))
+      throw new Error("File changed while downloading. Try again.");
+    if (offset > stat.size) throw new Error("File changed while downloading. Try again.");
+    const buffer = Buffer.alloc(Math.min(length, stat.size - offset));
+    let read = 0;
+    while (read < buffer.length) {
+      const { bytesRead } = await handle.read(buffer, read, buffer.length - read, offset + read);
+      if (!bytesRead) throw new Error("File changed while downloading. Try again.");
+      read += bytesRead;
+    }
+    return {
+      path,
+      offset,
+      data: buffer.toString("base64"),
+      size: stat.size,
+      modified: stat.mtimeMs,
+    };
+  } finally {
+    await handle.close();
+  }
 }
 
 /**

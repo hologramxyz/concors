@@ -143,6 +143,7 @@ describe("WebSocket handshake", () => {
           "project-icons",
           "file-previews",
           "file-downloads",
+          "file-range-downloads",
           "heartbeat",
           "machine-mcp-servers",
           "workspace-pull-requests",

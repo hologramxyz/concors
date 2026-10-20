@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import {
   MAX_DOWNLOAD_BYTES,
+  DOWNLOAD_RANGE_BYTES,
   MAX_FILE_BYTES,
   MAX_PREVIEW_BYTES,
   type FileOperation,
@@ -159,6 +160,43 @@ describe("project files", () => {
     await symlink(join(directory, "secret.txt"), join(root, "secret.txt"));
     expect((await download("secret.txt")).status).toBe("error");
     expect((await download("../secret.txt")).status).toBe("error");
+  });
+  it("downloads a file larger than one message in pieces, refusing one that changes between them", async () => {
+    const range = (path: string, offset: number, expected?: { size: number; modified: number }) =>
+      request({
+        kind: "download-range",
+        projectId,
+        epoch,
+        path,
+        offset,
+        length: DOWNLOAD_RANGE_BYTES,
+        ...(expected ? { expected } : {}),
+      });
+    // Larger than the whole-file limit, which a video easily is.
+    const video = Buffer.alloc(MAX_DOWNLOAD_BYTES + 3 * DOWNLOAD_RANGE_BYTES + 7);
+    for (let i = 0; i < video.length; i += 4096) video[i] = (i / 4096) % 251;
+    await writeFile(join(root, "launch.mp4"), video);
+    const first = await range("launch.mp4", 0);
+    if (first.status !== "range") throw new Error(JSON.stringify(first));
+    expect(first.range.size).toBe(video.length);
+    const expected = { size: first.range.size, modified: first.range.modified };
+    const pieces = [Buffer.from(first.range.data, "base64")];
+    for (let offset = DOWNLOAD_RANGE_BYTES; offset < video.length; offset += DOWNLOAD_RANGE_BYTES) {
+      const next = await range("launch.mp4", offset, expected);
+      if (next.status !== "range") throw new Error(JSON.stringify(next));
+      pieces.push(Buffer.from(next.range.data, "base64"));
+    }
+    expect(Buffer.concat(pieces).equals(video)).toBe(true);
+    // A file rewritten mid-download is refused rather than stitched from two versions.
+    await writeFile(join(root, "launch.mp4"), Buffer.alloc(video.length + 1));
+    expect(await range("launch.mp4", DOWNLOAD_RANGE_BYTES, expected)).toMatchObject({
+      status: "error",
+      message: expect.stringContaining("changed"),
+    });
+    await writeFile(join(directory, "secret.txt"), "outside");
+    await symlink(join(directory, "secret.txt"), join(root, "linked.txt"));
+    expect((await range("linked.txt", 0)).status).toBe("error");
+    expect((await range("../secret.txt", 0)).status).toBe("error");
   });
   it("creates empty files and folders inside existing project directories", async () => {
     expect(

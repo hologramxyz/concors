@@ -1,11 +1,11 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { z } from "zod";
 
-/** A file the UI hands to the person, with its contents as base64 (how attachments travel). */
+/** A file the UI hands to the person: its contents as base64 (how attachments travel) or bytes. */
 export interface FileToSave {
   name: string;
   mime: string;
-  data: string;
+  data: string | Uint8Array;
 }
 
 /** Whether this host can put a file on the person's device; the mobile bundle cannot yet. */
@@ -17,14 +17,19 @@ export const canSaveFiles = true;
  * webview cancels downloads (`src-tauri/src/downloads.rs`); a browser downloads it as usual.
  */
 export async function saveFile(file: FileToSave): Promise<string | null> {
-  const bytes = Uint8Array.from(atob(file.data), (c) => c.charCodeAt(0));
+  const bytes =
+    typeof file.data === "string"
+      ? Uint8Array.from(atob(file.data), (c) => c.charCodeAt(0))
+      : file.data;
   if (isTauri())
     return z.string().parse(
       await invoke("save_download", bytes, {
         headers: { "x-file-name": encodeURIComponent(file.name) },
       }),
     );
-  const url = URL.createObjectURL(new Blob([bytes], { type: file.mime }));
+  const url = URL.createObjectURL(
+    new Blob([bytes as Uint8Array<ArrayBuffer>], { type: file.mime }),
+  );
   const link = document.createElement("a");
   link.href = url;
   link.download = file.name;

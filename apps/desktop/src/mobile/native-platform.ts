@@ -38,7 +38,7 @@ export const canSaveFiles = false;
 export interface FileToSave {
   name: string;
   mime: string;
-  data: string;
+  data: string | Uint8Array;
 }
 export async function saveFile(): Promise<never> {
   throw new Error("Save files from the Concors desktop app.");
