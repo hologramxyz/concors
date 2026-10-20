@@ -161,9 +161,13 @@ export function nativeToolItem(
         result["agentId"],
     );
     const activity = openCodeSteps(details["summary"]);
+    // Claude Code answers a background launch at once, with notes meant for the model only; what
+    // the sub-agent found arrives later, so the launch is not its report.
+    const background = details["status"] === "async_launched";
     return {
       ...base,
       type: "collabAgentToolCall",
+      ...(background ? { background } : {}),
       tool: name,
       agentType: text(args["subagent_type"] ?? args["subagentType"] ?? args["agent"]),
       ...(activity ? { activity } : {}),
@@ -173,7 +177,7 @@ export function nativeToolItem(
         ? {
             [child]: {
               status: failed ? "failed" : done ? "completed" : "running",
-              message: outputText(output) || null,
+              message: (!background && outputText(output)) || null,
             },
           }
         : {},

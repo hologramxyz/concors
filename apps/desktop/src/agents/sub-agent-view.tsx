@@ -27,7 +27,10 @@ export function SubAgentPanel({
   target: SubAgentTarget;
   /** The starting call as the chat has it now, so the panel follows its status. */
   item?: AgentItem | undefined;
-  /** Whether the parent chat's turn is still running; a finished turn has nothing live left. */
+  /**
+   * Whether the parent chat's turn is still running. Once it ends, only a sub-agent sent to the
+   * background can still be working.
+   */
   turnActive: boolean;
   onClose: () => void;
 }) {
@@ -37,7 +40,9 @@ export function SubAgentPanel({
   const log = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
   const child = item.presentation?.children?.find((c) => c.id === target.childId);
-  const running = turnActive && LIVE_SUB_AGENT.includes(child?.status ?? item.status);
+  const running =
+    (turnActive || (!!item.presentation?.background && item.status === "running")) &&
+    LIVE_SUB_AGENT.includes(child?.status ?? item.status);
   const label =
     (item.presentation?.agentType?.trim() || "Sub-agent") +
     (target.index !== undefined ? ` ${target.index + 1}` : "");
