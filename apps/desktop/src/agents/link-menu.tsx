@@ -23,11 +23,14 @@ export function LinkMenu({
   copy: string;
   copyLabel: string;
   /** Saves the linked file to the device; absent where there is nothing to save or nowhere to. */
-  download?: (() => Promise<void>) | undefined;
+  download?: ((onProgress: (fraction: number) => void) => Promise<void>) | undefined;
 }) {
   const [selection, setSelection] = useState("");
   const [status, setStatus] = useState<
-    { kind: "saving" } | { kind: "saved" } | { kind: "error"; message: string } | null
+    | { kind: "saving"; progress: number }
+    | { kind: "saved" }
+    | { kind: "error"; message: string }
+    | null
   >(null);
   useEffect(() => {
     if (!status || status.kind === "saving") return;
@@ -61,8 +64,8 @@ export function LinkMenu({
                 className={item}
                 disabled={status?.kind === "saving"}
                 onSelect={() => {
-                  setStatus({ kind: "saving" });
-                  void download().then(
+                  setStatus({ kind: "saving", progress: 0 });
+                  void download((progress) => setStatus({ kind: "saving", progress })).then(
                     () => setStatus({ kind: "saved" }),
                     (cause: unknown) =>
                       setStatus({
@@ -90,7 +93,10 @@ export function LinkMenu({
           className={`ml-1.5 text-xs ${status.kind === "error" ? "text-destructive" : "text-muted-foreground"}`}
         >
           {status.kind === "saving"
-            ? "Downloading…"
+            ? // A file small enough to arrive in one piece shows no percentage.
+              status.progress > 0 && status.progress < 1
+              ? `Downloading… ${Math.floor(status.progress * 100)}%`
+              : "Downloading…"
             : status.kind === "saved"
               ? "Saved to Downloads"
               : status.message}

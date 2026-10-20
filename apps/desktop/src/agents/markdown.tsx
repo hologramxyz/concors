@@ -13,7 +13,8 @@ import {
 import Markdown, { defaultUrlTransform, type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Check, Copy, ImageOff } from "lucide-react";
-import { FILE_DOWNLOAD_CAPABILITY, type AgentItem } from "@concors/protocol";
+import type { AgentItem } from "@concors/protocol";
+import { downloadProjectFile } from "@/files/download";
 import { copyText } from "@/lib/clipboard";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { openExternal, openPreview } from "@/tauri/open-external";
@@ -155,30 +156,12 @@ function MarkdownLink({ children: content, href, node: _node, ...props }: LinkPr
   const target = open && fileTarget ? fileTarget(href, sourcePath) : null;
   const download =
     target && connection && canSaveFiles
-      ? async () => {
-          if (
-            connection.state.status !== "ready" ||
-            !connection.state.daemon.capabilities?.includes(FILE_DOWNLOAD_CAPABILITY)
-          )
-            throw new Error(
-              connection.state.status === "ready"
-                ? "Update this machine’s Concors service from Machines to download files."
-                : "Reconnect to this machine to download the file.",
-            );
-          const { outcome } = await connection.requestFile(
-            { kind: "download", ...target },
-            crypto.randomUUID(),
-          );
-          if (outcome.status !== "downloaded")
-            throw new Error(
-              "message" in outcome ? outcome.message : "Could not download this file.",
-            );
-          await saveFile({
+      ? async (onProgress: (fraction: number) => void) =>
+          void (await saveFile({
             name: target.path.split("/").pop() || "download",
             mime: "application/octet-stream",
-            data: outcome.download.data,
-          });
-        }
+            data: await downloadProjectFile(connection, target, onProgress),
+          }))
       : undefined;
   return (
     <LinkMenu
