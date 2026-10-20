@@ -10,6 +10,14 @@ export const MAX_PREVIEW_BYTES = 20 * 1024 * 1024;
 /** Any regular file, sent whole as base64 so a link to it can be saved to the person's device. */
 export const FILE_DOWNLOAD_CAPABILITY = "file-downloads";
 export const MAX_DOWNLOAD_BYTES = MAX_PREVIEW_BYTES;
+/**
+ * Larger files, such as videos, read in pieces: one request per piece keeps every frame small and
+ * each request well inside its timeout on a slow link. A piece states the file's size and modified
+ * time, and a later piece of a file that has changed since is refused instead of mixing versions.
+ */
+export const FILE_RANGE_DOWNLOAD_CAPABILITY = "file-range-downloads";
+export const MAX_RANGE_DOWNLOAD_BYTES = 1024 * 1024 * 1024;
+export const DOWNLOAD_RANGE_BYTES = 512 * 1024;
 export const PREVIEW_MIME_TYPES = [
   "application/pdf",
   "image/png",
@@ -42,6 +50,16 @@ export const FileRequestSchema = z.object({
     z.object({ kind: z.literal("read"), ...Target }),
     z.object({ kind: z.literal("preview"), ...Target }),
     z.object({ kind: z.literal("download"), ...Target }),
+    z.object({
+      kind: z.literal("download-range"),
+      ...Target,
+      offset: z.number().int().nonnegative().max(MAX_RANGE_DOWNLOAD_BYTES),
+      length: z.number().int().positive().max(DOWNLOAD_RANGE_BYTES),
+      /** The file as the first piece found it; absent on the first piece. */
+      expected: z
+        .object({ size: z.number().int().nonnegative(), modified: z.number().nonnegative() })
+        .optional(),
+    }),
     z.object({
       kind: z.literal("create"),
       ...Target,
@@ -84,6 +102,18 @@ export const FileDownloadSchema = z.object({
   size: z.number().int().nonnegative(),
 });
 export type FileDownload = z.infer<typeof FileDownloadSchema>;
+export const FileRangeSchema = z.object({
+  path: Path,
+  offset: z.number().int().nonnegative(),
+  data: z
+    .string()
+    .max(Math.ceil(DOWNLOAD_RANGE_BYTES / 3) * 4)
+    .regex(/^[A-Za-z0-9+/]*=*$/),
+  /** The whole file's size and modified time, for the pieces still to come. */
+  size: z.number().int().nonnegative().max(MAX_RANGE_DOWNLOAD_BYTES),
+  modified: z.number().nonnegative(),
+});
+export type FileRange = z.infer<typeof FileRangeSchema>;
 export const FileEntrySchema = z.object({
   name: z.string(),
   path: Path,
@@ -103,6 +133,7 @@ export const FileResultSchema = z.object({
     z.object({ status: z.literal("read"), file: ProjectFileSchema }),
     z.object({ status: z.literal("preview"), preview: FilePreviewSchema }),
     z.object({ status: z.literal("downloaded"), download: FileDownloadSchema }),
+    z.object({ status: z.literal("range"), range: FileRangeSchema }),
     z.object({ status: z.literal("written"), file: ProjectFileSchema }),
     z.object({ status: z.literal("created"), entry: FileEntrySchema }),
     z.object({ status: z.literal("conflict"), message: z.string() }),

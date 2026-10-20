@@ -914,7 +914,13 @@ export class DaemonConnection {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.#fileRequests.delete(requestId);
-        reject(new Error("File request timed out. Reload from disk before retrying a save."));
+        reject(
+          new Error(
+            operation.kind === "write"
+              ? "File request timed out. Reload from disk before retrying a save."
+              : "File request timed out. Try again.",
+          ),
+        );
       }, 10000);
       this.#fileRequests.set(requestId, { resolve, reject, timer });
       try {
