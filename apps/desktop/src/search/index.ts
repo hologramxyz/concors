@@ -1,11 +1,13 @@
 import type { AgentInfo, PaneProfile, WorkspaceProject } from "@concors/protocol";
 import { tabPanes } from "@/workspace/tab-panes";
 import type { SessionPane } from "@/workspace/session-pane";
+import { closedChats } from "@/agents/closed-chats";
 
 export type SearchCategory = "all" | "workspaces" | "tabs" | "commands";
 export interface SearchEntry {
   id: string;
-  kind: "workspace" | "pane";
+  /** A closed chat has no pane to go to; selecting it opens the chat again. */
+  kind: "workspace" | "pane" | "closed-chat";
   title: string;
   detail: string;
   keywords: string;
@@ -28,51 +30,78 @@ export function workspaceEntries(
   agents: readonly AgentInfo[],
 ) {
   const sessions = new Map(agents.map((agent) => [agent.id, agent]));
-  return projects.flatMap((project): SearchEntry[] => [
-    {
-      id: `workspace:${project.id}`,
-      kind: "workspace",
-      title: project.name,
-      detail: project.directory,
-      keywords: "workspace project repository folder",
-      projectId: project.id,
-    },
-    ...project.tabs.flatMap((tab) => {
-      const panes = tabPanes(tab);
-      return panes.map((pane, index): SearchEntry => {
-        const candidate = pane.sessionId ? sessions.get(pane.sessionId) : undefined;
-        const agent = candidate?.projectId === project.id ? candidate : undefined;
-        const label = pane.terminalProfile?.name ?? profileNames[pane.profile];
-        const title = panes.length > 1 ? `${tab.name} · ${index + 1}` : tab.name;
-        const context = [project.name, pane.name ?? agent?.name ?? label];
-        if (agent && agent.name !== (agent.providerLabel ?? agent.provider))
-          context.push(agent.providerLabel ?? agent.provider);
-        return {
-          id: `pane:${project.id}:${tab.id}:${pane.id}`,
-          kind: "pane",
+  return projects
+    .flatMap((project): SearchEntry[] => [
+      {
+        id: `workspace:${project.id}`,
+        kind: "workspace",
+        title: project.name,
+        detail: project.directory,
+        keywords: "workspace project repository folder",
+        projectId: project.id,
+      },
+      ...project.tabs.flatMap((tab) => {
+        const panes = tabPanes(tab);
+        return panes.map((pane, index): SearchEntry => {
+          const candidate = pane.sessionId ? sessions.get(pane.sessionId) : undefined;
+          const agent = candidate?.projectId === project.id ? candidate : undefined;
+          const label = pane.terminalProfile?.name ?? profileNames[pane.profile];
+          const title = panes.length > 1 ? `${tab.name} · ${index + 1}` : tab.name;
+          const context = [project.name, pane.name ?? agent?.name ?? label];
+          if (agent && agent.name !== (agent.providerLabel ?? agent.provider))
+            context.push(agent.providerLabel ?? agent.provider);
+          return {
+            id: `pane:${project.id}:${tab.id}:${pane.id}`,
+            kind: "pane",
+            title,
+            detail: context.join(" · "),
+            keywords: [
+              "tab pane",
+              pane.name,
+              label,
+              pane.directory ?? project.directory,
+              agent?.directory,
+              agent?.provider,
+              agent?.providerLabel,
+              agent?.model,
+            ]
+              .filter(Boolean)
+              .join(" "),
+            projectId: project.id,
+            target: { projectId: project.id, tabId: tab.id, paneId: pane.id },
+            profile: pane.profile,
+            ...(agent ? { agent } : {}),
+          };
+        });
+      }),
+    ])
+    .concat(
+      // Closing a pane keeps its chat, so Search still finds it, after anything that is open.
+      closedChats({ projects: [...projects] }, agents).map(
+        ({ agent, title, projectName }): SearchEntry => ({
+          id: `closed-chat:${agent.id}`,
+          kind: "closed-chat",
           title,
-          detail: context.join(" · "),
+          detail: [projectName, agent.providerLabel ?? agent.provider].join(" · "),
           keywords: [
-            "tab pane",
-            pane.name,
-            label,
-            pane.directory ?? project.directory,
-            agent?.directory,
-            agent?.provider,
-            agent?.providerLabel,
-            agent?.model,
+            "agent chat closed",
+            agent.name,
+            agent.directory,
+            agent.provider,
+            agent.engine,
+            agent.model,
+            agent.tabName,
           ]
             .filter(Boolean)
             .join(" "),
-          projectId: project.id,
-          target: { projectId: project.id, tabId: tab.id, paneId: pane.id },
-          profile: pane.profile,
-          ...(agent ? { agent } : {}),
-        };
-      });
-    }),
-  ]);
+          projectId: agent.projectId,
+          agent,
+        }),
+      ),
+    );
 }
+
+const KIND_ORDER: Record<SearchEntry["kind"], number> = { workspace: 0, pane: 1, "closed-chat": 2 };
 
 function normalize(value: string) {
   return value.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().trim();
@@ -100,8 +129,7 @@ export function searchEntries(
   if (category === "commands") return [];
   return entries
     .filter(
-      (entry) =>
-        category === "all" || entry.kind === (category === "workspaces" ? "workspace" : "pane"),
+      (entry) => category === "all" || (category === "workspaces") === (entry.kind === "workspace"),
     )
     .map((entry) => ({
       entry,
@@ -113,7 +141,7 @@ export function searchEntries(
         b.score - a.score ||
         Number(b.entry.projectId === activeProjectId) -
           Number(a.entry.projectId === activeProjectId) ||
-        Number(a.entry.kind === "pane") - Number(b.entry.kind === "pane") ||
+        KIND_ORDER[a.entry.kind] - KIND_ORDER[b.entry.kind] ||
         a.entry.title.localeCompare(b.entry.title, undefined, { numeric: true }),
     )
     .map(({ entry }) => entry);
