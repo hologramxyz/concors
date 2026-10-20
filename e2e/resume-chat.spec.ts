@@ -59,3 +59,52 @@ test("a closed chat is found by its pane name and reopens with its name, model a
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("a closed chat stays in the sidebar and in Search, and both reopen it", async ({ page }) => {
+  test.setTimeout(60_000);
+  const directory = await mkdtemp(join(tmpdir(), "concors-closed-chat-"));
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Closed chats", directory);
+    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
+    const composer = page.getByRole("textbox", { name: "Message Codex" });
+    await expect(composer).toBeEnabled();
+    await composer.fill("draft the launch notes");
+    await page.getByRole("button", { name: "Send message", exact: true }).click();
+    await expect(page.getByRole("log")).toContainText("Hello from");
+    const pane = page.getByRole("region", { name: "Agent pane", exact: true });
+    await page.getByRole("button", { name: "Close Tab 2 tab", exact: true }).click();
+    await expect(pane).toHaveCount(0);
+
+    const closed = page
+      .getByRole("region", { name: "Agents", exact: true })
+      .getByRole("list", { name: "Recently closed agents", exact: true })
+      .getByRole("button");
+    await expect(closed).toHaveCount(1);
+    await expect(closed).toContainText("draft the launch notes");
+    await closed.click();
+    await expect(page.getByRole("log")).toContainText("draft the launch notes");
+    await expect(closed).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Close Tab 2 tab", exact: true }).click();
+    await expect(pane).toHaveCount(0);
+    await page
+      .getByRole("navigation", { name: "Primary" })
+      .getByRole("button", { name: "Search", exact: true })
+      .click();
+    const search = page.getByRole("dialog", { name: "Search", exact: true });
+    await search.getByRole("combobox").fill("launch notes codex");
+    const result = search.locator('[data-search-result="closed-chat"]');
+    await expect(result).toHaveCount(1);
+    await expect(result).toContainText("Closed chat");
+    await search.getByRole("combobox").press("Enter");
+    await expect(search).toHaveCount(0);
+    await expect(page.getByRole("log")).toContainText("draft the launch notes");
+    await expect(closed).toHaveCount(0);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

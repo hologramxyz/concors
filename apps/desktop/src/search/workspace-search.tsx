@@ -5,7 +5,7 @@ import { CompactLayoutContext } from "@/components/compact-layout";
 import { useCommands } from "@/shortcuts/context";
 import { isCompactCommand } from "@/shortcuts/bindings";
 import { useShortcutLabels } from "@/shortcuts/preferences-context";
-import { useAgents } from "@/agents/context";
+import { AgentStartedContext, useAgents } from "@/agents/context";
 import { ProviderIcon } from "@/agents/provider-icon";
 import { PaneProfileIcon } from "@/workspace/profile-icon";
 import type { SessionPane } from "@/workspace/session-pane";
@@ -116,6 +116,7 @@ function SearchContent({
   const commands = useCommands();
   const shortcutLabel = useShortcutLabels();
   const agents = useAgents();
+  const openAgent = useContext(AgentStartedContext);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<SearchCategory>("all");
   const [limit, setLimit] = useState(30);
@@ -258,7 +259,9 @@ function SearchContent({
                   run(() =>
                     entry.target
                       ? props.onSelectPane(entry.target)
-                      : props.onSelectProject(entry.projectId),
+                      : entry.kind === "closed-chat" && entry.agent && openAgent
+                        ? openAgent(entry.agent.id)
+                        : props.onSelectProject(entry.projectId),
                   )
                 }
                 className="flex-nowrap gap-3"
@@ -285,7 +288,11 @@ function SearchContent({
                   </span>
                 </span>
                 <span className="shrink-0 text-xs text-muted-foreground">
-                  {entry.kind === "workspace" ? "Workspace" : "Tab"}
+                  {entry.kind === "workspace"
+                    ? "Workspace"
+                    : entry.kind === "closed-chat"
+                      ? "Closed chat"
+                      : "Tab"}
                 </span>
               </CommandItem>
             ))}

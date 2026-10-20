@@ -140,3 +140,30 @@ it("does not mutate the index when filtering or ranking", () => {
   searchEntries(entries, "", "all", "other");
   expect(entries).toEqual(before);
 });
+
+it("finds closed chats after open panes, and only under tabs", () => {
+  const closed: AgentInfo = {
+    ...agent,
+    id: "closed",
+    name: "Tune the checkout copy",
+    turnId: "turn",
+    paneName: "Copy pass",
+  };
+  const entries = workspaceEntries([project], [agent, closed]);
+  expect(entries.at(-1)).toMatchObject({
+    id: "closed-chat:closed",
+    kind: "closed-chat",
+    title: "Copy pass",
+    projectId: "p",
+    agent: { id: "closed" },
+  });
+  expect(entries.at(-1)?.target).toBeUndefined();
+  expect(searchEntries(entries, "checkout", "tabs").map((entry) => entry.id)).toEqual([
+    "pane:p:t:chat",
+    "closed-chat:closed",
+  ]);
+  expect(searchEntries(entries, "copy pass", "all")[0]?.id).toBe("closed-chat:closed");
+  expect(searchEntries(entries, "checkout", "workspaces")).toEqual([]);
+  // A chat that never sent a message is not worth coming back to.
+  expect(workspaceEntries([project], [agent, { ...closed, turnId: null }])).toHaveLength(3);
+});

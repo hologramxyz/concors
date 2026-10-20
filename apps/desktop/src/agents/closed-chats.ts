@@ -26,7 +26,7 @@ function resumableEngine(agent: AgentInfo): ResumableEngine | null {
  * a group with a conversation still open is not closed. Chats never sent a message are skipped.
  */
 export function closedChats(
-  workspace: WorkspaceSnapshot | null,
+  workspace: Pick<WorkspaceSnapshot, "projects"> | null,
   agents: readonly AgentInfo[],
 ): ClosedChat[] {
   if (!workspace) return [];
