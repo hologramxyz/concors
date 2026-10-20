@@ -14,6 +14,7 @@ import { CompactLayoutContext } from "@/components/compact-layout";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { agentPane, paneNames, visibleAgentSessions } from "./visible-sessions";
 import { AgentStatusIcon } from "./activity";
+import { closedChats } from "./closed-chats";
 import { chatAgentStatus, terminalAgentStatus, type AgentStatus } from "./agent-status";
 import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
 import { TAB_PROFILES } from "@/workspace/tab-profiles";
@@ -24,6 +25,13 @@ import {
 } from "@concors/protocol";
 import { useAgents } from "./context";
 import { canFork, useForkChat } from "./fork";
+
+/**
+ * Closing a pane keeps its chat, so the newest few stay in reach below the open agents. The rest
+ * are in Search and "Resume a chat"; the sidebar is for what someone is working on now.
+ */
+const RECENTLY_CLOSED = 10;
+
 export function AgentSidebar({
   onSelect,
   workspace,
@@ -60,6 +68,11 @@ export function AgentSidebar({
   const activeChats = chats.filter(
     (agent) => visible.chats.some((a) => a.id === agent.id) || scheduled.has(agent.id),
   );
+  const closed = compact
+    ? []
+    : closedChats(workspace, chats)
+        .filter((chat) => !scheduled.has(chat.agent.id))
+        .slice(0, RECENTLY_CLOSED);
   const agents = [
     ...activeChats.map((agent) => ({
       ...chatAgentStatus(agent),
@@ -81,9 +94,10 @@ export function AgentSidebar({
   ]
     .map((agent) => ({ ...agent, name: names.get(agent.id) ?? agent.defaultName }))
     .toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  if (!agents.length) return compact ? null : <SidebarEmpty>No agents yet.</SidebarEmpty>;
+  if (!agents.length && !closed.length)
+    return compact ? null : <SidebarEmpty>No agents yet.</SidebarEmpty>;
   const list = (
-    <ul className="mt-1 space-y-0.5">
+    <ul className="mt-1 space-y-0.5 empty:hidden">
       {agents.map((agent) => {
         // Agents cannot be renamed themselves; the sidebar names the pane showing the agent, so the
         // pane title and every other list follow (see `paneNames`).
@@ -132,12 +146,41 @@ export function AgentSidebar({
       })}
     </ul>
   );
-  return compact ? <section aria-label="Agents">{list}</section> : list;
+  if (compact) return <section aria-label="Agents">{list}</section>;
+  if (!closed.length) return list;
+  return (
+    <>
+      {list}
+      <p className="mt-3 px-2 text-xs text-muted-foreground">Recently closed</p>
+      <ul aria-label="Recently closed agents" className="mt-1 space-y-0.5">
+        {closed.map((chat) => (
+          <AgentRow
+            key={chat.agent.id}
+            agent={{
+              ...chatAgentStatus(chat.agent),
+              status: "Closed",
+              running: false,
+              name: chat.title,
+            }}
+            compact={false}
+            closed
+            projectName={chat.projectName}
+            scheduled={false}
+            onSelect={onSelect}
+            actions={false}
+            onRename={undefined}
+            onFork={undefined}
+          />
+        ))}
+      </ul>
+    </>
+  );
 }
 
 function AgentRow({
   agent,
   compact,
+  closed = false,
   projectName,
   scheduled,
   onSelect,
@@ -147,6 +190,8 @@ function AgentRow({
 }: {
   agent: AgentStatus & { name: string };
   compact: boolean;
+  /** No pane shows it; selecting it opens it again in a tab of its workspace. */
+  closed?: boolean;
   projectName: string;
   scheduled: boolean;
   onSelect: (id: string) => void;
@@ -215,10 +260,15 @@ function AgentRow({
                 compact ? `Agent status: ${status} · ${agent.name} · ${projectName}` : undefined
               }
               data-agent-id={agent.id}
+              data-agent-closed={closed || undefined}
               onClick={() => onSelect(agent.id)}
             >
               <AgentStatusIcon agent={agent} />
-              {!compact && <span className="min-w-0 flex-1 truncate">{agent.name}</span>}
+              {!compact && (
+                <span className={cn("min-w-0 flex-1 truncate", closed && "text-muted-foreground")}>
+                  {agent.name}
+                </span>
+              )}
               {!compact && scheduled && (
                 <Clock
                   className="size-3.5 shrink-0 text-muted-foreground"

@@ -110,21 +110,28 @@ test("shared chat streams, handles approvals and removes detached sidebar entrie
     await page.getByRole("button", { name: "Pane actions" }).click();
     await page.getByRole("menuitemradio", { name: "Terminal", exact: true }).click();
     await expect(page.locator(".xterm").filter({ visible: true })).toBeVisible();
-    await expect(agentList.getByRole("list").getByRole("button")).toHaveCount(0);
+    // The chat leaves the open agents but stays in reach as recently closed.
+    const open = "button[data-agent-id]:not([data-agent-closed])";
+    const closed = { name: "Recently closed agents", exact: true } as const;
+    await expect(agentList.locator(open)).toHaveCount(0);
+    await expect(agentList.getByRole("list", closed).getByRole("button")).toHaveCount(1);
     const remoteAgents = second.getByRole("region", { name: "Agents", exact: true });
-    await expect(remoteAgents.getByRole("list").getByRole("button")).toHaveCount(0);
+    await expect(remoteAgents.locator(open)).toHaveCount(0);
     await second.reload();
-    await expect(remoteAgents.getByRole("list").getByRole("button")).toHaveCount(0);
+    await expect(remoteAgents.locator(open)).toHaveCount(0);
+    await expect(remoteAgents.getByRole("list", closed).getByRole("button")).toHaveCount(1);
     await page.getByRole("button", { name: "Pane actions" }).click();
     await page.getByRole("menuitemradio", { name: "Agent", exact: true }).click();
     await chooseProvider(page);
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
-    await expect(agentList.locator("button[data-agent-id]")).toHaveCount(1);
+    await expect(agentList.locator(open)).toHaveCount(1);
     await page.getByRole("button", { name: "Close pane", exact: true }).click();
-    await expect(agentList.getByRole("list").getByRole("button")).toHaveCount(0);
-    await expect(remoteAgents.getByRole("list").getByRole("button")).toHaveCount(0);
+    // The new chat never sent a message, so only the first one is kept.
+    await expect(agentList.locator(open)).toHaveCount(0);
+    await expect(agentList.getByRole("list", closed).getByRole("button")).toHaveCount(1);
+    await expect(remoteAgents.locator(open)).toHaveCount(0);
     await second.reload();
-    await expect(remoteAgents.getByRole("list").getByRole("button")).toHaveCount(0);
+    await expect(remoteAgents.locator(open)).toHaveCount(0);
     await page.screenshot({ path: "test-results/chat.png" });
     expect(errors).toEqual([]);
   } finally {
