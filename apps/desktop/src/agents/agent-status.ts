@@ -4,6 +4,7 @@ import {
   type AgentProviderId,
   type LayoutNode,
   type TerminalInfo,
+  type WorkspaceProject,
   type WorkspaceTab,
 } from "@concors/protocol";
 import { AGENT_STATUS, agentDisplayStatus } from "./context";
@@ -105,4 +106,62 @@ export function tabAgentStatuses(
     const session = terminals.find((item) => item.id === pane.sessionId);
     return session && isLiveTerminalAgent(session) ? [terminalAgentStatus(session)] : [];
   });
+}
+
+export interface WorkspaceAttention {
+  /** The most urgent state, which the workspace's badge shows; null when nothing is going on. */
+  kind: "needs_input" | "failed" | "done" | "working" | null;
+  needsInput: number;
+  failed: number;
+  done: number;
+  working: number;
+}
+
+/**
+ * What a workspace's agents want, summed over all its tabs, so someone switching between workspaces
+ * sees where to look. Finished and failed agents count until they are seen, as their tabs' dots do.
+ */
+export function workspaceAttention(
+  project: WorkspaceProject,
+  chats: readonly AgentInfo[],
+  terminals: readonly TerminalInfo[],
+): WorkspaceAttention {
+  const statuses = project.tabs.flatMap((tab) => tabAgentStatuses(tab, chats, terminals));
+  const needsInput = statuses.filter((s) => s.status === AGENT_STATUS.needs_input).length;
+  const failed = statuses.filter((s) => s.unread && s.status === AGENT_STATUS.failed).length;
+  const done = statuses.filter(
+    (s) =>
+      s.unread &&
+      !s.running &&
+      s.status !== AGENT_STATUS.failed &&
+      s.status !== AGENT_STATUS.needs_input,
+  ).length;
+  const working = statuses.filter((s) => s.running).length;
+  return {
+    kind: needsInput
+      ? "needs_input"
+      : failed
+        ? "failed"
+        : done
+          ? "done"
+          : working
+            ? "working"
+            : null,
+    needsInput,
+    failed,
+    done,
+    working,
+  };
+}
+
+/** "1 needs input · 2 done", for a workspace's tooltip. */
+export function workspaceAttentionLabel(attention: WorkspaceAttention): string {
+  return [
+    attention.needsInput && `${attention.needsInput} needs input`,
+    attention.failed && `${attention.failed} failed`,
+    attention.done && `${attention.done} done`,
+    attention.working && `${attention.working} working`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
