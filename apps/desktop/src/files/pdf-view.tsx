@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useZoomAnchor, useZoomGestures } from "./zoom";
 import type { PDFDocumentProxy } from "pdfjs-dist/legacy/build/pdf.mjs";
 
 /**
@@ -14,8 +15,22 @@ async function loadPdfJs() {
 }
 
 /** Keyed by its caller per file version, so a new document starts from a fresh mount. */
-export default function PdfView({ data, name }: { data: Uint8Array; name: string }) {
+export default function PdfView({
+  data,
+  name,
+  zoom,
+  onZoom,
+}: {
+  data: Uint8Array;
+  name: string;
+  /** 1 fits the pages to the tab's width, up to a comfortable reading width. */
+  zoom: number;
+  onZoom: (zoom: number) => void;
+}) {
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
+  const scroller = useRef<HTMLDivElement>(null);
+  useZoomGestures(scroller, zoom, onZoom);
+  useZoomAnchor(scroller, zoom);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -44,36 +59,42 @@ export default function PdfView({ data, name }: { data: Uint8Array; name: string
       void destroy?.();
     };
   }, [data]);
-  if (error)
-    return (
-      <p role="alert" className="p-4 text-sm text-destructive">
-        {error}
-      </p>
-    );
-  if (!pdf)
-    return (
-      <p role="status" className="p-4 text-sm text-muted-foreground">
-        Opening PDF…
-      </p>
-    );
   return (
+    // Always mounted, so the zoom gestures and scroll anchor have their element from the start.
     <div
+      ref={scroller}
       aria-label={`Pages of ${name}`}
-      className="flex h-full flex-col items-center gap-4 overflow-auto bg-muted/40 p-4"
+      // Focusable, so a click into the pages lets the keyboard scroll and zoom them.
+      tabIndex={0}
+      className="flex h-full flex-col gap-4 overflow-auto bg-muted/40 p-4 outline-none"
     >
-      {Array.from({ length: pdf.numPages }, (_, index) => (
-        <PdfPage key={index} pdf={pdf} number={index + 1} />
-      ))}
+      {error ? (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      ) : !pdf ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          Opening PDF…
+        </p>
+      ) : (
+        Array.from({ length: pdf.numPages }, (_, index) => (
+          <PdfPage key={index} pdf={pdf} number={index + 1} zoom={zoom} />
+        ))
+      )}
     </div>
   );
 }
 
-function PdfPage({ pdf, number }: { pdf: PDFDocumentProxy; number: number }) {
+/** Canvas pixels per page at most: a zoomed-in page past this renders softer, not out of memory. */
+const MAX_PAGE_PIXELS = 4096 * 4096;
+
+function PdfPage({ pdf, number, zoom }: { pdf: PDFDocumentProxy; number: number; zoom: number }) {
   const frame = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const [aspect, setAspect] = useState(Math.SQRT2);
   const [width, setWidth] = useState(0);
   const [near, setNear] = useState(number <= 2);
+  const drawn = useRef(false);
   useEffect(() => {
     const element = frame.current;
     if (!element) return;
@@ -112,25 +133,47 @@ function PdfPage({ pdf, number }: { pdf: PDFDocumentProxy; number: number }) {
     if (!near || !width || !target) return;
     let task: { cancel(): void; promise: Promise<void> } | null = null;
     let cancelled = false;
-    void pdf
-      .getPage(number)
-      .then((page) => {
-        if (cancelled) return;
-        const scale = (width / page.getViewport({ scale: 1 }).width) * window.devicePixelRatio;
-        const viewport = page.getViewport({ scale });
-        target.width = Math.floor(viewport.width);
-        target.height = Math.floor(viewport.height);
-        task = page.render({ canvas: target, viewport });
-        return task.promise;
-      })
-      .catch(() => undefined);
+    const render = () =>
+      void pdf
+        .getPage(number)
+        .then((page) => {
+          if (cancelled) return;
+          const natural = page.getViewport({ scale: 1 });
+          const scale = Math.min(
+            (width / natural.width) * window.devicePixelRatio,
+            Math.sqrt(MAX_PAGE_PIXELS / (natural.width * natural.height)),
+          );
+          const viewport = page.getViewport({ scale });
+          // Drawn aside and copied over when done, so a page being redrawn at a new zoom keeps
+          // showing, stretched, instead of going blank.
+          const drawing = document.createElement("canvas");
+          drawing.width = Math.floor(viewport.width);
+          drawing.height = Math.floor(viewport.height);
+          task = page.render({ canvas: drawing, viewport });
+          return task.promise.then(() => {
+            if (cancelled) return;
+            target.width = drawing.width;
+            target.height = drawing.height;
+            target.getContext("2d")?.drawImage(drawing, 0, 0);
+            drawn.current = true;
+          });
+        })
+        .catch(() => undefined);
+    // The first drawing goes straight away; a redraw waits for a pinch or resize to settle.
+    const timer = drawn.current ? setTimeout(render, 150) : (render(), undefined);
     return () => {
       cancelled = true;
+      clearTimeout(timer);
       task?.cancel();
     };
   }, [pdf, number, near, width]);
   return (
-    <div ref={frame} className="w-full max-w-4xl shrink-0">
+    // Auto margins centre a page that fits and let one wider than the tab scroll from its left edge.
+    <div
+      ref={frame}
+      className="mx-auto shrink-0"
+      style={{ width: `calc(min(100%, 56rem) * ${zoom})` }}
+    >
       <canvas
         ref={canvas}
         aria-label={`Page ${number}`}
