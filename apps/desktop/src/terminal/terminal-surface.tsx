@@ -1,6 +1,7 @@
 import { terminalClipboardHandler } from "./clipboard";
 import { readClipboardImage, readClipboardText, writeClipboardText } from "@/tauri";
-import { fileBase64, fitImage } from "@/agents/image-attachment";
+import { ATTACHMENT_LIMIT_BYTES, fileBase64, fitImage } from "@/agents/image-attachment";
+import { carriesFiles } from "@/window/file-drops";
 import { terminalTheme } from "./theme";
 import { useContext, useLayoutEffect, useRef, useState } from "react";
 import { useTabVisible } from "@/workspace/tab-visibility";
@@ -45,6 +46,7 @@ export function TerminalSurface({
   const [session, setSession] = useState<TerminalInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reconnecting, setReconnecting] = useState(false);
+  const [dropping, setDropping] = useState(false);
   const isRecovering = recovering || session?.status === "interrupted";
 
   useLayoutEffect(() => {
@@ -123,6 +125,68 @@ export function TerminalSurface({
       }
       return true;
     };
+    const canDropImages = () =>
+      !disposed &&
+      running &&
+      connection.state.status === "ready" &&
+      !!connection.state.daemon.capabilities?.includes(TERMINAL_IMAGE_PASTE_CAPABILITY);
+    // Dropping images pastes their paths, as dropping a file does in other terminals. The CLI may
+    // run on another machine, so each image is stored there first, as a pasted one is.
+    const dropImages = async (files: File[]) => {
+      terminal.focus();
+      activate();
+      try {
+        const paths: string[] = [];
+        for (const file of files) {
+          const image = await terminalImage(file);
+          const result = await connection.requestTerminal(
+            {
+              kind: "paste-image",
+              sessionId,
+              image: { name: image.name, mime: image.type, data: await fileBase64(image) },
+            },
+            crypto.randomUUID(),
+          );
+          if (result.outcome.status === "error") throw new Error(result.outcome.message);
+          if (result.outcome.path) paths.push(result.outcome.path);
+        }
+        if (!paths.length || disposed || !running) return;
+        if (!owner && !claiming) claim();
+        terminal.paste(paths.join(" "));
+      } catch (cause) {
+        report(cause);
+      }
+    };
+    let dragDepth = 0;
+    const dragOver = (event: DragEvent) => {
+      if (!carriesFiles(event.dataTransfer) || !canDropImages()) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    };
+    const dragEnter = (event: DragEvent) => {
+      if (!carriesFiles(event.dataTransfer) || !canDropImages()) return;
+      if (dragDepth++ === 0) setDropping(true);
+    };
+    const dragLeave = (event: DragEvent) => {
+      if (!carriesFiles(event.dataTransfer) || dragDepth === 0) return;
+      if (--dragDepth === 0) setDropping(false);
+    };
+    const drop = (event: DragEvent) => {
+      dragDepth = 0;
+      setDropping(false);
+      if (!carriesFiles(event.dataTransfer) || !canDropImages()) return;
+      event.preventDefault();
+      const files = Array.from(event.dataTransfer?.files ?? []);
+      const images = files.filter((file) => file.type.startsWith("image/"));
+      if (images.length < files.length)
+        setError("Only images can be dropped into a terminal. Their paths are pasted for the CLI.");
+      else setError(null);
+      if (images.length) void dropImages(images);
+    };
+    element.addEventListener("dragenter", dragEnter);
+    element.addEventListener("dragover", dragOver);
+    element.addEventListener("dragleave", dragLeave);
+    element.addEventListener("drop", drop);
     terminal.attachCustomKeyEventHandler(
       terminalClipboardHandler({
         terminal,
@@ -330,6 +394,10 @@ export function TerminalSurface({
       element.removeEventListener("pointerdown", activate);
       element.removeEventListener("focusin", activate);
       element.removeEventListener("keydown", activate, true);
+      element.removeEventListener("dragenter", dragEnter);
+      element.removeEventListener("dragover", dragOver);
+      element.removeEventListener("dragleave", dragLeave);
+      element.removeEventListener("drop", drop);
       input.dispose();
       unsubscribe();
       unsubscribeWorkspace();
@@ -385,7 +453,15 @@ export function TerminalSurface({
           )}
         </div>
       )}
-      <div className="min-h-0 min-w-0 flex-1 overflow-hidden bg-[var(--terminal-background)] p-2">
+      <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-[var(--terminal-background)] p-2">
+        {dropping && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-2 z-10 flex items-center justify-center rounded-md border-2 border-dashed border-primary bg-background/80 text-sm font-medium text-primary"
+          >
+            Drop images to paste their paths
+          </div>
+        )}
         <div
           ref={host}
           aria-label="Terminal output"
@@ -407,4 +483,23 @@ export function TerminalSurface({
       )}
     </div>
   );
+}
+
+/**
+ * An image as the machine stores it for a terminal: PNG, JPEG, WebP or GIF of 1 MB at most. Other
+ * still images, and larger ones, are redrawn and shrunk to fit; a large GIF cannot keep its frames.
+ */
+async function terminalImage(file: File): Promise<File> {
+  if (/^image\/(png|jpeg|webp|gif)$/.test(file.type) && file.size <= ATTACHMENT_LIMIT_BYTES)
+    return file;
+  if (file.type === "image/gif")
+    throw new Error(`${file.name} is a GIF over 1 MB, too large to paste into a terminal.`);
+  const bitmap = await createImageBitmap(file).catch(() => {
+    throw new Error(`${file.name} could not be read as an image.`);
+  });
+  try {
+    return await fitImage(bitmap, file.name.replace(/\.[^.]+$/, "") || "image");
+  } finally {
+    bitmap.close();
+  }
 }
