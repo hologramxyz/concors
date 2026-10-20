@@ -3,8 +3,18 @@ export interface Notice {
   id: string;
   sessionId: string;
   kind: "done" | "needs_input";
+  /** A desktop notification's title and text, which carry the workspace and tab as plain text. */
   title: string;
   body: string;
+  /** Where the agent is, which the in-app card shows apart from what it says. */
+  place: NoticePlace;
+  agent: string;
+}
+/** The workspace and tab an agent's pane is in; empty when it is not open in one. */
+export interface NoticePlace {
+  projectId: string;
+  workspace: string;
+  tab: string;
 }
 export interface NoticeSink {
   claim: (id: string) => Promise<boolean>;
@@ -24,7 +34,7 @@ export class AttentionEngine {
   constructor(sink: NoticeSink) {
     this.#sink = sink;
   }
-  observe(agent: AgentInfo, live: boolean, projectName: string): void {
+  observe(agent: AgentInfo, live: boolean, place: NoticePlace): void {
     if (this.#disposed) return;
     const previous = this.#known.get(agent.id);
     this.#known.set(agent.id, agent);
@@ -49,12 +59,15 @@ export class AttentionEngine {
     // Initial snapshots update badges, but never replay old sounds or desktop alerts.
     if (!live) return;
     const focused = this.#sink.focused(agent.id);
+    const title = attention.kind === "done" ? "Agent finished" : "Agent needs input";
     const notice: Notice = {
       id: attention.id,
       sessionId: agent.id,
       kind: attention.kind,
-      title: attention.kind === "done" ? "Agent finished" : "Agent needs input",
-      body: projectName ? `${projectName} · ${agent.name}` : agent.name,
+      title: place.workspace ? `${title} in ${place.workspace}` : title,
+      body: place.tab && place.tab !== agent.name ? `${place.tab} · ${agent.name}` : agent.name,
+      place,
+      agent: agent.name,
     };
     if (focused) {
       if (attention.kind === "needs_input")
