@@ -181,8 +181,14 @@ anything, which usually takes from a few hours to a few business days.
 4. Create a **certificate profile** of type _Public Trust_ from the approved identity.
 5. In Microsoft Entra ID → App registrations, register an app (any name, e.g. `concors-release`)
    and create a client secret for it. Note its client ID, the tenant ID and the secret.
-6. On the certificate profile, give that app registration the **Certificate Profile Signer**
-   role. Assigning it to yourself instead is the usual mistake, and fails with 403 at signing.
+6. Give that app registration two roles (Access control (IAM) → Add role assignment):
+   - **Artifact Signing Certificate Profile Signer**, on the Artifact Signing account (it covers
+     the account's profiles). Assigning it to yourself instead is the usual mistake, and fails
+     with 403 at signing.
+   - **Reader**, on the account's resource group. `artifact-signing-cli` starts with
+     `az login --service-principal`, which Azure CLI refuses with "No subscriptions found" for an
+     app that can see no subscription, and the signer role alone grants none. The first signed
+     release failed this way.
 7. In the GitHub repository's settings, add:
 
 | Kind     | Name                                         | Value                                       |
