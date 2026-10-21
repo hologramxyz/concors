@@ -254,6 +254,11 @@ export const AgentInfoSchema = z.object({
   nativeImport: z.boolean().optional(),
   turnId: z.string().nullable(),
   status: z.enum(["idle", "starting", "working", "needs_input", "done", "failed", "interrupted"]),
+  /**
+   * Sub-agents the chat left working in the background. They outlive the turn that started them,
+   * so a chat can be done, and free to take a message, while some still run.
+   */
+  backgroundAgents: z.number().int().min(0).optional(),
   error: z.string().nullable(),
   /**
    * The account behind the chat reached a plan limit during its last turn, so the chat can offer

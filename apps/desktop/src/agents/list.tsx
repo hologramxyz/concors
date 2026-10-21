@@ -1,4 +1,4 @@
-import { Clock, Ellipsis, GitFork, Pencil } from "lucide-react";
+import { Bot, Clock, Ellipsis, GitFork, Pencil } from "lucide-react";
 import { useSchedules } from "@/schedules/use-schedules";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import {
@@ -202,7 +202,10 @@ function AgentRow({
   onFork: (() => void) | undefined;
 }) {
   const mobile = useContext(CompactLayoutContext);
-  const { status, unread } = agent;
+  const { status, unread, background } = agent;
+  const backgroundLabel = background
+    ? `${background} sub-agent${background === 1 ? "" : "s"} running`
+    : "";
   // Mirrors the pane rename: the ref stops blur after Enter/Escape from committing a second time.
   const [renaming, setRenaming] = useState<string | null>(null);
   const renameRef = useRef<string | null>(null);
@@ -257,7 +260,9 @@ function AgentRow({
               type="button"
               className={`flex items-center rounded-md text-ui ${compact ? "sidebar-rail-control w-full hover:bg-sidebar-accent" : "h-8 min-w-0 flex-1 gap-2 px-2 text-left"}`}
               aria-label={
-                compact ? `Agent status: ${status} · ${agent.name} · ${projectName}` : undefined
+                compact
+                  ? `Agent status: ${status}${backgroundLabel ? ` · ${backgroundLabel}` : ""} · ${agent.name} · ${projectName}`
+                  : undefined
               }
               data-agent-id={agent.id}
               data-agent-closed={closed || undefined}
@@ -267,6 +272,16 @@ function AgentRow({
               {!compact && (
                 <span className={cn("min-w-0 flex-1 truncate", closed && "text-muted-foreground")}>
                   {agent.name}
+                </span>
+              )}
+              {!compact && background > 0 && (
+                <span
+                  data-background-agents={background}
+                  aria-label={backgroundLabel}
+                  className="flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground tabular-nums"
+                >
+                  <Bot aria-hidden="true" className="size-3.5 motion-safe:animate-pulse" />
+                  {background > 1 && background}
                 </span>
               )}
               {!compact && scheduled && (
@@ -285,6 +300,7 @@ function AgentRow({
               <p className="font-medium break-words">{projectName}</p>
               <p className="opacity-75">
                 {status}
+                {backgroundLabel ? ` · ${backgroundLabel}` : ""}
                 {scheduled ? " · Scheduled" : ""}
                 {unread ? " · Unread update" : ""}
               </p>
