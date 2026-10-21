@@ -494,6 +494,8 @@ export class ProviderRegistry {
       if (op.kind === "sessions-list") throw new Error("Use the session discovery service");
       if (op.kind === "account") throw new Error("Use the account service");
       if (op.kind === "usage") throw new Error("Use the plan usage service");
+      if (op.kind === "plugins" || op.kind === "plugin-enable")
+        throw new Error("Use the plugin service");
       if (
         op.kind === "save" ||
         op.kind === "remove" ||

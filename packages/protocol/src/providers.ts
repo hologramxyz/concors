@@ -46,6 +46,24 @@ export type McpServer = z.infer<typeof McpServerSchema>;
  * the names, and leave a value null when saving to keep the stored one.
  */
 export const MACHINE_MCP_SERVERS_CAPABILITY = "machine-mcp-servers";
+/** Settings can list the plugins Claude Code and Codex have installed, and turn them on or off. */
+export const MACHINE_PLUGINS_CAPABILITY = "machine-plugins";
+/**
+ * A plugin an agent CLI has installed on the machine: skills, commands, hooks and MCP servers it
+ * adds to every chat. The CLI owns installing them; Concors lists them and turns them on or off.
+ */
+export const AgentPluginSchema = z.object({
+  /** As the CLI names it, `<plugin>@<marketplace>`. */
+  id: z.string().min(1).max(300),
+  name: z.string().max(200),
+  marketplace: z.string().max(200),
+  version: z.string().max(100).nullable(),
+  description: z.string().max(1000).nullable(),
+  enabled: z.boolean(),
+  /** Whether Concors can turn it on or off: one an organization manages, or a project's, cannot. */
+  canToggle: z.boolean(),
+});
+export type AgentPlugin = z.infer<typeof AgentPluginSchema>;
 /** The schedule tools Concors itself serves to every agent; no user server may take its name. */
 export const RESERVED_MCP_SERVER_NAMES = ["concors-schedules"] as const;
 const McpName = z
@@ -193,6 +211,15 @@ export const ProviderRequestSchema = z.object({
       servers: z.array(McpServerInputSchema).max(32),
       expectedRevision: z.number().int().nonnegative(),
     }),
+    /** The plugins a Claude Code or Codex configuration has installed, for its own account. */
+    z.object({ kind: z.literal("plugins"), id: ProviderIdSchema }),
+    /** Turns one of those plugins on or off; chats started afterwards follow it. */
+    z.object({
+      kind: z.literal("plugin-enable"),
+      id: ProviderIdSchema,
+      plugin: z.string().min(1).max(300),
+      enabled: z.boolean(),
+    }),
     /** Which subscription every chat on this machine uses for an engine; null = default account. */
     z.object({
       kind: z.literal("activate"),
@@ -217,6 +244,7 @@ export const ProviderResultSchema = z.object({
       usage: AgentPlanUsageSchema.optional(),
       /** The machine-wide MCP servers, without their secret values. */
       mcpServers: z.array(McpServerSummarySchema).max(32).optional(),
+      plugins: z.array(AgentPluginSchema).max(500).optional(),
     }),
     z.object({ status: z.literal("error"), message: z.string() }),
   ]),
