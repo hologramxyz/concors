@@ -1,3 +1,4 @@
+import { hostAction } from "./bridge";
 export { openExternal } from "./external";
 // The mobile bundle never imports Tauri. Expo owns operating-system notifications.
 export function isTauri() {
@@ -27,9 +28,22 @@ export async function openNativeNotificationSettings() {
 }
 
 export { readText as readClipboardText, copyText as writeClipboardText } from "@/lib/clipboard";
-// Mobile paste events carry images as files, so there is nothing to read natively.
-export async function readClipboardImage(): Promise<ImageData | null> {
-  return null;
+/**
+ * The web view's paste carries no image on iOS or Android, and iOS does not even offer Paste in a
+ * text field when the clipboard holds only an image, so the app reads it and the composer offers
+ * Paste image itself.
+ */
+export async function clipboardHasImage(): Promise<boolean> {
+  return (await hostAction({ kind: "clipboard-has-image" })) === true;
+}
+export async function readClipboardImage(): Promise<ImageBitmap | null> {
+  const data = await hostAction({ kind: "clipboard-image" });
+  if (typeof data !== "string" || !data.startsWith("data:image/")) return null;
+  const [header, base64 = ""] = data.split(",", 2);
+  const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+  return createImageBitmap(
+    new Blob([bytes], { type: header?.slice(5).split(";")[0] ?? "image/png" }),
+  );
 }
 
 // Saving needs the app's own share sheet, which the web view cannot reach yet; the shared UI hides

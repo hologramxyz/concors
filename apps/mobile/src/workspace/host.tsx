@@ -303,6 +303,11 @@ function SignedInWorkspace() {
       case "clipboard":
         await Clipboard.setStringAsync(action.text);
         return;
+      // Only asking whether there is an image does not show iOS's "pasted from" notice.
+      case "clipboard-has-image":
+        return await Clipboard.hasImageAsync();
+      case "clipboard-image":
+        return (await Clipboard.getImageAsync({ format: "png" }))?.data ?? null;
       case "preferences":
         await setPreferences(action.preferences);
         return;

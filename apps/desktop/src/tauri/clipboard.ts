@@ -16,6 +16,10 @@ export async function writeClipboardText(text: string): Promise<void> {
  * empty paste event for an image-only clipboard and refuses the async Clipboard API, so on Linux
  * the image can only be read natively.
  */
+/** The desktop pastes through the paste event, so it offers no Paste image of its own. */
+export async function clipboardHasImage(): Promise<boolean> {
+  return false;
+}
 export async function readClipboardImage(): Promise<ImageData | null> {
   if (!isTauri()) return null;
   let image;
