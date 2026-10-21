@@ -10,6 +10,40 @@ export function installTestCodexProfile(directory: string): string {
     script,
     `
 const { createInterface } = require("node:readline");
+// Settings → Plugins: answers the app server calls it makes, with plugins kept beside this script.
+if (process.argv[2] === "app-server") {
+  const fs = require("node:fs"), path = require("node:path");
+  const file = path.join(__dirname, "codex-plugins.json");
+  const load = () => (fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : { "deploy@openai-curated": true });
+  createInterface({ input: process.stdin, terminal: false }).on("line", (line) => {
+    const message = JSON.parse(line);
+    if (message.id == null) return;
+    let result = {};
+    if (message.method === "initialize") result = { userAgent: "codex/0.200.0" };
+    if (message.method === "config/batchWrite") {
+      const state = load();
+      for (const edit of message.params.edits) {
+        const id = /^plugins\\."(.*)"\\.enabled$/.exec(edit.keyPath)?.[1];
+        if (id) state[id] = edit.value;
+      }
+      fs.writeFileSync(file, JSON.stringify(state));
+      result = { status: "ok" };
+    }
+    if (message.method === "plugin/installed")
+      result = {
+        marketplaces: [{
+          name: "openai-curated",
+          plugins: Object.entries(load()).map(([id, enabled]) => ({
+            id, name: id.split("@")[0], installed: true, enabled,
+            interface: { displayName: "Deploy", shortDescription: "Ship previews from a chat" },
+          })),
+        }],
+        marketplaceLoadErrors: [],
+      };
+    process.stdout.write(JSON.stringify({ id: message.id, result }) + "\\n");
+  });
+  return;
+}
 const lines = createInterface({ input: process.stdin, terminal: false, crlfDelay: Infinity });
 lines.on("line", (data) => {
   if (data.trim() === "test-working") process.stdout.write("\\x1b]0;⠙ Test turn\\x07");
@@ -44,6 +78,25 @@ export function installTestClaudeProfile(directory: string): string {
     script,
     String.raw`
 const { createInterface } = require("node:readline");
+// Settings → Plugins: ` +
+      "`claude plugin list|enable|disable`" +
+      String.raw`, with plugins kept beside this script.
+if (process.argv[2] === "plugin") {
+  const fs = require("node:fs"), path = require("node:path");
+  const file = path.join(__dirname, "claude-plugins.json");
+  const plugins = fs.existsSync(file)
+    ? JSON.parse(fs.readFileSync(file, "utf8"))
+    : [
+        { id: "release-notes@acme", version: "1.2.0", scope: "user", enabled: true },
+        { id: "house-style@acme", version: "0.4.0", scope: "managed", enabled: true },
+      ];
+  if (process.argv[3] === "enable" || process.argv[3] === "disable") {
+    for (const plugin of plugins)
+      if (plugin.id === process.argv[4]) plugin.enabled = process.argv[3] === "enable";
+    fs.writeFileSync(file, JSON.stringify(plugins));
+  } else process.stdout.write(JSON.stringify(plugins));
+  return;
+}
 const rule = "────────────────────────────────────────";
 function screen(state) {
   const lines = state === "approval"

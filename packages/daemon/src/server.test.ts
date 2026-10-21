@@ -146,6 +146,7 @@ describe("WebSocket handshake", () => {
           "file-range-downloads",
           "heartbeat",
           "machine-mcp-servers",
+          "machine-plugins",
           "workspace-pull-requests",
           "pull-request-actions",
           "pull-request-states",

@@ -17,6 +17,7 @@ import { providerFactory } from "../agents/providers/index.ts";
 import type { AccountBackendFactory } from "../agents/accounts/manager.ts";
 import { ProjectFiles } from "../files/service.ts";
 import { AgentManager, type AgentProviderFactory } from "../agents/manager.ts";
+import { AgentPlugins } from "../agents/plugins.ts";
 import { ProjectManager } from "../projects/manager.ts";
 import { WorkspacePullRequests, type GitHubSource } from "../projects/pull-requests.ts";
 import { GitHubCredentials } from "../github/credentials.ts";
@@ -133,6 +134,7 @@ export function registerProtocolEndpoint(
       : attachments + "-providers",
     options.claudeHome,
   );
+  const plugins = new AgentPlugins(providers);
   const themes = new ThemeRegistry(
     basename(attachments) === "attachments"
       ? join(dirname(attachments), "themes")
@@ -354,6 +356,11 @@ export function registerProtocolEndpoint(
             void agents.providerAccount(viewer.id, message).then((result) => send(socket, result));
           else if (message.operation.kind === "usage")
             void agents.providerUsage(message).then((result) => send(socket, result));
+          else if (
+            message.operation.kind === "plugins" ||
+            message.operation.kind === "plugin-enable"
+          )
+            void plugins.request(message).then((result) => send(socket, result));
           else if (message.operation.kind === "activate")
             send(socket, agents.activateSubscription(message));
           else {
