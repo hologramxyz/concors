@@ -74,6 +74,8 @@ export class ClaudeProvider extends EventProvider {
   /** When the plan limit this turn ran into resets, in seconds, as Claude reported it. */
   private limitResetsAt: number | undefined;
   private tools = new Map<string, { name: string; input: unknown }>();
+  /** Tool calls sub-agents made that have not reported back yet. */
+  private subAgentTools = new Set<string>();
   private messageId = "";
   private text = "";
   private thinking = new Map<number, string>();
@@ -609,7 +611,8 @@ export class ClaudeProvider extends EventProvider {
     this.limitResetsAt = undefined;
     this.activeCommand = command;
     this.compactCompleted = false;
-    this.tools.clear();
+    // A sub-agent left working in the background still reports to the call that started it.
+    for (const id of this.tools.keys()) if (!this.inBackground(id)) this.tools.delete(id);
     this.messageId = "";
     this.text = "";
     return result;
@@ -620,8 +623,21 @@ export class ClaudeProvider extends EventProvider {
     // Claude Code starts a turn of its own when a background command, monitor or sub-agent it
     // left running reports back. Without a turn here, all of that work would go unseen.
     if (turnStart && !this.turnId) this.selfStartedTurn = this.startTurn().turn.id;
-    if (!this.turnId) return;
     const parent = string(m["parent_tool_use_id"]);
+    // A background sub-agent keeps working after the turn that started it has ended.
+    if (
+      m["type"] === "system" &&
+      m["subtype"] === "task_notification" &&
+      this.inBackground(string(m["tool_use_id"]))
+    ) {
+      const call = string(m["tool_use_id"]),
+        owner = this.tools.get(call);
+      this.subAgentReport(call, string(m["summary"]), false);
+      if (owner) this.tool(call, owner.name, owner.input, null, true, m["status"] !== "completed");
+      this.tools.delete(call);
+      return;
+    }
+    if (!this.turnId && !(parent && this.inBackground(parent))) return;
     // A sub-agent's task id is its agent id, which names its transcript; the tool call only
     // reports it when the sub-agent finishes. Nested sub-agents stay steps of their parent.
     if (
@@ -647,12 +663,17 @@ export class ClaudeProvider extends EventProvider {
       // A sub-agent's own tool calls are steps of the tool call that started it, shown on its
       // row rather than as the main conversation's. Its final report is that call's result.
       const owner = this.tools.get(parent);
-      if (m["type"] === "assistant")
-        for (const value of array(object(m["message"])["content"])) {
+      if (m["type"] === "assistant") {
+        const content = array(object(m["message"])["content"]);
+        this.subAgentReport(
+          parent,
+          textContent(content.filter((v) => object(v)["type"] === "text")),
+        );
+        for (const value of content) {
           const c = object(value);
           if (c["type"] !== "tool_use") continue;
           const id = string(c["id"]);
-          this.tools.set(id, { name: string(c["name"]), input: c["input"] });
+          this.subAgentTools.add(id);
           this.subAgentStep(parent, {
             id,
             title: string(c["name"]).slice(0, 100) || "Tool",
@@ -660,10 +681,11 @@ export class ClaudeProvider extends EventProvider {
             status: "running",
           });
         }
+      }
       if (m["type"] === "user")
         for (const value of array(object(m["message"])["content"])) {
           const c = object(value);
-          if (c["type"] === "tool_result" && this.tools.has(string(c["tool_use_id"])))
+          if (c["type"] === "tool_result" && this.subAgentTools.delete(string(c["tool_use_id"])))
             this.subAgentStep(parent, {
               id: string(c["tool_use_id"]),
               status: c["is_error"] === true ? "failed" : "completed",
@@ -758,7 +780,11 @@ export class ClaudeProvider extends EventProvider {
         if (c["type"] !== "tool_result") continue;
         const id = string(c["tool_use_id"]),
           tool = this.tools.get(id);
-        if (tool)
+        // A sub-agent sent to the background answers at once; its row stays live until it is done.
+        if (tool && object(m["tool_use_result"] ?? {})["status"] === "async_launched") {
+          this.subAgentLaunched(id);
+          this.tool(id, tool.name, tool.input, null, false);
+        } else if (tool)
           this.tool(
             id,
             tool.name,

@@ -75,6 +75,10 @@ export abstract class EventProvider implements ConversationProvider {
   private subAgentSteps = new Map<string, AgentActivityStep[]>();
   /** The conversation each running sub-agent keeps, by the tool call that started it. */
   private subAgentChildren = new Map<string, string>();
+  /** What each running sub-agent last said, by the tool call that started it. */
+  private subAgentReports = new Map<string, string>();
+  /** Sub-agents left working in the background, by the tool call that started them, to its turn. */
+  private backgroundSubAgents = new Map<string, string>();
   protected controls: AgentControls = AgentControlsSchema.parse({});
   protected compactionId: string | null = null;
   private ended = new Set<() => void>();
@@ -217,14 +221,43 @@ export abstract class EventProvider implements ConversationProvider {
     ) {
       item["receiverThreadIds"] = [child];
       item["agentsStates"] = {
-        [child]: { status: failed ? "failed" : done ? "completed" : "running", message: null },
+        [child]: {
+          status: failed ? "failed" : done ? "completed" : "running",
+          message: this.subAgentReports.get(id) ?? null,
+        },
       };
     }
+    const backgroundTurn = this.backgroundSubAgents.get(id);
+    if (item["type"] === "collabAgentToolCall" && backgroundTurn !== undefined)
+      item["background"] = true;
     if (done) {
       this.subAgentSteps.delete(id);
       this.subAgentChildren.delete(id);
+      this.subAgentReports.delete(id);
+      this.backgroundSubAgents.delete(id);
     }
-    this.item(item, done);
+    // A background sub-agent's row stays in the turn that started it, even once that turn ended.
+    if (backgroundTurn !== undefined)
+      this.emit(done ? "item/completed" : "item/started", { turnId: backgroundTurn, item });
+    else this.item(item, done);
+  }
+  /**
+   * Marks the sub-agent tool call `parentId` started as left working in the background: its call
+   * has returned, but it keeps reporting until the CLI says it finished, past the end of the turn.
+   */
+  protected subAgentLaunched(parentId: string) {
+    if (parentId && this.turnId) this.backgroundSubAgents.set(parentId, this.turnId);
+  }
+  protected inBackground(parentId: string) {
+    return this.backgroundSubAgents.has(parentId);
+  }
+  /**
+   * Records what the sub-agent under `parentId` last said; its row shows it as the latest update.
+   * With `replace` off, only fills in for a sub-agent that has said nothing yet.
+   */
+  protected subAgentReport(parentId: string, text: string, replace = true) {
+    if (parentId && text && (replace || !this.subAgentReports.has(parentId)))
+      this.subAgentReports.set(parentId, text.slice(0, 4000));
   }
   /** Records the conversation the sub-agent started by tool call `parentId` keeps. */
   protected subAgentStarted(parentId: string, childId: string) {
