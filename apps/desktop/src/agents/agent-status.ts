@@ -23,6 +23,8 @@ export interface AgentStatus {
   /** The dot shown when nothing is running. */
   color: string;
   unread: boolean;
+  /** Sub-agents still working in the background, which a chat that is done can still have. */
+  background: number;
 }
 
 export function chatAgentStatus(agent: AgentInfo): AgentStatus {
@@ -42,6 +44,7 @@ export function chatAgentStatus(agent: AgentInfo): AgentStatus {
             ? "bg-amber-500"
             : "bg-muted-foreground/60",
     unread: !!(agent.attention && !agent.attention.seen),
+    background: agent.backgroundAgents ?? 0,
   };
 }
 
@@ -69,6 +72,7 @@ export function terminalAgentStatus(session: TerminalInfo): AgentStatus {
           ? "bg-emerald-500"
           : "bg-muted-foreground/60",
     unread: false,
+    background: 0,
   };
 }
 
