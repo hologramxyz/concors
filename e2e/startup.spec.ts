@@ -203,6 +203,11 @@ test("a lasting drop shows a quiet reconnecting notice instead of clearing the w
 }) => {
   await signedIn(page);
   let refuse = false;
+  // Lets the machine back in only from Retry now's own click, so the automatic retries, which keep
+  // running meanwhile, cannot reconnect first and take the button away before it is clicked.
+  await page.exposeBinding("allowReconnect", () => {
+    refuse = false;
+  });
   let disconnect: () => void = () => undefined;
   await page.routeWebSocket("**/ws", (client) => {
     if (refuse) {
@@ -227,8 +232,13 @@ test("a lasting drop shows a quiet reconnecting notice instead of clearing the w
   await expect(help).toContainText("Quit Concors and open it again");
   await help.getByRole("button", { name: "Close", exact: true }).first().click();
   await expect(help).toHaveCount(0);
-  refuse = false;
-  await notice.getByRole("button", { name: "Retry now" }).click();
+  const retry = notice.getByRole("button", { name: "Retry now" });
+  await retry.evaluate((button) =>
+    button.addEventListener("click", () =>
+      (window as unknown as { allowReconnect(): void }).allowReconnect(),
+    ),
+  );
+  await retry.click();
   await expect(notice).toHaveCount(0);
 });
 

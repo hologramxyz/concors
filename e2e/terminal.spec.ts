@@ -34,6 +34,8 @@ test("two devices use the same terminal and recover its screen after reload", as
           })),
       )
       .toEqual({ horizontal: false, vertical: false });
+    // The New tab menu holds focus while it closes; type once the terminal has it, as a person would.
+    await expect(page.getByRole("textbox", { name: "Terminal input" })).toBeFocused();
     await page.keyboard.type("printf 'hello-%s\\n' shared-terminal");
     await page.keyboard.press("Enter");
     await page.keyboard.type(
@@ -84,4 +86,37 @@ test("two devices use the same terminal and recover its screen after reload", as
   } finally {
     await context.close();
   }
+});
+
+test("keys typed while a new terminal is still connecting reach its shell", async ({ page }) => {
+  // The terminal takes focus before its first snapshot arrives; hold that snapshot back so the
+  // keys always land in the gap, as they can for someone typing straight away.
+  let hold = true;
+  const held: string[] = [];
+  let release: () => void = () => undefined;
+  await page.routeWebSocket("ws://127.0.0.1:7429/ws", (socket) => {
+    const server = socket.connectToServer();
+    server.onMessage((raw) => {
+      const text = String(raw);
+      if (hold && JSON.parse(text).type === "terminal.snapshot") held.push(text);
+      else socket.send(text);
+    });
+    release = () => {
+      hold = false;
+      for (const text of held.splice(0)) socket.send(text);
+    };
+  });
+  await signedIn(page);
+  await page.goto("/");
+  await seedProject(page, "Early terminal keys", process.cwd());
+  await page.getByRole("button", { name: "New tab", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
+  const output = page.getByLabel("Terminal output").filter({ visible: true });
+  await expect(output).toBeVisible();
+  await expect.poll(() => held.length).toBeGreaterThan(0);
+  await expect(page.getByRole("textbox", { name: "Terminal input" })).toBeFocused();
+  await page.keyboard.type("printf 'early-%s\\n' keys");
+  await page.keyboard.press("Enter");
+  release();
+  await expect(output).toContainText("early-keys");
 });
