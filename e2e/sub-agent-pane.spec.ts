@@ -99,6 +99,12 @@ test("a sub-agent sent to the background stays live after its turn ends, until i
     await expect(row).toHaveAttribute("data-tool-status", "running");
     // Its steps keep arriving after the turn ended.
     await expect(row.locator("[data-sub-agent-current]")).toContainText("pnpm test --coverage");
+    // The chat is done and free to take a message; the sidebar still says something runs for it.
+    const agents = page.getByRole("region", { name: "Agents", exact: true });
+    const marker = agents.locator("[data-background-agents]");
+    await expect(marker).toHaveAttribute("data-background-agents", "1");
+    await expect(marker).toHaveAccessibleName("1 sub-agent running");
+    await expect(agents.getByRole("img", { name: "Agent status: Ready" })).toBeVisible();
     await row.getByRole("button", { name: "Open agent conversation", exact: true }).click();
     const panel = page.getByRole("complementary", { name: "Sub-agent conversation" });
     await expect(panel.getByRole("status").filter({ hasText: "Working" }).first()).toBeVisible();
@@ -106,6 +112,7 @@ test("a sub-agent sent to the background stays live after its turn ends, until i
     // It finishes on its own and reports back.
     await expect(row).toHaveAttribute("data-tool-status", "completed", { timeout: 10_000 });
     await expect(row).toHaveAttribute("aria-busy", "false");
+    await expect(marker).toHaveCount(0);
     await expect(panel.getByRole("status").filter({ hasText: "Working" })).toHaveCount(0);
     await page.keyboard.press("Escape");
     await row.getByRole("button", { expanded: false }).click();
