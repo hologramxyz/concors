@@ -28,6 +28,18 @@ describe("machineActivity", () => {
     ).toEqual({ busy: false, agents: { working: 0, waiting: 0 } });
   });
 
+  it("counts a done chat whose sub-agents still work in the background as working", () => {
+    expect(
+      machineActivity(
+        [
+          { ...chat("done"), backgroundAgents: 2 },
+          { ...chat("done"), backgroundAgents: 0 },
+        ],
+        [],
+      ),
+    ).toEqual({ busy: true, agents: { working: 1, waiting: 0 } });
+  });
+
   it("counts starting and working chats as working", () => {
     expect(machineActivity([chat("starting"), chat("working"), chat("idle")], [])).toEqual({
       busy: true,

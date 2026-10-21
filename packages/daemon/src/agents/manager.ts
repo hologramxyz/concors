@@ -17,6 +17,8 @@ import { normalizeCommandExecutionCommand } from "./codex/command-display.ts";
 import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { stat } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
+import { MemoryKillWatch } from "../host/memory-kills.ts";
 import { z } from "zod";
 import {
   AgentAttachmentSchema,
@@ -147,6 +149,7 @@ export class AgentManager {
    */
   readonly #usage = new Map<string, { at: number; usage: Promise<AgentPlanUsage> }>();
   #closed = false;
+  #memoryTimer: ReturnType<typeof setInterval> | undefined;
   private mutations = new Set<string>();
   /** Async questions whose answer is being steered into the running turn. */
   private answering = new Set<string>();
@@ -219,26 +222,38 @@ export class AgentManager {
         }
       }, false),
     );
+    // Beside the workspace database, or beside a test's own attachments.
+    const attachments = store.attachmentsDirectory;
+    const memory = new MemoryKillWatch(
+      basename(attachments) === "attachments"
+        ? join(dirname(attachments), "memory-kills.json")
+        : attachments + "-memory-kills.json",
+    );
+    const outOfMemory = memory.ranOutSinceRecorded();
+    memory.record();
+    this.#memoryTimer = setInterval(() => memory.record(), 60_000);
+    this.#memoryTimer.unref();
+    // A chat that finished its turn while sub-agents it sent to the background kept working lost
+    // them too, and would otherwise read as done with nothing more to come.
     for (const info of store.agents())
-      if (["starting", "working", "needs_input"].includes(info.status)) {
+      if (["starting", "working", "needs_input"].includes(info.status) || info.backgroundAgents) {
         store.saveAgent({
           ...info,
           status: "interrupted",
+          backgroundAgents: 0,
           queuePaused: true,
           pending: info.pending.filter((p) => p.asynchronous),
           attention: info.pending.some((p) => p.asynchronous) ? info.attention : null,
           turnId: null,
-          error:
-            "The daemon restarted. Your saved conversation can be continued; the previous prompt will not be resent.",
+          error: outOfMemory
+            ? "This machine ran out of memory, which stopped its agents. Your saved conversation can be continued; the previous prompt will not be resent. A machine with more memory, or swap, keeps large tasks running."
+            : "The daemon restarted. Your saved conversation can be continued; the previous prompt will not be resent.",
           revision: info.revision + 1,
           updatedAt: new Date().toISOString(),
         });
       }
     for (const item of store.runningBackgroundItems())
       store.saveAgentItem({ ...item, status: "interrupted" });
-    for (const info of store.agents())
-      if (info.backgroundAgents)
-        store.saveAgent({ ...info, backgroundAgents: 0, revision: info.revision + 1 });
     queueMicrotask(() => {
       if (!this.#closed)
         for (const info of store.agents())
@@ -2737,6 +2752,7 @@ export class AgentManager {
   async close(): Promise<void> {
     if (this.#closed) return;
     this.#closed = true;
+    clearInterval(this.#memoryTimer);
     this.stopVersionWatch();
     await this.nativeSessions.close();
     await this.accounts.close();
