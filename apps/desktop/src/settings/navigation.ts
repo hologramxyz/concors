@@ -9,6 +9,7 @@ import {
   Cloud,
   Users,
   Plug,
+  Puzzle,
   type LucideIcon,
 } from "lucide-react";
 
@@ -19,6 +20,7 @@ export type SettingsPage =
   | "notifications"
   | "providers"
   | "mcp-servers"
+  | "plugins"
   | "subscriptions"
   | "machines"
   | "billing"
@@ -62,6 +64,7 @@ export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
       // { page: "providers", label: "Providers", icon: Bot },
       { page: "subscriptions", label: "Subscriptions", icon: Users },
       { page: "mcp-servers", label: "MCP servers", icon: Plug },
+      { page: "plugins", label: "Plugins", icon: Puzzle },
       { page: "billing", label: "Billing", icon: CreditCard },
       { page: "ssh-keys", label: "SSH keys", icon: KeyRound },
     ],
