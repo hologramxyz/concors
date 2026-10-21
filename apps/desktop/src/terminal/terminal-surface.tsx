@@ -61,6 +61,9 @@ export function TerminalSurface({
     let claiming: Promise<void> | null = null;
     let activateAfterClaim = false;
     let queuedInput = "";
+    // The terminal takes focus before its first snapshot says whether the session runs; keys typed
+    // in that moment are kept and sent once it does, rather than lost, and dropped if it does not.
+    let earlyInput = "";
     const terminal = new Terminal({
       cursorBlink: true,
       cursorStyle: "block",
@@ -73,7 +76,8 @@ export function TerminalSurface({
       scrollback: 1000,
       screenReaderMode: true,
       theme: terminalTheme(),
-      disableStdin: true,
+      // Takes keys from the start: those typed before the first snapshot are held (`earlyInput`).
+      disableStdin: false,
     });
     const fit = new FitAddon();
     terminal.loadAddon(fit);
@@ -321,7 +325,15 @@ export function TerminalSurface({
         setSession(event.session);
         setError(null);
         setReconnecting(false);
-        if (running && event.ownerId === null && isVisible()) claim(true);
+        const early = earlyInput;
+        earlyInput = "";
+        if (running && early) {
+          if (owner && !claiming) sendInput(early);
+          else {
+            queuedInput += early;
+            claim();
+          }
+        } else if (running && event.ownerId === null && isVisible()) claim(true);
       } else if (event.type === "terminal.output" && event.sessionId === sessionId) {
         if (event.sequence <= sequence) return;
         if (event.sequence !== sequence + 1) {
@@ -338,12 +350,18 @@ export function TerminalSurface({
         setSession(event.session);
         running = event.session.status === "running";
         agent = (event.session.detectedAgent ?? event.session.profile) !== "shell";
-        if (!running) terminal.options.disableStdin = true;
+        // A session still starting will run; its keys are held until the snapshot, not refused.
+        if (!running && event.session.status !== "starting") terminal.options.disableStdin = true;
       } else if (event.type === "terminal.error" && event.sessionId === sessionId)
         setError(event.message);
     });
     const input = terminal.onData((data) => {
-      if (disposed || !running) return;
+      if (disposed) return;
+      if (sequence < 0) {
+        if (earlyInput.length + data.length <= 16384) earlyInput += data;
+        return;
+      }
+      if (!running) return;
       try {
         // Ownership can arrive before the claim reply. Keep later keys behind buffered keys.
         if (claiming && queuedInput.length + data.length <= 16384) queuedInput += data;
@@ -378,6 +396,7 @@ export function TerminalSurface({
         setError(null);
         terminal.options.disableStdin = true;
         queuedInput = "";
+        earlyInput = "";
         running = false;
         sequence = -1;
         snapshotPending = false;
