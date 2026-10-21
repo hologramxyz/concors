@@ -1,5 +1,6 @@
 import { ProvidersSettings } from "@/settings/providers-settings";
 import { McpSettings } from "@/settings/mcp-settings";
+import { PluginsSettings } from "@/settings/plugins-settings";
 import {
   SubscriptionsSettings,
   type SubscriptionsSettingsProps,
@@ -60,6 +61,9 @@ export function SettingsView({
       break;
     case "mcp-servers":
       content = <McpSettings />;
+      break;
+    case "plugins":
+      content = <PluginsSettings />;
       break;
     case "subscriptions":
       content = <SubscriptionsSettings auth={auth} {...subscriptions} />;
