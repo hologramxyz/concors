@@ -173,6 +173,10 @@ export function ConnectServerDialog({
                   </li>
                   <li>Adds Concors&apos; access key next to your own SSH keys</li>
                   <li>
+                    If the server has no swap, adds a swap file the size of its memory (2 to 8 GB),
+                    so many agents at once slow it down rather than stop
+                  </li>
+                  <li>
                     If the internet can&apos;t reach the server, installs a small tunnel to the
                     Concors relay
                   </li>
