@@ -1,6 +1,6 @@
 import type { ActivityResponse, AgentInfo, AgentPending, TerminalInfo } from "@concors/protocol";
 
-type AgentState = Pick<AgentInfo, "status"> & {
+type AgentState = Pick<AgentInfo, "status" | "backgroundAgents"> & {
   readonly pending: readonly Pick<AgentPending, "asynchronous">[];
 };
 type TerminalState = Pick<TerminalInfo, "status" | "agentActivity">;
@@ -13,7 +13,8 @@ type TerminalState = Pick<TerminalInfo, "status" | "agentActivity">;
  * not busy: its conversation resumes after the restart. Neither is a question an agent asked
  * without stopping (Codex's asynchronous questions): it survives a restart, and counting it would
  * hold updates back for as long as nobody dismissed it. A terminal counts only while its process is
- * running, since a stored session keeps the last activity it reported.
+ * running, since a stored session keeps the last activity it reported. A chat that is done while
+ * sub-agents it sent to the background still work is working: a restart would end them unseen.
  */
 export function machineActivity(
   agents: readonly AgentState[],
@@ -24,7 +25,12 @@ export function machineActivity(
   for (const agent of agents) {
     if (agent.status === "needs_input" || agent.pending.some((pending) => !pending.asynchronous))
       waiting++;
-    else if (agent.status === "starting" || agent.status === "working") working++;
+    else if (
+      agent.status === "starting" ||
+      agent.status === "working" ||
+      (agent.backgroundAgents ?? 0) > 0
+    )
+      working++;
   }
   for (const terminal of terminals) {
     if (terminal.status !== "running" && terminal.status !== "starting") continue;
