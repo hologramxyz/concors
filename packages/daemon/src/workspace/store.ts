@@ -77,6 +77,7 @@ export class WorkspaceStore {
         CREATE TABLE IF NOT EXISTS agents (id TEXT PRIMARY KEY, info TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS agent_items (position INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, item_id TEXT NOT NULL, item TEXT NOT NULL, UNIQUE(session_id, item_id));
         CREATE INDEX IF NOT EXISTS agent_message_index ON agent_items (session_id, position) WHERE json_extract(item, '$.kind') = 'user';
+        CREATE INDEX IF NOT EXISTS agent_background_index ON agent_items (session_id) WHERE json_extract(item, '$.presentation.background') = 1;
         CREATE TABLE IF NOT EXISTS agent_native_turns (session_id TEXT NOT NULL, native_id TEXT NOT NULL, turn_id TEXT NOT NULL, PRIMARY KEY (session_id, native_id));
         CREATE TABLE IF NOT EXISTS agent_request_errors (id TEXT PRIMARY KEY, message TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS agent_queue (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, request TEXT NOT NULL);
@@ -909,6 +910,20 @@ export class WorkspaceStore {
       this.#db.exec("ROLLBACK");
       throw error;
     }
+  }
+  /** Background sub-agent rows still marked running; after a restart nothing reports to them. */
+  runningBackgroundItems(): AgentItem[] {
+    return this.#db
+      .prepare(
+        "SELECT position, item FROM agent_items WHERE json_extract(item, '$.presentation.background') = 1 AND json_extract(item, '$.status') = 'running'",
+      )
+      .all()
+      .map((row) =>
+        AgentItemSchema.parse({
+          ...JSON.parse(String(row["item"])),
+          position: Number(row["position"]),
+        }),
+      );
   }
   agentItem(sessionId: string, id: string): AgentItem | null {
     const row = this.#db

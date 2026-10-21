@@ -1027,6 +1027,133 @@ it("shows a Claude sub-agent's tool calls as steps of the call that started it",
   expect(items().some((item) => JSON.stringify(item).includes("nested-agent"))).toBe(false);
 });
 
+it("keeps a Claude sub-agent sent to the background live in its turn until it reports back", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-claude-background-agent-"));
+  cleanup.push(() => rm(directory, { recursive: true, force: true }));
+  await writeFile(join(directory, process.platform === "win32" ? "claude.cmd" : "claude"), "", {
+    mode: 0o755,
+  });
+  vi.stubEnv("PATH", directory);
+  let emit: (value: unknown) => void = () => undefined;
+  const createQuery = vi.fn(() => {
+    const messages = new PassThrough({ objectMode: true });
+    emit = (value) => messages.write(value);
+    return Object.assign(messages, {
+      initializationResult: async () => ({
+        models: [{ value: "default", displayName: "Default" }],
+      }),
+      getContextUsage: async () => ({ model: "claude-sonnet-5" }),
+      setModel: async () => undefined,
+      setPermissionMode: async () => undefined,
+      close: () => {
+        messages.end();
+      },
+    }) as unknown as Query;
+  });
+  const provider = new ClaudeProvider(directory, vi.fn(), createQuery);
+  const { notifications } = observe(provider);
+  await provider.initialize();
+  await provider.request("thread/start");
+  const started = object(await provider.request("turn/start", turn));
+  const turnId = object(started["turn"])["id"];
+  // The order Claude Code 2.1 streams a background sub-agent in: its call answers at once, the
+  // turn ends, and only then does the sub-agent work and report back, starting a turn of its own.
+  emit({
+    type: "assistant",
+    message: {
+      id: "a",
+      content: [
+        {
+          type: "tool_use",
+          id: "task",
+          name: "Agent",
+          input: { description: "probe", run_in_background: true, prompt: "Sleep" },
+        },
+      ],
+    },
+  });
+  emit({
+    type: "system",
+    subtype: "task_started",
+    task_id: "agent-1",
+    tool_use_id: "task",
+    task_type: "local_agent",
+    spawn_depth: 1,
+  });
+  emit({
+    type: "user",
+    message: {
+      content: [
+        {
+          type: "tool_result",
+          tool_use_id: "task",
+          content: [{ type: "text", text: "Async agent launched successfully. (internal)" }],
+        },
+      ],
+    },
+    tool_use_result: { isAsync: true, status: "async_launched", agentId: "agent-1" },
+  });
+  emit({ type: "assistant", message: { id: "b", content: [{ type: "text", text: "launched" }] } });
+  emit({ type: "result", subtype: "success", result: "launched", modelUsage: {} });
+  const methods = () => notifications.map((n) => n.method);
+  await expect.poll(() => methods()).toContain("turn/completed");
+  emit({
+    type: "assistant",
+    parent_tool_use_id: "task",
+    message: {
+      id: "c",
+      content: [{ type: "tool_use", id: "bash", name: "Bash", input: { command: "sleep 15" } }],
+    },
+  });
+  emit({
+    type: "user",
+    parent_tool_use_id: "task",
+    message: { content: [{ type: "tool_result", tool_use_id: "bash", content: "done" }] },
+  });
+  emit({
+    type: "assistant",
+    parent_tool_use_id: "task",
+    message: { id: "d", content: [{ type: "text", text: "finished" }] },
+  });
+  const rows = () =>
+    notifications
+      .filter((n) => n.method.startsWith("item/") && object(n.params["item"])["id"] === "task")
+      .map((n) => ({ method: n.method, turnId: n.params["turnId"], ...object(n.params["item"]) }));
+  await expect
+    .poll(() => rows().at(-1))
+    .toMatchObject({
+      method: "item/started",
+      turnId,
+      background: true,
+      receiverThreadIds: ["agent-1"],
+      agentsStates: { "agent-1": { status: "running", message: "finished" } },
+      activity: [{ id: "bash", title: "Bash", status: "completed" }],
+    });
+  // The launch notice is meant for the model; the row never shows it as a result.
+  expect(JSON.stringify(rows())).not.toContain("Async agent launched");
+  expect(rows().some((row) => row.method === "item/completed")).toBe(false);
+
+  emit({
+    type: "system",
+    subtype: "task_notification",
+    task_id: "agent-1",
+    tool_use_id: "task",
+    status: "completed",
+    summary: "finished",
+  });
+  await expect
+    .poll(() => rows().at(-1))
+    .toMatchObject({
+      method: "item/completed",
+      turnId,
+      background: true,
+      agentsStates: { "agent-1": { status: "completed", message: "finished" } },
+    });
+  // Claude then answers the report in a turn of its own.
+  emit({ type: "system", subtype: "init", model: "claude-sonnet-5" });
+  await expect.poll(() => methods().filter((method) => method === "turn/started")).toHaveLength(2);
+});
+
 it("steers a running Claude turn with a message Claude reads at its next step", async () => {
   const directory = await mkdtemp(join(tmpdir(), "concors-claude-steer-"));
   cleanup.push(() => rm(directory, { recursive: true, force: true }));

@@ -201,6 +201,11 @@ const AgentPresentationSchema = z.object({
   agentType: z.string().max(100).optional(),
   /** What a sub-agent has done so far, oldest first; only the latest steps are kept. */
   activity: z.array(AgentActivityStepSchema).max(SUB_AGENT_STEPS).optional(),
+  /**
+   * A sub-agent left working in the background: its call returned at once, so it outlives the
+   * turn that started it and its row stays live until the CLI says it finished.
+   */
+  background: z.boolean().optional(),
 });
 export type AgentPresentation = z.infer<typeof AgentPresentationSchema>;
 export const AgentInfoSchema = z.object({

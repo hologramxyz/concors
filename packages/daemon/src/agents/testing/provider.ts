@@ -328,6 +328,41 @@ export class TestAgentProvider implements AgentProvider {
         .catch(() => undefined);
     } else if (text.includes("fail")) this.finish("failed");
     else {
+      if (text.includes("background")) {
+        // A sub-agent left working in the background, as Claude Code runs them: the turn that
+        // started it ends first, and it keeps reporting into that turn until it is done.
+        const turnId = this.turnId;
+        const row = (activity: Record<string, unknown>[], message: string | null) => ({
+          id: `background-${turnId}`,
+          type: "collabAgentToolCall",
+          tool: "Agent",
+          agentType: "Explore",
+          prompt: "Check the test coverage",
+          background: true,
+          receiverThreadIds: ["child-thread"],
+          agentsStates: { "child-thread": { status: message ? "completed" : "running", message } },
+          activity,
+        });
+        this.emit("item/started", { item: row([], null) });
+        setTimeout(() => {
+          this.emit("item/started", {
+            turnId,
+            item: row(
+              [{ id: "step", title: "Bash", text: "pnpm test --coverage", status: "running" }],
+              null,
+            ),
+          });
+        }, 1500);
+        setTimeout(() => {
+          this.emit("item/completed", {
+            turnId,
+            item: row(
+              [{ id: "step", title: "Bash", text: "pnpm test --coverage", status: "completed" }],
+              "Coverage is 82%.",
+            ),
+          });
+        }, 3500);
+      }
       if (text.includes("file-links")) {
         this.emit("item/completed", {
           item: {
