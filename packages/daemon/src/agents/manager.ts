@@ -236,6 +236,9 @@ export class AgentManager {
       }
     for (const item of store.runningBackgroundItems())
       store.saveAgentItem({ ...item, status: "interrupted" });
+    for (const info of store.agents())
+      if (info.backgroundAgents)
+        store.saveAgent({ ...info, backgroundAgents: 0, revision: info.revision + 1 });
     queueMicrotask(() => {
       if (!this.#closed)
         for (const info of store.agents())
@@ -419,6 +422,7 @@ export class AgentManager {
     }
     this.update(id, {
       status: "failed",
+      backgroundAgents: 0,
       queuePaused: true,
       pending: this.#store.agent(id).pending.filter((p) => p.asynchronous),
       error: (error instanceof Error ? error.message : String(error)).slice(0, 4000),
@@ -2692,17 +2696,17 @@ export class AgentManager {
   private backgroundChanged(id: string, itemId: string, live: boolean): void {
     const runtime = this.#runtimes.get(id);
     if (!runtime) return;
-    if (live) {
-      runtime.background.add(itemId);
-      return;
-    }
-    if (!runtime.background.delete(itemId) || runtime.background.size) return;
-    if (["starting", "working", "needs_input"].includes(this.#store.agent(id).status)) return;
-    if (runtime.reloadWhenIdle) {
-      runtime.closed = true;
-      this.#runtimes.delete(id);
-      void runtime.provider.close().catch(() => undefined);
-    } else queueMicrotask(() => this.releaseHidden());
+    const before = runtime.background.size;
+    if (live) runtime.background.add(itemId);
+    else runtime.background.delete(itemId);
+    if (runtime.background.size === before) return;
+    // Shown beside the chat's status; it is not activity of the chat's own, so its place in recent
+    // lists stays. Once none are left, `update` lets a CLI waiting to reload go.
+    this.update(id, {
+      backgroundAgents: runtime.background.size,
+      updatedAt: this.#store.agent(id).updatedAt,
+    });
+    if (!runtime.background.size) queueMicrotask(() => this.releaseHidden());
   }
   /**
    * Stops the CLI behind every agent that no pane shows any more, once it has nothing left to do.
