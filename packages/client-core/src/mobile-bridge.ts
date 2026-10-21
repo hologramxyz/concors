@@ -150,6 +150,12 @@ export const MobileActionSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("open-url"), url: z.string().max(4096) }),
   z.object({ kind: z.literal("open-preview"), preview: ProcessPreviewSchema }),
   z.object({ kind: z.literal("clipboard"), text: z.string().max(1_000_000) }),
+  /**
+   * The phone's clipboard image, as a PNG data URL or null, and whether there is one. The web
+   * view's own paste carries no image on iOS or Android, so the app reads it natively.
+   */
+  z.object({ kind: z.literal("clipboard-image") }),
+  z.object({ kind: z.literal("clipboard-has-image") }),
   z.object({ kind: z.literal("preferences"), preferences: MobilePreferencesSchema }),
   z.object({ kind: z.literal("file-guard"), active: z.boolean() }),
   z.object({ kind: z.literal("dismiss-keyboard") }),

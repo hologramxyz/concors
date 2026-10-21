@@ -1257,3 +1257,35 @@ test("custom shortcuts persist through the mobile preference bridge and renderer
   await ui.getByRole("button", { name: "Restore all defaults" }).click();
   await expect(ui.getByRole("button", { name: "Restore all defaults" })).toBeDisabled();
 });
+test("an image on the phone's clipboard can be pasted into the composer", async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  const ui = await enter(page);
+  const composer = ui.getByRole("textbox", { name: "Message Codex" });
+  await composer.click();
+  // Nothing to paste yet: no button for it.
+  const paste = ui.getByRole("button", { name: "Paste image", exact: true });
+  await expect(paste).toHaveCount(0);
+  // A screenshot copied on the phone. The app reads the clipboard itself; the web view cannot.
+  await page.evaluate(async () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 24;
+    canvas.height = 16;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("No canvas");
+    context.fillStyle = "#2563eb";
+    context.fillRect(0, 0, 24, 16);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+    if (!blob) throw new Error("No image");
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+  });
+  // Checked again when the app comes back to the foreground, as after copying elsewhere.
+  const renderer = await page.locator('iframe[title="Concors workspace"]').elementHandle();
+  await (
+    await renderer?.contentFrame()
+  )?.evaluate(() => window.dispatchEvent(new Event("concors-foreground")));
+  await paste.click();
+  await expect(ui.getByLabel("Remove Pasted image.png")).toBeVisible();
+});

@@ -47,6 +47,7 @@ import {
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from "expo-glass-effect";
+import * as Clipboard from "expo-clipboard";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { File, Paths } from "expo-file-system";
@@ -503,14 +504,36 @@ function Composer({
     }
   };
   // Like Messages and Paseo: photos and videos first, any file from Files second.
-  const chooseSource = () =>
-    new Promise<"photos" | "files" | null>((resolve) =>
+  const chooseSource = async () => {
+    // A text field offers no Paste for an image, so the sheet does while the clipboard holds one.
+    // Asking whether it does shows no "pasted from" notice; only reading it does.
+    const sources = [
+      ...((await Clipboard.hasImageAsync().catch(() => false)) ? (["clipboard"] as const) : []),
+      "photos" as const,
+      "files" as const,
+    ];
+    const labels = { clipboard: "Paste Image", photos: "Photo Library", files: "Choose File" };
+    return new Promise<(typeof sources)[number] | null>((resolve) =>
       ActionSheetIOS.showActionSheetWithOptions(
-        { options: ["Photo Library", "Choose File", "Cancel"], cancelButtonIndex: 2 },
-        (index) => resolve(index === 0 ? "photos" : index === 1 ? "files" : null),
+        {
+          options: [...sources.map((source) => labels[source]), "Cancel"],
+          cancelButtonIndex: sources.length,
+        },
+        (index) => resolve(sources[index] ?? null),
       ),
     );
-  const pick = async (source: "photos" | "files") => {
+  };
+  const pick = async (source: "clipboard" | "photos" | "files") => {
+    if (source === "clipboard") {
+      const image = await Clipboard.getImageAsync({ format: "png" });
+      const base64 = image?.data.split(",", 2)[1];
+      if (!base64) return null;
+      // Into the cache like the pickers' copies, so it is checked, sent and removed as they are.
+      const file = new File(Paths.cache, `pasted-${Date.now()}.png`);
+      file.create();
+      file.write(base64, { encoding: "base64" });
+      return [{ uri: file.uri, name: "Pasted image.png", mime: "image/png", size: file.size }];
+    }
     if (source === "files") {
       const result = await DocumentPicker.getDocumentAsync({
         multiple: true,
