@@ -18,6 +18,7 @@ import {
   File as FileIcon,
   RotateCw,
   CircleAlert,
+  ClipboardPaste,
 } from "lucide-react";
 import {
   agentProviderName,
@@ -56,7 +57,7 @@ import { useComposerMotion } from "./composer-motion";
 import { NativeSurfaceContext, useNativeSurface } from "@/components/native-surface";
 import { matchCommands, needsArguments, slashQuery } from "./slash-commands";
 import { SlashCommandMenu } from "./slash-menu";
-import { readClipboardImage } from "@/tauri";
+import { clipboardHasImage, readClipboardImage } from "@/tauri";
 import { carriesFiles } from "@/window/file-drops";
 import { ATTACHMENT_LIMIT_BYTES, fileBase64, fitImage, fitImageFile } from "./image-attachment";
 import { ImageViewer } from "./attachment-preview";
@@ -606,6 +607,25 @@ export function AgentComposer({
           ]
         : [];
     });
+  // A phone's text field offers no Paste for an image, so the composer does while the clipboard
+  // holds one (see readClipboardImage in the mobile platform). Checked as it opens and on return.
+  const [clipboardImage, setClipboardImage] = useState(false);
+  useEffect(() => {
+    // iOS's own composer offers Paste Image in its attach sheet.
+    if (!compact || native || !expanded) return;
+    let live = true;
+    const check = () =>
+      void clipboardHasImage().then(
+        (has) => live && setClipboardImage(has),
+        () => undefined,
+      );
+    check();
+    window.addEventListener("concors-foreground", check);
+    return () => {
+      live = false;
+      window.removeEventListener("concors-foreground", check);
+    };
+  }, [compact, native, expanded]);
   const agents = useAgents();
   const nativeModels = useAgentModelSelection(
     agent,
@@ -1264,7 +1284,8 @@ export function AgentComposer({
                   if (e.clipboardData.files.length) {
                     e.preventDefault();
                     void addFiles(e.clipboardData.files);
-                  } else if (!e.clipboardData.types.length) void pasteNativeImage();
+                    // A web view can paste an image as no text and no file: read it natively.
+                  } else if (!e.clipboardData.getData("text/plain")) void pasteNativeImage();
                 }}
                 onKeyDown={(e) => {
                   if (deferred) {
@@ -1367,6 +1388,19 @@ export function AgentComposer({
                     <Plus className="size-4" />
                   </button>
                 </ControlTooltip>
+                {compact && clipboardImage && (
+                  <button
+                    type="button"
+                    aria-label="Paste image"
+                    className="agent-control"
+                    disabled={
+                      !advanced || !connected || busy || attaching || uncertain || !!deferred
+                    }
+                    onClick={() => void pasteNativeImage()}
+                  >
+                    <ClipboardPaste className="size-4" />
+                  </button>
+                )}
                 <div
                   className={compact ? "mobile-composer-settings" : "contents"}
                   hidden={compact && !expanded}
