@@ -21,7 +21,9 @@ import {
 import { ChatPane } from "@/agents/chat";
 import { TerminalPane } from "@/terminal/terminal-pane";
 import { useContext, useEffect, useRef, useState } from "react";
-import { AgentPaneIcon } from "@/agents/activity";
+import { AgentPaneIcon, AgentStatusIcon } from "@/agents/activity";
+import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
+import { isLiveTerminalAgent, terminalAgentStatus } from "@/agents/agent-status";
 import { useAgents } from "@/agents/context";
 import { Columns2, Rows2, Ellipsis, Pencil, Plug, Terminal, X } from "lucide-react";
 import { McpStatusDialog } from "@/agents/mcp-status-dialog";
@@ -399,6 +401,9 @@ function Pane({
   const [menuOpen, setMenuOpen] = useState(false);
   if (menuOpen && !tabVisible) setMenuOpen(false);
   const agent = useAgents().find((agent) => agent.id === node.sessionId);
+  const terminal = useTerminalSessions().find((session) => session.id === node.sessionId);
+  const terminalAgent =
+    node.profile !== "chat" && terminal && isLiveTerminalAgent(terminal) ? terminal : null;
   const [mcpOpen, setMcpOpen] = useState(false);
   const profiles = useTerminalProfiles();
   const options = paneProfiles(profiles.profiles);
@@ -451,6 +456,14 @@ function Pane({
       >
         {node.profile === "chat" ? (
           <AgentPaneIcon sessionId={node.sessionId} />
+        ) : terminalAgent ? (
+          // An agent CLI in a terminal is marked as its tab marks it.
+          <span className="mx-1 flex shrink-0">
+            <AgentStatusIcon
+              agent={terminalAgentStatus(terminalAgent)}
+              surface="bg-[var(--terminal-background)] ring-[var(--terminal-background)]"
+            />
+          </span>
         ) : (
           <PaneIcon className="size-4 shrink-0 text-muted-foreground" />
         )}

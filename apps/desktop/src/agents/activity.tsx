@@ -2,8 +2,8 @@ import { formatDuration } from "./duration";
 import { useEffect, useState } from "react";
 import { ProviderIcon } from "./provider-icon";
 import { agentProviderName } from "@concors/protocol";
-import { useAgents, AGENT_STATUS, agentDisplayStatus } from "./context";
-import type { AgentStatus } from "./agent-status";
+import { useAgents } from "./context";
+import { chatAgentStatus, type AgentStatus } from "./agent-status";
 
 export function AgentLoadingIcon({ className = "size-4" }: { className?: string }) {
   return (
@@ -17,26 +17,33 @@ export function AgentLoadingIcon({ className = "size-4" }: { className?: string 
   );
 }
 
+/**
+ * A chat pane's agent as its tab shows it: the provider logo with the same status badge, so an agent
+ * that finished, failed or waits for an answer is marked on its pane too, and both clear together.
+ */
 export function AgentPaneIcon({ sessionId }: { sessionId: string | null }) {
   const agent = useAgents().find((a) => a.id === sessionId);
-  const running = agent?.status === "working" || agent?.status === "starting";
+  if (!agent)
+    return (
+      <span
+        className="mx-1 flex size-5 shrink-0 items-center justify-center"
+        title={agentProviderName("codex")}
+        aria-label="Codex"
+      >
+        <ProviderIcon provider="codex" />
+      </span>
+    );
+  const status = chatAgentStatus(agent);
   return (
     <span
-      className="relative mx-1 flex size-5 shrink-0 items-center justify-center"
-      title={
-        agent?.settings?.model ?? agent?.model ?? agentProviderName(agent?.provider ?? "codex")
-      }
-      aria-label={agent ? `Agent status: ${AGENT_STATUS[agentDisplayStatus(agent)]}` : "Codex"}
+      className="mx-1 flex shrink-0"
+      title={agent.settings?.model ?? agent.model ?? status.providerName}
     >
-      <ProviderIcon provider={agent?.engine ?? agent?.provider ?? "codex"} />
-      {running && (
-        <span
-          data-testid="pane-agent-loading"
-          className="absolute -right-1 -bottom-1 rounded-full bg-card p-px"
-        >
-          <AgentLoadingIcon className="size-3" />
-        </span>
-      )}
+      <AgentStatusIcon
+        agent={status}
+        surface="bg-card ring-card"
+        runningTestId="pane-agent-loading"
+      />
     </span>
   );
 }
@@ -46,11 +53,14 @@ export function AgentStatusIcon({
   agent,
   label = `Agent status: ${agent.status}`,
   surface = "bg-sidebar ring-sidebar",
+  runningTestId,
 }: {
   agent: Pick<AgentStatus, "provider" | "status" | "running" | "color" | "unread">;
   label?: string;
   /** Background of whatever the icon sits on, so the badge cuts cleanly into the logo. */
   surface?: string;
+  /** Marks the badge while the agent works, for tests that follow a particular icon. */
+  runningTestId?: string;
 }) {
   return (
     <span
@@ -69,6 +79,7 @@ export function AgentStatusIcon({
       )}
       <span
         data-agent-status-badge
+        data-testid={agent.running ? runningTestId : undefined}
         className={`absolute -right-1 -bottom-1 flex size-3 items-center justify-center rounded-full ring-1 ${surface}`}
       >
         {agent.running ? (
