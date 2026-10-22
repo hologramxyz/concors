@@ -62,3 +62,53 @@ test("a workspace shows what its agents want while another workspace is open", a
     await rm(second, { recursive: true, force: true });
   }
 });
+
+test("a pane shows its agent's status on its own icon, as its tab does", async ({ page }) => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-pane-status-"));
+  const control = new DaemonConnection({
+    endpoint: describeDaemonEndpoint("ws://127.0.0.1:7429/ws"),
+    client: { kind: "test", name: "pane status", version: "0.0.0" },
+  });
+  try {
+    control.subscribeWorkspace(() => undefined);
+    await control.connect();
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Pane status", directory);
+    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await chooseProvider(page);
+    await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
+    await expect
+      .poll(() => control.workspace?.projects.find((p) => p.directory === directory)?.id)
+      .toBeTruthy();
+    const project = control.workspace?.projects.find((p) => p.directory === directory);
+    assert(project);
+    await expect.poll(() => control.agents.some((a) => a.projectId === project.id)).toBe(true);
+    const agent = control.agents.find((a) => a.projectId === project.id);
+    assert(agent);
+
+    const pane = page.getByRole("region", { name: "Agent pane", exact: true }).locator("header");
+    const tab = page.getByRole("button", { name: "Tab 2", exact: true });
+    for (const [text, status] of [
+      ["hold", "Working"],
+      ["question", "Needs input"],
+    ] as const) {
+      if (text === "question") {
+        const turnId = control.agents.find((a) => a.id === agent.id)?.turnId;
+        assert(turnId);
+        await control.requestAgent(
+          { kind: "interrupt", sessionId: agent.id, turnId },
+          randomUUID(),
+        );
+      }
+      await control.requestAgent({ kind: "send", sessionId: agent.id, text }, randomUUID());
+      // The pane's icon carries the same badge as the tab's, from the same status.
+      await expect(pane.getByRole("img", { name: `Agent status: ${status}` })).toBeVisible();
+      await expect(tab).toHaveAttribute("aria-description", `Codex: ${status}`);
+    }
+  } finally {
+    control.disconnect();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
