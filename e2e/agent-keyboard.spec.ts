@@ -27,6 +27,8 @@ test("reverse native tab switching preserves permission mode and focuses the des
   const { composer, dispose } = await workspace(page);
   try {
     const permissions = page.getByRole("button", { name: "Permission mode", exact: true });
+    // Shift+Tab changes the mode only once the chat's controls are ready; before, it is ignored.
+    await expect(permissions).toBeEnabled();
     await expect(permissions).toHaveAttribute("data-value", "default");
     // The browser leaves Ctrl+Shift+Tab to its host; it must never change agent permissions.
     await composer.press("Control+Shift+Tab");
