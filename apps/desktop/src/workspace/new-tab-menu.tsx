@@ -153,6 +153,7 @@ export function NewTabMenu({
       ) : (
         <DropdownMenu open={open} onOpenChange={setOpen}>
           <DropdownMenuTrigger
+            data-tour="new-tab"
             title={`New tab (${shortcutLabel("new-tab")})`}
             aria-label={empty ? "Create a tab" : "New tab"}
             disabled={disabled}

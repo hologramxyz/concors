@@ -188,7 +188,7 @@ test("shortcuts have a dedicated settings page and the account menu only shows i
   await account.focus();
   await page.keyboard.press("Enter");
   const menu = page.getByRole("menu");
-  await expect(menu.getByRole("menuitem")).toHaveText(["Settings", "Sign out"]);
+  await expect(menu.getByRole("menuitem")).toHaveText(["Settings", "Take the tour", "Sign out"]);
   await expect(menu.getByText("E2E User", { exact: true })).toBeVisible();
   await expect(menu.getByText("e2e@example.com", { exact: true })).toBeVisible();
   await expect(menu.getByText("Personal organization", { exact: true })).toHaveCount(0);

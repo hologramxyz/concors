@@ -1,9 +1,11 @@
 import { expect, test } from "@playwright/test";
+import { skipTour } from "./support/tour.ts";
 
 test("a machine offers its pending daemon update, confirms first, and shows it installing", async ({
   page,
 }) => {
   await page.emulateMedia({ colorScheme: "dark" });
+  await skipTour(page);
   await page.addInitScript(() => localStorage.setItem("concors.auth.session-token.v1", "fixture"));
   const time = new Date().toISOString();
   const user = {

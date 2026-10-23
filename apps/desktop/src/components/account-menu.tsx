@@ -1,5 +1,5 @@
 import { AccountAvatar } from "./account-avatar";
-import { ChevronsUpDown, LogOut, UserRound, Settings } from "lucide-react";
+import { ChevronsUpDown, Compass, LogOut, UserRound, Settings } from "lucide-react";
 import { useContext, useState, type ReactNode } from "react";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import {
@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 
 import { type SignedInAuth } from "@/auth/auth-state";
+import { replayTour } from "@/tour/store";
 import { TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import {
@@ -81,6 +82,10 @@ export function AccountMenu({
         <DropdownMenuItem className="p-[8px] text-ui" onSelect={onOpenSettings}>
           <Settings aria-hidden="true" />
           Settings
+        </DropdownMenuItem>
+        <DropdownMenuItem className="p-[8px] text-ui" onSelect={replayTour}>
+          <Compass aria-hidden="true" />
+          Take the tour
         </DropdownMenuItem>
         <DropdownMenuItem className="p-[8px] text-ui" onSelect={onSignOut}>
           <LogOut aria-hidden="true" />

@@ -222,6 +222,7 @@ export function ProjectWorkspace({
       <div className="flex h-full min-h-0 flex-col">
         <h1 className="sr-only">{project.name}</h1>
         <div
+          data-tour="tabs"
           data-tauri-drag-region={windowChrome.enabled ? "true" : undefined}
           className="flex min-h-9 shrink-0 items-center gap-2 px-2 py-1 select-none"
         >
