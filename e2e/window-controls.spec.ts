@@ -130,12 +130,18 @@ test("controls stay accessible alongside tabs and the narrow Files panel", async
     await expect(page.getByRole("group", { name: "Window controls" })).toHaveCount(1);
     await page.getByRole("separator", { name: "Resize files sidebar" }).press("Home");
     await page.setViewportSize({ width: 800, height: 600 });
-    const closeFiles = await page
-      .getByRole("button", { name: "Close files", exact: true })
-      .boundingBox();
-    const minimize = await page.getByRole("button", { name: "Minimize window" }).boundingBox();
-    if (!closeFiles || !minimize) throw new Error("Window/file controls are missing");
-    expect(closeFiles.x + closeFiles.width).toBeLessThanOrEqual(minimize.x);
+    // Measured once the narrower layout has settled: right after the resize the Files panel can
+    // still be animating to its new width.
+    await expect
+      .poll(async () => {
+        const [closeFiles, minimize] = await Promise.all([
+          page.getByRole("button", { name: "Close files", exact: true }).boundingBox(),
+          page.getByRole("button", { name: "Minimize window" }).boundingBox(),
+        ]);
+        if (!closeFiles || !minimize) throw new Error("Window/file controls are missing");
+        return minimize.x - (closeFiles.x + closeFiles.width);
+      })
+      .toBeGreaterThanOrEqual(0);
     await page.getByRole("button", { name: "Close files", exact: true }).click();
     await expect(page.getByRole("group", { name: "Window controls" })).toHaveCount(1);
     await expect(page.getByRole("button", { name: "Maximize window", exact: true })).toBeVisible();
