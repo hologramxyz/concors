@@ -15,6 +15,13 @@ import type {
 import { environmentPreviewName, PreviewNames } from "./preview-names.ts";
 
 const execute = promisify(execFile);
+
+/** The kernel's clock ticks per second, which process start times count in; nearly always 100. */
+let ticks: Promise<number> | undefined;
+const clockTicks = () =>
+  (ticks ??= execute("getconf", ["CLK_TCK"], { timeout: 2000 })
+    .then(({ stdout }) => Number(stdout.trim()) || 100)
+    .catch(() => 100));
 /**
  * Whether a process directory lies inside a project. Process inspection reads Linux's
  * `/proc/<pid>/cwd`, so both paths are POSIX and the separator is `/`, not the host's `path.sep`.
@@ -38,6 +45,17 @@ export async function concurrentMap<T, R>(
     }),
   );
   return results;
+}
+
+/** When a process started, from its `starttime` (clock ticks after boot) and the boot time. */
+export function processStartedAt(
+  startedTicks: string,
+  bootSeconds: number,
+  ticksPerSecond: number,
+) {
+  const ticks = Number(startedTicks);
+  if (!Number.isFinite(ticks) || !bootSeconds || !ticksPerSecond) return null;
+  return Math.round((bootSeconds + ticks / ticksPerSecond) * 1000);
 }
 
 export function parseProcessStat(value: string) {
@@ -229,7 +247,10 @@ export class ProcessInventory {
     const entries = (await readdir("/proc")).filter((name) => /^\d+$/.test(name));
     if (entries.length > 8192)
       warnings.push("Process scan limited to 8,192 operating-system entries.");
-    const cpu = ((await readFile("/proc/stat", "utf8")).split("\n")[0] ?? "")
+    const kernel = await readFile("/proc/stat", "utf8");
+    const bootSeconds = Number(/^btime (\d+)$/m.exec(kernel)?.[1] ?? 0);
+    const ticksPerSecond = await clockTicks();
+    const cpu = (kernel.split("\n")[0] ?? "")
       .trim()
       .split(/\s+/)
       .slice(1, 9)
@@ -249,12 +270,15 @@ export class ProcessInventory {
         const info = parseProcessStat(raw);
         const argv = args.split("\0");
         const memory = status.match(/^VmRSS:\s+(\d+)\s+kB/m)?.[1];
+        const swap = status.match(/^VmSwap:\s+(\d+)\s+kB/m)?.[1];
         return {
           ...info,
           directory,
           uid,
           argv,
           memoryBytes: memory ? Number(memory) * 1024 : null,
+          swapBytes: swap ? Number(swap) * 1024 : null,
+          startedAt: processStartedAt(info.started, bootSeconds, ticksPerSecond),
         };
       } catch {
         return null;
@@ -352,6 +376,8 @@ export class ProcessInventory {
             ? null
             : Math.min(100, Math.max(0, ((p.ticks - before) / delta) * 100)),
         memoryBytes: p.memoryBytes,
+        swapBytes: p.swapBytes,
+        startedAt: p.startedAt,
         state:
           p.state === "R"
             ? "running"
