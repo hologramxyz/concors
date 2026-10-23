@@ -81,7 +81,10 @@ test("a pane is renamed from its title or its menu, and clearing the name restor
     const editor = pane.getByRole("textbox", { name: "Pane name", exact: true });
     await expect(header).toContainText("Terminal");
 
-    await header.getByText("Terminal", { exact: true }).dblclick();
+    // The header can show before the machine says panes are renamable; its title says once they are.
+    const title = header.getByText("Terminal", { exact: true });
+    await expect(title).toHaveAttribute("title", /Double-click to rename/);
+    await title.dblclick();
     await expect(editor).toBeFocused();
     await expect(editor).toHaveValue("Terminal");
     await page.keyboard.type("Dev server");
