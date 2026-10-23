@@ -32,6 +32,23 @@ async function resources(page: Page, supported = true) {
       state: "sleeping",
       ports: [5173],
       previews: [{ port: 5173, protocol: "http" }],
+      startedAt: Date.now() - 2 * 3_600_000,
+      swapBytes: 0,
+    },
+    // A dev server an agent left behind weeks ago, pushed almost entirely into swap.
+    {
+      ...template,
+      id: "16:100",
+      pid: 16,
+      name: "next-server",
+      directory: "/repo/site",
+      memoryBytes: 40 * 1024 ** 2,
+      cpuPercent: 0,
+      state: "sleeping",
+      ports: [3000],
+      previews: [{ port: 3000, protocol: "http" }],
+      startedAt: Date.now() - 22 * 86_400_000,
+      swapBytes: Math.round(2.3 * 1024 ** 3),
     },
     {
       ...template,
@@ -137,10 +154,12 @@ test("detected previews stop from the sidebar after a confirmation", async ({ pa
   await stop.getByRole("button", { name: "Stop process", exact: true }).click();
   await expect(stop).toHaveCount(0);
   expect(operations).toContainEqual({ kind: "stop", id: "11:100" });
-  await expect(sidebar).toContainText("No previews detected.");
+  await expect(
+    sidebar.getByRole("button", { name: "Open preview: Vite preview", exact: true }),
+  ).toHaveCount(0);
 });
 
-test("automatically detected previews open directly with rail-only tooltips and no manual controls", async ({
+test("automatically detected previews open directly, say how long they ran and what they hold, and have no manual controls", async ({
   page,
   context,
 }) => {
@@ -152,7 +171,11 @@ test("automatically detected previews open directly with rail-only tooltips and 
   await expect(sidebar.getByRole("button", { name: "Add preview" })).toHaveCount(0);
   const link = sidebar.getByRole("button", { name: "Open preview: Vite preview", exact: true });
   await link.hover();
-  await expect(page.getByRole("tooltip")).toHaveCount(0);
+  const tooltip = page.getByRole("tooltip", { name: /^Vite preview/ });
+  await expect(tooltip).toContainText("Running for 2 hours");
+  await expect(tooltip).toContainText("256.0 MiB of memory");
+  // A recent, light preview is not flagged; only the stale one is.
+  await expect(sidebar.locator("[data-preview-warning]")).toHaveCount(1);
   const opened = page.waitForEvent("popup");
   await link.click();
   const popup = await opened;
@@ -176,7 +199,7 @@ test("Resources opens the same automatically detected preview without an editor"
   await resources(page);
   await page.getByRole("button", { name: "Open resources" }).click();
   await expect(page.getByRole("dialog", { name: /preview/i })).toHaveCount(0);
-  await expect(page.getByRole("main").getByRole("button", { name: "Preview" })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("button", { name: "Preview" })).toHaveCount(2);
 });
 
 test("older daemons show an upgrade state without unsupported requests", async ({ page }) => {
@@ -185,4 +208,24 @@ test("older daemons show an upgrade state without unsupported requests", async (
   await expect(page.getByRole("alert")).toContainText("Update the machine daemon");
   await expect(page.getByRole("button", { name: "Refresh", exact: true })).toBeDisabled();
   expect(operations).toEqual([]);
+});
+
+test("a preview left running for days, or holding a lot of memory, is flagged with why", async ({
+  page,
+}) => {
+  await resources(page);
+  const sidebar = page.getByRole("navigation", { name: "Primary" });
+  // RAM alone (40 MiB) would hide it: the memory it holds counts its swap.
+  const warning = sidebar.getByRole("img", {
+    name: "Running for 22 days and holding 2.3 GiB of memory, most of it in swap. Stop it if you no longer need it.",
+    exact: true,
+  });
+  await expect(warning).toBeVisible();
+  await warning.hover();
+  await expect(page.getByRole("tooltip")).toContainText("Running for 22 days");
+  await page.screenshot({ path: test.info().outputPath("preview-warning.png") });
+  // Nothing stops it but the person: the usual Stop is still theirs to press.
+  await expect(
+    sidebar.getByRole("button", { name: "Stop next-server", exact: true }),
+  ).toBeEnabled();
 });

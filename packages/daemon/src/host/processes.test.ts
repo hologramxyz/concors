@@ -12,6 +12,7 @@ import {
   ProcessInventory,
   previewProtocol,
   within,
+  processStartedAt,
 } from "./processes.ts";
 
 it("parses proc names containing spaces and parentheses without shifting identity fields", () => {
@@ -166,8 +167,18 @@ it.skipIf(process.platform !== "linux")(
     const snapshot = await inventory.snapshot();
     const self = snapshot.processes.find((item) => item.pid === process.pid)!;
     expect(self.stopBlocked).toBeTruthy();
+    // This test's own process started moments ago; a swapless runner reports no swap as zero.
+    const started = Date.now() - process.uptime() * 1000;
+    expect(Math.abs((self.startedAt ?? 0) - started)).toBeLessThan(5000);
+    expect(self.swapBytes).toBeGreaterThanOrEqual(0);
     await expect(inventory.stop(self.id)).rejects.toThrow("protected");
     await expect(inventory.stop(`${process.pid}:0`)).rejects.toThrow("exited or changed");
   },
   15_000,
 );
+
+it("dates a process from its start in clock ticks after boot", () => {
+  // Booted at 1,700,000,000 s; started 12,345.67 s later at 100 ticks per second.
+  expect(processStartedAt("1234567", 1_700_000_000, 100)).toBe(1_700_012_345_670);
+  expect(processStartedAt("1234567", 0, 100)).toBeNull();
+});

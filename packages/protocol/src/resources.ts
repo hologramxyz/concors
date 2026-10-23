@@ -25,6 +25,10 @@ export const MachineProcessSchema = z.object({
   projectId: z.string().uuid().nullable(),
   cpuPercent: z.number().min(0).max(100).nullable(),
   memoryBytes: Bytes.nullable(),
+  /** Memory swapped out to disk, which `memoryBytes` (RAM) leaves out; absent on older daemons. */
+  swapBytes: Bytes.nullable().optional(),
+  /** When the process started, in milliseconds since the epoch; absent on older daemons. */
+  startedAt: z.number().int().nonnegative().nullable().optional(),
   state: z.enum(["running", "sleeping", "stopped", "zombie", "unknown"]),
   ports: z.array(z.number().int().min(1).max(65535)).max(64),
   /** HTTP services confirmed by the daemon; absent on older daemons. */
