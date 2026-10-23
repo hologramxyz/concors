@@ -1,5 +1,6 @@
 import { test as base, expect, type Page } from "@playwright/test";
 import { DaemonConnection, describeDaemonEndpoint } from "../packages/daemon-client/src/index.ts";
+import { skipTour } from "./support/tour.ts";
 
 // Specs share isolated daemons. Clear previous projects as well as live PTYs so a failed
 // test cannot leave agent panes in the next test's sidebar, and forget the agent provider and
@@ -141,7 +142,10 @@ export async function signedIn(
   page: Page,
   name = "E2E User",
   subscriptions = new SubscriptionLibrary(),
+  /** Leave the first-run tour to be offered, for the specs that test it. */
+  options: { freshTour?: boolean } = {},
 ): Promise<void> {
+  if (!options.freshTour) await skipTour(page);
   await page.addInitScript(
     ([key, token]: [string, string]) => {
       // Mobile's sandboxed renderer has no storage access and must never receive account tokens.
