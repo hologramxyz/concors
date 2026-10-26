@@ -1306,6 +1306,6 @@ test("the app reopens the tab last opened on this machine", async ({ page }) => 
   await expect(tabs).toHaveAttribute("data-value", activeTerminal);
   // Picking again moves what the next launch opens.
   await choose(ui, "Tabs", activeChat);
-  ui = await enter(page);
+  await enter(page);
   await expect(tabs).toHaveAttribute("data-value", activeChat);
 });
