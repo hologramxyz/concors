@@ -1,20 +1,34 @@
 #!/bin/bash
-# Installs Playwright's Chromium and the Ubuntu packages it needs, for the browser suites.
+# Installs Playwright's Chromium for the browser suites.
 #
-# `--with-deps` installs those packages with apt, from Ubuntu's mirror, which sometimes stalls for
-# many minutes: one stalled attempt used up a whole job's time limit, and the job was cancelled
-# with its tests half run or not run at all. apt now retries its own downloads with short timeouts
-# (for every apt call, Playwright's included), and each attempt has a deadline and is tried again.
+# The browser comes from Playwright's own servers. Its Ubuntu packages come through apt from the
+# runner's Ubuntu mirror, which sometimes stalls for many minutes; those packages are mostly fonts,
+# and the runner image already has the libraries Chromium runs on. So the download is retried, the
+# packages get one bounded attempt, and a stalled mirror only fails the job if Chromium is actually
+# missing a library. (Retrying `playwright install --with-deps` did not work: stopping it leaves its
+# root apt-get running, holding the package lock, so every retry failed at once.)
 set -euo pipefail
 
-printf '%s\n' 'Acquire::Retries "3";' 'Acquire::http::Timeout "30";' 'Acquire::https::Timeout "30";' |
-  sudo tee /etc/apt/apt.conf.d/80-concors-retries >/dev/null
-
 for attempt in 1 2 3; do
-  if timeout 360 pnpm exec playwright install --with-deps chromium; then
-    exit 0
+  if timeout 300 pnpm exec playwright install chromium; then
+    break
   fi
-  echo "::warning::Installing Playwright's Chromium failed or stalled (attempt $attempt of 3)."
-  [ "$attempt" = 3 ] || sleep 15
+  [ "$attempt" != 3 ] || exit 1
+  echo "::warning::Downloading Chromium failed or stalled (attempt $attempt of 3)."
+  sleep 15
 done
-exit 1
+
+if ! timeout 240 pnpm exec playwright install-deps chromium; then
+  echo "::warning::Chromium's Ubuntu packages did not install in time; checking it has the libraries it needs."
+fi
+
+missing=""
+while IFS= read -r binary; do
+  missing+="$(ldd "$binary" 2>/dev/null | grep 'not found' || true)"
+done < <(find "${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}" -type f \
+  \( -name chrome -o -name chrome-headless-shell \) 2>/dev/null)
+if [ -n "$missing" ]; then
+  echo "Chromium is missing libraries the runner does not have:"
+  echo "$missing"
+  exit 1
+fi
