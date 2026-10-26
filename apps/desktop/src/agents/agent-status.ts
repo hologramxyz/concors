@@ -84,6 +84,21 @@ export function isLiveTerminalAgent(session: TerminalInfo) {
   );
 }
 
+/** The agent a pane shows, chat or CLI in a terminal, or null when it shows none. */
+export function paneAgentStatus(
+  pane: Extract<LayoutNode, { kind: "pane" }>,
+  chats: readonly AgentInfo[],
+  terminals: readonly TerminalInfo[],
+): AgentStatus | null {
+  if (!pane.sessionId) return null;
+  if (pane.profile === "chat") {
+    const agent = chats.find((item) => item.id === pane.sessionId);
+    return agent ? chatAgentStatus(agent) : null;
+  }
+  const session = terminals.find((item) => item.id === pane.sessionId);
+  return session && isLiveTerminalAgent(session) ? terminalAgentStatus(session) : null;
+}
+
 /** The agents in a tab's panes, in reading order (left to right, top to bottom). */
 export function tabAgentStatuses(
   tab: WorkspaceTab,
@@ -102,13 +117,8 @@ export function tabAgentStatuses(
   };
   visit(tab.root);
   return panes.flatMap((pane) => {
-    if (!pane.sessionId) return [];
-    if (pane.profile === "chat") {
-      const agent = chats.find((item) => item.id === pane.sessionId);
-      return agent ? [chatAgentStatus(agent)] : [];
-    }
-    const session = terminals.find((item) => item.id === pane.sessionId);
-    return session && isLiveTerminalAgent(session) ? [terminalAgentStatus(session)] : [];
+    const status = paneAgentStatus(pane, chats, terminals);
+    return status ? [status] : [];
   });
 }
 
