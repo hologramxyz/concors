@@ -77,6 +77,15 @@ export interface MachinesViewProps {
   /** The machine the app is connected to (`local` for this computer) and that connection. */
   readonly selectedMachineId?: string;
   readonly connection?: DaemonConnectionInfo;
+  /**
+   * Whether this client offers buying, cancelling and paying for machines. The phone leaves all of
+   * that to the desktop app, as the App Store requires: no prices, plans or payment warnings.
+   */
+  readonly purchases?: boolean;
+  /** For a client without a machine switcher of its own (the phone): opens a machine. */
+  readonly onOpen?: (machine: Machine) => Promise<void>;
+  /** Whether `onOpen` can reach this machine now. */
+  readonly canOpen?: (machine: Machine) => boolean;
 }
 
 /** Cloud machines of the active organization: list, create, rename, cancel, and how to connect. */
@@ -87,11 +96,14 @@ export function MachinesView({
   focusedMachineId,
   selectedMachineId,
   connection,
+  purchases = true,
+  onOpen,
+  canOpen = () => true,
 }: MachinesViewProps) {
   const organization = activeOrganization(auth);
-  const state = useMachines(organization?.id);
+  const state = useMachines(organization?.id, { catalog: purchases });
   const ssh = useDeviceSsh(organization?.id);
-  const billing = useBillingStatus(organization?.id ?? "");
+  const billing = useBillingStatus(organization?.id ?? "", purchases);
   const [creating, setCreating] = useState(false);
   const [draft, setDraft] = useState<MachineDraft | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
@@ -99,6 +111,7 @@ export function MachinesView({
   const [resuming, setResuming] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   /** The own-server dialog: the machine it connects once added, and its command when known. */
+  const [opening, setOpening] = useState<string | null>(null);
   const [connecting, setConnecting] = useState<{
     machineId: string | null;
     command: string | null;
@@ -154,7 +167,11 @@ export function MachinesView({
     >
       <SettingsSectionHeader
         title="Machines"
-        description="Manage this computer and your cloud development machines."
+        description={
+          purchases
+            ? "Manage this computer and your cloud development machines."
+            : "Your development machines. Add or cancel machines in the Concors desktop app."
+        }
         actions={
           <>
             <Button
@@ -166,13 +183,15 @@ export function MachinesView({
             >
               <RefreshCw className={cn(state.loading && "animate-spin")} aria-hidden="true" />
             </Button>
-            <NewMachineMenu
-              variant="outline"
-              size="sm"
-              disabled={state.catalog === null || !organization}
-              onNewVps={newVps}
-              onConnectServer={connectServer}
-            />
+            {purchases && (
+              <NewMachineMenu
+                variant="outline"
+                size="sm"
+                disabled={state.catalog === null || !organization}
+                onNewVps={newVps}
+                onConnectServer={connectServer}
+              />
+            )}
           </>
         }
       />
@@ -188,13 +207,15 @@ export function MachinesView({
         </div>
       )}
 
-      <PaymentFailedWarning
-        className="mb-5"
-        organizationId={organization?.id}
-        paymentFailedAt={billing.data?.paymentFailedAt ?? null}
-        atRisk={atRisk}
-        onReturn={() => void billing.refresh()}
-      />
+      {purchases && (
+        <PaymentFailedWarning
+          className="mb-5"
+          organizationId={organization?.id}
+          paymentFailedAt={billing.data?.paymentFailedAt ?? null}
+          atRisk={atRisk}
+          onReturn={() => void billing.refresh()}
+        />
+      )}
 
       {onSelectLocal && (
         <div
@@ -236,13 +257,17 @@ export function MachinesView({
           <Cloud className="size-10 text-muted-foreground/50" aria-hidden="true" />
           <h3 className="text-lg font-medium">No cloud machines yet</h3>
           <p className="max-w-sm text-sm text-muted-foreground">
-            Create a machine to run agents, clone repositories, and keep your work in one place.
+            {purchases
+              ? "Create a machine to run agents, clone repositories, and keep your work in one place."
+              : "Add one in the Concors desktop app, with this account and organization, then refresh."}
           </p>
-          <NewMachineMenu
-            disabled={state.catalog === null || !organization}
-            onNewVps={newVps}
-            onConnectServer={connectServer}
-          />
+          {purchases && (
+            <NewMachineMenu
+              disabled={state.catalog === null || !organization}
+              onNewVps={newVps}
+              onConnectServer={connectServer}
+            />
+          )}
         </div>
       ) : (
         <ul aria-label="Cloud machines" className="flex flex-col gap-5">
@@ -256,7 +281,20 @@ export function MachinesView({
                 machine={machine}
                 ssh={ssh}
                 connection={selectedMachineId === machine.id ? connection : undefined}
-                paymentFailed={billing.data?.paymentFailedAt != null}
+                paymentFailed={purchases && billing.data?.paymentFailedAt != null}
+                purchases={purchases}
+                {...(onOpen && canOpen(machine)
+                  ? {
+                      opening: opening === machine.id,
+                      onOpen: () => {
+                        setOpening(machine.id);
+                        setActionError(null);
+                        void onOpen(machine)
+                          .catch((cause: unknown) => setActionError(describeMachinesError(cause)))
+                          .finally(() => setOpening(null));
+                      },
+                    }
+                  : {})}
                 onRename={(name) => state.rename(machine.id, name)}
                 onIconChange={(icon) => state.setIcon(machine.id, icon)}
                 location={
@@ -374,6 +412,9 @@ function MachineCard({
   onRemove,
   onRetry,
   removing,
+  purchases,
+  onOpen,
+  opening = false,
 }: {
   readonly machine: Machine;
   readonly ssh: DeviceSsh;
@@ -395,6 +436,11 @@ function MachineCard({
   readonly onRemove: () => void;
   readonly onRetry: () => void;
   readonly removing: boolean;
+  /** See MachinesView: without purchases, no price and no cancel, remove or keep actions. */
+  readonly purchases: boolean;
+  /** Present when this client opens machines from here and this one can be opened now. */
+  readonly onOpen?: () => void;
+  readonly opening?: boolean;
 }) {
   const tone = statusTone(machine);
   // No server and no bill: nothing ends, renews or can be connected to.
@@ -475,12 +521,24 @@ function MachineCard({
                     <Server className="size-3.5 shrink-0" aria-hidden="true" />
                     {machine.size}
                   </span>
-                  {!undeployed && <span>{formatMonthly(machine.monthlyPrice)}</span>}
+                  {!undeployed && purchases && <span>{formatMonthly(machine.monthlyPrice)}</span>}
                 </>
               )}
             </div>
           </div>
-          {undeployed ? (
+          {!purchases ? (
+            onOpen && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={onOpen}
+                disabled={opening}
+              >
+                {connection ? "Open" : "Connect"}
+              </Button>
+            )
+          ) : undeployed ? (
             <div className="flex shrink-0 flex-wrap justify-end gap-2">
               <Button variant="ghost" size="sm" onClick={onRemove} disabled={removing}>
                 <Trash2 data-icon="inline-start" aria-hidden="true" />
@@ -530,9 +588,15 @@ function MachineCard({
             <div className="min-w-0 space-y-1">
               <p className="text-sm font-medium">This machine couldn't be deployed</p>
               <p className="text-sm text-muted-foreground">
-                The order didn't go through, so no server was created
-                {machine.monthlyPrice ? " and its payment was refunded" : ""}. Try again to pick
-                another region or size, or remove it.
+                {purchases ? (
+                  <>
+                    The order didn't go through, so no server was created
+                    {machine.monthlyPrice ? " and its payment was refunded" : ""}. Try again to pick
+                    another region or size, or remove it.
+                  </>
+                ) : (
+                  "No server was created. Try again or remove it in the Concors desktop app."
+                )}
               </p>
             </div>
           </div>
@@ -548,10 +612,16 @@ function MachineCard({
                 : "Run the setup command on your server to connect it."
             }
           >
-            <Button variant="outline" size="sm" onClick={onShowConnectCommand}>
-              <Terminal data-icon="inline-start" aria-hidden="true" />
-              Show setup command
-            </Button>
+            {purchases ? (
+              <Button variant="outline" size="sm" onClick={onShowConnectCommand}>
+                <Terminal data-icon="inline-start" aria-hidden="true" />
+                Show setup command
+              </Button>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Its setup command is in the Concors desktop app.
+              </p>
+            )}
           </SetupPanel>
         </div>
       ) : isSettingUp(machine) ? (

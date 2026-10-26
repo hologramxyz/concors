@@ -259,7 +259,8 @@ test("mobile sidebar reuses account avatars and edits machine names and icons th
   await sheet(ui, "Settings").getByRole("combobox", { name: "Settings section" }).click();
   await expect(ui.getByRole("option", { name: "Machines", exact: true })).toHaveCount(1);
   await ui.getByRole("option", { name: "Machines", exact: true }).click();
-  const row = ui.locator('[data-machine-id="second-machine"]');
+  // Desktop's machine card, as on desktop's Machines page.
+  const row = ui.locator("#cloud-machine-second-machine");
   await row.getByRole("button", { name: "Rename build-server", exact: true }).click();
   await expect(sheet(ui, "Rename machine")).toHaveAttribute("data-mobile-drawer", "true");
   await sheet(ui, "Rename machine")
