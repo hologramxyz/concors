@@ -13,6 +13,8 @@ export function dispatchMobileApi(api: ApiClient, call: MobileApiCall) {
       return api.getMachine(...call.args);
     case "renameMachine":
       return api.renameMachine(...call.args);
+    case "updateMachineDaemon":
+      return api.updateMachineDaemon(...call.args);
     case "updateMachineIcon":
       return api.updateMachineIcon(...call.args);
     case "githubStatus":
@@ -60,6 +62,7 @@ export function assertCompanionApiAllowed(call: MobileApiCall) {
       "getMachine",
       "renameMachine",
       "updateMachineIcon",
+      "updateMachineDaemon",
       "githubStatus",
       "connectGitHub",
       "disconnectGitHub",

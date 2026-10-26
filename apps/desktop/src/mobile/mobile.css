@@ -210,10 +210,15 @@ body {
   height: 20px;
   flex-shrink: 0;
 }
-.mobile-pane-choice > span {
+.mobile-pane-choice > span:not([data-pane-status]) {
   min-width: 0;
   flex: 1;
   font-size: 14px;
+}
+/* An agent's logo and status dot sit where the pane's icon would, at its size. */
+.mobile-pane-choice > [data-pane-status] {
+  display: flex;
+  flex-shrink: 0;
 }
 .mobile-pane-choice small {
   display: block;

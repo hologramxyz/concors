@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useNotificationPreferences, setNotificationPreferences } from "./preferences";
 import {
   desktopNotice,
@@ -15,7 +15,13 @@ import { Button } from "@/components/ui/button";
 export function NotificationSettings({
   native = false,
   onSetSound,
-}: { native?: boolean; onSetSound?(enabled: boolean): Promise<void> } = {}) {
+  children,
+}: {
+  native?: boolean;
+  onSetSound?(enabled: boolean): Promise<void>;
+  /** Rows of the platform's own, such as the phone's push notifications, in the same card. */
+  children?: ReactNode;
+} = {}) {
   const preferences = useNotificationPreferences();
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -187,6 +193,7 @@ export function NotificationSettings({
             </Button>
           </div>
         )}
+        {children}
       </SettingsCard>
       {error && (
         <p role="alert" className="mt-2 text-xs text-destructive">

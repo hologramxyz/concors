@@ -238,7 +238,11 @@ function SignedInWorkspace() {
       case "api": {
         const call = action.call;
         const editsMachine = call.method === "renameMachine" || call.method === "updateMachineIcon";
-        if (editsMachine || call.method === "prepareGitHubMachine") {
+        if (
+          editsMachine ||
+          call.method === "prepareGitHubMachine" ||
+          call.method === "updateMachineDaemon"
+        ) {
           if (!machines.data?.some((machine) => machine.id === call.args[0]))
             throw new Error("Machine is unavailable in this organization");
         }

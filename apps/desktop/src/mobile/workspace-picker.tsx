@@ -10,6 +10,10 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { PaneProfileIcon } from "@/workspace/profile-icon";
+import { AgentStatusIcon } from "@/agents/activity";
+import { paneAgentStatus } from "@/agents/agent-status";
+import { useAgents } from "@/agents/context";
+import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
 import { projectPanes, type PaneNode } from "./selection";
 import { WorkspaceActions } from "./workspace-actions";
 import { useNativeSurface } from "@/components/native-surface";
@@ -41,6 +45,8 @@ export function WorkspacePicker({
   const trigger = useRef<HTMLButtonElement>(null);
   const content = useRef<HTMLDivElement>(null);
   const entries = projectPanes(project);
+  const chats = useAgents();
+  const terminals = useTerminalSessions();
   const selected = entries.find((entry) => entry.tab.id === tab?.id && entry.pane.id === pane?.id);
   const title = selected?.label ?? project.name;
   const subtitle = selected?.profileLabel ?? "Tabs";
@@ -167,6 +173,8 @@ export function WorkspacePicker({
           >
             {entries.map(({ tab: item, pane: node, label, profileLabel }) => {
               const active = tab?.id === item.id && pane?.id === node.id;
+              // The agent's logo and status dot, as desktop's tab strip shows them.
+              const status = paneAgentStatus(node, chats, terminals);
               return (
                 <div key={`${item.id}:${node.id}`} className="mobile-pane-row">
                   <button
@@ -174,10 +182,23 @@ export function WorkspacePicker({
                     data-pane-choice
                     data-value={`${item.id}:${node.id}`}
                     aria-pressed={active}
+                    // Read out beside the tab's name, which stays the button's name.
+                    aria-description={
+                      status ? `${status.providerName}: ${status.status}` : undefined
+                    }
                     className="mobile-pane-choice"
                     onClick={() => choose(item.id, node.id)}
                   >
-                    <PaneProfileIcon profile={node.profile} />
+                    {status ? (
+                      <span aria-hidden="true" data-pane-status={status.status}>
+                        <AgentStatusIcon
+                          agent={status}
+                          surface={active ? "bg-accent ring-accent" : "bg-popover ring-popover"}
+                        />
+                      </span>
+                    ) : (
+                      <PaneProfileIcon profile={node.profile} />
+                    )}
                     <span>
                       <span className="block truncate">{label}</span>
                       <small className="truncate">{profileLabel}</small>
