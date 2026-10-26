@@ -450,6 +450,9 @@ test("folder workspaces and shared settings remain available from the sidebar", 
   await openSettings(ui);
   await choose(ui, "Settings section", "notifications");
   await expect(ui.getByRole("checkbox", { name: "Push notifications" })).toBeDisabled();
+  // One section, as on desktop: push sits beside sound rather than under a second heading.
+  await expect(ui.getByRole("heading", { name: "Agent notifications" })).toHaveCount(1);
+  await page.screenshot({ path: test.info().outputPath("mobile-notifications.png") });
   await ui.getByRole("combobox", { name: "Settings section", exact: true }).click();
   await expect(ui.getByRole("option", { name: "Billing", exact: true })).toHaveCount(0);
   await ui.getByRole("option").first().press("Escape");
