@@ -1,10 +1,16 @@
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
-import type { WorkspaceProject, WorkspaceTab, LayoutNode } from "@concors/protocol";
+import {
+  terminalProfileKind,
+  type WorkspaceProject,
+  type WorkspaceTab,
+  type LayoutNode,
+} from "@concors/protocol";
 import { LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PaneVisibilityContext } from "@/components/compact-layout";
 import { useViewedAgent } from "@/notifications/context";
 import { useTabVisible } from "@/workspace/tab-visibility";
+import { TerminalCliInstall } from "./cli-install";
 import { TerminalConnectionContext } from "./connection-context";
 import { TerminalSurface } from "./terminal-surface";
 import { useTerminalSessions } from "./use-terminal-sessions";
@@ -100,6 +106,11 @@ export function TerminalPane({
         launchError={error}
       />
     );
+  const cliId = node.terminalProfile
+    ? terminalProfileKind(node.terminalProfile.command)
+    : node.profile === "chat"
+      ? "shell"
+      : node.profile;
   return (
     <div
       className="flex min-h-0 flex-1 items-center justify-center bg-[var(--terminal-background)]"
@@ -110,7 +121,22 @@ export function TerminalPane({
           <p role="alert" className="text-sm text-destructive">
             {error}
           </p>
-          <Button size="sm" disabled={!canEdit || busy} onClick={() => void start()}>
+          {cliId !== "shell" &&
+            connection?.state.status === "ready" &&
+            connection.state.daemon.capabilities?.includes("provider-settings") && (
+              <TerminalCliInstall
+                connection={connection}
+                cliId={cliId}
+                canEdit={canEdit}
+                onInstalled={() => void start()}
+              />
+            )}
+          <Button
+            size="sm"
+            variant={cliId === "shell" ? "default" : "outline"}
+            disabled={!canEdit || busy}
+            onClick={() => void start()}
+          >
             {busy ? "Starting…" : "Retry terminal"}
           </Button>
         </div>
