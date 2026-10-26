@@ -390,7 +390,7 @@ test("top select switches split panes and cold session links survive sign-in", a
   await expect(ui.getByLabel("Terminal output", { exact: true })).toBeVisible();
   await ui.locator(".xterm-helper-textarea").pressSequentially("ls");
   await ui.locator(".xterm-helper-textarea").press("Enter");
-  await expect(ui.locator(".xterm-accessibility-tree")).toContainText("ls");
+  await expect(ui.locator(".xterm-rows")).toContainText("ls");
   await choose(ui, "Tabs", activeChat);
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
