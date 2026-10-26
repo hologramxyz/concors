@@ -41,7 +41,10 @@ export async function checkRelease({ candidate = false, json = false } = {}) {
   }
 }
 
-if (process.argv[1] && realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url)))
+if (
+  process.argv[1] &&
+  realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url))
+)
   await checkRelease({
     candidate: process.argv.includes("--candidate"),
     json: process.argv.includes("--json"),
