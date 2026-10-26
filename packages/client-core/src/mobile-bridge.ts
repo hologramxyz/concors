@@ -29,6 +29,8 @@ export const MobileApiCallSchema = z.discriminatedUnion("method", [
     args: z.tuple([id, z.string().regex(/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/)]),
   }),
   z.object({ method: z.literal("updateMachineIcon"), args: z.tuple([id, MachineIconSchema]) }),
+  /** Installs a machine's pending daemon update now, as its owner can from the desktop app. */
+  z.object({ method: z.literal("updateMachineDaemon"), args: z.tuple([id]) }),
   z.object({ method: z.literal("githubStatus"), args: empty }),
   z.object({ method: z.literal("connectGitHub"), args: empty }),
   z.object({ method: z.literal("disconnectGitHub"), args: empty }),

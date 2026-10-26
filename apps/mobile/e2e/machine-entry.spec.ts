@@ -15,7 +15,9 @@ test("machine picker leads directly to machine settings", async ({ page }) => {
     "data-value",
     "machines",
   );
-  await expect(settings.getByRole("button", { name: "Refresh machines" })).toBeVisible();
+  // Desktop's Machines page, without buying or cancelling.
+  await expect(settings.getByRole("region", { name: "Machines", exact: true })).toBeVisible();
+  await expect(settings.getByRole("button", { name: "Refresh", exact: true })).toBeVisible();
 });
 
 test("an account with no machines gets machine setup navigation instead of project instructions", async ({
@@ -38,6 +40,7 @@ test("an account with no machines gets machine setup navigation instead of proje
   await expect(ui.getByRole("heading", { name: "Connect a machine to get started" })).toBeVisible();
   await ui.getByRole("button", { name: "Manage machines", exact: true }).click();
   const settings = ui.getByRole("dialog", { name: "Settings", exact: true });
-  await expect(settings).toContainText("No machines are available in this organization");
-  await expect(settings.getByRole("button", { name: "Refresh machines" })).toBeVisible();
+  await expect(settings.getByRole("region", { name: "Machines", exact: true })).toBeVisible();
+  await expect(settings).toContainText("Add or cancel machines in the Concors desktop app.");
+  await expect(settings.getByRole("button", { name: "Refresh", exact: true })).toBeVisible();
 });

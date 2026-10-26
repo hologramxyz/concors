@@ -39,6 +39,8 @@ it("dispatches only the explicit GitHub and machine metadata methods", async () 
     { method: "prepareGitHubMachine", args: ["machine", "org/repo"] },
     { method: "renameMachine", args: ["machine", "new-name"] },
     { method: "updateMachineIcon", args: ["machine", "🚀"] },
+    // Not commerce: installing a machine's pending daemon update, as desktop's Machines page can.
+    { method: "updateMachineDaemon", args: ["machine"] },
   ];
   for (const call of calls) {
     const method = vi.fn().mockResolvedValue({ ok: true });
