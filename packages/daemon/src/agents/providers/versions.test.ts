@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
@@ -283,4 +283,65 @@ it("tries each release once and leaves installs it does not own to the user", as
   expect(theirs.get("codex")).toMatchObject({ updateAvailable: true });
   expect(runs.some((argv) => argv[0] === "mise")).toBe(false);
   theirs.close();
+});
+
+it("installs its own copy again from scratch when npm left it without its binary", async () => {
+  const codex = await concorsInstall();
+  const lockfile = join(codex.prefix, "package-lock.json");
+  await writeFile(lockfile, "{}");
+  let installs = 0;
+  // The first install "succeeds" without the platform binary, as npm does when that optional
+  // dependency fails to download; the fresh one brings it.
+  const run = vi.fn(async (argv: string[]) => {
+    if (argv[0] === "npm") {
+      installs++;
+      return { code: 0, output: "added 1 package" };
+    }
+    return installs >= 2
+      ? { code: 0, output: "codex-cli 1.1.0" }
+      : { code: 1, output: "Error: Missing optional dependency @openai/codex-linux-x64" };
+  });
+  const versions = new ProviderVersions(
+    () => [codex],
+    vi.fn(),
+    run,
+    async () => "1.1.0",
+    () => false,
+  );
+  // Found broken by a check: it never reads as outdated, so it is repaired instead.
+  await versions.check();
+  await versions.pending("codex");
+  expect(installs).toBe(2);
+  expect(versions.get("codex")).toMatchObject({ installed: "1.1.0" });
+  expect(versions.get("codex")?.updateError).toBeUndefined();
+  // Starting fresh means npm's lockfile from the broken install is gone too.
+  await expect(readFile(lockfile, "utf8")).rejects.toThrow();
+  versions.close();
+});
+
+it("says so when its own copy still does not start, and tries each release once", async () => {
+  const codex = await concorsInstall();
+  let installs = 0;
+  const run = vi.fn(async (argv: string[]) => {
+    if (argv[0] === "npm") {
+      installs++;
+      return { code: 0, output: "added 1 package" };
+    }
+    return { code: 1, output: "Error: Missing optional dependency @openai/codex-linux-x64" };
+  });
+  const versions = new ProviderVersions(
+    () => [codex],
+    vi.fn(),
+    run,
+    async () => "1.1.0",
+    () => false,
+  );
+  await versions.check();
+  await versions.pending("codex");
+  // A repair installs from scratch, checks, and installs from scratch once more.
+  expect(installs).toBe(2);
+  expect(versions.get("codex")?.updateError).toMatch(/was installed but does not start/);
+  await versions.check();
+  expect(installs).toBe(2);
+  versions.close();
 });
