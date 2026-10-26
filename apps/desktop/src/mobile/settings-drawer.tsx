@@ -175,31 +175,36 @@ export function SettingsDrawer({
                     preferences: { ...host.preferences, sound },
                   });
                 }}
-              />
-              <Section
-                title="Agent notifications"
-                description="Get notified when an agent finishes or needs your input. Code and prompts stay out of notification payloads."
               >
-                <label className="flex items-center justify-between gap-4 py-4">
-                  <span>Push notifications</span>
-                  <input
-                    type="checkbox"
-                    aria-label="Push notifications"
-                    checked={host.pushEnabled}
-                    disabled={busy || !host.capabilities.pushNotifications}
-                    onChange={(event) =>
-                      void run(() => hostAction({ kind: "push", enabled: event.target.checked }))
-                    }
-                  />
-                </label>
-                {!host.capabilities.pushNotifications && (
-                  <p className="text-sm text-muted-foreground">
-                    {host.app?.personalTeam
-                      ? "Push notifications are disabled in this free Personal Team build."
-                      : "Push delivery is not available on this server yet."}
-                  </p>
-                )}
-              </Section>
+                {/* Where desktop has its banners: the phone's own notifications. */}
+                <div className="p-4">
+                  <label className="flex items-center justify-between gap-6">
+                    <span>
+                      <span className="text-sm font-medium">Push notifications</span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
+                        When an agent finishes or needs your input. Code and prompts stay out of
+                        notifications.
+                      </span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      aria-label="Push notifications"
+                      checked={host.pushEnabled}
+                      disabled={busy || !host.capabilities.pushNotifications}
+                      onChange={(event) =>
+                        void run(() => hostAction({ kind: "push", enabled: event.target.checked }))
+                      }
+                    />
+                  </label>
+                  {!host.capabilities.pushNotifications && (
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      {host.app?.personalTeam
+                        ? "Push notifications are disabled in this free Personal Team build."
+                        : "Push delivery is not available on this server yet."}
+                    </p>
+                  )}
+                </div>
+              </NotificationSettings>
             </div>
           ) : host.me ? (
             <SettingsView
