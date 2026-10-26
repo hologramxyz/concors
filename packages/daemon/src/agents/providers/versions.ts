@@ -9,9 +9,16 @@
  * deferred because the CLI is busy, waits for the user to press Update, and only with a command
  * scoped to that one tool; installs the daemon cannot attribute get no command, and the user
  * updates them the way they installed them.
+ *
+ * npm counts a platform binary it failed to download (Codex ships its binary as an optional
+ * dependency, often over 100 MB) as a skipped extra and still reports success, leaving a copy that
+ * cannot start; one that does not answer `--version` then never shows as outdated either. So a copy
+ * of Concors' own is checked after every update and installed again from scratch if it does not
+ * start, and one found broken later is reinstalled once per release.
  */
 import { closeSync, openSync, readSync, realpathSync } from "node:fs";
-import { basename, dirname, sep } from "node:path";
+import { rm } from "node:fs/promises";
+import { basename, dirname, join, sep } from "node:path";
 import spawn from "cross-spawn";
 import type { ProviderVersion } from "@concors/protocol";
 import { killTree } from "../../host/kill-tree.ts";
@@ -207,6 +214,8 @@ interface Entry {
   attempted?: string | undefined;
   updating?: boolean;
   updateError?: string | undefined;
+  /** The release a reinstall of a copy that does not start last tried, so it is tried once each. */
+  repaired?: string | undefined;
 }
 
 export class ProviderVersions {
@@ -280,6 +289,15 @@ export class ProviderVersions {
       this.entries.set(target.id, { ...entry, attempted: version.latest });
       this.update(target);
     }
+    for (const target of this.targets()) {
+      if (this.closed) return;
+      const entry = this.entries.get(target.id);
+      if (!entry?.automatic || !entry.command || entry.installed || entry.updating) continue;
+      const release = entry.latest ?? "unknown";
+      if (entry.repaired === release || this.busy(target)) continue;
+      this.entries.set(target.id, { ...entry, repaired: release });
+      this.update(target, true);
+    }
   }
   /** The running update of this provider's CLI, which settles (never rejects) once it ends. */
   pending(id: string): Promise<void> | undefined {
@@ -323,17 +341,26 @@ export class ProviderVersions {
     return !!previous?.installed && !!installed && previous.installed !== installed;
   }
   /** Starts the install's own update command; progress is visible through `get`. */
-  update(target: VersionTarget) {
+  update(target: VersionTarget, clean = false) {
     const entry = this.entries.get(target.id);
     if (entry?.updating) return;
     if (!entry?.command)
       throw new Error(
         `Concors can't tell how ${target.label} was installed. Update it the way you installed it.`,
       );
+    const command = entry.command;
     const executable = target.executable();
     const env = executable?.env ?? process.env;
     this.entries.set(target.id, { ...entry, updating: true, updateError: undefined });
-    const done = this.run(entry.command, env, UPDATE_TIMEOUT_MS).then(async ({ code, output }) => {
+    const install = async () => {
+      if (clean) await this.clear(target);
+      const result = await this.run(command, env, UPDATE_TIMEOUT_MS);
+      // A copy of our own that npm "installed" without its binary is installed again, once.
+      if (result.code !== 0 || !entry.automatic || (await this.starts(target))) return result;
+      await this.clear(target);
+      return this.run(command, env, UPDATE_TIMEOUT_MS);
+    };
+    const done = install().then(async ({ code, output }) => {
       const current = this.entries.get(target.id) ?? {};
       const tail = output.trim().split("\n").slice(-3).join("\n");
       this.entries.set(target.id, {
@@ -344,6 +371,11 @@ export class ProviderVersions {
       });
       if (this.closed) return;
       if (await this.probe(target)) this.changed([target.id]);
+      if (code === 0 && entry.automatic && !this.entries.get(target.id)?.installed)
+        this.entries.set(target.id, {
+          ...this.entries.get(target.id),
+          updateError: `${target.label} was installed but does not start. ${tail}`.trim(),
+        });
       // Version managers can hold back fresh releases (a minimum release age, a pinned version).
       const after = this.get(target.id);
       if (code === 0 && after?.updateAvailable)
@@ -358,6 +390,22 @@ export class ProviderVersions {
         if (this.updates.get(target.id) === settled) this.updates.delete(target.id);
       });
     this.updates.set(target.id, settled);
+  }
+  /** Whether the CLI answers `--version`, as a working install does. */
+  private async starts(target: VersionTarget): Promise<boolean> {
+    const executable = target.executable();
+    if (!executable) return false;
+    const result = await this.run(
+      [executable.command, ...executable.args, "--version"],
+      executable.env,
+      PROBE_TIMEOUT_MS,
+    );
+    return result.code === 0 && !!parseVersion(result.output);
+  }
+  /** Removes what npm installed into Concors' own prefix, so the next install starts fresh. */
+  private async clear(target: VersionTarget) {
+    await rm(join(target.prefix, "node_modules"), { recursive: true, force: true });
+    await rm(join(target.prefix, "package-lock.json"), { force: true });
   }
   close() {
     this.closed = true;
