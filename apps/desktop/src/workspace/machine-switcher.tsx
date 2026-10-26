@@ -102,6 +102,7 @@ export function MachineSwitcher({
           <DropdownMenuTrigger
             className={`group/machine relative flex min-w-0 items-center rounded-md hover:bg-sidebar-accent focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-sidebar-ring aria-expanded:bg-sidebar-accent ${compact ? "sidebar-rail-control" : "h-8 max-w-full gap-2 px-2 text-left"}`}
             aria-label="Switch machine"
+            data-tour="machines"
           >
             {selected.machineId !== "local" && cloudMachines === null ? (
               <span className="size-4 shrink-0 rounded bg-muted" aria-hidden="true" />

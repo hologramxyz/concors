@@ -19,7 +19,7 @@ import { NotificationProvider } from "@/notifications/provider";
 import { AgentsProvider } from "@/agents/state";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { TerminalProfilesContext } from "@/terminal/profiles-context";
-import { DEFAULT_TERMINAL_PROFILES } from "@concors/protocol";
+import { DEFAULT_TERMINAL_PROFILES, PROJECT_RENAME_CAPABILITY } from "@concors/protocol";
 import type { DaemonEndpoint } from "@concors/daemon-client";
 import type { WorkspaceOperation } from "@concors/protocol";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
@@ -56,6 +56,7 @@ import {
   type Host,
 } from "@/workspace/machines";
 import { ProjectWorkspace } from "@/workspace/project-workspace";
+import { Tour } from "@/tour/tour";
 import { machineListResource, SETTLING_POLL_MS } from "@/machines/use-machines";
 
 export function App() {
@@ -267,7 +268,53 @@ function AppContent() {
   }, [hostScope, organizationId, selectionHost]);
 
   const transport = connection.transport;
-  const newWorkspace = useNewWorkspace(transport);
+  // The workspace the tour sets up gets a name, so it reads as a place to start, not the home folder.
+  const nameNextWorkspace = useRef(false);
+  const defaultWorkspaceId = useRef<string | null>(null);
+  const nameDefaultWorkspace = useCallback(() => {
+    const current = transport?.workspace;
+    const project = current?.projects.find((p) => p.id === defaultWorkspaceId.current);
+    // Not in the snapshot yet, or its terminal is still starting: renaming bumps the workspace's
+    // version, which would make the daemon refuse that start. The effect below tries again.
+    const starting = project?.tabs.some((tab) =>
+      tab.nodes.some((node) => node.kind === "pane" && !node.sessionId),
+    );
+    if (!transport || !current || !project || starting) return;
+    defaultWorkspaceId.current = null;
+    if (
+      project.renamed ||
+      transport.state.status !== "ready" ||
+      !transport.state.daemon.capabilities?.includes(PROJECT_RENAME_CAPABILITY)
+    )
+      return;
+    // Best-effort: if it fails, the workspace keeps its folder's name.
+    void transport
+      .executeWorkspace({
+        type: "workspace.command",
+        commandId: crypto.randomUUID(),
+        epoch: current.epoch,
+        operation: {
+          kind: "project.rename",
+          projectId: project.id,
+          expectedVersion: project.version,
+          name: "Default workspace",
+        },
+      })
+      .catch(() => undefined);
+  }, [transport]);
+  const onWorkspaceCreated = useCallback(
+    (projectId: string) => {
+      if (!nameNextWorkspace.current) return;
+      nameNextWorkspace.current = false;
+      defaultWorkspaceId.current = projectId;
+      nameDefaultWorkspace();
+    },
+    [nameDefaultWorkspace],
+  );
+  const newWorkspace = useNewWorkspace(transport, onWorkspaceCreated);
+  useEffect(() => {
+    if (defaultWorkspaceId.current) nameDefaultWorkspace();
+  }, [workspace, nameDefaultWorkspace]);
   const startWorkspace = () => {
     setView("projects");
     newWorkspace.start();
@@ -663,6 +710,23 @@ function AppContent() {
                       }}
                     />
                   )}
+                  <Tour
+                    ready={connection.workspaceReady && !!workspace}
+                    firstName={account.user.name.trim().split(/\s+/)[0] ?? ""}
+                    hasWorkspace={!!workspace?.projects.length}
+                    workspaceFailed={!!newWorkspace.error}
+                    onCreateWorkspace={() => {
+                      nameNextWorkspace.current = true;
+                      startWorkspace();
+                    }}
+                    onPrepare={(inWorkspace) => {
+                      if (sidebarCollapsed) setSidebarCollapsed(false);
+                      const first = workspace?.projects[0];
+                      if (inWorkspace && !activeProject && first) selectProject(first.id);
+                      else if (view !== "projects") setView("projects");
+                    }}
+                    onAddWorkspace={() => openProjectDialog("open")}
+                  />
                   <WorkspaceSearch
                     key={`${hostScope}:${memoryKey}`}
                     machine={selectedHost.label}

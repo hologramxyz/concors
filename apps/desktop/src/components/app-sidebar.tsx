@@ -90,6 +90,7 @@ export function AppSidebar(props: AppSidebarProps) {
                 <button
                   type="button"
                   aria-label="Search"
+                  data-tour="search"
                   onClick={props.onOpenSearch}
                   className={cn(
                     "flex shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground",
@@ -136,7 +137,7 @@ export function AppSidebar(props: AppSidebarProps) {
             props.collapsed ? "px-[6px]" : "px-2",
           )}
         >
-          <div className="space-y-0.5">
+          <div className="space-y-0.5" data-tour="schedules">
             <SchedulesNav
               selected={props.view === "schedules"}
               compact={props.collapsed}
@@ -149,54 +150,56 @@ export function AppSidebar(props: AppSidebarProps) {
               onClick={() => props.onOpenPullRequests()}
             />
           </div>
-          <SidebarSection
-            title="Workspaces"
-            compact={props.collapsed}
-            action={
-              <NewWorkspaceMenu
-                rail={props.collapsed}
-                disabled={!props.canEdit}
-                onNew={props.onAddProject}
-                onOpen={props.onOpenFolder}
-              />
-            }
-          >
-            {props.workspace?.projects.length ? (
-              <ul className="mt-1 space-y-0.5">
-                {props.workspace.projects.map((project) => (
-                  <WorkspaceSidebarItem
-                    key={project.id}
-                    project={project}
-                    compact={props.collapsed}
-                    selected={
-                      props.view === "projects" &&
-                      props.workspace?.selection?.projectId === project.id
-                    }
-                    canEdit={props.canEdit}
-                    icon={
-                      props.workspace
-                        ? icons.get(projectIconKey(props.workspace.epoch, project))
-                        : undefined
-                    }
-                    pullRequests={
-                      props.workspace
-                        ? pullRequests.workspaces.get(
-                            pullRequestKey(props.workspace.epoch, project),
-                          )
-                        : undefined
-                    }
-                    onSelect={props.onSelectProject}
-                    onOpenPullRequests={props.onOpenPullRequests}
-                    execute={props.execute}
-                    onCommand={props.onCommand}
-                  />
-                ))}
-              </ul>
-            ) : null}
-            {!props.collapsed && props.workspace?.projects.length === 0 && (
-              <SidebarEmpty>No workspaces yet.</SidebarEmpty>
-            )}
-          </SidebarSection>
+          <div data-tour="workspaces">
+            <SidebarSection
+              title="Workspaces"
+              compact={props.collapsed}
+              action={
+                <NewWorkspaceMenu
+                  rail={props.collapsed}
+                  disabled={!props.canEdit}
+                  onNew={props.onAddProject}
+                  onOpen={props.onOpenFolder}
+                />
+              }
+            >
+              {props.workspace?.projects.length ? (
+                <ul className="mt-1 space-y-0.5">
+                  {props.workspace.projects.map((project) => (
+                    <WorkspaceSidebarItem
+                      key={project.id}
+                      project={project}
+                      compact={props.collapsed}
+                      selected={
+                        props.view === "projects" &&
+                        props.workspace?.selection?.projectId === project.id
+                      }
+                      canEdit={props.canEdit}
+                      icon={
+                        props.workspace
+                          ? icons.get(projectIconKey(props.workspace.epoch, project))
+                          : undefined
+                      }
+                      pullRequests={
+                        props.workspace
+                          ? pullRequests.workspaces.get(
+                              pullRequestKey(props.workspace.epoch, project),
+                            )
+                          : undefined
+                      }
+                      onSelect={props.onSelectProject}
+                      onOpenPullRequests={props.onOpenPullRequests}
+                      execute={props.execute}
+                      onCommand={props.onCommand}
+                    />
+                  ))}
+                </ul>
+              ) : null}
+              {!props.collapsed && props.workspace?.projects.length === 0 && (
+                <SidebarEmpty>No workspaces yet.</SidebarEmpty>
+              )}
+            </SidebarSection>
+          </div>
           {props.collapsed ? (
             <AgentSidebar compact onSelect={props.onSelectAgent} workspace={props.workspace} />
           ) : (

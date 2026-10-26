@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { candidateFailures, releaseFailures } from "./release-requirements.mjs";
@@ -40,7 +41,10 @@ export async function checkRelease({ candidate = false, json = false } = {}) {
   }
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url))
+if (
+  process.argv[1] &&
+  realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url))
+)
   await checkRelease({
     candidate: process.argv.includes("--candidate"),
     json: process.argv.includes("--json"),

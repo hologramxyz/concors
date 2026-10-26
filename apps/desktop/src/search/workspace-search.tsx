@@ -1,4 +1,4 @@
-import { Cloud, Folder, LogOut, Monitor, Moon, RefreshCw, Sun } from "lucide-react";
+import { Cloud, Compass, Folder, LogOut, Monitor, Moon, RefreshCw, Sun } from "lucide-react";
 import { useContext, useMemo, useRef, useState, type ReactNode } from "react";
 import type { WorkspaceProject } from "@concors/protocol";
 import { CompactLayoutContext } from "@/components/compact-layout";
@@ -19,6 +19,7 @@ import {
   CommandShortcut,
 } from "@/components/ui/command";
 import { ALL_NAV, type View } from "@/navigation";
+import { replayTour } from "@/tour/store";
 import type { ThemePreference } from "@/theme/use-theme";
 import { matchScore, searchEntries, workspaceEntries, type SearchCategory } from "./index";
 
@@ -159,6 +160,17 @@ function SearchContent({
         run: () => run(() => props.onNavigate(item.view)),
       }),
     ),
+    ...(!compact
+      ? [
+          {
+            id: "tour",
+            title: "Take the tour",
+            keywords: "onboarding welcome tour help getting started",
+            icon: <Compass aria-hidden="true" />,
+            run: () => run(replayTour, false),
+          },
+        ]
+      : []),
     ...(props.canReconnect
       ? [
           {
