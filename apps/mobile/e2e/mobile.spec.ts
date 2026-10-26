@@ -1293,3 +1293,19 @@ test("the Tabs sheet shows each agent's status, as desktop's tab strip does", as
   await expect(terminal.locator("[data-pane-status]")).toHaveCount(0);
   await page.screenshot({ path: "apps/mobile/test-results/mobile-tabs-status.png" });
 });
+test("the app reopens the tab last opened on this machine", async ({ page }) => {
+  let ui = await enter(page);
+  const tabs = ui.getByRole("combobox", { name: "Tabs", exact: true });
+  await expect(tabs).toHaveAttribute("data-value", activeChat);
+  await choose(ui, "Tabs", activeTerminal);
+  await expect(ui.getByLabel("Terminal output", { exact: true })).toBeVisible();
+  await page.goto("/");
+  await page.getByRole("button", { name: "Explore demo" }).click();
+  ui = workspace(page);
+  await expect(ui.getByLabel("Terminal output", { exact: true })).toBeVisible();
+  await expect(tabs).toHaveAttribute("data-value", activeTerminal);
+  // Picking again moves what the next launch opens.
+  await choose(ui, "Tabs", activeChat);
+  ui = await enter(page);
+  await expect(tabs).toHaveAttribute("data-value", activeChat);
+});

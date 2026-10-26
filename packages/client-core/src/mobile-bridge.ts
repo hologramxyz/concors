@@ -122,6 +122,8 @@ export const MobileStateSchema = z.object({
   preferences: MobilePreferencesSchema,
   pushEnabled: z.boolean(),
   target: MobileTargetSchema,
+  /** The tab last opened on this phone on the current machine, reopened at launch. */
+  lastTarget: MobileTargetSchema.nullable().optional(),
   supportUrl: z.string(),
   privacyUrl: z.string(),
   apiUrl: z.string(),
@@ -159,6 +161,7 @@ export const MobileActionSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("clipboard-image") }),
   z.object({ kind: z.literal("clipboard-has-image") }),
   z.object({ kind: z.literal("preferences"), preferences: MobilePreferencesSchema }),
+  z.object({ kind: z.literal("remember-target"), target: MobileTargetSchema }),
   z.object({ kind: z.literal("file-guard"), active: z.boolean() }),
   z.object({ kind: z.literal("dismiss-keyboard") }),
 ]);

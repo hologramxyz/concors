@@ -12,9 +12,10 @@ export const tokenStore = new HydratedTokenStore({
   },
 });
 const values = new Map<string, string>();
-// Persist appearance and shortcut preferences in the browser preview, just as the native
-// host does. Credentials and every other value remain in memory.
-const preferenceKey = (key: string) => (key === "appearance.v1" ? `concors.mobile.${key}` : null);
+// Persist appearance and shortcut preferences and the last opened tab in the browser preview,
+// just as the native host does. Credentials and every other value remain in memory.
+const preferenceKey = (key: string) =>
+  key === "appearance.v1" || key === "last-target.v1" ? `concors.mobile.${key}` : null;
 export const deviceStorage = {
   get: async (key: string) => {
     const persisted = preferenceKey(key);
