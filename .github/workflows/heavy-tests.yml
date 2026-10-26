@@ -183,8 +183,9 @@ jobs:
       matrix:
         shard: [1, 2, 3, 4]
     runs-on: ubuntu-latest
-    # The single-worker suite takes about 12–14 minutes in all, so a quarter of it plus setup.
-    timeout-minutes: 15
+    # The single-worker suite takes about 12–14 minutes in all, so a quarter of it plus setup, and
+    # room for the browser install to be retried when Ubuntu's mirror stalls.
+    timeout-minutes: 25
     if: inputs.release != true
     steps:
       - uses: actions/checkout@v4
@@ -197,7 +198,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium
+      - run: scripts/install-playwright-chromium.sh
       - run: pnpm test:workspace:e2e --shard=${{ matrix.shard }}/4
       - uses: actions/upload-artifact@v4
         if: failure()
@@ -221,8 +222,9 @@ jobs:
           - { suite: direct, shard: 3, shards: 3 }
           - { suite: managed, shard: 1, shards: 1 }
     runs-on: ubuntu-latest
-    # Include bundle generation and the full phone interaction suite (about 7 minutes).
-    timeout-minutes: 15
+    # Include bundle generation and the full phone interaction suite (about 7 minutes), and room
+    # for the browser install to be retried when Ubuntu's mirror stalls.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -231,7 +233,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium
+      - run: scripts/install-playwright-chromium.sh
       - run: pnpm test:mobile:${{ matrix.suite }} --shard=${{ matrix.shard }}/${{ matrix.shards }}
       - uses: actions/upload-artifact@v4
         if: always()
