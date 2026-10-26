@@ -1289,3 +1289,17 @@ test("an image on the phone's clipboard can be pasted into the composer", async 
   await paste.click();
   await expect(ui.getByLabel("Remove Pasted image.png")).toBeVisible();
 });
+test("the Tabs sheet shows each agent's status, as desktop's tab strip does", async ({ page }) => {
+  const ui = await enter(page);
+  await ui.getByRole("combobox", { name: "Tabs", exact: true }).click();
+  const sheet = ui.getByRole("dialog", { name: "Tabs", exact: true });
+  const chat = sheet.locator(`[data-pane-choice][data-value="${activeChat}"]`);
+  // The agent's logo and status dot replace the plain chat icon; the name stays the tab's.
+  await expect(chat.locator("[data-pane-status]")).toBeVisible();
+  await expect(chat.locator("[data-agent-status-badge]")).toBeVisible();
+  await expect(chat).toHaveAttribute("aria-description", /^Codex: /);
+  // A terminal with no agent in it keeps its terminal icon.
+  const terminal = sheet.locator(`[data-pane-choice][data-value="${activeTerminal}"]`);
+  await expect(terminal.locator("[data-pane-status]")).toHaveCount(0);
+  await page.screenshot({ path: "apps/mobile/test-results/mobile-tabs-status.png" });
+});
