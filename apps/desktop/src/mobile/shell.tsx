@@ -195,10 +195,23 @@ function MobileWorkspaceContent({
     });
     setSidebarOpen(false);
   };
+  // Until something is picked on this machine, reopen the tab last opened on it.
+  const picked = local.machineId === host.machineId && Object.keys(local.target).length > 0;
   const selected = workspace
-    ? resolveMobileSelection(workspace, local.machineId === host.machineId ? local.target : {})
+    ? resolveMobileSelection(workspace, picked ? local.target : (host.lastTarget ?? {}))
     : null;
   const { project, tab, pane } = selected ?? { project: null, tab: null, pane: null };
+  const remembered = useRef<string | null>(null);
+  useEffect(() => {
+    if (!picked || local.target.sessionId || !host.machineId || !project || !tab || !pane) return;
+    const key = `${host.machineId}:${project.id}:${tab.id}:${pane.id}`;
+    if (remembered.current === key) return;
+    remembered.current = key;
+    void hostAction({
+      kind: "remember-target",
+      target: { machineId: host.machineId, projectId: project.id, tabId: tab.id, paneId: pane.id },
+    }).catch(() => undefined);
+  }, [picked, local.target.sessionId, host.machineId, project, tab, pane]);
   useEffect(() => {
     if (local.machineId !== host.machineId || !local.target.sessionId || !project || !tab || !pane)
       return;

@@ -44,6 +44,14 @@ import { WorkspaceRenderer } from "./renderer";
 import type { WorkspaceRendererHandle } from "./renderer-types";
 import { dispatchMobileApi } from "./api";
 import { assertWorkspaceActionAllowed } from "./access";
+import { deviceStorage } from "../platform/storage";
+import {
+  LAST_TARGETS_KEY,
+  lastTargetKey,
+  parseLastTargets,
+  rememberTarget,
+  type LastTargets,
+} from "./last-target";
 
 export function WorkspaceHost() {
   const auth = useAuth();
@@ -161,6 +169,24 @@ function SignedInWorkspace() {
       alive.current = false;
     };
   }, [userId]);
+  // Read once per account; this component remounts when the account or organization changes.
+  const [lastTargets, setLastTargets] = useState<LastTargets | null>(null);
+  const lastTargetsRef = useRef<LastTargets | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void deviceStorage
+      .get(LAST_TARGETS_KEY)
+      .catch(() => null)
+      .then((raw) => {
+        if (cancelled || lastTargetsRef.current) return;
+        lastTargetsRef.current = parseLastTargets(raw);
+        setLastTargets(lastTargetsRef.current);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const account = auth.direct ? "direct" : (auth.me?.user.id ?? "");
   const target = MobileTargetSchema.safeParse(params);
   const state: MobileState | null =
     auth.me || auth.direct
@@ -196,6 +222,9 @@ function SignedInWorkspace() {
           preferences,
           pushEnabled: push,
           target: target.success ? target.data : {},
+          ...(machineId && lastTargets
+            ? { lastTarget: lastTargets[lastTargetKey(account, machineId)] ?? null }
+            : {}),
           supportUrl: config.supportUrl,
           privacyUrl: config.privacyUrl,
           apiUrl: config.apiUrl,
@@ -315,6 +344,18 @@ function SignedInWorkspace() {
       case "preferences":
         await setPreferences(action.preferences);
         return;
+      case "remember-target": {
+        // A pick on a machine the phone has since switched away from is not that machine's.
+        if (!machineId || action.target.machineId !== machineId) return;
+        const stored =
+          lastTargetsRef.current ??
+          parseLastTargets(await deviceStorage.get(LAST_TARGETS_KEY).catch(() => null));
+        const next = rememberTarget(stored, lastTargetKey(account, machineId), action.target);
+        lastTargetsRef.current = next;
+        setLastTargets(next);
+        await deviceStorage.set(LAST_TARGETS_KEY, JSON.stringify(next));
+        return;
+      }
       case "open-url": {
         await openExternalLink(action.url);
         return;
