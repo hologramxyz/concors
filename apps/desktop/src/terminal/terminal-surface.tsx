@@ -74,7 +74,10 @@ export function TerminalSurface({
       lineHeight: 1.1,
       fontFamily: '"Geist Mono Variable", "SF Mono", Consolas, monospace',
       scrollback: 1000,
-      screenReaderMode: true,
+      // Off, as xterm's default: screen reader mode leaves every typed key in xterm's hidden
+      // textarea, and an input method's keystroke (macOS autocorrect, a Chinese or Japanese IME)
+      // then sends that whole text again, so prompts showed up typed twice.
+      screenReaderMode: false,
       theme: terminalTheme(),
       // Takes keys from the start: those typed before the first snapshot are held (`earlyInput`).
       disableStdin: false,
