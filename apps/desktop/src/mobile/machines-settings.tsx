@@ -1,14 +1,19 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
-import type { MobileState } from "@concors/client-core";
+import { machineAvailability, type MobileState } from "@concors/client-core";
 import { Button } from "@/components/ui/button";
 import { DaemonDetails, type DaemonConnectionInfo } from "@/machines/daemon-details";
 import { Section } from "@/views/settings-primitives";
 import { AddMachineDrawer } from "./add-machine-drawer";
 import { ExistingMachines } from "./existing-machines";
+import { MachinesView } from "@/machines/machines-view";
 import { hostAction } from "./bridge";
 
-/** Machine management stays in Settings in both cloud and direct-preview modes. */
+/**
+ * Machine management stays in Settings in both cloud and direct-preview modes. Signed in, it is
+ * desktop's Machines page, without buying, cancelling or paying, which the phone leaves to the
+ * desktop app; opening a machine switches this device to it.
+ */
 export function MachinesSettings({
   host,
   connection,
@@ -63,16 +68,36 @@ export function MachinesSettings({
             </p>
           </Section>
         </div>
+      ) : host.me ? (
+        <div className="px-4 py-6">
+          <MachinesView
+            auth={{ status: "signed-in", ...host.me, organizations: host.organizations }}
+            purchases={false}
+            {...(host.machineId ? { selectedMachineId: host.machineId } : {})}
+            connection={connection}
+            canOpen={(machine) =>
+              machineAvailability(machine) === "connectable" && host.capabilities.remoteAccess
+            }
+            onOpen={async (machine) => {
+              await hostAction({ kind: "select-machine", machineId: machine.id });
+              onConnected();
+            }}
+          />
+        </div>
       ) : (
         <ExistingMachines host={host} connection={connection} onConnected={onConnected} />
       )}
-      <div className="px-4 pb-4">
-        <Button variant="outline" onClick={() => setAdding(true)}>
-          <Plus aria-hidden="true" />
-          Add machine
-        </Button>
-      </div>
-      <AddMachineDrawer host={host} open={adding} onOpenChange={setAdding} />
+      {(host.direct || !host.me) && (
+        <>
+          <div className="px-4 pb-4">
+            <Button variant="outline" onClick={() => setAdding(true)}>
+              <Plus aria-hidden="true" />
+              Add machine
+            </Button>
+          </div>
+          <AddMachineDrawer host={host} open={adding} onOpenChange={setAdding} />
+        </>
+      )}
     </>
   );
 }

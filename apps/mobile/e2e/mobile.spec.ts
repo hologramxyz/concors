@@ -1080,28 +1080,17 @@ test("compact account footer and machine management live in settings", async ({ 
   await expect(
     ui.getByRole("button", { name: /Create machine|Cancel machine|Resume machine/ }),
   ).toHaveCount(0);
-  await expect(ui.getByRole("button", { name: "Refresh machines", exact: true })).toBeVisible();
-  await expect(
-    ui
-      .getByRole("dialog", { name: "Settings", exact: true })
-      .getByText("Development", { exact: true }),
-  ).toBeVisible();
   const settings = ui.getByRole("dialog", { name: "Settings", exact: true });
-  const add = settings.getByRole("button", { name: "Add machine", exact: true });
-  // Text actions share desktop spacing, with mobile's minimum touch height retained.
-  for (const button of [
-    add,
-    settings.getByRole("button", { name: "Refresh machines", exact: true }),
-  ]) {
-    await expect(button).toHaveCSS("padding", "4px 8px");
-    await expect(button).toHaveCSS("min-height", "44px");
-    await expect(button).toHaveCSS("line-height", "18px");
-  }
-  await add.click();
-  const setup = ui.getByRole("dialog", { name: "Add machine", exact: true });
-  await expect(setup).toContainText("Creating machines is not available in mobile yet.");
-  await setup.getByRole("button", { name: "Close", exact: true }).click();
-  await expect(add).toBeFocused();
+  // Desktop's Machines page, without buying, cancelling, prices or payment warnings.
+  const machines = settings.getByRole("region", { name: "Machines", exact: true });
+  await expect(machines).toContainText("Add or cancel machines in the Concors desktop app.");
+  await expect(machines.getByText("Development", { exact: true })).toBeVisible();
+  await expect(machines.getByRole("button", { name: /^(Connect|Open)$/ })).toBeVisible();
+  await expect(
+    machines.getByRole("button", { name: /New machine|Cancel |Keep machine/ }),
+  ).toHaveCount(0);
+  await expect(machines).not.toContainText("/mo");
+  await expect(settings.getByRole("alert")).toHaveCount(0);
   await expect(settings).toBeVisible();
   await settings.getByRole("combobox", { name: "Settings section" }).click();
   await expect(ui.getByRole("option", { name: "Machines", exact: true })).toHaveCount(1);
@@ -1115,9 +1104,7 @@ test("compact account footer and machine management live in settings", async ({ 
     "data-value",
     "machines",
   );
-  await expect(
-    settings.getByRole("button", { name: "Refresh machines", exact: true }),
-  ).toBeVisible();
+  await expect(settings.getByRole("region", { name: "Machines", exact: true })).toBeVisible();
 });
 
 test("machine sheet preserves the sidebar, selected status, and focus", async ({ page }) => {

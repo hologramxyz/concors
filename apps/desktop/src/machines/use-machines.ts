@@ -49,11 +49,16 @@ export interface MachinesState {
  * Machines of one organization plus the catalog to create more. Polls current resource usage while visible,
  * more often during provisioning or deletion. Failed refreshes keep retrying.
  */
-export function useMachines(organizationId: string | undefined): MachinesState {
+export function useMachines(
+  organizationId: string | undefined,
+  /** The regions, sizes and prices machines are bought from; a client that sells none skips it. */
+  { catalog: withCatalog = true }: { catalog?: boolean } = {},
+): MachinesState {
   const scope = organizationId === undefined ? {} : { organizationId };
   const list = useMachineList(organizationId);
   const catalog = useApiResource("machine-catalog", () => api.getMachineCatalog(), {
     staleTime: 300_000,
+    enabled: withCatalog,
   });
   const machines = list.data;
   useEffect(() => {
