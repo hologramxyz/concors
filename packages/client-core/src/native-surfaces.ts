@@ -32,6 +32,8 @@ const option = z.object({
   id: optionValue,
   label: z.string().max(4608),
   selected: z.boolean(),
+  /** Opens another page of options without committing a choice or dismissing the picker. */
+  navigate: z.boolean().optional(),
 });
 export const NativeControlSchema = z.object({
   id: z.string().max(200),

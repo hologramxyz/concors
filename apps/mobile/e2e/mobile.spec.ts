@@ -231,6 +231,35 @@ test("model, effort, permissions, plan and speed use the desktop controls", asyn
   await ui.getByRole("button", { name: "Send message", exact: true }).click();
   await expect(ui.getByText("Which platform should I verify?")).toBeVisible();
 });
+test("Android composer keeps the model picker open when returning to providers", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    window.addEventListener("message", (event) => {
+      const message = event.data?.concorsMobile;
+      if (window.parent !== window && message?.type === "state") {
+        // Match the Android WebView host: native platform services, shared DOM controls.
+        message.state.native = true;
+        message.state.nativeChrome = false;
+      }
+    });
+  });
+  const ui = await enter(page);
+  await ui.getByRole("textbox", { name: "Message Codex" }).fill("Keep my draft");
+  const trigger = ui.getByRole("button", { name: "Agent and model", exact: true });
+  await trigger.click();
+  for (let visit = 0; visit < 2; visit++) {
+    await ui.getByRole("button", { name: "Back to providers", exact: true }).click();
+    const providers = ui.getByRole("listbox", { name: "Providers", exact: true });
+    await expect(providers).toBeVisible();
+    await expect(ui.getByRole("combobox", { name: "Search providers" })).toBeVisible();
+    await providers.getByRole("option", { name: /^Codex\b/ }).click();
+    await expect(ui.getByRole("listbox", { name: "Agent and model", exact: true })).toBeVisible();
+  }
+  await ui.getByRole("option", { name: "Codex", exact: true }).click();
+  await expect(ui.getByRole("listbox", { name: "Agent and model", exact: true })).toHaveCount(0);
+  await expect(ui.getByRole("textbox", { name: "Message Codex" })).toHaveValue("Keep my draft");
+});
 test("composer stays visible with keyboard-sized viewport and return inserts a newline", async ({
   page,
 }) => {

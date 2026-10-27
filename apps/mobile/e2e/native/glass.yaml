@@ -36,6 +36,18 @@ env:
     id: native-composer-context
 - takeScreenshot: apps/mobile/test-results/native/composer-expanded
 - tapOn:
+    id: native-composer-model
+- assertVisible: "Codex · Agent and model"
+- tapOn: "← Back to providers"
+- assertVisible: "Choose an agent provider"
+- tapOn: "Codex ·.*"
+- assertVisible: "Codex · Agent and model"
+- tapOn: "← Back to providers"
+- assertVisible: "Choose an agent provider"
+- tapOn: "Codex ·.*"
+- tapOn: "Codex"
+- assertVisible: "Native Liquid Glass draft"
+- tapOn:
     id: native-composer-brain
 - assertVisible: "Thinking effort.*"
 - tapOn: "Cancel"

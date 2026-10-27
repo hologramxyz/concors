@@ -67,6 +67,7 @@ import {
   reconcileNativeDraft,
   type NativeChromeProps,
 } from "./native-chrome-types";
+import { NativeControlPicker } from "./native-control-picker.ios";
 
 const symbols = {
   menu: "line.3.horizontal",
@@ -351,6 +352,7 @@ function controlModifiers({
 }
 
 function Control({
+  id,
   icon,
   corners,
   label,
@@ -363,6 +365,7 @@ function Control({
   onPresent,
   width = 40,
 }: {
+  id?: string;
   icon: NativeIcon;
   corners: CornerStyle;
   label: string;
@@ -376,6 +379,22 @@ function Control({
   width?: number;
 }) {
   const modifiers = controlModifiers({ corners, label, dark, primary, blocked, width });
+  const optionButton = (press: () => void) => (
+    <Button testID={`native-composer-${icon}`} onPress={press} modifiers={modifiers}>
+      {icon === "model" || icon === "claude" || icon === "opencode" ? (
+        <RNHostView matchContents>
+          <RNImage
+            source={providerImages[icon]}
+            style={{ width: 18, height: 18, tintColor: dark ? "#eee" : "#222" }}
+          />
+        </RNHostView>
+      ) : icon === "pi" ? (
+        <Text modifiers={[font({ size: 20 })]}>π</Text>
+      ) : (
+        <Image systemName={symbols[icon]} size={18} />
+      )}
+    </Button>
+  );
   return (
     <Host
       style={[styles.control, { width }]}
@@ -384,9 +403,18 @@ function Control({
       ignoreSafeArea="all"
     >
       {options ? (
-        <Button
-          testID={`native-composer-${icon}`}
-          onPress={() => {
+        id === "model" ? (
+          <NativeControlPicker
+            label={label}
+            options={options}
+            dark={dark}
+            blocked={blocked}
+            anchor={optionButton}
+            onSelect={onSelect}
+            onPresent={onPresent}
+          />
+        ) : (
+          optionButton(() => {
             onPresent?.(true);
             ActionSheetIOS.showActionSheetWithOptions(
               {
@@ -405,22 +433,8 @@ function Control({
                 onPresent?.(false);
               },
             );
-          }}
-          modifiers={modifiers}
-        >
-          {icon === "model" || icon === "claude" || icon === "opencode" ? (
-            <RNHostView matchContents>
-              <RNImage
-                source={providerImages[icon]}
-                style={{ width: 18, height: 18, tintColor: dark ? "#eee" : "#222" }}
-              />
-            </RNHostView>
-          ) : icon === "pi" ? (
-            <Text modifiers={[font({ size: 20 })]}>π</Text>
-          ) : (
-            <Image systemName={symbols[icon]} size={18} />
-          )}
-        </Button>
+          })
+        )
       ) : (
         <Button
           testID={`native-composer-${icon}`}
