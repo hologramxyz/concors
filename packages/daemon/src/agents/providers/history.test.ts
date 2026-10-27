@@ -115,3 +115,62 @@ it("does not show the notification Claude Code records on resume for a cut-off c
   ]);
   expect(turns.flatMap((t) => t.items.map((i) => i["id"]))).toEqual(["user:prompt", "reply"]);
 });
+it("shows Claude's compaction summary as a compaction note, not as a prompt", () => {
+  // As getSessionMessages returns them: without the transcript's isCompactSummary flag.
+  const turns = claudeHistory([
+    { type: "user", uuid: "prompt", message: { role: "user", content: "Fix the router" } },
+    {
+      type: "assistant",
+      uuid: "a",
+      message: { id: "before", content: [{ type: "text", text: "Working on it" }] },
+    },
+    {
+      type: "user",
+      uuid: "summary",
+      message: {
+        role: "user",
+        content:
+          "This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.\n\nSummary:\n1. Primary Request and Intent: ...",
+      },
+    },
+    {
+      type: "user",
+      uuid: "stdout",
+      message: { role: "user", content: "<local-command-stdout>Compacted </local-command-stdout>" },
+    },
+    {
+      type: "assistant",
+      uuid: "b",
+      message: { id: "after", content: [{ type: "text", text: "Done" }] },
+    },
+  ]);
+  expect(turns.map((t) => [t.id, t.items.map((i) => [i["id"], i["type"]])])).toEqual([
+    [
+      "prompt",
+      [
+        ["user:prompt", "userMessage"],
+        ["before", "agentMessage"],
+        ["compact:summary", "contextCompaction"],
+        ["after", "agentMessage"],
+      ],
+    ],
+  ]);
+});
+it("opens history that starts at a compaction with the compaction note", () => {
+  const turns = claudeHistory([
+    {
+      type: "user",
+      uuid: "summary",
+      message: {
+        role: "user",
+        content:
+          "This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.",
+      },
+    },
+    { type: "user", uuid: "prompt", message: { role: "user", content: "Reply with ok" } },
+  ]);
+  expect(turns.map((t) => [t.id, t.items.map((i) => i["type"])])).toEqual([
+    ["summary", ["contextCompaction"]],
+    ["prompt", ["userMessage"]],
+  ]);
+});

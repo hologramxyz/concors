@@ -55,6 +55,10 @@ export function claudeThinkingItems(
   });
 }
 
+/** The opening line of the summary Claude Code puts in place of a compacted conversation. */
+const COMPACT_SUMMARY =
+  /^This session is being continued from a previous conversation that ran out of context\./;
+
 export function claudeHistory(messages: unknown[]): NativeTurn[] {
   const tasks = new TaskState();
   const turns: NativeTurn[] = [];
@@ -89,6 +93,27 @@ export function claudeHistory(messages: unknown[]): NativeTurn[] {
       /^<(?:command-name|local-command-(?:stdout|stderr|caveat))>/.test(message["content"].trim())
     )
       continue;
+    // getSessionMessages also drops `isCompactSummary`, so the summary Claude Code writes after
+    // compacting is recognised by its opening line. It is shown as the live chat shows it: a
+    // "Context compacted" note in the turn that was running, rather than as a prompt. History
+    // that starts at the summary opens with the note.
+    if (
+      entry["type"] === "user" &&
+      typeof message["content"] === "string" &&
+      COMPACT_SUMMARY.test(message["content"])
+    ) {
+      const note = {
+        id: `compact:${string(entry["uuid"])}`,
+        type: "contextCompaction",
+        status: "completed",
+      };
+      if (turn) turn.items.push(note);
+      else {
+        turn = { id: string(entry["uuid"]), status: "completed", items: [note] };
+        turns.push(turn);
+      }
+      continue;
+    }
     if (entry["type"] === "user" && !content.some((c) => c["type"] === "tool_result")) {
       // A background command, monitor or sub-agent reporting back starts a turn of Claude's own,
       // which the live chat shows without a prompt. getSessionMessages drops the transcript's
