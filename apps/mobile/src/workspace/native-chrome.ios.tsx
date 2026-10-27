@@ -30,6 +30,7 @@ import {
   buttonBorderShape,
   buttonStyle,
   clipShape,
+  contentShape,
   controlSize,
   disabled,
   environment,
@@ -44,6 +45,7 @@ import {
   presentationBackground,
   presentationDragIndicator,
   progressViewStyle,
+  shapes,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from "expo-glass-effect";
@@ -282,7 +284,16 @@ function HeaderButton({
           {pill ? (
             <HStack
               spacing={8}
-              modifiers={[padding({ horizontal: 12 }), frame({ maxWidth: Infinity })]}
+              modifiers={[
+                padding({ horizontal: 12 }),
+                ...(content.icon === "chevron" && content.label === "Tabs"
+                  ? [
+                      // Plain buttons hit-test their label, not the outer glass frame.
+                      frame({ width, height }),
+                      contentShape(shapes.rectangle()),
+                    ]
+                  : [frame({ maxWidth: Infinity })]),
+              ]}
             >
               <VStack
                 alignment="leading"

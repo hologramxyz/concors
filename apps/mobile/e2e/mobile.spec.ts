@@ -727,14 +727,24 @@ test("composer expands on focus, preserves portaled controls, and collapses afte
   expect(centered).toBe(true);
 });
 
-test("flat tab picker opens a bottom sheet and dismisses without reopening", async ({ page }) => {
+test("flat tab picker opens from its text and padding and dismisses without reopening", async ({
+  page,
+}) => {
   const ui = await enter(page);
   const picker = ui.getByRole("combobox", { name: "Tabs" });
   const list = ui.getByRole("dialog", { name: "Tabs", exact: true });
-  for (let i = 0; i < 3; i++) {
+  // Android/web use this DOM button; exercise both text lines, padding and the chevron.
+  for (const [x, y] of [
+    [0.2, 0.3],
+    [0.2, 0.7],
+    [0.03, 0.5],
+    [0.5, 0.05],
+    [0.5, 0.95],
+    [0.95, 0.5],
+  ] as const) {
     const trigger = await picker.boundingBox();
     if (!trigger) throw new Error("Picker trigger is not visible");
-    await picker.tap();
+    await picker.tap({ position: { x: trigger.width * x, y: trigger.height * y } });
     await expect(list).toBeVisible();
     await expect(ui.getByRole("dialog", { name: "Tabs", exact: true })).toHaveAttribute(
       "data-mobile-drawer",
