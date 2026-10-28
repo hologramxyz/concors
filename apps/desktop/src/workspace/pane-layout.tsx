@@ -338,7 +338,7 @@ export function PaneLayout(props: Props) {
         setDragging(null);
         setDrop(null);
       }}
-      className="relative h-full min-h-[220px] min-w-[320px] px-2 pb-2"
+      className="relative h-full min-h-[220px] min-w-[320px]"
     >
       {render(props.tab.root)}
       {dragging && (
@@ -436,7 +436,7 @@ function Pane({
       data-pane-id={node.id}
       tabIndex={-1}
       aria-label={`${label} pane`}
-      className={`relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border outline-none ${node.profile === "chat" ? "bg-card" : "bg-[var(--terminal-background)] text-[var(--terminal-foreground)]"}`}
+      className={`relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden outline-none ${node.profile === "chat" ? "bg-background" : "bg-[var(--terminal-background)] text-[var(--terminal-foreground)]"}`}
     >
       <header
         tabIndex={0}
@@ -452,7 +452,7 @@ function Pane({
           onDrag({ paneId: node.id, version: project.version });
         }}
         onDragEnd={() => onDrag(null)}
-        className={`flex h-9 shrink-0 items-center gap-1 border-b px-2 outline-none ${canDrag && tab.nodes.length > 1 ? "cursor-grab active:cursor-grabbing" : ""}`}
+        className={`flex h-9 shrink-0 items-center gap-1 px-2 outline-none ${canDrag && tab.nodes.length > 1 ? "cursor-grab active:cursor-grabbing" : ""}`}
       >
         {node.profile === "chat" ? (
           <AgentPaneIcon sessionId={node.sessionId} />
@@ -702,7 +702,7 @@ function Split({
         aria-disabled={!canEdit}
         data-resizing={preview !== null || undefined}
         tabIndex={canEdit ? 0 : -1}
-        className={`pane-resize-handle shrink-0 touch-none ${horizontal ? "w-2 cursor-col-resize" : "h-2 cursor-row-resize"}`}
+        className={`pane-resize-handle shrink-0 touch-none bg-border ${horizontal ? "w-px cursor-col-resize" : "h-px cursor-row-resize"}`}
         onPointerDown={(event) => {
           if (!canEdit || event.button !== 0) return;
           // Otherwise the press starts a text selection that sweeps across both panes as the

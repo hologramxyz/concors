@@ -72,6 +72,9 @@
 
 :root {
   --sidebar-width: 216px;
+  --sidebar-rail-width: 44px;
+  /* Room macOS keeps at the left of the unified title bar for its traffic lights. */
+  --traffic-lights-width: 76px;
   --corner-radius: 0.375rem;
   color-scheme: light;
   --selection: #deded9;
@@ -381,7 +384,14 @@
   transition: width 240ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .sidebar-shell[data-collapsed="true"] {
-  width: 44px;
+  width: var(--sidebar-rail-width);
+}
+/* The collapsed rail is narrower than the traffic lights, which then reach into the content's top row. */
+:root[data-traffic-lights]
+  .sidebar-shell[data-collapsed="true"]
+  + .workspace-surface
+  .title-bar-row {
+  padding-left: calc(var(--traffic-lights-width) - var(--sidebar-rail-width));
 }
 .sidebar-rail-control {
   width: 32px;
@@ -430,7 +440,7 @@
   outline: none;
 }
 /*
- * The gap between panes is only a few pixels wide, so a press just beside it landed in a pane and
+ * The divider between panes is a single pixel, so a press just beside it landed in a pane and
  * started selecting text. The grab area reaches 4px into each pane without moving the layout.
  */
 .pane-resize-handle[aria-disabled="false"]::before {
@@ -457,12 +467,12 @@
   transition: opacity 120ms ease;
 }
 .pane-resize-handle[aria-orientation="vertical"]::after {
-  inset-block: 8px;
+  inset-block: 0;
   left: calc(50% - 0.5px);
   width: 1px;
 }
 .pane-resize-handle[aria-orientation="horizontal"]::after {
-  inset-inline: 8px;
+  inset-inline: 0;
   top: calc(50% - 0.5px);
   height: 1px;
 }
@@ -624,7 +634,8 @@ html[data-pane-resizing="row"] * {
   }
 }
 :root {
-  --terminal-background: var(--card);
+  /* Terminals sit on the same surface as chats. */
+  --terminal-background: var(--background);
   --terminal-foreground: #20211f;
   --terminal-cursor: var(--foreground);
   --terminal-selection: #00000020;
@@ -646,7 +657,7 @@ html[data-pane-resizing="row"] * {
   --terminal-bright-white: #ffffff;
 }
 .dark {
-  --terminal-background: var(--card);
+  --terminal-background: var(--background);
   --terminal-foreground: var(--foreground);
   --terminal-cursor: var(--foreground);
   --terminal-selection: #ffffff30;

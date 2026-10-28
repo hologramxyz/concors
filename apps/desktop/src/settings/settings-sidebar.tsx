@@ -1,5 +1,6 @@
 import { ArrowLeft } from "lucide-react";
 import { cn } from "cn";
+import { useWindowChrome } from "@/window/context";
 
 import { SETTINGS_NAV_GROUPS, type SettingsPage } from "./navigation";
 
@@ -12,6 +13,7 @@ interface SettingsSidebarProps {
 }
 
 export function SettingsSidebar({ page, onBack, onNavigate, hidden }: SettingsSidebarProps) {
+  const windowChrome = useWindowChrome();
   return (
     <div className="sidebar-shell">
       <nav
@@ -19,7 +21,10 @@ export function SettingsSidebar({ page, onBack, onNavigate, hidden }: SettingsSi
         aria-label="Settings"
         className="flex h-full w-[216px] flex-col bg-sidebar text-ui text-sidebar-foreground"
       >
-        <div className="m-2 flex h-9 items-center gap-1">
+        {windowChrome.inset && (
+          <div data-tauri-drag-region className="box-content h-11 shrink-0 pt-2" />
+        )}
+        <div className={cn("mx-2 flex h-9 items-center gap-1", !windowChrome.inset && "my-2")}>
           <button
             type="button"
             onClick={onBack}

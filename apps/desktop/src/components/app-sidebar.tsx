@@ -14,6 +14,7 @@ import { PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
 import { TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { cn } from "cn";
+import { useWindowChrome } from "@/window/context";
 import type { WorkspaceSnapshot, WorkspaceOperation } from "@concors/protocol";
 import type { View } from "@/navigation";
 import { activeOrganization, type SignedInAuth } from "@/auth/auth-state";
@@ -54,6 +55,74 @@ export function AppSidebar(props: AppSidebarProps) {
   const shortcutLabel = useShortcutLabels();
   const icons = useProjectIcons(props.workspace);
   const pullRequests = usePullRequests(props.workspace);
+  const windowChrome = useWindowChrome();
+  const trafficLights = windowChrome.inset && !windowChrome.fullscreen;
+  const machineSwitcher = (
+    <MachineSwitcher
+      compact={props.collapsed}
+      key={activeOrganization(props.auth)?.id}
+      organizationId={activeOrganization(props.auth)?.id}
+      onViewCloud={props.onViewCloud}
+      scope={props.hostScope}
+      selected={props.selectedHost}
+      connected={props.machineConnected}
+      onSelect={props.onSelectMachine}
+      onOpenResources={props.onOpenResources}
+    />
+  );
+  const controls = (
+    <div
+      className={cn(
+        "flex shrink-0 items-center gap-0.5",
+        props.collapsed ? "flex-col-reverse" : !windowChrome.inset && "ml-auto",
+      )}
+    >
+      <SidebarTooltip collapsed={props.collapsed}>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label="Search"
+            data-tour="search"
+            onClick={props.onOpenSearch}
+            className={cn(
+              "flex shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground",
+              props.collapsed ? "sidebar-rail-control" : "p-1.5",
+            )}
+          >
+            <Search className="size-4" aria-hidden="true" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side={props.collapsed ? "right" : "bottom"}>
+          Search ({shortcutLabel("search")})
+        </TooltipContent>
+      </SidebarTooltip>
+      <SidebarTooltip collapsed={props.collapsed}>
+        <TooltipTrigger asChild>
+          <button
+            id={props.collapsed ? "expand-sidebar" : "collapse-sidebar"}
+            type="button"
+            aria-label={props.collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-controls="app-sidebar"
+            aria-expanded={!props.collapsed}
+            onClick={props.onCollapse}
+            className={cn(
+              "flex shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground",
+              props.collapsed ? "sidebar-rail-control" : "p-1.5",
+            )}
+          >
+            {props.collapsed ? (
+              <PanelLeftOpen className="size-4" aria-hidden="true" />
+            ) : (
+              <PanelLeftClose className="size-4" aria-hidden="true" />
+            )}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side={props.collapsed ? "right" : "bottom"}>
+          {props.collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        </TooltipContent>
+      </SidebarTooltip>
+    </div>
+  );
 
   return (
     <div className="sidebar-shell" data-collapsed={props.collapsed}>
@@ -62,75 +131,35 @@ export function AppSidebar(props: AppSidebarProps) {
         aria-label="Primary"
         className="flex h-full w-full flex-col bg-sidebar text-ui text-sidebar-foreground"
       >
-        <div
-          className={cn(
-            "flex shrink-0 items-center gap-1",
-            props.collapsed ? "m-[6px] flex-col" : "m-2 h-11",
-          )}
-        >
-          <MachineSwitcher
-            compact={props.collapsed}
-            key={activeOrganization(props.auth)?.id}
-            organizationId={activeOrganization(props.auth)?.id}
-            onViewCloud={props.onViewCloud}
-            scope={props.hostScope}
-            selected={props.selectedHost}
-            connected={props.machineConnected}
-            onSelect={props.onSelectMachine}
-            onOpenResources={props.onOpenResources}
-          />
-          <div
-            className={cn(
-              "flex shrink-0 items-center gap-0.5",
-              props.collapsed ? "flex-col-reverse" : "ml-auto",
+        {windowChrome.inset && !props.collapsed ? (
+          <>
+            <div
+              data-tauri-drag-region
+              className={cn(
+                "box-content flex h-11 shrink-0 items-center pt-2",
+                trafficLights ? "pl-(--traffic-lights-width)" : "pl-2",
+              )}
+            >
+              {controls}
+            </div>
+            <div className="mx-2 flex h-9 shrink-0 items-center">{machineSwitcher}</div>
+          </>
+        ) : (
+          <>
+            {windowChrome.inset && (
+              <div data-tauri-drag-region className="box-content h-11 shrink-0 pt-2" />
             )}
-          >
-            <SidebarTooltip collapsed={props.collapsed}>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  aria-label="Search"
-                  data-tour="search"
-                  onClick={props.onOpenSearch}
-                  className={cn(
-                    "flex shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground",
-                    props.collapsed ? "sidebar-rail-control" : "p-1.5",
-                  )}
-                >
-                  <Search className="size-4" aria-hidden="true" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side={props.collapsed ? "right" : "bottom"}>
-                Search ({shortcutLabel("search")})
-              </TooltipContent>
-            </SidebarTooltip>
-            <SidebarTooltip collapsed={props.collapsed}>
-              <TooltipTrigger asChild>
-                <button
-                  id={props.collapsed ? "expand-sidebar" : "collapse-sidebar"}
-                  type="button"
-                  aria-label={props.collapsed ? "Expand sidebar" : "Collapse sidebar"}
-                  aria-controls="app-sidebar"
-                  aria-expanded={!props.collapsed}
-                  onClick={props.onCollapse}
-                  className={cn(
-                    "flex shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground",
-                    props.collapsed ? "sidebar-rail-control" : "p-1.5",
-                  )}
-                >
-                  {props.collapsed ? (
-                    <PanelLeftOpen className="size-4" aria-hidden="true" />
-                  ) : (
-                    <PanelLeftClose className="size-4" aria-hidden="true" />
-                  )}
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side={props.collapsed ? "right" : "bottom"}>
-                {props.collapsed ? "Expand sidebar" : "Collapse sidebar"}
-              </TooltipContent>
-            </SidebarTooltip>
-          </div>
-        </div>
+            <div
+              className={cn(
+                "flex shrink-0 items-center gap-1",
+                props.collapsed ? "m-[6px] flex-col" : "m-2 h-11",
+              )}
+            >
+              {machineSwitcher}
+              {controls}
+            </div>
+          </>
+        )}
         <div
           className={cn(
             "min-h-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto py-3",

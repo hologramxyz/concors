@@ -16,6 +16,7 @@ import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { FolderOpen, Pencil, Plus, X } from "lucide-react";
 import type { PaneProfile, WorkspaceOperation, WorkspaceSnapshot } from "@concors/protocol";
 import { Button } from "@/components/ui/button";
+import { cn } from "cn";
 import { PaneLayout } from "./pane-layout";
 import { VisitedTab } from "./visited-tab";
 import { useRetainedProjects } from "./retained-projects";
@@ -49,6 +50,8 @@ export function ProjectWorkspace({
   const connection = useContext(TerminalConnectionContext);
   const files = useFiles();
   const windowChrome = useWindowChrome();
+  // The tab row is the window's title bar when the native one is hidden.
+  const titleBar = windowChrome.enabled || windowChrome.inset;
   const scope = fileScope(
     workspace.machineId,
     workspace.epoch,
@@ -223,13 +226,16 @@ export function ProjectWorkspace({
         <h1 className="sr-only">{project.name}</h1>
         <div
           data-tour="tabs"
-          data-tauri-drag-region={windowChrome.enabled ? "true" : undefined}
-          className="flex min-h-9 shrink-0 items-center gap-2 px-2 py-1 select-none"
+          data-tauri-drag-region={titleBar ? "true" : undefined}
+          className={cn(
+            "flex shrink-0 items-center gap-2 border-b px-2 select-none",
+            windowChrome.inset ? "title-bar-row h-11" : "min-h-9 py-1",
+          )}
         >
           {sidebarToggle}
           <div
             className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
-            data-tauri-drag-region={windowChrome.enabled ? "true" : undefined}
+            data-tauri-drag-region={titleBar ? "true" : undefined}
             aria-label="Project tabs"
           >
             {project.tabs.map((tab, index) => (
@@ -385,7 +391,7 @@ export function ProjectWorkspace({
               onResume={() => setResuming(true)}
             />
           </div>
-          {windowChrome.enabled && <div data-tauri-drag-region className="h-7 w-8 shrink-0" />}
+          {titleBar && <div data-tauri-drag-region className="h-7 w-8 shrink-0" />}
           <FilesToggle />
           {!files.sidebar.open && <WindowControls />}
         </div>

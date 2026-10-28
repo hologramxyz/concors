@@ -483,7 +483,11 @@ function AppContent() {
             <NotificationProvider connection={connection.transport} onOpen={openAgent}>
               <AgentsProvider connection={connection.transport} onStarted={openAgent}>
                 <TooltipProvider>
-                  <div className="flex h-dvh w-full overflow-hidden bg-sidebar">
+                  <div
+                    // The gaps around the content card are part of the macOS title bar too.
+                    data-tauri-drag-region={windowChrome.inset ? "true" : undefined}
+                    className="flex h-dvh w-full overflow-hidden bg-sidebar"
+                  >
                     {view === "settings" ? (
                       <SettingsSidebar
                         page={settingsPage}
@@ -531,8 +535,10 @@ function AppContent() {
                     <div className="workspace-surface my-2 mr-2 flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-background shadow-xs">
                       {!(view === "projects" && activeProject) && (
                         <header
-                          data-tauri-drag-region={windowChrome.enabled ? "deep" : undefined}
-                          className="flex h-11 shrink-0 items-center gap-2 border-b pr-2 pl-4 select-none"
+                          data-tauri-drag-region={
+                            windowChrome.enabled || windowChrome.inset ? "deep" : undefined
+                          }
+                          className="title-bar-row flex h-11 shrink-0 items-center gap-2 border-b pr-2 pl-4 select-none"
                         >
                           <h1 className="min-w-0 flex-1 truncate text-ui font-medium">
                             {view === "settings"

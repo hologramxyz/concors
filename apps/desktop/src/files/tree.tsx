@@ -1,4 +1,5 @@
 import { WindowControls } from "@/window/controls";
+import { cn } from "cn";
 import { useWindowChrome } from "@/window/context";
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import {
@@ -96,8 +97,11 @@ export function FileTree({
     >
       {!compact && (
         <div
-          data-tauri-drag-region={windowChrome.enabled ? "deep" : undefined}
-          className="m-2 flex h-9 shrink-0 items-center gap-2 px-1 select-none"
+          data-tauri-drag-region={windowChrome.enabled || windowChrome.inset ? "deep" : undefined}
+          className={cn(
+            "flex shrink-0 items-center gap-2 px-1 select-none",
+            windowChrome.inset ? "mx-2 box-content h-11 pt-2" : "m-2 h-9",
+          )}
         >
           <FolderOpen className="size-4" />
           <h2 className="min-w-0 flex-1 truncate text-ui font-medium">Files</h2>

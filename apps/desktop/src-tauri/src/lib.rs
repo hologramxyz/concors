@@ -16,6 +16,7 @@ mod notifications;
 mod sign_in;
 mod sound;
 mod ssh_key;
+mod title_bar;
 mod update;
 
 use tauri::Manager;
@@ -28,6 +29,16 @@ pub fn run() {
         // Opens links (Stripe Checkout, invoices) in the system browser instead of the webview.
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        // Size, position and maximized state only: Linux keeps its own decorations setting.
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::SIZE
+                        | tauri_plugin_window_state::StateFlags::POSITION
+                        | tauri_plugin_window_state::StateFlags::MAXIMIZED,
+                )
+                .build(),
+        )
         .manage(daemon::LocalDaemon::default())
         .manage(notifications::Notifications::default())
         .manage(sign_in::SignInListener::default())
@@ -53,6 +64,7 @@ pub fn run() {
             update::app_installation,
             update::install_app_update,
             downloads::save_download,
+            title_bar::title_bar_double_click,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Concors")
