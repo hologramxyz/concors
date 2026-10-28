@@ -638,7 +638,7 @@ export function AgentComposer({
   );
   useEffect(() => {
     if (native && connected) void nativeModels.load();
-    // Native action sheets have no open event; load on connection/session changes.
+    // Preload the catalog so the native picker can display it immediately.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [native, connected, agent.id]);
   const planUsage = usePlanUsage(agent.provider);
@@ -702,7 +702,12 @@ export function AgentComposer({
           disabled: controlsDisabled || agent.status === "starting" || nativeModels.switching,
           options: nativeProvider
             ? [
-                { id: "__providers__", label: "← Back to providers", selected: false },
+                {
+                  id: "__providers__",
+                  label: "← Back to providers",
+                  selected: false,
+                  navigate: true,
+                },
                 // Choosing it opens a chat that offers to install the CLI.
                 ...(nativeProvider.installed === false
                   ? [
@@ -738,6 +743,7 @@ export function AgentComposer({
                       ? " · Not installed"
                       : ` · ${switchDescription(agents, agent, provider.id)}`),
                   selected: provider.id === agent.provider,
+                  navigate: true,
                 })),
         },
         {
