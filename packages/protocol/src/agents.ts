@@ -29,6 +29,19 @@ export const agentProviderNames: Record<string, string> = Object.fromEntries(
   providerPresets.map((p) => [p.id, p.label]),
 );
 export const agentProviderName = (id: string): string => agentProviderNames[id] ?? id;
+/** What a chat is called until its first message gives it a title. */
+export const UNTITLED_CHAT_NAME = "New chat";
+/** Whether a chat still has the name it started with. Older chats started with their provider's. */
+export function isUntitledChat(chat: {
+  name: string;
+  provider: string;
+  providerLabel?: string | undefined;
+}): boolean {
+  return (
+    chat.name === UNTITLED_CHAT_NAME ||
+    chat.name === (chat.providerLabel ?? agentProviderName(chat.provider))
+  );
+}
 export const AgentModelSchema = z.object({
   id: AgentModelIdSchema,
   label: z.string(),

@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
-import { nextWorkspaceTabName } from "./tab-names.ts";
+import { nextWorkspaceName, nextWorkspaceTabName } from "./tab-names.ts";
+import { isUntitledChat } from "./agents.ts";
 
 const tabs = (...names: string[]) => names.map((name) => ({ name }));
 it("numbers new tabs within each workspace, independently of pane type", () => {
@@ -27,4 +28,17 @@ it("ignores non-numeric and unsafe-number custom labels", () => {
       tabs(`Tab ${Number.MAX_SAFE_INTEGER - 1}`, `Tab ${Number.MAX_SAFE_INTEGER}`),
     ),
   ).toBe("Tab 3");
+});
+it("numbers one-click workspaces with the lowest number not in use", () => {
+  const projects = (...names: string[]) => names.map((name) => ({ name }));
+  expect(nextWorkspaceName([])).toBe("Workspace 1");
+  expect(nextWorkspaceName(projects("Workspace 1", "studio"))).toBe("Workspace 2");
+  expect(nextWorkspaceName(projects("Workspace 2", "workspace 1"))).toBe("Workspace 3");
+  expect(nextWorkspaceName(projects("Workspace 2", "Workspace"))).toBe("Workspace 1");
+});
+it("treats a chat as untitled under its new name or its provider's, never once titled", () => {
+  expect(isUntitledChat({ name: "New chat", provider: "claude" })).toBe(true);
+  expect(isUntitledChat({ name: "Claude Code", provider: "claude" })).toBe(true);
+  expect(isUntitledChat({ name: "Codex", provider: "codex", providerLabel: "Codex" })).toBe(true);
+  expect(isUntitledChat({ name: "hello?", provider: "claude" })).toBe(false);
 });

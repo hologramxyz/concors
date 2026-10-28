@@ -1,4 +1,4 @@
-import type { WorkspaceTab } from "./workspace.ts";
+import type { WorkspaceProject, WorkspaceTab } from "./workspace.ts";
 
 /** A new workspace tab names its container, not whichever pane it starts with.
  * Existing names are never rewritten. Count custom/legacy tabs and skip every
@@ -22,4 +22,12 @@ export function nextWorkspaceTabName(tabs: readonly Pick<WorkspaceTab, "name">[]
   if (next === Number.MAX_SAFE_INTEGER && names.has(`tab ${next}`)) next = tabs.length + 1;
   while (names.has(`tab ${next}`)) next++;
   return `Tab ${next}`;
+}
+
+/** A one-click workspace's name until it moves into a folder: the lowest unused "Workspace N". */
+export function nextWorkspaceName(projects: readonly Pick<WorkspaceProject, "name">[]): string {
+  const names = new Set(projects.map((project) => project.name.toLowerCase()));
+  let next = 1;
+  while (names.has(`workspace ${next}`)) next++;
+  return `Workspace ${next}`;
 }

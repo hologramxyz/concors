@@ -1,4 +1,5 @@
 import type { AgentInfo, PaneProfile, WorkspaceProject } from "@concors/protocol";
+import { tabTitle } from "@/workspace/tab-title";
 import { tabPanes } from "@/workspace/tab-panes";
 import type { SessionPane } from "@/workspace/session-pane";
 import { closedChats } from "@/agents/closed-chats";
@@ -46,7 +47,8 @@ export function workspaceEntries(
           const candidate = pane.sessionId ? sessions.get(pane.sessionId) : undefined;
           const agent = candidate?.projectId === project.id ? candidate : undefined;
           const label = pane.terminalProfile?.name ?? profileNames[pane.profile];
-          const title = panes.length > 1 ? `${tab.name} · ${index + 1}` : tab.name;
+          const name = tabTitle(tab, agents);
+          const title = panes.length > 1 ? `${name} · ${index + 1}` : name;
           const context = [project.name, pane.name ?? agent?.name ?? label];
           if (agent && agent.name !== (agent.providerLabel ?? agent.provider))
             context.push(agent.providerLabel ?? agent.provider);

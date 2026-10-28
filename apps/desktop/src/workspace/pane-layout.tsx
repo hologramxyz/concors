@@ -30,20 +30,13 @@ import { McpStatusDialog } from "@/agents/mcp-status-dialog";
 import {
   PANE_RENAME_CAPABILITY,
   type LayoutNode,
-  type PaneProfile,
   type WorkspaceOperation,
   type WorkspaceProject,
   type WorkspaceTab,
 } from "@concors/protocol";
 import { typingOutsidePanes } from "./typing-outside-panes";
+import { defaultPaneTitle, PROFILE_LABELS } from "./tab-title";
 
-const PROFILE_LABELS: Record<PaneProfile, string> = {
-  shell: "Terminal",
-  chat: "Agent",
-  codex: "Codex",
-  claude: "Claude Code",
-  opencode: "OpenCode",
-};
 interface Props {
   focusRequest?: PaneFocusRequest | null;
   onPaneFocus?: ((paneId: string) => void) | undefined;
@@ -411,7 +404,7 @@ function Pane({
     TAB_PROFILES.find((item) => item.profile === (node.terminalProfile?.id ?? node.profile))
       ?.icon ?? Terminal;
   const label = node.terminalProfile?.name ?? PROFILE_LABELS[node.profile];
-  const fallbackTitle = node.profile === "chat" ? (agent?.name ?? "Agent") : label;
+  const fallbackTitle = defaultPaneTitle(node, agent ? [agent] : []);
   const title = node.name ?? fallbackTitle;
   const target = {
     projectId: project.id,

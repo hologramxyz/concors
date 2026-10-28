@@ -26,6 +26,7 @@ import {
 
 export function WorkspaceSidebarItem({
   project,
+  parent,
   compact,
   selected,
   canEdit,
@@ -37,6 +38,8 @@ export function WorkspaceSidebarItem({
   onCommand,
 }: {
   project: WorkspaceProject;
+  /** Shown beside the name only when another workspace has the same name. */
+  parent?: string | undefined;
   compact: boolean;
   selected: boolean;
   canEdit: boolean;
@@ -104,6 +107,9 @@ export function WorkspaceSidebarItem({
     >
       {image}
       {!compact && <span className="truncate">{project.name}</span>}
+      {!compact && parent && (
+        <span className="min-w-0 shrink-[2] truncate text-muted-foreground">{parent}</span>
+      )}
     </button>
   );
   return (

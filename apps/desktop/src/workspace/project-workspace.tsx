@@ -14,13 +14,20 @@ import { nextWorkspaceTabName } from "@concors/protocol";
 import { ContextMenu } from "radix-ui";
 import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { FolderOpen, Pencil, Plus, X } from "lucide-react";
-import type { PaneProfile, WorkspaceOperation, WorkspaceSnapshot } from "@concors/protocol";
+import type {
+  AgentInfo,
+  PaneProfile,
+  WorkspaceOperation,
+  WorkspaceSnapshot,
+  WorkspaceTab,
+} from "@concors/protocol";
 import { Button } from "@/components/ui/button";
 import { cn } from "cn";
 import { PaneLayout } from "./pane-layout";
 import { VisitedTab } from "./visited-tab";
 import { useRetainedProjects } from "./retained-projects";
-import { TabButton } from "./tab-button";
+import { CloseTabButton, LatestAgents, TabButton } from "./tab-button";
+import { tabTitle } from "./tab-title";
 
 export function ProjectWorkspace({
   workspace,
@@ -50,6 +57,8 @@ export function ProjectWorkspace({
   const connection = useContext(TerminalConnectionContext);
   const files = useFiles();
   const windowChrome = useWindowChrome();
+  // Read by rename, which names the tab after what it shows; kept out of render on purpose.
+  const agentsRef = useRef<readonly AgentInfo[]>([]);
   // The tab row is the window's title bar when the native one is hidden.
   const titleBar = windowChrome.enabled || windowChrome.inset;
   const scope = fileScope(
@@ -137,7 +146,7 @@ export function ProjectWorkspace({
   };
   useCommand("rename-tab", !!project && connected && !activeFile, () => {
     const tab = shortcutTab();
-    if (tab) setRename({ tabId: tab.id, value: tab.name });
+    if (tab) setRename({ tabId: tab.id, value: tabTitle(tab, agentsRef.current) });
   });
   useCommand("move-tab-left", !!project && canEdit && !activeFile, () => moveTab(-1));
   useCommand("move-tab-right", !!project && canEdit && !activeFile, () => moveTab(1));
@@ -202,8 +211,8 @@ export function ProjectWorkspace({
   };
   // Not gated on `canEdit`: a double-click's first click selects the tab, which briefly marks a
   // command as pending, and the second click must still open the editor.
-  const startRename = (tab: { id: string; name: string }) => {
-    if (connected) setRename({ tabId: tab.id, value: tab.name });
+  const startRename = (tab: WorkspaceTab) => {
+    if (connected) setRename({ tabId: tab.id, value: tabTitle(tab, agentsRef.current) });
   };
   const commitRename = () => {
     const current = renameRef.current;
@@ -211,7 +220,8 @@ export function ProjectWorkspace({
     setRename(null);
     const tab = project.tabs.find((item) => item.id === current.tabId);
     const name = current.value.trim().slice(0, 120);
-    if (!tab || !name || name === tab.name) return;
+    // Keeping the title it already shows leaves an unnamed tab following its pane.
+    if (!tab || !name || name === tabTitle(tab, agentsRef.current)) return;
     onCommand({
       kind: "tab.rename",
       projectId: project.id,
@@ -224,6 +234,7 @@ export function ProjectWorkspace({
     <ProjectFileLinks project={project}>
       <div className="flex h-full min-h-0 flex-col">
         <h1 className="sr-only">{project.name}</h1>
+        <LatestAgents targetRef={agentsRef} />
         <div
           data-tour="tabs"
           data-tauri-drag-region={titleBar ? "true" : undefined}
@@ -327,9 +338,8 @@ export function ProjectWorkspace({
                         }}
                       />
                     )}
-                    <button
-                      type="button"
-                      aria-label={`Close ${tab.name} tab`}
+                    <CloseTabButton
+                      tab={tab}
                       disabled={!canEdit}
                       onClick={() =>
                         onCommand({
@@ -342,7 +352,7 @@ export function ProjectWorkspace({
                       className="rounded p-1 text-muted-foreground opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 hover:text-foreground [@media(hover:none)]:opacity-100"
                     >
                       <X className="size-3" />
-                    </button>
+                    </CloseTabButton>
                   </div>
                 </ContextMenu.Trigger>
                 <ContextMenu.Portal>

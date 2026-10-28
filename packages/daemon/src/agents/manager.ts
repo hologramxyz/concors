@@ -52,6 +52,8 @@ import type { ConversationProvider as AgentProvider } from "./providers/contract
 import {
   agentProviderName,
   findAgentModel,
+  isUntitledChat,
+  UNTITLED_CHAT_NAME,
   NativeSessionSchema,
   type AgentProviderCatalog,
 } from "@concors/protocol";
@@ -878,7 +880,7 @@ export class AgentManager {
       info = {
         id,
         projectId,
-        name: config.label,
+        name: UNTITLED_CHAT_NAME,
         engine: config.engine,
         providerLabel: config.label,
         directory: project.directory,
@@ -1323,7 +1325,7 @@ export class AgentManager {
         const info: AgentInfo = {
           id: randomUUID(),
           projectId: project.id,
-          name: this.registry.config(providerId).label,
+          name: UNTITLED_CHAT_NAME,
           engine: this.registry.config(providerId).engine,
           providerLabel: this.registry.config(providerId).label,
           directory,
@@ -1624,10 +1626,9 @@ export class AgentManager {
           ...(implementation
             ? { settings: { ...(info.settings ?? defaultSettings), planMode: false } }
             : {}),
-          name:
-            info.name === (info.providerLabel ?? agentProviderName(info.provider))
-              ? op.text.split("\n")[0]?.slice(0, 80) || agentProviderName(info.provider)
-              : info.name,
+          name: isUntitledChat(info)
+            ? op.text.split("\n")[0]?.slice(0, 80) || UNTITLED_CHAT_NAME
+            : info.name,
           status: "working" as const,
           turnId,
           turnStartedAt: new Date().toISOString(),
@@ -1903,7 +1904,7 @@ export class AgentManager {
     const info: AgentInfo = {
       id: randomUUID(),
       projectId: previous.projectId,
-      name: label,
+      name: UNTITLED_CHAT_NAME,
       ...(previous.engine ? { engine: previous.engine } : {}),
       providerLabel: label,
       directory: previous.directory,

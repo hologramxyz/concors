@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ChevronRight } from "lucide-react";
 import type { DaemonConnection } from "@concors/daemon-client";
-import type { ProjectIcon } from "@concors/protocol";
+import { isDefaultTabName, type ProjectIcon } from "@concors/protocol";
 import { NotificationContext } from "./context";
 import { AttentionEngine, type Notice } from "./engine";
 import { claimNotification, getNotificationPreferences } from "./preferences";
@@ -153,7 +153,8 @@ export function NotificationProvider({
             projectId: agent.projectId,
             workspace:
               connection.workspace?.projects.find((p) => p.id === agent.projectId)?.name ?? "",
-            tab: pane?.tab.name ?? "",
+            // A tab nobody named is called after its chat, which the body already says.
+            tab: pane && !isDefaultTabName(pane.tab.name) ? pane.tab.name : "",
           },
         );
       }

@@ -5,7 +5,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { mkdir, realpath, stat, opendir } from "node:fs/promises";
 import { isAbsolute, dirname, basename, join, sep } from "node:path";
 import type { ProjectRequest, ProjectResult, ProjectSetup } from "@concors/protocol";
-import { nextWorkspaceTabName } from "@concors/protocol";
+import { nextWorkspaceName, nextWorkspaceTabName } from "@concors/protocol";
 import type { WorkspaceStore } from "../workspace/store.ts";
 import { killTree } from "../host/kill-tree.ts";
 
@@ -81,7 +81,12 @@ export class ProjectManager {
         const setup: ProjectSetup = {
           id: op.id,
           mode: quick ? "open" : op.mode,
-          name: quick ? "Workspace" : op.name || basename(directory).slice(0, 120) || directory,
+          name: quick
+            ? nextWorkspaceName([
+                ...this.#store.snapshot().projects,
+                ...existing.filter((s) => s.status === "working"),
+              ])
+            : op.name || basename(directory).slice(0, 120) || directory,
           ...(quick ? { directoryMode: "follow" as const } : {}),
           directory,
           repository: quick ? "" : op.repository,
@@ -215,7 +220,11 @@ export class ProjectManager {
         operation: {
           kind: "project.add",
           projectId: setup.id,
-          name: setup.name,
+          // Numbered again here: another one-click workspace may have taken the number meanwhile.
+          name:
+            setup.directoryMode === "follow"
+              ? nextWorkspaceName(this.#store.snapshot().projects)
+              : setup.name,
           directory,
           ...(setup.directoryMode ? { directoryMode: setup.directoryMode } : {}),
         },

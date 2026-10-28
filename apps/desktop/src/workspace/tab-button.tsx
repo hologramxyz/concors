@@ -1,9 +1,10 @@
-import type { ComponentProps } from "react";
-import type { WorkspaceTab } from "@concors/protocol";
+import { useEffect, type ComponentProps, type RefObject } from "react";
+import type { AgentInfo, WorkspaceTab } from "@concors/protocol";
 import { AgentStatusIcon } from "@/agents/activity";
 import { tabAgentStatuses } from "@/agents/agent-status";
 import { useAgents } from "@/agents/context";
 import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
+import { tabTitle } from "./tab-title";
 
 /**
  * A tab's label: the provider and status of every agent in its panes, then its name. It subscribes
@@ -14,7 +15,8 @@ export function TabButton({
   selected,
   ...props
 }: { tab: WorkspaceTab; selected: boolean } & ComponentProps<"button">) {
-  const agents = tabAgentStatuses(tab, useAgents(), useTerminalSessions());
+  const sessions = useAgents();
+  const agents = tabAgentStatuses(tab, sessions, useTerminalSessions());
   return (
     <button
       type="button"
@@ -41,7 +43,23 @@ export function TabButton({
           ))}
         </span>
       )}
-      <span className="max-w-44 truncate">{tab.name}</span>
+      <span className="max-w-44 truncate">{tabTitle(tab, sessions)}</span>
     </button>
   );
+}
+
+export function CloseTabButton({
+  tab,
+  ...props
+}: { tab: WorkspaceTab } & ComponentProps<"button">) {
+  return <button type="button" aria-label={`Close ${tabTitle(tab, useAgents())} tab`} {...props} />;
+}
+
+/** Keeps the latest agents in `targetRef` for event handlers, without repainting the tab bar. */
+export function LatestAgents({ targetRef }: { targetRef: RefObject<readonly AgentInfo[]> }) {
+  const agents = useAgents();
+  useEffect(() => {
+    targetRef.current = agents;
+  }, [agents, targetRef]);
+  return null;
 }

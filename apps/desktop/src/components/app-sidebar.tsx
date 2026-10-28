@@ -4,6 +4,7 @@ import { usePullRequests } from "@/pull-requests/use-pull-requests";
 import { pullRequestKey } from "@/pull-requests/store";
 import { NewWorkspaceMenu } from "@/workspace/new-workspace-menu";
 import { WorkspaceSidebarItem } from "@/workspace/sidebar-item";
+import { clashingWorkspaceParents } from "@/workspace/workspace-parents";
 import { useProjectIcons } from "@/workspace/use-project-icons";
 import { projectIconKey } from "@/workspace/project-icons";
 import { useShortcutLabels } from "@/shortcuts/preferences-context";
@@ -55,6 +56,7 @@ export function AppSidebar(props: AppSidebarProps) {
   const shortcutLabel = useShortcutLabels();
   const icons = useProjectIcons(props.workspace);
   const pullRequests = usePullRequests(props.workspace);
+  const parents = clashingWorkspaceParents(props.workspace?.projects ?? []);
   const windowChrome = useWindowChrome();
   const trafficLights = windowChrome.inset && !windowChrome.fullscreen;
   const machineSwitcher = (
@@ -198,6 +200,7 @@ export function AppSidebar(props: AppSidebarProps) {
                     <WorkspaceSidebarItem
                       key={project.id}
                       project={project}
+                      parent={parents.get(project.id)}
                       compact={props.collapsed}
                       selected={
                         props.view === "projects" &&
