@@ -35,6 +35,8 @@ import { UnreachableHelpButton } from "@/daemon/unreachable-dialog";
 import { useAuth } from "@/auth/use-auth";
 import { useSignInUnavailable } from "@/auth/sign-in";
 import { AppSidebar } from "@/components/app-sidebar";
+import { SidebarToggle } from "@/components/sidebar-toggle";
+import { SearchButton } from "@/components/search-button";
 import { WorkspaceSearch } from "@/search/workspace-search";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { resolveStartupEndpoint, resolveHostEndpoint } from "@/daemon/resolve-endpoint";
@@ -477,6 +479,21 @@ function AppContent() {
     (project) => project.id === workspace.selection?.projectId,
   );
 
+  // Collapsed, the sidebar is gone and its toggle and search stay where the open sidebar has
+  // them: pinned beside the traffic lights over the content's top row, which leaves them room.
+  // Without a native title bar they simply lead that row.
+  const collapsedToggle = view !== "settings" && sidebarCollapsed && (
+    <div className="flex shrink-0 items-center gap-0.5">
+      <SidebarToggle
+        collapsed
+        onToggle={() => toggleSidebar(false)}
+        side="bottom"
+        className="p-1.5"
+      />
+      <SearchButton collapsed onOpenSearch={openSearch} />
+    </div>
+  );
+  const titleBarToggle = windowChrome.inset ? null : collapsedToggle || null;
   return (
     <ColorThemeProvider
       connection={connection.transport}
@@ -548,6 +565,14 @@ function AppContent() {
                           onSignOut={signOut}
                         />
                       )}
+                      {windowChrome.inset && collapsedToggle && (
+                        <div
+                          data-tauri-drag-region
+                          className="title-bar-start fixed top-0 left-0 z-20 box-content flex h-11 items-center pt-2"
+                        >
+                          {collapsedToggle}
+                        </div>
+                      )}
                       <div className="workspace-surface my-2 mr-2 flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-background shadow-xs">
                         {!(view === "projects" && activeProject) && (
                           <header
@@ -556,6 +581,7 @@ function AppContent() {
                             }
                             className="title-bar-row flex h-11 shrink-0 items-center gap-2 border-b pr-2 pl-4 select-none"
                           >
+                            {titleBarToggle}
                             <h1 className="min-w-0 flex-1 truncate text-ui font-medium">
                               {view === "settings"
                                 ? settingsNavItemFor(settingsPage).label
@@ -697,6 +723,7 @@ function AppContent() {
                                 execute={execute}
                                 onAddProject={startWorkspace}
                                 onOpenFolder={openProjectDialog}
+                                sidebarToggle={titleBarToggle}
                               />
                             ) : (
                               <StartupScreen embedded onOpenSettings={connectionSettings} />

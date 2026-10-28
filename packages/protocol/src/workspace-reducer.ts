@@ -173,7 +173,7 @@ export function applyWorkspaceOperation(
           project.directoryMode === "follow" &&
           !project.followPaneId &&
           !project.tabs.length &&
-          op.profile === "shell"
+          (op.profile === "shell" || op.profile === "chat")
         )
           project.followPaneId = op.paneId;
         project.tabs.push({
@@ -376,7 +376,12 @@ export function applyWorkspaceOperation(
     const anchor = project.tabs
       .flatMap((tab) => tab.nodes)
       .find((node) => node.id === project.followPaneId);
-    if (!anchor || anchor.kind !== "pane" || anchor.profile !== "shell") {
+    // A first pane that opens to the start screen keeps the role, and follows once it is a shell.
+    if (
+      !anchor ||
+      anchor.kind !== "pane" ||
+      (anchor.profile !== "shell" && anchor.profile !== "chat")
+    ) {
       project.directoryMode = "pinned";
       delete project.followPaneId;
     }

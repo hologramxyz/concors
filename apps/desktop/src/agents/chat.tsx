@@ -8,6 +8,7 @@ import { TimelineItem } from "./timeline-item";
 import { useViewedAgent } from "@/notifications/context";
 import { CompactLayoutContext, PaneVisibilityContext } from "@/components/compact-layout";
 import {
+  type ReactNode,
   useCallback,
   useContext,
   useEffect,
@@ -16,7 +17,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { ArrowDown, Bot, LoaderCircle } from "lucide-react";
+import { ArrowDown, Bot, MessageSquare } from "lucide-react";
 import type {
   AgentOperation,
   LayoutNode,
@@ -41,6 +42,8 @@ import { ResumeSession } from "./resume-session";
 import { rememberProviders } from "./session-cache";
 import { ControlPicker } from "./control-picker";
 import { ProviderIcon } from "./provider-icon";
+import { defaultProvider } from "./default-provider";
+import { hasConversation } from "./provider-switch";
 import { timelineView } from "./thinking";
 import { SubAgentViewContext, type SubAgentTarget } from "./sub-agent-context";
 import { SubAgentPanel } from "./sub-agent-view";
@@ -50,11 +53,14 @@ export function ChatPane({
   tab,
   node,
   canEdit,
+  start,
 }: {
   project: WorkspaceProject;
   tab: WorkspaceTab;
   node: Extract<LayoutNode, { kind: "pane" }>;
   canEdit: boolean;
+  /** Shown under the prompt box until the chat's first turn, which centres the box in the pane. */
+  start?: ReactNode;
 }) {
   const connection = useContext(TerminalConnectionContext);
   const [error, setError] = useState<string | null>(null);
@@ -70,6 +76,11 @@ export function ChatPane({
     !!connection.state.daemon.capabilities?.includes("provider-settings");
   const [providers, setProviders] = useState<ProviderStatus[] | null>(null);
   const [provider, setProvider] = useState<string | null>(null);
+  const agents = useAgents();
+  const latestAgents = useRef(agents);
+  useEffect(() => {
+    latestAgents.current = agents;
+  });
   useEffect(() => {
     if (node.sessionId || !canEdit || !choosesProvider || !connection) return;
     let current = true;
@@ -80,7 +91,17 @@ export function ChatPane({
         if (result.outcome.status === "error") throw new Error(result.outcome.message);
         rememberProviders(connection, result.outcome.providers, result.outcome.revision);
         // Subscriptions are accounts of their engine, which every chat on the machine shares.
-        setProviders(result.outcome.providers.filter((p) => p.enabled && !p.subscription));
+        const list = result.outcome.providers.filter((p) => p.enabled && !p.subscription);
+        setProviders(list);
+        // The prompt box is ready at once; its model chip changes the provider before sending.
+        setProvider(
+          (current) =>
+            current ??
+            defaultProvider(
+              list.filter((p) => p.installed).map((p) => p.id),
+              latestAgents.current,
+            ),
+        );
       })
       .catch((cause: unknown) => {
         if (current) setError(cause instanceof Error ? cause.message : "Could not load providers");
@@ -141,12 +162,15 @@ export function ChatPane({
     retry,
   ]);
   if (node.sessionId)
-    return <Chat key={node.sessionId} sessionId={node.sessionId} canEdit={canEdit} />;
+    return <Chat key={node.sessionId} sessionId={node.sessionId} canEdit={canEdit} start={start} />;
+  // Asked only when no provider could be picked: none is installed, or the picked one failed.
+  const asking = choosesProvider && !!providers && !provider;
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="Agent conversation">
       <div className="min-h-0 flex-1" role="log" aria-label="Chat timeline" />
-      <div className="shrink-0 px-3 pt-2 pb-3">
-        <div className="mx-auto max-w-5xl space-y-3">
+      {start && <StartHeading provider={provider} />}
+      <div className="shrink-0 px-[24px] pt-2 pb-3">
+        <div className="mx-auto max-w-chat space-y-3">
           {error && (
             <div role="alert" className="flex items-center gap-2 text-xs text-destructive">
               {error}
@@ -167,13 +191,11 @@ export function ChatPane({
             <textarea
               data-agent-composer
               aria-label="Preparing agent"
-              placeholder={
-                choosesProvider && !provider ? "Select a provider to start" : "Preparing agent…"
-              }
+              placeholder={start ? START_PLACEHOLDER : "Ask your agent to build something…"}
               disabled
               className="agent-composer-input min-h-16 w-full resize-none bg-transparent px-3 py-3 outline-none"
             />
-            {choosesProvider && (
+            {asking && (
               <div className="flex items-center gap-1 px-1">
                 <ControlPicker
                   label="Providers"
@@ -184,14 +206,8 @@ export function ChatPane({
                       ? (providers?.find((p) => p.id === provider)?.label ?? provider)
                       : "Select a provider"
                   }
-                  icon={
-                    provider ? (
-                      <LoaderCircle className="size-4 animate-spin" />
-                    ) : (
-                      <Bot className="size-4" />
-                    )
-                  }
-                  disabled={!canEdit || !available || !providers || !!provider}
+                  icon={<Bot className="size-4" />}
+                  disabled={!canEdit || !available}
                   options={(providers ?? []).map((p) => ({
                     id: p.id,
                     label: p.label,
@@ -205,11 +221,54 @@ export function ChatPane({
           </div>
         </div>
       </div>
+      {start && <StartSpace open>{start}</StartSpace>}
     </div>
   );
 }
 
-export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boolean }) {
+/** The heading says what the start screen is for, so its prompt box asks more briefly. */
+const START_PLACEHOLDER = "Ask anything…";
+
+/** Above the start screen's prompt box: the mark of the provider its chip has selected. */
+function StartHeading({ provider }: { provider: string | null }) {
+  return (
+    // 48px to the prompt box, less the 0.5rem its footer already pads above it.
+    <div className="flex shrink-0 flex-col items-center gap-3 px-[24px] pt-2 pb-[calc(48px-0.5rem)] text-muted-foreground">
+      {provider ? (
+        <ProviderIcon provider={provider} size={40} />
+      ) : (
+        <MessageSquare className="size-10" aria-hidden="true" />
+      )}
+      <h2 className="text-lg font-medium text-foreground">What should we build?</h2>
+    </div>
+  );
+}
+
+/**
+ * Below the prompt box on the start screen. It is taller than the timeline above, so the column
+ * sits a little above the middle of the pane. It holds the other ways to start, which a short
+ * pane clips before the prompt box gives up any room, and shrinks away with the first message,
+ * easing the box down.
+ */
+function StartSpace({ open, children }: { open: boolean; children: ReactNode }) {
+  return (
+    <div
+      className={`min-h-0 basis-0 overflow-hidden px-[24px] transition-[flex-grow] duration-300 ease-out motion-reduce:transition-none ${open ? "grow-[1.5]" : "grow-0"}`}
+    >
+      <div className="mx-auto max-w-chat">{children}</div>
+    </div>
+  );
+}
+
+export function Chat({
+  sessionId,
+  canEdit,
+  start,
+}: {
+  sessionId: string;
+  canEdit: boolean;
+  start?: ReactNode;
+}) {
   const compact = useContext(CompactLayoutContext);
   const paneVisible = useContext(PaneVisibilityContext);
   const visible = useTabVisible() && paneVisible;
@@ -262,6 +321,8 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
     connection?.state.status === "ready" &&
     connection.state.daemon.capabilities?.includes("agent-plan-implementation");
   const active = agent && ["working", "needs_input"].includes(agent.status);
+  // Nothing was said yet: the pane is still the start screen.
+  const fresh = !!agent && !hasConversation(agent) && !conversation.items.length;
   const connected = canEdit && connection?.state.status === "ready";
   const canResume =
     agent &&
@@ -375,14 +436,16 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
               role="log"
               aria-label="Chat timeline"
               aria-live="off"
-              className="chat-scroll selectable min-h-0 min-w-0 flex-1 overflow-y-auto px-3 py-4 [overflow-anchor:none]"
+              className={`chat-scroll selectable min-h-0 min-w-0 flex-1 overflow-y-auto ${compact ? "px-3" : "px-[24px]"} py-4 [overflow-anchor:none]`}
               onScroll={onScroll}
             >
-              <div className="mx-auto max-w-5xl space-y-5">
+              <div className="mx-auto max-w-chat space-y-5">
                 {canResume && agent && (
                   <ProviderSwitchNotice agent={agent} disabled={!connected || busy} />
                 )}
+                {/* The start screen offers nothing but the prompt box and its chips. */}
                 {canResume &&
+                  !start &&
                   connection?.state.status === "ready" &&
                   connection.state.daemon.capabilities?.includes(NATIVE_SESSIONS_CAPABILITY) && (
                     <div className="flex justify-center py-6">
@@ -490,13 +553,14 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
               </Button>
             )}
           </div>
+          {start && fresh && <StartHeading provider={agent.provider} />}
           <div
             data-chat-footer
             // In a short pane the timeline gives up its room first. Prompts and notices above the
             // composer scroll before the composer itself loses any of its height.
-            className={`${compact ? "" : "flex max-h-[min(100%,max(55%,12rem))] flex-col"} shrink-0 px-3 pt-2 pb-3`}
+            className={`${compact ? "px-3" : "flex max-h-[min(100%,max(55%,12rem))] flex-col px-[24px]"} shrink-0 pt-2 pb-3`}
           >
-            <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-col gap-3">
+            <div className="mx-auto flex min-h-0 w-full max-w-chat flex-col gap-3">
               <div className="min-h-0 space-y-3 overflow-y-auto empty:hidden">
                 {!compact && feedback}
                 {latestPlan && <PlanProgress compact item={latestPlan} />}
@@ -535,10 +599,12 @@ export function Chat({ sessionId, canEdit }: { sessionId: string; canEdit: boole
                   reachable={connection?.state.status === "ready"}
                   onSend={latest}
                   onInterrupt={interrupt}
+                  placeholder={start && fresh ? START_PLACEHOLDER : undefined}
                 />
               )}
             </div>
           </div>
+          {start && <StartSpace open={fresh}>{fresh && start}</StartSpace>}
         </div>
         {subAgent && (
           <SubAgentPanel

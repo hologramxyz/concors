@@ -262,6 +262,6 @@ it("creates separate one-click workspaces and browses folders on this machine", 
       directoryMode: "follow",
       followPaneId: project.tabs[0]?.root,
       directory: await realpath(root),
-      tabs: [{ nodes: [{ kind: "pane", profile: "shell" }] }],
+      tabs: [{ nodes: [{ kind: "pane", profile: "chat" }] }],
     });
 });

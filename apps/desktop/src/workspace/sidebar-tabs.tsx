@@ -30,7 +30,8 @@ function RowDot({ row, status }: { row: SidebarRow; status: AgentStatus | undefi
       data-provider={status?.provider}
       data-row-state={state}
       data-background-agents={background || undefined}
-      className="flex size-5 shrink-0 items-center justify-center"
+      // The workspace icon is 20px, not a spacing step, so titles line up with workspace names.
+      className="flex size-[20px] shrink-0 items-center justify-center"
     >
       {state === "working" || state === "background" ? (
         <BrailleSpinner />
@@ -126,7 +127,7 @@ export function SidebarTabRow({
     >
       {renaming !== null ? (
         <div className="flex h-8 min-w-0 flex-1 items-center gap-2 px-2">
-          <span aria-hidden="true" className="w-5 shrink-0" />
+          <span aria-hidden="true" className="w-[20px] shrink-0" />
           <input
             ref={renameInput}
             aria-label="Tab name"
@@ -224,14 +225,14 @@ export function UnavailableChats({ chats, now }: { chats: readonly AgentInfo[]; 
       <p className="flex h-8 items-center px-2 text-ui text-muted-foreground">
         Unavailable workspace
       </p>
-      <ul className="ml-3 space-y-0.5">
+      <ul className="space-y-0.5">
         {chats.map((chat) => (
           <li
             key={chat.id}
             data-agent-id={chat.id}
             className="flex h-8 items-center gap-2 px-2 text-ui text-muted-foreground"
           >
-            <span aria-hidden="true" className="w-5 shrink-0" />
+            <span aria-hidden="true" className="w-[20px] shrink-0" />
             <span className="min-w-0 flex-1 truncate">
               {chat.paneName ?? chat.tabName ?? chat.name}
             </span>

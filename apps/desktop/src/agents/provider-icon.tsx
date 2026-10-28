@@ -3,12 +3,18 @@ import type { AgentProviderId } from "@concors/protocol";
 import { CodexIcon } from "./paseo/codex-icon";
 import { ClaudeIcon } from "./paseo/claude-icon";
 import { OpenCodeIcon } from "./paseo/opencode-icon";
-export function ProviderIcon({ provider }: { provider: AgentProviderId }) {
-  if (provider === "codex") return <CodexIcon />;
-  if (provider === "claude") return <ClaudeIcon />;
-  if (provider === "opencode") return <OpenCodeIcon />;
-  if (provider === "copilot") return <Bot className="size-4" aria-hidden="true" />;
-  if (provider !== "pi" && provider !== "omp") return <Bot className="size-4" aria-hidden="true" />;
+/** `size` in pixels, for the few places that show the mark larger than its 16px default. */
+export function ProviderIcon({
+  provider,
+  size = 16,
+}: {
+  provider: AgentProviderId;
+  size?: number;
+}) {
+  if (provider === "codex") return <CodexIcon size={size} />;
+  if (provider === "claude") return <ClaudeIcon size={size} />;
+  if (provider === "opencode") return <OpenCodeIcon size={size} />;
+  if (provider !== "pi" && provider !== "omp") return <Bot size={size} aria-hidden="true" />;
   return (
     <span
       aria-hidden="true"

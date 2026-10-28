@@ -33,5 +33,11 @@ export const nativeWindow = {
   /** Does what macOS is set to do when a title bar is double-clicked. */
   titleBarDoubleClick: () => invoke("title_bar_double_click"),
   resize: (direction: ResizeDirection) => getCurrentWindow().startResizeDragging(direction),
+  /**
+   * Gives the native frame the app's appearance. Otherwise a dark app under a light system theme
+   * keeps a light frame, whose bright top rim shows above the unified title bar.
+   */
+  setTheme: (theme: "light" | "dark") =>
+    isTauri() && PLATFORM === "macos" ? getCurrentWindow().setTheme(theme) : Promise.resolve(),
 };
 export type { ResizeDirection };

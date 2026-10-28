@@ -30,8 +30,8 @@ test("shared chat streams, handles approvals and removes detached sidebar entrie
     await expect(agentList.getByText("Chat acceptance", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
     await expect(page.getByRole("heading", { name: "Choose an agent" })).toHaveCount(0);
-    // No messages or placeholder text: an empty chat only offers to resume an earlier session.
-    await expect(page.getByRole("log")).toHaveText("Resume session");
+    // No messages or placeholder text: an empty chat is the start screen, its timeline empty.
+    await expect(page.getByRole("log")).toHaveText("");
     await expect(page.getByText("Start a conversation", { exact: true })).toHaveCount(0);
     await expect(
       page.getByRole("region", { name: "Agent pane", exact: true }).locator("header .truncate"),

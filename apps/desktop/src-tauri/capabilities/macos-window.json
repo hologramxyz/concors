@@ -1,8 +1,12 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "macos-window",
-  "description": "Dragging the unified macOS title bar. Double-clicking it runs title_bar_double_click instead of the built-in maximize, so it follows the system setting.",
+  "description": "Dragging the unified macOS title bar. Double-clicking it runs title_bar_double_click instead of the built-in maximize, so it follows the system setting. The frame takes the app's light or dark theme.",
   "platforms": ["macOS"],
   "windows": ["main"],
-  "permissions": ["core:window:allow-start-dragging", "core:window:deny-internal-toggle-maximize"]
+  "permissions": [
+    "core:window:allow-start-dragging",
+    "core:window:allow-set-theme",
+    "core:window:deny-internal-toggle-maximize"
+  ]
 }

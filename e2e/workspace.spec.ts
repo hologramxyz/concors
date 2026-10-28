@@ -67,10 +67,9 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
     await expect(first.getByRole("region", { name: "Agent pane", exact: true })).toHaveCount(1);
     await expect(first.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
     await expect(second.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
+    // The empty chat is the start screen: the prompt box and the terminal chips.
     await expect(
-      first
-        .getByRole("log", { name: "Chat timeline" })
-        .getByRole("button", { name: "Resume session", exact: true }),
+      first.getByRole("group", { name: "Start with" }).getByRole("button", { name: "Terminal" }),
     ).toBeEnabled();
     await first.getByRole("separator", { name: "Resize split" }).focus();
     await first.keyboard.press("ArrowRight");

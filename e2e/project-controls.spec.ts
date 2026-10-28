@@ -46,10 +46,11 @@ test("projects open an agent immediately and new tabs start the chosen profile",
     const sidebar = page.getByRole("navigation", { name: "Primary" });
     const before = await page.getByLabel("Terminal output").filter({ visible: true }).boundingBox();
     await page.getByRole("button", { name: "Collapse sidebar" }).click();
-    await expect(sidebar).toBeVisible();
-    await expect(page.locator(".sidebar-shell")).not.toHaveAttribute("inert", "");
+    // Collapsed, the sidebar slides away entirely and leaves its controls out of reach.
+    await expect(page.locator(".sidebar-shell")).toHaveAttribute("inert", "");
     await expect(page.locator(".sidebar-shell")).toHaveCSS("transition-property", "width");
-    await expect(page.locator(".sidebar-shell")).toHaveCSS("width", "44px");
+    await expect(page.locator(".sidebar-shell")).toHaveCSS("width", "0px");
+    await expect(sidebar).toBeHidden();
     const expand = page.getByRole("button", { name: "Expand sidebar" });
     await expect(expand).toBeFocused();
     await expect(
@@ -78,7 +79,7 @@ test("projects open an agent immediately and new tabs start the chosen profile",
     await page.emulateMedia({ reducedMotion: "reduce" });
     await expect(page.locator(".sidebar-shell")).toHaveCSS("transition-duration", "0s");
     await page.getByRole("button", { name: "Collapse sidebar" }).click();
-    await expect(page.locator(".sidebar-shell")).toHaveCSS("width", "44px");
+    await expect(page.locator(".sidebar-shell")).toHaveCSS("width", "0px");
     await page.getByRole("button", { name: "Expand sidebar" }).click();
     await expect(page.locator(".sidebar-shell")).toHaveCSS("width", "216px");
   } finally {

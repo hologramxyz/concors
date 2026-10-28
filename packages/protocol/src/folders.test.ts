@@ -4,7 +4,7 @@ import { expect, it } from "vitest";
 import { applyWorkspaceOperation } from "./workspace-reducer.ts";
 import { WorkspaceSnapshotSchema, type WorkspaceOperation } from "./workspace.ts";
 
-function fixture(follow = true) {
+function fixture(follow = true, profile: "shell" | "chat" = "shell") {
   let state = WorkspaceSnapshotSchema.parse({
     schemaVersion: 1,
     machineId: id(),
@@ -31,7 +31,7 @@ function fixture(follow = true) {
     tabId,
     paneId,
     name: "Terminal",
-    profile: "shell",
+    profile,
   });
   return { run, state: () => state, projectId, tabId, paneId };
 }
@@ -62,6 +62,15 @@ it("keeps existing projects pinned and anchors fresh workspaces to their origina
   });
   expect(f.state().projects[0]?.directoryMode).toBe("pinned");
   expect(f.state().projects[0]?.followPaneId).toBeUndefined();
+});
+it("anchors a workspace that opens to the start screen until the pane leaves the shell", () => {
+  const f = fixture(true, "chat");
+  expect(f.state().projects[0]?.followPaneId).toBe(f.paneId);
+  const target = { projectId: f.projectId, tabId: f.tabId, paneId: f.paneId };
+  f.run({ kind: "pane.configure", ...target, expectedVersion: 1, profile: "shell" });
+  expect(f.state().projects[0]).toMatchObject({ directoryMode: "follow", followPaneId: f.paneId });
+  f.run({ kind: "pane.configure", ...target, expectedVersion: 2, profile: "codex" });
+  expect(f.state().projects[0]?.directoryMode).toBe("pinned");
 });
 it("inherits the source pane directory without retargeting other panes", () => {
   const f = fixture();

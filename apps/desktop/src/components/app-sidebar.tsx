@@ -7,8 +7,6 @@ import { WorkspaceSidebarItem } from "@/workspace/sidebar-item";
 import { clashingWorkspaceParents } from "@/workspace/workspace-parents";
 import { useProjectIcons } from "@/workspace/use-project-icons";
 import { projectIconKey } from "@/workspace/project-icons";
-import { useShortcutLabels } from "@/shortcuts/preferences-context";
-import { AgentSidebar } from "@/agents/list";
 import { SidebarTabRow, UnavailableChats } from "@/workspace/sidebar-tabs";
 import {
   sidebarRows,
@@ -33,9 +31,8 @@ import {
 } from "@concors/protocol";
 import { PreviewsSidebar } from "@/host/previews-sidebar";
 import { SidebarEmpty, SidebarSection } from "./sidebar-section";
-import { PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
-import { TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { SidebarTooltip } from "@/components/sidebar-tooltip";
+import { SearchButton } from "@/components/search-button";
+import { SidebarToggle } from "@/components/sidebar-toggle";
 import { cn } from "cn";
 import { useWindowChrome } from "@/window/context";
 import type { WorkspaceSnapshot, WorkspaceOperation } from "@concors/protocol";
@@ -91,12 +88,11 @@ const rowChatId = (row: SidebarRow) =>
 const ROWS_SHOWN = 5;
 
 export function AppSidebar(props: AppSidebarProps) {
-  const shortcutLabel = useShortcutLabels();
   const windowChrome = useWindowChrome();
   const trafficLights = windowChrome.inset && !windowChrome.fullscreen;
   const machineSwitcher = (
     <MachineSwitcher
-      compact={props.collapsed}
+      compact={false}
       key={activeOrganization(props.auth)?.id}
       organizationId={activeOrganization(props.auth)?.id}
       onViewCloud={props.onViewCloud}
@@ -107,143 +103,84 @@ export function AppSidebar(props: AppSidebarProps) {
       onOpenResources={props.onOpenResources}
     />
   );
-  const controls = (
-    <div
-      className={cn(
-        "flex shrink-0 items-center gap-0.5",
-        props.collapsed ? "flex-col-reverse" : !windowChrome.inset && "ml-auto",
-      )}
-    >
-      <SidebarTooltip collapsed={props.collapsed}>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            aria-label="Search"
-            data-tour="search"
-            onClick={props.onOpenSearch}
-            className={cn(
-              "flex shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground",
-              props.collapsed ? "sidebar-rail-control" : "p-1.5",
-            )}
-          >
-            <Search className="size-4" aria-hidden="true" />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side={props.collapsed ? "right" : "bottom"}>
-          Search ({shortcutLabel("search")})
-        </TooltipContent>
-      </SidebarTooltip>
-      <SidebarTooltip collapsed={props.collapsed}>
-        <TooltipTrigger asChild>
-          <button
-            id={props.collapsed ? "expand-sidebar" : "collapse-sidebar"}
-            type="button"
-            aria-label={props.collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            aria-controls="app-sidebar"
-            aria-expanded={!props.collapsed}
-            onClick={props.onCollapse}
-            className={cn(
-              "flex shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground",
-              props.collapsed ? "sidebar-rail-control" : "p-1.5",
-            )}
-          >
-            {props.collapsed ? (
-              <PanelLeftOpen className="size-4" aria-hidden="true" />
-            ) : (
-              <PanelLeftClose className="size-4" aria-hidden="true" />
-            )}
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side={props.collapsed ? "right" : "bottom"}>
-          {props.collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        </TooltipContent>
-      </SidebarTooltip>
-    </div>
+  const search = <SearchButton collapsed={false} onOpenSearch={props.onOpenSearch} tour />;
+  const toggle = (
+    <SidebarToggle collapsed={false} onToggle={props.onCollapse} side="bottom" className="p-1.5" />
   );
 
   return (
-    <div className="sidebar-shell" data-collapsed={props.collapsed}>
+    // Collapsed, the sidebar keeps its layout and is clipped to nothing, so it slides away whole;
+    // inert keeps its hidden controls out of focus and the accessibility tree.
+    <div className="sidebar-shell" data-collapsed={props.collapsed} inert={props.collapsed}>
       <nav
         id="app-sidebar"
         aria-label="Primary"
-        className="flex h-full w-full flex-col bg-sidebar text-ui text-sidebar-foreground"
+        className="flex h-full w-(--sidebar-width) flex-col bg-sidebar text-ui text-sidebar-foreground"
       >
-        {windowChrome.inset && !props.collapsed ? (
+        {windowChrome.inset ? (
           <>
             <div
               data-tauri-drag-region
               className={cn(
-                "box-content flex h-11 shrink-0 items-center pt-2",
+                "box-content flex h-11 shrink-0 items-center gap-0.5 pt-2",
                 trafficLights ? "pl-(--traffic-lights-width)" : "pl-2",
               )}
             >
-              {controls}
+              {toggle}
+              {search}
             </div>
             <div className="mx-2 flex h-9 shrink-0 items-center">{machineSwitcher}</div>
           </>
         ) : (
-          <>
-            {windowChrome.inset && (
-              <div data-tauri-drag-region className="box-content h-11 shrink-0 pt-2" />
-            )}
-            <div
-              className={cn(
-                "flex shrink-0 items-center gap-1",
-                props.collapsed ? "m-[6px] flex-col" : "m-2 h-11",
-              )}
-            >
-              {machineSwitcher}
-              {controls}
+          <div className="m-2 flex h-11 shrink-0 items-center gap-1">
+            {machineSwitcher}
+            <div className="ml-auto flex shrink-0 items-center gap-0.5">
+              {search}
+              {toggle}
             </div>
-          </>
+          </div>
         )}
-        <div
-          className={cn(
-            "min-h-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto py-3",
-            props.collapsed ? "px-[6px]" : "px-2",
-          )}
-        >
+        <div className={cn("min-h-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto px-2 py-3")}>
           <div className="space-y-0.5" data-tour="schedules">
             <SchedulesNav
               selected={props.view === "schedules"}
-              compact={props.collapsed}
+              compact={false}
               onClick={props.onOpenSchedules}
             />
             <PullRequestsNav
               workspace={props.workspace}
               selected={props.view === "pull-requests"}
-              compact={props.collapsed}
+              compact={false}
               onClick={() => props.onOpenPullRequests()}
             />
           </div>
-          <div data-tour="workspaces">
-            <SidebarSection
-              title="Workspaces"
-              compact={props.collapsed}
-              action={
-                <NewWorkspaceMenu
-                  rail={props.collapsed}
-                  disabled={!props.canEdit}
-                  onNew={props.onAddProject}
-                  onOpen={props.onOpenFolder}
-                />
-              }
-            >
-              <WorkspaceTree {...props} />
-              {!props.collapsed && props.workspace?.projects.length === 0 && (
-                <SidebarEmpty>No workspaces yet.</SidebarEmpty>
-              )}
-            </SidebarSection>
-          </div>
-          {props.collapsed && (
-            <AgentSidebar compact onSelect={props.onSelectAgent} workspace={props.workspace} />
-          )}
-          <PreviewsSidebar compact={props.collapsed} />
+          <>
+            <div data-tour="workspaces">
+              <SidebarSection
+                title="Workspaces"
+                compact={false}
+                action={
+                  <NewWorkspaceMenu
+                    rail={false}
+                    disabled={!props.canEdit}
+                    onNew={props.onAddProject}
+                    onOpen={props.onOpenFolder}
+                  />
+                }
+              >
+                <WorkspaceTree {...props} collapsed={false} />
+                {props.workspace?.projects.length === 0 && (
+                  <SidebarEmpty>No workspaces yet.</SidebarEmpty>
+                )}
+              </SidebarSection>
+            </div>
+            <PreviewsSidebar compact={false} />
+          </>
         </div>
-        <div className={cn("space-y-1", props.collapsed ? "p-[6px]" : "p-2")}>
-          <UpdateBadge collapsed={props.collapsed} />
+        <div className="space-y-1 p-2">
+          <UpdateBadge collapsed={false} />
           <AccountMenu
-            collapsed={props.collapsed}
+            collapsed={false}
             auth={props.auth}
             onSignOut={props.onSignOut}
             onOpenSettings={props.onOpenSettings}
@@ -395,7 +332,7 @@ function WorkspaceTree(props: AppSidebarProps) {
                 {listed.length > 0 && (
                   <li className="sidebar-collapse" data-collapsed={!expanded || undefined}>
                     <div>
-                      <ul aria-label={`${project.name} tabs`} className="ml-3 space-y-0.5">
+                      <ul aria-label={`${project.name} tabs`} className="space-y-0.5">
                         {listed.map((row) => (
                           <SidebarTabRow
                             key={row.key}
@@ -434,7 +371,7 @@ function WorkspaceTree(props: AppSidebarProps) {
                               onClick={() =>
                                 setMore((previous) => new Set(previous).add(project.id))
                               }
-                              className="flex h-8 w-full items-center rounded-md pr-2 pl-9 text-left text-ui text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                              className="flex h-8 w-full items-center rounded-md pr-2 pl-[calc(1rem+20px)] text-left text-ui text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
                             >
                               Show more
                             </button>

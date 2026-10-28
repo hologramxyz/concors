@@ -13,6 +13,8 @@
  */
 @theme inline {
   /* Keep compact rem-based spacing, but give text sizes explicit, readable values. */
+  /* The chat's reading width, shared by its messages and prompt box. */
+  --container-chat: 768px;
   --text-ui: 13px;
   --text-ui--line-height: 1.4;
   --text-xs: 12px;
@@ -72,9 +74,9 @@
 
 :root {
   --sidebar-width: 216px;
-  --sidebar-rail-width: 44px;
-  /* Room macOS keeps at the left of the unified title bar for its traffic lights. */
-  --traffic-lights-width: 76px;
+  /* Room macOS keeps at the left of the unified title bar for its traffic lights, plus a gap
+     before the controls that follow them. */
+  --traffic-lights-width: 84px;
   --corner-radius: 0.375rem;
   color-scheme: light;
   --selection: #deded9;
@@ -384,14 +386,38 @@
   transition: width 240ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .sidebar-shell[data-collapsed="true"] {
-  width: var(--sidebar-rail-width);
+  width: 0;
 }
-/* The collapsed rail is narrower than the traffic lights, which then reach into the content's top row. */
+/* Hidden once it has slid away, and shown again as soon as it opens. */
+.sidebar-shell > nav {
+  transition: visibility 0s;
+}
+.sidebar-shell[data-collapsed="true"] > nav {
+  visibility: hidden;
+  transition-delay: 240ms;
+}
+/* With the sidebar gone, the content keeps the same gap from the window's left edge as its right. */
+.sidebar-shell[data-collapsed="true"] ~ .workspace-surface {
+  margin-left: 0.5rem;
+}
+/* Where the open sidebar's top row starts its controls: after the traffic lights, or at its own
+   padding in full screen. The collapsed sidebar's toggle is pinned at the same place. */
+.title-bar-start {
+  padding-left: 0.5rem;
+}
+:root[data-traffic-lights] .title-bar-start {
+  padding-left: var(--traffic-lights-width);
+}
+/* The content's top row leaves room for the toggle and search (2rem each, 0.125rem apart), less
+   its own 0.5rem margin and 1px border, which together keep a 0.5rem gap before the tabs. */
+:root[data-window-inset] .sidebar-shell[data-collapsed="true"] ~ .workspace-surface .title-bar-row {
+  padding-left: calc(0.5rem + 4.125rem - 1px);
+}
 :root[data-traffic-lights]
   .sidebar-shell[data-collapsed="true"]
-  + .workspace-surface
+  ~ .workspace-surface
   .title-bar-row {
-  padding-left: calc(var(--traffic-lights-width) - var(--sidebar-rail-width));
+  padding-left: calc(var(--traffic-lights-width) + 4.125rem - 1px);
 }
 .sidebar-rail-control {
   width: 32px;
@@ -406,6 +432,7 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .sidebar-shell,
+  .sidebar-shell > nav,
   .workspace-surface {
     transition: none;
   }

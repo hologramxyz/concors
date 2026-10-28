@@ -5,6 +5,7 @@ import { clampRatio, splitRatio } from "./split-ratio";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { useTerminalProfiles } from "@/terminal/profiles-context";
 import { paneProfiles, TAB_PROFILES } from "./tab-profiles";
+import { StartOptions } from "./start-options";
 import { useCommand } from "@/shortcuts/context";
 import { useShortcutLabels } from "@/shortcuts/preferences-context";
 import type { PaneFocusRequest } from "./session-pane";
@@ -621,7 +622,28 @@ function Pane({
             directory: agent?.directory ?? node.directory ?? project.directory,
           }}
         >
-          <ChatPane project={project} tab={tab} node={node} canEdit={canEdit} />
+          <ChatPane
+            project={project}
+            tab={tab}
+            node={node}
+            canEdit={canEdit}
+            start={
+              <StartOptions
+                options={options}
+                disabled={!canEdit}
+                onOpen={(option) =>
+                  onCommand({
+                    kind: "pane.configure",
+                    ...target,
+                    profile: option.profile,
+                    ...(profiles.supported && option.terminalProfileId
+                      ? { terminalProfileId: option.terminalProfileId }
+                      : {}),
+                  })
+                }
+              />
+            }
+          />
         </ProjectFileLinks>
       )}
     </section>

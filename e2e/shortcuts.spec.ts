@@ -254,6 +254,10 @@ test("Mac workspace shortcuts use physical Control and display matching hints", 
     ).toBeEnabled();
     await page.keyboard.press("Control+Shift+n");
     await expect(page.getByRole("dialog")).toHaveCount(0);
+    await page
+      .getByRole("group", { name: "Start with" })
+      .getByRole("button", { name: "Terminal", exact: true })
+      .click();
     await page.locator(".concors-terminal textarea").filter({ visible: true }).focus();
     await page.keyboard.type(`cd '${directory}'`);
     await page.keyboard.press("Enter");

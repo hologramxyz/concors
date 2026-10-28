@@ -39,6 +39,11 @@ test("new workspaces follow the original shell, inherit folders and preserve ope
       .click();
     await page.getByRole("menuitem", { name: "New workspace", exact: true }).click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
+    // A new workspace opens to the start screen; its terminal then sets the workspace's folder.
+    await page
+      .getByRole("group", { name: "Start with" })
+      .getByRole("button", { name: "Terminal", exact: true })
+      .click();
     const panes = page.getByRole("region", { name: "Terminal pane", exact: true });
     await expect(panes).toHaveCount(1);
     await cd(page, panes.first(), src);
@@ -108,6 +113,10 @@ test("a renamed workspace keeps its name when the shell changes folder", async (
       .getByRole("button", { name: "Open workspace menu", exact: true })
       .click();
     await page.getByRole("menuitem", { name: "New workspace", exact: true }).click();
+    await page
+      .getByRole("group", { name: "Start with" })
+      .getByRole("button", { name: "Terminal", exact: true })
+      .click();
     const panes = page.getByRole("region", { name: "Terminal pane", exact: true });
     await expect(panes).toHaveCount(1);
     await cd(page, panes.first(), first);

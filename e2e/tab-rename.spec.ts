@@ -206,7 +206,7 @@ test("renaming a new Agent tab keeps focus when its chat becomes ready mid-word"
     holding = true;
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
-    await chooseProvider(page);
+    // The chat picks its provider itself; its start is what is held.
     await tab(page, 1).dblclick();
     const editor = tabs.getByRole("textbox", { name: "Tab name", exact: true });
     await expect(editor).toBeFocused();

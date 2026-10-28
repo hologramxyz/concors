@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { nativeWindow } from "@/tauri/window";
 
 export const THEME_PREFERENCES = ["system", "dark", "light"] as const;
 export type ThemePreference = (typeof THEME_PREFERENCES)[number];
@@ -51,6 +52,7 @@ export function useTheme(): {
     const root = document.documentElement;
     root.classList.toggle("dark", resolved === "dark");
     root.style.colorScheme = resolved;
+    void nativeWindow.setTheme(resolved).catch(console.error);
   }, [resolved]);
 
   const setPreference = useCallback((next: ThemePreference) => {

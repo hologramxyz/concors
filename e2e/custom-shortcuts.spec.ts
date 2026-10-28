@@ -83,6 +83,10 @@ test("custom sequences split from a terminal and run from an Agent input without
   await editor.getByRole("button", { name: "Save shortcuts" }).click();
   await page.getByRole("button", { name: "Back to app" }).click();
   await page.keyboard.press("Control+Shift+n");
+  await page
+    .getByRole("group", { name: "Start with" })
+    .getByRole("button", { name: "Terminal", exact: true })
+    .click();
   const terminals = page.locator(".concors-terminal textarea").filter({ visible: true });
   await expect(terminals).toHaveCount(1);
   await terminals.first().focus();
@@ -229,6 +233,10 @@ test("tab-scoped sequences rename the focused tab even when another tab is selec
   await editor.getByRole("button", { name: "Save shortcuts" }).click();
   await page.getByRole("button", { name: "Back to app" }).click();
   await page.keyboard.press("Control+Shift+n");
+  await page
+    .getByRole("group", { name: "Start with" })
+    .getByRole("button", { name: "Terminal", exact: true })
+    .click();
   const first = tab(page, 0);
   await expect(first).toBeVisible();
   await page.getByRole("button", { name: "New tab", exact: true }).click();

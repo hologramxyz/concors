@@ -58,7 +58,8 @@ export function WindowChromeProvider({ children }: { children: ReactNode }) {
   // Lets styles.css make room for the traffic lights where React does not know the layout.
   useEffect(() => {
     document.documentElement.toggleAttribute("data-traffic-lights", trafficLights);
-  }, [trafficLights]);
+    document.documentElement.toggleAttribute("data-window-inset", state.inset);
+  }, [trafficLights, state.inset]);
   return (
     <WindowChromeContext value={{ ...state, actions: nativeWindow }}>
       {children}

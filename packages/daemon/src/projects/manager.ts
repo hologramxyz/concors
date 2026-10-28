@@ -244,9 +244,9 @@ export class ProjectManager {
           tabId: randomUUID(),
           paneId: randomUUID(),
           name: nextWorkspaceTabName(project.tabs),
-          // A named folder is ready for agent work. One-click workspaces still start with a
-          // shell because their identity follows the first terminal's working directory.
-          profile: setup.directoryMode === "follow" ? "shell" : "chat",
+          // Every workspace opens to the start screen. A one-click workspace follows this pane's
+          // folder once it becomes a terminal.
+          profile: "chat",
         },
       });
       if (initialTab.result.outcome.status === "rejected")
