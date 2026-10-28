@@ -5,6 +5,7 @@ import type { ProjectIcon } from "@concors/protocol";
 import { NotificationContext } from "./context";
 import { AttentionEngine, type Notice } from "./engine";
 import { claimNotification, getNotificationPreferences } from "./preferences";
+import { countdown } from "./countdown";
 import { desktopNotice, notificationAccess, openNotificationSettings } from "./platform";
 import { errorMessage } from "./access";
 import { isTauri } from "@/tauri";
@@ -14,6 +15,9 @@ import { terminalAgentSound } from "./terminal";
 import { agentPane, paneNames } from "@/agents/visible-sessions";
 import { ProjectImage } from "@/workspace/project-image";
 import { projectIconKey, projectIcons } from "@/workspace/project-icons";
+
+/** How long an unanswered card stays readable, as long as a macOS or Windows banner does. */
+const CARD_TIMEOUT_MS = 5_000;
 
 export function NotificationProvider({
   connection,
@@ -46,14 +50,17 @@ export function NotificationProvider({
       else views.current.set(id, count - 1);
     };
   }, []);
+  // Only the card goes: the agent stays unread and its OS notification stays in the list.
+  const expire = useCallback((id: string) => {
+    setNotices((current) => current.filter((n) => n.id !== id));
+  }, []);
   useEffect(() => {
     if (!connection) return;
     let disposed = false,
       live = false;
     const closes = new Map<string, { id: string; close: () => void }>();
     const seenRequests = new Set<string>();
-    const focused = (id: string) =>
-      document.visibilityState === "visible" && document.hasFocus() && views.current.has(id);
+    const focused = (id: string) => windowInFront() && views.current.has(id);
     const clear = (id: string) => {
       closes.get(id)?.close();
       closes.delete(id);
@@ -231,10 +238,7 @@ export function NotificationProvider({
         className="fixed right-4 bottom-4 z-50 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2"
       >
         {notices.map((notice) => (
-          <div
-            key={notice.id}
-            className="flex items-start gap-2 rounded-lg border bg-card p-3 shadow-lg"
-          >
+          <NoticeCard key={notice.id} id={notice.id} onExpire={expire}>
             <button
               className="min-w-0 flex-1 text-left"
               onClick={() => {
@@ -289,7 +293,7 @@ export function NotificationProvider({
             >
               ×
             </button>
-          </div>
+          </NoticeCard>
         ))}
         {problem && (
           <div role="status" className="rounded-lg border bg-card p-3 text-xs shadow-lg">
@@ -312,6 +316,55 @@ export function NotificationProvider({
         )}
       </aside>
     </NotificationContext>
+  );
+}
+
+/** Whether this window is on screen with focus, which is when its cards can be read. */
+function windowInFront() {
+  return document.visibilityState === "visible" && document.hasFocus();
+}
+function subscribeWindow(listener: () => void) {
+  window.addEventListener("focus", listener);
+  window.addEventListener("blur", listener);
+  document.addEventListener("visibilitychange", listener);
+  return () => {
+    window.removeEventListener("focus", listener);
+    window.removeEventListener("blur", listener);
+    document.removeEventListener("visibilitychange", listener);
+  };
+}
+
+/**
+ * A card that goes away by itself once it has been readable for `CARD_TIMEOUT_MS`: the window in
+ * front, and neither the pointer nor keyboard focus on the card, as toasts pause.
+ */
+function NoticeCard({
+  id,
+  onExpire,
+  children,
+}: {
+  id: string;
+  onExpire: (id: string) => void;
+  children: React.ReactNode;
+}) {
+  const [run] = useState(() => countdown(CARD_TIMEOUT_MS));
+  const front = useSyncExternalStore(subscribeWindow, windowInFront);
+  const [pointer, setPointer] = useState(false);
+  const [focus, setFocus] = useState(false);
+  const running = front && !pointer && !focus;
+  useEffect(() => (running ? run(() => onExpire(id)) : undefined), [run, running, onExpire, id]);
+  return (
+    <div
+      className="flex items-start gap-2 rounded-lg border bg-card p-3 shadow-lg"
+      onPointerEnter={() => setPointer(true)}
+      onPointerLeave={() => setPointer(false)}
+      onFocus={() => setFocus(true)}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setFocus(false);
+      }}
+    >
+      {children}
+    </div>
   );
 }
 
