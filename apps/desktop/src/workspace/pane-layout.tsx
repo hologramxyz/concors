@@ -404,7 +404,7 @@ function Pane({
     TAB_PROFILES.find((item) => item.profile === (node.terminalProfile?.id ?? node.profile))
       ?.icon ?? Terminal;
   const label = node.terminalProfile?.name ?? PROFILE_LABELS[node.profile];
-  const fallbackTitle = defaultPaneTitle(node, agent ? [agent] : []);
+  const fallbackTitle = defaultPaneTitle(node, agent ? [agent] : [], terminal ? [terminal] : []);
   const title = node.name ?? fallbackTitle;
   const target = {
     projectId: project.id,

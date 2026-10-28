@@ -21,6 +21,7 @@ import { defaultPaneTitle, mainPane } from "@/workspace/tab-title";
 import { useAgents } from "@/agents/context";
 import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
+import { BackgroundTerminalsContext } from "@/terminal/background-terminals";
 import { canFork, useForkChat } from "@/agents/fork";
 import { useSchedules } from "@/schedules/use-schedules";
 import { Fragment, useContext, useLayoutEffect, useRef, useState } from "react";
@@ -83,7 +84,8 @@ function followOrder(previous: ReadonlyMap<string, string[]>, order: string) {
 }
 
 /** The chat a row stands for, when it stands for one. */
-const rowChatId = (row: SidebarRow) => (row.kind === "tab" ? row.chat?.id : row.chat.agent.id);
+const rowChatId = (row: SidebarRow) =>
+  row.kind === "tab" ? row.chat?.id : row.kind === "closed" ? row.chat.agent.id : undefined;
 
 /** Each workspace lists this many rows before "Show more"; the selected tab is always among them. */
 const ROWS_SHOWN = 5;
@@ -261,10 +263,12 @@ function WorkspaceTree(props: AppSidebarProps) {
   const pullRequests = usePullRequests(props.workspace);
   const parents = clashingWorkspaceParents(props.workspace?.projects ?? []);
   const connection = useContext(TerminalConnectionContext);
+  const background = useContext(BackgroundTerminalsContext);
   const forkChat = useForkChat();
   const now = useMinuteClock();
   const chats = useAgents();
-  const { rows, unavailable } = sidebarRows(props.workspace, chats, useTerminalSessions());
+  const terminals = useTerminalSessions();
+  const { rows, unavailable } = sidebarRows(props.workspace, chats, terminals);
   const currentProjectId = props.workspace?.selection?.projectId ?? null;
   const selectedTabId =
     props.view === "projects" ? (props.workspace?.selection?.tabId ?? null) : null;
@@ -305,7 +309,7 @@ function WorkspaceTree(props: AppSidebarProps) {
     if (tab && pane && isDefaultTabName(tab.name) && canRenamePanes)
       return (value: string) => {
         const name = value.trim().slice(0, 120);
-        const next = name && name !== defaultPaneTitle(pane, chats) ? name : null;
+        const next = name && name !== defaultPaneTitle(pane, chats, terminals) ? name : null;
         if (next === (pane.name ?? null)) return;
         props.onCommand({
           kind: "pane.rename",
@@ -356,11 +360,13 @@ function WorkspaceTree(props: AppSidebarProps) {
             const selectedRow = ordered.find(
               (row) => row.kind === "tab" && row.tabId === selectedTabId,
             );
-            const shown = !expanded
+            // Rendered while collapsed too, so the list can ease open and shut.
+            const listed = props.collapsed
               ? []
               : more.has(project.id)
                 ? ordered
                 : ordered.filter((row, index) => index < ROWS_SHOWN || row === selectedRow);
+            const shown = expanded ? listed : [];
             const current = props.view === "projects" && currentProjectId === project.id;
             return (
               <Fragment key={project.id}>
@@ -386,43 +392,56 @@ function WorkspaceTree(props: AppSidebarProps) {
                   execute={props.execute}
                   onCommand={props.onCommand}
                 />
-                {shown.length > 0 && (
-                  <li>
-                    <ul aria-label={`${project.name} tabs`} className="ml-3 space-y-0.5">
-                      {shown.map((row) => (
-                        <SidebarTabRow
-                          key={row.key}
-                          row={row}
-                          now={now}
-                          selected={row === selectedRow && current}
-                          scheduled={scheduledChats.has(rowChatId(row) ?? "")}
-                          onOpen={() => {
-                            // Opening a session focuses its pane, as the tab bar does;
-                            // a pane that has not started yet just has its tab selected.
-                            const session =
-                              row.kind === "tab"
-                                ? (row.chat?.id ?? row.terminal?.id)
-                                : row.chat.agent.id;
-                            if (session) props.onSelectAgent(session);
-                            else if (row.kind === "tab")
-                              props.onSelectTab(row.projectId, row.tabId);
-                          }}
-                          onRename={row.kind === "tab" ? rename(project, row) : undefined}
-                          onFork={fork(row.kind === "tab" ? row.chat : row.chat.agent)}
-                        />
-                      ))}
-                      {shown.length < ordered.length && (
-                        <li>
-                          <button
-                            type="button"
-                            onClick={() => setMore((previous) => new Set(previous).add(project.id))}
-                            className="flex h-8 w-full items-center rounded-md pr-2 pl-9 text-left text-ui text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                          >
-                            Show more
-                          </button>
-                        </li>
-                      )}
-                    </ul>
+                {listed.length > 0 && (
+                  <li className="sidebar-collapse" data-collapsed={!expanded || undefined}>
+                    <div>
+                      <ul aria-label={`${project.name} tabs`} className="ml-3 space-y-0.5">
+                        {listed.map((row) => (
+                          <SidebarTabRow
+                            key={row.key}
+                            row={row}
+                            now={now}
+                            selected={row === selectedRow && current}
+                            scheduled={scheduledChats.has(rowChatId(row) ?? "")}
+                            onOpen={() => {
+                              // A background terminal comes back into a new tab.
+                              if (row.kind === "terminal") {
+                                background?.reopen(row.terminal);
+                                return;
+                              }
+                              // Opening a session focuses its pane, as the tab bar does;
+                              // a pane that has not started yet just has its tab selected.
+                              const session =
+                                row.kind === "tab"
+                                  ? (row.chat?.id ?? row.terminal?.id)
+                                  : row.chat.agent.id;
+                              if (session) props.onSelectAgent(session);
+                              else if (row.kind === "tab")
+                                props.onSelectTab(row.projectId, row.tabId);
+                            }}
+                            onRename={row.kind === "tab" ? rename(project, row) : undefined}
+                            onFork={
+                              row.kind === "terminal"
+                                ? undefined
+                                : fork(row.kind === "tab" ? row.chat : row.chat.agent)
+                            }
+                          />
+                        ))}
+                        {listed.length < ordered.length && (
+                          <li>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setMore((previous) => new Set(previous).add(project.id))
+                              }
+                              className="flex h-8 w-full items-center rounded-md pr-2 pl-9 text-left text-ui text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                            >
+                              Show more
+                            </button>
+                          </li>
+                        )}
+                      </ul>
+                    </div>
                   </li>
                 )}
               </Fragment>

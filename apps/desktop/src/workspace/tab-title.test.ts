@@ -54,3 +54,14 @@ it("shows a parent folder only for workspaces in different folders with the same
     ["2", "old"],
   ]);
 });
+it("names a shell after the command it runs, as the sidebar does once its tab is closed", () => {
+  const shell = tab("Tab 1", [pane("a", { profile: "shell", sessionId: "s" })]);
+  const terminal = (foregroundCommand: string | null, status = "running" as const) => [
+    { id: "s", status, foregroundCommand },
+  ];
+  expect(tabTitle(shell, [], terminal("npm run dev"))).toBe("npm run dev");
+  expect(tabTitle(shell, [], terminal(null))).toBe("Terminal");
+  expect(tabTitle(shell, [])).toBe("Terminal");
+  // A name someone gave it still wins.
+  expect(tabTitle(tab("Build", shell.nodes), [], terminal("npm run dev"))).toBe("Build");
+});

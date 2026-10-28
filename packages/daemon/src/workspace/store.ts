@@ -341,9 +341,21 @@ export class WorkspaceStore {
     if (op.kind !== "bind") throw new Error("Expected bind");
     this.#db.exec("BEGIN IMMEDIATE");
     try {
-      const state = this.snapshot();
+      let state = this.snapshot();
       const session = this.terminal(op.sessionId);
       if (session.projectId !== op.projectId) throw new Error("Session belongs to another project");
+      // Opening it in a tab of its own creates that tab here, so nobody sees it empty first.
+      if (op.newTab) {
+        state = applyWorkspaceOperation(state, {
+          kind: "tab.create",
+          projectId: op.projectId,
+          expectedVersion: op.expectedVersion,
+          tabId: op.tabId,
+          paneId: op.paneId,
+          name: op.newTab.name,
+          profile: session.profile,
+        });
+      }
       const project = state.projects.find((p) => p.id === op.projectId);
       const pane = project?.tabs
         .find((t) => t.id === op.tabId)
@@ -353,8 +365,10 @@ export class WorkspaceStore {
         this.#db.exec("COMMIT");
         return;
       }
-      if (project.version !== op.expectedVersion || pane.sessionId !== null)
+      // A new tab was checked against the version as it was created, and already counted.
+      if (!op.newTab && (project.version !== op.expectedVersion || pane.sessionId !== null))
         throw new Error("Use an empty pane to attach this session");
+      if (op.newTab) pane.directory = session.directory;
       if (
         state.projects.some((p) =>
           p.tabs.some((t) => t.nodes.some((n) => n.kind === "pane" && n.sessionId === session.id)),
@@ -367,8 +381,10 @@ export class WorkspaceStore {
       pane.profile = session.profile;
       if (session.terminalProfile) pane.terminalProfile = session.terminalProfile;
       else delete pane.terminalProfile;
-      project.version++;
-      state.revision++;
+      if (!op.newTab) {
+        project.version++;
+        state.revision++;
+      }
       this.#db.prepare("UPDATE workspace SET snapshot = ? WHERE id = 1").run(JSON.stringify(state));
       this.#db.exec("COMMIT");
     } catch (error) {

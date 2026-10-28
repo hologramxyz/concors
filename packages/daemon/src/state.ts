@@ -22,6 +22,7 @@ import {
   PANE_RENAME_CAPABILITY,
   PROJECT_RENAME_CAPABILITY,
   TERMINAL_IMAGE_PASTE_CAPABILITY,
+  TERMINAL_BIND_NEW_TAB_CAPABILITY,
 } from "@concors/protocol";
 
 import { DAEMON_VERSION } from "./version.ts";
@@ -95,6 +96,7 @@ export class DaemonState {
         PROJECT_RENAME_CAPABILITY,
         "terminal-recovery",
         TERMINAL_IMAGE_PASTE_CAPABILITY,
+        TERMINAL_BIND_NEW_TAB_CAPABILITY,
         ATTACHMENT_UPLOADS_CAPABILITY,
         ...(this.#dictation ? [DICTATION_CAPABILITY] : []),
       ],

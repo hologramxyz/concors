@@ -1,5 +1,5 @@
 import { directoryIdentity, shellDirectory } from "./working-directory.ts";
-import { detectTerminalAgent, readTerminalProcesses } from "./agent-process.ts";
+import { detectTerminalAgent, foregroundCommand, readTerminalProcesses } from "./agent-process.ts";
 import { randomUUID } from "node:crypto";
 import { mkdir, realpath, stat, writeFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
@@ -79,8 +79,10 @@ export class TerminalManager {
     try {
       const processes = await readTerminalProcesses();
       if (this.#closed) return;
-      for (const runtime of shells)
+      for (const runtime of shells) {
         runtime.detectAgent(detectTerminalAgent(runtime.pid, processes));
+        runtime.detectForeground(foregroundCommand(runtime.pid, processes));
+      }
     } catch {
       // Process enumeration can be unavailable temporarily; retain the last observed state.
     } finally {

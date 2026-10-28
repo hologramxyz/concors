@@ -8,6 +8,7 @@ import {
 } from "@/agents/agent-status";
 import { agentDisplayStatus } from "@/agents/context";
 import { closedChats, type ClosedChat } from "@/agents/closed-chats";
+import { backgroundTerminals, terminalActivity } from "@/terminal/background-terminals";
 import { mainPane, tabTitle } from "./tab-title";
 import { tabPanes, type PaneNode } from "./tab-panes";
 
@@ -36,11 +37,23 @@ export interface ClosedChatRow {
   readonly time: string;
 }
 
-export type SidebarRow = OpenTabRow | ClosedChatRow;
+/** A terminal whose tab closed while it kept running something; it comes back into a new tab. */
+export interface BackgroundTerminalRow {
+  readonly kind: "terminal";
+  readonly key: string;
+  readonly projectId: string;
+  readonly terminal: TerminalInfo;
+  /** What it runs: a coding agent's name, or the command. */
+  readonly title: string;
+  readonly time: string;
+}
+
+export type SidebarRow = OpenTabRow | ClosedChatRow | BackgroundTerminalRow;
 
 /**
  * Every workspace's rows, in the order the sidebar lists them: its open tabs in the tab bar's
- * order, then its closed chats, newest first. Chats whose workspace was removed are returned apart.
+ * order, then what was closed and can come back, newest first: chats, and terminals still running.
+ * Chats whose workspace was removed are returned apart.
  */
 export function sidebarRows(
   workspace: Pick<WorkspaceSnapshot, "projects"> | null,
@@ -77,7 +90,7 @@ export function sidebarRows(
         key: `tab:${tab.id}`,
         projectId: project.id,
         tabId: tab.id,
-        title: tabTitle(tab, chats),
+        title: tabTitle(tab, chats, terminals),
         chat,
         terminal,
         tool,
@@ -86,14 +99,25 @@ export function sidebarRows(
     });
     rows.set(project.id, open);
   }
-  for (const chat of closedChats(workspace, chats))
-    rows.get(chat.agent.projectId)?.push({
-      kind: "closed",
+  const closed: SidebarRow[] = [
+    ...closedChats(workspace, chats).map((chat) => ({
+      kind: "closed" as const,
       key: `closed:${chat.agent.id}`,
       projectId: chat.agent.projectId,
       chat,
       time: chat.agent.updatedAt,
-    });
+    })),
+    ...backgroundTerminals(workspace, terminals).map((terminal) => ({
+      kind: "terminal" as const,
+      key: `terminal:${terminal.id}`,
+      projectId: terminal.projectId,
+      terminal,
+      title: terminalActivity(terminal) ?? "Terminal",
+      time: terminal.startedAt,
+    })),
+  ];
+  for (const row of closed.sort((a, b) => b.time.localeCompare(a.time)))
+    rows.get(row.projectId)?.push(row);
   return { rows, unavailable: unavailableChats(workspace, chats) };
 }
 
@@ -108,7 +132,7 @@ function firstSeen(tabId: string) {
 
 /** The agent a row speaks for, chat or CLI, while there is one. */
 export function rowAgentStatus(row: SidebarRow): AgentStatus | undefined {
-  if (row.kind === "closed") return undefined;
+  if (row.kind !== "tab") return undefined;
   if (row.chat) return chatAgentStatus(row.chat);
   return row.terminal && isLiveTerminalAgent(row.terminal)
     ? terminalAgentStatus(row.terminal)
@@ -116,24 +140,28 @@ export function rowAgentStatus(row: SidebarRow): AgentStatus | undefined {
 }
 
 /**
- * The row's dot: "attention" when its agent waits for an answer, failed, or finished unseen;
- * "working" while it replies, sub-agents included. A closed chat still finishing its turn works too.
+ * What the row shows before its name: "attention" (red) when its agent waits for an answer or
+ * failed, "done" (white) when it finished and nobody has looked yet, and "working" while it replies,
+ * sub-agents included, or while a shell runs a command. Something whose tab was closed but still
+ * runs, a terminal or a chat finishing its turn, is "background".
  */
-export function rowState(row: SidebarRow): "working" | "attention" | undefined {
+export function rowState(
+  row: SidebarRow,
+): "working" | "attention" | "done" | "background" | undefined {
+  if (row.kind === "terminal") return "background";
   const chat = row.kind === "closed" ? row.chat.agent : row.chat;
   if (chat) {
     const status = agentDisplayStatus(chat);
-    if (
-      row.kind === "tab" &&
-      (status === "needs_input" || status === "failed" || (chat.attention && !chat.attention.seen))
-    )
-      return "attention";
-    return status === "starting" || status === "working" || chat.backgroundAgents
+    if (row.kind === "tab" && (status === "needs_input" || status === "failed")) return "attention";
+    if (row.kind === "tab" && chat.attention && !chat.attention.seen) return "done";
+    if (status !== "starting" && status !== "working" && !chat.backgroundAgents) return undefined;
+    return row.kind === "closed" ? "background" : "working";
+  }
+  if (row.kind === "closed" || !row.terminal) return undefined;
+  if (!isLiveTerminalAgent(row.terminal))
+    return row.terminal.status === "running" && row.terminal.foregroundCommand
       ? "working"
       : undefined;
-  }
-  if (row.kind === "closed" || !row.terminal || !isLiveTerminalAgent(row.terminal))
-    return undefined;
   if (row.terminal.agentActivity === "needs_input") return "attention";
   return terminalAgentStatus(row.terminal).running ? "working" : undefined;
 }

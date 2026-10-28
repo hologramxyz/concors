@@ -1,5 +1,5 @@
-import { Clock, Ellipsis, GitFork, Pencil } from "lucide-react";
-import { useRef, useState } from "react";
+import { Clock, Ellipsis, GitFork, Pencil, RotateCcw, Square } from "lucide-react";
+import { useContext, useRef, useState } from "react";
 import type { AgentInfo } from "@concors/protocol";
 import { cn } from "cn";
 import {
@@ -8,13 +8,17 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { BrailleSpinner } from "@/agents/activity";
 import type { AgentStatus } from "@/agents/agent-status";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { BackgroundTerminalsContext } from "@/terminal/background-terminals";
 import { rowAgentStatus, rowState, shortAge, type SidebarRow } from "./sidebar-rows";
 
 /**
- * Sits under the workspace's icon, one indent in, so the row reads as the workspace's. A small dot
- * while the agent works or needs you; nothing otherwise.
+ * Sits under the workspace's icon, one indent in, so the row reads as the workspace's. The chat's
+ * braille spinner while anything runs, open or closed (closed rows are told apart by their muted
+ * name), a white dot when it finished unseen, a red one when it failed or waits for an answer, and
+ * nothing otherwise.
  */
 function RowDot({ row, status }: { row: SidebarRow; status: AgentStatus | undefined }) {
   const state = rowState(row);
@@ -28,22 +32,26 @@ function RowDot({ row, status }: { row: SidebarRow; status: AgentStatus | undefi
       data-background-agents={background || undefined}
       className="flex size-5 shrink-0 items-center justify-center"
     >
-      {state && (
-        <span
-          aria-hidden="true"
-          className={cn(
-            "size-1.5 rounded-full",
-            state === "attention" ? "bg-primary" : "bg-muted-foreground/60",
-          )}
-        />
+      {state === "working" || state === "background" ? (
+        <BrailleSpinner />
+      ) : (
+        state && (
+          <span
+            aria-hidden="true"
+            className={cn(
+              "size-1.5 rounded-full",
+              state === "done" ? "bg-primary" : "bg-destructive",
+            )}
+          />
+        )
       )}
     </span>
   );
 }
 
 /**
- * One tab, or one closed chat, under its workspace. Rows have no close button: closing is the
- * tab's job, and a closed chat stays here, muted, until it is opened again.
+ * One tab, closed chat, or background terminal under its workspace. Rows have no close button:
+ * closing is the tab's job, and what was closed stays here, muted, while it can be opened again.
  */
 export function SidebarTabRow({
   row,
@@ -65,9 +73,11 @@ export function SidebarTabRow({
   /** Absent for terminals, and for a chat that cannot be forked right now. */
   onFork: (() => void) | undefined;
 }) {
-  const closed = row.kind === "closed";
-  const title = closed ? row.chat.title : row.title;
+  const closed = row.kind !== "tab";
+  const title = row.kind === "closed" ? row.chat.title : row.title;
   const status = rowAgentStatus(row);
+  const background = useContext(BackgroundTerminalsContext);
+  const terminal = row.kind === "terminal" && background ? row.terminal : undefined;
   // Mirrors the tab rename: the ref stops blur after Enter/Escape from committing a second time.
   const [renaming, setRenaming] = useState<string | null>(null);
   const renameRef = useRef<string | null>(null);
@@ -82,14 +92,15 @@ export function SidebarTabRow({
     setRename(null);
     onRename?.(value);
   };
-  const actions = !!onRename || !!onFork;
+  const actions = !!onRename || !!onFork || !!terminal;
   const button = (
     <button
       type="button"
       aria-current={selected ? "true" : undefined}
-      data-agent-id={status?.id ?? (closed ? row.chat.agent.id : undefined)}
-      data-agent-closed={closed || undefined}
-      data-sidebar-tab-id={closed ? undefined : row.tabId}
+      data-agent-id={status?.id ?? (row.kind === "closed" ? row.chat.agent.id : undefined)}
+      data-agent-closed={row.kind === "closed" || undefined}
+      data-sidebar-tab-id={row.kind === "tab" ? row.tabId : undefined}
+      data-background-terminal={row.kind === "terminal" ? row.terminal.id : undefined}
       onClick={onOpen}
       className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md pl-2 text-left text-ui outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
@@ -185,6 +196,16 @@ export function SidebarTabRow({
               <DropdownMenuItem onSelect={onFork}>
                 <GitFork /> Fork chat
               </DropdownMenuItem>
+            )}
+            {terminal && (
+              <>
+                <DropdownMenuItem onSelect={() => background?.reopen(terminal)}>
+                  <RotateCcw /> Reopen
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => background?.stop(terminal)}>
+                  <Square /> Stop
+                </DropdownMenuItem>
+              </>
             )}
           </DropdownMenuContent>
         </DropdownMenu>

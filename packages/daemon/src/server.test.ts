@@ -174,6 +174,7 @@ describe("WebSocket handshake", () => {
           "project-rename",
           "terminal-recovery",
           "terminal-image-paste",
+          "terminal-bind-new-tab",
           "attachment-uploads",
         ],
       });

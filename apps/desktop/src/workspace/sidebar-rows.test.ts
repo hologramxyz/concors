@@ -92,7 +92,7 @@ it("lists each workspace's open tabs in tab-bar order, then its closed chats new
     ],
   );
   expect(
-    rows.get("p")?.map((row) => [row.key, row.kind === "tab" ? row.title : row.chat.title]),
+    rows.get("p")?.map((row) => [row.key, row.kind === "closed" ? row.chat.title : row.title]),
   ).toEqual([
     ["tab:chat-tab", "hello?"],
     // A split tab is one row, named and timed after its first pane.
@@ -171,7 +171,8 @@ it("dots a row only while its agent works or needs you", () => {
         attention: { id: "a", kind: "done", createdAt: "2026-09-20T00:00:00Z", seen: false },
       }),
     ),
-  ).toBe("attention");
+  ).toBe("done");
+  expect(state(agent("open", { status: "failed" }))).toBe("attention");
   const cli = (patch: Partial<TerminalInfo>) =>
     rowState(
       sidebarRows(workspace, [], [terminal("cli", { profile: "claude", ...patch })]).rows.get(
@@ -181,9 +182,55 @@ it("dots a row only while its agent works or needs you", () => {
   expect(cli({ agentActivity: "working" })).toBe("working");
   expect(cli({ agentActivity: "needs_input" })).toBe("attention");
   expect(cli({ agentActivity: "idle" })).toBeUndefined();
-  // A closed chat is muted, with a dot only while it is still finishing its turn.
+  // A closed chat is muted, with a spinner only while it is still finishing its turn.
   const closed = (patch: Partial<AgentInfo>) =>
     rowState(sidebarRows(workspace, [agent("closed", patch)], []).rows.get("p")![3]!);
   expect(closed({ status: "needs_input" })).toBeUndefined();
-  expect(closed({ status: "working" })).toBe("working");
+  expect(closed({ status: "working" })).toBe("background");
+});
+
+it("keeps a closed terminal that still runs something among the closed rows, by when it started", () => {
+  const { rows } = sidebarRows(
+    workspace,
+    [agent("old", { updatedAt: "2026-09-18T00:00:00Z" })],
+    [
+      terminal("dev", { foregroundCommand: "npm run dev", startedAt: "2026-09-19T00:00:00Z" }),
+      terminal("agent", { profile: "codex", startedAt: "2026-09-17T00:00:00Z" }),
+      // A shell waiting at a prompt has nothing to come back to.
+      terminal("idle", { foregroundCommand: null }),
+    ],
+  );
+  const closed = rows.get("p")?.slice(3) ?? [];
+  expect(
+    closed.map((row) => [row.key, row.kind === "closed" ? row.chat.title : row.title]),
+  ).toEqual([
+    ["terminal:dev", "npm run dev"],
+    ["closed:old", "Chat old"],
+    ["terminal:agent", "Codex"],
+  ]);
+  expect(closed.map(rowState)).toEqual(["background", undefined, "background"]);
+});
+
+it("dots an open shell while it runs a command", () => {
+  const shellTab: Pick<WorkspaceSnapshot, "projects"> = {
+    projects: [
+      {
+        ...workspace.projects[0]!,
+        tabs: [
+          {
+            id: "shell-tab",
+            name: "Tab 1",
+            root: "pane",
+            nodes: [{ kind: "pane", id: "pane", profile: "shell", sessionId: "shell" }],
+          },
+        ],
+      },
+    ],
+  };
+  const shell = (foregroundCommand: string | null) =>
+    rowState(
+      sidebarRows(shellTab, [], [terminal("shell", { foregroundCommand })]).rows.get("p")![0]!,
+    );
+  expect(shell("make watch")).toBe("working");
+  expect(shell(null)).toBeUndefined();
 });

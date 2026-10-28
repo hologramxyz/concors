@@ -16,7 +16,8 @@ export function TabButton({
   ...props
 }: { tab: WorkspaceTab; selected: boolean } & ComponentProps<"button">) {
   const sessions = useAgents();
-  const agents = tabAgentStatuses(tab, sessions, useTerminalSessions());
+  const terminals = useTerminalSessions();
+  const agents = tabAgentStatuses(tab, sessions, terminals);
   return (
     <button
       type="button"
@@ -43,7 +44,7 @@ export function TabButton({
           ))}
         </span>
       )}
-      <span className="max-w-44 truncate">{tabTitle(tab, sessions)}</span>
+      <span className="max-w-44 truncate">{tabTitle(tab, sessions, terminals)}</span>
     </button>
   );
 }
@@ -52,7 +53,8 @@ export function CloseTabButton({
   tab,
   ...props
 }: { tab: WorkspaceTab } & ComponentProps<"button">) {
-  return <button type="button" aria-label={`Close ${tabTitle(tab, useAgents())} tab`} {...props} />;
+  const label = tabTitle(tab, useAgents(), useTerminalSessions());
+  return <button type="button" aria-label={`Close ${label} tab`} {...props} />;
 }
 
 /** Keeps the latest agents in `targetRef` for event handlers, without repainting the tab bar. */
