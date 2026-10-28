@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ChatPane } from "@/agents/chat";
 import { TerminalPane } from "@/terminal/terminal-pane";
-import { useContext, useEffect, useRef, useState } from "react";
+import { Fragment, useContext, useEffect, useRef, useState } from "react";
 import { AgentPaneIcon, AgentStatusIcon } from "@/agents/activity";
 import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
 import { isLiveTerminalAgent, terminalAgentStatus } from "@/agents/agent-status";
@@ -580,11 +580,14 @@ function Pane({
                   });
               }}
             >
-              {options.map(({ id, label: optionLabel, icon: Icon }) => (
-                <DropdownMenuRadioItem key={id} value={id} disabled={!canEdit}>
-                  <Icon className="size-4 shrink-0" aria-hidden="true" />
-                  <span className="truncate">{optionLabel}</span>
-                </DropdownMenuRadioItem>
+              {options.map(({ id, profile, label: optionLabel, icon: Icon }) => (
+                <Fragment key={id}>
+                  <DropdownMenuRadioItem value={id} disabled={!canEdit}>
+                    <Icon className="size-4 shrink-0" aria-hidden="true" />
+                    <span className="truncate">{optionLabel}</span>
+                  </DropdownMenuRadioItem>
+                  {profile === "chat" && <DropdownMenuSeparator />}
+                </Fragment>
               ))}
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>

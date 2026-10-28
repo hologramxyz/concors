@@ -3,7 +3,7 @@ import { useShortcutLabels } from "@/shortcuts/preferences-context";
 import { PaneProfileIcon } from "./profile-icon";
 import { paneProfiles } from "./tab-profiles";
 import { useTerminalProfiles } from "@/terminal/profiles-context";
-import { useContext, useRef, useState, type ReactNode } from "react";
+import { Fragment, useContext, useRef, useState, type ReactNode } from "react";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import { History, Plus } from "lucide-react";
 import type { PaneProfile } from "@concors/protocol";
@@ -176,17 +176,19 @@ export function NewTabMenu({
           >
             {paneProfiles(profiles.profiles).map(
               ({ id, profile, label, icon: Icon, terminalProfileId }) => (
-                <DropdownMenuItem
-                  key={id}
-                  disabled={disabled}
-                  onSelect={() => {
-                    menuTransfersFocus.current = true;
-                    create(profile, terminalProfileId);
-                  }}
-                >
-                  <Icon className="size-4 shrink-0" aria-hidden="true" />
-                  <span className="truncate">{label}</span>
-                </DropdownMenuItem>
+                <Fragment key={id}>
+                  <DropdownMenuItem
+                    disabled={disabled}
+                    onSelect={() => {
+                      menuTransfersFocus.current = true;
+                      create(profile, terminalProfileId);
+                    }}
+                  >
+                    <Icon className="size-4 shrink-0" aria-hidden="true" />
+                    <span className="truncate">{label}</span>
+                  </DropdownMenuItem>
+                  {profile === "chat" && <DropdownMenuSeparator />}
+                </Fragment>
               ),
             )}
             {onResume && (
