@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
 import { chooseProvider } from "./support/agents.ts";
+import { tab } from "./support/tabs.ts";
 for (const [provider, label] of [
   ["claude", "Claude Code"],
   ["opencode", "OpenCode"],
@@ -20,7 +21,7 @@ for (const [provider, label] of [
       await page.goto("/");
       await seedProject(page, "Provider picker", directory);
       await page.getByRole("button", { name: "New tab", exact: true }).click();
-      await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+      await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
       await chooseProvider(page);
       const original = page.getByRole("textbox", { name: "Message Codex" });
       await expect(original).toBeEnabled();
@@ -61,11 +62,8 @@ for (const [provider, label] of [
         .click();
       const composer = page.getByRole("textbox", { name: `Message ${label}` });
       await expect(composer).toBeEnabled();
-      await expect(page.getByRole("button", { name: "Tab 2", exact: true })).toHaveAttribute(
-        "aria-pressed",
-        "true",
-      );
-      await expect(page.getByRole("button", { name: "Tab 3", exact: true })).toHaveCount(0);
+      await expect(tab(page, 1)).toHaveAttribute("aria-pressed", "true");
+      await expect(tab(page, 2)).toHaveCount(0);
       await expect(pane).toHaveAttribute("data-pane-id", paneId);
       await expect(
         page.getByRole("button", { name: "Agent and model", exact: true }),
@@ -96,7 +94,7 @@ for (const [provider, label] of [
         .getByRole("button", { name: "Switch to Codex", exact: true })
         .click();
       await expect(pane).toHaveAttribute("data-pane-id", paneId);
-      await expect(page.getByRole("button", { name: "Tab 3", exact: true })).toHaveCount(0);
+      await expect(tab(page, 2)).toHaveCount(0);
       await expect(original).toBeEnabled();
       await expect(page.getByRole("log")).toContainText("keep this Codex conversation");
       await expect(page.getByRole("log")).not.toContainText("new provider conversation");

@@ -5,6 +5,7 @@ import { join } from "node:path";
 import type { Page } from "@playwright/test";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { chooseProvider } from "./support/agents.ts";
+import { tab } from "./support/tabs.ts";
 // Pane and tab sequences share one dialog, which names the combination that opened it.
 const shortcutActions = (page: Page, prefix: "p" | "t") =>
   page
@@ -66,7 +67,7 @@ test("directional pane sequences, tab cycling, project memory and immediate Agen
     await expect.poll(() => focusedPane(page)).toBe(left);
     // Navigation works in both directions between terminal and Agent inputs.
     await upper.getByRole("button", { name: "Pane actions" }).click();
-    await page.getByRole("menuitemradio", { name: "Agent", exact: true }).click();
+    await page.getByRole("menuitemradio", { name: "New chat", exact: true }).click();
     // A closing menu hands focus back to its button when its exit animation ends, and still
     // counts as open for shortcuts until then, so let it finish before navigating by keyboard.
     await expect(page.getByRole("menu")).toHaveCount(0);
@@ -132,7 +133,7 @@ test("directional pane sequences, tab cycling, project memory and immediate Agen
     await page.keyboard.press("Control+Shift+ArrowLeft");
     await expect.poll(() => focusedPane(page)).toBe(left);
     await sequence(page, "t", "Enter");
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await expect(page.getByRole("menu")).toHaveCount(0);
     const input = page.getByRole("textbox", { name: "Message Codex" });
@@ -165,10 +166,7 @@ test("directional pane sequences, tab cycling, project memory and immediate Agen
       .filter({ hasText: /^Navigation project/ })
       .click();
     await expect.poll(() => focusedPane(page)).toBe(left);
-    await expect(page.getByRole("button", { name: "Tab 1", exact: true })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    await expect(tab(page, 0)).toHaveAttribute("aria-pressed", "true");
     expect(page.isClosed()).toBe(false);
   } finally {
     await rm(directory, { recursive: true, force: true });

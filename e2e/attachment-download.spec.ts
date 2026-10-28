@@ -13,7 +13,7 @@ test("images open as large as the window allows, and attachments download", asyn
     await page.goto("/");
     await seedProject(page, "Downloads", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const composer = page.getByRole("textbox", { name: "Message Codex" });
     await expect(composer).toBeEnabled();

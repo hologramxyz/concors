@@ -5,6 +5,7 @@ import type { Page } from "@playwright/test";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
 import { chooseProvider } from "./support/agents.ts";
+import { tab, closeTab } from "./support/tabs.ts";
 
 test("resume finds older native sessions, protects drafts, and keeps the same pane", async ({
   page,
@@ -17,7 +18,7 @@ test("resume finds older native sessions, protects drafts, and keeps the same pa
     await page.goto("/");
     await seedProject(page, "Resume workspace", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const composer = page.getByRole("textbox", { name: "Message Codex", exact: true });
     const resume = page.getByRole("button", { name: "Resume session", exact: true });
@@ -114,7 +115,7 @@ test("resume focuses an already open session instead of making a duplicate", asy
     await seedProject(page, "Existing resume", directory);
     const newChat = async () => {
       await page.getByRole("button", { name: "New tab", exact: true }).click();
-      await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+      await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
       await chooseProvider(page);
       await expect(page.getByRole("textbox", { name: "Message Codex", exact: true })).toBeEnabled();
     };
@@ -136,10 +137,7 @@ test("resume focuses an already open session instead of making a duplicate", asy
     await newChat();
     await pick();
     await expect(page.getByRole("button", { name: /^Close .* tab$/ })).toHaveCount(3);
-    await expect(page.getByRole("button", { name: "Tab 2", exact: true })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    await expect(tab(page, 1)).toHaveAttribute("aria-pressed", "true");
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -156,7 +154,7 @@ test("a renamed session is listed and resumed under its pane name", async ({ pag
     // Session 42 is used by no other test; the daemon is shared and a session has one workspace.
     const pick = async (search: string, name: RegExp) => {
       await page.getByRole("button", { name: "New tab", exact: true }).click();
-      await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+      await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
       await chooseProvider(page);
       await expect(page.getByRole("textbox", { name: "Message Codex", exact: true })).toBeEnabled();
       await page.getByRole("button", { name: "Resume session", exact: true }).click();
@@ -176,7 +174,7 @@ test("a renamed session is listed and resumed under its pane name", async ({ pag
     await pane.getByRole("textbox", { name: "Pane name", exact: true }).fill("Hello world");
     await page.keyboard.press("Enter");
     await expect(pane.locator("header").getByText("Hello world", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Close Tab 2 tab", exact: true }).click();
+    await closeTab(page, 1).click();
     await expect(pane).toHaveCount(0);
 
     // Found by the name given to it, not only by the CLI's title.
@@ -245,7 +243,7 @@ test("a long session opens at its latest messages when resumed and when reopened
     await page.goto("/");
     await seedProject(page, "Long resume", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await expect(page.getByRole("textbox", { name: "Message Codex", exact: true })).toBeEnabled();
     let painted = await recordFrames(page);
@@ -263,7 +261,7 @@ test("a long session opens at its latest messages when resumed and when reopened
 
     // Closing the chat stops its CLI; reopening it replays the saved history once more.
     const pane = page.getByRole("region", { name: "Agent pane", exact: true });
-    await page.getByRole("button", { name: "Close Tab 2 tab", exact: true }).click();
+    await closeTab(page, 1).click();
     await expect(pane).toHaveCount(0);
     painted = await recordFrames(page);
     await page.getByRole("button", { name: "New tab", exact: true }).click();

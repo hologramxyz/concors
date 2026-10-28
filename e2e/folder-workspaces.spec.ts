@@ -4,6 +4,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
+import { tab } from "./support/tabs.ts";
 
 async function cd(page: Page, pane: Locator, directory: string) {
   await pane.locator("textarea").focus();
@@ -48,7 +49,7 @@ test("new workspaces follow the original shell, inherit folders and preserve ope
     await tree.getByRole("button", { name: "same.ts", exact: true }).click();
     const editor = page.getByRole("textbox", { name: "Code editor: same.ts" });
     await editor.fill("const original = 3;\n");
-    await page.getByRole("button", { name: "Tab 1", exact: true }).click();
+    await tab(page, 0).click();
     await panes.first().getByRole("button", { name: "Pane actions" }).click();
     await page.getByRole("menuitem", { name: "Split horizontally", exact: true }).click();
     await expect(panes).toHaveCount(2);
@@ -75,7 +76,7 @@ test("new workspaces follow the original shell, inherit folders and preserve ope
     await tree.getByRole("button", { name: "same.ts", exact: true }).click();
     await expect(editor).toContainText("const other = 2");
     await expect(page.getByRole("button", { name: /^same.ts/ })).toHaveCount(3); // two tabs and one file tree entry
-    await page.getByRole("button", { name: "Tab 1", exact: true }).click();
+    await tab(page, 0).click();
     await cd(page, panes.first(), src);
     await expect(page.getByRole("heading", { name: "folder-flow", exact: true })).toBeVisible();
     await second.reload();

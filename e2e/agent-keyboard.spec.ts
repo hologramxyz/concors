@@ -6,6 +6,7 @@ import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
 import { chooseProvider } from "./support/agents.ts";
 import { mockDictation } from "./support/dictation.ts";
+import { tab } from "./support/tabs.ts";
 
 async function workspace(page: Page) {
   const directory = await mkdtemp(join(tmpdir(), "concors-agent-keyboard-"));
@@ -14,7 +15,7 @@ async function workspace(page: Page) {
   await page.goto("/");
   await seedProject(page, "Agent keyboard", directory);
   await page.getByRole("button", { name: "New tab", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+  await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
   await chooseProvider(page);
   const composer = page.getByRole("textbox", { name: "Message Codex", exact: true });
   await expect(composer).toBeFocused();
@@ -47,10 +48,7 @@ test("reverse native tab switching preserves permission mode and focuses the des
     // Select only the shortcut dispatcher's native branch; this page keeps its browser runtime.
     await page.evaluate(() => Object.assign(window, { isTauri: true }));
     await composer.press("Control+Shift+Tab");
-    await expect(page.getByRole("button", { name: "Tab 1", exact: true })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    await expect(tab(page, 0)).toHaveAttribute("aria-pressed", "true");
     await expect(
       page.locator(".concors-terminal textarea").filter({ visible: true }),
     ).toBeFocused();
@@ -186,7 +184,7 @@ test("Ctrl+D dictates in the focused agent pane, preserves drafts, and remains t
     await expect(inputs.last()).toBeFocused();
     await expect(inputs.last()).toHaveValue("Right draft more words");
     await expect(page.getByRole("log").getByText("Right draft more words")).toHaveCount(0);
-    await page.getByRole("button", { name: "Tab 1", exact: true }).click();
+    await tab(page, 0).click();
     const terminal = page.locator(".concors-terminal textarea").filter({ visible: true });
     await expect(terminal).toBeFocused();
     await page.keyboard.press("Control+d");

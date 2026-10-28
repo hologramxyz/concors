@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { chooseProvider } from "./support/agents.ts";
+import { tab } from "./support/tabs.ts";
 
 test("visited tabs retain terminal screens and chat drafts without reconnecting or stealing shortcuts", async ({
   page,
@@ -47,7 +48,7 @@ test("visited tabs retain terminal screens and chat drafts without reconnecting 
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     const menu = page.getByRole("menu");
     await page.screenshot({ path: "test-results/desktop-tab-menu.png" });
-    await menu.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await menu.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const input = page.getByRole("textbox", { name: "Message Codex" });
     await expect(input).toBeEnabled();
@@ -58,7 +59,7 @@ test("visited tabs retain terminal screens and chat drafts without reconnecting 
     ).toHaveCount(0);
     expect(await renderer.evaluate((el) => el.isConnected)).toBe(true);
     for (let i = 0; i < 3; i++) {
-      await page.getByRole("button", { name: "Tab 1", exact: true }).click();
+      await tab(page, 0).click();
       await expect(terminalPane.locator("textarea")).toBeFocused();
       expect(
         await renderer.evaluate((el) => el.isConnected && el.getClientRects().length > 0),
@@ -66,17 +67,17 @@ test("visited tabs retain terminal screens and chat drafts without reconnecting 
       await expect(
         terminalPane.getByLabel("Terminal output").filter({ visible: true }),
       ).toContainText("TAB_SCREEN_RETAINED");
-      await page.getByRole("button", { name: "Tab 2", exact: true }).click();
+      await tab(page, 1).click();
       await expect(input).toBeFocused();
       await expect(input).toHaveValue("Keep this draft while I check the terminal");
     }
     expect(attaches.length).toBe(attachedBefore);
-    await page.getByRole("button", { name: "Tab 1", exact: true }).click();
+    await tab(page, 0).click();
     await expect(terminalPane.locator("textarea")).toBeFocused();
     await page.keyboard.press("Control+Shift+p");
     await page.keyboard.press("ArrowDown");
     await expect(page.getByRole("region", { name: "Terminal pane", exact: true })).toHaveCount(2);
-    await page.getByRole("button", { name: "Tab 2", exact: true }).click();
+    await tab(page, 1).click();
     await expect(page.getByRole("region", { name: "Agent pane", exact: true })).toHaveCount(1);
     await input.fill("hold this stream");
     await page.getByRole("button", { name: "Send message", exact: true }).click();

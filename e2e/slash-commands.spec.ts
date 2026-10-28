@@ -14,7 +14,7 @@ test("typing a slash lists the provider's commands and choosing compact compacts
     await page.goto("/");
     await seedProject(page, "Slash commands", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const composer = page.getByRole("textbox", { name: "Message Codex" });
     await expect(composer).toBeEnabled();
@@ -72,7 +72,7 @@ test("/clear starts over in the same pane and the old chat can be resumed", asyn
     await page.goto("/");
     await seedProject(page, "Clearing chats", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const composer = page.getByRole("textbox", { name: "Message Codex" });
     await expect(composer).toBeEnabled();

@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { DaemonConnection, describeDaemonEndpoint } from "../packages/daemon-client/src/index.ts";
 import { chooseProvider } from "./support/agents.ts";
+import { tab } from "./support/tabs.ts";
 
 test("notifications deduplicate across windows, open chat, and sync unread without replay", async ({
   page,
@@ -52,7 +53,7 @@ test("notifications deduplicate across windows, open chat, and sync unread witho
     await page.goto("/");
     await seedProject(page, "Notifications acceptance", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await expect(page.getByLabel("Agent status: Ready").first()).toBeVisible();
     // A ready label can belong to an older project, and this separate socket may
@@ -107,7 +108,7 @@ test("notifications deduplicate across windows, open chat, and sync unread witho
     await expect(page.getByLabel("Unread agent update")).toHaveCount(0);
     await expect(second.getByLabel("Unread agent update")).toHaveCount(0);
     // A retained but hidden chat must still notify and remain unread.
-    await opened.getByRole("button", { name: "Tab 1", exact: true }).click();
+    await tab(opened, 0).click();
     await control.requestAgent({ kind: "send", sessionId: id, text: "question" }, randomUUID());
     await expect.poll(count).toBe(2);
     await expect.poll(() => control.agents.find((a) => a.id === id)?.attention?.seen).toBe(false);

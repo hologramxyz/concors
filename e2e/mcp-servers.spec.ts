@@ -54,7 +54,7 @@ test("MCP servers are set once for the machine, keep their secrets there, and sh
     // Each chat shows the servers its agent loaded, from the pane's menu.
     await page.getByRole("button", { name: "Back to app", exact: true }).click();
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
     await page.getByRole("button", { name: "Pane actions" }).last().click();

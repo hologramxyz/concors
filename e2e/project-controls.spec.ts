@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { chooseProvider } from "./support/agents.ts";
+import { tabs } from "./support/tabs.ts";
 
 test("projects open an agent immediately and new tabs start the chosen profile", async ({
   page,
@@ -19,17 +20,14 @@ test("projects open an agent immediately and new tabs start the chosen profile",
     await chooseProvider(page);
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    for (const name of ["Terminal", "Agent", "Codex", "Claude Code", "OpenCode"]) {
+    for (const name of ["New chat", "Terminal", "Claude Code", "Codex", "OpenCode"]) {
       await expect(page.getByRole("menuitem", { name, exact: true })).toBeVisible();
     }
     await page.keyboard.press("Escape");
     await expect(page.getByLabel("Project tabs").locator("[data-tab-id]")).toHaveCount(1);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
-    await page
-      .getByRole("button", { name: "Tab 2", exact: true })
-      .last()
-      .click({ button: "right" });
+    await tabs(page).nth(1).locator("> button").first().click({ button: "right" });
     await page.getByRole("menuitem", { name: "Rename tab", exact: true }).click();
     await page.getByLabel("Tab name", { exact: true }).fill("Development");
     await page.keyboard.press("Enter");

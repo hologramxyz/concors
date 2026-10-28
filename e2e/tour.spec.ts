@@ -4,7 +4,7 @@ import { test, expect, signedIn } from "./signed-in.ts";
 const STEPS = [
   { target: "workspaces", title: "Workspaces" },
   { target: "tabs", title: "Tabs and panes" },
-  { target: "new-tab", title: "Start agents here", menu: "Agent" },
+  { target: "new-tab", title: "Start agents here", menu: "New chat" },
   { target: "schedules", title: "Schedules and pull requests" },
   { target: "search", title: "Search" },
   { target: "machines", title: "This computer, or the cloud", menu: "This computer" },

@@ -17,7 +17,7 @@ test("Enter steers the running turn, ⌘/Ctrl+Enter queues, and a queued follow-
     await page.goto("/");
     await seedProject(page, "Steering", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const composer = page.getByRole("textbox", { name: "Message Codex" });
     await expect(composer).toBeEnabled();

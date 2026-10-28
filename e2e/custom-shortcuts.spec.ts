@@ -1,6 +1,7 @@
 import { test, expect, signedIn } from "./signed-in.ts";
 import type { Page } from "@playwright/test";
 import { chooseProvider } from "./support/agents.ts";
+import { tab } from "./support/tabs.ts";
 const KEY = "concors.shortcuts.v1";
 const search = "Search workspaces, agents and tabs";
 async function openSettings(page: Page) {
@@ -94,7 +95,7 @@ test("custom sequences split from a terminal and run from an Agent input without
   await expect(terminals).toHaveCount(2);
   await expect(terminals.last()).toBeFocused();
   await page.getByRole("button", { name: "New tab", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+  await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
   await chooseProvider(page);
   const chat = page.getByRole("textbox", { name: "Message Codex", exact: true });
   await expect(chat).toBeEnabled();
@@ -159,14 +160,14 @@ test("manual input supports modifiers and function keys, and invalid recordings 
   await expect(page.getByRole("main")).toContainText("Ctrl+Win+R");
   await page.getByRole("button", { name: "Back to app" }).click();
   await page.keyboard.press("Control+Shift+n");
-  const tab = page.getByRole("button", { name: "Tab 1", exact: true });
-  await expect(tab).toBeVisible();
+  const firstTab = tab(page, 0);
+  await expect(firstTab).toBeVisible();
   // A new tab moves focus into its pane once the pane's input arrives. Let that settle, as it has
   // long before a person could reach the tab, or it takes focus back from the tab below.
   await expect
     .poll(() => page.evaluate(() => !!document.activeElement?.closest("[data-pane-id] textarea")))
     .toBe(true);
-  await tab.focus();
+  await firstTab.focus();
   await page.keyboard.press("F2");
   await expect(page.getByRole("textbox", { name: "Tab name" })).toHaveCount(0);
   await page.keyboard.press("Alt+F6");
@@ -228,18 +229,19 @@ test("tab-scoped sequences rename the focused tab even when another tab is selec
   await editor.getByRole("button", { name: "Save shortcuts" }).click();
   await page.getByRole("button", { name: "Back to app" }).click();
   await page.keyboard.press("Control+Shift+n");
-  const first = page.getByRole("button", { name: "Tab 1", exact: true });
+  const first = tab(page, 0);
   await expect(first).toBeVisible();
   await page.getByRole("button", { name: "New tab", exact: true }).click();
   await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
-  const second = page.getByRole("button", { name: "Tab 2", exact: true });
+  const second = tab(page, 1);
   await expect(second).toHaveAttribute("aria-pressed", "true");
   await first.focus();
   await page.keyboard.press("F6");
   await page.keyboard.press("r");
   const name = page.getByRole("textbox", { name: "Tab name", exact: true });
   await expect(name).toBeFocused();
-  await expect(name).toHaveValue("Tab 1");
+  // An unnamed tab is renamed starting from the title it shows: its shell's.
+  await expect(name).toHaveValue("Terminal");
   await name.fill("Focused tab");
   await name.press("Enter");
   await expect(page.getByRole("button", { name: "Focused tab", exact: true })).toBeVisible();

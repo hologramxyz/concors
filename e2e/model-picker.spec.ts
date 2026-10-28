@@ -39,7 +39,7 @@ test("effective models stay selected and warm provider menus reopen without load
     await page.goto("/");
     await seedProject(page, "Model menus", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
     // A prompt typed before switching provider stays in the composer of the agent that replaces it.
@@ -178,7 +178,7 @@ test("an outdated agent CLI is flagged in the picker and can be updated from it"
     await page.goto("/");
     await seedProject(page, "Provider updates", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
     const notice = page.getByText("Codex 0.156.0 is available.", { exact: false });
@@ -221,7 +221,7 @@ test("switching provider explains that the conversation is kept, and switching b
     await page.goto("/");
     await seedProject(page, "Provider switch", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const codex = page.getByRole("textbox", { name: "Message Codex" });
     await expect(codex).toBeEnabled();

@@ -29,6 +29,7 @@ export function WorkspaceSidebarItem({
   parent,
   compact,
   selected,
+  current,
   canEdit,
   icon,
   pullRequests,
@@ -42,6 +43,11 @@ export function WorkspaceSidebarItem({
   parent?: string | undefined;
   compact: boolean;
   selected: boolean;
+  /**
+   * Whether this is the workspace you are in, when the sidebar also lists its tabs: its name is
+   * then a little stronger than the others', and the selected tab row carries the fill.
+   */
+  current?: boolean | undefined;
   canEdit: boolean;
   icon: ProjectIcon | undefined;
   pullRequests?: WorkspacePullRequests | undefined;
@@ -99,14 +105,19 @@ export function WorkspaceSidebarItem({
       aria-label={project.name}
       data-workspace-id={project.id}
       onClick={() => onSelect(project.id)}
-      aria-current={selected ? "page" : undefined}
+      // The workspace you are in, even while one of its tab rows carries the selection's fill.
+      aria-current={(current ?? selected) ? "page" : undefined}
       className={cn(
         "flex min-w-0 flex-1 items-center rounded-md text-ui disabled:opacity-50",
         compact ? "sidebar-rail-control font-semibold" : "h-8 gap-2 px-2",
       )}
     >
       {image}
-      {!compact && <span className="truncate">{project.name}</span>}
+      {!compact && (
+        <span className={cn("truncate", current === false && "text-sidebar-foreground/80")}>
+          {project.name}
+        </span>
+      )}
       {!compact && parent && (
         <span className="min-w-0 shrink-[2] truncate text-muted-foreground">{parent}</span>
       )}
@@ -115,8 +126,9 @@ export function WorkspaceSidebarItem({
   return (
     <li
       className={cn(
-        "group flex items-center rounded-md focus-within:bg-sidebar-accent hover:bg-sidebar-accent has-[[data-state=open]]:bg-sidebar-accent",
-        selected && "bg-sidebar-accent",
+        // Keyboard focus shows, but a clicked row does not stay filled once selection moves on.
+        "group flex items-center rounded-md hover:bg-sidebar-accent/50 has-[:focus-visible]:bg-sidebar-accent/50 has-[[data-state=open]]:bg-sidebar-accent/50",
+        selected && "bg-sidebar-accent hover:bg-sidebar-accent",
         mobile && "mobile-project",
       )}
     >

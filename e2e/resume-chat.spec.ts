@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
 import { chooseProvider } from "./support/agents.ts";
+import { closeTab } from "./support/tabs.ts";
 
 test("a closed chat is found by its pane name and reopens with its name, model and history", async ({
   page,
@@ -15,7 +16,7 @@ test("a closed chat is found by its pane name and reopens with its name, model a
     await page.goto("/");
     await seedProject(page, "Resumable chats", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const composer = page.getByRole("textbox", { name: "Message Codex" });
     await expect(composer).toBeEnabled();
@@ -29,7 +30,7 @@ test("a closed chat is found by its pane name and reopens with its name, model a
     await pane.getByRole("textbox", { name: "Pane name", exact: true }).fill("Hello world");
     await page.keyboard.press("Enter");
     await expect(pane.locator("header").getByText("Hello world", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Close Tab 2 tab", exact: true }).click();
+    await closeTab(page, 1).click();
     await expect(pane).toHaveCount(0);
 
     await page.getByRole("button", { name: "New tab", exact: true }).click();
@@ -68,7 +69,7 @@ test("a closed chat stays in the sidebar and in Search, and both reopen it", asy
     await page.goto("/");
     await seedProject(page, "Closed chats", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const composer = page.getByRole("textbox", { name: "Message Codex" });
     await expect(composer).toBeEnabled();
@@ -76,20 +77,20 @@ test("a closed chat stays in the sidebar and in Search, and both reopen it", asy
     await page.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(page.getByRole("log")).toContainText("Hello from");
     const pane = page.getByRole("region", { name: "Agent pane", exact: true });
-    await page.getByRole("button", { name: "Close Tab 2 tab", exact: true }).click();
+    await closeTab(page, 1).click();
     await expect(pane).toHaveCount(0);
 
+    // A closed chat stays under its workspace, muted.
     const closed = page
-      .getByRole("region", { name: "Agents", exact: true })
-      .getByRole("list", { name: "Recently closed agents", exact: true })
-      .getByRole("button");
+      .getByRole("list", { name: "Closed chats tabs", exact: true })
+      .locator("button[data-agent-closed]");
     await expect(closed).toHaveCount(1);
     await expect(closed).toContainText("draft the launch notes");
     await closed.click();
     await expect(page.getByRole("log")).toContainText("draft the launch notes");
     await expect(closed).toHaveCount(0);
 
-    await page.getByRole("button", { name: "Close Tab 2 tab", exact: true }).click();
+    await closeTab(page, 1).click();
     await expect(pane).toHaveCount(0);
     await page
       .getByRole("navigation", { name: "Primary" })

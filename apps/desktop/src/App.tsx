@@ -450,6 +450,10 @@ function AppContent() {
     setView("projects");
     command({ kind: "selection.set", projectId, tabId });
   };
+  const selectTab = (projectId: string, tabId: string) => {
+    setView("projects");
+    command({ kind: "selection.set", projectId, tabId });
+  };
   const selectMachine = (host: Host, destination: View = "projects") => {
     if (beforeLeaveFiles.current?.() === false) return;
     saveHost(hostScope, host);
@@ -502,6 +506,7 @@ function AppContent() {
                         execute={execute}
                         onCommand={command}
                         onSelectAgent={openAgent}
+                        onSelectTab={selectTab}
                         view={view}
                         onOpenSettings={() => openSettings("account")}
                         onOpenSchedules={() => {

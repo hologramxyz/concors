@@ -4,6 +4,7 @@ import { basename, join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { BINDINGS } from "../apps/desktop/src/shortcuts/bindings.ts";
 import { bindingLabel, defaultKeymap } from "../apps/desktop/src/shortcuts/keymap.ts";
+import { tabs } from "./support/tabs.ts";
 
 test("workspace shortcuts create, search, split and close the active pane without leaking into terminals", async ({
   page,
@@ -67,10 +68,7 @@ test("workspace shortcuts create, search, split and close the active pane withou
     await page.keyboard.press("Control+Shift+t");
     await page.keyboard.press("Enter");
     await page.getByRole("menuitem", { name: "Codex", exact: true }).click();
-    const tab = page.getByLabel("Project tabs", { exact: true }).getByRole("button", {
-      name: "Tab 2",
-      exact: true,
-    });
+    const tab = tabs(page).nth(1).locator("> button").first();
     await expect(tab).toHaveAttribute("aria-pressed", "true");
     const panes = page.getByRole("region", { name: "Codex pane", exact: true });
     await expect(panes).toHaveCount(1);
@@ -139,9 +137,8 @@ test("workspace shortcuts create, search, split and close the active pane withou
     await expect(
       page
         .getByRole("navigation", { name: "Primary" })
-        .getByRole("region", { name: "Agents", exact: true })
         .getByRole("button", { name: /Open in terminal.*Codex/ }),
-    ).toHaveCount(3);
+    ).toHaveCount(1); // Three panes, one split tab: the sidebar lists the tab once.
     // The daemon is shared by acceptance tests; stop our fixture before detaching its pane.
     for (const pane of await panes.all()) {
       await pane.locator("textarea").focus();
@@ -152,7 +149,6 @@ test("workspace shortcuts create, search, split and close the active pane withou
     await expect(
       page
         .getByRole("navigation", { name: "Primary" })
-        .getByRole("region", { name: "Agents", exact: true })
         .getByRole("button", { name: /Open in terminal.*Codex/ }),
     ).toHaveCount(0);
     await panes.first().focus();

@@ -40,7 +40,7 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     await page.goto("/");
     await seedProject(page, "Composer acceptance", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await page.getByRole("textbox", { name: "Message Codex" }).waitFor();
     await expect(page.getByLabel("Agent and model")).toBeEnabled();
@@ -227,7 +227,7 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     await expect(search).toBeVisible();
     await search.press("Escape");
     await page.getByRole("button", { name: "Pane actions", exact: true }).click();
-    for (const name of ["Terminal", "Agent", "Codex", "Claude Code", "OpenCode"])
+    for (const name of ["New chat", "Terminal", "Claude Code", "Codex", "OpenCode"])
       await expect(page.getByRole("menuitemradio", { name, exact: true })).toBeEnabled();
     await page.getByRole("menuitemradio", { name: "Terminal", exact: true }).click();
     await expect(page.locator(".concors-terminal .xterm")).toBeVisible();
@@ -256,7 +256,7 @@ test("an unconfirmed message can stop retrying, to edit it or remove its attachm
     await page.goto("/");
     await seedProject(page, "Unconfirmed delivery", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const composer = page.getByRole("textbox", { name: "Message Codex" });
     await expect(composer).toBeEnabled();

@@ -68,7 +68,7 @@ test("a chat that hits its plan limit offers to switch the machine to another ac
     await page.goto("/");
     await seedProject(page, "Usage limit", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const composer = page.getByRole("textbox", { name: "Message Codex" });
     await composer.fill("primitive-usage-limit");

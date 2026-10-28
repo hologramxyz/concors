@@ -48,7 +48,6 @@ test("collapsed sidebar keeps workspace, machine, search and account navigation 
     await seedProject(page, "Beta workspace", join(directory, "beta"));
     const rail = page.getByRole("navigation", { name: "Primary" });
     const shell = page.locator(".sidebar-shell");
-    await expect(rail.getByText("No agents yet.", { exact: true })).toBeVisible();
     await expect(rail.getByRole("button", { name: "Previews", exact: true })).toBeVisible();
     await expectNoSidebarTooltips(page, rail);
     await rail.getByRole("button", { name: "Collapse sidebar", exact: true }).click();
@@ -151,7 +150,6 @@ test("collapsed sidebar keeps workspace, machine, search and account navigation 
     await expectNoSidebarTooltips(page, rail);
     await hoverControl(page, beta);
     await expect(page.getByRole("tooltip")).toContainText(join(directory, "beta"));
-    await expect(rail.getByText("No agents yet.", { exact: true })).toBeVisible();
     await expect(rail.getByRole("button", { name: "Previews", exact: true })).toBeVisible();
     expect(errors).toEqual([]);
   } finally {
@@ -169,7 +167,7 @@ test("collapsed agents show provider icons and live status without losing chat d
     await page.goto("/");
     await seedProject(page, "Rail agents", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const codex = page.getByRole("textbox", { name: "Message Codex", exact: true });
     await expect(codex).toBeEnabled();
@@ -189,7 +187,7 @@ test("collapsed agents show provider icons and live status without losing chat d
     await expect(codexButton.locator(".bg-emerald-500")).toHaveCount(0);
     await codex.fill("Keep this draft");
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await expect(codex).toBeEnabled();
     await page.getByRole("button", { name: "Agent and model", exact: true }).click();
@@ -219,12 +217,16 @@ test("collapsed agents show provider icons and live status without losing chat d
     await page.screenshot({ path: test.info().outputPath("rail-providers-dark.png") });
     await rail.getByRole("button", { name: "Expand sidebar", exact: true }).click();
     await expect(codex).toHaveValue("Keep this draft");
-    await expect(agents.getByRole("img", { name: "Agent status: Ready" })).toHaveCount(2);
+    // Expanded, the chats sit under their workspace instead.
+    await expect(
+      rail
+        .getByRole("list", { name: "Rail agents tabs", exact: true })
+        .getByRole("img", { name: "Agent status: Ready" }),
+    ).toHaveCount(2);
     await expectNoSidebarTooltips(page, rail);
     const expandedCodex = rail.locator('button[data-agent-id]:has([data-provider="codex"])');
     await expect(expandedCodex.locator('[data-provider="codex"]')).toBeVisible();
     await hoverControl(page, expandedCodex);
-    await expect(page.getByRole("tooltip")).toContainText("Rail agents");
     await expect(page.getByRole("tooltip")).toContainText("Codex");
     await page.keyboard.press("Escape");
     await codex.fill("hold");

@@ -15,7 +15,7 @@ test("pasted images attach, and screenshots too large for an agent are shrunk in
     await page.goto("/");
     await seedProject(page, "Image paste", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const composer = page.getByRole("textbox", { name: "Message Codex" });
     await expect(composer).toBeEnabled();
@@ -87,7 +87,7 @@ test("sent images show as square thumbnails at once, after a reload, and open fu
     await page.goto("/");
     await seedProject(page, "Image thumbnails", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const composer = page.getByRole("textbox", { name: "Message Codex" });
     await expect(composer).toBeEnabled();

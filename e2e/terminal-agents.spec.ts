@@ -3,6 +3,17 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
+import { tab } from "./support/tabs.ts";
+import type { Page } from "@playwright/test";
+
+/**
+ * A sidebar row for a terminal agent, by its status and the provider icon it shows. A shell that
+ * runs an agent keeps its tab's name ("Terminal"), so the icon is what says which agent it is.
+ */
+const agentRow = (scope: Page, status: string, provider: string) =>
+  scope
+    .getByRole("button", { name: new RegExp(`Agent status: ${status}`) })
+    .filter({ has: scope.locator(`[data-provider="${provider}"]`) });
 
 test("Codex terminal profiles appear across clients and agent clicks focus the owning split pane", async ({
   page,
@@ -47,10 +58,11 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
       "CODEX_TERMINAL_READY",
     );
     await second.goto(test.info().project.use.baseURL ?? "http://localhost:1420");
+    // The shell's tab keeps its name; the row shows the Codex running in it by its icon.
     const shellAgent = second
       .getByRole("navigation", { name: "Primary" })
-      .getByRole("region", { name: "Agents", exact: true })
-      .getByRole("button", { name: /Open in terminal.*Codex/ });
+      .getByRole("button", { name: /Open in terminal/ })
+      .filter({ has: second.locator('[data-provider="codex"]') });
     await expect(shellAgent).toBeVisible();
     await second.reload();
     await shellAgent.click();
@@ -66,9 +78,7 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
     await expect(
       agents.getByRole("button", { name: /Agent status: Working.*Codex/ }),
     ).toBeVisible();
-    await expect(
-      second.getByRole("button", { name: /Agent status: Working.*Codex/ }),
-    ).toBeVisible();
+    await expect(agentRow(second, "Working", "codex")).toBeVisible();
     await second.keyboard.type("test-approval");
     await second.keyboard.press("Enter");
     await expect(
@@ -77,9 +87,10 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
     await second.keyboard.type("test-idle");
     await second.keyboard.press("Enter");
     for (const client of [page, second]) {
-      const done = client.getByRole("button", { name: /Agent status: Done.*Codex/ });
+      const done = agentRow(client, "Done", "codex");
       await expect(done).toBeVisible();
-      await expect(done.locator(".bg-emerald-500")).toBeVisible();
+      // Done and idle look alike in the sidebar: no dot.
+      await expect(done.locator("[data-row-state]")).toHaveCount(0);
     }
     await expect(agents.getByRole("button", { name: /Agent status: Working.*Codex/ })).toHaveCount(
       0,
@@ -105,13 +116,11 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
       await second.keyboard.type(command);
       await second.keyboard.press("Enter");
       for (const client of [page, second])
-        await expect(
-          client.getByRole("button", { name: new RegExp(`Agent status: ${label}.*Claude`) }),
-        ).toBeVisible();
+        await expect(agentRow(client, label, "claude")).toBeVisible();
     }
     await second.reload();
-    const completedClaude = second.getByRole("button", { name: /Agent status: Done.*Claude/ });
-    await expect(completedClaude.locator(".bg-emerald-500")).toBeVisible();
+    const completedClaude = agentRow(second, "Done", "claude");
+    await expect(completedClaude.locator("[data-row-state]")).toHaveCount(0);
     await completedClaude.click();
     await expect(second.getByLabel("Terminal output").filter({ visible: true })).toHaveAttribute(
       "aria-busy",
@@ -151,29 +160,25 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
     ).toContainText("CODEX_TERMINAL_READY");
 
     await second.goto(test.info().project.use.baseURL ?? "http://localhost:1420");
-    const remoteAgents = second
-      .getByRole("navigation", { name: "Primary" })
-      .getByRole("region", { name: "Agents", exact: true });
+    // The expanded sidebar lists the split tab once, whatever runs in its panes.
+    const remoteAgents = second.getByRole("navigation", { name: "Primary" });
     await expect(remoteAgents.getByRole("button", { name: /Open in terminal.*Codex/ })).toHaveCount(
-      2,
+      1,
     );
     await second.reload();
     await expect(remoteAgents.getByRole("button", { name: /Open in terminal.*Codex/ })).toHaveCount(
-      2,
+      1,
     );
     await second.getByRole("button", { name: /^Account:/ }).click();
     await second.getByRole("menuitem", { name: "Settings", exact: true }).click();
     await second.getByRole("button", { name: "Back to app", exact: true }).click();
 
-    await page.getByRole("button", { name: "Tab 1", exact: true }).click();
+    await tab(page, 0).click();
     await agents
       .getByRole("button", { name: /Open in terminal.*Codex/ })
       .first()
       .click();
-    await expect(page.getByRole("button", { name: "Tab 2", exact: true })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    await expect(tab(page, 1)).toHaveAttribute("aria-pressed", "true");
     await expect
       .poll(() =>
         page.evaluate(() =>

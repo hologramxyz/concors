@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
 import { chooseProvider } from "./support/agents.ts";
+import { tab } from "./support/tabs.ts";
 import { DaemonConnection, describeDaemonEndpoint } from "../packages/daemon-client/src/index.ts";
 
 test("an agent's notice names its workspace and tab apart from what the agent was doing", async ({
@@ -45,9 +46,16 @@ test("an agent's notice names its workspace and tab apart from what the agent wa
     await seedProject(page, "Marketing", first);
     await page.getByRole("button", { name: "Marketing", exact: true }).click();
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
+    // A tab nobody named is left out of the notice, which already names the chat; a named one
+    // is shown.
+    await tab(page, 1).click({ button: "right" });
+    await page.getByRole("menuitem", { name: "Rename tab", exact: true }).click();
+    await page.getByLabel("Tab name", { exact: true }).fill("Launch");
+    await page.keyboard.press("Enter");
+    await expect(tab(page, 1)).toHaveText("Launch");
     await expect
       .poll(() => control.workspace?.projects.find((p) => p.directory === first)?.id)
       .toBeTruthy();
@@ -56,10 +64,6 @@ test("an agent's notice names its workspace and tab apart from what the agent wa
     await expect.poll(() => control.agents.some((a) => a.projectId === project.id)).toBe(true);
     const agent = control.agents.find((a) => a.projectId === project.id);
     assert(agent);
-    const tab = project.tabs.find((t) =>
-      t.nodes.some((n) => n.kind === "pane" && n.sessionId === agent.id),
-    );
-    assert(tab);
 
     await seedProject(page, "Engineering", second);
     await page.getByRole("button", { name: "Engineering", exact: true }).click();
@@ -67,8 +71,8 @@ test("an agent's notice names its workspace and tab apart from what the agent wa
 
     const notices = page.getByRole("complementary", { name: "Agent notifications" });
     const place = notices.locator("[data-notice-place]");
-    await expect(place).toHaveText(`Marketing${tab.name}`);
-    await expect(place).toHaveAttribute("title", `Marketing › ${tab.name}`);
+    await expect(place).toHaveText("MarketingLaunch");
+    await expect(place).toHaveAttribute("title", "Marketing › Launch");
     await expect(notices).toContainText("Agent finished");
     await notices.screenshot({ path: test.info().outputPath("notice-place.png") });
     await notices.getByRole("button", { name: /Marketing/ }).click();

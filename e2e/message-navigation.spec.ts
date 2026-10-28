@@ -24,7 +24,7 @@ test("sent-message rail previews and jumps through paginated history, with a nar
     await page.goto("/");
     await seedProject(page, "Message navigation", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const input = page.getByRole("textbox", { name: "Message Codex" });
     await expect(input).toBeEnabled();
@@ -167,7 +167,7 @@ test("the sent-message index reloads cleanly when a reconnect's workspace trails
     await page.goto("/");
     await seedProject(page, "Message navigation reconnect", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
     await expect

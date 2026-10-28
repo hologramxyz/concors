@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
 import { chooseProvider } from "./support/agents.ts";
+import { tab } from "./support/tabs.ts";
 
 for (const result of ["connected", "disconnected", "error"] as const) {
   test(`initial account check stays quiet until ${result} response`, async ({ page }) => {
@@ -48,7 +49,7 @@ for (const result of ["connected", "disconnected", "error"] as const) {
       await page.goto("/");
       await seedProject(page, "Account loading", directory);
       await page.getByRole("button", { name: "New tab", exact: true }).click();
-      await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+      await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
       await chooseProvider(page);
       // Choosing the chat's provider lists them once; the account check must not list again.
       providerLists = 0;
@@ -119,7 +120,7 @@ test("the first sign-in click survives a background focus refresh", async ({ pag
     await page.goto("/");
     await seedProject(page, "First-click sign-in", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const prompt = page.getByRole("region", { name: "Codex account connection", exact: true });
     const signIn = prompt.getByRole("button", { name: "Sign in with ChatGPT", exact: true });
@@ -153,7 +154,7 @@ for (const [provider, label] of [
       await page.goto("/");
       await seedProject(page, "Agent accounts", directory);
       await page.getByRole("button", { name: "New tab", exact: true }).click();
-      await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+      await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
       await chooseProvider(page);
       await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
       if (provider !== "codex") {
@@ -280,7 +281,7 @@ test("a missing CLI is offered as a one-click install instead of an account chec
     await page.goto("/");
     await seedProject(page, "Missing CLI", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const install = page.getByRole("region", { name: "Codex installation", exact: true });
     const account = page.getByRole("region", { name: "Codex account connection", exact: true });
@@ -335,7 +336,7 @@ test("Codex sign-in keeps its code across a tab switch and copies it for the sig
     });
     await seedProject(page, "Sign-in code", directory);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const prompt = page.getByRole("region", { name: "Codex account connection", exact: true });
     await prompt.getByRole("button", { name: "Sign in with ChatGPT", exact: true }).click();
@@ -344,9 +345,9 @@ test("Codex sign-in keeps its code across a tab switch and copies it for the sig
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("TEST-CODE");
     // Leaving the tab while entering the code in the browser must not cancel the sign-in: the
     // fixture approves it a moment later, and the chat comes back connected.
-    await page.getByRole("button", { name: "Tab 1", exact: true }).click();
+    await tab(page, 0).click();
     await expect(prompt).toHaveCount(0);
-    await page.getByRole("button", { name: "Tab 2", exact: true }).click();
+    await tab(page, 1).click();
     await expect.poll(() => connected, { timeout: 10_000 }).toBe(true);
     await expect(prompt).toHaveCount(0);
     expect(cancels).toBe(0);

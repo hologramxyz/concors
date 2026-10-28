@@ -4,8 +4,9 @@ import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
 import { chooseProvider } from "./support/agents.ts";
+import { closeTab, tab, tabs } from "./support/tabs.ts";
 
-test("tabs are numbered per workspace and keep custom names across pane changes and reloads", async ({
+test("unnamed tabs show their pane's title and keep custom names across pane changes and reloads", async ({
   page,
 }) => {
   test.setTimeout(60_000);
@@ -13,51 +14,48 @@ test("tabs are numbered per workspace and keep custom names across pane changes 
   try {
     await signedIn(page);
     await page.goto("/");
-    await seedProject(page, "Numbered tabs", directory);
-    const tabs = page.getByLabel("Project tabs", { exact: true });
-    const labels = () => tabs.locator("[data-tab-id] > button:first-child").allTextContents();
-    await expect.poll(labels).toEqual(["Tab 1"]);
-    for (const [profile, expected] of [
-      ["Agent", "Tab 2"],
-      ["Codex", "Tab 3"],
-    ]) {
+    await seedProject(page, "Named tabs", directory);
+    const bar = page.getByLabel("Project tabs", { exact: true });
+    const labels = () => bar.locator("[data-tab-id] > button:first-child").allTextContents();
+    await expect.poll(labels).toEqual(["Terminal"]);
+    for (const [index, profile] of [
+      [1, "New chat"],
+      [2, "Codex"],
+    ] as const) {
       await page.getByRole("button", { name: "New tab", exact: true }).click();
       await page.getByRole("menuitem", { name: profile, exact: true }).click();
-      await expect(tabs.getByRole("button", { name: expected, exact: true })).toHaveAttribute(
-        "aria-pressed",
-        "true",
-      );
+      await expect(tab(page, index)).toHaveAttribute("aria-pressed", "true");
     }
-    await tabs.getByRole("button", { name: "Tab 1", exact: true }).click({ button: "right" });
+    // A chat is "New chat" until its first message titles it; a terminal profile shows its name.
+    await expect.poll(labels).toEqual(["Terminal", "New chat", "Codex"]);
+    await tab(page, 0).click({ button: "right" });
     await page.getByRole("menuitem", { name: "Rename tab", exact: true }).click();
     await page.getByLabel("Tab name", { exact: true }).fill("Build and review");
     await page.keyboard.press("Enter");
-    const renamed = tabs.getByRole("button", { name: "Build and review", exact: true });
+    const renamed = bar.getByRole("button", { name: "Build and review", exact: true });
     await renamed.click();
     // Until the switch lands, "Pane actions" still resolves to the previous tab's pane, which
     // then hides.
     await expect(renamed).toHaveAttribute("aria-pressed", "true");
     await page.getByRole("button", { name: "Pane actions", exact: true }).click();
-    await page.getByRole("menuitemradio", { name: "Agent", exact: true }).click();
+    await page.getByRole("menuitemradio", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
     await page.getByRole("button", { name: "Pane actions", exact: true }).click();
     await page.getByRole("menuitem", { name: "Split horizontally", exact: true }).click();
     await expect(page.getByRole("region", { name: "Agent pane", exact: true })).toHaveCount(2);
-    await expect.poll(labels).toEqual(["Build and review", "Tab 2", "Tab 3"]);
-    await tabs.getByRole("button", { name: "Close Tab 2 tab", exact: true }).click();
-    await tabs
-      .getByRole("button", { name: "Tab 3", exact: true })
-      .dragTo(tabs.getByRole("button", { name: "Build and review", exact: true }));
-    await expect.poll(labels).toEqual(["Tab 3", "Build and review"]);
+    await expect.poll(labels).toEqual(["Build and review", "New chat", "Codex"]);
+    await closeTab(page, 1).click();
+    await tab(page, 1).dragTo(renamed);
+    await expect.poll(labels).toEqual(["Codex", "Build and review"]);
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
-    await expect.poll(labels).toEqual(["Tab 3", "Build and review", "Tab 4"]);
+    await expect.poll(labels).toEqual(["Codex", "Build and review", "Terminal"]);
     await page.reload();
-    await expect.poll(labels).toEqual(["Tab 3", "Build and review", "Tab 4"]);
+    await expect.poll(labels).toEqual(["Codex", "Build and review", "Terminal"]);
     await mkdir(join(directory, "other"));
-    await seedProject(page, "Another numbered workspace", join(directory, "other"));
-    await expect.poll(labels).toEqual(["Tab 1"]);
+    await seedProject(page, "Another workspace", join(directory, "other"));
+    await expect.poll(labels).toEqual(["Terminal"]);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -96,19 +94,18 @@ test("closing a tab still works when a new pane's session started a moment befor
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Closing while starting", directory);
-    const tabs = page.getByLabel("Project tabs", { exact: true });
-    const labels = () => tabs.locator("[data-tab-id] > button:first-child").allTextContents();
-    await expect.poll(labels).toEqual(["Tab 1"]);
+    const bar = page.getByLabel("Project tabs", { exact: true });
+    const labels = () => bar.locator("[data-tab-id] > button:first-child").allTextContents();
+    await expect.poll(labels).toEqual(["Terminal"]);
     armed = true;
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
-    await expect(tabs.getByRole("button", { name: "Tab 2", exact: true })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    await expect(tab(page, 1)).toHaveAttribute("aria-pressed", "true");
+    const kept = await tabs(page).nth(1).getAttribute("data-tab-id");
     await expect.poll(() => held.length).toBeGreaterThan(0);
-    await tabs.getByRole("button", { name: "Close Tab 1 tab", exact: true }).click();
-    await expect.poll(labels).toEqual(["Tab 2"]);
+    await closeTab(page, 0).click();
+    await expect(tabs(page)).toHaveCount(1);
+    await expect(tabs(page).first()).toHaveAttribute("data-tab-id", kept ?? "");
     await expect(page.getByText("Project changed on another client")).toHaveCount(0);
   } finally {
     await rm(directory, { recursive: true, force: true });
