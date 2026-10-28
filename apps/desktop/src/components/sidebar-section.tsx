@@ -57,8 +57,12 @@ export function SidebarSection({
         )}
         {!compact && action}
       </div>
-      <div id={id} hidden={!expanded && !(compact && action)}>
-        {children}
+      <div
+        id={id}
+        className="sidebar-collapse"
+        data-collapsed={(!expanded && !(compact && action)) || undefined}
+      >
+        <div>{children}</div>
       </div>
     </section>
   );

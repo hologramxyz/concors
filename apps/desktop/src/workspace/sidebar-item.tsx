@@ -17,7 +17,6 @@ import { pullRequestsLabel } from "@/pull-requests/labels";
 import { workspaceOpenCount } from "@/pull-requests/store";
 import { useAgents } from "@/agents/context";
 import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
-import { AgentLoadingIcon } from "@/agents/activity";
 import {
   workspaceAttention,
   workspaceAttentionLabel,
@@ -204,28 +203,23 @@ export function WorkspaceSidebarItem({
   );
 }
 
-/** The corner of a workspace's icon: its agents' most urgent state, as their tabs show it. */
+/**
+ * The corner of a workspace's icon, when something in it wants a look: a question, a failure or a
+ * finished turn. Work in progress shows on its own row instead, so the icon stays still.
+ */
 function AttentionBadge({ attention }: { attention: WorkspaceAttention }) {
-  if (!attention.kind) return null;
+  if (!attention.kind || attention.kind === "working") return null;
   return (
     <span
       data-workspace-attention={attention.kind}
       className="absolute -right-1 -bottom-1 flex size-3 items-center justify-center rounded-full bg-sidebar ring-1 ring-sidebar"
     >
-      {attention.kind === "working" ? (
-        <AgentLoadingIcon className="size-3" />
-      ) : (
-        <span
-          className={cn(
-            "size-2 rounded-full",
-            attention.kind === "needs_input"
-              ? "bg-amber-500"
-              : attention.kind === "failed"
-                ? "bg-red-500"
-                : "bg-emerald-500",
-          )}
-        />
-      )}
+      <span
+        className={cn(
+          "size-2 rounded-full",
+          attention.kind === "done" ? "bg-primary" : "bg-destructive",
+        )}
+      />
     </span>
   );
 }

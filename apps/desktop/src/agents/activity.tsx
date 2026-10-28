@@ -12,7 +12,6 @@ export function AgentLoadingIcon({ className = "size-4" }: { className?: string 
       <g className="origin-center animate-spin [animation-duration:1.4s] motion-reduce:animate-none">
         <path d="M10 3a7 7 0 0 1 7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
       </g>
-      <circle cx="10" cy="10" r="1.5" fill="currentColor" opacity="0.7" />
     </svg>
   );
 }
@@ -77,17 +76,20 @@ export function AgentStatusIcon({
           className={`absolute -top-1 -left-1 size-1.5 rounded-full bg-primary ring-2 ${surface}`}
         />
       )}
-      <span
-        data-agent-status-badge
-        data-testid={agent.running ? runningTestId : undefined}
-        className={`absolute -right-1 -bottom-1 flex size-3 items-center justify-center rounded-full ring-1 ${surface}`}
-      >
-        {agent.running ? (
-          <AgentLoadingIcon className="size-3" />
-        ) : (
-          <span className={`size-2 rounded-full ${agent.color}`} />
-        )}
-      </span>
+      {/* No badge while it sits idle, so a mark always means something. */}
+      {(agent.running || agent.color) && (
+        <span
+          data-agent-status-badge
+          data-testid={agent.running ? runningTestId : undefined}
+          className={`absolute -right-1 -bottom-1 flex size-3 items-center justify-center rounded-full ring-1 ${surface}`}
+        >
+          {agent.running ? (
+            <AgentLoadingIcon className="size-3" />
+          ) : (
+            <span className={`size-2 rounded-full ${agent.color}`} />
+          )}
+        </span>
+      )}
     </span>
   );
 }

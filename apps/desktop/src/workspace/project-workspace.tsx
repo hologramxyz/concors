@@ -29,6 +29,9 @@ import { useRetainedProjects } from "./retained-projects";
 import { CloseTabButton, LatestAgents, TabButton } from "./tab-button";
 import { tabTitle } from "./tab-title";
 
+/** How long a tab takes to shrink away; matches `tab-close` in styles.css. */
+const TAB_CLOSE_MS = 180;
+
 export function ProjectWorkspace({
   workspace,
   sidebarToggle,
@@ -108,6 +111,49 @@ export function ProjectWorkspace({
   };
   useCommand("previous-tab", tabCount > 1 && canEdit, () => cycleTab(-1));
   useCommand("next-tab", tabCount > 1 && canEdit, () => cycleTab(1));
+  // A tab shrinks away before it closes. The command goes out once the animation has ended, so the
+  // tabs after it never jump, and it reads the workspace as it is then.
+  const tabList = useRef<HTMLDivElement>(null);
+  const [closingTabs, setClosingTabs] = useState<ReadonlyMap<string, number>>(new Map());
+  const closeSent = useRef(new Set<string>());
+  const latestProject = useRef(project);
+  useEffect(() => {
+    latestProject.current = project;
+  });
+  const sendClose = (tabId: string) => {
+    if (closeSent.current.has(tabId)) return;
+    closeSent.current.add(tabId);
+    const current = latestProject.current;
+    if (current?.tabs.some((tab) => tab.id === tabId))
+      onCommand({
+        kind: "tab.close",
+        projectId: current.id,
+        expectedVersion: current.version,
+        tabId,
+      });
+    // A close the daemon refused brings the tab back.
+    setTimeout(() => {
+      closeSent.current.delete(tabId);
+      setClosingTabs((previous) => {
+        const next = new Map(previous);
+        next.delete(tabId);
+        return next;
+      });
+    }, 1000);
+  };
+  const closeTab = (tabId: string) => {
+    const element = tabList.current?.querySelector(`[data-tab-id="${tabId}"]`);
+    if (!element || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      closeSent.current.delete(tabId);
+      return sendClose(tabId);
+    }
+    closeSent.current.delete(tabId);
+    setClosingTabs((previous) =>
+      new Map(previous).set(tabId, element.getBoundingClientRect().width),
+    );
+    // In case the animation never runs, as in a window that is not being drawn.
+    setTimeout(() => sendClose(tabId), TAB_CLOSE_MS * 3);
+  };
   useCommand(
     "close-tab",
     !!project && (!!activeFile || (!!selected && canEdit)) && !launching,
@@ -116,13 +162,7 @@ export function ProjectWorkspace({
         files.close(activeFile);
         return;
       }
-      if (project && selected)
-        onCommand({
-          kind: "tab.close",
-          projectId: project.id,
-          expectedVersion: project.version,
-          tabId: selected.id,
-        });
+      if (selected) closeTab(selected.id);
     },
   );
   const shortcutTab = () => {
@@ -146,7 +186,8 @@ export function ProjectWorkspace({
   };
   useCommand("rename-tab", !!project && connected && !activeFile, () => {
     const tab = shortcutTab();
-    if (tab) setRename({ tabId: tab.id, value: tabTitle(tab, agentsRef.current) });
+    if (tab)
+      setRename({ tabId: tab.id, value: tabTitle(tab, agentsRef.current, connection?.terminals) });
   });
   useCommand("move-tab-left", !!project && canEdit && !activeFile, () => moveTab(-1));
   useCommand("move-tab-right", !!project && canEdit && !activeFile, () => moveTab(1));
@@ -212,7 +253,8 @@ export function ProjectWorkspace({
   // Not gated on `canEdit`: a double-click's first click selects the tab, which briefly marks a
   // command as pending, and the second click must still open the editor.
   const startRename = (tab: WorkspaceTab) => {
-    if (connected) setRename({ tabId: tab.id, value: tabTitle(tab, agentsRef.current) });
+    if (connected)
+      setRename({ tabId: tab.id, value: tabTitle(tab, agentsRef.current, connection?.terminals) });
   };
   const commitRename = () => {
     const current = renameRef.current;
@@ -221,7 +263,7 @@ export function ProjectWorkspace({
     const tab = project.tabs.find((item) => item.id === current.tabId);
     const name = current.value.trim().slice(0, 120);
     // Keeping the title it already shows leaves an unnamed tab following its pane.
-    if (!tab || !name || name === tabTitle(tab, agentsRef.current)) return;
+    if (!tab || !name || name === tabTitle(tab, agentsRef.current, connection?.terminals)) return;
     onCommand({
       kind: "tab.rename",
       projectId: project.id,
@@ -245,6 +287,7 @@ export function ProjectWorkspace({
         >
           {sidebarToggle}
           <div
+            ref={tabList}
             className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
             data-tauri-drag-region={titleBar ? "true" : undefined}
             aria-label="Project tabs"
@@ -254,6 +297,9 @@ export function ProjectWorkspace({
                 <ContextMenu.Trigger asChild>
                   <div
                     data-tab-id={tab.id}
+                    onAnimationEnd={(event) => {
+                      if (event.animationName === "tab-close") sendClose(tab.id);
+                    }}
                     draggable={canEdit && renaming?.tabId !== tab.id}
                     onDragStart={(event) => {
                       event.dataTransfer.effectAllowed = "move";
@@ -288,11 +334,20 @@ export function ProjectWorkspace({
                       setDragging(null);
                       setDropTarget(null);
                     }}
-                    style={{
-                      opacity: dragging?.tabId === tab.id ? 0.5 : 1,
-                      outline: dropTarget === tab.id ? "2px solid var(--primary)" : undefined,
-                    }}
-                    className={`group flex shrink-0 items-center rounded-md border ${!activeFile && selected?.id === tab.id ? "border-border bg-background shadow-xs" : "border-transparent"}`}
+                    style={
+                      {
+                        opacity: dragging?.tabId === tab.id ? 0.5 : 1,
+                        outline: dropTarget === tab.id ? "2px solid var(--primary)" : undefined,
+                        "--tab-width": `${closingTabs.get(tab.id) ?? 0}px`,
+                      } as React.CSSProperties
+                    }
+                    className={cn(
+                      "project-tab group flex shrink-0 items-center rounded-md border",
+                      !activeFile && selected?.id === tab.id
+                        ? "border-border bg-background shadow-xs"
+                        : "border-transparent",
+                      closingTabs.has(tab.id) && "tab-closing",
+                    )}
                   >
                     {renaming?.tabId === tab.id ? (
                       <input
@@ -341,14 +396,7 @@ export function ProjectWorkspace({
                     <CloseTabButton
                       tab={tab}
                       disabled={!canEdit}
-                      onClick={() =>
-                        onCommand({
-                          kind: "tab.close",
-                          projectId: project.id,
-                          expectedVersion: project.version,
-                          tabId: tab.id,
-                        })
-                      }
+                      onClick={() => closeTab(tab.id)}
                       className="rounded p-1 text-muted-foreground opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 hover:text-foreground [@media(hover:none)]:opacity-100"
                     >
                       <X className="size-3" />
@@ -372,14 +420,7 @@ export function ProjectWorkspace({
                     </ContextMenu.Item>
                     <ContextMenu.Item
                       disabled={!canEdit}
-                      onSelect={() =>
-                        onCommand({
-                          kind: "tab.close",
-                          projectId: project.id,
-                          expectedVersion: project.version,
-                          tabId: tab.id,
-                        })
-                      }
+                      onSelect={() => closeTab(tab.id)}
                       className="flex items-center gap-2 rounded px-2 py-1.5 outline-none focus:bg-accent data-disabled:opacity-40"
                     >
                       <X className="size-4" /> Close tab

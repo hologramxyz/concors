@@ -271,7 +271,7 @@ export function NotificationProvider({
               <span className="flex items-center gap-1.5 text-sm font-medium">
                 <span
                   aria-hidden="true"
-                  className={`size-2 shrink-0 rounded-full ${notice.kind === "done" ? "bg-emerald-500" : "bg-amber-500"}`}
+                  className={`size-2 shrink-0 rounded-full ${notice.kind === "done" ? "bg-primary" : "bg-destructive"}`}
                 />
                 {notice.kind === "done" ? "Agent finished" : "Agent needs input"}
               </span>

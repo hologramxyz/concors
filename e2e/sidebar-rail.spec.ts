@@ -20,6 +20,8 @@ async function expectNoSidebarTooltips(page: Page, sidebar: Locator) {
   for (const control of await sidebar
     .locator("button:not([data-workspace-id]):not([data-agent-id])")
     .all()) {
+    // A workspace's tab list stays in place while closed, hidden once it has eased shut.
+    if (!(await control.isVisible())) continue;
     await control.hover();
     await control.focus();
     // Focus would open an enabled tooltip immediately, even when hover is delayed.
@@ -184,7 +186,7 @@ test("collapsed agents show provider icons and live status without losing chat d
     // The open chat has seen its finished turn, so it reads as Ready rather than a green Done.
     await expect(page.getByText(/^Worked for /)).toHaveCount(1);
     await expect(codexButton.getByRole("img", { name: "Agent status: Ready" })).toBeVisible();
-    await expect(codexButton.locator(".bg-emerald-500")).toHaveCount(0);
+    await expect(codexButton.locator("[data-agent-status-badge]")).toHaveCount(0);
     await codex.fill("Keep this draft");
     await page.getByRole("button", { name: "New tab", exact: true }).click();
     await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
@@ -231,11 +233,14 @@ test("collapsed agents show provider icons and live status without losing chat d
     await page.keyboard.press("Escape");
     await codex.fill("hold");
     await page.getByRole("button", { name: "Send message", exact: true }).click();
-    await expect(expandedCodex.getByRole("img", { name: "Agent status: Working" })).toBeVisible();
-    const badge = expandedCodex.locator("[data-agent-status-badge]");
+    // Expanded, a working chat shows a quiet dot; the pane keeps its corner badge.
+    await expect(expandedCodex.getByRole("img", { name: "Agent status: Working" })).toHaveAttribute(
+      "data-row-state",
+      "working",
+    );
     const paneBadge = page.getByTestId("pane-agent-loading");
     await expect(paneBadge).toBeVisible();
-    for (const indicator of [badge, paneBadge]) {
+    for (const indicator of [paneBadge]) {
       const bounds = await indicator.boundingBox();
       const parent = await indicator.locator("..").boundingBox();
       if (!bounds || !parent) throw new Error("Missing status badge bounds");

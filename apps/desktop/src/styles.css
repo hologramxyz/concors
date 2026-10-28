@@ -855,3 +855,64 @@ html[data-pane-resizing="row"] * {
     transition: none;
   }
 }
+
+/* Tabs grow in when they open and shrink away before they close (`TAB_CLOSE_MS`). */
+@media (prefers-reduced-motion: no-preference) {
+  .project-tab {
+    animation: tab-open 180ms cubic-bezier(0.2, 0, 0, 1);
+  }
+  .project-tab.tab-closing {
+    overflow: hidden;
+    pointer-events: none;
+    animation: tab-close 180ms cubic-bezier(0.2, 0, 0, 1) forwards;
+  }
+}
+@keyframes tab-open {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+@keyframes tab-close {
+  from {
+    max-width: var(--tab-width);
+  }
+  /* Faded before it is narrow, so its label never squeezes visibly. */
+  60% {
+    opacity: 0;
+  }
+  to {
+    max-width: 0;
+    opacity: 0;
+    border-width: 0;
+    /* Takes the gap with it, so the tabs after it close in smoothly. */
+    margin-inline-end: -0.25rem;
+  }
+}
+
+/*
+ * Sidebar lists open and close by easing their height (grid rows 1fr ↔ 0fr). Visibility flips only
+ * once a close has finished, so the content is hidden from focus and screen readers when closed.
+ */
+.sidebar-collapse {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition:
+    grid-template-rows 200ms cubic-bezier(0.2, 0, 0, 1),
+    opacity 200ms cubic-bezier(0.2, 0, 0, 1),
+    visibility 200ms;
+}
+.sidebar-collapse > * {
+  min-height: 0;
+  overflow: hidden;
+}
+.sidebar-collapse[data-collapsed] {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  visibility: hidden;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-collapse {
+    transition: none;
+  }
+}
