@@ -131,8 +131,11 @@ function AppContent() {
     setAddingProject(null);
     const trigger = projectDialogTrigger.current;
     // These controlled dialogs have no Radix DialogTrigger. Only cancellation returns
-    // to the opener; successful setup leaves focus with the newly opened workspace.
+    // to the opener; successful setup leaves focus with the newly opened workspace. Focus moved
+    // elsewhere meanwhile, by a click or a shortcut, stays where it went.
     requestAnimationFrame(() => {
+      const focused = document.activeElement;
+      if (focused && focused !== document.body && !focused.closest('[role="dialog"]')) return;
       if (trigger?.isConnected) trigger.focus({ preventScroll: true });
     });
   };

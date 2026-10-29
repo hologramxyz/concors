@@ -48,7 +48,7 @@ test("palettes persist and agent-written themes reload without replacing termina
         getComputedStyle(document.documentElement).getPropertyValue("--terminal-background").trim(),
       ),
     )
-    .toBe("#171f32");
+    .toBe("#101625");
   await page.getByRole("button", { name: "Back to app", exact: true }).click();
   await expect(red).not.toHaveCSS("color", originalRed);
   await page.reload();

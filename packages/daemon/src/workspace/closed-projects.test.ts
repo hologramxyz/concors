@@ -194,14 +194,12 @@ it("never moves chats into a workspace in the home folder", () => {
   expect(store.agent(stray.id).projectId).toBe(stray.projectId);
 });
 
-it("turns each folder's stranded chats into a closed workspace, once", () => {
+it("turns each folder's stranded chats into a closed workspace on every start", () => {
   const path = join(directory, "state.db");
   const app = join(directory, "app");
   const older = saved(agent({ directory: app, updatedAt: "2026-09-01T00:00:00.000Z" }));
   const newer = saved(agent({ directory: app, updatedAt: "2026-09-03T00:00:00.000Z" }));
   const home = saved(agent({ directory, updatedAt: "2026-09-02T00:00:00.000Z" }));
-  // The marker is set when the store first opened, as on a machine that already ran it.
-  db.prepare("DELETE FROM migrations").run();
   store.close();
   store = new WorkspaceStore(path);
   const closed = store.snapshot().closedProjects ?? [];
@@ -215,11 +213,18 @@ it("turns each folder's stranded chats into a closed workspace, once", () => {
   expect(execute({ kind: "project.reopen", projectId: closed[0]!.id }).status).toBe("accepted");
   expect(project(closed[0]!.id)).toMatchObject({ name: "app", directory: app, tabs: [] });
 
-  const later = saved(agent({ directory: app }));
+  // A chat stranded later, by an older client removing its workspace, is grouped at the next start.
+  const later = saved(agent({ directory: join(directory, "web") }));
   store.close();
   store = new WorkspaceStore(path);
-  expect(store.agent(later.id).projectId).toBe(later.projectId);
-  expect(store.snapshot().closedProjects).toHaveLength(1);
+  const next = store.snapshot().closedProjects ?? [];
+  expect(next.map((item) => item.name)).toEqual(["web", directory.split("/").at(-1)]);
+  expect(store.agent(later.id).projectId).toBe(next[0]!.id);
+  // Nothing stranded: nothing changes.
+  const revision = store.snapshot().revision;
+  store.close();
+  store = new WorkspaceStore(path);
+  expect(store.snapshot().revision).toBe(revision);
 });
 
 it("numbers a one-click workspace past the closed ones' names", async () => {

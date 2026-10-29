@@ -131,7 +131,14 @@ export function MachineSwitcher({
           </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent side={compact ? "right" : "bottom"} sideOffset={6}>
-          {selected.label}, {connected ? "connected" : "disconnected"}
+          <span className="flex items-center gap-2">
+            {selected.label}
+            <span
+              role="img"
+              aria-label={connected ? "Connected" : "Disconnected"}
+              className={`size-1.5 shrink-0 rounded-full ${connected ? "bg-emerald-500" : "bg-muted-foreground/60"}`}
+            />
+          </span>
         </TooltipContent>
       </SidebarTooltip>
       <DropdownMenuContent
@@ -142,7 +149,6 @@ export function MachineSwitcher({
           className="min-h-[32px] gap-2 px-[8px]"
           onSelect={() => onSelect(LOCAL_HOST)}
           aria-label={`This computer${selected.machineId === "local" ? (connected ? " Connected" : " Selected") : ""}`}
-          title={`This computer${selected.machineId === "local" ? (connected ? ", connected" : ", selected") : ""}`}
         >
           <MachineIcon local />
           <span className="min-w-0 flex-1 truncate">This computer</span>
@@ -167,7 +173,6 @@ export function MachineSwitcher({
               key={machine.id}
               className="min-h-[32px] gap-2 px-[8px]"
               aria-label={`${machine.name} ${status}${isSelected ? " Selected" : ""}`}
-              title={`${machine.name}, ${status.toLowerCase()}${isSelected ? ", selected" : ""}`}
               disabled={checking !== null}
               onPointerEnter={() => {
                 if (!isSelected && machineState === "connectable")

@@ -516,7 +516,7 @@ test("repository access rejection removes cached rows instead of treating them a
   await expect(dialog.getByRole("button", { name: "Continue", exact: true })).toBeDisabled();
 });
 
-test("GitHub avatar is shared by the sidebar, rail and settings without loading repositories", async ({
+test("GitHub avatar is shared by the sidebar and settings without loading repositories", async ({
   page,
 }) => {
   await signedIn(page);
@@ -534,7 +534,10 @@ test("GitHub avatar is shared by the sidebar, rail and settings without loading 
     .poll(() => avatar.evaluate((img: HTMLImageElement) => img.naturalWidth))
     .toBeGreaterThan(0);
   expect(reads).toEqual(["/api/v1/github/"]);
+  // The collapsed sidebar is hidden whole, account menu and all, until it is expanded again.
   await page.getByRole("button", { name: "Collapse sidebar" }).click();
+  await expect(account).toBeHidden();
+  await page.getByRole("button", { name: "Expand sidebar" }).click();
   await expect(avatar).toBeVisible();
   await account.click();
   await page.getByRole("menuitem", { name: "Settings", exact: true }).click();

@@ -94,7 +94,6 @@ export class WorkspaceStore {
         CREATE TABLE IF NOT EXISTS commands (id TEXT PRIMARY KEY, payload TEXT NOT NULL, result TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS terminals (id TEXT PRIMARY KEY, request_id TEXT UNIQUE NOT NULL, request TEXT NOT NULL, info TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS closed_projects (id TEXT PRIMARY KEY, directory TEXT NOT NULL, project TEXT NOT NULL, closed_at TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS migrations (name TEXT PRIMARY KEY);
         CREATE TABLE IF NOT EXISTS project_setups (id TEXT PRIMARY KEY, request TEXT NOT NULL, setup TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS agents (id TEXT PRIMARY KEY, info TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS agent_items (position INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, item_id TEXT NOT NULL, item TEXT NOT NULL, UNIQUE(session_id, item_id));
@@ -302,12 +301,11 @@ export class WorkspaceStore {
   }
 
   /**
-   * Once, for chats left without a workspace by daemons that removed workspaces instead of closing
-   * them: each folder's chats become a closed workspace, listed with the others to reopen, closed
-   * when its newest chat was last used.
+   * On every start, for chats left without a workspace (by daemons, or clients, that removed
+   * workspaces instead of closing them): each folder's chats become a closed workspace, listed
+   * with the others to reopen, closed when its newest chat was last used.
    */
   #closeStrandedChats(): void {
-    if (this.#db.prepare("SELECT 1 FROM migrations WHERE name = 'stranded-chats'").get()) return;
     this.transaction(() => {
       const state = this.snapshot();
       const known = new Set([
@@ -339,7 +337,6 @@ export class WorkspaceStore {
           .prepare("UPDATE workspace SET snapshot = ? WHERE id = 1")
           .run(JSON.stringify(state));
       }
-      this.#db.prepare("INSERT INTO migrations (name) VALUES ('stranded-chats')").run();
     });
   }
 

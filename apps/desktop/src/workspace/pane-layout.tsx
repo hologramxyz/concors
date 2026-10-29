@@ -108,6 +108,9 @@ export function PaneLayout(props: Props) {
     // moment no pane has it, after which this pane would see another pane focused and give up.
     pane.dataset.focusPending = "";
     let initial = true;
+    // Focus that moves to another pane meanwhile was asked for, by a click or by a dialog giving it
+    // back, so it is kept even before this pane has had its first try.
+    const started = document.activeElement;
     const settle = () => {
       pendingFocus.current = null;
       delete pane.dataset.focusPending;
@@ -121,7 +124,12 @@ export function PaneLayout(props: Props) {
         return;
       }
       const focusedPane = focused?.closest<HTMLElement>("[data-pane-id]");
-      if (!initial && focusedPane && focusedPane !== pane && focusedPane.getClientRects().length) {
+      if (
+        (!initial || focused !== started) &&
+        focusedPane &&
+        focusedPane !== pane &&
+        focusedPane.getClientRects().length
+      ) {
         settle();
         return;
       }
@@ -231,6 +239,8 @@ export function PaneLayout(props: Props) {
     const root = container.current;
     if (!root) return;
     let initial = true;
+    // As above: focus moved to another pane meanwhile was asked for, and is kept.
+    const started = document.activeElement;
     const focus = () => {
       const pane = container.current?.querySelector<HTMLElement>(
         `[data-pane-id="${target.paneId}"]`,
@@ -244,7 +254,10 @@ export function PaneLayout(props: Props) {
       if (focused?.closest(OPEN_OVERLAY)) return;
       if (
         typingOutsidePanes(focused) ||
-        (!initial && focusedPane && focusedPane !== pane && focusedPane.getClientRects().length)
+        ((!initial || focused !== started) &&
+          focusedPane &&
+          focusedPane !== pane &&
+          focusedPane.getClientRects().length)
       ) {
         observer.disconnect();
         return;

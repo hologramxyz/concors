@@ -228,7 +228,19 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
     ).toHaveCount(0);
     await panes.last().getByRole("button", { name: "Start new session" }).click();
     await expect(agents.getByRole("button", { name: /Open in terminal.*Codex/ })).toHaveCount(1);
+    // Closing its pane leaves the running agent listed under its workspace, muted, until stopped.
     await panes.last().getByRole("button", { name: "Close pane" }).click();
+    const background = agents.locator("[data-background-terminal]", { hasText: "Codex" });
+    await expect(background).toHaveCount(1);
+    await expect(
+      remoteAgents.locator("[data-background-terminal]", { hasText: "Codex" }),
+    ).toHaveCount(1);
+    await background.hover();
+    await agents
+      .getByRole("button", { name: /^Actions for / })
+      .last()
+      .click();
+    await page.getByRole("menuitem", { name: "Stop", exact: true }).click();
     await expect(agents.getByRole("button", { name: /Open in terminal.*Codex/ })).toHaveCount(0);
     await expect(remoteAgents.getByRole("button", { name: /Open in terminal.*Codex/ })).toHaveCount(
       0,
