@@ -13,11 +13,18 @@ for (const result of ["connected", "disconnected", "error"] as const) {
     let release: (() => void) | undefined;
     let delivered = false;
     let providerLists = 0;
+    let reads = 0;
     await page.routeWebSocket("ws://127.0.0.1:7429/ws", (socket) => {
       const server = socket.connectToServer();
       socket.onMessage((raw) => {
         const event = JSON.parse(String(raw));
         if (event.type === "provider.request" && event.operation.kind === "list") providerLists++;
+        if (
+          event.type === "agent.request" &&
+          event.operation.kind === "account" &&
+          event.operation.action.type === "read"
+        )
+          reads++;
         if (
           !delivered &&
           event.type === "agent.request" &&
@@ -72,9 +79,13 @@ for (const result of ["connected", "disconnected", "error"] as const) {
       } else {
         // Only a failed check asks whether the CLI is installed; listing holds up the daemon.
         await expect.poll(() => providerLists).toBe(1);
-        await expect(prompt.getByRole("alert")).toContainText("Could not check this account.");
-        await prompt.getByRole("button", { name: "Check account", exact: true }).click();
-        await expect(prompt.getByRole("button", { name: "Sign in with ChatGPT" })).toBeEnabled();
+        // A failed check is no evidence the account is missing, so nothing asks to connect one,
+        // and its error is not shown. Coming back to the window checks again.
+        await expect(prompt).toHaveCount(0);
+        await expect(page.getByText("Could not check this account.")).toHaveCount(0);
+        const before = reads;
+        await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+        await expect.poll(() => reads).toBeGreaterThan(before);
       }
       if (result !== "error") expect(providerLists).toBe(0);
     } finally {

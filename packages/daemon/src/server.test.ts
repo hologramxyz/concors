@@ -1,5 +1,10 @@
+import { randomUUID } from "node:crypto";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { DaemonConnection, describeDaemonEndpoint } from "@concors/daemon-client";
 import {
+  AgentInfoSchema,
   HEALTH_PATH,
   HEARTBEAT_INTERVAL_MS,
   PROTOCOL_VERSION,
@@ -14,6 +19,7 @@ import { WebSocket as WsClient } from "ws";
 import { loadDaemonConfig } from "./config.ts";
 import { createDaemonServer, type DaemonServer } from "./server.ts";
 import { DAEMON_VERSION } from "./version.ts";
+import { WorkspaceStore } from "./workspace/store.ts";
 
 const client: ClientInfo = { kind: "test", name: "daemon-tests", version: "0.0.0" };
 
@@ -234,5 +240,100 @@ describe("WebSocket handshake", () => {
     await server.close();
     await disconnected;
     expect(connection.state).toMatchObject({ status: "disconnected" });
+  });
+});
+
+describe("large chat lists", () => {
+  it("keeps a client through a multi-megabyte resync and the chat list a delete sends", async () => {
+    // Claude chats list every command and skill, about 65 KB each on a well-equipped machine, so
+    // forty chats come to several megabytes whenever the whole list is sent.
+    const directory = await mkdtemp(join(tmpdir(), "concors-large-lists-"));
+    const path = join(directory, "workspace.sqlite");
+    const store = new WorkspaceStore(path);
+    const projectId = randomUUID();
+    store.execute({
+      type: "workspace.command",
+      commandId: randomUUID(),
+      epoch: store.snapshot().epoch,
+      operation: { kind: "project.add", projectId, name: "App", directory },
+    });
+    const commands = Array.from({ length: 146 }, (_, index) => ({
+      name: `skill-${index}`,
+      description: "Does one thing well. ".repeat(20),
+      kind: "skill" as const,
+    }));
+    const at = new Date().toISOString();
+    const ids = Array.from({ length: 40 }, () => randomUUID());
+    for (const id of ids)
+      store.createBackgroundAgent(
+        AgentInfoSchema.parse({
+          id,
+          projectId,
+          provider: "claude",
+          name: "Chat",
+          directory,
+          model: null,
+          threadId: null,
+          turnId: null,
+          status: "idle",
+          error: null,
+          startedAt: at,
+          turnStartedAt: null,
+          updatedAt: at,
+          revision: 0,
+          pending: [],
+          attention: null,
+          controls: { commands },
+        }),
+      );
+    store.close();
+    const large = createDaemonServer(loadDaemonConfig({ port: 0, logLevel: "silent" }, {}), {
+      workspacePath: path,
+    });
+    try {
+      const url = await large.listen();
+      const socket = new WsClient(`${url.replace(/^http/, "ws")}${WS_PATH}`);
+      const received: DaemonMessage[] = [];
+      let closeCode: number | undefined;
+      socket.on("message", (data) => {
+        const parsed = parseDaemonMessage(String(data));
+        if (parsed.success) received.push(parsed.data);
+      });
+      socket.on("close", (code) => (closeCode = code));
+      await new Promise((resolve) => socket.on("open", resolve));
+      socket.send(
+        JSON.stringify({
+          type: "client.hello",
+          protocolVersion: PROTOCOL_VERSION,
+          client,
+          capabilities: ["agent-providers-v2"],
+        }),
+      );
+      await vi.waitFor(() => expect(received.map((m) => m.type)).toContain("daemon.ready"));
+      socket.send(JSON.stringify({ type: "workspace.subscribe" }));
+      await vi.waitFor(() => expect(received.map((m) => m.type)).toContain("workspace.snapshot"));
+      expect(received.filter((m) => m.type === "agent.state")).toHaveLength(ids.length);
+
+      const requestId = randomUUID();
+      socket.send(
+        JSON.stringify({
+          type: "agent.request",
+          requestId,
+          operation: { kind: "delete", sessionId: ids[0] },
+        }),
+      );
+      await vi.waitFor(() =>
+        expect(received.some((m) => m.type === "agent.result" && m.requestId === requestId)).toBe(
+          true,
+        ),
+      );
+      const list = received.findLast((m) => m.type === "agent.list");
+      expect(list?.type === "agent.list" && list.agents).toHaveLength(ids.length - 1);
+      expect(closeCode).toBeUndefined();
+      socket.close();
+    } finally {
+      await large.close();
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 });

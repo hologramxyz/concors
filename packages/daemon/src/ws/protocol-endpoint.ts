@@ -58,6 +58,11 @@ export interface ProtocolEndpointOptions {
 const CLOSE_PROTOCOL_ERROR = 1002;
 const CLOSE_GOING_AWAY = 1001;
 const DEFAULT_HANDSHAKE_TIMEOUT_MS = 5_000;
+/** A client this far behind is dropped at once, so none can make the daemon hold more for it. */
+const SEND_BUFFER_LIMIT = 64 * 1024 * 1024;
+/** Behind by more than this, a client must keep draining its backlog or be dropped. */
+const SEND_BACKLOG = 2 * 1024 * 1024;
+const SEND_STALL_MS = 15_000;
 
 /**
  * Mounts the Concors protocol WebSocket endpoint.
@@ -97,11 +102,29 @@ export function registerProtocolEndpoint(
       socket.close(CLOSE_PROTOCOL_ERROR, "Agent client upgrade required");
       return;
     }
-    if (socket.bufferedAmount > 2 * 1024 * 1024) {
+    if (socket.bufferedAmount > SEND_BUFFER_LIMIT) {
       socket.close(1013, "Client must reconnect to catch up");
       return;
     }
     socket.send(JSON.stringify(uploadClients.has(socket) ? message : forLegacyClients(message)));
+    watchBacklog(socket);
+  };
+  /**
+   * A full chat list can run to megabytes (each Claude chat lists its commands), so a backlog alone
+   * is no sign of a stuck client. One that stops draining it is dropped, and reconnects to catch up.
+   */
+  const backlogs = new Map<WebSocket, ReturnType<typeof setTimeout>>();
+  const watchBacklog = (socket: WebSocket) => {
+    if (backlogs.has(socket) || socket.bufferedAmount <= SEND_BACKLOG) return;
+    const queued = socket.bufferedAmount;
+    const timer = setTimeout(() => {
+      backlogs.delete(socket);
+      if (socket.readyState !== socket.OPEN) return;
+      if (socket.bufferedAmount >= queued) socket.close(1013, "Client must reconnect to catch up");
+      else watchBacklog(socket);
+    }, SEND_STALL_MS);
+    timer.unref();
+    backlogs.set(socket, timer);
   };
 
   const dictation = options.speechModelsDirectory
@@ -238,6 +261,8 @@ export function registerProtocolEndpoint(
     });
     socket.on("close", () => {
       clearInterval(heartbeat);
+      clearTimeout(backlogs.get(socket));
+      backlogs.delete(socket);
       unsubscribeUsage?.();
       connections.delete(socket);
       subscribers.delete(socket);

@@ -272,7 +272,7 @@ it("does not mistake OpenCode free models for authenticated providers", async ()
   await authenticated.close();
 });
 
-it("serializes overlapping account starts while an earlier backend is closing", async () => {
+it("queues overlapping account requests instead of failing them", async () => {
   let release: () => void = () => undefined;
   const b = backend();
   b.close.mockImplementationOnce(
@@ -285,11 +285,17 @@ it("serializes overlapping account starts while an earlier backend is closing", 
   const accounts = new AgentAccounts(factory);
   await accounts.request("one", info, { type: "read" });
   const starting = accounts.request("one", info, { type: "start", methodId: "test" });
-  await expect(accounts.request("one", info, { type: "start", methodId: "test" })).rejects.toThrow(
-    "already in progress",
-  );
+  let second = false;
+  const again = accounts.request("one", info, { type: "read" }).then((account) => {
+    second = true;
+    return account;
+  });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  // The second waits while the first is still closing its earlier backend.
+  expect(second).toBe(false);
   release();
   expect((await starting).status).toBe("pending");
+  expect((await again).status).toBe("pending");
   expect(factory).toHaveBeenCalledTimes(2);
   await accounts.close();
 });

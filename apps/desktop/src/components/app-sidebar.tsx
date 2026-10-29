@@ -35,8 +35,9 @@ import {
 import { PreviewsSidebar } from "@/host/previews-sidebar";
 import { SidebarEmpty, SidebarSection } from "./sidebar-section";
 import { SearchButton } from "@/components/search-button";
-import { ChatLimitBanner, DeleteChatDialog } from "@/agents/chat-limit";
-import { useChatActions } from "@/agents/chat-actions";
+import { ChatLimitBanner, DeleteChatDialog, type ChatToDelete } from "@/agents/chat-limit";
+import { chatName, useChatActions } from "@/agents/chat-actions";
+import { useDeferredDelete } from "@/agents/deferred-delete";
 import { SidebarToggle } from "@/components/sidebar-toggle";
 import { cn } from "cn";
 import { useWindowChrome } from "@/window/context";
@@ -211,13 +212,33 @@ function WorkspaceTree(props: AppSidebarProps) {
   const connection = useContext(TerminalConnectionContext);
   const background = useContext(BackgroundTerminalsContext);
   const forkChat = useForkChat();
-  const chatActions = useChatActions(props.workspace, props.execute);
-  const [deleting, setDeleting] = useState<AgentInfo | null>(null);
+  const chatActions = useChatActions(props.execute);
+  // The chat stays set while its dialog closes, so it can ease out under the same name.
+  const [deleting, setDeleting] = useState<{ chat: ChatToDelete; open: boolean } | null>(null);
   const now = useMinuteClock();
   const chats = useAgents();
   const terminals = useTerminalSessions();
   const closedNames = useClosedTerminalNames();
-  const { rows, unavailable } = sidebarRows(props.workspace, chats, terminals, closedNames);
+  const deferred = useDeferredDelete({
+    actions: chatActions,
+    isSelected: (id) => {
+      const selection = props.workspace?.selection;
+      return !!props.workspace?.projects
+        .find((project) => project.id === selection?.projectId)
+        ?.tabs.find((tab) => tab.id === selection?.tabId)
+        ?.nodes.some((node) => node.kind === "pane" && node.sessionId === id);
+    },
+    onReopenSelected: props.onSelectAgent,
+  });
+  const all = sidebarRows(props.workspace, chats, terminals, closedNames);
+  // A chat waiting out its undo is gone from the list already.
+  const rows = new Map(
+    [...all.rows].map(([id, list]) => [
+      id,
+      list.filter((row) => !deferred.hidden.has(rowChatId(row) ?? "")),
+    ]),
+  );
+  const unavailable = all.unavailable.filter((chat) => !deferred.hidden.has(chat.id));
   const currentProjectId = props.workspace?.selection?.projectId ?? null;
   const selectedTabId =
     props.view === "projects" ? (props.workspace?.selection?.tabId ?? null) : null;
@@ -304,11 +325,26 @@ function WorkspaceTree(props: AppSidebarProps) {
             .pin(chat, !chat.pinned)
             .catch((error: unknown) => console.error("Could not pin the chat", error))
       : undefined;
+  // Bound to the chat's ID and its name as shown now, never to where its row sits.
   const remove = (chat: AgentInfo | undefined) =>
-    props.canEdit && chatActions && chat ? () => setDeleting(chat) : undefined;
+    props.canEdit && chatActions && chat
+      ? () => setDeleting({ chat: { id: chat.id, name: chatName(chat) }, open: true })
+      : undefined;
   return (
     <>
-      <DeleteChatDialog chat={deleting} actions={chatActions} onClose={() => setDeleting(null)} />
+      {deferred.toast}
+      <DeleteChatDialog
+        key={deleting?.chat.id}
+        chat={deleting?.chat ?? null}
+        open={!!deleting?.open}
+        canDelete={!!chatActions}
+        onConfirm={(chat) => void deferred.remove(chat)}
+        onClose={(id) =>
+          setDeleting((current) =>
+            current?.chat.id === id ? { chat: current.chat, open: false } : current,
+          )
+        }
+      />
       {props.workspace?.projects.length ? (
         <ul
           ref={list}
@@ -420,6 +456,6 @@ function WorkspaceTree(props: AppSidebarProps) {
 /** The near-limit line, apart from the sidebar so chat updates repaint only it. */
 function SidebarChatLimit({ workspace, execute }: Pick<AppSidebarProps, "workspace" | "execute">) {
   const chats = useAgents();
-  const actions = useChatActions(workspace, execute);
+  const actions = useChatActions(execute);
   return <ChatLimitBanner workspace={workspace} chats={chats} actions={actions} />;
 }

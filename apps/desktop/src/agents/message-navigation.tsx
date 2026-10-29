@@ -33,6 +33,8 @@ export function MessageNavigation({
   const [hovered, setHovered] = useState<number | null>(null);
   const [focused, setFocused] = useState<number | null>(null);
   const [active, setActive] = useState<string | null>(null);
+  // A rail needs somewhere to jump: a single message, or messages that all fit on screen, show none.
+  const [scrolls, setScrolls] = useState(false);
   const [open, setOpen] = useState(false);
   const [jumping, setJumping] = useState(false);
   const [jumpError, setJumpError] = useState<string | null>(null);
@@ -60,6 +62,7 @@ export function MessageNavigation({
     let frame = 0;
     const update = () => {
       frame = 0;
+      setScrolls(hasEarlier || hasNewer || el.scrollHeight - el.clientHeight > 2);
       // Several prompts can fit in the final viewport. At the bottom, select the
       // final prompt rather than whichever one happens to sit near the top.
       // Allow for fractional scroll positions and rounded viewport dimensions.
@@ -90,7 +93,7 @@ export function MessageNavigation({
       observer.disconnect();
       cancelAnimationFrame(frame);
     };
-  }, [viewport, entries, hasNewer]);
+  }, [viewport, entries, hasEarlier, hasNewer]);
   const jump = async (entry: MessageEntry) => {
     if (jumping) return;
     setJumping(true);
@@ -111,6 +114,7 @@ export function MessageNavigation({
     <>
       <nav
         ref={rail}
+        hidden={!scrolls || entries.length < 2}
         aria-label="Your messages"
         aria-busy={loading || jumping}
         className="message-rail"
@@ -172,7 +176,7 @@ export function MessageNavigation({
                   data-active={entry.id === active}
                   data-attention={index === attention}
                   style={{
-                    width: (entry.id === active ? 16 : 10) + weight * 14,
+                    width: (entry.id === active ? 10 : 6) + weight * 14,
                     height: 2 + weight * 2,
                   }}
                 />

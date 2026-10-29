@@ -35,57 +35,52 @@ const workspaceName = (
     (project) => project.id === id,
   )?.name ?? "Unavailable workspace";
 
-/** Confirms deleting `chat`; open while it is set. */
+/** The chat a delete was asked for: its ID, and its name as the menu showed it. */
+export interface ChatToDelete {
+  readonly id: string;
+  readonly name: string;
+}
+
+/**
+ * Confirms deleting `chat`, which `onConfirm` then deletes (with a moment to undo). Mount it keyed
+ * by the chat's ID, so it can only ever confirm the chat it was opened for.
+ */
 export function DeleteChatDialog({
   chat,
-  actions,
+  open,
+  canDelete,
+  onConfirm,
   onClose,
 }: {
-  chat: AgentInfo | null;
-  actions: ChatActions | null;
-  onClose: () => void;
+  chat: ChatToDelete | null;
+  open: boolean;
+  canDelete: boolean;
+  onConfirm: (chat: ChatToDelete) => void;
+  /** Called with the ID it was confirming, so it can never close another chat's dialog. */
+  onClose: (id: string) => void;
 }) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const close = () => {
-    setError(null);
-    onClose();
+    if (chat) onClose(chat.id);
   };
   return (
-    <Dialog
-      open={!!chat}
-      onOpenChange={(open) => {
-        if (!open && !busy) close();
-      }}
-    >
+    <Dialog open={open && !!chat} onOpenChange={(next) => !next && close()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Delete “{chat ? chatName(chat) : ""}”?</DialogTitle>
-          <DialogDescription>This can’t be undone.</DialogDescription>
+          <DialogTitle>Delete “{chat?.name}”?</DialogTitle>
+          <DialogDescription>You’ll have a few seconds to undo.</DialogDescription>
         </DialogHeader>
-        {error && (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        )}
         <DialogFooter>
-          <Button type="button" variant="outline" disabled={busy} onClick={close}>
+          <Button type="button" variant="outline" onClick={close}>
             Cancel
           </Button>
           <Button
             type="button"
             variant="destructive"
-            disabled={busy || !actions}
+            disabled={!canDelete}
             onClick={() => {
-              if (!chat || !actions) return;
-              setBusy(true);
-              setError(null);
-              actions
-                .remove(chat)
-                .then(close, (cause: unknown) =>
-                  setError(errorText(cause, "Could not delete the chat.")),
-                )
-                .finally(() => setBusy(false));
+              if (!chat) return;
+              close();
+              onConfirm(chat);
             }}
           >
             Delete
@@ -285,7 +280,7 @@ function ReviewChatsDialog({
             disabled={busy || chosen.length === 0}
             onClick={() =>
               run(async () => {
-                for (const chat of chosen) await actions.remove(chat);
+                for (const chat of chosen) await actions.remove(chat.id);
                 onOpenChange(false);
               })
             }

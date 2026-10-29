@@ -184,8 +184,9 @@ test("the sent-message index reloads cleanly when a reconnect's workspace trails
         .poll(() => connection.agents.find((a) => a.id === sessionId)?.status)
         .toBe("done");
     }
-    const nav = page.getByRole("navigation", { name: "Your messages", exact: true });
-    await expect(nav.getByRole("button")).toHaveCount(2);
+    // Two short prompts fit on screen, so the rail is hidden; its index is still kept.
+    const marks = page.locator(".message-rail-target");
+    await expect(marks).toHaveCount(2);
     // A lasting drop, long enough for the app to show it, then the machine comes back.
     refuse = true;
     drop();
@@ -196,10 +197,67 @@ test("the sent-message index reloads cleanly when a reconnect's workspace trails
     });
     await page.waitForTimeout(3_000);
     await expect(page.getByText("Could not load messages · Retry")).toHaveCount(0);
-    await expect(nav.getByRole("button")).toHaveCount(2);
+    await expect(marks).toHaveCount(2);
   } finally {
     off();
     connection.disconnect();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("the rail shows only for several messages that scroll, and its marks start short", async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const directory = await mkdtemp(join(tmpdir(), "concors-message-nav-fits-"));
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Short chat", directory);
+    const nav = page.getByRole("navigation", { name: "Your messages", exact: true });
+    const timeline = page.getByRole("log", { name: "Chat timeline", exact: true });
+    const scrolls = () => timeline.evaluate((el) => el.scrollHeight > el.clientHeight + 2);
+    const newChat = async () => {
+      await page.getByRole("button", { name: "New tab options", exact: true }).click();
+      await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
+      await chooseProvider(page);
+    };
+    const sendMessage = async (text: string) => {
+      const input = page.getByRole("textbox", { name: "Message Codex" });
+      await expect(input).toBeEnabled();
+      await input.fill(text);
+      await page.getByRole("button", { name: "Send message", exact: true }).click();
+      await expect(timeline).toContainText(text.split("\n")[0] ?? text);
+      await expect(timeline).toContainText("Hello from");
+      await expect(input).toBeEnabled();
+    };
+
+    // Several messages that all fit on screen.
+    await newChat();
+    await sendMessage("Summarise the readme");
+    await sendMessage("List the scripts");
+    expect(await scrolls()).toBe(false);
+    await expect(nav).toBeHidden();
+
+    // A single message, even one too long for the screen.
+    await newChat();
+    await sendMessage(
+      Array.from({ length: 80 }, (_, line) => `Line ${line + 1} of a long brief`).join("\n"),
+    );
+    await expect.poll(scrolls).toBe(true);
+    await expect(nav).toBeHidden();
+
+    // A second message in a conversation that scrolls brings the rail, its marks a few pixels.
+    await sendMessage("And one more thing to check");
+    await expect(nav).toBeVisible();
+    await expect(nav.getByRole("button")).toHaveCount(2);
+    await page.mouse.move(900, 20);
+    const widths = await nav
+      .locator(".message-rail-tick")
+      .evaluateAll((ticks) => ticks.map((tick) => tick.getBoundingClientRect().width));
+    expect(Math.max(...widths)).toBeLessThanOrEqual(10);
+    expect(Math.min(...widths)).toBeGreaterThanOrEqual(6);
+  } finally {
     await rm(directory, { recursive: true, force: true });
   }
 });

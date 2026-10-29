@@ -879,6 +879,9 @@ html[data-pane-resizing="row"] * {
   .message-rail {
     display: flex;
   }
+  .message-rail[hidden] {
+    display: none;
+  }
   .chat-timeline-shell > .chat-scroll {
     padding-left: 48px;
     padding-top: 16px;

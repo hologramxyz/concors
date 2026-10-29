@@ -49,17 +49,18 @@ export function connectHost(options: HostConnectionOptions) {
   function report(state: ConnectionState) {
     options.onState(state, established && !blocked && state.status !== "ready");
   }
-  function drop() {
+  /** Closes the socket. Unless `final`, another attempt follows, so chat requests wait for it. */
+  function drop(final = false) {
     generation++;
     clearTimeout(timer);
     clearTimeout(refreshTimer);
     quiet = true;
-    connection.disconnect();
+    connection.disconnect({ reconnecting: !final });
     quiet = false;
   }
   function stop(message: string) {
     blocked = true;
-    drop();
+    drop(true);
     report({ status: "error", error: { code: "INTERNAL_ERROR", message } });
   }
   function retry(authentication: boolean, opaque = false) {
@@ -246,7 +247,7 @@ export function connectHost(options: HostConnectionOptions) {
       clearTimeout(refreshTimer);
       unsubscribe();
       unsubscribeWorkspace();
-      drop();
+      drop(true);
       options.onTransport(null);
     },
   };

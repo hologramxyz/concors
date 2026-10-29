@@ -531,6 +531,41 @@ describe("workspace replica lifecycle", () => {
     expect(connection.terminals.map((t) => t.id)).toEqual([kept]);
   });
 
+  it("keeps agent requests through a disconnect made to reconnect, and fails them on a final one", async () => {
+    const { connection, socket, sockets, ready } = startConnection();
+    connection.subscribeWorkspace(() => undefined);
+    socket.serverOpen();
+    socket.serverSend(READY);
+    await ready;
+    socket.serverSend({ type: "workspace.snapshot", snapshot });
+    const sessionId = "00000000-0000-4000-8000-000000000013";
+    const requestId = "00000000-0000-4000-8000-000000000014";
+    const deleting = connection.requestAgent({ kind: "delete", sessionId }, requestId);
+    expect(JSON.parse(socket.sent.at(-1)!)).toMatchObject({ requestId });
+
+    connection.disconnect({ reconnecting: true });
+    const again = connection.connect();
+    sockets[1]!.serverOpen();
+    sockets[1]!.serverSend(READY);
+    await again;
+    sockets[1]!.serverSend({ type: "workspace.snapshot", snapshot });
+    // The same request goes again on the new socket, under the same ID.
+    expect(sockets[1]!.sent.map((raw) => JSON.parse(raw).requestId)).toContain(requestId);
+    sockets[1]!.serverSend({
+      type: "agent.result",
+      requestId,
+      outcome: { status: "error", message: "Agent session no longer exists" },
+    });
+    await expect(deleting).resolves.toMatchObject({ outcome: { status: "error" } });
+
+    const pending = connection.requestAgent(
+      { kind: "delete", sessionId },
+      "00000000-0000-4000-8000-000000000015",
+    );
+    connection.disconnect();
+    await expect(pending).rejects.toThrow("Disconnected from this machine");
+  });
+
   it("gates resource requests and rejects uncertain mutations on disconnect", async () => {
     const { connection, socket, ready } = startConnection();
     connection.subscribeWorkspace(() => undefined);
