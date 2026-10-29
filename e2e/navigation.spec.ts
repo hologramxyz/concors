@@ -132,8 +132,8 @@ test("directional pane sequences, tab cycling, project memory and immediate Agen
     // At the outside edge, focus stays in the current pane.
     await page.keyboard.press("Control+Shift+ArrowLeft");
     await expect.poll(() => focusedPane(page)).toBe(left);
+    // The new-tab sequence opens a tab on the start screen, a new chat.
     await sequence(page, "t", "Enter");
-    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await expect(page.getByRole("menu")).toHaveCount(0);
     const input = page.getByRole("textbox", { name: "Message Codex" });
