@@ -1,6 +1,6 @@
-import { rmSync } from "node:fs";
-import { dirname, join, resolve, sep } from "node:path";
-import { tmpdir } from "node:os";
+import { realpathSync, rmSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { homedir, tmpdir } from "node:os";
 import { z } from "zod";
 import {
   AgentAttachmentSchema,
@@ -49,6 +49,9 @@ import {
 export { AGENT_SESSION_LIMIT };
 /** How many closed workspaces a machine keeps; closing one more forgets the oldest. */
 const CLOSED_PROJECT_LIMIT = 64;
+/** When the most recently used of these chats was last used. */
+const newest = (chats: readonly AgentInfo[]) =>
+  chats.reduce((time, chat) => (chat.updatedAt > time ? chat.updatedAt : time), "");
 const ACTIVE_AGENT = ["starting", "working", "needs_input"];
 /** A kept file: its bytes, for inline attachments and shown images, or an upload's reference. */
 const StoredFileSchema = z.union([AgentAttachmentSchema, AgentUploadSchema]);
@@ -63,6 +66,14 @@ export class WorkspaceStore {
   onAgentsRetired: ((agents: RetiredAgent[]) => void) | null = null;
   /** Told of chats moved into a workspace whose folder was opened (see adoptChats). */
   onAgentsMoved: ((agents: AgentInfo[]) => void) | null = null;
+  /** The home folder, where every one-click workspace starts, so no workspace opened there adopts chats. */
+  home = (() => {
+    try {
+      return realpathSync(homedir());
+    } catch {
+      return homedir();
+    }
+  })();
 
   constructor(path = ":memory:") {
     this.attachmentsDirectory =
@@ -83,6 +94,7 @@ export class WorkspaceStore {
         CREATE TABLE IF NOT EXISTS commands (id TEXT PRIMARY KEY, payload TEXT NOT NULL, result TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS terminals (id TEXT PRIMARY KEY, request_id TEXT UNIQUE NOT NULL, request TEXT NOT NULL, info TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS closed_projects (id TEXT PRIMARY KEY, directory TEXT NOT NULL, project TEXT NOT NULL, closed_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS migrations (name TEXT PRIMARY KEY);
         CREATE TABLE IF NOT EXISTS project_setups (id TEXT PRIMARY KEY, request TEXT NOT NULL, setup TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS agents (id TEXT PRIMARY KEY, info TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS agent_items (position INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, item_id TEXT NOT NULL, item TEXT NOT NULL, UNIQUE(session_id, item_id));
@@ -108,6 +120,7 @@ export class WorkspaceStore {
         .prepare("INSERT OR IGNORE INTO workspace (id, snapshot) VALUES (1, ?)")
         .run(JSON.stringify(initial));
       this.snapshot(); // Fail startup on corrupt/incompatible persisted state; never silently reset it.
+      this.#closeStrandedChats();
     } catch (error) {
       this.#db.close();
       throw error;
@@ -244,7 +257,7 @@ export class WorkspaceStore {
    * a folder, as one-click workspaces in the home folder do. Past the limit the oldest is
    * forgotten; its chats stay, and join a workspace opened on their folder (see adoptChats).
    */
-  #keepClosedProject(project: WorkspaceProject): void {
+  #keepClosedProject(project: WorkspaceProject, closedAt = new Date().toISOString()): void {
     const forget = (id: string) => {
       this.#db.prepare("DELETE FROM closed_projects WHERE id = ?").run(id);
       this.#db.prepare("DELETE FROM project_directories WHERE project_id = ?").run(id);
@@ -253,7 +266,7 @@ export class WorkspaceStore {
       .prepare(
         "INSERT OR REPLACE INTO closed_projects (id, directory, project, closed_at) VALUES (?, ?, ?, ?)",
       )
-      .run(project.id, project.directory, JSON.stringify(project), new Date().toISOString());
+      .run(project.id, project.directory, JSON.stringify(project), closedAt);
     for (const row of this.#db
       .prepare(
         "SELECT id FROM closed_projects ORDER BY closed_at DESC, rowid DESC LIMIT -1 OFFSET ?",
@@ -288,6 +301,48 @@ export class WorkspaceStore {
     return WorkspaceSnapshotSchema.parse(state);
   }
 
+  /**
+   * Once, for chats left without a workspace by daemons that removed workspaces instead of closing
+   * them: each folder's chats become a closed workspace, listed with the others to reopen, closed
+   * when its newest chat was last used.
+   */
+  #closeStrandedChats(): void {
+    if (this.#db.prepare("SELECT 1 FROM migrations WHERE name = 'stranded-chats'").get()) return;
+    this.transaction(() => {
+      const state = this.snapshot();
+      const known = new Set([
+        ...state.projects.map((item) => item.id),
+        ...this.#closedProjects().map((item) => item.id),
+      ]);
+      const folders = new Map<string, AgentInfo[]>();
+      for (const agent of this.agents())
+        if (!known.has(agent.projectId))
+          folders.set(agent.directory, [...(folders.get(agent.directory) ?? []), agent]);
+      for (const [directory, chats] of [...folders].sort(([, a], [, b]) =>
+        newest(a).localeCompare(newest(b)),
+      )) {
+        const project: WorkspaceProject = {
+          id: randomUUID(),
+          name: folderName(directory),
+          directory,
+          version: 0,
+          tabs: [],
+        };
+        this.#keepClosedProject(project, newest(chats));
+        for (const agent of chats)
+          this.saveAgent({ ...agent, projectId: project.id, revision: agent.revision + 1 });
+      }
+      if (folders.size) {
+        state.closedProjects = this.#closedProjects();
+        state.revision++;
+        this.#db
+          .prepare("UPDATE workspace SET snapshot = ? WHERE id = 1")
+          .run(JSON.stringify(state));
+      }
+      this.#db.prepare("INSERT INTO migrations (name) VALUES ('stranded-chats')").run();
+    });
+  }
+
   /** Opening the folder of a workspace already open brings in its stranded chats too. */
   adoptChats(projectId: string): void {
     const state = this.snapshot();
@@ -299,18 +354,17 @@ export class WorkspaceStore {
 
   /**
    * Moves chats whose workspace is gone, neither open nor closed, into a workspace just opened on
-   * their folder or one above it. Most come from workspaces removed before closing kept them.
+   * their own folder; never one in the home folder. Older clients still remove workspaces.
    */
   #adoptChats(state: WorkspaceSnapshot, project: WorkspaceProject): AgentInfo[] {
+    if (project.directory === this.home) return [];
     const known = new Set([
       ...state.projects.map((item) => item.id),
       ...this.#closedProjects().map((item) => item.id),
     ]);
-    const root = project.directory.endsWith(sep) ? project.directory : project.directory + sep;
     const moved: AgentInfo[] = [];
     for (const agent of this.agents()) {
-      if (known.has(agent.projectId)) continue;
-      if (agent.directory !== project.directory && !agent.directory.startsWith(root)) continue;
+      if (known.has(agent.projectId) || agent.directory !== project.directory) continue;
       const next = { ...agent, projectId: project.id, revision: agent.revision + 1 };
       this.saveAgent(next);
       moved.push(next);

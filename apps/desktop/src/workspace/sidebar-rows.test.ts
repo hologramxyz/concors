@@ -186,7 +186,7 @@ it("dots a row only while its agent works or needs you", () => {
   const closed = (patch: Partial<AgentInfo>) =>
     rowState(sidebarRows(workspace, [agent("closed", patch)], []).rows.get("p")![3]!);
   expect(closed({ status: "needs_input" })).toBeUndefined();
-  expect(closed({ status: "working" })).toBe("background");
+  expect(closed({ status: "working" })).toBe("working");
 });
 
 it("keeps a closed terminal that still runs something among the closed rows, by when it started", () => {
@@ -212,7 +212,7 @@ it("keeps a closed terminal that still runs something among the closed rows, by 
     ["closed:old", "Chat old"],
     ["terminal:agent", "Codex"],
   ]);
-  expect(closed.map(rowState)).toEqual(["background", undefined, "background"]);
+  expect(closed.map(rowState)).toEqual(["running", undefined, "running"]);
 });
 
 it("keeps a closed terminal's tab name and its agent's state", () => {
@@ -226,7 +226,7 @@ it("keeps a closed terminal's tab name and its agent's state", () => {
   const waiting = background({ agentActivity: "needs_input" });
   expect(waiting.kind === "terminal" && waiting.title).toBe("test");
   expect(rowState(waiting)).toBe("attention");
-  expect(rowState(background({ agentActivity: "working" }))).toBe("background");
+  expect(rowState(background({ agentActivity: "working" }))).toBe("running");
   expect(rowState(background({ agentActivity: "idle" }))).toBeUndefined();
 });
 
@@ -250,7 +250,7 @@ it("dots an open shell while it runs a command", () => {
     rowState(
       sidebarRows(shellTab, [], [terminal("shell", { foregroundCommand })]).rows.get("p")![0]!,
     );
-  expect(shell("make watch")).toBe("working");
+  expect(shell("make watch")).toBe("running");
   expect(shell(null)).toBeUndefined();
 });
 

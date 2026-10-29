@@ -544,12 +544,16 @@ function SessionList({
                 <span className="line-clamp-2 text-sm break-words">
                   {session.title.trim() || "Untitled session"}
                 </span>
-                <span className="text-xs text-muted-foreground">
-                  {session.providerLabel} ·{" "}
+                <span className="flex flex-wrap gap-x-2 text-xs text-muted-foreground">
+                  <span>{session.providerLabel}</span>
                   <time dateTime={session.updatedAt}>
                     {new Date(session.updatedAt).toLocaleString()}
                   </time>
-                  {open ? " · Already open" : session.busy ? " · Working in another client" : ""}
+                  {open ? (
+                    <span>Already open</span>
+                  ) : (
+                    session.busy && <span>Working in another client</span>
+                  )}
                 </span>
               </span>
             </button>

@@ -148,7 +148,7 @@ test("an agent is renamed from the sidebar, and its pane title follows", async (
 
     await row.hover();
     await row.getByRole("button", { name: /^Actions for / }).click();
-    await page.getByRole("menuitem", { name: "Rename", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Rename tab", exact: true }).click();
     await expect(editor).toBeFocused();
     await expect(editor).toHaveValue(original);
     await page.keyboard.type("Release notes");
@@ -160,7 +160,7 @@ test("an agent is renamed from the sidebar, and its pane title follows", async (
     // Escape discards; clearing the name gives the agent and its pane their default back.
     await row.hover();
     await row.getByRole("button", { name: /^Actions for / }).click();
-    await page.getByRole("menuitem", { name: "Rename", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Rename tab", exact: true }).click();
     await expect(editor).toBeFocused();
     await page.keyboard.type("Not this");
     await page.keyboard.press("Escape");
@@ -168,7 +168,7 @@ test("an agent is renamed from the sidebar, and its pane title follows", async (
     await expect(title).toHaveText("Release notes");
     await row.hover();
     await row.getByRole("button", { name: /^Actions for / }).click();
-    await page.getByRole("menuitem", { name: "Rename", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Rename tab", exact: true }).click();
     await expect(editor).toBeFocused();
     await editor.fill("");
     await page.keyboard.press("Enter");

@@ -88,25 +88,33 @@ function saved(info: AgentInfo) {
   return info;
 }
 
-/** Open folder… on `folder`, with `home` as the machine's home folder; settles once it is done. */
-async function openFolder(folder: string, home = directory) {
+/**
+ * Open folder… on `folder`, or a one-click workspace without one, with `home` as the machine's
+ * home folder; settles once it is done.
+ */
+async function openFolder(folder: string | null, home = directory) {
   const manager = new ProjectManager(store, () => undefined, home);
   try {
     const id = randomUUID();
+    const epoch = store.snapshot().epoch;
     manager.request({
       type: "project.request",
       requestId: randomUUID(),
-      operation: {
-        kind: "start",
-        epoch: store.snapshot().epoch,
-        id,
-        mode: "open",
-        name: "app",
-        directory: folder,
-        repository: "",
-      },
+      operation:
+        folder === null
+          ? { kind: "workspace", epoch, id }
+          : {
+              kind: "start",
+              epoch,
+              id,
+              mode: "open",
+              name: "app",
+              directory: folder,
+              repository: "",
+            },
     });
     await expect.poll(() => store.projectSetups().find((s) => s.id === id)?.status).toBe("done");
+    return id;
   } finally {
     manager.close();
   }
@@ -164,24 +172,68 @@ it("keeps every closed workspace on a folder, and reopens each by its ID", () =>
   expect(store.snapshot().projects.map((p) => p.id)).toEqual([open, first.projectId]);
 });
 
-it("moves chats of a removed workspace into one opened on their folder", async () => {
+it("moves chats of a removed workspace into one opened on their own folder", async () => {
   const folder = join(directory, "app");
-  const stray = saved(agent({ directory: join(folder, "src") }));
+  const stray = saved(agent({ directory: folder }));
+  const nested = saved(agent({ directory: join(folder, "src") }));
   const elsewhere = saved(agent({ directory: join(directory, "apple") }));
   const moved: AgentInfo[] = [];
   store.onAgentsMoved = (agents) => moved.push(...agents);
   const { projectId } = workspace("app");
   await new Promise<void>((resolve) => queueMicrotask(resolve));
   expect(store.agent(stray.id).projectId).toBe(projectId);
+  expect(store.agent(nested.id).projectId).toBe(nested.projectId);
   expect(store.agent(elsewhere.id).projectId).toBe(elsewhere.projectId);
   expect(moved.map((agent) => agent.id)).toEqual([stray.id]);
 });
 
-it("leaves chats of a closed workspace where they are when another folder opens", () => {
+it("never moves chats into a workspace in the home folder", () => {
+  store.home = join(directory, "home");
+  const stray = saved(agent({ directory: store.home }));
+  workspace("home");
+  expect(store.agent(stray.id).projectId).toBe(stray.projectId);
+});
+
+it("turns each folder's stranded chats into a closed workspace, once", () => {
+  const path = join(directory, "state.db");
+  const app = join(directory, "app");
+  const older = saved(agent({ directory: app, updatedAt: "2026-09-01T00:00:00.000Z" }));
+  const newer = saved(agent({ directory: app, updatedAt: "2026-09-03T00:00:00.000Z" }));
+  const home = saved(agent({ directory, updatedAt: "2026-09-02T00:00:00.000Z" }));
+  // The marker is set when the store first opened, as on a machine that already ran it.
+  db.prepare("DELETE FROM migrations").run();
+  store.close();
+  store = new WorkspaceStore(path);
+  const closed = store.snapshot().closedProjects ?? [];
+  expect(closed.map(({ name, directory, closedAt }) => ({ name, directory, closedAt }))).toEqual([
+    { name: "app", directory: app, closedAt: newer.updatedAt },
+    { name: directory.split("/").at(-1), directory, closedAt: home.updatedAt },
+  ]);
+  expect(store.agent(older.id).projectId).toBe(closed[0]!.id);
+  expect(store.agent(newer.id).projectId).toBe(closed[0]!.id);
+  expect(store.agent(home.id).projectId).toBe(closed[1]!.id);
+  expect(execute({ kind: "project.reopen", projectId: closed[0]!.id }).status).toBe("accepted");
+  expect(project(closed[0]!.id)).toMatchObject({ name: "app", directory: app, tabs: [] });
+
+  const later = saved(agent({ directory: app }));
+  store.close();
+  store = new WorkspaceStore(path);
+  expect(store.agent(later.id).projectId).toBe(later.projectId);
+  expect(store.snapshot().closedProjects).toHaveLength(1);
+});
+
+it("numbers a one-click workspace past the closed ones' names", async () => {
+  const first = project(await openFolder(null))!;
+  expect(first.name).toBe("Workspace 1");
+  execute({ kind: "project.close", projectId: first.id, expectedVersion: first.version });
+  expect(project(await openFolder(null))!.name).toBe("Workspace 2");
+});
+
+it("leaves chats of a closed workspace where they are when its folder opens again", () => {
   const chat = agent();
   const { projectId } = workspace("app", chat);
   execute({ kind: "project.close", projectId, expectedVersion: version(projectId) });
-  workspace("app/nested");
+  workspace("app");
   expect(store.agent(chat.id).projectId).toBe(projectId);
 });
 

@@ -154,18 +154,18 @@ export function rowAgentStatus(row: SidebarRow): AgentStatus | undefined {
 
 /**
  * What the row shows before its name: "attention" (red) when its agent waits for an answer or
- * failed, "done" (white) when it finished and nobody has looked yet, and "working" while it replies,
- * sub-agents included, or while a shell runs a command. Something whose tab was closed but still
- * runs, a terminal or a chat finishing its turn, is "background". A CLI agent in the background
- * shows the same states it did in its tab, so one waiting for an answer stays red.
+ * failed, "done" (white) when it finished and nobody has looked yet, and "working" while an agent
+ * replies, sub-agents included, even with its tab closed. A shell running a command, and any
+ * terminal still running with its tab closed, is "running". A CLI agent in the background still
+ * turns red when it waits for an answer.
  */
 export function rowState(
   row: SidebarRow,
-): "working" | "attention" | "done" | "background" | undefined {
+): "working" | "running" | "attention" | "done" | undefined {
   if (row.kind === "terminal") {
-    if (!isLiveTerminalAgent(row.terminal)) return "background";
+    if (!isLiveTerminalAgent(row.terminal)) return "running";
     if (row.terminal.agentActivity === "needs_input") return "attention";
-    return terminalAgentStatus(row.terminal).running ? "background" : undefined;
+    return terminalAgentStatus(row.terminal).running ? "running" : undefined;
   }
   const chat = row.kind === "closed" ? row.chat.agent : row.chat;
   if (chat) {
@@ -173,12 +173,12 @@ export function rowState(
     if (row.kind === "tab" && (status === "needs_input" || status === "failed")) return "attention";
     if (row.kind === "tab" && chat.attention && !chat.attention.seen) return "done";
     if (status !== "starting" && status !== "working" && !chat.backgroundAgents) return undefined;
-    return row.kind === "closed" ? "background" : "working";
+    return "working";
   }
   if (row.kind === "closed" || !row.terminal) return undefined;
   if (!isLiveTerminalAgent(row.terminal))
     return row.terminal.status === "running" && row.terminal.foregroundCommand
-      ? "working"
+      ? "running"
       : undefined;
   if (row.terminal.agentActivity === "needs_input") return "attention";
   return terminalAgentStatus(row.terminal).running ? "working" : undefined;

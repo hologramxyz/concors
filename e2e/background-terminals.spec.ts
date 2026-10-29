@@ -35,7 +35,7 @@ test("a closed terminal running a command stays in the sidebar, reopens with its
     await page.keyboard.type("echo BEFORE_CLOSE; sleep 600");
     await page.keyboard.press("Enter");
     const tabRow = sidebar.locator("li", { has: page.locator("[data-sidebar-tab-id]") }).last();
-    await expect(tabRow.locator('[data-row-state="working"]')).toBeVisible({ timeout: 10_000 });
+    await expect(tabRow.locator('[data-row-state="running"]')).toBeVisible({ timeout: 10_000 });
     // Open or closed, it goes by the command it runs.
     await expect(tabs(page).nth(1)).toHaveText("sleep 600");
     await expect(tabRow).toContainText("sleep 600");
@@ -46,8 +46,10 @@ test("a closed terminal running a command stays in the sidebar, reopens with its
     await expect(row).toHaveText(/sleep 600/);
     await expect(row.locator(".truncate")).toHaveText("sleep 600");
     await expect(row.locator(".truncate")).toHaveClass(/text-muted-foreground/);
-    // Still running with its tab closed: a spinner rather than a dot.
-    await expect(row.locator('[data-row-state="background"] > span')).toBeVisible();
+    // Still running with its tab closed: a grey dot, never a spinner.
+    await expect(
+      row.locator('[data-row-state="running"] > span.bg-muted-foreground'),
+    ).toBeVisible();
 
     // Clicking the row brings it back into a new tab, screen and all, without an empty tab first.
     await page.evaluate(() => {
@@ -83,7 +85,7 @@ test("a closed terminal running a command stays in the sidebar, reopens with its
     await openTerminal();
     await page.keyboard.type("sleep 600");
     await page.keyboard.press("Enter");
-    await expect(tabRow.locator('[data-row-state="working"]')).toBeVisible({ timeout: 10_000 });
+    await expect(tabRow.locator('[data-row-state="running"]')).toBeVisible({ timeout: 10_000 });
     await closeTab(page, 1).click();
     await expect(row).toBeVisible();
     await row.hover();

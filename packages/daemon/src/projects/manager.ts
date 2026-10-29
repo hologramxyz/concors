@@ -83,7 +83,7 @@ export class ProjectManager {
           mode: quick ? "open" : op.mode,
           name: quick
             ? nextWorkspaceName([
-                ...this.#store.snapshot().projects,
+                ...this.workspaceNames(),
                 ...existing.filter((s) => s.status === "working"),
               ])
             : op.name || basename(directory).slice(0, 120) || directory,
@@ -157,6 +157,11 @@ export class ProjectManager {
     }
   }
 
+  /** Open and closed workspaces alike, so a new number never repeats a closed one's name. */
+  private workspaceNames(): { name: string }[] {
+    const snapshot = this.#store.snapshot();
+    return [...snapshot.projects, ...(snapshot.closedProjects ?? [])];
+  }
   private save(setup: ProjectSetup): void {
     if (!this.#closed) {
       this.#store.saveProjectSetup(setup);
@@ -243,7 +248,7 @@ export class ProjectManager {
           // Numbered again here: another one-click workspace may have taken the number meanwhile.
           name:
             setup.directoryMode === "follow"
-              ? nextWorkspaceName(this.#store.snapshot().projects)
+              ? nextWorkspaceName(this.workspaceNames())
               : setup.name,
           directory,
           ...(setup.directoryMode ? { directoryMode: setup.directoryMode } : {}),

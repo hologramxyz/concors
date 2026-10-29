@@ -61,9 +61,7 @@ export function DeleteChatDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Delete “{chat ? chatName(chat) : ""}”?</DialogTitle>
-          <DialogDescription>
-            This can’t be undone. Its messages, images and attachments are deleted too.
-          </DialogDescription>
+          <DialogDescription>This can’t be undone.</DialogDescription>
         </DialogHeader>
         {error && (
           <p role="alert" className="text-sm text-destructive">

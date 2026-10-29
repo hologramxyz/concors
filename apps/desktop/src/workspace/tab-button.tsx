@@ -43,7 +43,7 @@ export function TabButton({
       {agents.length > 0 && (
         <span aria-hidden="true" className="flex shrink-0 items-center gap-1.5">
           {agents.map((agent) => (
-            <span key={agent.id} title={`${agent.providerName} · ${agent.status}`} className="flex">
+            <span key={agent.id} title={`${agent.providerName}: ${agent.status}`} className="flex">
               <AgentStatusIcon
                 agent={agent}
                 label={`${agent.providerName}: ${agent.status}`}

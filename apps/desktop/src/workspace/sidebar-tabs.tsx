@@ -27,9 +27,9 @@ import { rowAgentStatus, rowPinned, rowState, shortAge, type SidebarRow } from "
 
 /**
  * Sits under the workspace's icon, one indent in, so the row reads as the workspace's. The chat's
- * braille spinner while anything runs, open or closed (closed rows are told apart by their muted
- * name), a white dot when it finished unseen, a red one when it failed or waits for an answer, and
- * nothing otherwise.
+ * braille spinner while an agent replies, open or closed (closed rows are told apart by their
+ * muted name), a grey dot while a terminal runs, a white dot when it finished unseen, a red one
+ * when it failed or waits for an answer, and nothing otherwise.
  */
 function RowDot({ row, status }: { row: SidebarRow; status: AgentStatus | undefined }) {
   const state = rowState(row);
@@ -44,7 +44,7 @@ function RowDot({ row, status }: { row: SidebarRow; status: AgentStatus | undefi
       // The workspace icon is 20px, not a spacing step, so titles line up with workspace names.
       className="flex size-[20px] shrink-0 items-center justify-center"
     >
-      {state === "working" || state === "background" ? (
+      {state === "working" ? (
         <BrailleSpinner />
       ) : (
         state && (
@@ -52,7 +52,11 @@ function RowDot({ row, status }: { row: SidebarRow; status: AgentStatus | undefi
             aria-hidden="true"
             className={cn(
               "size-1.5 rounded-full",
-              state === "done" ? "bg-primary" : "bg-destructive",
+              state === "done"
+                ? "bg-primary"
+                : state === "running"
+                  ? "bg-muted-foreground"
+                  : "bg-destructive",
             )}
           />
         )
@@ -222,7 +226,7 @@ export function SidebarTabRow({
             )}
             {onRename && (
               <DropdownMenuItem onSelect={() => setRename(title)}>
-                <Pencil /> Rename
+                <Pencil /> Rename tab
               </DropdownMenuItem>
             )}
             {onFork && (

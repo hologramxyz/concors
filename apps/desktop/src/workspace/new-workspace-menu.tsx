@@ -117,7 +117,7 @@ export function NewWorkspaceMenu({
             </DropdownMenuTrigger>
           </TooltipTrigger>
           <TooltipContent side={rail ? "right" : "bottom"} sideOffset={6}>
-            Workspaces · New workspace or open folder
+            New workspace or open folder
           </TooltipContent>
         </SidebarTooltip>
         <DropdownMenuContent align="end" className="w-52">

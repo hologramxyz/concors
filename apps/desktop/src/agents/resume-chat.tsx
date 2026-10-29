@@ -240,11 +240,15 @@ function ResumeChatContent({
                 {chat.title !== agent.name && agent.name.trim() && (
                   <span className="truncate text-xs text-muted-foreground">{agent.name}</span>
                 )}
-                <span className="truncate text-xs text-muted-foreground">
-                  {details.join(" · ")}
-                  {["starting", "working", "needs_input"].includes(agent.status)
-                    ? ` · ${AGENT_STATUS[agent.status]}`
-                    : ""}
+                <span className="flex min-w-0 gap-2 text-xs text-muted-foreground">
+                  {details.map((detail) => (
+                    <span key={detail} className="truncate">
+                      {detail}
+                    </span>
+                  ))}
+                  {["starting", "working", "needs_input"].includes(agent.status) && (
+                    <span className="shrink-0">{AGENT_STATUS[agent.status]}</span>
+                  )}
                 </span>
               </span>
             </div>
