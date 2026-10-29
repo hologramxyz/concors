@@ -176,6 +176,14 @@ export function WorkspaceSidebarItem({
           </TooltipContent>
         </Tooltip>
       )}
+      {/* Before the menu, so every row's "…" sits at the same edge. */}
+      {!compact && onOpenPullRequests && (
+        <WorkspacePullRequestCount
+          project={project}
+          listing={pullRequests}
+          onOpen={onOpenPullRequests}
+        />
+      )}
       {!compact && (
         <ProjectActions
           project={project}
@@ -190,13 +198,6 @@ export function WorkspaceSidebarItem({
             event.preventDefault();
             renameInput.current?.focus();
           }}
-        />
-      )}
-      {!compact && onOpenPullRequests && (
-        <WorkspacePullRequestCount
-          project={project}
-          listing={pullRequests}
-          onOpen={onOpenPullRequests}
         />
       )}
     </li>

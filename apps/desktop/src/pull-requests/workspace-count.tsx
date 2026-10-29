@@ -8,9 +8,9 @@ import { byOpenCount, pullRequestsLabel, repositoryLabel } from "./labels";
 import { workspaceOpenCount } from "./store";
 
 /**
- * A workspace's open pull request count, at the end of its sidebar row. Hovering shows each
- * repository's share, each opening that repository's pull requests; clicking the count (or
- * tapping, where there is no hover) opens the whole workspace's. Nothing is shown when the
+ * A workspace's open pull request count, just before its sidebar row's actions menu. Hovering
+ * shows each repository's share, each opening that repository's pull requests; clicking the count
+ * (or tapping, where there is no hover) opens the whole workspace's. Nothing is shown when the
  * workspace has none. Everything stays in Concors.
  */
 export function WorkspacePullRequestCount({
