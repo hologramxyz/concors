@@ -16,7 +16,7 @@ test("two devices use the same terminal and recover its screen after reload", as
     await page.goto("/");
 
     await seedProject(page, "Terminal acceptance", process.cwd());
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
     await expect(page.getByRole("button", { name: "Start terminal", exact: true })).toHaveCount(0);
     await expect(page.getByLabel("Terminal output").filter({ visible: true })).toBeVisible();
@@ -109,7 +109,7 @@ test("keys typed while a new terminal is still connecting reach its shell", asyn
   await signedIn(page);
   await page.goto("/");
   await seedProject(page, "Early terminal keys", process.cwd());
-  await page.getByRole("button", { name: "New tab", exact: true }).click();
+  await page.getByRole("button", { name: "New tab options", exact: true }).click();
   await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
   const output = page.getByLabel("Terminal output").filter({ visible: true });
   await expect(output).toBeVisible();

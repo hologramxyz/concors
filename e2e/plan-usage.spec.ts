@@ -16,7 +16,7 @@ test("the context ring shows the conversation's window and the plan's usage bars
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Plan usage", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const message = page.getByRole("textbox", { name: "Message Codex" });

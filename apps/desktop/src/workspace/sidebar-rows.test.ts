@@ -195,7 +195,11 @@ it("keeps a closed terminal that still runs something among the closed rows, by 
     [agent("old", { updatedAt: "2026-09-18T00:00:00Z" })],
     [
       terminal("dev", { foregroundCommand: "npm run dev", startedAt: "2026-09-19T00:00:00Z" }),
-      terminal("agent", { profile: "codex", startedAt: "2026-09-17T00:00:00Z" }),
+      terminal("agent", {
+        profile: "codex",
+        agentActivity: "working",
+        startedAt: "2026-09-17T00:00:00Z",
+      }),
       // A shell waiting at a prompt has nothing to come back to.
       terminal("idle", { foregroundCommand: null }),
     ],
@@ -209,6 +213,21 @@ it("keeps a closed terminal that still runs something among the closed rows, by 
     ["terminal:agent", "Codex"],
   ]);
   expect(closed.map(rowState)).toEqual(["background", undefined, "background"]);
+});
+
+it("keeps a closed terminal's tab name and its agent's state", () => {
+  const background = (patch: Partial<TerminalInfo>) =>
+    sidebarRows(
+      { projects: [{ ...workspace.projects[0]!, tabs: [] }] },
+      [],
+      [terminal("cli", { profile: "claude", ...patch })],
+      new Map([["cli", "test"]]),
+    ).rows.get("p")![0]!;
+  const waiting = background({ agentActivity: "needs_input" });
+  expect(waiting.kind === "terminal" && waiting.title).toBe("test");
+  expect(rowState(waiting)).toBe("attention");
+  expect(rowState(background({ agentActivity: "working" }))).toBe("background");
+  expect(rowState(background({ agentActivity: "idle" }))).toBeUndefined();
 });
 
 it("dots an open shell while it runs a command", () => {

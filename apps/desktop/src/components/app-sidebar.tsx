@@ -20,6 +20,7 @@ import { useAgents } from "@/agents/context";
 import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { BackgroundTerminalsContext } from "@/terminal/background-terminals";
+import { useClosedTerminalNames } from "@/terminal/closed-names";
 import { canFork, useForkChat } from "@/agents/fork";
 import { useSchedules } from "@/schedules/use-schedules";
 import { Fragment, useContext, useLayoutEffect, useRef, useState } from "react";
@@ -205,7 +206,8 @@ function WorkspaceTree(props: AppSidebarProps) {
   const now = useMinuteClock();
   const chats = useAgents();
   const terminals = useTerminalSessions();
-  const { rows, unavailable } = sidebarRows(props.workspace, chats, terminals);
+  const closedNames = useClosedTerminalNames();
+  const { rows, unavailable } = sidebarRows(props.workspace, chats, terminals, closedNames);
   const currentProjectId = props.workspace?.selection?.projectId ?? null;
   const selectedTabId =
     props.view === "projects" ? (props.workspace?.selection?.tabId ?? null) : null;

@@ -14,7 +14,7 @@ async function workspace(page: Page) {
   await mockDictation(page);
   await page.goto("/");
   await seedProject(page, "Agent keyboard", directory);
-  await page.getByRole("button", { name: "New tab", exact: true }).click();
+  await page.getByRole("button", { name: "New tab options", exact: true }).click();
   await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
   await chooseProvider(page);
   const composer = page.getByRole("textbox", { name: "Message Codex", exact: true });

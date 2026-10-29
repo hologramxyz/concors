@@ -7,11 +7,18 @@ import {
 } from "@concors/protocol";
 import type { DaemonConnectionHandle } from "@/daemon/use-daemon-connection";
 import {
+  closingNames,
   closingTerminals,
   isIdleShell,
   terminalActivity,
   type BackgroundTerminalActions,
 } from "./background-terminals";
+import { closedTerminalName, rememberClosedNames } from "./closed-names";
+
+interface Closing {
+  terminals: TerminalInfo[];
+  names: Map<string, string>;
+}
 
 /**
  * Terminals keep running when their tab closes. This tells the user when that leaves something
@@ -54,7 +61,8 @@ export function useBackgroundTerminals(
     onReopen();
     const tabId = crypto.randomUUID();
     const paneId = crypto.randomUUID();
-    const name = nextWorkspaceTabName(project.tabs);
+    // It comes back under the name its tab had when it closed.
+    const name = closedTerminalName(terminal.id) ?? nextWorkspaceTabName(project.tabs);
     void (async () => {
       if (
         transport?.state.status === "ready" &&
@@ -115,20 +123,26 @@ export function useBackgroundTerminals(
     dismissClosed,
     managing,
     setManaging,
-    /** The running terminals an operation is about to close, read before it runs. */
-    closing: (operation: WorkspaceOperation): TerminalInfo[] => {
-      if (operation.kind !== "tab.close" && operation.kind !== "pane.close") return [];
+    /** The running terminals an operation is about to close, and their names, read before it runs. */
+    closing: (operation: WorkspaceOperation): Closing => {
+      if (operation.kind !== "tab.close" && operation.kind !== "pane.close")
+        return { terminals: [], names: new Map() };
       const tab = connection.workspace?.projects
         .find((project) => project.id === operation.projectId)
         ?.tabs.find((item) => item.id === operation.tabId);
-      return closingTerminals(
-        tab,
-        transport?.terminals ?? [],
-        operation.kind === "pane.close" ? operation.paneId : undefined,
-      );
+      const paneId = operation.kind === "pane.close" ? operation.paneId : undefined;
+      return {
+        terminals: closingTerminals(tab, transport?.terminals ?? [], paneId),
+        names: closingNames(tab, paneId),
+      };
     },
-    /** After the close: idle shells stop, anything still running gets a notice. */
-    afterClose: (terminals: readonly TerminalInfo[]) => {
+    /**
+     * After the close: idle shells stop, anything still running keeps its name and gets a notice.
+     */
+    afterClose: ({ terminals, names }: Closing) => {
+      rememberClosedNames(
+        new Map([...names].filter(([id]) => terminals.some((terminal) => terminal.id === id))),
+      );
       for (const terminal of terminals)
         if (terminalActivity(terminal)) setClosed(terminal);
         else if (isIdleShell(terminal)) stop(terminal);

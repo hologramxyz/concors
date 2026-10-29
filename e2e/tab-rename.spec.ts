@@ -20,7 +20,7 @@ test("double-clicking a tab renames it inline, and the name persists and syncs",
     await seedProject(page, "Renamable tabs", directory);
     const tabs = page.getByLabel("Project tabs", { exact: true });
     const labels = () => tabs.locator("[data-tab-id] > button:first-child").allTextContents();
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     // Unnamed tabs show their pane's title: the shell's, and the chat's until it is titled.
@@ -129,7 +129,7 @@ test("an agent is renamed from the sidebar, and its pane title follows", async (
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Renamable agents", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     // The chat's row under its workspace: renaming it names its pane, so the tab follows too.
@@ -204,7 +204,7 @@ test("renaming a new Agent tab keeps focus when its chat becomes ready mid-word"
     await seedProject(page, "Renaming while starting", directory);
     const tabs = page.getByLabel("Project tabs", { exact: true });
     holding = true;
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     // The chat picks its provider itself; its start is what is held.
     await tab(page, 1).dblclick();
@@ -261,7 +261,7 @@ test("renaming a new Terminal tab keeps focus when its terminal takes control mi
     await seedProject(page, "Renaming a terminal", directory);
     const tabs = page.getByLabel("Project tabs", { exact: true });
     holding = true;
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
     await expect.poll(() => held.length).toBeGreaterThan(0);
     await tab(page, 1).dblclick();

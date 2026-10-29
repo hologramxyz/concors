@@ -67,7 +67,12 @@ test("workspace shortcuts create, search, split and close the active pane withou
     ).toBeVisible();
     await page.keyboard.press("Control+Shift+t");
     await page.keyboard.press("Enter");
-    await page.getByRole("menuitem", { name: "Codex", exact: true }).click();
+    // The shortcut opens a tab on the start screen, whose chips start the other profiles.
+    await page
+      .getByRole("group", { name: "Start with", exact: true })
+      .filter({ visible: true })
+      .getByRole("button", { name: "Codex", exact: true })
+      .click();
     const tab = tabs(page).nth(1).locator("> button").first();
     await expect(tab).toHaveAttribute("aria-pressed", "true");
     const panes = page.getByRole("region", { name: "Codex pane", exact: true });
@@ -168,8 +173,9 @@ test("workspace shortcuts create, search, split and close the active pane withou
     await page.keyboard.press("Control+Shift+k");
     await page.getByPlaceholder("Search workspaces, agents, tabs…").fill("New tab");
     await page.getByRole("option", { name: /New tab/ }).click();
-    await expect(page.getByRole("menuitem", { name: "Terminal", exact: true })).toBeVisible();
-    await page.keyboard.press("Escape");
+    await expect(
+      page.getByRole("group", { name: "Start with", exact: true }).filter({ visible: true }),
+    ).toBeVisible();
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

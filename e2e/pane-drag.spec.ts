@@ -16,7 +16,7 @@ test("dragging moves panes across the workspace without replacing sessions", asy
     await Promise.all([signedIn(page), signedIn(second)]);
     await page.goto("/");
     await seedProject(page, "Pane dragging", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
     // The first tab's terminal is visible too until the new tab arrives, and so is its "Pane
     // actions".
@@ -118,7 +118,7 @@ test("a pane menu opened while a new tab launches closes when that tab takes ove
     await page.goto("/");
     await seedProject(page, "Menu during launch", directory);
     holding = true;
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
     await expect.poll(() => held.some((raw) => raw.includes('"workspace.result"'))).toBe(true);
     await page.getByRole("button", { name: "Pane actions" }).click();

@@ -15,7 +15,7 @@ test("appearance follows the system and uses a shared neutral terminal/chat surf
     await page.getByRole("button", { name: "Open workspace menu", exact: true }).first().waitFor();
     await expect(page.locator("html")).toHaveClass(/dark/);
     await seedProject(page, "Appearance acceptance", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
     const terminal = page.getByRole("region", { name: "Terminal pane", exact: true });
     await expect(terminal.locator("textarea")).toBeVisible();

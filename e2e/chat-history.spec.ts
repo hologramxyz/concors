@@ -17,7 +17,7 @@ for (const width of [1360, 390]) {
       await signedIn(page);
       await page.goto("/");
       await seedProject(page, "Infinite history", directory);
-      await page.getByRole("button", { name: "New tab", exact: true }).click();
+      await page.getByRole("button", { name: "New tab options", exact: true }).click();
       await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
       await chooseProvider(page);
       const timeline = page.getByRole("log", { name: "Chat timeline" });

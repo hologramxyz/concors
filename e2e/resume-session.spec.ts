@@ -17,7 +17,7 @@ test("resume finds older native sessions, protects drafts, and keeps the same pa
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Resume workspace", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const composer = page.getByRole("textbox", { name: "Message Codex", exact: true });
@@ -114,7 +114,7 @@ test("resume focuses an already open session instead of making a duplicate", asy
     await page.goto("/");
     await seedProject(page, "Existing resume", directory);
     const newChat = async () => {
-      await page.getByRole("button", { name: "New tab", exact: true }).click();
+      await page.getByRole("button", { name: "New tab options", exact: true }).click();
       await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
       await chooseProvider(page);
       await expect(page.getByRole("textbox", { name: "Message Codex", exact: true })).toBeEnabled();
@@ -153,7 +153,7 @@ test("a renamed session is listed and resumed under its pane name", async ({ pag
     const dialog = page.getByRole("dialog", { name: "Resume session", exact: true });
     // Session 42 is used by no other test; the daemon is shared and a session has one workspace.
     const pick = async (search: string, name: RegExp) => {
-      await page.getByRole("button", { name: "New tab", exact: true }).click();
+      await page.getByRole("button", { name: "New tab options", exact: true }).click();
       await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
       await chooseProvider(page);
       await expect(page.getByRole("textbox", { name: "Message Codex", exact: true })).toBeEnabled();
@@ -242,7 +242,7 @@ test("a long session opens at its latest messages when resumed and when reopened
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Long resume", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await expect(page.getByRole("textbox", { name: "Message Codex", exact: true })).toBeEnabled();
@@ -264,7 +264,7 @@ test("a long session opens at its latest messages when resumed and when reopened
     await closeTab(page, 1).click();
     await expect(pane).toHaveCount(0);
     painted = await recordFrames(page);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "Resume a chat…", exact: true }).click();
     const chats = page.getByRole("dialog", { name: "Resume a chat" });
     await chats.getByRole("combobox", { name: "Search closed chats" }).fill("session 77");

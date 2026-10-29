@@ -126,7 +126,7 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
     await second.keyboard.press("Enter");
     await expect(claude).toHaveCount(0);
 
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "Codex", exact: true }).click();
     await expect(agents.getByRole("button", { name: /Open in terminal.*Codex/ })).toHaveCount(1);
     await agents.getByRole("button", { name: /Open in terminal.*Codex/ }).hover();

@@ -16,7 +16,7 @@ test("a sub-agent's conversation opens beside its chat, read-only, and follows i
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Sub-agents", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const composer = page.getByRole("textbox", { name: "Message Codex" });
@@ -84,7 +84,7 @@ test("a sub-agent sent to the background stays live after its turn ends, until i
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Background sub-agents", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const composer = page.getByRole("textbox", { name: "Message Codex" });

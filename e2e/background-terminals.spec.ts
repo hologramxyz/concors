@@ -16,7 +16,7 @@ test("a closed terminal running a command stays in the sidebar, reopens with its
     await seedProject(page, "Background", directory);
     const sidebar = page.getByRole("list", { name: "Background tabs", exact: true });
     const openTerminal = async () => {
-      await page.getByRole("button", { name: "New tab", exact: true }).click();
+      await page.getByRole("button", { name: "New tab options", exact: true }).click();
       await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
       await expect(page.getByRole("textbox", { name: "Terminal input" })).toBeFocused();
     };
@@ -103,7 +103,7 @@ test("a closed coding agent tab keeps running under its name and comes back wher
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Agent background", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "Codex", exact: true }).click();
     await expect(page.getByLabel("Terminal output").filter({ visible: true })).toContainText(
       "CODEX_TERMINAL_READY",

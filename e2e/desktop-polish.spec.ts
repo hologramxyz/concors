@@ -45,7 +45,7 @@ test("visited tabs retain terminal screens and chat drafts without reconnecting 
     await terminalPane.focus();
     await expect(terminalPane).toHaveCSS("outline-style", "none");
     await expect(terminalPane).toHaveCSS("box-shadow", "none");
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     const menu = page.getByRole("menu");
     await page.screenshot({ path: "test-results/desktop-tab-menu.png" });
     await menu.getByRole("menuitem", { name: "New chat", exact: true }).click();

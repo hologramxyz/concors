@@ -12,7 +12,7 @@ async function openChat(page: Page, name: string, directory: string) {
   await signedIn(page);
   await page.goto("/");
   await seedProject(page, name, directory);
-  await page.getByRole("button", { name: "New tab", exact: true }).click();
+  await page.getByRole("button", { name: "New tab options", exact: true }).click();
   await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
   await chooseProvider(page);
   const composer = page.getByRole("textbox", { name: "Message Codex" });

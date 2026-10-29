@@ -273,7 +273,7 @@ test("agent file links open Markdown and code tabs without leaving the workspace
 }) => {
   const root = await project(page);
   try {
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await expect(page.getByLabel("Message Codex").filter({ visible: true })).toBeEnabled();
@@ -307,7 +307,7 @@ test("right-clicking an agent's file link offers Concors actions, and Download s
 }) => {
   const root = await project(page);
   try {
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await expect(page.getByLabel("Message Codex").filter({ visible: true })).toBeEnabled();
@@ -356,7 +356,7 @@ test("right-clicking an agent's file link offers Concors actions, and Download s
 test("an image Codex generates shows inline in its reply and opens full size", async ({ page }) => {
   const root = await project(page);
   try {
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await expect(page.getByLabel("Message Codex").filter({ visible: true })).toBeEnabled();
@@ -383,7 +383,7 @@ test("agent replies show the images they embed inline and open them full size", 
         "base64",
       ),
     );
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await expect(page.getByLabel("Message Codex").filter({ visible: true })).toBeEnabled();

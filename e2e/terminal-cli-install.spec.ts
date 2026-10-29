@@ -70,7 +70,7 @@ test("a Codex terminal on a machine without Codex offers to install it, then sta
     await seedProject(page, "Missing terminal CLI", directory);
     await expect(page.getByLabel("Terminal output").filter({ visible: true })).toBeVisible();
     armed = true;
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "Codex", exact: true }).click();
     await expect(page.getByRole("alert")).toContainText("codex is not installed");
     const install = page.getByRole("region", { name: "Codex installation", exact: true });
@@ -117,7 +117,7 @@ test("a plain terminal that cannot start offers no install", async ({ page }) =>
     await seedProject(page, "Shell fails", directory);
     await expect(page.getByLabel("Terminal output").filter({ visible: true })).toBeVisible();
     armed = true;
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
     await expect(page.getByRole("alert")).toContainText("Could not start the shell");
     await expect(page.getByRole("button", { name: "Retry terminal" })).toBeVisible();

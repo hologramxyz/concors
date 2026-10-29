@@ -14,10 +14,16 @@ import {
   shownSessions,
   terminalActivity,
 } from "./background-terminals";
+import { useClosedTerminalNames } from "./closed-names";
 import { useTerminalSessions } from "./use-terminal-sessions";
 
-/** How a background terminal is named: what it runs, set apart when it is a command. */
+/**
+ * How a background terminal is named: what its tab was called, or else what it runs, set apart
+ * when it is a command.
+ */
 function TerminalName({ terminal }: { terminal: TerminalInfo }) {
+  const name = useClosedTerminalNames().get(terminal.id);
+  if (name) return <>{name}</>;
   const activity = terminalActivity(terminal);
   if (!activity) return <>Terminal</>;
   return terminal.profile === "shell" && !terminal.detectedAgent ? (

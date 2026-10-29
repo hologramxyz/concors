@@ -52,7 +52,7 @@ test("notifications deduplicate across windows, open chat, and sync unread witho
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Notifications acceptance", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await expect(page.getByLabel("Agent status: Ready").first()).toBeVisible();

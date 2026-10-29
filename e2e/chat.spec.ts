@@ -21,7 +21,7 @@ test("shared chat streams, handles approvals and removes detached sidebar entrie
     await Promise.all([signedIn(page), signedIn(second)]);
     await page.goto("/");
     await seedProject(page, "Chat acceptance", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await expect(page.getByLabel("Agent status: Ready").first()).toBeVisible();

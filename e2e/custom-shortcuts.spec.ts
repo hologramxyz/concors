@@ -98,7 +98,7 @@ test("custom sequences split from a terminal and run from an Agent input without
   await page.keyboard.press("Enter");
   await expect(terminals).toHaveCount(2);
   await expect(terminals.last()).toBeFocused();
-  await page.getByRole("button", { name: "New tab", exact: true }).click();
+  await page.getByRole("button", { name: "New tab options", exact: true }).click();
   await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
   await chooseProvider(page);
   const chat = page.getByRole("textbox", { name: "Message Codex", exact: true });
@@ -239,7 +239,7 @@ test("tab-scoped sequences rename the focused tab even when another tab is selec
     .click();
   const first = tab(page, 0);
   await expect(first).toBeVisible();
-  await page.getByRole("button", { name: "New tab", exact: true }).click();
+  await page.getByRole("button", { name: "New tab options", exact: true }).click();
   await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
   const second = tab(page, 1);
   await expect(second).toHaveAttribute("aria-pressed", "true");

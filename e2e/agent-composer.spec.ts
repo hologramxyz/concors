@@ -39,7 +39,7 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     });
     await page.goto("/");
     await seedProject(page, "Composer acceptance", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await page.getByRole("textbox", { name: "Message Codex" }).waitFor();
@@ -255,7 +255,7 @@ test("an unconfirmed message can stop retrying, to edit it or remove its attachm
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Unconfirmed delivery", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const composer = page.getByRole("textbox", { name: "Message Codex" });

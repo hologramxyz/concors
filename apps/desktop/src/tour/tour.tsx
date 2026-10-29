@@ -332,8 +332,8 @@ function Finish({
           </DialogPrimitive.Title>
           <DialogPrimitive.Description className="text-muted-foreground">
             {hasWorkspace
-              ? "Start your first agent: click + in the tab bar, then choose Agent."
-              : "Add a folder from your computer, then start an Agent."}
+              ? "Start your first agent: click + in the tab bar and ask it something."
+              : "Add a folder from your computer, then start a chat."}
           </DialogPrimitive.Description>
         </div>
         {hasWorkspace ? (

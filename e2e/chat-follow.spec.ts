@@ -18,7 +18,7 @@ test("chat stays pinned to the bottom until the user scrolls up, and sending ret
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Follow the bottom", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const timeline = page.getByRole("log", { name: "Chat timeline" });

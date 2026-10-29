@@ -94,7 +94,7 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
     disconnected = true;
     for (const socket of sockets.splice(0)) socket.close();
     await expect(second.getByRole("button", { name: "New tab", exact: true })).toBeDisabled();
-    await first.getByRole("button", { name: "New tab", exact: true }).click();
+    await first.getByRole("button", { name: "New tab options", exact: true }).click();
     await first.getByRole("menuitem", { name: "Terminal", exact: true }).click();
     disconnected = false;
     await expect(tab(second, 1)).toHaveAttribute("aria-pressed", "true");
@@ -140,7 +140,7 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
     await seedProject(first, "Managed acceptance", "/tmp", {
       url: "ws://127.0.0.1:7430/ws",
     });
-    await first.getByRole("button", { name: "New tab", exact: true }).click();
+    await first.getByRole("button", { name: "New tab options", exact: true }).click();
     await first.getByRole("menuitem", { name: "Terminal", exact: true }).click();
     const remoteTerminal = first.getByLabel("Terminal output").filter({ visible: true });
     await expect(remoteTerminal).toBeVisible();

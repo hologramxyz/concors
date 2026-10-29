@@ -15,7 +15,7 @@ test("a closed chat is found by its pane name and reopens with its name, model a
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Resumable chats", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const composer = page.getByRole("textbox", { name: "Message Codex" });
@@ -33,7 +33,7 @@ test("a closed chat is found by its pane name and reopens with its name, model a
     await closeTab(page, 1).click();
     await expect(pane).toHaveCount(0);
 
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "Resume a chat…", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Resume a chat" });
     const option = dialog.getByRole("option");
@@ -68,7 +68,7 @@ test("a closed chat stays in the sidebar and in Search, and both reopen it", asy
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Closed chats", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const composer = page.getByRole("textbox", { name: "Message Codex" });

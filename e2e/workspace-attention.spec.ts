@@ -22,7 +22,7 @@ test("a workspace shows what its agents want while another workspace is open", a
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Attention A", first);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
@@ -76,7 +76,7 @@ test("a pane shows its agent's status on its own icon, as its tab does", async (
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Pane status", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();

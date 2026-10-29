@@ -103,7 +103,7 @@ test("chats keep their drafts and live status while the sidebar is collapsed", a
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Rail agents", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const codex = page.getByRole("textbox", { name: "Message Codex", exact: true });
@@ -121,7 +121,7 @@ test("chats keep their drafts and live status while the sidebar is collapsed", a
     await expect(codexTab.locator('[data-provider="codex"]')).toBeVisible();
     await expect(codexTab.locator("[data-agent-status-badge]")).toHaveCount(0);
     await codex.fill("Keep this draft");
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await expect(codex).toBeEnabled();

@@ -20,7 +20,7 @@ for (const [provider, label] of [
       await signedIn(page);
       await page.goto("/");
       await seedProject(page, "Provider picker", directory);
-      await page.getByRole("button", { name: "New tab", exact: true }).click();
+      await page.getByRole("button", { name: "New tab options", exact: true }).click();
       await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
       await chooseProvider(page);
       const original = page.getByRole("textbox", { name: "Message Codex" });

@@ -59,6 +59,8 @@ export function sidebarRows(
   workspace: Pick<WorkspaceSnapshot, "projects"> | null,
   chats: readonly AgentInfo[],
   terminals: readonly TerminalInfo[],
+  /** What background terminals' tabs were called when they closed. */
+  closedNames: ReadonlyMap<string, string> = new Map(),
 ) {
   const rows = new Map<string, SidebarRow[]>();
   for (const project of workspace?.projects ?? []) {
@@ -112,7 +114,7 @@ export function sidebarRows(
       key: `terminal:${terminal.id}`,
       projectId: terminal.projectId,
       terminal,
-      title: terminalActivity(terminal) ?? "Terminal",
+      title: closedNames.get(terminal.id) ?? terminalActivity(terminal) ?? "Terminal",
       time: terminal.startedAt,
     })),
   ];
@@ -132,8 +134,8 @@ function firstSeen(tabId: string) {
 
 /** The agent a row speaks for, chat or CLI, while there is one. */
 export function rowAgentStatus(row: SidebarRow): AgentStatus | undefined {
-  if (row.kind !== "tab") return undefined;
-  if (row.chat) return chatAgentStatus(row.chat);
+  if (row.kind === "closed") return undefined;
+  if (row.kind === "tab" && row.chat) return chatAgentStatus(row.chat);
   return row.terminal && isLiveTerminalAgent(row.terminal)
     ? terminalAgentStatus(row.terminal)
     : undefined;
@@ -143,12 +145,17 @@ export function rowAgentStatus(row: SidebarRow): AgentStatus | undefined {
  * What the row shows before its name: "attention" (red) when its agent waits for an answer or
  * failed, "done" (white) when it finished and nobody has looked yet, and "working" while it replies,
  * sub-agents included, or while a shell runs a command. Something whose tab was closed but still
- * runs, a terminal or a chat finishing its turn, is "background".
+ * runs, a terminal or a chat finishing its turn, is "background". A CLI agent in the background
+ * shows the same states it did in its tab, so one waiting for an answer stays red.
  */
 export function rowState(
   row: SidebarRow,
 ): "working" | "attention" | "done" | "background" | undefined {
-  if (row.kind === "terminal") return "background";
+  if (row.kind === "terminal") {
+    if (!isLiveTerminalAgent(row.terminal)) return "background";
+    if (row.terminal.agentActivity === "needs_input") return "attention";
+    return terminalAgentStatus(row.terminal).running ? "background" : undefined;
+  }
   const chat = row.kind === "closed" ? row.chat.agent : row.chat;
   if (chat) {
     const status = agentDisplayStatus(chat);

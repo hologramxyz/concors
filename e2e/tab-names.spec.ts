@@ -22,7 +22,7 @@ test("unnamed tabs show their pane's title and keep custom names across pane cha
       [1, "New chat"],
       [2, "Codex"],
     ] as const) {
-      await page.getByRole("button", { name: "New tab", exact: true }).click();
+      await page.getByRole("button", { name: "New tab options", exact: true }).click();
       await page.getByRole("menuitem", { name: profile, exact: true }).click();
       await expect(tab(page, index)).toHaveAttribute("aria-pressed", "true");
     }
@@ -48,7 +48,7 @@ test("unnamed tabs show their pane's title and keep custom names across pane cha
     await closeTab(page, 1).click();
     await tab(page, 1).dragTo(renamed);
     await expect.poll(labels).toEqual(["Codex", "Build and review"]);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
     await expect.poll(labels).toEqual(["Codex", "Build and review", "Terminal"]);
     await page.reload();
@@ -98,7 +98,7 @@ test("closing a tab still works when a new pane's session started a moment befor
     const labels = () => bar.locator("[data-tab-id] > button:first-child").allTextContents();
     await expect.poll(labels).toEqual(["Terminal"]);
     armed = true;
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
     await expect(tab(page, 1)).toHaveAttribute("aria-pressed", "true");
     const kept = await tabs(page).nth(1).getAttribute("data-tab-id");

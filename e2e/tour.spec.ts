@@ -69,7 +69,7 @@ test("welcomes a new device, sets up a workspace, and tours each area for real",
   await expect(page.locator('[data-tour="workspaces"]')).toContainText("Default workspace");
   // Naming it waits for its terminal, which a rename mid-start would make the daemon refuse.
   await expect(page.getByText("Pane changed on another client")).toHaveCount(0);
-  await expect(finish).toContainText("then choose Agent");
+  await expect(finish).toContainText("click + in the tab bar");
   await finish.getByRole("button", { name: "Start using Concors" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(hole).toHaveCount(0);

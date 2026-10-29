@@ -45,7 +45,7 @@ test("an agent's notice names its workspace and tab apart from what the agent wa
 
     await seedProject(page, "Marketing", first);
     await page.getByRole("button", { name: "Marketing", exact: true }).click();
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();

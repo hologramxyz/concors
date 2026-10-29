@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import type { TerminalInfo, WorkspaceSnapshot } from "@concors/protocol";
 import {
   backgroundTerminals,
+  closingNames,
   closingTerminals,
   isIdleShell,
   terminalActivity,
@@ -76,4 +77,23 @@ it("finds the running terminals a closing tab or pane takes with it", () => {
   const terminals = [terminal("open"), terminal("cli", { profile: "claude" }), terminal("other")];
   expect(closingTerminals(tab, terminals).map((item) => item.id)).toEqual(["open", "cli"]);
   expect(closingTerminals(tab, terminals, "b").map((item) => item.id)).toEqual(["cli"]);
+});
+
+it("keeps the names the user gave the panes a close sends to the background", () => {
+  const tab = workspace.projects[0]!.tabs[0]!;
+  expect(closingNames(tab)).toEqual(new Map());
+  const named = {
+    ...tab,
+    name: "test",
+    nodes: tab.nodes.map((node) =>
+      node.kind === "pane" && node.id === "b" ? { ...node, name: "reviewer" } : node,
+    ),
+  };
+  expect(closingNames(named)).toEqual(
+    new Map([
+      ["open", "test"],
+      ["cli", "reviewer"],
+    ]),
+  );
+  expect(closingNames(named, "a")).toEqual(new Map([["open", "test"]]));
 });

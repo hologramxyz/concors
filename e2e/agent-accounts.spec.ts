@@ -48,7 +48,7 @@ for (const result of ["connected", "disconnected", "error"] as const) {
       await signedIn(page);
       await page.goto("/");
       await seedProject(page, "Account loading", directory);
-      await page.getByRole("button", { name: "New tab", exact: true }).click();
+      await page.getByRole("button", { name: "New tab options", exact: true }).click();
       await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
       await chooseProvider(page);
       // Choosing the chat's provider lists them once; the account check must not list again.
@@ -119,7 +119,7 @@ test("the first sign-in click survives a background focus refresh", async ({ pag
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "First-click sign-in", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const prompt = page.getByRole("region", { name: "Codex account connection", exact: true });
@@ -153,7 +153,7 @@ for (const [provider, label] of [
       await signedIn(page);
       await page.goto("/");
       await seedProject(page, "Agent accounts", directory);
-      await page.getByRole("button", { name: "New tab", exact: true }).click();
+      await page.getByRole("button", { name: "New tab options", exact: true }).click();
       await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
       await chooseProvider(page);
       await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
@@ -280,7 +280,7 @@ test("a missing CLI is offered as a one-click install instead of an account chec
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Missing CLI", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const install = page.getByRole("region", { name: "Codex installation", exact: true });
@@ -335,7 +335,7 @@ test("Codex sign-in keeps its code across a tab switch and copies it for the sig
       window.open = () => null;
     });
     await seedProject(page, "Sign-in code", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const prompt = page.getByRole("region", { name: "Codex account connection", exact: true });

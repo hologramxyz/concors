@@ -11,7 +11,7 @@ test("a short chat pane gives the composer its room, send button included", asyn
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Short pane", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     // The split below opens a second chat, which starts too, so look only at the first.

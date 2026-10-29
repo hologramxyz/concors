@@ -17,7 +17,7 @@ test.beforeEach(async ({ page }) => {
 async function workspace(page: Page) {
   const directory = await mkdtemp(join(tmpdir(), "concors-dictation-"));
   await seedProject(page, "Dictation workspace", directory);
-  await page.getByRole("button", { name: "New tab", exact: true }).click();
+  await page.getByRole("button", { name: "New tab options", exact: true }).click();
   await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
   await chooseProvider(page);
   const composer = page.getByRole("textbox", { name: "Message Codex", exact: true });

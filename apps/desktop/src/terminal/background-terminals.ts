@@ -1,10 +1,12 @@
 import { createContext } from "react";
 import {
   agentProviderName,
+  isDefaultTabName,
   type TerminalInfo,
   type WorkspaceSnapshot,
   type WorkspaceTab,
 } from "@concors/protocol";
+import { mainPane } from "@/workspace/tab-title";
 
 /** Sessions some pane shows. Any other terminal still running has had its tab closed. */
 export function shownSessions(workspace: Pick<WorkspaceSnapshot, "projects"> | null) {
@@ -76,6 +78,25 @@ export function closingTerminals(
       sessions.has(terminal.id) &&
       (terminal.status === "running" || terminal.status === "starting"),
   );
+}
+
+/**
+ * What the user called the terminals a close is about to send to the background: a pane's own name,
+ * or its tab's for the tab's main pane. Terminals nobody named are left out and keep being called by
+ * what they run.
+ */
+export function closingNames(tab: WorkspaceTab | undefined, paneId?: string): Map<string, string> {
+  const names = new Map<string, string>();
+  if (!tab) return names;
+  const main = mainPane(tab);
+  for (const node of tab.nodes) {
+    if (node.kind !== "pane" || node.profile === "chat" || !node.sessionId) continue;
+    if (paneId && node.id !== paneId) continue;
+    const name =
+      node.name ?? (node.id === main?.id && !isDefaultTabName(tab.name) ? tab.name : undefined);
+    if (name) names.set(node.sessionId, name);
+  }
+  return names;
 }
 
 /** Reopening and stopping a background terminal, wherever it is listed. */
