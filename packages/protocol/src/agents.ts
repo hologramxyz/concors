@@ -267,6 +267,8 @@ export const AgentInfoSchema = z.object({
   nativeImport: z.boolean().optional(),
   turnId: z.string().nullable(),
   status: z.enum(["idle", "starting", "working", "needs_input", "done", "failed", "interrupted"]),
+  /** Kept at the top of its workspace, and never removed to make room for a new chat. */
+  pinned: z.boolean().optional(),
   /**
    * Sub-agents the chat left working in the background. They outlive the turn that started them,
    * so a chat can be done, and free to take a message, while some still run.
@@ -470,6 +472,9 @@ export const AgentOperationSchema = z.discriminatedUnion("kind", [
     before: z.number().int().positive().optional(),
   }),
   z.object({ kind: z.literal("seen"), sessionId: Id, attentionId: Id }),
+  z.object({ kind: z.literal("pin"), sessionId: Id, pinned: z.boolean() }),
+  /** Deletes a chat that no pane shows, with its messages, images and attachments. */
+  z.object({ kind: z.literal("delete"), sessionId: Id }),
   z.object({
     kind: z.literal("configure"),
     sessionId: Id,
@@ -534,8 +539,25 @@ export const AgentResultSchema = z.object({
   ]),
 });
 export type AgentResult = z.infer<typeof AgentResultSchema>;
+/** The most chats a machine keeps; a new one past it removes the oldest closed, unpinned ones. */
+export const AGENT_SESSION_LIMIT = 128;
+/** From this many saved chats, clients suggest reviewing the closed ones. */
+export const AGENT_SESSION_WARNING = 110;
+/** The daemon accepts `pin` and `delete`, and skips pinned chats when it makes room. */
+export const AGENT_PIN_DELETE_CAPABILITY = "agent-pin-delete";
+export const RetiredAgentSchema = z.object({
+  id: Id,
+  projectId: Id,
+  name: z.string().max(200),
+});
+export type RetiredAgent = z.infer<typeof RetiredAgentSchema>;
 export const AgentEventSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("agent.list"), agents: z.array(AgentInfoSchema).max(128) }),
+  z.object({
+    type: z.literal("agent.list"),
+    agents: z.array(AgentInfoSchema).max(AGENT_SESSION_LIMIT),
+    /** Old closed chats just removed to make room for a new one. */
+    retired: z.array(RetiredAgentSchema).max(AGENT_SESSION_LIMIT).optional(),
+  }),
   z.object({ type: z.literal("agent.state"), agent: AgentInfoSchema }),
   z.object({ type: z.literal("agent.item"), item: AgentItemSchema }),
 ]);

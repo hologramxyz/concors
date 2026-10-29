@@ -33,6 +33,8 @@ import {
 import { PreviewsSidebar } from "@/host/previews-sidebar";
 import { SidebarEmpty, SidebarSection } from "./sidebar-section";
 import { SearchButton } from "@/components/search-button";
+import { ChatLimitBanner, DeleteChatDialog } from "@/agents/chat-limit";
+import { useChatActions } from "@/agents/chat-actions";
 import { SidebarToggle } from "@/components/sidebar-toggle";
 import { cn } from "cn";
 import { useWindowChrome } from "@/window/context";
@@ -82,8 +84,9 @@ function followOrder(previous: ReadonlyMap<string, string[]>, order: string) {
 }
 
 /** The chat a row stands for, when it stands for one. */
-const rowChatId = (row: SidebarRow) =>
-  row.kind === "tab" ? row.chat?.id : row.kind === "closed" ? row.chat.agent.id : undefined;
+const rowChat = (row: SidebarRow) =>
+  row.kind === "tab" ? row.chat : row.kind === "closed" ? row.chat.agent : undefined;
+const rowChatId = (row: SidebarRow) => rowChat(row)?.id;
 
 /** Each workspace lists this many rows before "Show more"; the selected tab is always among them. */
 const ROWS_SHOWN = 5;
@@ -178,6 +181,7 @@ export function AppSidebar(props: AppSidebarProps) {
             <PreviewsSidebar compact={false} />
           </>
         </div>
+        <SidebarChatLimit workspace={props.workspace} execute={props.execute} />
         <div className="space-y-1 p-2">
           <UpdateBadge collapsed={false} />
           <AccountMenu
@@ -203,6 +207,8 @@ function WorkspaceTree(props: AppSidebarProps) {
   const connection = useContext(TerminalConnectionContext);
   const background = useContext(BackgroundTerminalsContext);
   const forkChat = useForkChat();
+  const chatActions = useChatActions(props.workspace, props.execute);
+  const [deleting, setDeleting] = useState<AgentInfo | null>(null);
   const now = useMinuteClock();
   const chats = useAgents();
   const terminals = useTerminalSessions();
@@ -226,12 +232,14 @@ function WorkspaceTree(props: AppSidebarProps) {
   const [more, setMore] = useState<ReadonlySet<string>>(new Set());
   // The order rows were last shown in. It follows every change except while the pointer is over
   // the list: rows then keep their places and new ones go after them. Hovering itself changes no
-  // state, so it never repaints anything; only a change that arrives meanwhile is held back.
-  const hovering = useRef(false);
+  // state, so it never repaints anything; only a change that arrives meanwhile is held back. The
+  // list is asked whether it is hovered rather than told by enter and leave, which a row's menu
+  // (outside the list, though its events pass through it) would leave stuck on "hovered".
+  const list = useRef<HTMLUListElement>(null);
   const [shownOrder, setShownOrder] = useState<ReadonlyMap<string, string[]>>(new Map());
   const order = JSON.stringify([...rows].map(([id, list]) => [id, list.map((row) => row.key)]));
   useLayoutEffect(() => {
-    if (!hovering.current) setShownOrder((previous) => followOrder(previous, order));
+    if (!list.current?.matches(":hover")) setShownOrder((previous) => followOrder(previous, order));
   }, [order]);
   const canRenamePanes =
     connection?.state.status === "ready" &&
@@ -280,18 +288,23 @@ function WorkspaceTree(props: AppSidebarProps) {
             console.error("Could not fork the chat", error),
           )
       : undefined;
+  const pin = (chat: AgentInfo | undefined) =>
+    props.canEdit && chatActions && chat
+      ? () =>
+          void chatActions
+            .pin(chat, !chat.pinned)
+            .catch((error: unknown) => console.error("Could not pin the chat", error))
+      : undefined;
+  const remove = (chat: AgentInfo | undefined) =>
+    props.canEdit && chatActions && chat ? () => setDeleting(chat) : undefined;
   return (
     <>
+      <DeleteChatDialog chat={deleting} actions={chatActions} onClose={() => setDeleting(null)} />
       {props.workspace?.projects.length ? (
         <ul
+          ref={list}
           className="mt-1 space-y-0.5"
-          onPointerEnter={() => {
-            hovering.current = true;
-          }}
-          onPointerLeave={() => {
-            hovering.current = false;
-            setShownOrder((previous) => followOrder(previous, order));
-          }}
+          onPointerLeave={() => setShownOrder((previous) => followOrder(previous, order))}
         >
           {props.workspace.projects.map((project) => {
             const expanded = !props.collapsed && isExpanded(project.id);
@@ -364,6 +377,8 @@ function WorkspaceTree(props: AppSidebarProps) {
                                 ? undefined
                                 : fork(row.kind === "tab" ? row.chat : row.chat.agent)
                             }
+                            onPin={pin(rowChat(row))}
+                            onDelete={remove(rowChat(row))}
                           />
                         ))}
                         {listed.length < ordered.length && (
@@ -391,4 +406,11 @@ function WorkspaceTree(props: AppSidebarProps) {
       ) : null}
     </>
   );
+}
+
+/** The near-limit line, apart from the sidebar so chat updates repaint only it. */
+function SidebarChatLimit({ workspace, execute }: Pick<AppSidebarProps, "workspace" | "execute">) {
+  const chats = useAgents();
+  const actions = useChatActions(workspace, execute);
+  return <ChatLimitBanner workspace={workspace} chats={chats} actions={actions} />;
 }

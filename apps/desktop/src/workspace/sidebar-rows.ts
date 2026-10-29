@@ -51,9 +51,9 @@ export interface BackgroundTerminalRow {
 export type SidebarRow = OpenTabRow | ClosedChatRow | BackgroundTerminalRow;
 
 /**
- * Every workspace's rows, in the order the sidebar lists them: its open tabs in the tab bar's
- * order, then what was closed and can come back, newest first: chats, and terminals still running.
- * Chats whose workspace was removed are returned apart.
+ * Every workspace's rows, in the order the sidebar lists them: its pinned chats, then its open tabs
+ * in the tab bar's order, then what was closed and can come back, newest first: chats, and
+ * terminals still running. Chats whose workspace was removed are returned apart.
  */
 export function sidebarRows(
   workspace: Pick<WorkspaceSnapshot, "projects"> | null,
@@ -120,7 +120,18 @@ export function sidebarRows(
   ];
   for (const row of closed.sort((a, b) => b.time.localeCompare(a.time)))
     rows.get(row.projectId)?.push(row);
+  for (const [id, list] of rows)
+    rows.set(id, [...list.filter(rowPinned), ...list.filter((row) => !rowPinned(row))]);
   return { rows, unavailable: unavailableChats(workspace, chats) };
+}
+
+/** Whether the row's chat is pinned to the top of its workspace. */
+export function rowPinned(row: SidebarRow): boolean {
+  return row.kind === "tab"
+    ? !!row.chat?.pinned
+    : row.kind === "closed"
+      ? !!row.chat.agent.pinned
+      : false;
 }
 
 // A tab that has not started its session yet has no time of its own, so it is timed from when this

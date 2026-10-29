@@ -22,6 +22,7 @@ import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { TerminalProfilesContext } from "@/terminal/profiles-context";
 import { BackgroundTerminalsContext } from "@/terminal/background-terminals";
 import { ClosedTerminalNotice, ManageTerminalsDialog } from "@/terminal/session-list";
+import { RetiredChatsNotice } from "@/agents/chat-limit";
 import { useBackgroundTerminals } from "@/terminal/use-background-terminals";
 import { DEFAULT_TERMINAL_PROFILES, PROJECT_RENAME_CAPABILITY } from "@concors/protocol";
 import type { DaemonEndpoint } from "@concors/daemon-client";
@@ -770,6 +771,7 @@ function AppContent() {
                         onDismiss={background.dismissClosed}
                       />
                     )}
+                    <RetiredChatsNotice workspace={workspace} />
                     <ManageTerminalsDialog
                       open={background.managing}
                       onOpenChange={background.setManaging}

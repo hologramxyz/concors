@@ -186,15 +186,9 @@ export class AgentManager {
     this.#emit = emit;
     // Old closed chats removed to make room for a new one: stop anything still attached to them,
     // and send the whole list, which clients take as the full set of sessions.
-    store.onAgentsRetired = (ids) => {
-      for (const id of ids) {
-        const runtime = this.#runtimes.get(id);
-        if (!runtime) continue;
-        runtime.closed = true;
-        this.#runtimes.delete(id);
-        void runtime.provider.close().catch(() => undefined);
-      }
-      this.#emit({ type: "agent.list", agents: store.agents() });
+    store.onAgentsRetired = (retired) => {
+      for (const { id } of retired) this.#stop(id);
+      this.#emit({ type: "agent.list", agents: store.agents(), retired });
     };
     // Switching provider or resuming another session can leave the pane's old agent hidden. It
     // runs after the change's own agent events, so those never overwrite the names it records.
@@ -1043,6 +1037,25 @@ export class AgentManager {
             updatedAt: info.updatedAt,
           });
         return this.result(request, op.sessionId);
+      }
+      if (op.kind === "pin") {
+        const info = this.#store.agent(op.sessionId);
+        // Pinning is not activity: the chat keeps its place among the recent ones.
+        if (!!info.pinned !== op.pinned)
+          this.update(info.id, { pinned: op.pinned || undefined, updatedAt: info.updatedAt });
+        return this.result(request, op.sessionId);
+      }
+      if (op.kind === "delete") {
+        const info = this.#store.agent(op.sessionId);
+        if (this.mutations.has(info.id)) throw new Error("This chat is being changed. Try again.");
+        this.#store.deleteAgent(info.id);
+        this.#stop(info.id);
+        this.#emit({ type: "agent.list", agents: this.#store.agents() });
+        return {
+          type: "agent.result",
+          requestId: request.requestId,
+          outcome: { status: "ok", conversation: { agent: info, items: [], hasMore: false } },
+        };
       }
       if (op.kind === "provider-catalog") {
         const info = this.#store.agent(op.sessionId);
@@ -1949,6 +1962,14 @@ export class AgentManager {
       nativeTurnId: this.#store.nativeTurnId(info.id, next.turnId),
       numTurns: dropped.length,
     };
+  }
+  /** Stops whatever still runs for a session that is gone. */
+  #stop(id: string): void {
+    const runtime = this.#runtimes.get(id);
+    if (!runtime) return;
+    runtime.closed = true;
+    this.#runtimes.delete(id);
+    void runtime.provider.close().catch(() => undefined);
   }
   private result(request: AgentRequest, id: string, before?: number, after?: number): AgentResult {
     return {

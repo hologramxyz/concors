@@ -1,4 +1,14 @@
-import { Clock, Ellipsis, GitFork, Pencil, RotateCcw, Square } from "lucide-react";
+import {
+  Clock,
+  Ellipsis,
+  GitFork,
+  Pencil,
+  Pin,
+  PinOff,
+  RotateCcw,
+  Square,
+  Trash2,
+} from "lucide-react";
 import { useContext, useRef, useState } from "react";
 import type { AgentInfo } from "@concors/protocol";
 import { cn } from "cn";
@@ -6,13 +16,14 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { BrailleSpinner } from "@/agents/activity";
 import type { AgentStatus } from "@/agents/agent-status";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { BackgroundTerminalsContext } from "@/terminal/background-terminals";
-import { rowAgentStatus, rowState, shortAge, type SidebarRow } from "./sidebar-rows";
+import { rowAgentStatus, rowPinned, rowState, shortAge, type SidebarRow } from "./sidebar-rows";
 
 /**
  * Sits under the workspace's icon, one indent in, so the row reads as the workspace's. The chat's
@@ -62,6 +73,8 @@ export function SidebarTabRow({
   onOpen,
   onRename,
   onFork,
+  onPin,
+  onDelete,
 }: {
   row: SidebarRow;
   now: number;
@@ -73,6 +86,10 @@ export function SidebarTabRow({
   onRename: ((name: string) => void) | undefined;
   /** Absent for terminals, and for a chat that cannot be forked right now. */
   onFork: (() => void) | undefined;
+  /** Pins or unpins the row's chat; absent for terminals. */
+  onPin?: (() => void) | undefined;
+  /** Asks to delete the row's chat; absent for terminals. */
+  onDelete?: (() => void) | undefined;
 }) {
   const closed = row.kind !== "tab";
   const title = row.kind === "closed" ? row.chat.title : row.title;
@@ -93,7 +110,8 @@ export function SidebarTabRow({
     setRename(null);
     onRename?.(value);
   };
-  const actions = !!onRename || !!onFork || !!terminal;
+  const pinned = rowPinned(row);
+  const actions = !!onRename || !!onFork || !!onPin || !!onDelete || !!terminal;
   const button = (
     <button
       type="button"
@@ -109,6 +127,7 @@ export function SidebarTabRow({
       <span className={cn("min-w-0 flex-1 truncate", closed && "text-muted-foreground")}>
         {title}
       </span>
+      {pinned && <Pin className="size-3.5 shrink-0 text-muted-foreground" aria-label="Pinned" />}
       {scheduled && (
         <Clock className="size-3.5 shrink-0 text-muted-foreground" aria-label="Scheduled agent" />
       )}
@@ -188,6 +207,19 @@ export function SidebarTabRow({
               renameInput.current?.focus();
             }}
           >
+            {onPin && (
+              <DropdownMenuItem onSelect={onPin}>
+                {pinned ? (
+                  <>
+                    <PinOff /> Unpin
+                  </>
+                ) : (
+                  <>
+                    <Pin /> Pin
+                  </>
+                )}
+              </DropdownMenuItem>
+            )}
             {onRename && (
               <DropdownMenuItem onSelect={() => setRename(title)}>
                 <Pencil /> Rename
@@ -197,6 +229,14 @@ export function SidebarTabRow({
               <DropdownMenuItem onSelect={onFork}>
                 <GitFork /> Fork chat
               </DropdownMenuItem>
+            )}
+            {onDelete && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem variant="destructive" onSelect={onDelete}>
+                  <Trash2 /> Delete
+                </DropdownMenuItem>
+              </>
             )}
             {terminal && (
               <>

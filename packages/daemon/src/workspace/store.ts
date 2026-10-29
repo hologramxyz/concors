@@ -15,6 +15,8 @@ import {
   type AgentItem,
   type AgentRequest,
   type AgentConversation,
+  type RetiredAgent,
+  AGENT_SESSION_LIMIT,
 } from "@concors/protocol";
 import { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
@@ -41,7 +43,7 @@ import {
  * How many chat sessions a machine keeps. Every session is replayed to each client that connects,
  * so the number is bounded; when it is reached, the least recently used closed chat makes room.
  */
-export const AGENT_SESSION_LIMIT = 128;
+export { AGENT_SESSION_LIMIT };
 const ACTIVE_AGENT = ["starting", "working", "needs_input"];
 /** A kept file: its bytes, for inline attachments and shown images, or an upload's reference. */
 const StoredFileSchema = z.union([AgentAttachmentSchema, AgentUploadSchema]);
@@ -53,7 +55,7 @@ export class WorkspaceStore {
   #closed = false;
   readonly #kept: (() => Iterable<string>)[] = [];
   /** Told which sessions were removed to make room, once they are gone (see makeRoomForAgent). */
-  onAgentsRetired: ((ids: string[]) => void) | null = null;
+  onAgentsRetired: ((agents: RetiredAgent[]) => void) | null = null;
 
   constructor(path = ":memory:") {
     this.attachmentsDirectory =
@@ -414,18 +416,9 @@ export class WorkspaceStore {
   keepAgents(ids: () => Iterable<string>): void {
     this.#kept.push(ids);
   }
-  /**
-   * Frees a place for one more session by removing the least recently updated closed chats.
-   * A chat is closed when no pane shows it, it is not running or waiting for an answer, nothing is
-   * queued for it, and nothing keeps it (keepAgents). Its conversation, images and attachment
-   * files go with it; for Claude Code and Codex the provider's own history usually remains, so
-   * Resume session can still find it. Throws only when every session is open or active.
-   */
-  makeRoomForAgent(state: WorkspaceSnapshot = this.snapshot()): void {
-    const agents = this.agents();
-    const excess = agents.length - (AGENT_SESSION_LIMIT - 1);
-    if (excess <= 0) return;
-    const shown = new Set(
+  /** The sessions some pane shows. */
+  #shownAgents(state: WorkspaceSnapshot = this.snapshot()): Set<string> {
+    return new Set(
       state.projects.flatMap((project) =>
         project.tabs.flatMap((tab) =>
           tab.nodes.flatMap((node) =>
@@ -434,6 +427,24 @@ export class WorkspaceStore {
         ),
       ),
     );
+  }
+  /** Whether something other than a pane relies on the session, such as a schedule. */
+  keepsAgent(id: string): boolean {
+    return this.#kept.some((ids) => [...ids()].includes(id));
+  }
+  /**
+   * Frees a place for one more session by removing the least recently updated closed chats.
+   * A chat is closed when no pane shows it, it is not running or waiting for an answer, nothing is
+   * queued for it, and nothing keeps it (keepAgents). Pinned chats are never removed. Its
+   * conversation, images and attachment files go with it; for Claude Code and Codex the provider's
+   * own history usually remains, so Resume session can still find it. Throws only when every
+   * session is open, active or pinned.
+   */
+  makeRoomForAgent(state: WorkspaceSnapshot = this.snapshot()): void {
+    const agents = this.agents();
+    const excess = agents.length - (AGENT_SESSION_LIMIT - 1);
+    if (excess <= 0) return;
+    const shown = this.#shownAgents(state);
     const kept = new Set(this.#kept.flatMap((ids) => [...ids()]));
     const queued = new Set(
       this.#db
@@ -447,19 +458,50 @@ export class WorkspaceStore {
           !shown.has(agent.id) &&
           !kept.has(agent.id) &&
           !queued.has(agent.id) &&
+          !agent.pinned &&
           !ACTIVE_AGENT.includes(agent.status) &&
           agent.pending.length === 0 &&
           !agent.queue?.length,
       )
       .sort((a, b) => a.updatedAt.localeCompare(b.updatedAt))
-      .slice(0, excess)
-      .map((agent) => agent.id);
+      .slice(0, excess);
     if (retired.length < excess)
       throw new Error(
-        `All ${AGENT_SESSION_LIMIT} chats on this machine are open or active. Close one to start another.`,
+        `All ${AGENT_SESSION_LIMIT} chats on this machine are open, active or pinned. Close or unpin one to start another.`,
       );
+    this.#deleteAgentRows(retired.map((agent) => agent.id));
+    // Callers start the new chat in a transaction of their own. Files and notices wait until it
+    // has settled, and only for chats really gone: a start that rolled back keeps its old chats.
+    queueMicrotask(() => {
+      if (this.#closed) return;
+      const gone = retired.filter(
+        (agent) => !this.#db.prepare("SELECT 1 FROM agents WHERE id = ?").get(agent.id),
+      );
+      if (gone.length === 0) return;
+      for (const agent of gone) this.#deleteAgentFiles(agent.id);
+      this.onAgentsRetired?.(
+        gone.map((agent) => ({
+          id: agent.id,
+          projectId: agent.projectId,
+          name: (agent.paneName ?? agent.tabName ?? agent.name).slice(0, 200),
+        })),
+      );
+    });
+  }
+  /**
+   * Deletes a chat with its conversation, images and attachment files. Only a chat no pane shows
+   * and nothing keeps can go, so a tab never points at a deleted chat.
+   */
+  deleteAgent(id: string): void {
+    this.agent(id);
+    if (this.#shownAgents().has(id)) throw new Error("Close this chat before deleting it");
+    if (this.keepsAgent(id)) throw new Error("A schedule uses this chat. Remove it first.");
+    this.#deleteAgentRows([id]);
+    this.#deleteAgentFiles(id);
+  }
+  #deleteAgentRows(ids: readonly string[]): void {
     this.transaction(() => {
-      for (const id of retired)
+      for (const id of ids)
         for (const table of [
           "agent_items",
           "agent_item_images",
@@ -468,20 +510,11 @@ export class WorkspaceStore {
           "agent_requests",
         ])
           this.#db.prepare(`DELETE FROM ${table} WHERE session_id = ?`).run(id);
-      for (const id of retired) this.#db.prepare("DELETE FROM agents WHERE id = ?").run(id);
+      for (const id of ids) this.#db.prepare("DELETE FROM agents WHERE id = ?").run(id);
     });
-    // Callers start the new chat in a transaction of their own. Files and notices wait until it
-    // has settled, and only for chats really gone: a start that rolled back keeps its old chats.
-    queueMicrotask(() => {
-      if (this.#closed) return;
-      const gone = retired.filter(
-        (id) => !this.#db.prepare("SELECT 1 FROM agents WHERE id = ?").get(id),
-      );
-      if (gone.length === 0) return;
-      for (const id of gone)
-        rmSync(join(this.attachmentsDirectory, id), { recursive: true, force: true });
-      this.onAgentsRetired?.(gone);
-    });
+  }
+  #deleteAgentFiles(id: string): void {
+    rmSync(join(this.attachmentsDirectory, id), { recursive: true, force: true });
   }
   mapNativeTurn(sessionId: string, nativeId: string, turnId: string): void {
     this.#db

@@ -253,3 +253,24 @@ it("dots an open shell while it runs a command", () => {
   expect(shell("make watch")).toBe("working");
   expect(shell(null)).toBeUndefined();
 });
+
+it("lists pinned chats first, open or closed, and keeps the rest in their order", () => {
+  const { rows } = sidebarRows(
+    workspace,
+    [
+      agent("open"),
+      agent("old", { pinned: true, updatedAt: "2026-09-01T00:00:00Z" }),
+      agent("recent", { updatedAt: "2026-09-25T00:00:00Z" }),
+    ],
+    [],
+  );
+  expect(rows.get("p")?.map((row) => row.key)).toEqual([
+    "closed:old",
+    "tab:chat-tab",
+    "tab:split-tab",
+    "tab:shell-tab",
+    "closed:recent",
+  ]);
+  const pinnedOpen = sidebarRows(workspace, [agent("open", { pinned: true })], []).rows.get("p");
+  expect(pinnedOpen?.[0]?.key).toBe("tab:chat-tab");
+});
