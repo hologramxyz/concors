@@ -560,7 +560,7 @@ export function Chat({
             {!atBottom && (
               <Button
                 variant="outline"
-                className="absolute bottom-2 left-1/2 z-10 -translate-x-1/2 shadow"
+                className="absolute bottom-2 left-1/2 z-10 -translate-x-1/2 bg-background/80 shadow backdrop-blur-md"
                 onClick={latest}
               >
                 <ArrowDown className="size-3" />
