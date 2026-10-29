@@ -37,13 +37,20 @@ test("a closed chat is found by its pane name and reopens with its name, model a
     await page.getByRole("menuitem", { name: "Resume a chat…", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Resume a chat" });
     const option = dialog.getByRole("option");
+    const search = dialog.getByRole("combobox", { name: "Search chats" });
+    // The closed chat is newer than the CLIs' saved sessions listed with it, so it comes first.
+    const chat = dialog.locator('[data-resume-row^="chat:"]');
+    await expect(chat).toHaveCount(1);
+    await expect(chat).toContainText("Hello world");
+    await expect(option.first()).toHaveAttribute("data-resume-row", /^chat:/);
+    // Found by what was said in it too, not only by its name.
+    await search.fill("release checklist");
     await expect(option).toHaveCount(1);
-    await expect(option).toContainText("Hello world");
-    await expect(option).toContainText("remember the release checklist");
-    await dialog.getByRole("combobox", { name: "Search closed chats" }).fill("claude");
+    await search.fill("no such chat");
     await expect(option).toHaveCount(0);
-    await dialog.getByRole("combobox", { name: "Search closed chats" }).fill("hello");
-    await expect(option).toHaveAttribute("aria-selected", "true");
+    await search.fill("hello");
+    await expect(option.first()).toHaveAttribute("aria-selected", "true");
+    await expect(option.first()).toContainText("Hello world");
     await page.keyboard.press("Enter");
     await expect(dialog).toHaveCount(0);
 
@@ -55,7 +62,8 @@ test("a closed chat is found by its pane name and reopens with its name, model a
     // Nothing is closed any more, and the shortcut opens the same list.
     await page.keyboard.press("Control+Shift+T");
     await page.keyboard.press("r");
-    await expect(dialog).toContainText("No closed chats in this workspace yet.");
+    await expect(dialog).toBeVisible();
+    await expect(chat).toHaveCount(0);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

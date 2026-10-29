@@ -8,7 +8,7 @@ import type { WorkspaceOperation } from "@concors/protocol";
 import { chooseProvider } from "../../../e2e/support/agents.ts";
 
 for (const native of [false, true]) {
-  test(`mobile ${native ? "native bridge" : "web composer"} resumes history in the existing pane`, async ({
+  test(`mobile ${native ? "native bridge" : "web composer"} resumes a CLI session in a new tab`, async ({
     page,
   }) => {
     const directory = await mkdtemp(join(tmpdir(), "concors-mobile-resume-"));
@@ -64,72 +64,54 @@ for (const native of [false, true]) {
       ).toHaveCount(0);
       const ui = page.frameLocator('iframe[title="Concors workspace"]');
       await chooseProvider(ui);
-      await ui.getByRole("button", { name: "Resume session", exact: true }).click();
-      const dialog = ui.getByRole("dialog", { name: "Resume session", exact: true });
+      // The New tab sheet opens the one Resume a chat list, closed chats and CLI sessions alike.
+      await ui.getByRole("combobox", { name: "Tabs" }).click();
+      await ui.getByRole("button", { name: "New tab", exact: true }).click();
+      await ui
+        .getByRole("dialog", { name: "New tab", exact: true })
+        .getByRole("button", { name: "Resume a closed chat", exact: true })
+        .click();
+      const dialog = ui.getByRole("dialog", { name: "Resume a chat", exact: true });
       await expect(dialog).toHaveAttribute("data-mobile-drawer", "true");
       await expect(dialog.getByRole("heading")).toHaveCSS("font-size", "16px");
-      await expect(dialog.getByRole("textbox", { name: "Search sessions" })).toHaveValue("");
-      await expect(dialog.getByRole("combobox")).toHaveCount(0);
-      const filters = dialog.getByRole("group", { name: "Filter sessions by provider" });
-      await expect(filters.getByRole("button", { name: "All", exact: true })).toHaveAttribute(
-        "aria-pressed",
-        "true",
-      );
-      for (const provider of ["codex", "claude", "opencode", "pi"]) {
-        const row = dialog.locator(`[data-session-provider="${provider}"]`).first();
-        await expect(row).toBeVisible();
-        await expect(row.locator("[data-session-provider-icon]")).toBeVisible();
-        const filter = filters.locator(`[data-session-filter="${provider}"]`);
-        await filter.scrollIntoViewIfNeeded();
-        await expect(filter.locator("[data-session-filter-icon]")).toBeVisible();
-        expect(
-          await filter.evaluate((element) => {
-            const button = element.getBoundingClientRect();
-            const icon = element
-              .querySelector("[data-session-filter-icon]")
-              ?.getBoundingClientRect();
-            return (
-              !!icon &&
-              icon.left >= button.left &&
-              icon.right <= button.right &&
-              icon.top >= button.top &&
-              icon.bottom <= button.bottom
-            );
-          }),
-        ).toBe(true);
-      }
-      await filters.evaluate((element) => {
-        element.scrollLeft = 0;
-      });
+      const search = dialog.getByRole("combobox", { name: "Search chats" });
+      await expect(search).toHaveValue("");
+      await expect(dialog.getByRole("group")).toHaveCount(0);
+      for (const provider of ["codex", "claude", "opencode", "pi"])
+        await expect(
+          dialog.locator(`[data-resume-row][data-provider="${provider}"]`).first(),
+        ).toBeVisible();
       expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
         true,
       );
-      const actions = dialog.locator('[data-slot="dialog-actions"]');
-      await expect(actions.getByRole("button", { name: "Refresh sessions" })).toBeVisible();
-      await expect(actions.getByRole("button", { name: "Close", exact: true })).toBeVisible();
       await page.screenshot({ path: test.info().outputPath("resume-all-mobile.png") });
-      if (!native) {
-        await filters.getByRole("button", { name: "Claude Code", exact: true }).click();
-        await expect(dialog.locator('[data-session-provider="codex"]')).toHaveCount(0);
-      }
       // The shared test daemon uses deterministic native IDs across fixture directories.
       const nativeIndex = native ? 124 : 125;
-      // A row selected from All must resume its own provider, not the blank chat's Codex default.
-      const row = dialog
-        .locator('[data-session-provider="claude"]')
-        .filter({ hasText: `Older CLI session ${nativeIndex}` });
-      await dialog.getByRole("textbox", { name: "Search sessions" }).fill(String(nativeIndex));
+      // A row resumes its own provider, not the blank chat's Codex default.
+      const row = dialog.locator('[data-resume-row][data-provider="claude"]', {
+        hasText: `Older CLI session ${nativeIndex}`,
+      });
+      await expect
+        .poll(async () => {
+          await dialog.getByRole("listbox", { name: "Chats" }).evaluate((element) => {
+            element.scrollTop = element.scrollHeight;
+          });
+          return row.count();
+        })
+        .toBe(1);
+      await search.fill(`session ${nativeIndex}`);
       await expect(row).toBeVisible();
       await page.screenshot({ path: test.info().outputPath("resume-picker-mobile.png") });
       await row.click();
       await expect(ui.getByRole("log")).toContainText("Saved CLI response");
-      await expect(ui.locator(".mobile-pane")).toHaveAttribute("data-pane-id", paneId);
-      expect(desktop.workspace?.projects.find((p) => p.id === projectId)?.tabs).toHaveLength(1);
+      // It opens in a new tab beside the chat that was there.
+      await expect
+        .poll(() => desktop.workspace?.projects.find((p) => p.id === projectId)?.tabs.length)
+        .toBe(2);
       const resumed = desktop.agents.find(
         (a) => a.projectId === projectId && a.threadId === `external-thread-${nativeIndex}`,
       );
       expect(resumed?.provider).toBe("claude");
-      await expect(ui.getByRole("button", { name: "Resume session", exact: true })).toHaveCount(0);
       await page.screenshot({ path: test.info().outputPath("resumed-mobile.png") });
       expect(errors).toEqual([]);
     } finally {

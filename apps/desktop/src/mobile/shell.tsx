@@ -971,6 +971,8 @@ function MobileWorkspaceContent({
                 onOpenChange={setResumeOpen}
                 workspace={workspace}
                 projectId={project?.id}
+                execute={execute}
+                onTabCreated={select}
               />
               <WorkspaceSearch
                 key={`${host.machineId}:${workspace?.epoch}`}

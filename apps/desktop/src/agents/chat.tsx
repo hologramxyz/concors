@@ -36,9 +36,7 @@ import { useTabVisible } from "@/workspace/tab-visibility";
 import { MessageNavigation } from "./message-navigation";
 import { useMessageIndex } from "./message-index";
 import { Button } from "@/components/ui/button";
-import { NATIVE_SESSIONS_CAPABILITY } from "@concors/protocol";
-import { AgentDraftScopeContext, useAgentDraft } from "./draft";
-import { ResumeSession } from "./resume-session";
+import { forgetPendingResume, pendingResume } from "./pending-resume";
 import { rememberProviders } from "./session-cache";
 import { ControlPicker } from "./control-picker";
 import { ProviderIcon } from "./provider-icon";
@@ -75,7 +73,11 @@ export function ChatPane({
     connection?.state.status === "ready" &&
     !!connection.state.daemon.capabilities?.includes("provider-settings");
   const [providers, setProviders] = useState<ProviderStatus[] | null>(null);
-  const [provider, setProvider] = useState<string | null>(null);
+  // A tab opened to resume a CLI's own session starts with that session's provider.
+  const [resumeTarget] = useState(() => pendingResume(node.id));
+  const resumed = useRef(false);
+  const [provider, setProvider] = useState<string | null>(resumeTarget?.provider ?? null);
+  const [resumeError, setResumeError] = useState<string | null>(null);
   const agents = useAgents();
   const latestAgents = useRef(agents);
   useEffect(() => {
@@ -161,8 +163,47 @@ export function ChatPane({
     tab.id,
     retry,
   ]);
-  if (node.sessionId)
-    return <Chat key={node.sessionId} sessionId={node.sessionId} canEdit={canEdit} start={start} />;
+  // Once its new chat is ready, it takes over the session: the CLI's history becomes the chat's.
+  const bound = node.sessionId ? agents.find((agent) => agent.id === node.sessionId) : undefined;
+  useEffect(() => {
+    const target = resumeTarget;
+    if (!target || resumed.current || !connection || !bound) return;
+    if (["starting", "working"].includes(bound.status)) return;
+    resumed.current = true;
+    forgetPendingResume(node.id);
+    void connection
+      .requestAgent(
+        {
+          kind: "resume-session",
+          sessionId: bound.id,
+          provider: target.provider,
+          nativeSessionId: target.nativeSessionId,
+          expectedRevision: bound.revision,
+        },
+        crypto.randomUUID(),
+      )
+      .then((result) => {
+        if (result.outcome.status === "error") throw new Error(result.outcome.message);
+      })
+      .catch((cause: unknown) =>
+        setResumeError(cause instanceof Error ? cause.message : "Could not resume the chat"),
+      );
+  }, [bound, connection, node.id, resumeTarget]);
+  if (node.sessionId) {
+    const chat = (
+      <Chat key={node.sessionId} sessionId={node.sessionId} canEdit={canEdit} start={start} />
+    );
+    return resumeError ? (
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <p role="alert" className="shrink-0 px-[24px] pt-3 text-xs text-destructive">
+          {resumeError}
+        </p>
+        {chat}
+      </div>
+    ) : (
+      chat
+    );
+  }
   // Asked only when no provider could be picked: none is installed, or the picked one failed.
   const asking = choosesProvider && !!providers && !provider;
   return (
@@ -277,13 +318,7 @@ export function Chat({
   const agent = useAgents().find((a) => a.id === sessionId);
   const conversation = useConversation(sessionId);
   const [busy, setBusy] = useState(false);
-  const [resuming, setResuming] = useState(false);
   const [installPrompt, setInstallPrompt] = useState(false);
-  const draft = useAgentDraft(
-    useContext(AgentDraftScopeContext) ?? connection,
-    sessionId,
-    connection?.workspace?.machineId,
-  );
   const [error, setError] = useState<string | null>(null);
   const [subAgent, setSubAgent] = useState<SubAgentTarget | null>(null);
   const root = useRef<HTMLDivElement>(null);
@@ -335,13 +370,6 @@ export function Chat({
     !["starting", "working", "needs_input"].includes(agent.status) &&
     !agent.queue?.length &&
     !agent.pending.length;
-  const hasDraft = !!(
-    draft.draft ||
-    draft.attachments.length ||
-    draft.queue.length ||
-    draft.busy ||
-    draft.uncertain
-  );
   const perform = async (operation: AgentOperation, id = crypto.randomUUID()) => {
     if (!connection) throw new Error("Machine is disconnected");
     const result = await connection.requestAgent(operation, id);
@@ -443,19 +471,6 @@ export function Chat({
                 {canResume && agent && (
                   <ProviderSwitchNotice agent={agent} disabled={!connected || busy} />
                 )}
-                {/* The start screen offers nothing but the prompt box and its chips. */}
-                {canResume &&
-                  !start &&
-                  connection?.state.status === "ready" &&
-                  connection.state.daemon.capabilities?.includes(NATIVE_SESSIONS_CAPABILITY) && (
-                    <div className="flex justify-center py-6">
-                      <ResumeSession
-                        agent={agent}
-                        disabled={!connected || busy || hasDraft}
-                        onOpenChange={setResuming}
-                      />
-                    </div>
-                  )}
                 {agent?.nativeImport &&
                   agent.status === "starting" &&
                   !conversation.items.length &&
@@ -595,7 +610,7 @@ export function Chat({
                 <AgentComposer
                   key={agent.id}
                   agent={agent}
-                  connected={!!connected && !busy && !resuming}
+                  connected={!!connected && !busy}
                   reachable={connection?.state.status === "ready"}
                   onSend={latest}
                   onInterrupt={interrupt}

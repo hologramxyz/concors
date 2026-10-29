@@ -508,6 +508,7 @@ export function ProjectWorkspace({
         onOpenChange={setResuming}
         workspace={workspace}
         projectId={project.id}
+        execute={execute}
       />
     </ProjectFileLinks>
   );

@@ -97,8 +97,11 @@ test("/clear starts over in the same pane and the old chat can be resumed", asyn
     await page.keyboard.press("Control+Shift+T");
     await page.keyboard.press("r");
     const dialog = page.getByRole("dialog", { name: "Resume a chat" });
+    // The chat /clear closed, found by what was said in it among the CLIs' saved sessions.
+    await expect(dialog.locator('[data-resume-row^="chat:"]')).toHaveCount(1);
+    await dialog.getByRole("combobox", { name: "Search chats" }).fill("remember the old plan");
     await expect(dialog.getByRole("option")).toHaveCount(1);
-    await expect(dialog.getByRole("option")).toContainText("remember the old plan");
+    await expect(dialog.getByRole("option")).toHaveAttribute("data-resume-row", /^chat:/);
     await page.keyboard.press("Enter");
     await expect(page.getByRole("log")).toContainText("remember the old plan");
   } finally {
