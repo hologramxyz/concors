@@ -32,6 +32,41 @@ import { tabTitle } from "./tab-title";
 /** How long a tab takes to shrink away; matches `tab-close` in styles.css. */
 const TAB_CLOSE_MS = 180;
 
+interface TabDrag {
+  projectId: string;
+  tabId: string;
+  from: number;
+  /** The index the tab lands at, counted after it is taken out, as `tab.move` expects. */
+  to: number;
+  /** Where each tab sat in the tab list when the drag began. */
+  slots: { left: number; width: number }[];
+  gap: number;
+  /** Sent to the daemon; the tabs hold still until the reordered workspace arrives. */
+  dropped: boolean;
+}
+
+function tabListX(list: HTMLElement, clientX: number) {
+  return clientX - list.getBoundingClientRect().left + list.scrollLeft;
+}
+
+function tabDropIndex(drag: TabDrag, x: number) {
+  return drag.slots.filter((slot, i) => i !== drag.from && slot.left + slot.width / 2 < x).length;
+}
+
+function tabShift({ from, to, slots, gap }: TabDrag, index: number) {
+  const source = slots[from];
+  const target = slots[to];
+  if (!source || !target) return 0;
+  if (index === from) {
+    return to > from
+      ? target.left + target.width - (source.left + source.width)
+      : target.left - source.left;
+  }
+  if (from < index && index <= to) return -(source.width + gap);
+  if (to <= index && index < from) return source.width + gap;
+  return 0;
+}
+
 export function ProjectWorkspace({
   workspace,
   sidebarToggle,
@@ -80,8 +115,10 @@ export function ProjectWorkspace({
   const lastFocusedPane = useRef<string | null>(null);
   const [launching, setLaunching] = useState(false);
   const [launchError, setLaunchError] = useState<string | null>(null);
-  const [dragging, setDragging] = useState<{ projectId: string; tabId: string } | null>(null);
-  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  // A dragged tab leaves a grey slot that slides to where it will land while the others make room.
+  // Tabs only move by transform until the daemon's reordered workspace arrives.
+  const [tabDrag, setTabDrag] = useState<TabDrag | null>(null);
+  const tabDragStart = useRef<number | null>(null);
   // Inline tab rename: double-click, F2 or the context menu turn the label into an input. The ref
   // mirrors the state so blur after Enter/Escape cannot commit twice or resurrect a cancelled edit.
   const [renaming, setRenaming] = useState<{ tabId: string; value: string } | null>(null);
@@ -96,6 +133,19 @@ export function ProjectWorkspace({
     workspace.projects.map((p) => p.id),
   );
   const selected = project?.tabs.find((tab) => tab.id === workspace.selection?.tabId);
+  // The reordered tabs are drawn in place of the shifted ones in the same frame, without sliding.
+  const tabOrder = project?.tabs.map((tab) => tab.id).join();
+  const [shownTabOrder, setShownTabOrder] = useState(tabOrder);
+  if (tabOrder !== shownTabOrder) {
+    setShownTabOrder(tabOrder);
+    if (tabDrag?.dropped) setTabDrag(null);
+  }
+  // A move the daemon refused slides the tabs back.
+  useEffect(() => {
+    if (!tabDrag?.dropped) return;
+    const timer = setTimeout(() => setTabDrag(null), 1000);
+    return () => clearTimeout(timer);
+  }, [tabDrag?.dropped]);
   const tabCount = (project?.tabs.length ?? 0) + projectFiles.length;
   const cycleTab = (delta: number) => {
     if (!project || tabCount < 2) return;
@@ -291,6 +341,28 @@ export function ProjectWorkspace({
             className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
             data-tauri-drag-region={titleBar ? "true" : undefined}
             aria-label="Project tabs"
+            onDragOver={(event) => {
+              const drag = tabDrag;
+              if (!canEdit || !drag || drag.dropped || drag.projectId !== project.id) return;
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "move";
+              const to = tabDropIndex(drag, tabListX(event.currentTarget, event.clientX));
+              if (to !== drag.to) setTabDrag({ ...drag, to });
+            }}
+            onDrop={(event) => {
+              const drag = tabDrag;
+              if (!drag || drag.dropped || drag.projectId !== project.id) return;
+              event.preventDefault();
+              if (!canEdit || drag.to === drag.from) return setTabDrag(null);
+              setTabDrag({ ...drag, dropped: true });
+              onCommand({
+                kind: "tab.move",
+                projectId: project.id,
+                expectedVersion: project.version,
+                tabId: drag.tabId,
+                index: drag.to,
+              });
+            }}
           >
             {project.tabs.map((tab, index) => (
               <ContextMenu.Root key={tab.id}>
@@ -304,40 +376,38 @@ export function ProjectWorkspace({
                     onDragStart={(event) => {
                       event.dataTransfer.effectAllowed = "move";
                       event.dataTransfer.setData("text/plain", tab.id);
-                      setDragging({ projectId: project.id, tabId: tab.id });
-                    }}
-                    onDragOver={(event) => {
-                      if (!canEdit || dragging?.projectId !== project.id) return;
-                      event.preventDefault();
-                      event.dataTransfer.dropEffect = "move";
-                      setDropTarget(tab.id);
-                    }}
-                    onDrop={(event) => {
-                      event.preventDefault();
-                      setDropTarget(null);
-                      setDragging(null);
-                      if (
-                        !canEdit ||
-                        dragging?.projectId !== project.id ||
-                        dragging.tabId === tab.id
-                      )
-                        return;
-                      onCommand({
-                        kind: "tab.move",
+                      const list = tabList.current;
+                      if (!list) return;
+                      const slots = [...list.querySelectorAll("[data-tab-id]")].map((element) => {
+                        const rect = element.getBoundingClientRect();
+                        return { left: tabListX(list, rect.left), width: rect.width };
+                      });
+                      const drag: TabDrag = {
                         projectId: project.id,
-                        expectedVersion: project.version,
-                        tabId: dragging.tabId,
-                        index,
+                        tabId: tab.id,
+                        from: index,
+                        to: index,
+                        slots,
+                        gap: parseFloat(getComputedStyle(list).columnGap) || 0,
+                        dropped: false,
+                      };
+                      // Next frame, so the drag image is the tab and not its grey slot.
+                      tabDragStart.current = requestAnimationFrame(() => {
+                        tabDragStart.current = null;
+                        setTabDrag(drag);
                       });
                     }}
                     onDragEnd={() => {
-                      setDragging(null);
-                      setDropTarget(null);
+                      if (tabDragStart.current != null) cancelAnimationFrame(tabDragStart.current);
+                      tabDragStart.current = null;
+                      setTabDrag((drag) => (drag?.dropped ? drag : null));
                     }}
                     style={
                       {
-                        opacity: dragging?.tabId === tab.id ? 0.5 : 1,
-                        outline: dropTarget === tab.id ? "2px solid var(--primary)" : undefined,
+                        transform:
+                          tabDrag?.projectId === project.id
+                            ? `translateX(${tabShift(tabDrag, index)}px)`
+                            : undefined,
                         "--tab-width": `${closingTabs.get(tab.id) ?? 0}px`,
                       } as React.CSSProperties
                     }
@@ -347,6 +417,8 @@ export function ProjectWorkspace({
                         ? "border-transparent bg-muted"
                         : "border-transparent",
                       closingTabs.has(tab.id) && "tab-closing",
+                      tabDrag && !tabDrag.dropped && "tab-sliding",
+                      tabDrag?.tabId === tab.id && "bg-muted-foreground/20 *:invisible",
                     )}
                   >
                     {renaming?.tabId === tab.id ? (

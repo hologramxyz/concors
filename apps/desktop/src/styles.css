@@ -902,6 +902,10 @@ html[data-pane-resizing="row"] * {
   .project-tab {
     animation: tab-open 180ms cubic-bezier(0.2, 0, 0, 1);
   }
+  /* While a tab is dragged, the others slide aside to open its landing slot. */
+  .project-tab.tab-sliding {
+    transition: transform 180ms cubic-bezier(0.2, 0, 0, 1);
+  }
   .project-tab.tab-closing {
     overflow: hidden;
     pointer-events: none;
