@@ -344,7 +344,7 @@ export function ProjectWorkspace({
                     className={cn(
                       "project-tab group flex shrink-0 items-center rounded-md border",
                       !activeFile && selected?.id === tab.id
-                        ? "border-border bg-background shadow-xs"
+                        ? "border-transparent bg-muted"
                         : "border-transparent",
                       closingTabs.has(tab.id) && "tab-closing",
                     )}
@@ -405,7 +405,7 @@ export function ProjectWorkspace({
                 </ContextMenu.Trigger>
                 <ContextMenu.Portal>
                   <ContextMenu.Content
-                    className="z-50 min-w-40 rounded-lg border bg-popover p-1 text-ui text-popover-foreground shadow-md"
+                    className="z-50 min-w-40 rounded-[calc(var(--radius)+(0.25rem+1px)*var(--concentric))] border bg-popover p-1 text-ui text-popover-foreground shadow-md"
                     onCloseAutoFocus={(event) => {
                       // Keep focus on the rename input instead of returning it to the tab.
                       if (renameRef.current?.tabId === tab.id) event.preventDefault();

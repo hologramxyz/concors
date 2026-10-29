@@ -212,7 +212,7 @@ export function ProjectSetupDialog({
               <div className={choosing ? "flex min-h-0 flex-1 flex-col gap-3" : "hidden"}>
                 {githubEnabled && (
                   <div
-                    className="flex w-fit max-w-full shrink-0 gap-1 rounded-lg bg-muted/50 p-1"
+                    className="flex w-fit max-w-full shrink-0 gap-1 rounded-[calc(min(var(--radius-md),12px)+(0.25rem)*var(--concentric))] bg-muted/50 p-1"
                     aria-label="Repository source"
                   >
                     <Button

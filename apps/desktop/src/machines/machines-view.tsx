@@ -917,7 +917,11 @@ function NewMachineMenu({
           <ChevronDown data-icon="inline-end" aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" sideOffset={6} className="w-72 p-1.5">
+      <DropdownMenuContent
+        align="end"
+        sideOffset={6}
+        className="w-72 rounded-[calc(var(--radius-md)+(0.375rem)*var(--concentric))] p-1.5"
+      >
         <DropdownMenuItem onSelect={onNewVps} className="items-start gap-3 py-2">
           <Cloud className="mt-0.5" aria-hidden="true" />
           <span className="space-y-0.5">

@@ -161,7 +161,7 @@ export function PullRequestsPage({
         <div
           role="tablist"
           aria-label="Pull request state"
-          className="mt-5 inline-flex self-start rounded-lg border bg-muted/40 p-0.5"
+          className="mt-5 inline-flex self-start rounded-[calc(var(--radius-md)+(0.125rem+1px)*var(--concentric))] border bg-muted/40 p-0.5"
         >
           {states.map(({ state: option, label, Icon, tone }) => {
             const count =

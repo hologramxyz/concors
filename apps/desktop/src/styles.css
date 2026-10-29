@@ -78,6 +78,11 @@
      before the controls that follow them. */
   --traffic-lights-width: 84px;
   --corner-radius: 0.375rem;
+  /* The corner radius macOS gives a window with a title bar and no toolbar. */
+  --window-corner-radius: 16px;
+  /* A container whose rounded items sit a small, even gap inside it takes the items' radius plus
+     that gap times this, so their corners are concentric. Square corners have no gap to add. */
+  --concentric: 1;
   color-scheme: light;
   --selection: #deded9;
 
@@ -116,6 +121,7 @@
 
 :root[data-corner-style="square"] {
   --corner-radius: 0rem;
+  --concentric: 0;
 }
 
 :root[data-corner-style="rounded"] {
@@ -429,6 +435,11 @@
 }
 .workspace-surface {
   transition: margin-left 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+/* In a rounded macOS window the content's corners sit concentric with the window's: its radius
+   less the 0.5rem gap between them. Full screen has square window corners, so it keeps the theme's. */
+:root[data-traffic-lights]:not([data-corner-style="square"]) .workspace-surface {
+  border-radius: calc(var(--window-corner-radius) - 0.5rem);
 }
 @media (prefers-reduced-motion: reduce) {
   .sidebar-shell,

@@ -134,7 +134,7 @@ export function ControlPicker({
           side="top"
           align="start"
           sideOffset={8}
-          className="z-50 w-72 max-w-[calc(100vw-24px)] overflow-hidden rounded-xl border bg-popover p-1.5 text-popover-foreground shadow-lg"
+          className="z-50 w-72 max-w-[calc(100vw-24px)] overflow-hidden rounded-[calc(var(--radius-lg)+(0.375rem+1px)*var(--concentric))] border bg-popover p-1.5 text-popover-foreground shadow-lg"
           onOpenAutoFocus={(event) => {
             event.preventDefault();
             search.current?.focus();
