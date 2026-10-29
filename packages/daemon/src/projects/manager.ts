@@ -211,6 +211,26 @@ export class ProjectManager {
         if (result.result.outcome.status === "rejected")
           throw new Error(result.result.outcome.message);
         this.save({ ...setup, projectId: existing.id, status: "done", progress: "Folder opened" });
+        this.#store.adoptChats(existing.id);
+        return;
+      }
+      // Opening a closed workspace's folder brings the workspace back, with its tabs and chats;
+      // never the home folder, where every one-click workspace starts.
+      const home = await realpath(this.#home).catch(() => this.#home);
+      const closed =
+        setup.directoryMode !== "follow" &&
+        directory !== home &&
+        this.#store.closedProjectAt(directory);
+      if (closed) {
+        const reopened = this.#store.execute({
+          type: "workspace.command",
+          commandId: setup.id,
+          epoch,
+          operation: { kind: "project.reopen", projectId: closed },
+        });
+        if (reopened.result.outcome.status === "rejected")
+          throw new Error(reopened.result.outcome.message);
+        this.save({ ...setup, projectId: closed, status: "done", progress: "Folder opened" });
         return;
       }
       const result = this.#store.execute({

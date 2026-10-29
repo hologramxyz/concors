@@ -172,6 +172,7 @@ describe("WebSocket handshake", () => {
           "directional-pane-split",
           "pane-rename",
           "project-rename",
+          "project-close",
           "agent-pin-delete",
           "terminal-recovery",
           "terminal-image-paste",

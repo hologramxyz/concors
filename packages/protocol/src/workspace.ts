@@ -9,6 +9,11 @@ import {
 export const PANE_RENAME_CAPABILITY = "pane-rename";
 /** The daemon accepts `project.rename` and stops a renamed workspace following its shell's folder. */
 export const PROJECT_RENAME_CAPABILITY = "project-rename";
+/**
+ * The daemon accepts `project.close` and `project.reopen`: a closed workspace keeps its tabs and
+ * chats, and opening its folder again brings them back. Older daemons only remove workspaces.
+ */
+export const PROJECT_CLOSE_CAPABILITY = "project-close";
 
 const Id = z.string().uuid();
 const Name = z.string().trim().min(1).max(120);
@@ -57,6 +62,14 @@ export const WorkspaceProjectSchema = z.object({
   tabs: z.array(WorkspaceTabSchema).max(32),
 });
 export type WorkspaceProject = z.infer<typeof WorkspaceProjectSchema>;
+/** A closed workspace, kept by the daemon until its folder is opened again. */
+export const ClosedProjectSchema = z.object({
+  id: Id,
+  name: Name,
+  directory: z.string().min(1).max(4096),
+  closedAt: z.string().datetime(),
+});
+export type ClosedProject = z.infer<typeof ClosedProjectSchema>;
 
 /** The automatic name of a workspace: the last segment of its folder. */
 export function folderName(directory: string): string {
@@ -69,6 +82,8 @@ export const WorkspaceSnapshotSchema = z.object({
   revision: Version,
   terminalProfiles: z.array(SavedTerminalProfileSchema).max(64).optional(),
   projects: z.array(WorkspaceProjectSchema).max(64),
+  /** Newest first. Absent from daemons without the "project-close" capability. */
+  closedProjects: z.array(ClosedProjectSchema).max(64).optional(),
   selection: z.object({ projectId: Id, tabId: Id.nullable() }).nullable(),
 });
 export type WorkspaceSnapshot = z.infer<typeof WorkspaceSnapshotSchema>;
@@ -94,6 +109,9 @@ export const WorkspaceOperationSchema = z.discriminatedUnion("kind", [
     directoryMode: z.enum(["follow", "pinned"]).optional(),
   }),
   z.object({ kind: z.literal("project.remove"), ...ProjectTarget }),
+  // Both need the "project-close" capability. Closing keeps the workspace's tabs and chats.
+  z.object({ kind: z.literal("project.close"), ...ProjectTarget }),
+  z.object({ kind: z.literal("project.reopen"), projectId: Id }),
   // `null` returns to the folder's name. Daemons without the "project-rename" capability reject this.
   z.object({ kind: z.literal("project.rename"), ...ProjectTarget, name: Name.nullable() }),
   z.object({

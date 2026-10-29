@@ -38,6 +38,7 @@ import { TerminalPane } from "@/terminal/terminal-pane";
 import { WorkspaceSidebarItem } from "@/workspace/sidebar-item";
 import { ProjectSetupDialog } from "@/workspace/project-setup-dialog";
 import { NewWorkspaceMenu } from "@/workspace/new-workspace-menu";
+import { recentlyClosed } from "@/workspace/closed-workspaces";
 import { useNewWorkspace } from "@/workspace/use-new-workspace";
 import { useProjectIcons } from "@/workspace/use-project-icons";
 import { projectIconKey } from "@/workspace/project-icons";
@@ -629,6 +630,8 @@ function MobileWorkspaceContent({
                           disabled={!canEdit || newWorkspace.busy}
                           onNew={newWorkspace.start}
                           onOpen={setAddingProject}
+                          closed={recentlyClosed(workspace)}
+                          onReopen={(projectId) => command({ kind: "project.reopen", projectId })}
                         />
                       }
                     >

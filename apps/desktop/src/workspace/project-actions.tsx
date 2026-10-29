@@ -1,7 +1,13 @@
-import { useState } from "react";
-import { Ellipsis, Pencil, Trash2 } from "lucide-react";
+import { useContext, useState } from "react";
+import { Ellipsis, FolderX, Pencil, Trash2 } from "lucide-react";
 import { cn } from "cn";
-import type { WorkspaceOperation, WorkspaceProject } from "@concors/protocol";
+import {
+  PROJECT_CLOSE_CAPABILITY,
+  type WorkspaceOperation,
+  type WorkspaceProject,
+} from "@concors/protocol";
+import { TerminalConnectionContext } from "@/terminal/connection-context";
+import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -38,6 +44,18 @@ export function ProjectActions({
   const [confirming, setConfirming] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Closing keeps the workspace's chats and tabs for when its folder is opened again. Older daemons
+  // can only remove it, so they keep the old wording and the destructive style.
+  const connection = useContext(TerminalConnectionContext);
+  const keeps =
+    connection?.state.status === "ready" &&
+    !!connection.state.daemon.capabilities?.includes(PROJECT_CLOSE_CAPABILITY);
+  // Shown in its tabs or running in the background, every one stops with the workspace.
+  const running = useTerminalSessions().filter(
+    (terminal) =>
+      terminal.projectId === project.id &&
+      (terminal.status === "running" || terminal.status === "starting"),
+  ).length;
   return (
     <>
       <DropdownMenu>
@@ -57,13 +75,13 @@ export function ProjectActions({
           </DropdownMenuItem>
           <DropdownMenuItem
             disabled={!canEdit}
-            variant="destructive"
+            variant={keeps ? "default" : "destructive"}
             onSelect={() => {
               setError(null);
               setConfirming(true);
             }}
           >
-            <Trash2 /> Close workspace…
+            {keeps ? <FolderX /> : <Trash2 />} Close workspace…
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -81,11 +99,26 @@ export function ProjectActions({
           }}
         >
           <DialogHeader>
-            <DialogTitle>Close {project.name}?</DialogTitle>
-            <DialogDescription>
-              This closes the workspace and its tabs on all connected devices. Files and running
-              sessions are kept.
-            </DialogDescription>
+            <DialogTitle>
+              {keeps ? `Close "${project.name}"?` : `Close ${project.name}?`}
+            </DialogTitle>
+            {keeps ? (
+              <DialogDescription>
+                Its chats are kept. Reopen it from the + menu.
+                {running > 0 && (
+                  <span className="mt-1 block">
+                    {running === 1
+                      ? "1 running terminal will be stopped."
+                      : `${running} running terminals will be stopped.`}
+                  </span>
+                )}
+              </DialogDescription>
+            ) : (
+              <DialogDescription>
+                This closes the workspace and its tabs on all connected devices. Files and running
+                sessions are kept.
+              </DialogDescription>
+            )}
           </DialogHeader>
           {error && (
             <p role="alert" className="text-sm text-destructive">
@@ -102,13 +135,13 @@ export function ProjectActions({
               Cancel
             </Button>
             <Button
-              variant="destructive"
+              variant={keeps ? "default" : "destructive"}
               disabled={!canEdit || pending}
               onClick={() => {
                 setPending(true);
                 setError(null);
                 void execute({
-                  kind: "project.remove",
+                  kind: keeps ? "project.close" : "project.remove",
                   projectId: project.id,
                   expectedVersion: project.version,
                 })

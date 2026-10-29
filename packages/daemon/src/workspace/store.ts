@@ -1,5 +1,5 @@
 import { rmSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import { tmpdir } from "node:os";
 import { z } from "zod";
 import {
@@ -32,9 +32,12 @@ import {
   isDefaultTabName,
   nextWorkspaceTabName,
   WorkspaceOperationError,
+  WorkspaceProjectSchema,
   WorkspaceSnapshotSchema,
   WorkspaceResultSchema,
+  type ClosedProject,
   type WorkspaceCommand,
+  type WorkspaceProject,
   type WorkspaceResult,
   type WorkspaceSnapshot,
 } from "@concors/protocol";
@@ -44,6 +47,8 @@ import {
  * so the number is bounded; when it is reached, the least recently used closed chat makes room.
  */
 export { AGENT_SESSION_LIMIT };
+/** How many closed workspaces a machine keeps; closing one more forgets the oldest. */
+const CLOSED_PROJECT_LIMIT = 64;
 const ACTIVE_AGENT = ["starting", "working", "needs_input"];
 /** A kept file: its bytes, for inline attachments and shown images, or an upload's reference. */
 const StoredFileSchema = z.union([AgentAttachmentSchema, AgentUploadSchema]);
@@ -56,6 +61,8 @@ export class WorkspaceStore {
   readonly #kept: (() => Iterable<string>)[] = [];
   /** Told which sessions were removed to make room, once they are gone (see makeRoomForAgent). */
   onAgentsRetired: ((agents: RetiredAgent[]) => void) | null = null;
+  /** Told of chats moved into a workspace whose folder was opened (see adoptChats). */
+  onAgentsMoved: ((agents: AgentInfo[]) => void) | null = null;
 
   constructor(path = ":memory:") {
     this.attachmentsDirectory =
@@ -75,6 +82,7 @@ export class WorkspaceStore {
         CREATE TABLE IF NOT EXISTS project_directories (project_id TEXT NOT NULL, directory TEXT NOT NULL, PRIMARY KEY(project_id, directory));
         CREATE TABLE IF NOT EXISTS commands (id TEXT PRIMARY KEY, payload TEXT NOT NULL, result TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS terminals (id TEXT PRIMARY KEY, request_id TEXT UNIQUE NOT NULL, request TEXT NOT NULL, info TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS closed_projects (id TEXT PRIMARY KEY, directory TEXT NOT NULL, project TEXT NOT NULL, closed_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS project_setups (id TEXT PRIMARY KEY, request TEXT NOT NULL, setup TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS agents (id TEXT PRIMARY KEY, info TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS agent_items (position INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, item_id TEXT NOT NULL, item TEXT NOT NULL, UNIQUE(session_id, item_id));
@@ -137,13 +145,26 @@ export class WorkspaceStore {
       }
       let snapshot = current;
       let result: WorkspaceResult;
+      let moved: AgentInfo[] = [];
+      // Closing and reopening write tables of their own, undone with the operation if it fails.
+      this.#db.exec("SAVEPOINT operation");
       try {
         if (command.epoch !== current.epoch)
           throw new WorkspaceOperationError(
             "CONFLICT",
             "Workspace was replaced. Refresh before editing.",
           );
-        snapshot = applyWorkspaceOperation(current, command.operation);
+        const op = command.operation;
+        snapshot =
+          op.kind === "project.reopen"
+            ? this.#reopenProject(current, op.projectId)
+            : applyWorkspaceOperation(current, op);
+        if (op.kind === "project.close") {
+          const closed = current.projects.find((project) => project.id === op.projectId);
+          if (closed) this.#keepClosedProject({ ...closed, version: closed.version + 1 });
+        }
+        if (op.kind === "project.close" || op.kind === "project.reopen")
+          snapshot.closedProjects = this.#closedProjects();
         // Keep snapshot frames below the protocol's transport limit.
         if (Buffer.byteLength(JSON.stringify(snapshot)) > 512 * 1024)
           throw new WorkspaceOperationError("LIMIT_EXCEEDED", "Workspace metadata exceeds 512 KiB");
@@ -156,25 +177,145 @@ export class WorkspaceStore {
         this.#db
           .prepare("UPDATE workspace SET snapshot = ? WHERE id = 1")
           .run(JSON.stringify(snapshot));
+        const opened =
+          op.kind === "project.reopen" ||
+          (op.kind === "project.add" && op.directoryMode !== "follow")
+            ? snapshot.projects.find((project) => project.id === op.projectId)
+            : undefined;
+        if (opened) moved = this.#adoptChats(snapshot, opened);
+        this.#db.exec("RELEASE operation");
         result = {
           type: "workspace.result",
           commandId: command.commandId,
           outcome: { status: "accepted", revision: snapshot.revision },
         };
       } catch (error) {
+        this.#db.exec("ROLLBACK TO operation");
+        this.#db.exec("RELEASE operation");
         if (!(error instanceof WorkspaceOperationError)) throw error;
         snapshot = current;
+        moved = [];
         result = this.reject(command, error.code, error.message);
       }
       this.#db
         .prepare("INSERT INTO commands (id, payload, result) VALUES (?, ?, ?)")
         .run(command.commandId, payload, JSON.stringify(result));
       this.#db.exec("COMMIT");
+      // After the snapshot that lists their workspace has gone out.
+      if (moved.length)
+        queueMicrotask(() => {
+          if (!this.#closed) this.onAgentsMoved?.(moved);
+        });
       return { result, snapshot, changed: result.outcome.status === "accepted" };
     } catch (error) {
       this.#db.exec("ROLLBACK");
       throw error;
     }
+  }
+
+  /** Closed workspaces, newest first, as clients list them. */
+  #closedProjects(): ClosedProject[] {
+    return this.#db
+      .prepare("SELECT project, closed_at FROM closed_projects ORDER BY closed_at DESC, rowid DESC")
+      .all()
+      .map((row) => {
+        const project = WorkspaceProjectSchema.parse(JSON.parse(String(row["project"])));
+        return {
+          id: project.id,
+          name: project.name,
+          directory: project.directory,
+          closedAt: String(row["closed_at"]),
+        };
+      });
+  }
+
+  /** The most recently closed workspace on this folder, which opening it brings back. */
+  closedProjectAt(directory: string): string | null {
+    const row = this.#db
+      .prepare(
+        "SELECT id FROM closed_projects WHERE directory = ? ORDER BY closed_at DESC, rowid DESC LIMIT 1",
+      )
+      .get(directory);
+    return row ? String(row["id"]) : null;
+  }
+
+  /**
+   * Keeps a closed workspace whole, tabs and all, with the folders it has used. Several can share
+   * a folder, as one-click workspaces in the home folder do. Past the limit the oldest is
+   * forgotten; its chats stay, and join a workspace opened on their folder (see adoptChats).
+   */
+  #keepClosedProject(project: WorkspaceProject): void {
+    const forget = (id: string) => {
+      this.#db.prepare("DELETE FROM closed_projects WHERE id = ?").run(id);
+      this.#db.prepare("DELETE FROM project_directories WHERE project_id = ?").run(id);
+    };
+    this.#db
+      .prepare(
+        "INSERT OR REPLACE INTO closed_projects (id, directory, project, closed_at) VALUES (?, ?, ?, ?)",
+      )
+      .run(project.id, project.directory, JSON.stringify(project), new Date().toISOString());
+    for (const row of this.#db
+      .prepare(
+        "SELECT id FROM closed_projects ORDER BY closed_at DESC, rowid DESC LIMIT -1 OFFSET ?",
+      )
+      .all(CLOSED_PROJECT_LIMIT))
+      forget(String(row["id"]));
+  }
+
+  /**
+   * The workspace with a closed one back in it, selected at its first tab. It comes back by its ID
+   * even when another workspace has since opened its folder. A pane whose chat or
+   * terminal has since gone (deleted, or removed to make room) opens to the start screen instead.
+   */
+  #reopenProject(current: WorkspaceSnapshot, id: string): WorkspaceSnapshot {
+    const row = this.#db.prepare("SELECT project FROM closed_projects WHERE id = ?").get(id);
+    if (!row) throw new WorkspaceOperationError("NOT_FOUND", "Workspace no longer exists");
+    const project = WorkspaceProjectSchema.parse(JSON.parse(String(row["project"])));
+    if (current.projects.length >= 64)
+      throw new WorkspaceOperationError("LIMIT_EXCEEDED", "Maximum of 64 workspaces reached");
+    const sessions = new Set([
+      ...this.agents().map((agent) => agent.id),
+      ...this.terminals().map((terminal) => terminal.id),
+    ]);
+    for (const node of project.tabs.flatMap((tab) => tab.nodes))
+      if (node.kind === "pane" && node.sessionId && !sessions.has(node.sessionId))
+        node.sessionId = null;
+    this.#db.prepare("DELETE FROM closed_projects WHERE id = ?").run(id);
+    const state = WorkspaceSnapshotSchema.parse(current);
+    state.projects.push({ ...project, version: project.version + 1 });
+    state.selection = { projectId: project.id, tabId: project.tabs[0]?.id ?? null };
+    state.revision++;
+    return WorkspaceSnapshotSchema.parse(state);
+  }
+
+  /** Opening the folder of a workspace already open brings in its stranded chats too. */
+  adoptChats(projectId: string): void {
+    const state = this.snapshot();
+    const project = state.projects.find((item) => item.id === projectId);
+    if (!project || project.directoryMode === "follow") return;
+    const moved = this.transaction(() => this.#adoptChats(state, project));
+    if (moved.length) this.onAgentsMoved?.(moved);
+  }
+
+  /**
+   * Moves chats whose workspace is gone, neither open nor closed, into a workspace just opened on
+   * their folder or one above it. Most come from workspaces removed before closing kept them.
+   */
+  #adoptChats(state: WorkspaceSnapshot, project: WorkspaceProject): AgentInfo[] {
+    const known = new Set([
+      ...state.projects.map((item) => item.id),
+      ...this.#closedProjects().map((item) => item.id),
+    ]);
+    const root = project.directory.endsWith(sep) ? project.directory : project.directory + sep;
+    const moved: AgentInfo[] = [];
+    for (const agent of this.agents()) {
+      if (known.has(agent.projectId)) continue;
+      if (agent.directory !== project.directory && !agent.directory.startsWith(root)) continue;
+      const next = { ...agent, projectId: project.id, revision: agent.revision + 1 };
+      this.saveAgent(next);
+      moved.push(next);
+    }
+    return moved;
   }
 
   private rememberDirectories(state: WorkspaceSnapshot): void {

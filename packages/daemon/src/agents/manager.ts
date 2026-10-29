@@ -190,6 +190,10 @@ export class AgentManager {
       for (const { id } of retired) this.#stop(id);
       this.#emit({ type: "agent.list", agents: store.agents(), retired });
     };
+    // Chats from a removed workspace that joined the one just opened on their folder.
+    store.onAgentsMoved = (moved) => {
+      for (const agent of moved) this.#emit({ type: "agent.state", agent });
+    };
     // Switching provider or resuming another session can leave the pane's old agent hidden. It
     // runs after the change's own agent events, so those never overwrite the names it records.
     this.#workspaceChanged = () => {

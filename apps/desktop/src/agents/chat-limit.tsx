@@ -26,9 +26,14 @@ const ACTIVE = ["starting", "working", "needs_input"];
 const errorText = (cause: unknown, fallback: string) =>
   cause instanceof Error ? cause.message : fallback;
 
-/** A chat's workspace by name. */
-const workspaceName = (workspace: Pick<WorkspaceSnapshot, "projects"> | null, id: string) =>
-  workspace?.projects.find((project) => project.id === id)?.name ?? "Unavailable workspace";
+/** A chat's workspace by name, open or closed. */
+const workspaceName = (
+  workspace: Pick<WorkspaceSnapshot, "projects" | "closedProjects"> | null,
+  id: string,
+) =>
+  [...(workspace?.projects ?? []), ...(workspace?.closedProjects ?? [])].find(
+    (project) => project.id === id,
+  )?.name ?? "Unavailable workspace";
 
 /** Confirms deleting `chat`; open while it is set. */
 export function DeleteChatDialog({

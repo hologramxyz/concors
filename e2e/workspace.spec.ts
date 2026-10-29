@@ -163,7 +163,9 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
     ).toHaveAttribute("aria-pressed", "true");
     await first.getByRole("button", { name: "Actions for Concors acceptance" }).click();
     await first.getByRole("menuitem", { name: "Close workspace…" }).click();
-    await expect(first.getByRole("dialog")).toContainText("Files and running sessions are kept.");
+    await expect(first.getByRole("dialog")).toContainText(
+      "Its chats are kept. Reopen it from the + menu.",
+    );
     await expect(first.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
     await first.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(
@@ -177,6 +179,12 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
       .click();
     await expect(
       second.getByRole("heading", { name: "Start working on this machine" }),
+    ).toBeVisible();
+    // A closed workspace comes back from the "+" menu with its tabs.
+    await first.getByRole("button", { name: "Open workspace menu" }).click();
+    await first.getByRole("menuitem", { name: "Concors acceptance" }).click();
+    await expect(
+      second.getByRole("button", { name: "Build and review", exact: true }),
     ).toBeVisible();
     expect(errors).toEqual([]);
   } finally {

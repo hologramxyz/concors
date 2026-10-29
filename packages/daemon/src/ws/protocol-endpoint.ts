@@ -410,6 +410,10 @@ export function registerProtocolEndpoint(
               send(target, { type: "workspace.snapshot", snapshot });
           else send(socket, { type: "workspace.snapshot", snapshot });
           send(socket, result);
+          // Closing a workspace stops its terminals. Its chats stop as a closed tab's do: below,
+          // once any reply under way has finished.
+          if (changed && message.operation.kind === "project.close")
+            terminals.stopProject(message.operation.projectId);
           // Renaming or closing a chat's pane: keep its names, stop a CLI left with nothing to show.
           if (changed) agents.workspaceEdited();
         } catch (error) {

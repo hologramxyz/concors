@@ -3,6 +3,7 @@ import { PullRequestsNav } from "@/pull-requests/nav";
 import { usePullRequests } from "@/pull-requests/use-pull-requests";
 import { pullRequestKey } from "@/pull-requests/store";
 import { NewWorkspaceMenu } from "@/workspace/new-workspace-menu";
+import { recentlyClosed } from "@/workspace/closed-workspaces";
 import { WorkspaceSidebarItem } from "@/workspace/sidebar-item";
 import { clashingWorkspaceParents } from "@/workspace/workspace-parents";
 import { useProjectIcons } from "@/workspace/use-project-icons";
@@ -27,6 +28,7 @@ import { Fragment, useContext, useLayoutEffect, useRef, useState } from "react";
 import {
   isDefaultTabName,
   PANE_RENAME_CAPABILITY,
+  PROJECT_CLOSE_CAPABILITY,
   type AgentInfo,
   type WorkspaceProject,
 } from "@concors/protocol";
@@ -169,6 +171,8 @@ export function AppSidebar(props: AppSidebarProps) {
                     disabled={!props.canEdit}
                     onNew={props.onAddProject}
                     onOpen={props.onOpenFolder}
+                    closed={recentlyClosed(props.workspace)}
+                    onReopen={(projectId) => props.onCommand({ kind: "project.reopen", projectId })}
                   />
                 }
               >
@@ -244,6 +248,11 @@ function WorkspaceTree(props: AppSidebarProps) {
   const canRenamePanes =
     connection?.state.status === "ready" &&
     !!connection.state.daemon.capabilities?.includes(PANE_RENAME_CAPABILITY);
+  // Chats of a closed workspace come back with its folder, so they are not listed apart. Older
+  // daemons remove workspaces instead, and their chats can only be listed as unavailable.
+  const keepsClosed =
+    connection?.state.status === "ready" &&
+    !!connection.state.daemon.capabilities?.includes(PROJECT_CLOSE_CAPABILITY);
   /**
    * A tab nobody named shows its main pane's title, so renaming its row names that pane, as the
    * pane's own menu does: the tab, the pane and the chat once closed all keep the name, and
@@ -401,7 +410,7 @@ function WorkspaceTree(props: AppSidebarProps) {
               </Fragment>
             );
           })}
-          {!props.collapsed && <UnavailableChats chats={unavailable} now={now} />}
+          {!props.collapsed && !keepsClosed && <UnavailableChats chats={unavailable} now={now} />}
         </ul>
       ) : null}
     </>

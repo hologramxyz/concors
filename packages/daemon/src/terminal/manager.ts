@@ -62,6 +62,12 @@ export class TerminalManager {
       }
   }
 
+  /** Stops every terminal of a workspace being closed, shown in a tab or running in the background. */
+  stopProject(projectId: string): void {
+    for (const runtime of this.#runtimes.values())
+      if (runtime.info.projectId === projectId) void runtime.stop().catch(() => undefined);
+  }
+
   /** Whether a terminal is running this agent's CLI, as its profile or typed into a shell. */
   runningAgent(engine: string): boolean {
     return [...this.#runtimes.values()].some(
