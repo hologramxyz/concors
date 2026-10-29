@@ -6,22 +6,30 @@ import {
   type WorkspaceOperation,
   type WorkspaceSnapshot,
 } from "@concors/protocol";
+import { ChevronDown } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { ageLabel } from "@/pull-requests/labels";
 import { matchScore } from "@/search/index";
 import { AgentStartedContext, useAgents } from "./context";
 import { ProviderIcon } from "./provider-icon";
-import { closedChats } from "./closed-chats";
-import { useDiskSessions } from "./disk-sessions";
+import { closedChats, RESUMABLE_ENGINES, type ResumableEngine } from "./closed-chats";
+import { useDiskSessions, type PlacedSession, type SessionPlace } from "./disk-sessions";
 import { forgetPendingResume, resumeInPane } from "./pending-resume";
-import type { ProviderSession } from "./session-catalog";
 
 /**
  * One list of what can come back, newest first: chats closed here, which return as they were
- * (names, agent, model, settings and history), and the CLIs' own older sessions in this
- * workspace's folder, which open in a new chat that takes their history over. A conversation
+ * (names, agent, model, settings and history), and the CLIs' own older sessions in the
+ * workspaces' folders, which open in a new chat that takes their history over. A conversation
  * that is both is listed once, as its chat.
  */
 export function ResumeChatDialog({
@@ -62,13 +70,20 @@ export function ResumeChatDialog({
   );
 }
 
+const ENGINE_LABELS: Record<ResumableEngine, string> = {
+  claude: "Claude Code",
+  codex: "Codex",
+  opencode: "OpenCode",
+};
+const ENGINE_ORDER = ["claude", "codex", "opencode"] as const satisfies readonly ResumableEngine[];
+
 interface Row {
   key: string;
   title: string;
   /** The agent its icon shows. */
   provider: string;
   updatedAt: string;
-  directory: string;
+  projectId: string;
   /** What else a search matches: the agent, model and workspace. */
   detail: string;
   /** A CLI session working in another client cannot be taken over. */
@@ -78,7 +93,53 @@ interface Row {
 
 const conversation = (provider: string, threadId: string) => JSON.stringify([provider, threadId]);
 
-/** Mounted with the dialog, so a query never carries over to the next time. */
+/** A compact dropdown of the filter row, showing its choice. */
+function FilterMenu({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  /** A null entry draws a divider. */
+  options: ({ id: string; label: string; icon?: React.ReactNode } | null)[];
+  onChange: (id: string) => void;
+}) {
+  const current = options.find((option) => option?.id === value);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-label={label}
+          className="min-w-0 text-muted-foreground"
+        >
+          {current?.icon}
+          <span className="truncate">{current?.label}</span>
+          <ChevronDown aria-hidden="true" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-auto max-w-72 min-w-44">
+        <DropdownMenuRadioGroup value={value} onValueChange={onChange}>
+          {options.map((option, index) =>
+            option ? (
+              <DropdownMenuRadioItem key={option.id} value={option.id}>
+                {option.icon}
+                <span className="truncate">{option.label}</span>
+              </DropdownMenuRadioItem>
+            ) : (
+              <DropdownMenuSeparator key={`divider-${index}`} />
+            ),
+          )}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** Mounted with the dialog, so a query or filter never carries over to the next time. */
 function ResumeChatContent({
   workspace,
   projectId,
@@ -98,21 +159,33 @@ function ResumeChatContent({
   const agents = useAgents();
   const listId = useId();
   const [query, setQuery] = useState("");
+  // "this", "all", or a workspace's ID.
+  const [scope, setScope] = useState(projectId ? "this" : "all");
+  const [engine, setEngine] = useState<ResumableEngine | "all">("all");
   const [active, setActive] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const list = useRef<HTMLDivElement>(null);
   const sentinel = useRef<HTMLDivElement>(null);
-  const project = workspace?.projects.find((item) => item.id === projectId);
+  const projects = useMemo(() => workspace?.projects ?? [], [workspace]);
+  const shownProject = scope === "this" ? projectId : scope === "all" ? null : scope;
   const listsSessions =
     !!execute &&
     connection?.state.status === "ready" &&
     !!connection.state.daemon.capabilities?.includes(NATIVE_SESSIONS_CAPABILITY);
-  const place = useMemo(
-    () =>
-      listsSessions && project ? { projectId: project.id, directory: project.directory } : null,
-    [listsSessions, project],
-  );
-  const { snapshot, catalog } = useDiskSessions(connection, place);
+  // The folders listed for CLI sessions: the workspace shown, or every workspace's, each once.
+  const places = useMemo(() => {
+    if (!listsSessions) return [];
+    const shown = shownProject
+      ? projects.filter((item) => item.id === shownProject)
+      : [...projects].sort((a, b) => Number(b.id === projectId) - Number(a.id === projectId));
+    const seen = new Set<string>();
+    return shown.flatMap((item): SessionPlace[] => {
+      if (seen.has(item.directory)) return [];
+      seen.add(item.directory);
+      return [{ projectId: item.id, directory: item.directory }];
+    });
+  }, [listsSessions, shownProject, projects, projectId]);
+  const disk = useDiskSessions(connection, places);
 
   const open = (agent: AgentInfo) => {
     setError(null);
@@ -132,27 +205,26 @@ function ResumeChatContent({
         setError(cause instanceof Error ? cause.message : "Could not resume the chat"),
       );
   };
-  // A CLI session nobody chatted with here opens in a new tab, whose chat then takes it over.
-  const takeOver = (session: ProviderSession) => {
-    if (!execute || !project) return;
+  // A CLI session nobody chatted with here opens in a new tab of its folder's workspace, whose
+  // chat then takes it over.
+  const takeOver = (session: PlacedSession) => {
+    const target = projects.find((item) => item.id === session.place.projectId);
+    if (!execute || !target) return;
     setError(null);
     const tabId = crypto.randomUUID();
     const paneId = crypto.randomUUID();
-    resumeInPane(paneId, {
-      provider: session.provider,
-      nativeSessionId: session.id,
-    });
+    resumeInPane(paneId, { provider: session.provider, nativeSessionId: session.id });
     void execute({
       kind: "tab.create",
-      projectId: project.id,
-      expectedVersion: project.version,
+      projectId: target.id,
+      expectedVersion: target.version,
       tabId,
       paneId,
-      name: nextWorkspaceTabName(project.tabs),
+      name: nextWorkspaceTabName(target.tabs),
       profile: "chat",
     })
       .then(() => {
-        onTabCreated?.({ projectId: project.id, tabId, paneId });
+        onTabCreated?.({ projectId: target.id, tabId, paneId });
         onClose();
       })
       .catch((cause: unknown) => {
@@ -163,7 +235,7 @@ function ResumeChatContent({
 
   const rows = useMemo(() => {
     const closed = closedChats(workspace, agents);
-    const projects = new Map(workspace?.projects.map((item) => [item.id, item.name]));
+    const names = new Map(projects.map((item) => [item.id, item.name]));
     const listed = new Set(closed.map((chat) => chat.agent.providerGroupId ?? chat.agent.id));
     const chats = new Map(
       agents.flatMap((agent) =>
@@ -175,7 +247,7 @@ function ResumeChatContent({
       title: chat.title,
       provider: chat.engine,
       updatedAt: chat.agent.updatedAt,
-      directory: chat.agent.directory,
+      projectId: chat.agent.projectId,
       detail: [
         chat.agent.name,
         chat.agent.providerLabel,
@@ -186,17 +258,21 @@ function ResumeChatContent({
         .join(" "),
       pick: () => open(chat.agent),
     }));
-    for (const session of snapshot.sessions) {
-      const chat = chats.get(conversation(session.provider, session.id));
+    const seen = new Set<string>();
+    for (const session of disk.sessions) {
+      const id = conversation(session.provider, session.id);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const chat = chats.get(id);
       // Already a chat here: listed as that chat when closed, and opened where it is when open.
       if (chat && listed.has(chat.providerGroupId ?? chat.id)) continue;
       all.push({
-        key: `session:${conversation(session.provider, session.id)}`,
+        key: `session:${id}`,
         title: chat?.paneName ?? chat?.tabName ?? (session.title.trim() || "Untitled session"),
         provider: session.provider,
         updatedAt: chat && chat.updatedAt > session.updatedAt ? chat.updatedAt : session.updatedAt,
-        directory: session.directory || project?.directory || "",
-        detail: [session.providerLabel, project ? projects.get(project.id) : null, session.id]
+        projectId: chat?.projectId ?? session.place.projectId,
+        detail: [session.providerLabel, names.get(session.place.projectId), session.id]
           .filter(Boolean)
           .join(" "),
         ...(!chat && session.busy ? { busy: true } : {}),
@@ -206,103 +282,136 @@ function ResumeChatContent({
     return all.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     // `open` and `takeOver` only read what the rows are built from.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspace, agents, snapshot, project]);
+  }, [workspace, agents, disk.sessions, projects]);
   const results = useMemo(
     () =>
-      query.trim() ? rows.filter((row) => matchScore(query, row.title, row.detail) > 0) : rows,
-    [rows, query],
+      rows.filter(
+        (row) =>
+          (!shownProject || row.projectId === shownProject) &&
+          (engine === "all" || row.provider === engine) &&
+          (!query.trim() || matchScore(query, row.title, row.detail) > 0),
+      ),
+    [rows, shownProject, engine, query],
   );
-  // Rows that would look alike, the same name and agent, add their folder.
-  const alike = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const row of results) {
-      const look = JSON.stringify([row.provider, row.title]);
-      counts.set(look, (counts.get(look) ?? 0) + 1);
-    }
-    return (row: Row) => (counts.get(JSON.stringify([row.provider, row.title])) ?? 0) > 1;
-  }, [results]);
+  const workspaceName = (id: string) => projects.find((item) => item.id === id)?.name ?? "";
   const selected = Math.max(
     results.findIndex((row) => row.key === active),
     0,
   );
-  const loading = snapshot.providers.some((provider) => provider.loading);
-  const more = snapshot.providers.some((provider) => provider.hasMore && !provider.error);
   useEffect(() => {
     list.current
       ?.querySelector(`[data-index="${selected}"]`)
       ?.scrollIntoView?.({ block: "nearest" });
   }, [selected]);
   // Older CLI sessions are fetched as the list nears its end.
+  const { loading, more, loadMore } = disk;
   useEffect(() => {
-    if (!catalog || loading || !more) return;
+    if (loading || !more) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry?.isIntersecting) catalog.loadMore();
+        if (entry?.isIntersecting) loadMore();
       },
       { root: list.current, rootMargin: "100px" },
     );
     if (sentinel.current) observer.observe(sentinel.current);
     return () => observer.disconnect();
-  }, [catalog, loading, more]);
+  }, [loading, more, loadMore]);
   const pick = (row: Row | undefined) => {
     if (row && !row.busy) row.pick();
   };
   const option = (index: number) => `${listId}-${index}`;
+  const others = projects.filter((item) => item.id !== projectId);
   return (
     <>
-      <input
-        autoFocus
-        role="combobox"
-        aria-label="Search chats"
-        aria-controls={listId}
-        aria-expanded="true"
-        aria-activedescendant={results.length ? option(selected) : undefined}
-        placeholder="Search chats…"
-        value={query}
-        maxLength={200}
-        onChange={(event) => {
-          setQuery(event.target.value);
-          setActive(null);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-            event.preventDefault();
-            const step = event.key === "ArrowDown" ? 1 : -1;
-            const next = Math.min(Math.max(selected + step, 0), Math.max(results.length - 1, 0));
-            setActive(results[next]?.key ?? null);
-          } else if (event.key === "Enter" && !event.nativeEvent.isComposing) {
-            event.preventDefault();
-            pick(results[selected]);
-          }
-        }}
-        className="min-w-0 shrink-0 rounded-md border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      />
+      <div className="flex min-w-0 shrink-0 flex-col gap-2">
+        <input
+          autoFocus
+          role="combobox"
+          aria-label="Search chats"
+          aria-controls={listId}
+          aria-expanded="true"
+          aria-activedescendant={results.length ? option(selected) : undefined}
+          placeholder="Search chats…"
+          value={query}
+          maxLength={200}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setActive(null);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+              event.preventDefault();
+              const step = event.key === "ArrowDown" ? 1 : -1;
+              const next = Math.min(Math.max(selected + step, 0), Math.max(results.length - 1, 0));
+              setActive(results[next]?.key ?? null);
+            } else if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+              event.preventDefault();
+              pick(results[selected]);
+            }
+          }}
+          className="min-w-0 rounded-md border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        />
+        <div className="-ml-2 flex min-w-0 items-center gap-1">
+          <FilterMenu
+            label="Workspace"
+            value={scope}
+            onChange={(id) => {
+              setScope(id);
+              setActive(null);
+            }}
+            options={[
+              ...(projectId ? [{ id: "this", label: "This workspace" }] : []),
+              { id: "all", label: "All workspaces" },
+              ...(others.length ? [null] : []),
+              ...others.map((item) => ({ id: item.id, label: item.name })),
+            ]}
+          />
+          <FilterMenu
+            label="Agent"
+            value={engine}
+            onChange={(id) => {
+              setEngine(id as ResumableEngine | "all");
+              setActive(null);
+            }}
+            options={[
+              { id: "all", label: "All agents" },
+              ...ENGINE_ORDER.filter((id) => RESUMABLE_ENGINES.includes(id)).map((id) => ({
+                id,
+                label: ENGINE_LABELS[id],
+                icon: (
+                  <span aria-hidden="true" className="flex size-4 items-center justify-center">
+                    <ProviderIcon provider={id} />
+                  </span>
+                ),
+              })),
+            ]}
+          />
+        </div>
+      </div>
       {error && (
         <p role="alert" className="text-sm text-destructive">
           {error}
         </p>
       )}
-      {snapshot.providers
-        .filter((provider) => provider.error)
-        .map((provider) => (
-          <div
-            key={provider.id}
-            role="alert"
-            className="flex items-center gap-2 text-xs text-destructive"
+      {disk.errors.map((item) => (
+        <div
+          key={item.key}
+          role="alert"
+          className="flex items-center gap-2 text-xs text-destructive"
+        >
+          <p className="min-w-0 flex-1">
+            {item.label}: {item.error}
+          </p>
+          <Button
+            variant="outline"
+            disabled={item.loading}
+            onClick={item.retry}
+            aria-label={`Retry ${item.label}`}
           >
-            <p className="min-w-0 flex-1">
-              {provider.label}: {provider.error}
-            </p>
-            <Button
-              variant="outline"
-              disabled={provider.loading}
-              onClick={() => catalog?.retry(provider.id)}
-              aria-label={`Retry ${provider.label}`}
-            >
-              Retry
-            </Button>
-          </div>
-        ))}
+            Retry
+          </Button>
+        </div>
+      ))}
       <div
         ref={list}
         id={listId}
@@ -330,8 +439,10 @@ function ResumeChatContent({
             </span>
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="truncate text-sm">{row.title}</span>
-              {alike(row) && (
-                <span className="truncate text-xs text-muted-foreground">{row.directory}</span>
+              {scope === "all" && (
+                <span className="truncate text-xs text-muted-foreground">
+                  {workspaceName(row.projectId)}
+                </span>
               )}
             </span>
             <time
@@ -344,9 +455,20 @@ function ResumeChatContent({
           </div>
         ))}
         {!results.length && !loading && (
-          <p className="py-8 text-center text-sm text-muted-foreground">
-            {query.trim() ? "No chats match your search." : "No chats to resume yet."}
-          </p>
+          <div className="flex flex-col items-center gap-3 py-8 text-center text-sm text-muted-foreground">
+            <p>{query.trim() ? "No chats match your search." : "No closed chats here"}</p>
+            {scope !== "all" && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setScope("all");
+                  setActive(null);
+                }}
+              >
+                Show all workspaces
+              </Button>
+            )}
+          </div>
         )}
         <div ref={sentinel} aria-hidden="true" className="h-px" />
       </div>

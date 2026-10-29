@@ -10,10 +10,7 @@ import { tab, closeTab } from "./support/tabs.ts";
 async function openResume(page: Page) {
   await page.getByRole("button", { name: "New tab options", exact: true }).click();
   await page.getByRole("menuitem", { name: "Resume a chat…", exact: true }).click();
-  const dialog = page.getByRole("dialog", {
-    name: "Resume a chat",
-    exact: true,
-  });
+  const dialog = page.getByRole("dialog", { name: "Resume a chat", exact: true });
   await expect(dialog).toBeVisible();
   return dialog;
 }
@@ -42,14 +39,40 @@ test("one list holds closed chats and older CLI sessions, and takes one over in 
     await expect(dialog.getByRole("heading")).toHaveCount(1);
     for (const provider of ["codex", "claude", "opencode", "pi"])
       await expect(row(dialog, provider).first()).toBeVisible();
-    // The same name from different agents is told apart by the icon alone, not by its folder.
+    // Rows never show folder paths.
     await expect(row(dialog, "codex", /^CLI session/)).not.toContainText(directory);
+    // This workspace and every agent to start with; the agent filter narrows the list.
+    const workspaceFilter = dialog.getByRole("button", { name: "Workspace", exact: true });
+    const agentFilter = dialog.getByRole("button", { name: "Agent", exact: true });
+    await expect(workspaceFilter).toHaveText("This workspace");
+    await expect(agentFilter).toHaveText("All agents");
+    await agentFilter.click();
+    await expect(page.getByRole("menuitemradio")).toHaveText([
+      "All agents",
+      "Claude Code",
+      "Codex",
+      "OpenCode",
+    ]);
+    await page.getByRole("menuitemradio", { name: "Claude Code", exact: true }).click();
+    await expect(row(dialog, "codex")).toHaveCount(0);
+    await expect(row(dialog, "claude").first()).toBeVisible();
+    await agentFilter.click();
+    await page.getByRole("menuitemradio", { name: "All agents", exact: true }).click();
+    await expect(row(dialog, "codex").first()).toBeVisible();
+    // Nothing here offers every workspace, where each row names its workspace.
+    await search.fill("no such chat");
+    await expect(dialog.getByRole("option")).toHaveCount(0);
+    await dialog.getByRole("button", { name: "Show all workspaces", exact: true }).click();
+    await expect(workspaceFilter).toHaveText("All workspaces");
+    await search.fill("");
+    await expect(row(dialog, "codex").first()).toContainText("Resume workspace");
+    await workspaceFilter.click();
+    await page.getByRole("menuitemradio", { name: "This workspace", exact: true }).click();
+    await expect(row(dialog, "codex").first()).not.toContainText("Resume workspace");
     expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
       true,
     );
-    await page.screenshot({
-      path: test.info().outputPath("resume-all-desktop.png"),
-    });
+    await page.screenshot({ path: test.info().outputPath("resume-all-desktop.png") });
     // Older sessions are appended as the list is scrolled.
     await expect
       .poll(async () => {
@@ -61,25 +84,18 @@ test("one list holds closed chats and older CLI sessions, and takes one over in 
       .toBe(1);
     await search.fill("session 125");
     await expect(row(dialog, "codex")).toHaveCount(1);
-    await page.screenshot({
-      path: test.info().outputPath("resume-picker-desktop.png"),
-    });
+    await page.screenshot({ path: test.info().outputPath("resume-picker-desktop.png") });
     await row(dialog, "codex", "Older CLI session 125").click();
     await expect(dialog).toHaveCount(0);
     await expect(page.getByRole("log")).toContainText("Saved CLI prompt");
     await expect(page.getByRole("log")).toContainText("Saved CLI response");
     await expect(page.getByRole("button", { name: /^Close .* tab$/ })).toHaveCount(2);
     await expect(tab(page, 1)).toHaveAttribute("aria-pressed", "true");
-    const composer = page.getByRole("textbox", {
-      name: "Message Codex",
-      exact: true,
-    });
+    const composer = page.getByRole("textbox", { name: "Message Codex", exact: true });
     await composer.fill("Continue this saved session");
     await page.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(page.getByRole("log")).toContainText("Hello from");
-    await page.screenshot({
-      path: test.info().outputPath("resumed-desktop.png"),
-    });
+    await page.screenshot({ path: test.info().outputPath("resumed-desktop.png") });
     expect(errors).toEqual([]);
   } finally {
     await rm(directory, { recursive: true, force: true });
@@ -147,11 +163,7 @@ test("a renamed session is listed once and resumed under its pane name", async (
 /** Records every painted frame of the chat timeline, to catch history drawn from the top. */
 async function recordFrames(page: Page) {
   await page.evaluate(() => {
-    const frames: {
-      items: number;
-      fromBottom: number;
-      first: string | null;
-    }[] = [];
+    const frames: { items: number; fromBottom: number; first: string | null }[] = [];
     (window as unknown as { chatFrames: typeof frames }).chatFrames = frames;
     // Measure each frame just before it is painted: from a resize observer created during that
     // frame, which is notified after the chat's own observer has pinned the timeline. A timer
@@ -183,11 +195,7 @@ async function recordFrames(page: Page) {
       () =>
         (
           window as unknown as {
-            chatFrames: {
-              items: number;
-              fromBottom: number;
-              first: string | null;
-            }[];
+            chatFrames: { items: number; fromBottom: number; first: string | null }[];
           }
         ).chatFrames,
     );
