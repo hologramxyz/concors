@@ -1154,6 +1154,72 @@ it("keeps a Claude sub-agent sent to the background live in its turn until it re
   await expect.poll(() => methods().filter((method) => method === "turn/started")).toHaveLength(2);
 });
 
+it("shows a failed Claude tool call as failed and carries on with the turn", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-claude-failed-tool-"));
+  cleanup.push(() => rm(directory, { recursive: true, force: true }));
+  await writeFile(join(directory, process.platform === "win32" ? "claude.cmd" : "claude"), "", {
+    mode: 0o755,
+  });
+  vi.stubEnv("PATH", directory);
+  let emit: (value: unknown) => void = () => undefined;
+  const createQuery = vi.fn(() => {
+    const messages = new PassThrough({ objectMode: true });
+    emit = (value) => messages.write(value);
+    return Object.assign(messages, {
+      initializationResult: async () => ({
+        models: [{ value: "default", displayName: "Default" }],
+      }),
+      getContextUsage: async () => ({ model: "claude-sonnet-5" }),
+      setModel: async () => undefined,
+      setPermissionMode: async () => undefined,
+      close: () => {
+        messages.end();
+      },
+    }) as unknown as Query;
+  });
+  const provider = new ClaudeProvider(directory, vi.fn(), createQuery);
+  const { notifications } = observe(provider);
+  await provider.initialize();
+  await provider.request("thread/start");
+  await provider.request("turn/start", turn);
+  emit({
+    type: "assistant",
+    message: {
+      id: "a",
+      content: [{ type: "tool_use", id: "bash", name: "Bash", input: { command: "ls /missing" } }],
+    },
+  });
+  // What Claude Code 2.1 streams for a failed tool: the result details are the error text.
+  emit({
+    type: "user",
+    message: {
+      content: [
+        {
+          type: "tool_result",
+          tool_use_id: "bash",
+          is_error: true,
+          content: "Exit code 1\nls: /missing: No such file or directory",
+        },
+      ],
+    },
+    tool_use_result: "Error: Exit code 1\nls: /missing: No such file or directory",
+  });
+  emit({
+    type: "assistant",
+    message: { id: "b", content: [{ type: "text", text: "It is gone." }] },
+  });
+  emit({ type: "result", subtype: "success", result: "It is gone.", modelUsage: {} });
+  await expect.poll(() => notifications.map((n) => n.method)).toContain("turn/completed");
+  const item = (id: string) =>
+    notifications
+      .filter((n) => n.method === "item/completed" && object(n.params["item"])["id"] === id)
+      .map((n) => object(n.params["item"]))
+      .at(-1);
+  expect(item("bash")).toMatchObject({ status: "failed" });
+  expect(item("b")).toMatchObject({ type: "agentMessage", text: "It is gone." });
+  expect(JSON.stringify(notifications)).not.toContain("expected record");
+});
+
 it("steers a running Claude turn with a message Claude reads at its next step", async () => {
   const directory = await mkdtemp(join(tmpdir(), "concors-claude-steer-"));
   cleanup.push(() => rm(directory, { recursive: true, force: true }));
