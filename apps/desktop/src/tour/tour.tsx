@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -7,13 +8,30 @@ import {
   type ReactNode,
 } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
-import { Loader2 } from "lucide-react";
+import {
+  ArrowBigUp,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  ChevronUp,
+  Command,
+  CornerDownLeft,
+  Delete,
+  Loader2,
+  Option,
+  type LucideIcon,
+} from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
-import { useShortcutLabels } from "@/shortcuts/preferences-context";
+import type { CommandId } from "@/shortcuts/bindings";
+import { strokeLabel, strokeSymbols } from "@/shortcuts/keymap";
+import { useShortcutPreferences } from "@/shortcuts/preferences-context";
 import {
   cardPosition,
+  frameInside,
+  welcomeTitle,
   TOUR_STEPS,
   tourSteps,
   type Box,
@@ -28,6 +46,8 @@ const FIND_TIMEOUT_MS = 800;
 /** How long to wait for the default workspace before touring without it. */
 const SETUP_TIMEOUT_MS = 10_000;
 const HOLE_PADDING = 6;
+/** Keeps the hole's 2px ring, and clear space, inside the window's edges. */
+const HOLE_INSET = 8;
 // Dark enough to pull the eye to the lit area, light enough that the app still reads behind it.
 const DIM = "rgb(0 0 0 / 0.5)";
 
@@ -99,7 +119,9 @@ function useStepBox(step: TourStep): Box | null | "pending" {
           frame = requestAnimationFrame(follow);
           return;
         }
-        const next = boxOf(element, menu);
+        // A control can be part of a larger one the frame should take in whole, as ⌄ is of the
+        // split "+" button.
+        const next = boxOf(element.closest<HTMLElement>("[data-tour-frame]") ?? element, menu);
         setBox((current) =>
           current !== null &&
           current !== "pending" &&
@@ -273,7 +295,7 @@ function Welcome({
         <BrandMark className="size-12 text-foreground" />
         <div className="space-y-2">
           <DialogPrimitive.Title className="text-xl font-semibold">
-            Welcome to Concors{firstName ? `, ${firstName}` : ""}
+            {welcomeTitle(firstName)}
           </DialogPrimitive.Title>
           <DialogPrimitive.Description className="text-muted-foreground">
             Run coding agents side by side, right on your computer.
@@ -331,9 +353,7 @@ function Finish({
             You’re all set
           </DialogPrimitive.Title>
           <DialogPrimitive.Description className="text-muted-foreground">
-            {hasWorkspace
-              ? "Start your first agent: click + in the tab bar and ask it something."
-              : "Add a folder from your computer, then start a chat."}
+            Type below to start, or click + for more.
           </DialogPrimitive.Description>
         </div>
         {hasWorkspace ? (
@@ -371,7 +391,6 @@ function Step({
   onSkip: () => void;
 }) {
   const box = useStepBox(step);
-  const shortcutLabel = useShortcutLabels();
   const card = useRef<HTMLDivElement>(null);
   const [measured, setMeasured] = useState<{ index: number; height: number } | null>(null);
   useLayoutEffect(() => {
@@ -385,14 +404,19 @@ function Step({
     event.preventDefault();
   };
   const viewport = { width: window.innerWidth, height: window.innerHeight };
+  const padding = step.framePadding ?? HOLE_PADDING;
   const hole =
     box && box !== "pending"
-      ? {
-          top: box.top - HOLE_PADDING,
-          left: box.left - HOLE_PADDING,
-          width: box.width + HOLE_PADDING * 2,
-          height: box.height + HOLE_PADDING * 2,
-        }
+      ? frameInside(
+          {
+            top: box.top - padding,
+            left: box.left - padding,
+            width: box.width + padding * 2,
+            height: box.height + padding * 2,
+          },
+          viewport,
+          HOLE_INSET,
+        )
       : null;
   const place = (height: number) =>
     hole
@@ -452,11 +476,7 @@ function Step({
             {step.body}
           </DialogPrimitive.Description>
         </div>
-        {step.shortcut && (
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            Shortcut <Kbd>{shortcutLabel(step.shortcut)}</Kbd>
-          </p>
-        )}
+        {step.shortcut && <StepShortcut id={step.shortcut} />}
         <div className="flex items-center gap-2">
           <Button type="button" variant="ghost" onClick={onSkip}>
             Skip tour
@@ -468,7 +488,11 @@ function Step({
               </Button>
             )}
             {/* Mounted once the card shows: a hidden button cannot take focus. */}
-            <StepNext key={settled ? index : `hidden-${index}`} onNext={onNext} />
+            <StepNext
+              key={settled ? index : `hidden-${index}`}
+              label={index + 1 === count ? "Done" : "Next"}
+              onNext={onNext}
+            />
           </div>
         </div>
       </DialogPrimitive.Content>
@@ -503,10 +527,86 @@ function Spotlight({ hole }: { hole: Box }) {
 }
 
 /** Keyed by step, and by the card showing, so focus lands on Next each time, ready for Enter. */
-function StepNext({ onNext }: { onNext: () => void }) {
+function StepNext({ label, onNext }: { label: string; onNext: () => void }) {
   return (
     <Button type="button" onClick={onNext} autoFocus>
-      Next
+      {label}
     </Button>
+  );
+}
+
+/**
+ * The step's shortcut as the person has it bound, one key per chip so a sequence such as ⌃⇧P then →
+ * reads as two presses. Nothing when the command has no binding.
+ */
+function StepShortcut({ id }: { id: CommandId }) {
+  const { keymap, mac } = useShortcutPreferences();
+  const binding = keymap[id][0];
+  if (!binding) return null;
+  return (
+    <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      {/* The chips speak for themselves on screen; a screen reader still hears what they are. */}
+      <span className="sr-only">Shortcut</span>
+      {binding.keys.map((stroke, index) => (
+        <Fragment key={index}>
+          {index > 0 && " then "}
+          <Kbd className="h-6 px-1.5 text-[14px]">
+            {mac ? <Symbols text={strokeSymbols(stroke)} /> : strokeLabel(stroke)}
+          </Kbd>
+        </Fragment>
+      ))}
+    </p>
+  );
+}
+
+// Lucide pads each shape differently inside its box, so each icon gets the box that draws its shape
+// as tall as the chip's capital letter; the caret, a short shape, as wide as one. All of them centre
+// on the letter. The last number is the blank space each side of the shape, in Lucide's 24-unit
+// grid, so the icon can be spaced by its shape rather than its box.
+const KEY_ICONS: Record<string, [LucideIcon, string, number, number]> = {
+  "⌃": [ChevronUp, "Control", 18, 6],
+  "⌥": [Option, "Option", 12, 3],
+  "⇧": [ArrowBigUp, "Shift", 12.75, 4],
+  "⌘": [Command, "Command", 11.5, 3],
+  "↩": [CornerDownLeft, "Return", 12.75, 4],
+  "⌫": [Delete, "Delete", 12.75, 2],
+  "←": [ArrowLeft, "Left arrow", 12.75, 5],
+  "→": [ArrowRight, "Right arrow", 12.75, 5],
+  "↑": [ArrowUp, "Up arrow", 12.75, 5],
+  "↓": [ArrowDown, "Down arrow", 12.75, 5],
+};
+const KEY_STROKE = 1.5;
+/** The blank space a letter of the chip's font leaves each side of its shape. */
+const KEY_SIDE_BEARING = 1.25;
+
+/**
+ * Key symbols as icons rather than text: the font draws each symbol at its own size and height (⌃
+ * small and high, ⇧ large), so as text they never line up with the letter beside them. One tight
+ * row, the way a Mac menu writes ⌃⇧N, with the same space between every two shapes.
+ */
+function Symbols({ text }: { text: string }) {
+  return (
+    <span className="inline-flex items-center gap-0.5 leading-none">
+      {Array.from(text).map((char, index) => {
+        const icon = KEY_ICONS[char];
+        if (!icon) return <span key={index}>{char}</span>;
+        const [Icon, name, size, inset] = icon;
+        // Trim the box to the shape plus a letter's side bearing, so the gaps match the letter's.
+        const margin = KEY_SIDE_BEARING + KEY_STROKE / 2 - (inset * size) / 24;
+        // One line weight for every icon whatever its box, as heavy as the letter's stem. Lucide
+        // scales the line by the size prop, not the CSS size, so the size goes in as a prop.
+        return (
+          <Icon
+            key={index}
+            role="img"
+            aria-label={name}
+            size={size}
+            style={{ width: size, height: size, marginInline: margin }}
+            strokeWidth={KEY_STROKE}
+            absoluteStrokeWidth
+          />
+        );
+      })}
+    </span>
   );
 }

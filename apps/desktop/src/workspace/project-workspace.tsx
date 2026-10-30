@@ -248,12 +248,7 @@ export function ProjectWorkspace({
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
         <FolderOpen className="size-10 text-muted-foreground/50" />
-        <div>
-          <h2 className="text-lg font-medium">Start working on this machine</h2>
-          <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-            Open a terminal and navigate to your code. Your workspace follows its folder.
-          </p>
-        </div>
+        <h2 className="text-lg font-medium">Start working on this machine</h2>
         <Button onClick={onAddProject} disabled={!canEdit}>
           <Plus />
           New workspace

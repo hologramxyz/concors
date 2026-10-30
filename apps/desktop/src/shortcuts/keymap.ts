@@ -70,6 +70,24 @@ export function strokeLabel(stroke: ShortcutStroke, mac = false): string {
     stroke.key === " " ? "Space" : keyLabel(stroke.key),
   ].join("+");
 }
+const macModifiers = { Control: "⌃", Alt: "⌥", Shift: "⇧", Meta: "⌘" } as const;
+const macKeys: Record<string, string> = {
+  Enter: "↩",
+  Backspace: "⌫",
+  Delete: "⌦",
+  Escape: "⎋",
+  Tab: "⇥",
+  " ": "Space",
+};
+/** A stroke as macOS menus write it, e.g. ⌃⇧N. */
+export function strokeSymbols(stroke: ShortcutStroke): string {
+  return [
+    ...modifierOrder
+      .filter((modifier) => stroke.modifiers.includes(modifier))
+      .map((modifier) => macModifiers[modifier]),
+    macKeys[stroke.key] ?? keyLabel(stroke.key),
+  ].join("");
+}
 export function bindingLabel(binding: Shortcut, mac = false): string {
   return binding.keys.map((key) => strokeLabel(key, mac)).join(" → ");
 }

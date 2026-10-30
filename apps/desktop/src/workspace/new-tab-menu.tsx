@@ -156,7 +156,10 @@ export function NewTabMenu({
       ) : (
         // A split button: "+" opens a new tab on the start screen, and the ⌄ beside it lists every
         // way to start one.
-        <div className={cn("flex shrink-0 items-center", empty && "rounded-md border")}>
+        <div
+          data-tour-frame
+          className={cn("flex shrink-0 items-center", empty && "rounded-md border")}
+        >
           <button
             type="button"
             title={`New tab (${shortcutLabel("new-tab")})`}
@@ -188,6 +191,9 @@ export function NewTabMenu({
             </DropdownMenuTrigger>
             <DropdownMenuContent
               className="w-72 max-w-[calc(100vw-16px)]"
+              // Near the window's right edge the menu would sit flush with it, and its border
+              // (a ring drawn just outside the box) would fall off the window.
+              collisionPadding={8}
               onCloseAutoFocus={(event) => {
                 // The selected pane owns focus after selection.
                 if (menuTransfersFocus.current) event.preventDefault();

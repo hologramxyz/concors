@@ -1,5 +1,12 @@
 import { expect, it } from "vitest";
-import { cardPosition, parseTourOutcome, TOUR_STEPS, tourSteps } from "./steps";
+import {
+  cardPosition,
+  frameInside,
+  parseTourOutcome,
+  TOUR_STEPS,
+  tourSteps,
+  welcomeTitle,
+} from "./steps";
 
 const viewport = { width: 1440, height: 900 };
 const card = { width: 320, height: 200 };
@@ -40,6 +47,25 @@ it("puts the card below a control in the main area, or above it without room", (
     left: 1108,
     top: 584,
   });
+});
+
+it("pulls a frame at the window's edge back inside it", () => {
+  expect(frameInside({ top: -4.5, left: 211, width: 1235, height: 50 }, viewport, 4)).toEqual({
+    top: 4,
+    left: 211,
+    width: 1225,
+    height: 41.5,
+  });
+  const inside = { top: 100, left: 300, width: 200, height: 40 };
+  expect(frameInside(inside, viewport, 4)).toEqual(inside);
+});
+
+it("greets by first name only when it has two letters or more", () => {
+  expect(welcomeTitle("Jo")).toBe("Welcome to Concors, Jo");
+  expect(welcomeTitle("Zoë")).toBe("Welcome to Concors, Zoë");
+  expect(welcomeTitle("z")).toBe("Welcome to Concors");
+  expect(welcomeTitle("J.")).toBe("Welcome to Concors");
+  expect(welcomeTitle("")).toBe("Welcome to Concors");
 });
 
 it("reads only outcomes it wrote", () => {

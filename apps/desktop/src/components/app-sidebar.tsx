@@ -73,6 +73,8 @@ interface AppSidebarProps {
   onSelectMachine: (host: Host) => void;
   onViewCloud: (machineId?: string) => void;
   auth: SignedInAuth;
+  /** The workspace is loaded, so Take the tour has something to point at. */
+  canTour: boolean;
   onSignOut: () => void;
   execute: (operation: WorkspaceOperation) => Promise<void>;
   /** Like `execute`, but a failure is shown in the window's error banner. */
@@ -192,6 +194,7 @@ export function AppSidebar(props: AppSidebarProps) {
           <AccountMenu
             collapsed={false}
             auth={props.auth}
+            canTour={props.canTour}
             onSignOut={props.onSignOut}
             onOpenSettings={props.onOpenSettings}
           />

@@ -154,7 +154,7 @@ function SearchContent({
     ...ALL_NAV.filter((item) => item.view !== "settings" && !item.comingSoon).map(
       (item): Action => ({
         id: `navigate:${item.view}`,
-        title: `Go to ${item.view === "projects" ? "Workspaces" : item.label}`,
+        title: `Go to ${item.label}`,
         keywords: "navigate page",
         icon: <item.icon aria-hidden="true" />,
         run: () => run(() => props.onNavigate(item.view)),

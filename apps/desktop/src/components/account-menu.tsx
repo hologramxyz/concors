@@ -1,5 +1,5 @@
 import { AccountAvatar } from "./account-avatar";
-import { ChevronsUpDown, Compass, LogOut, UserRound, Settings } from "lucide-react";
+import { ChevronsUpDown, LogOut, MapIcon, UserRound, Settings } from "lucide-react";
 import { useContext, useState, type ReactNode } from "react";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import {
@@ -29,6 +29,8 @@ interface AccountMenuProps {
   readonly onSignOut: () => void;
   readonly onOpenSettings: () => void;
   readonly collapsed?: boolean;
+  /** The tour points at the live workspace, so it cannot run while that is not loaded. */
+  readonly canTour?: boolean;
 }
 
 /** Sidebar footer: who is signed in, with settings and sign out. */
@@ -37,6 +39,7 @@ export function AccountMenu({
   onSignOut,
   onOpenSettings,
   collapsed = false,
+  canTour = true,
 }: AccountMenuProps) {
   const compact = useContext(CompactLayoutContext);
   if (compact)
@@ -83,8 +86,8 @@ export function AccountMenu({
           <Settings aria-hidden="true" />
           Settings
         </DropdownMenuItem>
-        <DropdownMenuItem className="p-[8px] text-ui" onSelect={replayTour}>
-          <Compass aria-hidden="true" />
+        <DropdownMenuItem className="p-[8px] text-ui" disabled={!canTour} onSelect={replayTour}>
+          <MapIcon aria-hidden="true" />
           Take the tour
         </DropdownMenuItem>
         <DropdownMenuItem className="p-[8px] text-ui" onSelect={onSignOut}>

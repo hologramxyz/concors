@@ -14,6 +14,7 @@ import {
   parseStroke,
   resolveKeymap,
   shortcutsConflict,
+  strokeSymbols,
   updateBindings,
   type ShortcutEvent,
 } from "./keymap";
@@ -117,6 +118,11 @@ describe("custom keymaps", () => {
     expect(parseStroke("cmd+Space")).toEqual({ key: " ", modifiers: ["Meta"] });
     expect(parseStroke("Ctrl+←")).toEqual({ key: "ArrowLeft", modifiers: ["Control"] });
     expect(parseStroke("Ctrl+ArrowLeft")).toEqual(parseStroke("Ctrl+←"));
+  });
+  it("writes strokes as macOS symbols in the menus' modifier order", () => {
+    expect(strokeSymbols(parseStroke("shift+ctrl+n")!)).toBe("⌃⇧N");
+    expect(strokeSymbols(parseStroke("cmd+alt+Enter")!)).toBe("⌥⌘↩");
+    expect(strokeSymbols(parseStroke("→")!)).toBe("→");
   });
   it("makes browser interception visible without rejecting native bindings", () => {
     expect(browserWarning(shortcut("Ctrl+Shift+W"), false)).toMatch(/reserve/);
