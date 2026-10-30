@@ -384,6 +384,18 @@
   display: none;
 }
 
+/* On macOS the window is transparent with the system sidebar blur behind it
+   (tauri.macos.conf.json), and the frame around the content lets it show through. */
+:root[data-window-inset] body {
+  background: transparent;
+}
+:root[data-window-inset] .app-frame {
+  background-color: color-mix(in srgb, var(--sidebar) 60%, transparent);
+}
+:root[data-window-inset] .sidebar-shell > nav {
+  background-color: transparent;
+}
+
 /* Collapsing keeps a navigable icon rail; only its footprint changes. */
 .sidebar-shell {
   width: var(--sidebar-width);

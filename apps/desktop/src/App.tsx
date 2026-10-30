@@ -522,7 +522,7 @@ function AppContent() {
                     <div
                       // The gaps around the content card are part of the macOS title bar too.
                       data-tauri-drag-region={windowChrome.inset ? "true" : undefined}
-                      className="flex h-dvh w-full overflow-hidden bg-sidebar"
+                      className="app-frame flex h-dvh w-full overflow-hidden bg-sidebar"
                     >
                       {view === "settings" ? (
                         <SettingsSidebar
