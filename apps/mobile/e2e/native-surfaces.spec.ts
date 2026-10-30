@@ -60,6 +60,31 @@ async function openNativeDemo(page: Page) {
   await expect.poll(async () => !!(await composer(page))).toBe(true);
   return page.frameLocator('iframe[title="Concors workspace"]');
 }
+test("native model pages distinguish provider navigation from a committed model choice", async ({
+  page,
+}) => {
+  await openNativeDemo(page);
+  const model = async () =>
+    (await composer(page))?.controls.find((control) => control.id === "model");
+  await expect
+    .poll(
+      async () =>
+        (await model())?.options?.find((option) => option.id === "__providers__")?.navigate,
+    )
+    .toBe(true);
+  await event(page, "composer", "", { kind: "press", control: "model", value: "__providers__" });
+  await expect.poll(async () => (await model())?.label).toBe("Choose an agent provider");
+  await expect
+    .poll(async () => (await model())?.options?.find((option) => option.id === "codex")?.navigate)
+    .toBe(true);
+  await event(page, "composer", "", { kind: "press", control: "model", value: "codex" });
+  await expect.poll(async () => (await model())?.label).toBe("Codex · Agent and model");
+  await expect
+    .poll(async () =>
+      (await model())?.options?.some((option) => option.id === "demo-codex" && !option.navigate),
+    )
+    .toBe(true);
+});
 test("native surface bridge preserves navigation, drafts, settings, attachments and submission", async ({
   page,
 }) => {

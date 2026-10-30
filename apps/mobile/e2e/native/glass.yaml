@@ -36,6 +36,18 @@ env:
     id: native-composer-context
 - takeScreenshot: apps/mobile/test-results/native/composer-expanded
 - tapOn:
+    id: native-composer-model
+- assertVisible: "Codex · Agent and model"
+- tapOn: "← Back to providers"
+- assertVisible: "Choose an agent provider"
+- tapOn: "Codex ·.*"
+- assertVisible: "Codex · Agent and model"
+- tapOn: "← Back to providers"
+- assertVisible: "Choose an agent provider"
+- tapOn: "Codex ·.*"
+- tapOn: "Codex"
+- assertVisible: "Native Liquid Glass draft"
+- tapOn:
     id: native-composer-brain
 - assertVisible: "Thinking effort.*"
 - tapOn: "Cancel"
@@ -48,7 +60,26 @@ env:
 - tapOn:
     id: native-header-back
 - assertVisible: "Native Liquid Glass draft"
+# Hit testing belongs to the native SwiftUI label, so cover it on-device rather than in a mock.
+# The title/subtitle area and empty vertical padding must open the same drawer as the chevron.
 - tapOn:
     id: native-header-chevron
+    point: "20%,35%"
+- assertVisible: "Tabs"
+- tapOn: "Close"
+- assertVisible: "Native Liquid Glass draft"
+- tapOn:
+    id: native-header-chevron
+    point: "20%,65%"
+- assertVisible: "Tabs"
+- tapOn: "Close"
+- tapOn:
+    id: native-header-chevron
+    point: "50%,5%"
+- assertVisible: "Tabs"
+- tapOn: "Close"
+- tapOn:
+    id: native-header-chevron
+    point: "90%,50%"
 - assertVisible: "Tabs"
 - takeScreenshot: apps/mobile/test-results/native/tabs-drawer

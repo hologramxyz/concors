@@ -30,6 +30,10 @@ inside the existing agent JSON record.
 - Clicking a browser/native notification or in-app card opens the agent's global conversation.
   Switching machines or resuming work invalidates old click targets. Dismissing a card closes
   its browser notification but does not mark the conversation read.
+- A card nobody answers goes away by itself after five seconds, as a macOS or Windows banner
+  does. Only time it could be read counts: the window in front, and neither the pointer nor
+  keyboard focus on the card. Expiry only hides the card; the conversation stays unread and its
+  OS notification stays in the notification center.
 
 ## Agent CLIs in terminals
 

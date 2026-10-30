@@ -231,6 +231,35 @@ test("model, effort, permissions, plan and speed use the desktop controls", asyn
   await ui.getByRole("button", { name: "Send message", exact: true }).click();
   await expect(ui.getByText("Which platform should I verify?")).toBeVisible();
 });
+test("Android composer keeps the model picker open when returning to providers", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    window.addEventListener("message", (event) => {
+      const message = event.data?.concorsMobile;
+      if (window.parent !== window && message?.type === "state") {
+        // Match the Android WebView host: native platform services, shared DOM controls.
+        message.state.native = true;
+        message.state.nativeChrome = false;
+      }
+    });
+  });
+  const ui = await enter(page);
+  await ui.getByRole("textbox", { name: "Message Codex" }).fill("Keep my draft");
+  const trigger = ui.getByRole("button", { name: "Agent and model", exact: true });
+  await trigger.click();
+  for (let visit = 0; visit < 2; visit++) {
+    await ui.getByRole("button", { name: "Back to providers", exact: true }).click();
+    const providers = ui.getByRole("listbox", { name: "Providers", exact: true });
+    await expect(providers).toBeVisible();
+    await expect(ui.getByRole("combobox", { name: "Search providers" })).toBeVisible();
+    await providers.getByRole("option", { name: /^Codex\b/ }).click();
+    await expect(ui.getByRole("listbox", { name: "Agent and model", exact: true })).toBeVisible();
+  }
+  await ui.getByRole("option", { name: "Codex", exact: true }).click();
+  await expect(ui.getByRole("listbox", { name: "Agent and model", exact: true })).toHaveCount(0);
+  await expect(ui.getByRole("textbox", { name: "Message Codex" })).toHaveValue("Keep my draft");
+});
 test("composer stays visible with keyboard-sized viewport and return inserts a newline", async ({
   page,
 }) => {
@@ -698,14 +727,24 @@ test("composer expands on focus, preserves portaled controls, and collapses afte
   expect(centered).toBe(true);
 });
 
-test("flat tab picker opens a bottom sheet and dismisses without reopening", async ({ page }) => {
+test("flat tab picker opens from its text and padding and dismisses without reopening", async ({
+  page,
+}) => {
   const ui = await enter(page);
   const picker = ui.getByRole("combobox", { name: "Tabs" });
   const list = ui.getByRole("dialog", { name: "Tabs", exact: true });
-  for (let i = 0; i < 3; i++) {
+  // Android/web use this DOM button; exercise both text lines, padding and the chevron.
+  for (const [x, y] of [
+    [0.2, 0.3],
+    [0.2, 0.7],
+    [0.03, 0.5],
+    [0.5, 0.05],
+    [0.5, 0.95],
+    [0.95, 0.5],
+  ] as const) {
     const trigger = await picker.boundingBox();
     if (!trigger) throw new Error("Picker trigger is not visible");
-    await picker.tap();
+    await picker.tap({ position: { x: trigger.width * x, y: trigger.height * y } });
     await expect(list).toBeVisible();
     await expect(ui.getByRole("dialog", { name: "Tabs", exact: true })).toHaveAttribute(
       "data-mobile-drawer",
