@@ -191,6 +191,18 @@ for (const native of [false, true]) {
             .click();
         }
       };
+      // A new chat starts with the provider an earlier test left last. The native composer has
+      // no chip for chooseProvider, so the bridge switches it to Codex.
+      if (native) {
+        const model = async () => {
+          const content = (await surface("composer"))?.content;
+          return content?.kind === "composer"
+            ? content.controls.find((control) => control.id === "model")?.label
+            : undefined;
+        };
+        await expect.poll(model).toMatch(/ · Agent and model$/);
+        if ((await model()) !== "Codex · Agent and model") await choose("codex", "Codex");
+      }
       await send("Codex", "Keep my original conversation");
       for (const [provider, label] of [
         ["claude", "Claude Code"],

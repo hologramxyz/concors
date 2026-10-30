@@ -20,7 +20,7 @@ test("closing a workspace stops its terminals and keeps it for the + menu to reo
     await expect(item).not.toHaveAttribute("data-variant", "destructive");
     await item.click();
     const dialog = page.getByRole("dialog");
-    await expect(dialog.getByRole("heading")).toHaveText('Close "Closing project"?');
+    await expect(dialog.getByRole("heading")).toHaveText("Close “Closing project”?");
     await expect(dialog).toContainText("Its chats are kept. Reopen it from the + menu.");
     await expect(dialog).toContainText(/\d running terminals? will be stopped\./);
     await dialog.getByRole("button", { name: "Close workspace", exact: true }).click();

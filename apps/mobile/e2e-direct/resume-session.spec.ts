@@ -1,11 +1,40 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { mobileDesktopSocket } from "../../../e2e/support/mobile-direct-ports.cjs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DaemonConnection, describeDaemonEndpoint } from "@concors/daemon-client";
 import type { WorkspaceOperation } from "@concors/protocol";
+import type { MobileHostMessage, MobileRendererMessage } from "@concors/client-core";
 import { chooseProvider } from "../../../e2e/support/agents.ts";
+
+type TestWindow = Window & {
+  nativeSnapshot?: Extract<MobileRendererMessage, { type: "native-surfaces" }>;
+  concorsMobileReceive?(message: MobileHostMessage): void;
+};
+
+/** Presses a button the phone draws in native chrome, as the native host would. */
+async function pressNative(page: Page, label: string) {
+  const find = () =>
+    page.evaluate(
+      (label) =>
+        (window as TestWindow).nativeSnapshot?.surfaces.find(
+          (item) => item.content.kind === "button" && item.content.label === label,
+        )?.id,
+      label,
+    );
+  await expect.poll(find).toBeTruthy();
+  const state = await page.evaluate(() => (window as TestWindow).nativeSnapshot);
+  const frame = page.frames().find((item) => item !== page.mainFrame());
+  if (!state || !frame) throw new Error(`Missing native surface ${label}`);
+  await frame.evaluate((message) => (window as TestWindow).concorsMobileReceive?.(message), {
+    type: "native-event",
+    scope: state.scope,
+    connectionId: state.connectionId,
+    surfaceId: (await find())!,
+    event: { kind: "press", control: "activate" },
+  } satisfies MobileHostMessage);
+}
 
 for (const native of [false, true]) {
   test(`mobile ${native ? "native bridge" : "web composer"} resumes a CLI session in a new tab`, async ({
@@ -54,6 +83,8 @@ for (const native of [false, true]) {
               // Exercise the native host contract; Chromium does not render SwiftUI itself.
               message.state.native = true;
               message.state.nativeChrome = true;
+            } else if (window.parent === window && message?.type === "native-surfaces") {
+              (window as TestWindow).nativeSnapshot = message;
             }
           });
         });
@@ -65,7 +96,9 @@ for (const native of [false, true]) {
       const ui = page.frameLocator('iframe[title="Concors workspace"]');
       await chooseProvider(ui);
       // The New tab sheet opens the one Resume a chat list, closed chats and CLI sessions alike.
-      await ui.getByRole("combobox", { name: "Tabs" }).click();
+      // In native chrome the phone draws the Tabs button, so the bridge presses it.
+      if (native) await pressNative(page, "Tabs");
+      else await ui.getByRole("combobox", { name: "Tabs" }).click();
       await ui.getByRole("button", { name: "New tab", exact: true }).click();
       await ui
         .getByRole("dialog", { name: "New tab", exact: true })

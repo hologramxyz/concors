@@ -1,6 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 
-type Scope = Pick<Page, "getByRole">;
+type Scope = Pick<Page, "getByRole" | "locator">;
 
 /**
  * A new chat starts with the provider used last, then the first installed one. Tests share their
@@ -11,6 +11,11 @@ export async function chooseProvider(scope: Scope, provider = "Codex", root: Sco
   await expect(root.getByRole("menu")).toHaveCount(0);
   await expect(scope.getByRole("textbox", { name: "Preparing agent", exact: true })).toHaveCount(0);
   const composer = scope.getByRole("textbox", { name: /^Message / }).first();
+  // On the mobile native bridge the phone draws the composer, and its provider comes through
+  // the bridge, so there is no chip here to switch with.
+  const native = scope.locator("[data-native-composer]").first();
+  await expect(composer.or(native)).toBeAttached();
+  if (await native.count()) return;
   await expect(composer).toBeVisible();
   if ((await composer.getAttribute("aria-label")) === `Message ${provider}`) return;
   await scope.getByRole("button", { name: "Agent and model", exact: true }).first().click();

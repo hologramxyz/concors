@@ -129,7 +129,11 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
     await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "Codex", exact: true }).click();
     await expect(agents.getByRole("button", { name: /Open in terminal.*Codex/ })).toHaveCount(1);
-    await agents.getByRole("button", { name: /Open in terminal.*Codex/ }).hover();
+    // Only a row's name opens its details; the name is the row's tooltip trigger.
+    await agents
+      .getByRole("button", { name: /Open in terminal.*Codex/ })
+      .locator("[data-state]")
+      .hover();
     await expect(page.getByRole("tooltip")).toContainText("Codex");
     await page.mouse.move(0, 0);
     await expect(page.getByLabel("Terminal output").filter({ visible: true })).toContainText(

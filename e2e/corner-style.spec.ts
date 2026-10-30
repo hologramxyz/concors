@@ -29,7 +29,7 @@ test("corner styles update the live workspace and portaled controls, sync, and p
     const model = page.getByRole("button", { name: "Agent and model", exact: true });
     await expect(model).toBeEnabled();
     await model.click();
-    const modelOptions = page.getByRole("listbox", { name: "Agent and model" });
+    const modelOptions = page.getByRole("listbox", { name: "Models" });
     await expect(modelOptions).toBeVisible();
 
     await signedIn(second);

@@ -4,6 +4,9 @@ import { chooseProvider } from "./support/agents.ts";
 import { tab } from "./support/tabs.ts";
 const KEY = "concors.shortcuts.v1";
 const search = "Search workspaces, agents and tabs";
+// A collapsed sidebar stays mounted, inert, beside the title bar's copy of its search button.
+const searchButton = (page: Page) =>
+  page.getByRole("button", { name: "Search", exact: true }).and(page.locator(":not([inert] *)"));
 async function openSettings(page: Page) {
   await signedIn(page);
   await page.goto("/");
@@ -37,7 +40,7 @@ test("recorded shortcuts replace aliases, update hints, persist across reloads a
   await expect(page.getByRole("main")).toContainText("Ctrl+Alt+S");
   await page.getByRole("button", { name: "Back to app", exact: true }).click();
   await page.getByRole("button", { name: "Collapse sidebar" }).click();
-  await page.getByRole("button", { name: "Search", exact: true }).hover();
+  await searchButton(page).hover();
   await expect(
     page.getByRole("tooltip", { name: "Search (Ctrl+Alt+S)", exact: true }),
   ).toBeVisible();
@@ -49,14 +52,14 @@ test("recorded shortcuts replace aliases, update hints, persist across reloads a
   await expect(searchDialog.getByRole("combobox")).toBeFocused();
   await page.keyboard.press("Escape");
   await page.reload();
-  await expect(page.getByRole("button", { name: "Search", exact: true })).toBeVisible();
+  await expect(searchButton(page)).toBeVisible();
   await page.keyboard.press("Control+Alt+s");
   await expect(searchDialog).toBeVisible();
   await page.keyboard.press("Escape");
   const second = await context.newPage();
   await signedIn(second);
   await second.goto("/");
-  await expect(second.getByRole("button", { name: "Search", exact: true })).toBeVisible();
+  await expect(searchButton(second)).toBeVisible();
   await page.keyboard.press("Control+Shift+Slash");
   const disable = await edit(page, search);
   await disable.getByRole("button", { name: "Remove shortcut 1" }).click();

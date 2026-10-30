@@ -176,7 +176,7 @@ test("flat mobile tabs stay synced with desktop nested splits without flattening
     await drawer.getByRole("button", { name: "New tab", exact: true }).click();
     const create = ui.getByRole("dialog", { name: "New tab", exact: true });
     await expect(create.getByRole("button", { name: /Add pane/ })).toHaveCount(0);
-    await create.getByRole("button", { name: "Agent", exact: true }).click();
+    await create.getByRole("button", { name: "New chat", exact: true }).click();
     await expect.poll(() => project().tabs.length).toBe(3);
     const added = project().tabs[2];
     if (!added) throw new Error("Missing newly created tab");
