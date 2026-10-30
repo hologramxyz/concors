@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
-import { ageLabel } from "@/pull-requests/labels";
+import { shortAge } from "@/lib/format-date";
 import { matchScore } from "@/search/index";
 import { AgentStartedContext, useAgents } from "./context";
 import { ProviderIcon } from "./provider-icon";
@@ -450,7 +450,7 @@ function ResumeChatContent({
               title={new Date(row.updatedAt).toLocaleString()}
               className="shrink-0 text-xs text-muted-foreground"
             >
-              {ageLabel(row.updatedAt)}
+              {shortAge(row.updatedAt)}
             </time>
           </div>
         ))}

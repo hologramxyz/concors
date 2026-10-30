@@ -27,6 +27,7 @@ import { ProjectImage } from "@/workspace/project-image";
 import { projectIconKey } from "@/workspace/project-icons";
 import { useProjectIcons } from "@/workspace/use-project-icons";
 import { CloseDialog, MergeDialog } from "./actions";
+import { shortAge } from "@/lib/format-date";
 import { ageLabel, checksLabel, mergeReadiness, reviewLabel } from "./labels";
 import { usePullRequest } from "./use-pull-request";
 import type { PullRequestTarget } from "./view";
@@ -390,7 +391,7 @@ function TimelineEntry({ entry }: { entry: PullRequestTimelineEntry }) {
       <p className="flex flex-wrap items-center gap-x-1.5 border-b bg-muted/30 px-4 py-2 text-muted-foreground">
         <span className="font-medium text-foreground">{entry.author ?? "Someone"}</span>
         {review ? <span className={review[1]}>{review[0]}</span> : <span>commented</span>}
-        <span>· {ageLabel(entry.createdAt)}</span>
+        <span>· {shortAge(entry.createdAt)}</span>
       </p>
       {entry.body && (
         <div className="px-4 py-3">

@@ -97,6 +97,14 @@ export function WorkspaceSidebarItem({
       <AttentionBadge attention={attention} />
     </span>
   );
+  const details = (
+    <div className="min-w-0 break-words">
+      <p className="font-medium">{project.name}</p>
+      <p className="opacity-75">{project.directory}</p>
+      {attention.kind && <p className="opacity-75">Agents: {workspaceAttentionLabel(attention)}</p>}
+      {openPullRequests > 0 && <p className="opacity-75">{pullRequestsLabel(openPullRequests)}</p>}
+    </div>
+  );
   const button = (
     <button
       type="button"
@@ -114,7 +122,20 @@ export function WorkspaceSidebarItem({
       {image}
       {!compact && (
         <span className={cn("truncate", current === false && "text-sidebar-foreground/80")}>
-          {project.name}
+          {mobile ? (
+            project.name
+          ) : (
+            // Only the name opens the details, and they open below it: beside the row they would
+            // cover its pull-request count and "…" menu.
+            <Tooltip delayDuration={600} disableHoverableContent>
+              <TooltipTrigger asChild>
+                <span>{project.name}</span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" align="start" sideOffset={6}>
+                {details}
+              </TooltipContent>
+            </Tooltip>
+          )}
         </span>
       )}
       {!compact && parent && (
@@ -157,22 +178,13 @@ export function WorkspaceSidebarItem({
             className="min-w-0 flex-1 rounded bg-background px-1.5 py-0.5 text-ui text-foreground ring-1 ring-ring outline-none"
           />
         </div>
-      ) : mobile ? (
+      ) : mobile || !compact ? (
         button
       ) : (
         <Tooltip delayDuration={250}>
           <TooltipTrigger asChild>{button}</TooltipTrigger>
           <TooltipContent side="right" sideOffset={8}>
-            <div className="min-w-0 break-words">
-              <p className="font-medium">{project.name}</p>
-              <p className="opacity-75">{project.directory}</p>
-              {attention.kind && (
-                <p className="opacity-75">Agents: {workspaceAttentionLabel(attention)}</p>
-              )}
-              {openPullRequests > 0 && (
-                <p className="opacity-75">{pullRequestsLabel(openPullRequests)}</p>
-              )}
-            </div>
+            {details}
           </TooltipContent>
         </Tooltip>
       )}

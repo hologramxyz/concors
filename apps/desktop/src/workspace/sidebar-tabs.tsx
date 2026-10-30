@@ -23,7 +23,8 @@ import { BrailleSpinner } from "@/agents/activity";
 import type { AgentStatus } from "@/agents/agent-status";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { BackgroundTerminalsContext } from "@/terminal/background-terminals";
-import { rowAgentStatus, rowPinned, rowState, shortAge, type SidebarRow } from "./sidebar-rows";
+import { shortAge } from "@/lib/format-date";
+import { rowAgentStatus, rowPinned, rowState, type SidebarRow } from "./sidebar-rows";
 
 /**
  * Sits under the workspace's icon, one indent in, so the row reads as the workspace's. The chat's
@@ -129,7 +130,24 @@ export function SidebarTabRow({
     >
       <RowDot row={row} status={status} />
       <span className={cn("min-w-0 flex-1 truncate", closed && "text-muted-foreground")}>
-        {title}
+        {status ? (
+          // Only the name opens the details, and they open below it: beside the row they would
+          // cover its "…" menu.
+          <Tooltip delayDuration={600} disableHoverableContent>
+            <TooltipTrigger asChild>
+              <span>{title}</span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="start" sideOffset={6}>
+              <div className="min-w-0">
+                <p className="font-medium break-words">{title}</p>
+                <p className="opacity-75">{status.providerName}</p>
+                <p className="opacity-75">{status.status}</p>
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          title
+        )}
       </span>
       {pinned && <Pin className="size-3.5 shrink-0 text-muted-foreground" aria-label="Pinned" />}
       {scheduled && (
@@ -174,17 +192,6 @@ export function SidebarTabRow({
             className="min-w-0 flex-1 rounded bg-background px-1.5 py-0.5 text-ui text-foreground ring-1 ring-ring outline-none"
           />
         </div>
-      ) : status ? (
-        <Tooltip delayDuration={250}>
-          <TooltipTrigger asChild>{button}</TooltipTrigger>
-          <TooltipContent side="right" sideOffset={6}>
-            <div className="min-w-0">
-              <p className="font-medium break-words">{title}</p>
-              <p className="opacity-75">{status.providerName}</p>
-              <p className="opacity-75">{status.status}</p>
-            </div>
-          </TooltipContent>
-        </Tooltip>
       ) : (
         button
       )}

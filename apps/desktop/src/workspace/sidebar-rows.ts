@@ -217,19 +217,6 @@ export function stableOrder<T extends { key: string }>(
     .map(({ row }) => row);
 }
 
-/** Compact ages for sidebar rows: "now", "5m", "3h", "4d", "2mo", "1y". */
-export function shortAge(iso: string, now = Date.now()): string {
-  const minutes = Math.floor((now - Date.parse(iso)) / 60_000);
-  if (!Number.isFinite(minutes) || minutes < 1) return "now";
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d`;
-  if (days < 365) return `${Math.floor(days / 30)}mo`;
-  return `${Math.floor(days / 365)}y`;
-}
-
 /** Ages move on by themselves, so the list repaints once a minute. */
 export function useMinuteClock() {
   const [now, setNow] = useState(() => Date.now());

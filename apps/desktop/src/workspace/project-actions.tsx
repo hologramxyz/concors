@@ -99,9 +99,7 @@ export function ProjectActions({
           }}
         >
           <DialogHeader>
-            <DialogTitle>
-              {keeps ? `Close "${project.name}"?` : `Close ${project.name}?`}
-            </DialogTitle>
+            <DialogTitle>Close “{project.name}”?</DialogTitle>
             {keeps ? (
               <DialogDescription>
                 Its chats are kept. Reopen it from the + menu.

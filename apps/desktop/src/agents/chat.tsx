@@ -232,7 +232,7 @@ export function ChatPane({
             <textarea
               data-agent-composer
               aria-label="Preparing agent"
-              placeholder={start ? START_PLACEHOLDER : "Ask your agent to build something…"}
+              placeholder={start ? START_PLACEHOLDER : "Reply…"}
               disabled
               className="agent-composer-input min-h-16 w-full resize-none bg-transparent px-3 py-3 outline-none"
             />

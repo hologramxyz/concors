@@ -541,6 +541,7 @@ html[data-pane-resizing="row"] * {
   }
 }
 .agent-control {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -562,6 +563,18 @@ html[data-pane-resizing="row"] * {
 .agent-control > svg {
   flex-shrink: 0;
 }
+/* Sits on the icon's top corner, which is in the same place whether or not the label shows. */
+.agent-control-dot {
+  position: absolute;
+  top: 3px;
+  left: 17px;
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  background: var(--primary);
+  box-shadow: 0 0 0 2px var(--background);
+  pointer-events: none;
+}
 /*
  * The desktop composer keeps every control and the send button on one row at any pane width.
  * Labelled pickers give up width first, truncating their labels; once even those would crowd the
@@ -580,7 +593,7 @@ html[data-pane-resizing="row"] * {
 .agent-composer-toolbar .agent-control-value {
   flex-shrink: 1;
 }
-.agent-composer-toolbar .agent-control-value > span {
+.agent-composer-toolbar .agent-control-value > span:not(.agent-control-dot) {
   min-width: 0;
 }
 @container agent-composer (max-width: 585px) {
@@ -590,8 +603,9 @@ html[data-pane-resizing="row"] * {
     padding-inline: 0;
     flex-shrink: 0;
   }
-  .agent-composer-toolbar .agent-control-value:not(.agent-control-primary) > span,
-  .agent-composer-toolbar .composer-update-label > span {
+  .agent-composer-toolbar
+    .agent-control-value:not(.agent-control-primary)
+    > span:not(.agent-control-dot) {
     display: none;
   }
 }
@@ -602,7 +616,7 @@ html[data-pane-resizing="row"] * {
     padding-inline: 0;
     flex-shrink: 0;
   }
-  .agent-composer-toolbar .agent-control-primary > span {
+  .agent-composer-toolbar .agent-control-primary > span:not(.agent-control-dot) {
     display: none;
   }
 }

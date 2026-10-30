@@ -33,6 +33,8 @@ export function ControlPicker({
   onOpen,
   onGroupChange,
   status,
+  notice,
+  action,
 }: {
   label: string;
   value: string;
@@ -51,6 +53,10 @@ export function ControlPicker({
   onOpen?: () => void;
   onGroupChange?: (id: string) => void;
   status?: string | undefined;
+  /** Marks the trigger with a dot and adds this to its tooltip, e.g. an update for the agent. */
+  notice?: string | undefined;
+  /** Sits above everything else in the menu, set off by a divider. */
+  action?: ReactNode;
 }) {
   const [open, setOpen] = useState(false),
     [query, setQuery] = useState(""),
@@ -103,6 +109,7 @@ export function ControlPicker({
       ref={trigger}
       type="button"
       aria-label={label}
+      aria-description={notice}
       data-value={value}
       disabled={disabled}
       className={`agent-control ${showValue ? "agent-control-value" : ""} ${primary ? "agent-control-primary" : ""}`}
@@ -111,6 +118,7 @@ export function ControlPicker({
     >
       {icon}
       {showValue && <span className="truncate">{currentLabel}</span>}
+      {notice && <span aria-hidden="true" className="agent-control-dot" />}
     </Popover.Trigger>
   );
   return (
@@ -125,7 +133,11 @@ export function ControlPicker({
         setGroupId(selectedGroupId);
       }}
     >
-      <ControlTooltip text={`${label}: ${currentLabel}`} shortcut={shortcut} hidden={open || quiet}>
+      <ControlTooltip
+        text={`${label}: ${currentLabel}${notice ? ` · ${notice}` : ""}`}
+        shortcut={shortcut}
+        hidden={open || quiet}
+      >
         {triggerButton}
       </ControlTooltip>
       <Popover.Portal>
@@ -153,6 +165,7 @@ export function ControlPicker({
             }
           }}
         >
+          {action && <div className="mb-1.5 border-b pb-1.5">{action}</div>}
           {groups && (
             <div className="flex min-h-10 items-center gap-2 border-b px-2 pb-1.5 text-sm">
               {group && (

@@ -18,7 +18,8 @@ import {
 } from "@/components/ui/dialog";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { shownSessions } from "@/terminal/background-terminals";
-import { shortAge, useMinuteClock } from "@/workspace/sidebar-rows";
+import { shortAge } from "@/lib/format-date";
+import { useMinuteClock } from "@/workspace/sidebar-rows";
 import { chatName, type ChatActions } from "./chat-actions";
 
 const ACTIVE = ["starting", "working", "needs_input"];

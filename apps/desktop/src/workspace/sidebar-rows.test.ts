@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import type { AgentInfo, TerminalInfo, WorkspaceSnapshot } from "@concors/protocol";
-import { rowState, shortAge, sidebarRows, stableOrder } from "./sidebar-rows";
+import { shortAge } from "@/lib/format-date";
+import { rowState, sidebarRows, stableOrder } from "./sidebar-rows";
 
 const workspace: Pick<WorkspaceSnapshot, "projects"> = {
   projects: [
