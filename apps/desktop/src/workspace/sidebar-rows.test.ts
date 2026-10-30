@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import type { AgentInfo, TerminalInfo, WorkspaceSnapshot } from "@concors/protocol";
 import { shortAge } from "@/lib/format-date";
-import { rowState, sidebarRows, stableOrder } from "./sidebar-rows";
+import { rowState, rowStatusLabel, sidebarRows, stableOrder } from "./sidebar-rows";
 
 const workspace: Pick<WorkspaceSnapshot, "projects"> = {
   projects: [
@@ -188,6 +188,27 @@ it("dots a row only while its agent works or needs you", () => {
     rowState(sidebarRows(workspace, [agent("closed", patch)], []).rows.get("p")![3]!);
   expect(closed({ status: "needs_input" })).toBeUndefined();
   expect(closed({ status: "working" })).toBe("working");
+});
+
+it("labels a row's tooltip only while something is happening", () => {
+  const label = (chat: AgentInfo) =>
+    rowStatusLabel(sidebarRows(workspace, [chat, agent("closed")], []).rows.get("p")![0]!);
+  expect(label(agent("open"))).toBeUndefined();
+  expect(label(agent("open", { status: "working" }))).toBe("Working");
+  expect(label(agent("open", { status: "needs_input" }))).toBe("Needs your reply");
+  expect(label(agent("open", { status: "failed" }))).toBe("Failed");
+  const closed = (patch: Partial<AgentInfo>) =>
+    rowStatusLabel(sidebarRows(workspace, [agent("closed", patch)], []).rows.get("p")![3]!);
+  expect(closed({})).toBe("Closed");
+  expect(closed({ status: "working" })).toBe("Working");
+  const background = sidebarRows(
+    workspace,
+    [],
+    [terminal("dev", { foregroundCommand: "npm run dev" })],
+  ).rows.get("p")!;
+  expect(rowStatusLabel(background.find((row) => row.kind === "terminal")!)).toBe(
+    "Running in background",
+  );
 });
 
 it("keeps a closed terminal that still runs something among the closed rows, by when it started", () => {

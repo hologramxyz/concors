@@ -10,7 +10,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useContext, useRef, useState } from "react";
-import type { AgentInfo } from "@concors/protocol";
+import { agentProviderName, type AgentInfo } from "@concors/protocol";
 import { cn } from "cn";
 import {
   DropdownMenu,
@@ -24,7 +24,13 @@ import type { AgentStatus } from "@/agents/agent-status";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { BackgroundTerminalsContext } from "@/terminal/background-terminals";
 import { shortAge } from "@/lib/format-date";
-import { rowAgentStatus, rowPinned, rowState, type SidebarRow } from "./sidebar-rows";
+import {
+  rowAgentStatus,
+  rowPinned,
+  rowState,
+  rowStatusLabel,
+  type SidebarRow,
+} from "./sidebar-rows";
 
 /**
  * Sits under the workspace's icon, one indent in, so the row reads as the workspace's. The chat's
@@ -115,6 +121,14 @@ export function SidebarTabRow({
     setRename(null);
     onRename?.(value);
   };
+  const providerName =
+    status?.providerName ??
+    (row.kind === "closed"
+      ? (row.chat.agent.providerLabel ?? agentProviderName(row.chat.agent.provider))
+      : undefined);
+  const statusLabel = rowStatusLabel(row);
+  const name = useRef<HTMLSpanElement>(null);
+  const [tooltipPlace, setTooltipPlace] = useState({ side: 4, align: 0 });
   const pinned = rowPinned(row);
   const actions = !!onRename || !!onFork || !!onPin || !!onDelete || !!terminal;
   const button = (
@@ -130,24 +144,31 @@ export function SidebarTabRow({
     >
       <RowDot row={row} status={status} />
       <span className={cn("min-w-0 flex-1 truncate", closed && "text-muted-foreground")}>
-        {status ? (
-          // Only the name opens the details, and they open below it: beside the row they would
-          // cover its "…" menu.
-          <Tooltip delayDuration={600} disableHoverableContent>
-            <TooltipTrigger asChild>
-              <span>{title}</span>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" align="start" sideOffset={6}>
-              <div className="min-w-0">
-                <p className="font-medium break-words">{title}</p>
-                <p className="opacity-75">{status.providerName}</p>
-                <p className="opacity-75">{status.status}</p>
-              </div>
-            </TooltipContent>
-          </Tooltip>
-        ) : (
-          title
-        )}
+        {/* Only the name opens the details, and they sit beside the sidebar rather than the
+            name, so they never cover another row or this row's "…" menu. */}
+        <Tooltip
+          delayDuration={600}
+          disableHoverableContent
+          onOpenChange={(open) => open && setTooltipPlace(besideSidebar(name.current))}
+        >
+          <TooltipTrigger asChild>
+            <span ref={name}>{title}</span>
+          </TooltipTrigger>
+          <TooltipContent
+            side="right"
+            align="start"
+            arrow={false}
+            className="bg-popover/60 shadow-none backdrop-blur-md"
+            sideOffset={tooltipPlace.side}
+            alignOffset={tooltipPlace.align}
+          >
+            <div className="min-w-0">
+              <p className="font-medium break-words">{title}</p>
+              {providerName && <p className="opacity-75">{providerName}</p>}
+              {statusLabel && <p className="opacity-75">{statusLabel}</p>}
+            </div>
+          </TooltipContent>
+        </Tooltip>
       </span>
       {pinned && <Pin className="size-3.5 shrink-0 text-muted-foreground" aria-label="Pinned" />}
       {scheduled && (
@@ -294,4 +315,20 @@ export function UnavailableChats({ chats, now }: { chats: readonly AgentInfo[]; 
       </ul>
     </li>
   );
+}
+
+/**
+ * Where a row's tooltip goes relative to its name: 4px past the sidebar, where the content card
+ * starts, its top level with the row's. The name's own box runs past the row when it is truncated,
+ * so both come from the layout around it rather than from the name.
+ */
+function besideSidebar(name: HTMLElement | null): { side: number; align: number } {
+  const sidebar = name?.closest(".sidebar-shell");
+  const row = name?.closest("li");
+  if (!name || !sidebar || !row) return { side: 4, align: 0 };
+  const edge =
+    sidebar.parentElement?.querySelector(".workspace-surface")?.getBoundingClientRect().left ??
+    sidebar.getBoundingClientRect().right;
+  const box = name.getBoundingClientRect();
+  return { side: edge - box.right + 4, align: row.getBoundingClientRect().top - box.top };
 }

@@ -34,7 +34,6 @@ export function ControlPicker({
   onGroupChange,
   status,
   notice,
-  action,
 }: {
   label: string;
   value: string;
@@ -55,8 +54,6 @@ export function ControlPicker({
   status?: string | undefined;
   /** Marks the trigger with a dot and adds this to its tooltip, e.g. an update for the agent. */
   notice?: string | undefined;
-  /** Sits above everything else in the menu, set off by a divider. */
-  action?: ReactNode;
 }) {
   const [open, setOpen] = useState(false),
     [query, setQuery] = useState(""),
@@ -82,7 +79,7 @@ export function ControlPicker({
   const group = groups?.find((item) => item.id === groupId);
   const statusText = group?.status ?? status;
   const choosingProvider = !!groups && !group;
-  const searchLabel = choosingProvider ? "Providers" : label;
+  const searchLabel = choosingProvider ? "Providers" : group ? "Models" : label;
   const visible = (groups ? (group?.options ?? groups) : options).filter((o) =>
     `${o.label} ${o.description ?? ""}`.toLowerCase().includes(query.toLowerCase()),
   );
@@ -165,7 +162,6 @@ export function ControlPicker({
             }
           }}
         >
-          {action && <div className="mb-1.5 border-b pb-1.5">{action}</div>}
           {groups && (
             <div className="flex min-h-10 items-center gap-2 border-b px-2 pb-1.5 text-sm">
               {group && (
@@ -196,7 +192,7 @@ export function ControlPicker({
                 setQuery(e.target.value);
                 setActive(0);
               }}
-              placeholder={searchLabel}
+              placeholder={group ? "Search models" : searchLabel}
               className="min-w-0 flex-1 bg-transparent text-sm outline-none"
             />
           </div>

@@ -1,16 +1,15 @@
 import { useState } from "react";
 import { modelOptions } from "@concors/client-core";
-import { CircleArrowUp, Download, ExternalLink, LoaderCircle } from "lucide-react";
-import { agentProviderName, providerPresets, type AgentInfo } from "@concors/protocol";
+import { Download, LoaderCircle } from "lucide-react";
+import { agentProviderName, type AgentInfo } from "@concors/protocol";
 import { ControlPicker } from "./control-picker";
 import { ProviderIcon } from "./provider-icon";
 import { useAgentModelSelection } from "./use-model-selection";
-import { ProviderUpdateNotice } from "./provider-update";
-import { providerUpdatePending, useProviderUpdate } from "./provider-update-state";
+import { ProviderUpdateFooter, ProviderUpdateNotice } from "./provider-update";
+import { useProviderUpdate } from "./provider-update-state";
 import { useAgents } from "./context";
 import { hasConversation, switchConfirmation, switchDescription } from "./provider-switch";
 import { Button } from "@/components/ui/button";
-import { openExternal } from "@/tauri/open-external";
 import {
   Dialog,
   DialogContent,
@@ -55,51 +54,6 @@ export function AgentModelPicker({
     error: updateError,
     update,
   } = useProviderUpdate(agent.provider, providerLabel, current?.version);
-  const [guideError, setGuideError] = useState<string | null>(null);
-  // Without an update command the CLI was installed some way the daemon cannot repeat, so the
-  // item opens the vendor's guide instead.
-  const guide = providerPresets.find((p) => p.id === (agent.engine ?? agent.provider))?.installLink;
-  const updateAction = version && providerUpdatePending(version) && (
-    <>
-      <button
-        type="button"
-        disabled={!!version.updating || (!version.updateCommand && !guide)}
-        onClick={() => {
-          setGuideError(null);
-          if (version.updateCommand) void update();
-          else if (guide)
-            void openExternal(guide).catch(() => setGuideError("Could not open the update guide."));
-        }}
-        className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left text-sm hover:bg-accent disabled:hover:bg-transparent"
-      >
-        {version.updating ? (
-          <LoaderCircle className="size-4 shrink-0 animate-spin" />
-        ) : (
-          <CircleArrowUp className="size-4 shrink-0" />
-        )}
-        <span className="min-w-0 flex-1">
-          <span className="block truncate">
-            {version.updating ? `Updating ${providerLabel}…` : `Update ${providerLabel}`}
-          </span>
-          {version.latest && (
-            <span className="mt-0.5 block text-xs text-muted-foreground">
-              {version.updateCommand
-                ? `${version.installed ?? "Installed"} → ${version.latest}`
-                : `${version.latest} is out. Update it the way you installed it.`}
-            </span>
-          )}
-        </span>
-        {!version.updateCommand && guide && (
-          <ExternalLink className="size-3.5 shrink-0 text-muted-foreground" />
-        )}
-      </button>
-      {(updateError ?? guideError) && (
-        <p role="alert" className="px-2 pb-1 text-xs text-destructive">
-          {updateError ?? guideError}
-        </p>
-      )}
-    </>
-  );
   return (
     <>
       <ControlPicker
@@ -111,7 +65,6 @@ export function AgentModelPicker({
               ? `${providerLabel} ${version.latest} available`
               : undefined
         }
-        action={updateAction}
         showValue={showValue}
         primary
         selectedLabel={selection.label}
@@ -142,14 +95,27 @@ export function AgentModelPicker({
               ? "No models reported. Check this provider in Settings."
               : "Models are being discovered. They will appear here automatically."),
           status: p.error,
-          // The selected agent's update is the menu's first item instead.
-          footer: p.id !== agent.provider && p.version && (
-            <ProviderUpdateNotice
-              provider={p.id}
-              label={p.label ?? agentProviderName(p.id)}
-              version={p.version}
-            />
-          ),
+          // The selected agent's update is run from here, so it outlives the menu and the chip's
+          // dot follows its progress.
+          footer:
+            p.id === agent.provider ? (
+              <ProviderUpdateFooter
+                provider={agent.engine ?? agent.provider}
+                label={providerLabel}
+                version={version}
+                error={updateError}
+                onUpdate={() => void update()}
+              />
+            ) : (
+              p.version && (
+                <ProviderUpdateNotice
+                  id={p.id}
+                  provider={p.id}
+                  label={p.label ?? agentProviderName(p.id)}
+                  version={p.version}
+                />
+              )
+            ),
           options: [
             // An empty catalog must still allow opening a provider to sign in, and a missing
             // CLI to be installed: the chat it opens offers the install.
@@ -167,10 +133,10 @@ export function AgentModelPicker({
                   },
                 ]
               : []),
+            // The header already shows the agent, so model rows carry no icon of their own.
             ...(p.id === agent.provider ? selection.options : modelOptions(p.models)).map((m) => ({
               id: m.id,
               label: m.label,
-              icon: <ProviderIcon provider={p.id} />,
             })),
           ],
         }))}

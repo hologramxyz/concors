@@ -268,7 +268,7 @@ export function ChatPane({
 }
 
 /** The heading says what the start screen is for, so its prompt box asks more briefly. */
-const START_PLACEHOLDER = "Ask anything…";
+const START_PLACEHOLDER = "Ask your agent to build something…";
 
 /** Above the start screen's prompt box: the mark of the provider its chip has selected. */
 function StartHeading({ provider }: { provider: string | null }) {

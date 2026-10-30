@@ -184,6 +184,20 @@ export function rowState(
   return terminalAgentStatus(row.terminal).running ? "working" : undefined;
 }
 
+/**
+ * The status line a row's tooltip shows, only while something is happening: an open chat sitting
+ * idle, or finished (its dot says so), needs no label.
+ */
+export function rowStatusLabel(row: SidebarRow): string | undefined {
+  const state = rowState(row);
+  if (row.kind === "closed") return state === "working" ? "Working" : "Closed";
+  if (row.kind === "terminal")
+    return state === "attention" ? "Needs your reply" : "Running in background";
+  if (state === "attention")
+    return row.chat && agentDisplayStatus(row.chat) === "failed" ? "Failed" : "Needs your reply";
+  return state === "working" || state === "running" ? "Working" : undefined;
+}
+
 /** Saved chats whose workspace no longer exists, newest first, once per pane they were shown in. */
 function unavailableChats(
   workspace: Pick<WorkspaceSnapshot, "projects"> | null,
