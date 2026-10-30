@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
 import { chooseProvider } from "./support/agents.ts";
+import { closeTab } from "./support/tabs.ts";
 
 test("a closed chat is found by its pane name and reopens with its name, model and history", async ({
   page,
@@ -14,8 +15,8 @@ test("a closed chat is found by its pane name and reopens with its name, model a
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Resumable chats", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const composer = page.getByRole("textbox", { name: "Message Codex" });
     await expect(composer).toBeEnabled();
@@ -29,20 +30,27 @@ test("a closed chat is found by its pane name and reopens with its name, model a
     await pane.getByRole("textbox", { name: "Pane name", exact: true }).fill("Hello world");
     await page.keyboard.press("Enter");
     await expect(pane.locator("header").getByText("Hello world", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Close Tab 2 tab", exact: true }).click();
+    await closeTab(page, 1).click();
     await expect(pane).toHaveCount(0);
 
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "Resume a chat…", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Resume a chat" });
     const option = dialog.getByRole("option");
+    const search = dialog.getByRole("combobox", { name: "Search chats" });
+    // The closed chat is newer than the CLIs' saved sessions listed with it, so it comes first.
+    const chat = dialog.locator('[data-resume-row^="chat:"]');
+    await expect(chat).toHaveCount(1);
+    await expect(chat).toContainText("Hello world");
+    await expect(option.first()).toHaveAttribute("data-resume-row", /^chat:/);
+    // Found by what was said in it too, not only by its name.
+    await search.fill("release checklist");
     await expect(option).toHaveCount(1);
-    await expect(option).toContainText("Hello world");
-    await expect(option).toContainText("remember the release checklist");
-    await dialog.getByRole("combobox", { name: "Search closed chats" }).fill("claude");
+    await search.fill("no such chat");
     await expect(option).toHaveCount(0);
-    await dialog.getByRole("combobox", { name: "Search closed chats" }).fill("hello");
-    await expect(option).toHaveAttribute("aria-selected", "true");
+    await search.fill("hello");
+    await expect(option.first()).toHaveAttribute("aria-selected", "true");
+    await expect(option.first()).toContainText("Hello world");
     await page.keyboard.press("Enter");
     await expect(dialog).toHaveCount(0);
 
@@ -54,7 +62,8 @@ test("a closed chat is found by its pane name and reopens with its name, model a
     // Nothing is closed any more, and the shortcut opens the same list.
     await page.keyboard.press("Control+Shift+T");
     await page.keyboard.press("r");
-    await expect(dialog).toContainText("No closed chats in this workspace yet.");
+    await expect(dialog).toBeVisible();
+    await expect(chat).toHaveCount(0);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -67,8 +76,8 @@ test("a closed chat stays in the sidebar and in Search, and both reopen it", asy
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Closed chats", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const composer = page.getByRole("textbox", { name: "Message Codex" });
     await expect(composer).toBeEnabled();
@@ -76,20 +85,20 @@ test("a closed chat stays in the sidebar and in Search, and both reopen it", asy
     await page.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(page.getByRole("log")).toContainText("Hello from");
     const pane = page.getByRole("region", { name: "Agent pane", exact: true });
-    await page.getByRole("button", { name: "Close Tab 2 tab", exact: true }).click();
+    await closeTab(page, 1).click();
     await expect(pane).toHaveCount(0);
 
+    // A closed chat stays under its workspace, muted.
     const closed = page
-      .getByRole("region", { name: "Agents", exact: true })
-      .getByRole("list", { name: "Recently closed agents", exact: true })
-      .getByRole("button");
+      .getByRole("list", { name: "Closed chats tabs", exact: true })
+      .locator("button[data-agent-closed]");
     await expect(closed).toHaveCount(1);
     await expect(closed).toContainText("draft the launch notes");
     await closed.click();
     await expect(page.getByRole("log")).toContainText("draft the launch notes");
     await expect(closed).toHaveCount(0);
 
-    await page.getByRole("button", { name: "Close Tab 2 tab", exact: true }).click();
+    await closeTab(page, 1).click();
     await expect(pane).toHaveCount(0);
     await page
       .getByRole("navigation", { name: "Primary" })

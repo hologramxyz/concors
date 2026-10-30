@@ -253,12 +253,15 @@ it("creates separate one-click workspaces and browses folders on this machine", 
     expect(manager.request(request).outcome.status).toBe("ok");
     await expect.poll(() => store.projectSetups()[i]?.status).toBe("done");
   }
-  expect(store.snapshot().projects).toHaveLength(2);
+  expect(store.snapshot().projects.map((project) => project.name)).toEqual([
+    "Workspace 1",
+    "Workspace 2",
+  ]);
   for (const project of store.snapshot().projects)
     expect(project).toMatchObject({
       directoryMode: "follow",
       followPaneId: project.tabs[0]?.root,
       directory: await realpath(root),
-      tabs: [{ nodes: [{ kind: "pane", profile: "shell" }] }],
+      tabs: [{ nodes: [{ kind: "pane", profile: "chat" }] }],
     });
 });

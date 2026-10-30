@@ -70,7 +70,9 @@ function AccountPrompt({
   const storageKey = `concors:account-prompt:${connection.endpoint.url}:${agent.provider}`;
   const [hidden, setHidden] = useState(() => dismissed(storageKey));
   const [account, setAccount] = useState<AgentAccount | null>(null);
+  /** What went wrong with something the user did; a failed check alone is not shown. */
   const [error, setError] = useState<string | null>(null);
+  const [checkFailed, setCheckFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [method, setMethod] = useState("");
   const [value, setValue] = useState("");
@@ -113,7 +115,7 @@ function AccountPrompt({
         complete = resolve;
       });
       if (!background) setBusy(true);
-      setError(null);
+      if (action.type !== "read") setError(null);
       try {
         const result = await connection.requestAgent(
           { kind: "account", sessionId: agent.id, action },
@@ -149,10 +151,13 @@ function AccountPrompt({
           invalidateModelCatalogs(connection);
         latest.current = next;
         setAccount(next);
+        if (action.type === "read") setCheckFailed(false);
         if (action.type === "complete" || next.status === "connected") setValue("");
       } catch (cause) {
-        if (mounted.current && !isDismissed.current)
-          setError(cause instanceof Error ? cause.message : "Could not connect account");
+        if (!mounted.current || isDismissed.current) {
+          // Nothing to show.
+        } else if (action.type === "read") setCheckFailed(true);
+        else setError(cause instanceof Error ? cause.message : "Could not connect account");
       } finally {
         pending.current = null;
         complete();
@@ -215,9 +220,10 @@ function AccountPrompt({
         listing.current = false;
       });
   }, [checksInstall, provider]);
+  const troubled = !!error || checkFailed;
   useEffect(() => {
-    if (error && cli === undefined) checkInstall();
-  }, [error, cli, checkInstall]);
+    if (troubled && cli === undefined) checkInstall();
+  }, [troubled, cli, checkInstall]);
   const installing = cli?.installStatus === "installing";
   useEffect(() => {
     if (hidden || !installing) return;
@@ -255,7 +261,8 @@ function AccountPrompt({
     }
   };
   // While the CLI is missing, or a failed check is still asking, the chat's start error is noise.
-  const installPrompt = canEdit && !hidden && (cli ? !cli.installed : cli === undefined && !!error);
+  const installPrompt =
+    canEdit && !hidden && (cli ? !cli.installed : cli === undefined && troubled);
   useEffect(() => {
     onInstallPrompt?.(installPrompt);
   }, [installPrompt, onInstallPrompt]);
@@ -280,7 +287,7 @@ function AccountPrompt({
       </Button>
     );
   // A failed check may only mean the CLI is missing; wait to know before showing it.
-  if (cli === undefined && error) return null;
+  if (cli === undefined && troubled) return null;
   const label = agent.providerLabel ?? agentProviderName(agent.provider);
   if (cli && !cli.installed) {
     const failure = installError ?? (cli.installStatus === "failed" ? cli.error : undefined);
@@ -351,9 +358,9 @@ function AccountPrompt({
       </section>
     );
   }
-  // An unresolved initial check is not evidence that the user needs to sign in.
-  // Keep failures visible so the account check can still be retried.
-  if ((!account && !error) || account?.status === "connected") return null;
+  // Only a finished check that found no account, or a sign-in under way, asks to connect one. A
+  // check still running or one that failed is no evidence either way; the next focus checks again.
+  if (!account || account.status === "connected" || account.status === "unknown") return null;
   const methods = account?.methods ?? [];
   const selected = methods.find((m) => m.id === method) ?? methods[0];
   const challenge = account?.challenge;

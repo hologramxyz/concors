@@ -117,8 +117,9 @@ export function PreviewsSidebar({ compact = false }: { compact?: boolean }) {
                   side={compact ? "right" : "top"}
                   align={compact ? "center" : "start"}
                 >
-                  <p className="font-medium">
-                    {preview.name} · :{preview.port}
+                  <p className="flex gap-2 font-medium">
+                    <span>{preview.name}</span>
+                    <span className="opacity-75">:{preview.port}</span>
                   </p>
                   {usage.details.map((detail) => (
                     <p key={detail} className="opacity-75">

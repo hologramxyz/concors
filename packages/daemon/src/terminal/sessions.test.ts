@@ -174,13 +174,36 @@ it("shares a real PTY, transfers control, replays its screen, rebinds and record
     sessionId,
   });
   expect(first.connection.workspace!.projects[0]!.tabs[0]!.nodes[0]).toMatchObject({ sessionId });
+  // Or into a tab created in the same step, so it never shows empty first.
+  await edit(first.connection, { kind: "tab.close", projectId, tabId: newTab, expectedVersion: 4 });
+  const ownTab = randomUUID(),
+    ownPane = randomUUID();
+  await request(first.connection, {
+    kind: "bind",
+    projectId,
+    tabId: ownTab,
+    paneId: ownPane,
+    expectedVersion: 5,
+    sessionId,
+    newTab: { name: "Tab 1" },
+  });
+  await expect
+    .poll(() => first.connection.workspace)
+    .toMatchObject({
+      selection: { tabId: ownTab },
+      projects: [
+        {
+          version: 6,
+          tabs: [{ id: ownTab, nodes: [{ id: ownPane, sessionId, profile: "shell" }] }],
+        },
+      ],
+    });
   expect((await request(first.connection, { kind: "stop", sessionId }))[0]?.status).toBe("exited");
   const next = await request(first.connection, {
     ...start,
-    tabId: newTab,
-    paneId: newPane,
-    // Binding a session that already ran changes the pane's profile, so that one does count.
-    expectedVersion: 4,
+    tabId: ownTab,
+    paneId: ownPane,
+    expectedVersion: 6,
     expectedSessionId: sessionId,
   });
   expect(next[0]?.status).toBe("running");
@@ -196,8 +219,8 @@ it("shares a real PTY, transfers control, replays its screen, rebinds and record
   const recover: TerminalOperation = {
     ...start,
     recover: true,
-    tabId: newTab,
-    paneId: newPane,
+    tabId: ownTab,
+    paneId: ownPane,
     expectedVersion: 0, // Recovery of this exact binding tolerates unrelated project changes.
     expectedSessionId: next[0]!.id,
   };

@@ -1,11 +1,30 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath, URL } from "node:url";
-import { loadEnv } from "vite";
+import { loadEnv, type Plugin } from "vite";
 import { defineConfig } from "vitest/config";
 
 // Set by `tauri dev` when developing against a physical mobile device; unused on desktop.
 const host = process.env["TAURI_DEV_HOST"];
+
+/**
+ * With the dev proxy, the sign-in page would open on localhost:1420, an origin the identity
+ * provider does not trust, so Google and GitHub refuse to start. The page is a top-level browser
+ * visit that needs no same-origin access, so send it to the API's own origin instead.
+ */
+function redirectNativeSignInPage(apiOrigin: string): Plugin {
+  return {
+    name: "concors:redirect-native-sign-in",
+    configureServer(server) {
+      server.middlewares.use((request, response, next) => {
+        if (!request.url?.startsWith("/api/v1/native-auth/start")) return next();
+        response.statusCode = 302;
+        response.setHeader("Location", new URL(request.url, apiOrigin).toString());
+        response.end();
+      });
+    },
+  };
+}
 
 export default defineConfig(({ mode }) => {
   const root = fileURLToPath(new URL(".", import.meta.url));
@@ -15,7 +34,11 @@ export default defineConfig(({ mode }) => {
   const apiProxyTarget = loadEnv(mode, root, "")["CONCORS_API_PROXY_TARGET"];
 
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [
+      react(),
+      tailwindcss(),
+      ...(apiProxyTarget ? [redirectNativeSignInPage(apiProxyTarget)] : []),
+    ],
 
     resolve: {
       alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },

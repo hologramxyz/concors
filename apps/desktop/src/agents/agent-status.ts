@@ -20,7 +20,10 @@ export interface AgentStatus {
   providerName: string;
   status: string;
   running: boolean;
-  /** The dot shown when nothing is running. */
+  /**
+   * The dot shown when nothing is running: white (the accent) once it has finished, red when it
+   * failed or waits for an answer, and none while it simply sits idle.
+   */
   color: string;
   unread: boolean;
   /** Sub-agents still working in the background, which a chat that is done can still have. */
@@ -37,12 +40,10 @@ export function chatAgentStatus(agent: AgentInfo): AgentStatus {
     status: AGENT_STATUS[status],
     color:
       status === "done"
-        ? "bg-emerald-500"
-        : status === "failed"
-          ? "bg-red-500"
-          : status === "needs_input"
-            ? "bg-amber-500"
-            : "bg-muted-foreground/60",
+        ? "bg-primary"
+        : status === "failed" || status === "needs_input"
+          ? "bg-destructive"
+          : "",
     unread: !!(agent.attention && !agent.attention.seen),
     background: agent.backgroundAgents ?? 0,
   };
@@ -66,11 +67,7 @@ export function terminalAgentStatus(session: TerminalInfo): AgentStatus {
               ? "Done"
               : "Open in terminal",
     color:
-      session.agentActivity === "needs_input"
-        ? "bg-amber-500"
-        : turnDone
-          ? "bg-emerald-500"
-          : "bg-muted-foreground/60",
+      session.agentActivity === "needs_input" ? "bg-destructive" : turnDone ? "bg-primary" : "",
     unread: false,
     background: 0,
   };

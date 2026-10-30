@@ -7,6 +7,7 @@ import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
 import { chooseProvider } from "./support/agents.ts";
 import { DaemonConnection, describeDaemonEndpoint } from "../packages/daemon-client/src/index.ts";
+import { tabs } from "./support/tabs.ts";
 
 test("a workspace shows what its agents want while another workspace is open", async ({ page }) => {
   const first = await mkdtemp(join(tmpdir(), "concors-attention-a-"));
@@ -21,8 +22,8 @@ test("a workspace shows what its agents want while another workspace is open", a
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Attention A", first);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
     await expect
@@ -75,8 +76,8 @@ test("a pane shows its agent's status on its own icon, as its tab does", async (
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Pane status", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
     await expect
@@ -89,7 +90,7 @@ test("a pane shows its agent's status on its own icon, as its tab does", async (
     assert(agent);
 
     const pane = page.getByRole("region", { name: "Agent pane", exact: true }).locator("header");
-    const tab = page.getByRole("button", { name: "Tab 2", exact: true });
+    const tab = tabs(page).nth(1).locator("> button").first();
     for (const [text, status] of [
       ["hold", "Working"],
       ["question", "Needs input"],

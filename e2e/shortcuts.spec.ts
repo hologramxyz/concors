@@ -4,6 +4,7 @@ import { basename, join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { BINDINGS } from "../apps/desktop/src/shortcuts/bindings.ts";
 import { bindingLabel, defaultKeymap } from "../apps/desktop/src/shortcuts/keymap.ts";
+import { tabs } from "./support/tabs.ts";
 
 test("workspace shortcuts create, search, split and close the active pane without leaking into terminals", async ({
   page,
@@ -30,6 +31,12 @@ test("workspace shortcuts create, search, split and close the active pane withou
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await page.keyboard.press("Control+Shift+n");
     await expect(page.getByRole("dialog")).toHaveCount(0);
+    // A new workspace opens on the start screen; its Terminal chip starts a shell there.
+    await page
+      .getByRole("group", { name: "Start with", exact: true })
+      .filter({ visible: true })
+      .getByRole("button", { name: "Terminal", exact: true })
+      .click();
     await expect(page.locator(".concors-terminal .xterm").filter({ visible: true })).toHaveCount(1);
     await page.getByRole("button", { name: "Open workspace menu", exact: true }).click();
     await page.getByRole("menuitem", { name: "Clone repository…", exact: true }).click();
@@ -66,11 +73,13 @@ test("workspace shortcuts create, search, split and close the active pane withou
     ).toBeVisible();
     await page.keyboard.press("Control+Shift+t");
     await page.keyboard.press("Enter");
-    await page.getByRole("menuitem", { name: "Codex", exact: true }).click();
-    const tab = page.getByLabel("Project tabs", { exact: true }).getByRole("button", {
-      name: "Tab 2",
-      exact: true,
-    });
+    // The shortcut opens a tab on the start screen, whose chips start the other profiles.
+    await page
+      .getByRole("group", { name: "Start with", exact: true })
+      .filter({ visible: true })
+      .getByRole("button", { name: "Codex", exact: true })
+      .click();
+    const tab = tabs(page).nth(1).locator("> button").first();
     await expect(tab).toHaveAttribute("aria-pressed", "true");
     const panes = page.getByRole("region", { name: "Codex pane", exact: true });
     await expect(panes).toHaveCount(1);
@@ -139,9 +148,8 @@ test("workspace shortcuts create, search, split and close the active pane withou
     await expect(
       page
         .getByRole("navigation", { name: "Primary" })
-        .getByRole("region", { name: "Agents", exact: true })
         .getByRole("button", { name: /Open in terminal.*Codex/ }),
-    ).toHaveCount(3);
+    ).toHaveCount(1); // Three panes, one split tab: the sidebar lists the tab once.
     // The daemon is shared by acceptance tests; stop our fixture before detaching its pane.
     for (const pane of await panes.all()) {
       await pane.locator("textarea").focus();
@@ -152,7 +160,6 @@ test("workspace shortcuts create, search, split and close the active pane withou
     await expect(
       page
         .getByRole("navigation", { name: "Primary" })
-        .getByRole("region", { name: "Agents", exact: true })
         .getByRole("button", { name: /Open in terminal.*Codex/ }),
     ).toHaveCount(0);
     await panes.first().focus();
@@ -172,8 +179,9 @@ test("workspace shortcuts create, search, split and close the active pane withou
     await page.keyboard.press("Control+Shift+k");
     await page.getByPlaceholder("Search workspaces, agents, tabs…").fill("New tab");
     await page.getByRole("option", { name: /New tab/ }).click();
-    await expect(page.getByRole("menuitem", { name: "Terminal", exact: true })).toBeVisible();
-    await page.keyboard.press("Escape");
+    await expect(
+      page.getByRole("group", { name: "Start with", exact: true }).filter({ visible: true }),
+    ).toBeVisible();
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -258,6 +266,10 @@ test("Mac workspace shortcuts use physical Control and display matching hints", 
     ).toBeEnabled();
     await page.keyboard.press("Control+Shift+n");
     await expect(page.getByRole("dialog")).toHaveCount(0);
+    await page
+      .getByRole("group", { name: "Start with" })
+      .getByRole("button", { name: "Terminal", exact: true })
+      .click();
     await page.locator(".concors-terminal textarea").filter({ visible: true }).focus();
     await page.keyboard.type(`cd '${directory}'`);
     await page.keyboard.press("Enter");

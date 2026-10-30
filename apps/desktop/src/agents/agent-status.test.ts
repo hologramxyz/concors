@@ -69,9 +69,9 @@ it("shows a finished chat agent as Ready once its completion has been seen", () 
       attention: { id: id(31), kind: "done", createdAt: new Date(0).toISOString(), seen },
     }) as AgentInfo;
   const [unseen] = tabAgentStatuses(tab, [finished(false)], []);
-  expect(unseen).toMatchObject({ status: "Done", color: "bg-emerald-500", unread: true });
+  expect(unseen).toMatchObject({ status: "Done", color: "bg-primary", unread: true });
   const [seen] = tabAgentStatuses(tab, [finished(true)], []);
-  expect(seen).toMatchObject({ status: "Ready", color: "bg-muted-foreground/60", unread: false });
+  expect(seen).toMatchObject({ status: "Ready", color: "", unread: false });
 });
 
 it("sums a workspace's agents across its tabs, most urgent first, counting updates until seen", () => {

@@ -1,3 +1,4 @@
+import { X } from "lucide-react";
 import { SchedulesPage } from "@/schedules/page";
 import { PullRequestsPage } from "@/pull-requests/page";
 import { allPullRequests, type PullRequestsView } from "@/pull-requests/view";
@@ -19,6 +20,10 @@ import { NotificationProvider } from "@/notifications/provider";
 import { AgentsProvider } from "@/agents/state";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { TerminalProfilesContext } from "@/terminal/profiles-context";
+import { BackgroundTerminalsContext } from "@/terminal/background-terminals";
+import { ClosedTerminalNotice, ManageTerminalsDialog } from "@/terminal/session-list";
+import { RetiredChatsNotice } from "@/agents/chat-limit";
+import { useBackgroundTerminals } from "@/terminal/use-background-terminals";
 import { DEFAULT_TERMINAL_PROFILES, PROJECT_RENAME_CAPABILITY } from "@concors/protocol";
 import type { DaemonEndpoint } from "@concors/daemon-client";
 import type { WorkspaceOperation } from "@concors/protocol";
@@ -31,6 +36,8 @@ import { UnreachableHelpButton } from "@/daemon/unreachable-dialog";
 import { useAuth } from "@/auth/use-auth";
 import { useSignInUnavailable } from "@/auth/sign-in";
 import { AppSidebar } from "@/components/app-sidebar";
+import { SidebarToggle } from "@/components/sidebar-toggle";
+import { SearchButton } from "@/components/search-button";
 import { WorkspaceSearch } from "@/search/workspace-search";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { resolveStartupEndpoint, resolveHostEndpoint } from "@/daemon/resolve-endpoint";
@@ -124,8 +131,11 @@ function AppContent() {
     setAddingProject(null);
     const trigger = projectDialogTrigger.current;
     // These controlled dialogs have no Radix DialogTrigger. Only cancellation returns
-    // to the opener; successful setup leaves focus with the newly opened workspace.
+    // to the opener; successful setup leaves focus with the newly opened workspace. Focus moved
+    // elsewhere meanwhile, by a click or a shortcut, stays where it went.
     requestAnimationFrame(() => {
+      const focused = document.activeElement;
+      if (focused && focused !== document.body && !focused.closest('[role="dialog"]')) return;
       if (trigger?.isConnected) trigger.focus({ preventScroll: true });
     });
   };
@@ -174,6 +184,10 @@ function AppContent() {
     hostScope,
   );
   const workspace = connection.workspace;
+  const background = useBackgroundTerminals(connection, {
+    onReopen: () => setView("projects"),
+    onError: setError,
+  });
   const canEdit = connection.state.status === "ready" && connection.workspaceReady && !pending;
   const selection = workspace?.selection;
   const memoryKey = `${selectedMachineId}:${workspace?.epoch}`;
@@ -429,12 +443,14 @@ function AppContent() {
   const execute = async (operation: WorkspaceOperation) => {
     // A selection shows at once and is not version-checked, so it never holds up the next action.
     if (operation.kind === "selection.set") return connection.execute(operation);
+    const closing = background.closing(operation);
     setPending(true);
     try {
       await connection.execute(operation);
     } finally {
       setPending(false);
     }
+    background.afterClose(closing);
   };
   const command = (operation: WorkspaceOperation) => {
     setError(null);
@@ -447,6 +463,10 @@ function AppContent() {
     const remembered = lastTabs.current.get(`${memoryKey}:${projectId}`);
     const tabId =
       project?.tabs.find((tab) => tab.id === remembered)?.id ?? project?.tabs[0]?.id ?? null;
+    setView("projects");
+    command({ kind: "selection.set", projectId, tabId });
+  };
+  const selectTab = (projectId: string, tabId: string) => {
     setView("projects");
     command({ kind: "selection.set", projectId, tabId });
   };
@@ -463,6 +483,21 @@ function AppContent() {
     (project) => project.id === workspace.selection?.projectId,
   );
 
+  // Collapsed, the sidebar is gone and its toggle and search stay where the open sidebar has
+  // them: pinned beside the traffic lights over the content's top row, which leaves them room.
+  // Without a native title bar they simply lead that row.
+  const collapsedToggle = view !== "settings" && sidebarCollapsed && (
+    <div className="flex shrink-0 items-center gap-0.5">
+      <SidebarToggle
+        collapsed
+        onToggle={() => toggleSidebar(false)}
+        side="bottom"
+        className="p-1.5"
+      />
+      <SearchButton collapsed onOpenSearch={openSearch} />
+    </div>
+  );
+  const titleBarToggle = windowChrome.inset ? null : collapsedToggle || null;
   return (
     <ColorThemeProvider
       connection={connection.transport}
@@ -471,287 +506,334 @@ function AppContent() {
       onSelect={colorTheme.select}
     >
       <TerminalConnectionContext value={connection.transport}>
-        <TerminalProfilesContext
-          value={{
-            profiles: workspace?.terminalProfiles ?? DEFAULT_TERMINAL_PROFILES,
-            supported:
-              connection.state.status === "ready" &&
-              !!connection.state.daemon.capabilities?.includes("terminal-profiles"),
-          }}
-        >
-          <FilesProvider beforeLeaveRef={beforeLeaveFiles}>
-            <NotificationProvider connection={connection.transport} onOpen={openAgent}>
-              <AgentsProvider connection={connection.transport} onStarted={openAgent}>
-                <TooltipProvider>
-                  <div className="flex h-dvh w-full overflow-hidden bg-sidebar">
-                    {view === "settings" ? (
-                      <SettingsSidebar
-                        page={settingsPage}
-                        onBack={() => setView(settingsReturnView.current)}
-                        onNavigate={setSettingsPage}
-                        hidden={hiddenSettings}
-                      />
-                    ) : (
-                      <AppSidebar
-                        collapsed={sidebarCollapsed}
-                        onCollapse={() => toggleSidebar(!sidebarCollapsed)}
-                        execute={execute}
-                        onCommand={command}
-                        onSelectAgent={openAgent}
-                        view={view}
-                        onOpenSettings={() => openSettings("account")}
-                        onOpenSchedules={() => {
-                          setView("schedules");
-                        }}
-                        onOpenPullRequests={(projectId, repository) => {
-                          setPullRequestsView({
-                            projectId: projectId ?? null,
-                            repository: repository ?? null,
-                            state: "open",
-                            pullRequest: null,
-                          });
-                          setView("pull-requests");
-                        }}
-                        onOpenSearch={openSearch}
-                        onOpenResources={() => setView("resources")}
-                        workspace={workspace}
-                        canEdit={canEdit && !newWorkspace.busy}
-                        onSelectProject={selectProject}
-                        onAddProject={startWorkspace}
-                        onOpenFolder={openProjectDialog}
-                        hostScope={hostScope}
-                        selectedHost={selectedHost}
-                        machineConnected={connection.link === "connected"}
-                        onSelectMachine={selectMachine}
-                        onViewCloud={manageMachines}
-                        auth={account}
-                        onSignOut={signOut}
-                      />
-                    )}
-                    <div className="workspace-surface my-2 mr-2 flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-background shadow-xs">
-                      {!(view === "projects" && activeProject) && (
-                        <header
-                          data-tauri-drag-region={windowChrome.enabled ? "deep" : undefined}
-                          className="flex h-11 shrink-0 items-center gap-2 border-b pr-2 pl-4 select-none"
-                        >
-                          <h1 className="min-w-0 flex-1 truncate text-ui font-medium">
-                            {view === "settings"
-                              ? settingsNavItemFor(settingsPage).label
-                              : navItemFor(view).label}
-                          </h1>
-                          <WindowControls />
-                        </header>
+        <BackgroundTerminalsContext value={background.actions}>
+          <TerminalProfilesContext
+            value={{
+              profiles: workspace?.terminalProfiles ?? DEFAULT_TERMINAL_PROFILES,
+              supported:
+                connection.state.status === "ready" &&
+                !!connection.state.daemon.capabilities?.includes("terminal-profiles"),
+            }}
+          >
+            <FilesProvider beforeLeaveRef={beforeLeaveFiles}>
+              <NotificationProvider connection={connection.transport} onOpen={openAgent}>
+                <AgentsProvider connection={connection.transport} onStarted={openAgent}>
+                  <TooltipProvider>
+                    <div
+                      // The gaps around the content card are part of the macOS title bar too.
+                      data-tauri-drag-region={windowChrome.inset ? "true" : undefined}
+                      className="app-frame flex h-dvh w-full overflow-hidden bg-sidebar"
+                    >
+                      {view === "settings" ? (
+                        <SettingsSidebar
+                          page={settingsPage}
+                          onBack={() => setView(settingsReturnView.current)}
+                          onNavigate={setSettingsPage}
+                          hidden={hiddenSettings}
+                        />
+                      ) : (
+                        <AppSidebar
+                          collapsed={sidebarCollapsed}
+                          onCollapse={() => toggleSidebar(!sidebarCollapsed)}
+                          execute={execute}
+                          onCommand={command}
+                          onSelectAgent={openAgent}
+                          onSelectTab={selectTab}
+                          view={view}
+                          onOpenSettings={() => openSettings("account")}
+                          onOpenSchedules={() => {
+                            setView("schedules");
+                          }}
+                          onOpenPullRequests={(projectId, repository) => {
+                            setPullRequestsView({
+                              projectId: projectId ?? null,
+                              repository: repository ?? null,
+                              state: "open",
+                              pullRequest: null,
+                            });
+                            setView("pull-requests");
+                          }}
+                          onOpenSearch={openSearch}
+                          onOpenResources={() => setView("resources")}
+                          workspace={workspace}
+                          canEdit={canEdit && !newWorkspace.busy}
+                          onSelectProject={selectProject}
+                          onAddProject={startWorkspace}
+                          onOpenFolder={openProjectDialog}
+                          hostScope={hostScope}
+                          selectedHost={selectedHost}
+                          machineConnected={connection.link === "connected"}
+                          onSelectMachine={selectMachine}
+                          onViewCloud={manageMachines}
+                          auth={account}
+                          onSignOut={signOut}
+                        />
                       )}
-                      {(error || localStartupError) && (
+                      {windowChrome.inset && collapsedToggle && (
                         <div
-                          role="alert"
-                          className="flex items-center justify-between gap-3 border-b bg-destructive/5 px-4 py-2 text-xs text-destructive"
+                          data-tauri-drag-region
+                          className="title-bar-start fixed top-0 left-0 z-20 box-content flex h-11 items-center pt-2"
                         >
-                          <span>{error ?? localStartupError}</span>
-                          <Button
-                            variant="ghost"
-                            type="button"
-                            onClick={() => {
-                              setError(null);
-                              setLocalStartupError(null);
-                            }}
-                          >
-                            Dismiss
-                          </Button>
+                          {collapsedToggle}
                         </div>
                       )}
-                      {connection.error && (
-                        <div
-                          role="alert"
-                          className="flex items-center justify-between gap-3 border-b bg-destructive/5 px-4 py-2 text-xs text-destructive"
-                        >
-                          <span className="min-w-0 flex-1">
-                            {connection.error === "Access revoked"
-                              ? connection.error
-                              : `Can't reach ${selectedHost.label}. Concors keeps retrying.`}
-                          </span>
-                          {connection.error !== "Access revoked" && (
+                      <div className="workspace-surface my-2 mr-2 flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-background shadow-xs">
+                        {!(view === "projects" && activeProject) && (
+                          <header
+                            data-tauri-drag-region={
+                              windowChrome.enabled || windowChrome.inset ? "deep" : undefined
+                            }
+                            className="title-bar-row flex h-11 shrink-0 items-center gap-2 border-b pr-2 pl-4 select-none"
+                          >
+                            {titleBarToggle}
+                            <h1 className="min-w-0 flex-1 truncate text-ui font-medium">
+                              {view === "settings"
+                                ? settingsNavItemFor(settingsPage).label
+                                : navItemFor(view).label}
+                            </h1>
+                            <WindowControls />
+                          </header>
+                        )}
+                        {(error || localStartupError) && (
+                          <div
+                            role="alert"
+                            className="flex items-center justify-between gap-3 border-b bg-destructive/5 px-4 py-2 text-xs text-destructive"
+                          >
+                            <span>{error ?? localStartupError}</span>
+                            <Button
+                              variant="ghost"
+                              type="button"
+                              onClick={() => {
+                                setError(null);
+                                setLocalStartupError(null);
+                              }}
+                            >
+                              Dismiss
+                            </Button>
+                          </div>
+                        )}
+                        {connection.error && (
+                          <div
+                            role="alert"
+                            className="flex items-center justify-between gap-3 border-b bg-destructive/5 px-4 py-2 text-xs text-destructive"
+                          >
+                            <span className="min-w-0 flex-1">
+                              {connection.error === "Access revoked"
+                                ? connection.error
+                                : `Can't reach ${selectedHost.label}. Concors keeps retrying.`}
+                            </span>
+                            {connection.error !== "Access revoked" && (
+                              <UnreachableHelpButton
+                                host={selectedHost}
+                                organizationId={organizationId}
+                                onRetry={connection.reconnectNow}
+                              />
+                            )}
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={connection.reconnectNow}
+                            >
+                              Retry connection
+                            </Button>
+                          </div>
+                        )}
+                        {connection.link === "reconnecting" && (
+                          <div
+                            role="status"
+                            className="flex items-center gap-2 border-b bg-muted px-4 py-1 text-xs text-muted-foreground"
+                          >
+                            <span
+                              aria-hidden="true"
+                              className="size-1.5 shrink-0 animate-pulse rounded-full bg-warning"
+                            />
+                            <span className="min-w-0 flex-1 truncate">
+                              Reconnecting to {selectedHost.label}…
+                            </span>
                             <UnreachableHelpButton
                               host={selectedHost}
                               organizationId={organizationId}
                               onRetry={connection.reconnectNow}
                             />
-                          )}
-                          <Button type="button" variant="outline" onClick={connection.reconnectNow}>
-                            Retry connection
-                          </Button>
-                        </div>
-                      )}
-                      {connection.link === "reconnecting" && (
-                        <div
-                          role="status"
-                          className="flex items-center gap-2 border-b bg-muted px-4 py-1 text-xs text-muted-foreground"
-                        >
-                          <span
-                            aria-hidden="true"
-                            className="size-1.5 shrink-0 animate-pulse rounded-full bg-warning"
-                          />
-                          <span className="min-w-0 flex-1 truncate">
-                            Reconnecting to {selectedHost.label}…
-                          </span>
-                          <UnreachableHelpButton
-                            host={selectedHost}
-                            organizationId={organizationId}
-                            onRetry={connection.reconnectNow}
-                          />
-                          <Button type="button" variant="ghost" onClick={connection.reconnectNow}>
-                            Retry now
-                          </Button>
-                        </div>
-                      )}
-                      <main className="min-h-0 flex-1 overflow-auto">
-                        {view === "settings" ? (
-                          <SettingsView
-                            key={workspace?.machineId ?? endpoint?.url}
-                            page={settingsPage}
-                            machines={{
-                              onSelectLocal: () => selectMachine(LOCAL_HOST),
-                              localSelected: selectedHost.machineId === "local",
-                              focusedMachineId: focusedCloudMachineId,
-                              selectedMachineId,
-                              connection: { endpoint, state: connection.state },
-                            }}
-                            subscriptions={{
-                              localEndpoint,
-                              hostScope,
-                            }}
-                            theme={theme.preference}
-                            onSetTheme={theme.setPreference}
-                            cornerStyle={corners.preference}
-                            onSetCornerStyle={corners.setPreference}
-                            auth={account}
-                            onSetActiveOrganization={(organizationId) => {
-                              setError(null);
-                              void auth
-                                .setActiveOrganization(organizationId)
-                                .catch((cause: unknown) => setError(describeAuthError(cause)));
-                            }}
-                          />
-                        ) : view === "schedules" ? (
-                          <SchedulesPage
-                            key={workspace?.machineId ?? endpoint?.url}
-                            workspace={workspace}
-                            connected={
-                              connection.workspaceReady && connection.state.status === "ready"
-                            }
-                            onOpenAgent={openAgent}
-                          />
-                        ) : view === "pull-requests" ? (
-                          <PullRequestsPage
-                            key={workspace?.machineId ?? endpoint?.url}
-                            workspace={workspace}
-                            connected={
-                              connection.workspaceReady && connection.state.status === "ready"
-                            }
-                            view={pullRequestsView}
-                            onNavigate={setPullRequestsView}
-                          />
-                        ) : view === "projects" ? (
-                          workspace ? (
-                            <ProjectWorkspace
-                              onPaneFocus={(paneId) => {
-                                if (selection?.tabId)
-                                  lastPanes.current.set(`${memoryKey}:${selection.tabId}`, paneId);
+                            <Button type="button" variant="ghost" onClick={connection.reconnectNow}>
+                              Retry now
+                            </Button>
+                          </div>
+                        )}
+                        <main className="min-h-0 flex-1 overflow-auto">
+                          {view === "settings" ? (
+                            <SettingsView
+                              key={workspace?.machineId ?? endpoint?.url}
+                              page={settingsPage}
+                              machines={{
+                                onSelectLocal: () => selectMachine(LOCAL_HOST),
+                                localSelected: selectedHost.machineId === "local",
+                                focusedMachineId: focusedCloudMachineId,
+                                selectedMachineId,
+                                connection: { endpoint, state: connection.state },
                               }}
-                              focusRequest={paneFocus}
+                              subscriptions={{
+                                localEndpoint,
+                                hostScope,
+                              }}
+                              theme={theme.preference}
+                              onSetTheme={theme.setPreference}
+                              cornerStyle={corners.preference}
+                              onSetCornerStyle={corners.setPreference}
+                              auth={account}
+                              onSetActiveOrganization={(organizationId) => {
+                                setError(null);
+                                void auth
+                                  .setActiveOrganization(organizationId)
+                                  .catch((cause: unknown) => setError(describeAuthError(cause)));
+                              }}
+                            />
+                          ) : view === "schedules" ? (
+                            <SchedulesPage
+                              key={workspace?.machineId ?? endpoint?.url}
                               workspace={workspace}
                               connected={
-                                connection.state.status === "ready" && connection.workspaceReady
+                                connection.workspaceReady && connection.state.status === "ready"
                               }
-                              canEdit={canEdit && !newWorkspace.busy}
-                              onCommand={command}
-                              execute={execute}
-                              onAddProject={startWorkspace}
-                              onOpenFolder={openProjectDialog}
+                              onOpenAgent={openAgent}
                             />
+                          ) : view === "pull-requests" ? (
+                            <PullRequestsPage
+                              key={workspace?.machineId ?? endpoint?.url}
+                              workspace={workspace}
+                              connected={
+                                connection.workspaceReady && connection.state.status === "ready"
+                              }
+                              view={pullRequestsView}
+                              onNavigate={setPullRequestsView}
+                            />
+                          ) : view === "projects" ? (
+                            workspace ? (
+                              <ProjectWorkspace
+                                onPaneFocus={(paneId) => {
+                                  if (selection?.tabId)
+                                    lastPanes.current.set(
+                                      `${memoryKey}:${selection.tabId}`,
+                                      paneId,
+                                    );
+                                }}
+                                focusRequest={paneFocus}
+                                workspace={workspace}
+                                connected={
+                                  connection.state.status === "ready" && connection.workspaceReady
+                                }
+                                canEdit={canEdit && !newWorkspace.busy}
+                                onCommand={command}
+                                execute={execute}
+                                onAddProject={startWorkspace}
+                                onOpenFolder={openProjectDialog}
+                                sidebarToggle={titleBarToggle}
+                              />
+                            ) : (
+                              <StartupScreen embedded onOpenSettings={connectionSettings} />
+                            )
                           ) : (
-                            <StartupScreen embedded onOpenSettings={connectionSettings} />
-                          )
-                        ) : (
-                          <ResourcesView />
+                            <ResourcesView />
+                          )}
+                        </main>
+                        {view !== "settings" && (
+                          <ResourceStatus
+                            connection={connection.transport}
+                            state={connection.state}
+                            reconnecting={connection.link === "reconnecting"}
+                            machine={selectedHost.label}
+                            onOpenResources={() => setView("resources")}
+                          />
                         )}
-                      </main>
-                      {view !== "settings" && (
-                        <ResourceStatus
-                          connection={connection.transport}
-                          state={connection.state}
-                          reconnecting={connection.link === "reconnecting"}
-                          machine={selectedHost.label}
-                          onOpenResources={() => setView("resources")}
-                        />
-                      )}
+                      </div>
+                      <FilesSidebar project={view === "projects" ? activeProject : undefined} />
                     </div>
-                    <FilesSidebar project={view === "projects" ? activeProject : undefined} />
-                  </div>
-                  {newWorkspace.error && (
-                    <div
-                      role="alert"
-                      className="fixed bottom-4 left-1/2 z-50 flex max-w-[90vw] -translate-x-1/2 items-center gap-3 rounded-md border bg-popover p-3 text-ui shadow-md"
-                    >
-                      <span>{newWorkspace.error}</span>
-                      <Button type="button" variant="ghost" onClick={newWorkspace.dismiss}>
-                        Dismiss
-                      </Button>
-                    </div>
-                  )}
-                  {addingProject && (
-                    <ProjectSetupDialog
-                      machineId={selectedMachineId}
-                      mode={addingProject}
-                      onClose={cancelProjectDialog}
-                      onAdded={() => {
-                        setAddingProject(null);
-                        setView("projects");
-                      }}
+                    {newWorkspace.error && (
+                      <div
+                        role="alert"
+                        className="fixed top-14 left-1/2 z-50 flex max-w-[90vw] -translate-x-1/2 items-center gap-3 rounded-md border bg-popover p-3 text-ui shadow-md duration-200 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-2"
+                      >
+                        <span>{newWorkspace.error}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label="Dismiss"
+                          className="text-muted-foreground"
+                          onClick={newWorkspace.dismiss}
+                        >
+                          <X />
+                        </Button>
+                      </div>
+                    )}
+                    {background.closed && (
+                      <ClosedTerminalNotice
+                        key={background.closed.id}
+                        terminal={background.closed}
+                        workspace={workspace}
+                        onDismiss={background.dismissClosed}
+                      />
+                    )}
+                    <RetiredChatsNotice workspace={workspace} />
+                    <ManageTerminalsDialog
+                      open={background.managing}
+                      onOpenChange={background.setManaging}
+                      workspace={workspace}
                     />
-                  )}
-                  <Tour
-                    ready={connection.workspaceReady && !!workspace}
-                    firstName={account.user.name.trim().split(/\s+/)[0] ?? ""}
-                    hasWorkspace={!!workspace?.projects.length}
-                    workspaceFailed={!!newWorkspace.error}
-                    onCreateWorkspace={() => {
-                      nameNextWorkspace.current = true;
-                      startWorkspace();
-                    }}
-                    onPrepare={(inWorkspace) => {
-                      if (sidebarCollapsed) setSidebarCollapsed(false);
-                      const first = workspace?.projects[0];
-                      if (inWorkspace && !activeProject && first) selectProject(first.id);
-                      else if (view !== "projects") setView("projects");
-                    }}
-                    onAddWorkspace={() => openProjectDialog("open")}
-                  />
-                  <WorkspaceSearch
-                    key={`${hostScope}:${memoryKey}`}
-                    machine={selectedHost.label}
-                    activeProjectId={selection?.projectId}
-                    canSelectProject={canEdit}
-                    projects={workspace?.projects ?? []}
-                    onSelectProject={selectProject}
-                    onSelectPane={openPane}
-                    open={searchOpen}
-                    onOpenChange={setSearchOpen}
-                    onNavigate={setView}
-                    onManageMachines={manageMachines}
-                    onReconnect={connection.reconnectNow}
-                    canReconnect={
-                      connection.state.status === "disconnected" ||
-                      connection.state.status === "error"
-                    }
-                    onSetTheme={theme.setPreference}
-                    onSignOut={signOut}
-                  />
-                </TooltipProvider>
-              </AgentsProvider>
-            </NotificationProvider>
-          </FilesProvider>
-        </TerminalProfilesContext>
+                    {addingProject && (
+                      <ProjectSetupDialog
+                        machineId={selectedMachineId}
+                        mode={addingProject}
+                        onClose={cancelProjectDialog}
+                        onAdded={() => {
+                          setAddingProject(null);
+                          setView("projects");
+                        }}
+                      />
+                    )}
+                    <Tour
+                      ready={connection.workspaceReady && !!workspace}
+                      firstName={account.user.name.trim().split(/\s+/)[0] ?? ""}
+                      hasWorkspace={!!workspace?.projects.length}
+                      workspaceFailed={!!newWorkspace.error}
+                      onCreateWorkspace={() => {
+                        nameNextWorkspace.current = true;
+                        startWorkspace();
+                      }}
+                      onPrepare={(inWorkspace) => {
+                        if (sidebarCollapsed) setSidebarCollapsed(false);
+                        const first = workspace?.projects[0];
+                        if (inWorkspace && !activeProject && first) selectProject(first.id);
+                        else if (view !== "projects") setView("projects");
+                      }}
+                      onAddWorkspace={() => openProjectDialog("open")}
+                    />
+                    <WorkspaceSearch
+                      key={`${hostScope}:${memoryKey}`}
+                      machine={selectedHost.label}
+                      activeProjectId={selection?.projectId}
+                      canSelectProject={canEdit}
+                      projects={workspace?.projects ?? []}
+                      onSelectProject={selectProject}
+                      onSelectPane={openPane}
+                      open={searchOpen}
+                      onOpenChange={setSearchOpen}
+                      onNavigate={setView}
+                      onManageMachines={manageMachines}
+                      onReconnect={connection.reconnectNow}
+                      canReconnect={
+                        connection.state.status === "disconnected" ||
+                        connection.state.status === "error"
+                      }
+                      onSetTheme={theme.setPreference}
+                      onSignOut={signOut}
+                    />
+                  </TooltipProvider>
+                </AgentsProvider>
+              </NotificationProvider>
+            </FilesProvider>
+          </TerminalProfilesContext>
+        </BackgroundTerminalsContext>
       </TerminalConnectionContext>
     </ColorThemeProvider>
   );

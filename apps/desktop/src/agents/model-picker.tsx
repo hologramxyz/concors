@@ -5,7 +5,8 @@ import { agentProviderName, type AgentInfo } from "@concors/protocol";
 import { ControlPicker } from "./control-picker";
 import { ProviderIcon } from "./provider-icon";
 import { useAgentModelSelection } from "./use-model-selection";
-import { ProviderUpdateNotice } from "./provider-update";
+import { ProviderUpdateFooter, ProviderUpdateNotice } from "./provider-update";
+import { useProviderUpdate } from "./provider-update-state";
 import { useAgents } from "./context";
 import { hasConversation, switchConfirmation, switchDescription } from "./provider-switch";
 import { Button } from "@/components/ui/button";
@@ -46,10 +47,24 @@ export function AgentModelPicker({
       providers.find((p) => p.id === confirming.provider)?.label ??
         agentProviderName(confirming.provider),
     );
+  const current = providers.find((p) => p.id === agent.provider);
+  const providerLabel = current?.label ?? agentProviderName(agent.provider);
+  const {
+    version,
+    error: updateError,
+    update,
+  } = useProviderUpdate(agent.provider, providerLabel, current?.version);
   return (
     <>
       <ControlPicker
         label="Agent and model"
+        notice={
+          version?.updating
+            ? `Updating ${providerLabel}`
+            : version?.updateAvailable
+              ? `${providerLabel} ${version.latest} available`
+              : undefined
+        }
         showValue={showValue}
         primary
         selectedLabel={selection.label}
@@ -80,13 +95,27 @@ export function AgentModelPicker({
               ? "No models reported. Check this provider in Settings."
               : "Models are being discovered. They will appear here automatically."),
           status: p.error,
-          footer: p.version && (
-            <ProviderUpdateNotice
-              provider={p.id}
-              label={p.label ?? agentProviderName(p.id)}
-              version={p.version}
-            />
-          ),
+          // The selected agent's update is run from here, so it outlives the menu and the chip's
+          // dot follows its progress.
+          footer:
+            p.id === agent.provider ? (
+              <ProviderUpdateFooter
+                provider={agent.engine ?? agent.provider}
+                label={providerLabel}
+                version={version}
+                error={updateError}
+                onUpdate={() => void update()}
+              />
+            ) : (
+              p.version && (
+                <ProviderUpdateNotice
+                  id={p.id}
+                  provider={p.id}
+                  label={p.label ?? agentProviderName(p.id)}
+                  version={p.version}
+                />
+              )
+            ),
           options: [
             // An empty catalog must still allow opening a provider to sign in, and a missing
             // CLI to be installed: the chat it opens offers the install.
@@ -104,10 +133,10 @@ export function AgentModelPicker({
                   },
                 ]
               : []),
+            // The header already shows the agent, so model rows carry no icon of their own.
             ...(p.id === agent.provider ? selection.options : modelOptions(p.models)).map((m) => ({
               id: m.id,
               label: m.label,
-              icon: <ProviderIcon provider={p.id} />,
             })),
           ],
         }))}

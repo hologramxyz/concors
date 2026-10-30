@@ -16,6 +16,7 @@ const edges: [ResizeDirection, string][] = [
 export function WindowChromeProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<WindowChromeState>({
     enabled: false,
+    inset: false,
     maximized: false,
     fullscreen: false,
   });
@@ -29,7 +30,7 @@ export function WindowChromeProvider({ children }: { children: ReactNode }) {
     };
     void (async () => {
       const initial = await refresh();
-      if (cancelled || !initial.enabled) return;
+      if (cancelled || !(initial.enabled || initial.inset)) return;
       const stop = await nativeWindow.subscribe(() => {
         void refresh().catch(console.error);
       });
@@ -44,6 +45,21 @@ export function WindowChromeProvider({ children }: { children: ReactNode }) {
       unsubscribe?.();
     };
   }, []);
+  const trafficLights = state.inset && !state.fullscreen;
+  useEffect(() => {
+    if (!state.inset) return;
+    const doubleClick = (event: MouseEvent) => {
+      if (event.button === 0 && isDragRegion(event.composedPath()))
+        void nativeWindow.titleBarDoubleClick().catch(console.error);
+    };
+    document.addEventListener("dblclick", doubleClick);
+    return () => document.removeEventListener("dblclick", doubleClick);
+  }, [state.inset]);
+  // Lets styles.css make room for the traffic lights where React does not know the layout.
+  useEffect(() => {
+    document.documentElement.toggleAttribute("data-traffic-lights", trafficLights);
+    document.documentElement.toggleAttribute("data-window-inset", state.inset);
+  }, [trafficLights, state.inset]);
   return (
     <WindowChromeContext value={{ ...state, actions: nativeWindow }}>
       {children}
@@ -65,4 +81,25 @@ export function WindowChromeProvider({ children }: { children: ReactNode }) {
         ))}
     </WindowChromeContext>
   );
+}
+
+/** The same rule Tauri's drag script uses to decide whether a press lands on a drag region. */
+function isDragRegion(path: EventTarget[]) {
+  for (const element of path) {
+    if (!(element instanceof HTMLElement)) continue;
+    const region = element.getAttribute("data-tauri-drag-region");
+    const clickable =
+      /^(A|BUTTON|INPUT|SELECT|TEXTAREA|LABEL|SUMMARY)$/.test(element.tagName) ||
+      element.isContentEditable ||
+      (element.hasAttribute("tabindex") && element.getAttribute("tabindex") !== "-1") ||
+      /^(button|link|menuitem|tab|checkbox|radio|switch|option)$/.test(
+        element.getAttribute("role") ?? "",
+      );
+    if (clickable && region === null) return false;
+    if (region === null) continue;
+    if (region === "false") return false;
+    if (region === "deep") return true;
+    if (region === "" || region === "true") return element === path[0];
+  }
+  return false;
 }

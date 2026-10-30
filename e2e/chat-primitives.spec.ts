@@ -13,8 +13,8 @@ test("chat presents native forms, plan review, file content and durable attachme
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Chat primitives", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const input = page.getByRole("textbox", { name: "Message Codex" });
     const send = async (text: string) => {

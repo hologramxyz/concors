@@ -27,8 +27,8 @@ test("damaged text attachments show a recoverable error without crashing the con
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Attachment recovery", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const composer = page.getByRole("textbox", { name: "Message Codex" });
     await page.locator('input[type="file"]').setInputFiles({

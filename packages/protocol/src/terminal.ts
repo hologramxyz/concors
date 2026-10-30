@@ -7,6 +7,8 @@ import { AgentAttachmentSchema } from "./agents.ts";
  * headless machine cannot read the viewer's clipboard, but it attaches an image path pasted as text.
  */
 export const TERMINAL_IMAGE_PASTE_CAPABILITY = "terminal-image-paste";
+/** The daemon can open a background terminal in a new tab it creates in the same step. */
+export const TERMINAL_BIND_NEW_TAB_CAPABILITY = "terminal-bind-new-tab";
 
 const Id = z.string().uuid();
 const Size = { cols: z.number().int().min(10).max(240), rows: z.number().int().min(2).max(100) };
@@ -21,6 +23,11 @@ export const TerminalInfoSchema = z.object({
   profile: TerminalProfileSchema,
   terminalProfile: SavedTerminalProfileSchema.optional(),
   detectedAgent: z.enum(["codex", "claude", "opencode"]).nullable().optional(),
+  /**
+   * A shell's foreground job as a short label ("npm run dev"), or null while it waits at a prompt.
+   * Coding agents are named, never their arguments. Absent from daemons that do not report it.
+   */
+  foregroundCommand: z.string().max(80).nullable().optional(),
   currentDirectory: z.string().min(1).max(4096).optional(),
   directory: z.string(),
   status: z.enum(["starting", "running", "exited", "failed", "interrupted"]),
@@ -56,6 +63,11 @@ export const TerminalOperationSchema = z.discriminatedUnion("kind", [
     paneId: Id,
     expectedVersion: z.number().int().nonnegative(),
     sessionId: Id,
+    /**
+     * Creates `tabId`, with the terminal in its only pane `paneId`, instead of filling an empty pane,
+     * so the tab never shows anything else first. Needs `TERMINAL_BIND_NEW_TAB_CAPABILITY`.
+     */
+    newTab: z.object({ name: z.string().trim().min(1).max(120) }).optional(),
   }),
 ]);
 export type TerminalOperation = z.infer<typeof TerminalOperationSchema>;

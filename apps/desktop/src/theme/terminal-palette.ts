@@ -55,7 +55,8 @@ export function terminalPalette(
   const palette = theme[mode];
   const custom = theme.custom?.[mode]?.terminal;
   const background =
-    custom?.background ?? (compact ? mobileThemeBackground(theme, mode) : palette.surface);
+    // Terminals share the surface chats sit on, so a pane looks the same whatever runs in it.
+    custom?.background ?? (compact ? mobileThemeBackground(theme, mode) : palette.background);
   const colors: TerminalPalette = {
     ...ANSI_COLORS[mode],
     background,

@@ -17,7 +17,6 @@ import { pullRequestsLabel } from "@/pull-requests/labels";
 import { workspaceOpenCount } from "@/pull-requests/store";
 import { useAgents } from "@/agents/context";
 import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
-import { AgentLoadingIcon } from "@/agents/activity";
 import {
   workspaceAttention,
   workspaceAttentionLabel,
@@ -26,8 +25,10 @@ import {
 
 export function WorkspaceSidebarItem({
   project,
+  parent,
   compact,
   selected,
+  current,
   canEdit,
   icon,
   pullRequests,
@@ -37,8 +38,15 @@ export function WorkspaceSidebarItem({
   onCommand,
 }: {
   project: WorkspaceProject;
+  /** Shown beside the name only when another workspace has the same name. */
+  parent?: string | undefined;
   compact: boolean;
   selected: boolean;
+  /**
+   * Whether this is the workspace you are in, when the sidebar also lists its tabs: its name is
+   * then a little stronger than the others', and the selected tab row carries the fill.
+   */
+  current?: boolean | undefined;
   canEdit: boolean;
   icon: ProjectIcon | undefined;
   pullRequests?: WorkspacePullRequests | undefined;
@@ -89,6 +97,14 @@ export function WorkspaceSidebarItem({
       <AttentionBadge attention={attention} />
     </span>
   );
+  const details = (
+    <div className="min-w-0 break-words">
+      <p className="font-medium">{project.name}</p>
+      <p className="opacity-75">{project.directory}</p>
+      {attention.kind && <p className="opacity-75">Agents: {workspaceAttentionLabel(attention)}</p>}
+      {openPullRequests > 0 && <p className="opacity-75">{pullRequestsLabel(openPullRequests)}</p>}
+    </div>
+  );
   const button = (
     <button
       type="button"
@@ -96,21 +112,43 @@ export function WorkspaceSidebarItem({
       aria-label={project.name}
       data-workspace-id={project.id}
       onClick={() => onSelect(project.id)}
-      aria-current={selected ? "page" : undefined}
+      // The workspace you are in, even while one of its tab rows carries the selection's fill.
+      aria-current={(current ?? selected) ? "page" : undefined}
       className={cn(
         "flex min-w-0 flex-1 items-center rounded-md text-ui disabled:opacity-50",
         compact ? "sidebar-rail-control font-semibold" : "h-8 gap-2 px-2",
       )}
     >
       {image}
-      {!compact && <span className="truncate">{project.name}</span>}
+      {!compact && (
+        <span className={cn("truncate", current === false && "text-sidebar-foreground/80")}>
+          {mobile ? (
+            project.name
+          ) : (
+            // Only the name opens the details, and they open below it: beside the row they would
+            // cover its pull-request count and "…" menu.
+            <Tooltip delayDuration={600} disableHoverableContent>
+              <TooltipTrigger asChild>
+                <span>{project.name}</span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" align="start" sideOffset={6}>
+                {details}
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </span>
+      )}
+      {!compact && parent && (
+        <span className="min-w-0 shrink-[2] truncate text-muted-foreground">{parent}</span>
+      )}
     </button>
   );
   return (
     <li
       className={cn(
-        "group flex items-center rounded-md focus-within:bg-sidebar-accent hover:bg-sidebar-accent has-[[data-state=open]]:bg-sidebar-accent",
-        selected && "bg-sidebar-accent",
+        // Keyboard focus shows, but a clicked row does not stay filled once selection moves on.
+        "group flex items-center rounded-md hover:bg-sidebar-accent/50 has-[:focus-visible]:bg-sidebar-accent/50 has-[[data-state=open]]:bg-sidebar-accent/50",
+        selected && "bg-sidebar-accent hover:bg-sidebar-accent",
         mobile && "mobile-project",
       )}
     >
@@ -140,24 +178,23 @@ export function WorkspaceSidebarItem({
             className="min-w-0 flex-1 rounded bg-background px-1.5 py-0.5 text-ui text-foreground ring-1 ring-ring outline-none"
           />
         </div>
-      ) : mobile ? (
+      ) : mobile || !compact ? (
         button
       ) : (
         <Tooltip delayDuration={250}>
           <TooltipTrigger asChild>{button}</TooltipTrigger>
           <TooltipContent side="right" sideOffset={8}>
-            <div className="min-w-0 break-words">
-              <p className="font-medium">{project.name}</p>
-              <p className="opacity-75">{project.directory}</p>
-              {attention.kind && (
-                <p className="opacity-75">Agents: {workspaceAttentionLabel(attention)}</p>
-              )}
-              {openPullRequests > 0 && (
-                <p className="opacity-75">{pullRequestsLabel(openPullRequests)}</p>
-              )}
-            </div>
+            {details}
           </TooltipContent>
         </Tooltip>
+      )}
+      {/* Before the menu, so every row's "…" sits at the same edge. */}
+      {!compact && onOpenPullRequests && (
+        <WorkspacePullRequestCount
+          project={project}
+          listing={pullRequests}
+          onOpen={onOpenPullRequests}
+        />
       )}
       {!compact && (
         <ProjectActions
@@ -175,39 +212,27 @@ export function WorkspaceSidebarItem({
           }}
         />
       )}
-      {!compact && onOpenPullRequests && (
-        <WorkspacePullRequestCount
-          project={project}
-          listing={pullRequests}
-          onOpen={onOpenPullRequests}
-        />
-      )}
     </li>
   );
 }
 
-/** The corner of a workspace's icon: its agents' most urgent state, as their tabs show it. */
+/**
+ * The corner of a workspace's icon, when something in it wants a look: a question, a failure or a
+ * finished turn. Work in progress shows on its own row instead, so the icon stays still.
+ */
 function AttentionBadge({ attention }: { attention: WorkspaceAttention }) {
-  if (!attention.kind) return null;
+  if (!attention.kind || attention.kind === "working") return null;
   return (
     <span
       data-workspace-attention={attention.kind}
       className="absolute -right-1 -bottom-1 flex size-3 items-center justify-center rounded-full bg-sidebar ring-1 ring-sidebar"
     >
-      {attention.kind === "working" ? (
-        <AgentLoadingIcon className="size-3" />
-      ) : (
-        <span
-          className={cn(
-            "size-2 rounded-full",
-            attention.kind === "needs_input"
-              ? "bg-amber-500"
-              : attention.kind === "failed"
-                ? "bg-red-500"
-                : "bg-emerald-500",
-          )}
-        />
-      )}
+      <span
+        className={cn(
+          "size-2 rounded-full",
+          attention.kind === "done" ? "bg-primary" : "bg-destructive",
+        )}
+      />
     </span>
   );
 }

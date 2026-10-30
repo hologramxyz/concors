@@ -62,9 +62,16 @@ test("pane, tab, search and form dialogs share layout and preserve pointer and k
     await expectModalLayout(page, tabDialog);
     await tabDialog.getByRole("button", { name: /New tab/ }).focus();
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("menuitem", { name: "Agent", exact: true })).toBeVisible();
-    await page.keyboard.press("Escape");
-    await expect(page.getByRole("menu")).toHaveCount(0);
+    await expect(
+      page.getByRole("group", { name: "Start with", exact: true }).filter({ visible: true }),
+    ).toBeVisible();
+    await page
+      .getByLabel("Project tabs")
+      .locator("[data-tab-id]")
+      .first()
+      .locator("> button")
+      .first()
+      .click();
     await originalInput.focus();
 
     await page.keyboard.press("Control+Shift+p");

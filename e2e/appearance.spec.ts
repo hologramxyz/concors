@@ -15,28 +15,33 @@ test("appearance follows the system and uses a shared neutral terminal/chat surf
     await page.getByRole("button", { name: "Open workspace menu", exact: true }).first().waitFor();
     await expect(page.locator("html")).toHaveClass(/dark/);
     await seedProject(page, "Appearance acceptance", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
     const terminal = page.getByRole("region", { name: "Terminal pane", exact: true });
     await expect(terminal.locator("textarea")).toBeVisible();
-    await expect(terminal).toHaveCSS("background-color", "rgb(27, 27, 27)");
+    await expect(terminal).toHaveCSS("background-color", "rgb(17, 17, 17)");
     await expect
       .poll(() =>
         page.evaluate(() => {
-          const styles = getComputedStyle(document.documentElement);
-          return (
-            styles.getPropertyValue("--terminal-background").trim() ===
-            styles.getPropertyValue("--card").trim()
-          );
+          // The palette and the theme can spell one colour differently ("#111111", "#111").
+          const resolve = (token: string) => {
+            const probe = document.createElement("div");
+            probe.style.backgroundColor = `var(${token})`;
+            document.body.append(probe);
+            const color = getComputedStyle(probe).backgroundColor;
+            probe.remove();
+            return color;
+          };
+          return resolve("--terminal-background") === resolve("--background");
         }),
       )
       .toBe(true);
     // Native theme changes should recolor an already mounted terminal without restarting it.
     await page.emulateMedia({ colorScheme: "light" });
     await expect(page.locator("html")).not.toHaveClass(/dark/);
-    await expect(terminal).toHaveCSS("background-color", "rgb(255, 255, 255)");
+    await expect(terminal).toHaveCSS("background-color", "rgb(238, 237, 232)");
     await page.emulateMedia({ colorScheme: "dark" });
-    await expect(terminal).toHaveCSS("background-color", "rgb(27, 27, 27)");
+    await expect(terminal).toHaveCSS("background-color", "rgb(17, 17, 17)");
     await terminal.locator("textarea").focus();
     await page.keyboard.type("seq 1 100");
     await page.keyboard.press("Enter");

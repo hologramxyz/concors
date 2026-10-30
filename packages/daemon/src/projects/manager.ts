@@ -5,7 +5,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { mkdir, realpath, stat, opendir } from "node:fs/promises";
 import { isAbsolute, dirname, basename, join, sep } from "node:path";
 import type { ProjectRequest, ProjectResult, ProjectSetup } from "@concors/protocol";
-import { nextWorkspaceTabName } from "@concors/protocol";
+import { nextWorkspaceName, nextWorkspaceTabName } from "@concors/protocol";
 import type { WorkspaceStore } from "../workspace/store.ts";
 import { killTree } from "../host/kill-tree.ts";
 
@@ -81,7 +81,12 @@ export class ProjectManager {
         const setup: ProjectSetup = {
           id: op.id,
           mode: quick ? "open" : op.mode,
-          name: quick ? "Workspace" : op.name || basename(directory).slice(0, 120) || directory,
+          name: quick
+            ? nextWorkspaceName([
+                ...this.workspaceNames(),
+                ...existing.filter((s) => s.status === "working"),
+              ])
+            : op.name || basename(directory).slice(0, 120) || directory,
           ...(quick ? { directoryMode: "follow" as const } : {}),
           directory,
           repository: quick ? "" : op.repository,
@@ -152,6 +157,11 @@ export class ProjectManager {
     }
   }
 
+  /** Open and closed workspaces alike, so a new number never repeats a closed one's name. */
+  private workspaceNames(): { name: string }[] {
+    const snapshot = this.#store.snapshot();
+    return [...snapshot.projects, ...(snapshot.closedProjects ?? [])];
+  }
   private save(setup: ProjectSetup): void {
     if (!this.#closed) {
       this.#store.saveProjectSetup(setup);
@@ -206,6 +216,26 @@ export class ProjectManager {
         if (result.result.outcome.status === "rejected")
           throw new Error(result.result.outcome.message);
         this.save({ ...setup, projectId: existing.id, status: "done", progress: "Folder opened" });
+        this.#store.adoptChats(existing.id);
+        return;
+      }
+      // Opening a closed workspace's folder brings the workspace back, with its tabs and chats;
+      // never the home folder, where every one-click workspace starts.
+      const home = await realpath(this.#home).catch(() => this.#home);
+      const closed =
+        setup.directoryMode !== "follow" &&
+        directory !== home &&
+        this.#store.closedProjectAt(directory);
+      if (closed) {
+        const reopened = this.#store.execute({
+          type: "workspace.command",
+          commandId: setup.id,
+          epoch,
+          operation: { kind: "project.reopen", projectId: closed },
+        });
+        if (reopened.result.outcome.status === "rejected")
+          throw new Error(reopened.result.outcome.message);
+        this.save({ ...setup, projectId: closed, status: "done", progress: "Folder opened" });
         return;
       }
       const result = this.#store.execute({
@@ -215,7 +245,11 @@ export class ProjectManager {
         operation: {
           kind: "project.add",
           projectId: setup.id,
-          name: setup.name,
+          // Numbered again here: another one-click workspace may have taken the number meanwhile.
+          name:
+            setup.directoryMode === "follow"
+              ? nextWorkspaceName(this.workspaceNames())
+              : setup.name,
           directory,
           ...(setup.directoryMode ? { directoryMode: setup.directoryMode } : {}),
         },
@@ -235,9 +269,9 @@ export class ProjectManager {
           tabId: randomUUID(),
           paneId: randomUUID(),
           name: nextWorkspaceTabName(project.tabs),
-          // A named folder is ready for agent work. One-click workspaces still start with a
-          // shell because their identity follows the first terminal's working directory.
-          profile: setup.directoryMode === "follow" ? "shell" : "chat",
+          // Every workspace opens to the start screen. A one-click workspace follows this pane's
+          // folder once it becomes a terminal.
+          profile: "chat",
         },
       });
       if (initialTab.result.outcome.status === "rejected")

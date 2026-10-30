@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Page, Locator } from "@playwright/test";
 import { chooseProvider } from "./support/agents.ts";
+import { tab } from "./support/tabs.ts";
 
 async function bounds(locator: Locator) {
   const rect = await locator.boundingBox();
@@ -272,8 +273,8 @@ test("agent file links open Markdown and code tabs without leaving the workspace
 }) => {
   const root = await project(page);
   try {
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await expect(page.getByLabel("Message Codex").filter({ visible: true })).toBeEnabled();
     await page.getByLabel("Message Codex").filter({ visible: true }).fill("file-links");
@@ -292,7 +293,7 @@ test("agent file links open Markdown and code tabs without leaving the workspace
     await expect
       .poll(() => readFileSync(join(root, "README.md"), "utf8"))
       .toBe("# Edited readme\n");
-    await page.getByRole("button", { name: "Tab 2", exact: true }).click();
+    await tab(page, 1).click();
     await page.getByRole("link", { name: "the code", exact: true }).click();
     await expect(page.getByRole("textbox", { name: "Code editor: src/main.ts" })).toBeVisible();
     expect(new URL(page.url()).pathname).toBe("/");
@@ -306,8 +307,8 @@ test("right-clicking an agent's file link offers Concors actions, and Download s
 }) => {
   const root = await project(page);
   try {
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await expect(page.getByLabel("Message Codex").filter({ visible: true })).toBeEnabled();
     await page.getByLabel("Message Codex").filter({ visible: true }).fill("file-links");
@@ -355,8 +356,8 @@ test("right-clicking an agent's file link offers Concors actions, and Download s
 test("an image Codex generates shows inline in its reply and opens full size", async ({ page }) => {
   const root = await project(page);
   try {
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await expect(page.getByLabel("Message Codex").filter({ visible: true })).toBeEnabled();
     await page.getByLabel("Message Codex").filter({ visible: true }).fill("generate-image");
@@ -382,8 +383,8 @@ test("agent replies show the images they embed inline and open them full size", 
         "base64",
       ),
     );
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await expect(page.getByLabel("Message Codex").filter({ visible: true })).toBeEnabled();
     await page.getByLabel("Message Codex").filter({ visible: true }).fill("show-image");

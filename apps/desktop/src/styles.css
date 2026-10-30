@@ -13,6 +13,8 @@
  */
 @theme inline {
   /* Keep compact rem-based spacing, but give text sizes explicit, readable values. */
+  /* The chat's reading width, shared by its messages and prompt box. */
+  --container-chat: 768px;
   --text-ui: 13px;
   --text-ui--line-height: 1.4;
   --text-xs: 12px;
@@ -72,7 +74,15 @@
 
 :root {
   --sidebar-width: 216px;
+  /* Room macOS keeps at the left of the unified title bar for its traffic lights, plus a gap
+     before the controls that follow them. */
+  --traffic-lights-width: 84px;
   --corner-radius: 0.375rem;
+  /* The corner radius macOS gives a window with a title bar and no toolbar. */
+  --window-corner-radius: 16px;
+  /* A container whose rounded items sit a small, even gap inside it takes the items' radius plus
+     that gap times this, so their corners are concentric. Square corners have no gap to add. */
+  --concentric: 1;
   color-scheme: light;
   --selection: #deded9;
 
@@ -111,6 +121,7 @@
 
 :root[data-corner-style="square"] {
   --corner-radius: 0rem;
+  --concentric: 0;
 }
 
 :root[data-corner-style="rounded"] {
@@ -373,6 +384,18 @@
   display: none;
 }
 
+/* On macOS the window is transparent with the system sidebar blur behind it
+   (tauri.macos.conf.json), and the frame around the content lets it show through. */
+:root[data-window-inset] body {
+  background: transparent;
+}
+:root[data-window-inset] .app-frame {
+  background-color: color-mix(in srgb, var(--sidebar) 60%, transparent);
+}
+:root[data-window-inset] .sidebar-shell > nav {
+  background-color: transparent;
+}
+
 /* Collapsing keeps a navigable icon rail; only its footprint changes. */
 .sidebar-shell {
   width: var(--sidebar-width);
@@ -381,7 +404,38 @@
   transition: width 240ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .sidebar-shell[data-collapsed="true"] {
-  width: 44px;
+  width: 0;
+}
+/* Hidden once it has slid away, and shown again as soon as it opens. */
+.sidebar-shell > nav {
+  transition: visibility 0s;
+}
+.sidebar-shell[data-collapsed="true"] > nav {
+  visibility: hidden;
+  transition-delay: 240ms;
+}
+/* With the sidebar gone, the content keeps the same gap from the window's left edge as its right. */
+.sidebar-shell[data-collapsed="true"] ~ .workspace-surface {
+  margin-left: 0.5rem;
+}
+/* Where the open sidebar's top row starts its controls: after the traffic lights, or at its own
+   padding in full screen. The collapsed sidebar's toggle is pinned at the same place. */
+.title-bar-start {
+  padding-left: 0.5rem;
+}
+:root[data-traffic-lights] .title-bar-start {
+  padding-left: var(--traffic-lights-width);
+}
+/* The content's top row leaves room for the toggle and search (2rem each, 0.125rem apart), less
+   its own 0.5rem margin and 1px border, which together keep a 0.5rem gap before the tabs. */
+:root[data-window-inset] .sidebar-shell[data-collapsed="true"] ~ .workspace-surface .title-bar-row {
+  padding-left: calc(0.5rem + 4.125rem - 1px);
+}
+:root[data-traffic-lights]
+  .sidebar-shell[data-collapsed="true"]
+  ~ .workspace-surface
+  .title-bar-row {
+  padding-left: calc(var(--traffic-lights-width) + 4.125rem - 1px);
 }
 .sidebar-rail-control {
   width: 32px;
@@ -394,8 +448,14 @@
 .workspace-surface {
   transition: margin-left 240ms cubic-bezier(0.22, 1, 0.36, 1);
 }
+/* In a rounded macOS window the content's corners sit concentric with the window's: its radius
+   less the 0.5rem gap between them. Full screen has square window corners, so it keeps the theme's. */
+:root[data-traffic-lights]:not([data-corner-style="square"]) .workspace-surface {
+  border-radius: calc(var(--window-corner-radius) - 0.5rem);
+}
 @media (prefers-reduced-motion: reduce) {
   .sidebar-shell,
+  .sidebar-shell > nav,
   .workspace-surface {
     transition: none;
   }
@@ -430,7 +490,7 @@
   outline: none;
 }
 /*
- * The gap between panes is only a few pixels wide, so a press just beside it landed in a pane and
+ * The divider between panes is a single pixel, so a press just beside it landed in a pane and
  * started selecting text. The grab area reaches 4px into each pane without moving the layout.
  */
 .pane-resize-handle[aria-disabled="false"]::before {
@@ -457,12 +517,12 @@
   transition: opacity 120ms ease;
 }
 .pane-resize-handle[aria-orientation="vertical"]::after {
-  inset-block: 8px;
+  inset-block: 0;
   left: calc(50% - 0.5px);
   width: 1px;
 }
 .pane-resize-handle[aria-orientation="horizontal"]::after {
-  inset-inline: 8px;
+  inset-inline: 0;
   top: calc(50% - 0.5px);
   height: 1px;
 }
@@ -493,6 +553,7 @@ html[data-pane-resizing="row"] * {
   }
 }
 .agent-control {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -514,6 +575,18 @@ html[data-pane-resizing="row"] * {
 .agent-control > svg {
   flex-shrink: 0;
 }
+/* Sits on the icon's top corner, which is in the same place whether or not the label shows. */
+.agent-control-dot {
+  position: absolute;
+  top: 3px;
+  left: 17px;
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  background: var(--link);
+  box-shadow: 0 0 0 2px var(--background);
+  pointer-events: none;
+}
 /*
  * The desktop composer keeps every control and the send button on one row at any pane width.
  * Labelled pickers give up width first, truncating their labels; once even those would crowd the
@@ -532,7 +605,7 @@ html[data-pane-resizing="row"] * {
 .agent-composer-toolbar .agent-control-value {
   flex-shrink: 1;
 }
-.agent-composer-toolbar .agent-control-value > span {
+.agent-composer-toolbar .agent-control-value > span:not(.agent-control-dot) {
   min-width: 0;
 }
 @container agent-composer (max-width: 585px) {
@@ -542,8 +615,9 @@ html[data-pane-resizing="row"] * {
     padding-inline: 0;
     flex-shrink: 0;
   }
-  .agent-composer-toolbar .agent-control-value:not(.agent-control-primary) > span,
-  .agent-composer-toolbar .composer-update-label > span {
+  .agent-composer-toolbar
+    .agent-control-value:not(.agent-control-primary)
+    > span:not(.agent-control-dot) {
     display: none;
   }
 }
@@ -554,7 +628,7 @@ html[data-pane-resizing="row"] * {
     padding-inline: 0;
     flex-shrink: 0;
   }
-  .agent-composer-toolbar .agent-control-primary > span {
+  .agent-composer-toolbar .agent-control-primary > span:not(.agent-control-dot) {
     display: none;
   }
 }
@@ -624,7 +698,8 @@ html[data-pane-resizing="row"] * {
   }
 }
 :root {
-  --terminal-background: var(--card);
+  /* Terminals sit on the same surface as chats. */
+  --terminal-background: var(--background);
   --terminal-foreground: #20211f;
   --terminal-cursor: var(--foreground);
   --terminal-selection: #00000020;
@@ -646,7 +721,7 @@ html[data-pane-resizing="row"] * {
   --terminal-bright-white: #ffffff;
 }
 .dark {
-  --terminal-background: var(--card);
+  --terminal-background: var(--background);
   --terminal-foreground: var(--foreground);
   --terminal-cursor: var(--foreground);
   --terminal-selection: #ffffff30;
@@ -830,6 +905,9 @@ html[data-pane-resizing="row"] * {
   .message-rail {
     display: flex;
   }
+  .message-rail[hidden] {
+    display: none;
+  }
   .chat-timeline-shell > .chat-scroll {
     padding-left: 48px;
     padding-top: 16px;
@@ -841,6 +919,71 @@ html[data-pane-resizing="row"] * {
 }
 @media (prefers-reduced-motion: reduce) {
   .message-rail-tick {
+    transition: none;
+  }
+}
+
+/* Tabs grow in when they open and shrink away before they close (`TAB_CLOSE_MS`). */
+@media (prefers-reduced-motion: no-preference) {
+  .project-tab {
+    animation: tab-open 180ms cubic-bezier(0.2, 0, 0, 1);
+  }
+  /* While a tab is dragged, the others slide aside to open its landing slot. */
+  .project-tab.tab-sliding {
+    transition: transform 180ms cubic-bezier(0.2, 0, 0, 1);
+  }
+  .project-tab.tab-closing {
+    overflow: hidden;
+    pointer-events: none;
+    animation: tab-close 180ms cubic-bezier(0.2, 0, 0, 1) forwards;
+  }
+}
+@keyframes tab-open {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+@keyframes tab-close {
+  from {
+    max-width: var(--tab-width);
+  }
+  /* Faded before it is narrow, so its label never squeezes visibly. */
+  60% {
+    opacity: 0;
+  }
+  to {
+    max-width: 0;
+    opacity: 0;
+    border-width: 0;
+    /* Takes the gap with it, so the tabs after it close in smoothly. */
+    margin-inline-end: -0.25rem;
+  }
+}
+
+/*
+ * Sidebar lists open and close by easing their height (grid rows 1fr ↔ 0fr). Visibility flips only
+ * once a close has finished, so the content is hidden from focus and screen readers when closed.
+ */
+.sidebar-collapse {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition:
+    grid-template-rows 200ms cubic-bezier(0.2, 0, 0, 1),
+    opacity 200ms cubic-bezier(0.2, 0, 0, 1),
+    visibility 200ms;
+}
+.sidebar-collapse > * {
+  min-height: 0;
+  overflow: hidden;
+}
+.sidebar-collapse[data-collapsed] {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  visibility: hidden;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-collapse {
     transition: none;
   }
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ChevronRight } from "lucide-react";
 import type { DaemonConnection } from "@concors/daemon-client";
-import type { ProjectIcon } from "@concors/protocol";
+import { isDefaultTabName, type ProjectIcon } from "@concors/protocol";
 import { NotificationContext } from "./context";
 import { AttentionEngine, type Notice } from "./engine";
 import { claimNotification, getNotificationPreferences } from "./preferences";
@@ -160,7 +160,8 @@ export function NotificationProvider({
             projectId: agent.projectId,
             workspace:
               connection.workspace?.projects.find((p) => p.id === agent.projectId)?.name ?? "",
-            tab: pane?.tab.name ?? "",
+            // A tab nobody named is called after its chat, which the body already says.
+            tab: pane && !isDefaultTabName(pane.tab.name) ? pane.tab.name : "",
           },
         );
       }
@@ -274,7 +275,7 @@ export function NotificationProvider({
               <span className="flex items-center gap-1.5 text-sm font-medium">
                 <span
                   aria-hidden="true"
-                  className={`size-2 shrink-0 rounded-full ${notice.kind === "done" ? "bg-emerald-500" : "bg-amber-500"}`}
+                  className={`size-2 shrink-0 rounded-full ${notice.kind === "done" ? "bg-primary" : "bg-destructive"}`}
                 />
                 {notice.kind === "done" ? "Agent finished" : "Agent needs input"}
               </span>

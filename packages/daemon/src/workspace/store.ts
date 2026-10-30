@@ -1,6 +1,6 @@
-import { rmSync } from "node:fs";
+import { realpathSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { z } from "zod";
 import {
   AgentAttachmentSchema,
@@ -15,6 +15,8 @@ import {
   type AgentItem,
   type AgentRequest,
   type AgentConversation,
+  type RetiredAgent,
+  AGENT_SESSION_LIMIT,
 } from "@concors/protocol";
 import { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
@@ -30,9 +32,12 @@ import {
   isDefaultTabName,
   nextWorkspaceTabName,
   WorkspaceOperationError,
+  WorkspaceProjectSchema,
   WorkspaceSnapshotSchema,
   WorkspaceResultSchema,
+  type ClosedProject,
   type WorkspaceCommand,
+  type WorkspaceProject,
   type WorkspaceResult,
   type WorkspaceSnapshot,
 } from "@concors/protocol";
@@ -41,7 +46,12 @@ import {
  * How many chat sessions a machine keeps. Every session is replayed to each client that connects,
  * so the number is bounded; when it is reached, the least recently used closed chat makes room.
  */
-export const AGENT_SESSION_LIMIT = 128;
+export { AGENT_SESSION_LIMIT };
+/** How many closed workspaces a machine keeps; closing one more forgets the oldest. */
+const CLOSED_PROJECT_LIMIT = 64;
+/** When the most recently used of these chats was last used. */
+const newest = (chats: readonly AgentInfo[]) =>
+  chats.reduce((time, chat) => (chat.updatedAt > time ? chat.updatedAt : time), "");
 const ACTIVE_AGENT = ["starting", "working", "needs_input"];
 /** A kept file: its bytes, for inline attachments and shown images, or an upload's reference. */
 const StoredFileSchema = z.union([AgentAttachmentSchema, AgentUploadSchema]);
@@ -53,7 +63,17 @@ export class WorkspaceStore {
   #closed = false;
   readonly #kept: (() => Iterable<string>)[] = [];
   /** Told which sessions were removed to make room, once they are gone (see makeRoomForAgent). */
-  onAgentsRetired: ((ids: string[]) => void) | null = null;
+  onAgentsRetired: ((agents: RetiredAgent[]) => void) | null = null;
+  /** Told of chats moved into a workspace whose folder was opened (see adoptChats). */
+  onAgentsMoved: ((agents: AgentInfo[]) => void) | null = null;
+  /** The home folder, where every one-click workspace starts, so no workspace opened there adopts chats. */
+  home = (() => {
+    try {
+      return realpathSync(homedir());
+    } catch {
+      return homedir();
+    }
+  })();
 
   constructor(path = ":memory:") {
     this.attachmentsDirectory =
@@ -73,6 +93,7 @@ export class WorkspaceStore {
         CREATE TABLE IF NOT EXISTS project_directories (project_id TEXT NOT NULL, directory TEXT NOT NULL, PRIMARY KEY(project_id, directory));
         CREATE TABLE IF NOT EXISTS commands (id TEXT PRIMARY KEY, payload TEXT NOT NULL, result TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS terminals (id TEXT PRIMARY KEY, request_id TEXT UNIQUE NOT NULL, request TEXT NOT NULL, info TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS closed_projects (id TEXT PRIMARY KEY, directory TEXT NOT NULL, project TEXT NOT NULL, closed_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS project_setups (id TEXT PRIMARY KEY, request TEXT NOT NULL, setup TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS agents (id TEXT PRIMARY KEY, info TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS agent_items (position INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, item_id TEXT NOT NULL, item TEXT NOT NULL, UNIQUE(session_id, item_id));
@@ -98,6 +119,7 @@ export class WorkspaceStore {
         .prepare("INSERT OR IGNORE INTO workspace (id, snapshot) VALUES (1, ?)")
         .run(JSON.stringify(initial));
       this.snapshot(); // Fail startup on corrupt/incompatible persisted state; never silently reset it.
+      this.#closeStrandedChats();
     } catch (error) {
       this.#db.close();
       throw error;
@@ -135,13 +157,26 @@ export class WorkspaceStore {
       }
       let snapshot = current;
       let result: WorkspaceResult;
+      let moved: AgentInfo[] = [];
+      // Closing and reopening write tables of their own, undone with the operation if it fails.
+      this.#db.exec("SAVEPOINT operation");
       try {
         if (command.epoch !== current.epoch)
           throw new WorkspaceOperationError(
             "CONFLICT",
             "Workspace was replaced. Refresh before editing.",
           );
-        snapshot = applyWorkspaceOperation(current, command.operation);
+        const op = command.operation;
+        snapshot =
+          op.kind === "project.reopen"
+            ? this.#reopenProject(current, op.projectId)
+            : applyWorkspaceOperation(current, op);
+        if (op.kind === "project.close") {
+          const closed = current.projects.find((project) => project.id === op.projectId);
+          if (closed) this.#keepClosedProject({ ...closed, version: closed.version + 1 });
+        }
+        if (op.kind === "project.close" || op.kind === "project.reopen")
+          snapshot.closedProjects = this.#closedProjects();
         // Keep snapshot frames below the protocol's transport limit.
         if (Buffer.byteLength(JSON.stringify(snapshot)) > 512 * 1024)
           throw new WorkspaceOperationError("LIMIT_EXCEEDED", "Workspace metadata exceeds 512 KiB");
@@ -154,25 +189,184 @@ export class WorkspaceStore {
         this.#db
           .prepare("UPDATE workspace SET snapshot = ? WHERE id = 1")
           .run(JSON.stringify(snapshot));
+        const opened =
+          op.kind === "project.reopen" ||
+          (op.kind === "project.add" && op.directoryMode !== "follow")
+            ? snapshot.projects.find((project) => project.id === op.projectId)
+            : undefined;
+        if (opened) moved = this.#adoptChats(snapshot, opened);
+        this.#db.exec("RELEASE operation");
         result = {
           type: "workspace.result",
           commandId: command.commandId,
           outcome: { status: "accepted", revision: snapshot.revision },
         };
       } catch (error) {
+        this.#db.exec("ROLLBACK TO operation");
+        this.#db.exec("RELEASE operation");
         if (!(error instanceof WorkspaceOperationError)) throw error;
         snapshot = current;
+        moved = [];
         result = this.reject(command, error.code, error.message);
       }
       this.#db
         .prepare("INSERT INTO commands (id, payload, result) VALUES (?, ?, ?)")
         .run(command.commandId, payload, JSON.stringify(result));
       this.#db.exec("COMMIT");
+      // After the snapshot that lists their workspace has gone out.
+      if (moved.length)
+        queueMicrotask(() => {
+          if (!this.#closed) this.onAgentsMoved?.(moved);
+        });
       return { result, snapshot, changed: result.outcome.status === "accepted" };
     } catch (error) {
       this.#db.exec("ROLLBACK");
       throw error;
     }
+  }
+
+  /** Closed workspaces, newest first, as clients list them. */
+  #closedProjects(): ClosedProject[] {
+    return this.#db
+      .prepare("SELECT project, closed_at FROM closed_projects ORDER BY closed_at DESC, rowid DESC")
+      .all()
+      .map((row) => {
+        const project = WorkspaceProjectSchema.parse(JSON.parse(String(row["project"])));
+        return {
+          id: project.id,
+          name: project.name,
+          directory: project.directory,
+          closedAt: String(row["closed_at"]),
+        };
+      });
+  }
+
+  /** The most recently closed workspace on this folder, which opening it brings back. */
+  closedProjectAt(directory: string): string | null {
+    const row = this.#db
+      .prepare(
+        "SELECT id FROM closed_projects WHERE directory = ? ORDER BY closed_at DESC, rowid DESC LIMIT 1",
+      )
+      .get(directory);
+    return row ? String(row["id"]) : null;
+  }
+
+  /**
+   * Keeps a closed workspace whole, tabs and all, with the folders it has used. Several can share
+   * a folder, as one-click workspaces in the home folder do. Past the limit the oldest is
+   * forgotten; its chats stay, and join a workspace opened on their folder (see adoptChats).
+   */
+  #keepClosedProject(project: WorkspaceProject, closedAt = new Date().toISOString()): void {
+    const forget = (id: string) => {
+      this.#db.prepare("DELETE FROM closed_projects WHERE id = ?").run(id);
+      this.#db.prepare("DELETE FROM project_directories WHERE project_id = ?").run(id);
+    };
+    this.#db
+      .prepare(
+        "INSERT OR REPLACE INTO closed_projects (id, directory, project, closed_at) VALUES (?, ?, ?, ?)",
+      )
+      .run(project.id, project.directory, JSON.stringify(project), closedAt);
+    for (const row of this.#db
+      .prepare(
+        "SELECT id FROM closed_projects ORDER BY closed_at DESC, rowid DESC LIMIT -1 OFFSET ?",
+      )
+      .all(CLOSED_PROJECT_LIMIT))
+      forget(String(row["id"]));
+  }
+
+  /**
+   * The workspace with a closed one back in it, selected at its first tab. It comes back by its ID
+   * even when another workspace has since opened its folder. A pane whose chat or
+   * terminal has since gone (deleted, or removed to make room) opens to the start screen instead.
+   */
+  #reopenProject(current: WorkspaceSnapshot, id: string): WorkspaceSnapshot {
+    const row = this.#db.prepare("SELECT project FROM closed_projects WHERE id = ?").get(id);
+    if (!row) throw new WorkspaceOperationError("NOT_FOUND", "Workspace no longer exists");
+    const project = WorkspaceProjectSchema.parse(JSON.parse(String(row["project"])));
+    if (current.projects.length >= 64)
+      throw new WorkspaceOperationError("LIMIT_EXCEEDED", "Maximum of 64 workspaces reached");
+    const sessions = new Set([
+      ...this.agents().map((agent) => agent.id),
+      ...this.terminals().map((terminal) => terminal.id),
+    ]);
+    for (const node of project.tabs.flatMap((tab) => tab.nodes))
+      if (node.kind === "pane" && node.sessionId && !sessions.has(node.sessionId))
+        node.sessionId = null;
+    this.#db.prepare("DELETE FROM closed_projects WHERE id = ?").run(id);
+    const state = WorkspaceSnapshotSchema.parse(current);
+    state.projects.push({ ...project, version: project.version + 1 });
+    state.selection = { projectId: project.id, tabId: project.tabs[0]?.id ?? null };
+    state.revision++;
+    return WorkspaceSnapshotSchema.parse(state);
+  }
+
+  /**
+   * On every start, for chats left without a workspace (by daemons, or clients, that removed
+   * workspaces instead of closing them): each folder's chats become a closed workspace, listed
+   * with the others to reopen, closed when its newest chat was last used.
+   */
+  #closeStrandedChats(): void {
+    this.transaction(() => {
+      const state = this.snapshot();
+      const known = new Set([
+        ...state.projects.map((item) => item.id),
+        ...this.#closedProjects().map((item) => item.id),
+      ]);
+      const folders = new Map<string, AgentInfo[]>();
+      for (const agent of this.agents())
+        if (!known.has(agent.projectId))
+          folders.set(agent.directory, [...(folders.get(agent.directory) ?? []), agent]);
+      for (const [directory, chats] of [...folders].sort(([, a], [, b]) =>
+        newest(a).localeCompare(newest(b)),
+      )) {
+        const project: WorkspaceProject = {
+          id: randomUUID(),
+          name: folderName(directory),
+          directory,
+          version: 0,
+          tabs: [],
+        };
+        this.#keepClosedProject(project, newest(chats));
+        for (const agent of chats)
+          this.saveAgent({ ...agent, projectId: project.id, revision: agent.revision + 1 });
+      }
+      if (folders.size) {
+        state.closedProjects = this.#closedProjects();
+        state.revision++;
+        this.#db
+          .prepare("UPDATE workspace SET snapshot = ? WHERE id = 1")
+          .run(JSON.stringify(state));
+      }
+    });
+  }
+
+  /** Opening the folder of a workspace already open brings in its stranded chats too. */
+  adoptChats(projectId: string): void {
+    const state = this.snapshot();
+    const project = state.projects.find((item) => item.id === projectId);
+    if (!project || project.directoryMode === "follow") return;
+    const moved = this.transaction(() => this.#adoptChats(state, project));
+    if (moved.length) this.onAgentsMoved?.(moved);
+  }
+
+  /**
+   * Moves chats whose workspace is gone, neither open nor closed, into a workspace just opened on
+   * their own folder; never one in the home folder. Older clients still remove workspaces.
+   */
+  #adoptChats(state: WorkspaceSnapshot, project: WorkspaceProject): AgentInfo[] {
+    if (project.directory === this.home) return [];
+    const known = new Set([
+      ...state.projects.map((item) => item.id),
+      ...this.#closedProjects().map((item) => item.id),
+    ]);
+    const moved: AgentInfo[] = [];
+    for (const agent of this.agents()) {
+      if (known.has(agent.projectId) || agent.directory !== project.directory) continue;
+      const next = { ...agent, projectId: project.id, revision: agent.revision + 1 };
+      this.saveAgent(next);
+      moved.push(next);
+    }
+    return moved;
   }
 
   private rememberDirectories(state: WorkspaceSnapshot): void {
@@ -341,9 +535,21 @@ export class WorkspaceStore {
     if (op.kind !== "bind") throw new Error("Expected bind");
     this.#db.exec("BEGIN IMMEDIATE");
     try {
-      const state = this.snapshot();
+      let state = this.snapshot();
       const session = this.terminal(op.sessionId);
       if (session.projectId !== op.projectId) throw new Error("Session belongs to another project");
+      // Opening it in a tab of its own creates that tab here, so nobody sees it empty first.
+      if (op.newTab) {
+        state = applyWorkspaceOperation(state, {
+          kind: "tab.create",
+          projectId: op.projectId,
+          expectedVersion: op.expectedVersion,
+          tabId: op.tabId,
+          paneId: op.paneId,
+          name: op.newTab.name,
+          profile: session.profile,
+        });
+      }
       const project = state.projects.find((p) => p.id === op.projectId);
       const pane = project?.tabs
         .find((t) => t.id === op.tabId)
@@ -353,8 +559,10 @@ export class WorkspaceStore {
         this.#db.exec("COMMIT");
         return;
       }
-      if (project.version !== op.expectedVersion || pane.sessionId !== null)
+      // A new tab was checked against the version as it was created, and already counted.
+      if (!op.newTab && (project.version !== op.expectedVersion || pane.sessionId !== null))
         throw new Error("Use an empty pane to attach this session");
+      if (op.newTab) pane.directory = session.directory;
       if (
         state.projects.some((p) =>
           p.tabs.some((t) => t.nodes.some((n) => n.kind === "pane" && n.sessionId === session.id)),
@@ -367,8 +575,10 @@ export class WorkspaceStore {
       pane.profile = session.profile;
       if (session.terminalProfile) pane.terminalProfile = session.terminalProfile;
       else delete pane.terminalProfile;
-      project.version++;
-      state.revision++;
+      if (!op.newTab) {
+        project.version++;
+        state.revision++;
+      }
       this.#db.prepare("UPDATE workspace SET snapshot = ? WHERE id = 1").run(JSON.stringify(state));
       this.#db.exec("COMMIT");
     } catch (error) {
@@ -398,18 +608,9 @@ export class WorkspaceStore {
   keepAgents(ids: () => Iterable<string>): void {
     this.#kept.push(ids);
   }
-  /**
-   * Frees a place for one more session by removing the least recently updated closed chats.
-   * A chat is closed when no pane shows it, it is not running or waiting for an answer, nothing is
-   * queued for it, and nothing keeps it (keepAgents). Its conversation, images and attachment
-   * files go with it; for Claude Code and Codex the provider's own history usually remains, so
-   * Resume session can still find it. Throws only when every session is open or active.
-   */
-  makeRoomForAgent(state: WorkspaceSnapshot = this.snapshot()): void {
-    const agents = this.agents();
-    const excess = agents.length - (AGENT_SESSION_LIMIT - 1);
-    if (excess <= 0) return;
-    const shown = new Set(
+  /** The sessions some pane shows. */
+  #shownAgents(state: WorkspaceSnapshot = this.snapshot()): Set<string> {
+    return new Set(
       state.projects.flatMap((project) =>
         project.tabs.flatMap((tab) =>
           tab.nodes.flatMap((node) =>
@@ -418,6 +619,24 @@ export class WorkspaceStore {
         ),
       ),
     );
+  }
+  /** Whether something other than a pane relies on the session, such as a schedule. */
+  keepsAgent(id: string): boolean {
+    return this.#kept.some((ids) => [...ids()].includes(id));
+  }
+  /**
+   * Frees a place for one more session by removing the least recently updated closed chats.
+   * A chat is closed when no pane shows it, it is not running or waiting for an answer, nothing is
+   * queued for it, and nothing keeps it (keepAgents). Pinned chats are never removed. Its
+   * conversation, images and attachment files go with it; for Claude Code and Codex the provider's
+   * own history usually remains, so Resume session can still find it. Throws only when every
+   * session is open, active or pinned.
+   */
+  makeRoomForAgent(state: WorkspaceSnapshot = this.snapshot()): void {
+    const agents = this.agents();
+    const excess = agents.length - (AGENT_SESSION_LIMIT - 1);
+    if (excess <= 0) return;
+    const shown = this.#shownAgents(state);
     const kept = new Set(this.#kept.flatMap((ids) => [...ids()]));
     const queued = new Set(
       this.#db
@@ -431,19 +650,50 @@ export class WorkspaceStore {
           !shown.has(agent.id) &&
           !kept.has(agent.id) &&
           !queued.has(agent.id) &&
+          !agent.pinned &&
           !ACTIVE_AGENT.includes(agent.status) &&
           agent.pending.length === 0 &&
           !agent.queue?.length,
       )
       .sort((a, b) => a.updatedAt.localeCompare(b.updatedAt))
-      .slice(0, excess)
-      .map((agent) => agent.id);
+      .slice(0, excess);
     if (retired.length < excess)
       throw new Error(
-        `All ${AGENT_SESSION_LIMIT} chats on this machine are open or active. Close one to start another.`,
+        `All ${AGENT_SESSION_LIMIT} chats on this machine are open, active or pinned. Close or unpin one to start another.`,
       );
+    this.#deleteAgentRows(retired.map((agent) => agent.id));
+    // Callers start the new chat in a transaction of their own. Files and notices wait until it
+    // has settled, and only for chats really gone: a start that rolled back keeps its old chats.
+    queueMicrotask(() => {
+      if (this.#closed) return;
+      const gone = retired.filter(
+        (agent) => !this.#db.prepare("SELECT 1 FROM agents WHERE id = ?").get(agent.id),
+      );
+      if (gone.length === 0) return;
+      for (const agent of gone) this.#deleteAgentFiles(agent.id);
+      this.onAgentsRetired?.(
+        gone.map((agent) => ({
+          id: agent.id,
+          projectId: agent.projectId,
+          name: (agent.paneName ?? agent.tabName ?? agent.name).slice(0, 200),
+        })),
+      );
+    });
+  }
+  /**
+   * Deletes a chat with its conversation, images and attachment files. Only a chat no pane shows
+   * and nothing keeps can go, so a tab never points at a deleted chat.
+   */
+  deleteAgent(id: string): void {
+    this.agent(id);
+    if (this.#shownAgents().has(id)) throw new Error("Close this chat before deleting it");
+    if (this.keepsAgent(id)) throw new Error("A schedule uses this chat. Remove it first.");
+    this.#deleteAgentRows([id]);
+    this.#deleteAgentFiles(id);
+  }
+  #deleteAgentRows(ids: readonly string[]): void {
     this.transaction(() => {
-      for (const id of retired)
+      for (const id of ids)
         for (const table of [
           "agent_items",
           "agent_item_images",
@@ -452,20 +702,11 @@ export class WorkspaceStore {
           "agent_requests",
         ])
           this.#db.prepare(`DELETE FROM ${table} WHERE session_id = ?`).run(id);
-      for (const id of retired) this.#db.prepare("DELETE FROM agents WHERE id = ?").run(id);
+      for (const id of ids) this.#db.prepare("DELETE FROM agents WHERE id = ?").run(id);
     });
-    // Callers start the new chat in a transaction of their own. Files and notices wait until it
-    // has settled, and only for chats really gone: a start that rolled back keeps its old chats.
-    queueMicrotask(() => {
-      if (this.#closed) return;
-      const gone = retired.filter(
-        (id) => !this.#db.prepare("SELECT 1 FROM agents WHERE id = ?").get(id),
-      );
-      if (gone.length === 0) return;
-      for (const id of gone)
-        rmSync(join(this.attachmentsDirectory, id), { recursive: true, force: true });
-      this.onAgentsRetired?.(gone);
-    });
+  }
+  #deleteAgentFiles(id: string): void {
+    rmSync(join(this.attachmentsDirectory, id), { recursive: true, force: true });
   }
   mapNativeTurn(sessionId: string, nativeId: string, turnId: string): void {
     this.#db

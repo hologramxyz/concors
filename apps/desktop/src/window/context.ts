@@ -7,6 +7,7 @@ export const WindowChromeContext = createContext<
   }
 >({
   enabled: false,
+  inset: false,
   maximized: false,
   fullscreen: false,
 });

@@ -35,9 +35,10 @@ export function WindowControls() {
   );
 }
 
-/** The sign-in screen has no tabs to host controls. */
+/** The sign-in screen has no tabs to host controls, or to drag the window by on macOS. */
 export function StandaloneWindowBar() {
-  const { enabled } = useWindowChrome();
+  const { enabled, inset } = useWindowChrome();
+  if (inset) return <div data-tauri-drag-region className="fixed inset-x-0 top-0 z-40 h-13" />;
   if (!enabled) return null;
   return (
     <div

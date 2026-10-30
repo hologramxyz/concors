@@ -56,10 +56,20 @@ test("a folder of repositories shows a child favicon, its pull request count and
 
     const count = sidebar.getByRole("button", { name: "3 open pull requests in hologram" });
     await expect(count).toHaveText("3");
+    const actions = sidebar.getByRole("button", { name: "Actions for hologram", exact: true });
+    await page.mouse.move(0, 0);
     const box = await count.boundingBox();
+    const menu = await actions.boundingBox();
     const rowBox = await row.locator("xpath=..").boundingBox();
-    // The count ends the row, after its actions.
-    expect(box && rowBox && rowBox.x + rowBox.width - (box.x + box.width)).toBeLessThan(4);
+    if (!box || !menu || !rowBox) throw new Error("Missing row bounds");
+    // The count sits just before the row's actions, which end the row in every row alike.
+    expect(menu.x - (box.x + box.width)).toBeGreaterThanOrEqual(0);
+    expect(menu.x - (box.x + box.width)).toBeLessThan(4);
+    expect(rowBox.x + rowBox.width - (menu.x + menu.width)).toBeLessThan(4);
+    // The actions keep their place while hidden, so the count never moves when they appear.
+    await row.hover();
+    await expect(actions).toHaveCSS("opacity", "1");
+    expect(await count.boundingBox()).toEqual(box);
     await expect(sidebar.getByRole("button", { name: "Pull requests", exact: true })).toContainText(
       "3",
     );
@@ -90,7 +100,7 @@ test("a folder of repositories shows a child favicon, its pull request count and
     ).toBeVisible();
     const app = page.getByRole("article", { name: "hologram/app" });
     await expect(app).toContainText("Show pull requests in workspaces");
-    await expect(app).toContainText("#42 · e2e-user · change-42 · 2h ago");
+    await expect(app).toContainText("#42 · e2e-user · change-42 · 2h");
     await expect(app).toContainText("Approved");
     await expect(app.getByRole("img", { name: "Checks passing" })).toBeVisible();
     await expect(app.getByRole("button", { name: /^Draft: redesign onboarding/ })).toContainText(

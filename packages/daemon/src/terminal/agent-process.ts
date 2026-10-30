@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import type { TerminalInfo } from "@concors/protocol";
+import { agentProviderName, type TerminalInfo } from "@concors/protocol";
+import { commandLabel } from "./command-label.ts";
 
 const execute = promisify(execFile);
 type Agent = NonNullable<TerminalInfo["detectedAgent"]>;
@@ -8,6 +9,10 @@ export interface TerminalProcess {
   pid: number;
   parentPid: number;
   command: string;
+  /** Its process group, where the platform reports one. */
+  group?: number;
+  /** The process group in the foreground of its terminal; 0 when it has no terminal. */
+  foregroundGroup?: number;
 }
 
 /** Match executables and CLI entrypoints, never arbitrary prompt/output text. */
@@ -54,6 +59,29 @@ export function detectTerminalAgent(
   return null;
 }
 
+/**
+ * What a shell runs in the foreground, labelled for anyone who can see the terminal, or null while
+ * the shell itself has the terminal, waiting at a prompt. Background jobs and the helpers some
+ * prompts keep running are in other groups, so they do not count. A coding agent is named, and its
+ * arguments, which can hold credentials, are never part of the label.
+ */
+export function foregroundCommand(
+  shellPid: number,
+  processes: readonly TerminalProcess[],
+): string | null {
+  const shell = processes.find((process) => process.pid === shellPid);
+  const group = shell?.foregroundGroup;
+  if (!shell || !group || group === shell.group) return null;
+  const members = processes.filter((process) => process.group === group);
+  const leader = members.find((process) => process.pid === group) ?? members[0];
+  if (!leader) return null;
+  for (const process of [leader, ...members]) {
+    const agent = agentCommand(process.command);
+    if (agent) return agentProviderName(agent);
+  }
+  return commandLabel(leader.command);
+}
+
 /** A single bounded process snapshot is shared by every running shell on this machine. */
 export async function readTerminalProcesses(): Promise<TerminalProcess[]> {
   const maxBuffer = 4 * 1024 * 1024;
@@ -81,14 +109,22 @@ export async function readTerminalProcesses(): Promise<TerminalProcess[]> {
       command: row.CommandLine ?? "",
     }));
   }
-  const { stdout } = await execute("ps", ["-ax", "-ww", "-o", "pid=,ppid=,args="], {
+  const { stdout } = await execute("ps", ["-ax", "-ww", "-o", "pid=,ppid=,pgid=,tpgid=,args="], {
     timeout: 3000,
     maxBuffer,
   });
   return stdout.split("\n").flatMap((line) => {
-    const match = /^\s*(\d+)\s+(\d+)\s+(.+)$/.exec(line);
+    const match = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(-?\d+)\s+(.+)$/.exec(line);
     return match
-      ? [{ pid: Number(match[1]), parentPid: Number(match[2]), command: match[3] ?? "" }]
+      ? [
+          {
+            pid: Number(match[1]),
+            parentPid: Number(match[2]),
+            group: Number(match[3]),
+            foregroundGroup: Math.max(0, Number(match[4])),
+            command: match[5] ?? "",
+          },
+        ]
       : [];
   });
 }

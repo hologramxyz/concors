@@ -38,8 +38,8 @@ test("effective models stay selected and warm provider menus reopen without load
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Model menus", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
     // A prompt typed before switching provider stays in the composer of the agent that replaces it.
@@ -177,21 +177,18 @@ test("an outdated agent CLI is flagged in the picker and can be updated from it"
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Provider updates", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
-    const notice = page.getByText("Codex 0.156.0 is available.", { exact: false });
-    const label = page.getByRole("button", { name: "Codex 0.156.0 available", exact: true });
-    await expect(label).toBeVisible();
+    // The agent chip carries a dot and says why; its menu offers the update.
+    const picker = page.getByRole("button", { name: "Agent and model", exact: true });
+    await expect(picker).toHaveAttribute("aria-description", "Codex 0.156.0 available");
     await page.screenshot({ path: test.info().outputPath("provider-update-label.png") });
-    await label.click();
+    await picker.click();
+    const notice = page.getByText("Update to 0.156.0", { exact: true });
     await expect(notice).toBeVisible();
     await page.screenshot({ path: test.info().outputPath("provider-update-popover.png") });
-    await page.keyboard.press("Escape");
-    const picker = page.getByRole("button", { name: "Agent and model", exact: true });
-    await picker.click();
-    await expect(notice).toBeVisible();
     await page.getByRole("button", { name: "Back to providers", exact: true }).click();
     await expect(
       page.getByRole("option", {
@@ -205,7 +202,7 @@ test("an outdated agent CLI is flagged in the picker and can be updated from it"
     await expect(notice).toHaveCount(0);
     await expect(page.getByText("Updating Codex…", { exact: true })).toHaveCount(0);
     await page.keyboard.press("Escape");
-    await expect(label).toHaveCount(0);
+    await expect(picker).not.toHaveAttribute("aria-description");
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -220,8 +217,8 @@ test("switching provider explains that the conversation is kept, and switching b
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Provider switch", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const codex = page.getByRole("textbox", { name: "Message Codex" });
     await expect(codex).toBeEnabled();

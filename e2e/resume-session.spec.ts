@@ -1,12 +1,25 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
-import { chooseProvider } from "./support/agents.ts";
+import { tab, closeTab } from "./support/tabs.ts";
 
-test("resume finds older native sessions, protects drafts, and keeps the same pane", async ({
+/** Opens "Resume a chat…" from the new-tab menu. */
+async function openResume(page: Page) {
+  await page.getByRole("button", { name: "New tab options", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Resume a chat…", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Resume a chat", exact: true });
+  await expect(dialog).toBeVisible();
+  return dialog;
+}
+
+/** A row of one agent: every test provider lists the same saved sessions. */
+const row = (dialog: Locator, provider: string, name?: string | RegExp) =>
+  dialog.locator(`[data-resume-row][data-provider="${provider}"]`, name ? { hasText: name } : {});
+
+test("one list holds closed chats and older CLI sessions, and takes one over in a new tab", async ({
   page,
 }) => {
   const directory = await mkdtemp(join(tmpdir(), "concors-resume-ui-"));
@@ -16,86 +29,69 @@ test("resume finds older native sessions, protects drafts, and keeps the same pa
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Resume workspace", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
-    await chooseProvider(page);
-    const composer = page.getByRole("textbox", { name: "Message Codex", exact: true });
-    const resume = page.getByRole("button", { name: "Resume session", exact: true });
-    await expect(composer).toBeEnabled();
-    await expect(resume).toBeEnabled();
-    await composer.fill("Do not lose my draft");
-    await expect(resume).toBeDisabled();
-    await composer.fill("");
-    await resume.click();
-    const dialog = page.getByRole("dialog", { name: "Resume session", exact: true });
-    await expect(dialog.getByRole("textbox", { name: "Search sessions" })).toHaveValue("");
-    await expect(dialog.getByRole("combobox")).toHaveCount(0);
+    const dialog = await openResume(page);
+    const search = dialog.getByRole("combobox", { name: "Search chats" });
+    await expect(search).toBeFocused();
+    await expect(search).toHaveValue("");
     await expect(dialog.getByRole("heading")).toHaveCSS("font-size", "16px");
-    const filters = dialog.getByRole("group", { name: "Filter sessions by provider" });
-    await expect(filters.getByRole("button", { name: "All", exact: true })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    for (const provider of ["codex", "claude", "opencode", "pi"]) {
-      const row = dialog.locator(`[data-session-provider="${provider}"]`).first();
-      await expect(row).toBeVisible();
-      await expect(row.locator("[data-session-provider-icon]")).toBeVisible();
-      const filter = filters.locator(`[data-session-filter="${provider}"]`);
-      await filter.scrollIntoViewIfNeeded();
-      await expect(filter.locator("[data-session-filter-icon]")).toBeVisible();
-      expect(
-        await filter.evaluate((element) => {
-          const button = element.getBoundingClientRect();
-          const icon = element.querySelector("[data-session-filter-icon]")?.getBoundingClientRect();
-          return (
-            !!icon &&
-            icon.left >= button.left &&
-            icon.right <= button.right &&
-            icon.top >= button.top &&
-            icon.bottom <= button.bottom
-          );
-        }),
-      ).toBe(true);
-    }
-    await filters.evaluate((element) => {
-      element.scrollLeft = 0;
-    });
+    // One list: no filters, sections or source labels.
+    await expect(dialog.getByRole("group")).toHaveCount(0);
+    await expect(dialog.getByRole("heading")).toHaveCount(1);
+    for (const provider of ["codex", "claude", "opencode", "pi"])
+      await expect(row(dialog, provider).first()).toBeVisible();
+    // Rows never show folder paths.
+    await expect(row(dialog, "codex", /^CLI session/)).not.toContainText(directory);
+    // This workspace and every agent to start with; the agent filter narrows the list.
+    const workspaceFilter = dialog.getByRole("button", { name: "Workspace", exact: true });
+    const agentFilter = dialog.getByRole("button", { name: "Agent", exact: true });
+    await expect(workspaceFilter).toHaveText("This workspace");
+    await expect(agentFilter).toHaveText("All agents");
+    await agentFilter.click();
+    await expect(page.getByRole("menuitemradio")).toHaveText([
+      "All agents",
+      "Claude Code",
+      "Codex",
+      "OpenCode",
+    ]);
+    await page.getByRole("menuitemradio", { name: "Claude Code", exact: true }).click();
+    await expect(row(dialog, "codex")).toHaveCount(0);
+    await expect(row(dialog, "claude").first()).toBeVisible();
+    await agentFilter.click();
+    await page.getByRole("menuitemradio", { name: "All agents", exact: true }).click();
+    await expect(row(dialog, "codex").first()).toBeVisible();
+    // Nothing here offers every workspace, where each row names its workspace.
+    await search.fill("no such chat");
+    await expect(dialog.getByRole("option")).toHaveCount(0);
+    await dialog.getByRole("button", { name: "Show all workspaces", exact: true }).click();
+    await expect(workspaceFilter).toHaveText("All workspaces");
+    await search.fill("");
+    await expect(row(dialog, "codex").first()).toContainText("Resume workspace");
+    await workspaceFilter.click();
+    await page.getByRole("menuitemradio", { name: "This workspace", exact: true }).click();
+    await expect(row(dialog, "codex").first()).not.toContainText("Resume workspace");
     expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
       true,
     );
-    const actions = dialog.locator('[data-slot="dialog-actions"]');
-    await expect(actions.getByRole("button", { name: "Refresh sessions" })).toBeVisible();
-    await expect(actions.getByRole("button", { name: "Close", exact: true })).toBeVisible();
     await page.screenshot({ path: test.info().outputPath("resume-all-desktop.png") });
-    await filters.getByRole("button", { name: "Codex", exact: true }).click();
-    await expect(dialog.locator('[data-session-provider="claude"]')).toHaveCount(0);
-    await filters.getByRole("button", { name: "All", exact: true }).click();
-    await expect(dialog.locator('[data-session-provider="claude"]').first()).toBeVisible();
-    await actions.getByRole("button", { name: "Refresh sessions" }).click();
-    await expect(dialog.locator('[data-session-provider="claude"]').first()).toBeVisible();
-    await expect(dialog.getByRole("textbox", { name: "Search sessions" })).toHaveValue("");
-    await filters.getByRole("button", { name: "Codex", exact: true }).click();
+    // Older sessions are appended as the list is scrolled.
     await expect
       .poll(async () => {
-        await dialog.getByLabel("Saved sessions").evaluate((element) => {
+        await dialog.getByRole("listbox", { name: "Chats" }).evaluate((element) => {
           element.scrollTop = element.scrollHeight;
         });
-        return dialog.getByRole("button", { name: /^Older CLI session 125 / }).count();
+        return row(dialog, "codex", "Older CLI session 125").count();
       })
       .toBe(1);
-    await expect(
-      page.getByRole("textbox", { name: "Message Codex", exact: true, includeHidden: true }),
-    ).toBeDisabled();
-    await dialog.getByRole("textbox", { name: "Search sessions" }).fill("125");
-    await expect(dialog.locator("[data-session-provider]")).toHaveCount(1);
-    await expect(dialog.getByRole("button", { name: /^Older CLI session 125 / })).toBeVisible();
+    await search.fill("session 125");
+    await expect(row(dialog, "codex")).toHaveCount(1);
     await page.screenshot({ path: test.info().outputPath("resume-picker-desktop.png") });
-    await dialog.getByRole("button", { name: /^Older CLI session 125 / }).click();
+    await row(dialog, "codex", "Older CLI session 125").click();
     await expect(dialog).toHaveCount(0);
     await expect(page.getByRole("log")).toContainText("Saved CLI prompt");
     await expect(page.getByRole("log")).toContainText("Saved CLI response");
-    await expect(resume).toHaveCount(0);
     await expect(page.getByRole("button", { name: /^Close .* tab$/ })).toHaveCount(2);
+    await expect(tab(page, 1)).toHaveAttribute("aria-pressed", "true");
+    const composer = page.getByRole("textbox", { name: "Message Codex", exact: true });
     await composer.fill("Continue this saved session");
     await page.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(page.getByRole("log")).toContainText("Hello from");
@@ -112,75 +108,51 @@ test("resume focuses an already open session instead of making a duplicate", asy
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Existing resume", directory);
-    const newChat = async () => {
-      await page.getByRole("button", { name: "New tab", exact: true }).click();
-      await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
-      await chooseProvider(page);
-      await expect(page.getByRole("textbox", { name: "Message Codex", exact: true })).toBeEnabled();
-    };
     const pick = async () => {
-      await page.getByRole("button", { name: "Resume session", exact: true }).click();
-      await page
-        .getByRole("dialog")
-        .getByRole("group", { name: "Filter sessions by provider" })
-        .getByRole("button", { name: "Codex", exact: true })
-        .click();
-      await page
-        .getByRole("dialog")
-        .getByRole("button", { name: /^CLI session / })
-        .click();
+      const dialog = await openResume(page);
+      await row(dialog, "codex", /^CLI session/).click();
+      await expect(dialog).toHaveCount(0);
       await expect(page.getByRole("log")).toContainText("Saved CLI response");
     };
-    await newChat();
     await pick();
-    await newChat();
+    await expect(page.getByRole("button", { name: /^Close .* tab$/ })).toHaveCount(2);
+    await tab(page, 0).click();
     await pick();
-    await expect(page.getByRole("button", { name: /^Close .* tab$/ })).toHaveCount(3);
-    await expect(page.getByRole("button", { name: "Tab 2", exact: true })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    await expect(page.getByRole("button", { name: /^Close .* tab$/ })).toHaveCount(2);
+    await expect(tab(page, 1)).toHaveAttribute("aria-pressed", "true");
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
 });
 
-test("a renamed session is listed and resumed under its pane name", async ({ page }) => {
+test("a renamed session is listed once and resumed under its pane name", async ({ page }) => {
   const directory = await mkdtemp(join(tmpdir(), "concors-resume-named-"));
   try {
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Named resume", directory);
     const pane = page.getByRole("region", { name: "Agent pane", exact: true });
-    const dialog = page.getByRole("dialog", { name: "Resume session", exact: true });
     // Session 42 is used by no other test; the daemon is shared and a session has one workspace.
-    const pick = async (search: string, name: RegExp) => {
-      await page.getByRole("button", { name: "New tab", exact: true }).click();
-      await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
-      await chooseProvider(page);
-      await expect(page.getByRole("textbox", { name: "Message Codex", exact: true })).toBeEnabled();
-      await page.getByRole("button", { name: "Resume session", exact: true }).click();
-      await dialog
-        .getByRole("group", { name: "Filter sessions by provider" })
-        .getByRole("button", { name: "Codex", exact: true })
-        .click();
-      await dialog.getByRole("textbox", { name: "Search sessions" }).fill(search);
-      await expect(dialog.locator("[data-session-provider]")).toHaveCount(1);
-      await dialog.getByRole("button", { name }).click();
+    const pick = async (search: string, name: string | RegExp) => {
+      const dialog = await openResume(page);
+      await dialog.getByRole("combobox", { name: "Search chats" }).fill(search);
+      // The chat and the CLI session it took over are one row.
+      await expect(row(dialog, "codex")).toHaveCount(1);
+      await row(dialog, "codex", name).click();
       await expect(dialog).toHaveCount(0);
       await expect(page.getByRole("log")).toContainText("Saved CLI response");
     };
-    await pick("session 42", /^Older CLI session 42 /);
+    await pick("session 42", "Older CLI session 42");
     await pane.getByRole("button", { name: "Pane actions" }).click();
     await page.getByRole("menuitem", { name: "Rename pane" }).click();
     await pane.getByRole("textbox", { name: "Pane name", exact: true }).fill("Hello world");
     await page.keyboard.press("Enter");
     await expect(pane.locator("header").getByText("Hello world", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Close Tab 2 tab", exact: true }).click();
+    await closeTab(page, 1).click();
     await expect(pane).toHaveCount(0);
 
     // Found by the name given to it, not only by the CLI's title.
-    await pick("hello", /^Hello world /);
+    await pick("hello", "Hello world");
     await expect(pane.locator("header").getByText("Hello world", { exact: true })).toBeVisible();
     await expect(page.getByText("Loading conversation…")).toHaveCount(0);
   } finally {
@@ -244,33 +216,24 @@ test("a long session opens at its latest messages when resumed and when reopened
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Long resume", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
-    await chooseProvider(page);
-    await expect(page.getByRole("textbox", { name: "Message Codex", exact: true })).toBeEnabled();
     let painted = await recordFrames(page);
-    await page.getByRole("button", { name: "Resume session", exact: true }).click();
-    const dialog = page.getByRole("dialog", { name: "Resume session", exact: true });
-    await dialog
-      .getByRole("group", { name: "Filter sessions by provider" })
-      .getByRole("button", { name: "Codex", exact: true })
-      .click();
-    await dialog.getByRole("textbox", { name: "Search sessions" }).fill("session 77");
-    await expect(dialog.locator("[data-session-provider]")).toHaveCount(1);
-    await dialog.getByRole("button", { name: /^Older CLI session 77 / }).click();
+    let dialog = await openResume(page);
+    await dialog.getByRole("combobox", { name: "Search chats" }).fill("session 77");
+    await expect(row(dialog, "codex")).toHaveCount(1);
+    await row(dialog, "codex", "Older CLI session 77").click();
     await expect(page.getByRole("log")).toContainText("Long session response 80");
     await painted();
 
     // Closing the chat stops its CLI; reopening it replays the saved history once more.
     const pane = page.getByRole("region", { name: "Agent pane", exact: true });
-    await page.getByRole("button", { name: "Close Tab 2 tab", exact: true }).click();
+    await closeTab(page, 1).click();
     await expect(pane).toHaveCount(0);
     painted = await recordFrames(page);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Resume a chat…", exact: true }).click();
-    const chats = page.getByRole("dialog", { name: "Resume a chat" });
-    await chats.getByRole("combobox", { name: "Search closed chats" }).fill("session 77");
-    await expect(chats.getByRole("option")).toHaveCount(1);
+    dialog = await openResume(page);
+    await dialog.getByRole("combobox", { name: "Search chats" }).fill("session 77");
+    // Listed once, as the closed chat, which is newer than any CLI session and so comes first.
+    await expect(row(dialog, "codex")).toHaveCount(1);
+    await expect(dialog.getByRole("option").first()).toHaveAttribute("data-provider", "codex");
     await page.keyboard.press("Enter");
     await expect(page.getByRole("log")).toContainText("Long session response 80");
     await painted();

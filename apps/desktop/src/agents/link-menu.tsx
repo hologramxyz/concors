@@ -48,7 +48,7 @@ export function LinkMenu({
       >
         <ContextMenu.Trigger asChild>{children}</ContextMenu.Trigger>
         <ContextMenu.Portal>
-          <ContextMenu.Content className="z-50 min-w-44 rounded-lg border bg-popover p-1 text-ui text-popover-foreground shadow-md">
+          <ContextMenu.Content className="z-50 min-w-44 rounded-[calc(var(--radius)+(0.25rem+1px)*var(--concentric))] border bg-popover p-1 text-ui text-popover-foreground shadow-md">
             {selection && (
               <ContextMenu.Item className={item} onSelect={() => void copyText(selection)}>
                 <Copy />

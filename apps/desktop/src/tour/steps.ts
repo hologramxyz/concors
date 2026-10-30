@@ -39,7 +39,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
   {
     target: "new-tab",
     title: "Start agents here",
-    body: "Choose Agent to work with Claude or Codex. Unlike a Terminal, it gives you approvals, model choice and chat history.",
+    body: "Choose New chat to work with Claude or Codex. Unlike a Terminal, it gives you approvals, model choice and chat history.",
     shortcut: "new-tab",
     opensMenu: true,
     inWorkspace: true,

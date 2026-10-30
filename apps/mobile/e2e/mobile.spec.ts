@@ -64,7 +64,7 @@ test("offline renderer supplies secure request IDs without the browser UUID help
   const ui = await enter(page);
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
   await newTab(ui);
-  await ui.getByRole("button", { name: "Agent", exact: true }).click();
+  await ui.getByRole("button", { name: "New chat", exact: true }).click();
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
   await paneCount(ui, 3);
 });
@@ -252,12 +252,18 @@ test("Android composer keeps the model picker open when returning to providers",
     await ui.getByRole("button", { name: "Back to providers", exact: true }).click();
     const providers = ui.getByRole("listbox", { name: "Providers", exact: true });
     await expect(providers).toBeVisible();
+    // Back re-renders the menu under the tap; the composer stays open around its picker, or the
+    // picker loses its anchor and jumps away from the next tap.
+    await expect(ui.getByRole("textbox", { name: "Message Codex" })).not.toHaveAttribute(
+      "placeholder",
+      "Message your agent",
+    );
     await expect(ui.getByRole("combobox", { name: "Search providers" })).toBeVisible();
     await providers.getByRole("option", { name: /^Codex\b/ }).click();
-    await expect(ui.getByRole("listbox", { name: "Agent and model", exact: true })).toBeVisible();
+    await expect(ui.getByRole("listbox", { name: "Models", exact: true })).toBeVisible();
   }
   await ui.getByRole("option", { name: "Codex", exact: true }).click();
-  await expect(ui.getByRole("listbox", { name: "Agent and model", exact: true })).toHaveCount(0);
+  await expect(ui.getByRole("listbox", { name: "Models", exact: true })).toHaveCount(0);
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toHaveValue("Keep my draft");
 });
 test("composer stays visible with keyboard-sized viewport and return inserts a newline", async ({
@@ -355,7 +361,7 @@ test("Files responds in the demo and terminal swipes keep both panels reachable"
 test("flat tab changes use the authoritative workspace operations", async ({ page }) => {
   const ui = await enter(page);
   await newTab(ui);
-  await ui.getByRole("button", { name: "Agent", exact: true }).click();
+  await ui.getByRole("button", { name: "New chat", exact: true }).click();
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
   await workspaceActions(ui);
   await ui.getByRole("menuitem", { name: "Rename tab" }).click();
@@ -774,7 +780,7 @@ test("flat tab picker opens from its text and padding and dismisses without reop
     ).toHaveCount(1);
   }
   await expect(drawer.getByRole("button", { name: /Add pane/ })).toHaveCount(0);
-  await drawer.getByRole("button", { name: "Agent", exact: true }).click();
+  await drawer.getByRole("button", { name: "New chat", exact: true }).click();
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
   const added = await picker.getAttribute("data-value");
   if (!added) throw new Error("New tab was not selected");
@@ -807,7 +813,7 @@ test("flat tab actions configure and close inactive leaves without changing the 
   await newTab(ui);
   await ui
     .getByRole("dialog", { name: "New tab", exact: true })
-    .getByRole("button", { name: "Agent", exact: true })
+    .getByRole("button", { name: "New chat", exact: true })
     .click();
   await expect(picker).not.toHaveAttribute("data-value", activeChat);
   const selected = await picker.getAttribute("data-value");

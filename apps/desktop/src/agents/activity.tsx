@@ -1,7 +1,8 @@
 import { formatDuration } from "./duration";
 import { useEffect, useState } from "react";
+import { MessageSquare } from "lucide-react";
+import { useStartingProvider } from "./default-provider";
 import { ProviderIcon } from "./provider-icon";
-import { agentProviderName } from "@concors/protocol";
 import { useAgents } from "./context";
 import { chatAgentStatus, type AgentStatus } from "./agent-status";
 
@@ -12,7 +13,6 @@ export function AgentLoadingIcon({ className = "size-4" }: { className?: string 
       <g className="origin-center animate-spin [animation-duration:1.4s] motion-reduce:animate-none">
         <path d="M10 3a7 7 0 0 1 7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
       </g>
-      <circle cx="10" cy="10" r="1.5" fill="currentColor" opacity="0.7" />
     </svg>
   );
 }
@@ -21,16 +21,22 @@ export function AgentLoadingIcon({ className = "size-4" }: { className?: string 
  * A chat pane's agent as its tab shows it: the provider logo with the same status badge, so an agent
  * that finished, failed or waits for an answer is marked on its pane too, and both clear together.
  */
+/** A chat's mark before its session starts: the provider its prompt box starts with. */
+export function StartingChatIcon() {
+  const provider = useStartingProvider();
+  return provider ? (
+    <ProviderIcon provider={provider} />
+  ) : (
+    <MessageSquare className="size-4 text-muted-foreground" aria-hidden="true" />
+  );
+}
+
 export function AgentPaneIcon({ sessionId }: { sessionId: string | null }) {
   const agent = useAgents().find((a) => a.id === sessionId);
   if (!agent)
     return (
-      <span
-        className="mx-1 flex size-5 shrink-0 items-center justify-center"
-        title={agentProviderName("codex")}
-        aria-label="Codex"
-      >
-        <ProviderIcon provider="codex" />
+      <span className="mx-1 flex size-5 shrink-0 items-center justify-center">
+        <StartingChatIcon />
       </span>
     );
   const status = chatAgentStatus(agent);
@@ -77,17 +83,20 @@ export function AgentStatusIcon({
           className={`absolute -top-1 -left-1 size-1.5 rounded-full bg-primary ring-2 ${surface}`}
         />
       )}
-      <span
-        data-agent-status-badge
-        data-testid={agent.running ? runningTestId : undefined}
-        className={`absolute -right-1 -bottom-1 flex size-3 items-center justify-center rounded-full ring-1 ${surface}`}
-      >
-        {agent.running ? (
-          <AgentLoadingIcon className="size-3" />
-        ) : (
-          <span className={`size-2 rounded-full ${agent.color}`} />
-        )}
-      </span>
+      {/* No badge while it sits idle, so a mark always means something. */}
+      {(agent.running || agent.color) && (
+        <span
+          data-agent-status-badge
+          data-testid={agent.running ? runningTestId : undefined}
+          className={`absolute -right-1 -bottom-1 flex size-3 items-center justify-center rounded-full ring-1 ${surface}`}
+        >
+          {agent.running ? (
+            <AgentLoadingIcon className="size-3" />
+          ) : (
+            <span className={`size-2 rounded-full ${agent.color}`} />
+          )}
+        </span>
+      )}
     </span>
   );
 }

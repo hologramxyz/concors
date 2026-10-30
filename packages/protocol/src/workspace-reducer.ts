@@ -126,6 +126,9 @@ export function applyWorkspaceOperation(
       tabs: [],
     });
     state.selection = { projectId: op.projectId, tabId: null };
+  } else if (op.kind === "project.reopen") {
+    // The closed workspace's tabs live with the daemon, which restores them itself.
+    throw new WorkspaceOperationError("INVALID_OPERATION", "Reopen the workspace on its machine");
   } else {
     const project = requireValue(
       state.projects.find((p) => p.id === op.projectId),
@@ -145,7 +148,8 @@ export function applyWorkspaceOperation(
           "Project changed on another client. Review the refreshed workspace and retry.",
         );
       project.version++;
-      if (op.kind === "project.remove") {
+      // The daemon keeps a closed workspace apart; here both leave the list alike.
+      if (op.kind === "project.remove" || op.kind === "project.close") {
         state.projects = state.projects.filter((p) => p.id !== project.id);
         if (state.selection?.projectId === project.id) state.selection = null;
       } else if (op.kind === "project.rename") {
@@ -173,7 +177,7 @@ export function applyWorkspaceOperation(
           project.directoryMode === "follow" &&
           !project.followPaneId &&
           !project.tabs.length &&
-          op.profile === "shell"
+          (op.profile === "shell" || op.profile === "chat")
         )
           project.followPaneId = op.paneId;
         project.tabs.push({
@@ -376,7 +380,12 @@ export function applyWorkspaceOperation(
     const anchor = project.tabs
       .flatMap((tab) => tab.nodes)
       .find((node) => node.id === project.followPaneId);
-    if (!anchor || anchor.kind !== "pane" || anchor.profile !== "shell") {
+    // A first pane that opens to the start screen keeps the role, and follows once it is a shell.
+    if (
+      !anchor ||
+      anchor.kind !== "pane" ||
+      (anchor.profile !== "shell" && anchor.profile !== "chat")
+    ) {
       project.directoryMode = "pinned";
       delete project.followPaneId;
     }

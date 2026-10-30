@@ -95,6 +95,12 @@ export function defaultKeymap(mac = false): Keymap {
     ...result.search,
     { keys: [{ key: "k", modifiers: [mac ? "Meta" : "Control"] }], context: "outside-terminal" },
   ];
+  // ⌘T opens a tab as it does everywhere on a Mac. In a browser the browser keeps it.
+  if (mac)
+    result["new-tab"] = [
+      ...result["new-tab"],
+      { keys: [{ key: "t", modifiers: ["Meta"] }], context: "native" },
+    ];
   result["next-tab"] = [
     ...result["next-tab"],
     { keys: [{ key: "Tab", modifiers: ["Control"] }], context: "native" },

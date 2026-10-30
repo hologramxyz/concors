@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
 
-test("folders, repo initials and local favicons match in expanded and collapsed sidebars", async ({
+test("folders, repo initials and local favicons show in the sidebar and survive a collapse", async ({
   page,
 }) => {
   test.setTimeout(90000);
@@ -33,11 +33,13 @@ test("folders, repo initials and local favicons match in expanded and collapsed 
       await seedProject(page, name, directory);
     }
     const sidebar = page.getByRole("navigation", { name: "Primary" });
-    for (const compact of [false, true, false]) {
-      if (compact)
+    // The collapsed sidebar is hidden, so the icons are checked open, then again after a collapse.
+    for (const pass of [0, 1]) {
+      if (pass === 1) {
         await sidebar.getByRole("button", { name: "Collapse sidebar", exact: true }).click();
-      else if (await sidebar.getByRole("button", { name: "Expand sidebar", exact: true }).count())
-        await sidebar.getByRole("button", { name: "Expand sidebar", exact: true }).click();
+        await expect(sidebar).toBeHidden();
+        await page.getByRole("button", { name: "Expand sidebar", exact: true }).click();
+      }
       for (const [name, kind, initial] of [
         ["Notes", "folder", ""],
         ["Atlas", "initial", "A"],
@@ -61,16 +63,15 @@ test("folders, repo initials and local favicons match in expanded and collapsed 
         // A tooltip still closing keeps its pointer-transit grace area, which would swallow the
         // hover that opens the next one (see hoverControl in sidebar-rail.spec.ts).
         await expect(page.getByRole("tooltip")).toHaveCount(0);
-        await button.hover();
+        // Only the name opens the details, so they do not cover the row's count and menu.
+        await button.getByText(name, { exact: true }).hover();
         await expect(page.getByRole("tooltip")).toContainText(join(root, name));
         await button.click();
         await expect(button).toHaveAttribute("aria-current", "page");
       }
       await page.keyboard.press("Escape");
       await page.screenshot({
-        path: test
-          .info()
-          .outputPath(compact ? "project-icons-rail.png" : "project-icons-expanded.png"),
+        path: test.info().outputPath(`project-icons-expanded-${pass}.png`),
       });
     }
     await page.reload();

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { chooseProvider } from "./support/agents.ts";
+import { tabs } from "./support/tabs.ts";
 
 test("projects open an agent immediately and new tabs start the chosen profile", async ({
   page,
@@ -18,18 +19,15 @@ test("projects open an agent immediately and new tabs start the chosen profile",
     await expect(page.getByRole("region", { name: "Agent pane", exact: true })).toBeVisible();
     await chooseProvider(page);
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
-    for (const name of ["Terminal", "Agent", "Codex", "Claude Code", "OpenCode"]) {
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    for (const name of ["New chat", "Terminal", "Claude Code", "Codex", "OpenCode"]) {
       await expect(page.getByRole("menuitem", { name, exact: true })).toBeVisible();
     }
     await page.keyboard.press("Escape");
     await expect(page.getByLabel("Project tabs").locator("[data-tab-id]")).toHaveCount(1);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
-    await page
-      .getByRole("button", { name: "Tab 2", exact: true })
-      .last()
-      .click({ button: "right" });
+    await tabs(page).nth(1).locator("> button").first().click({ button: "right" });
     await page.getByRole("menuitem", { name: "Rename tab", exact: true }).click();
     await page.getByLabel("Tab name", { exact: true }).fill("Development");
     await page.keyboard.press("Enter");
@@ -48,10 +46,11 @@ test("projects open an agent immediately and new tabs start the chosen profile",
     const sidebar = page.getByRole("navigation", { name: "Primary" });
     const before = await page.getByLabel("Terminal output").filter({ visible: true }).boundingBox();
     await page.getByRole("button", { name: "Collapse sidebar" }).click();
-    await expect(sidebar).toBeVisible();
-    await expect(page.locator(".sidebar-shell")).not.toHaveAttribute("inert", "");
+    // Collapsed, the sidebar slides away entirely and leaves its controls out of reach.
+    await expect(page.locator(".sidebar-shell")).toHaveAttribute("inert", "");
     await expect(page.locator(".sidebar-shell")).toHaveCSS("transition-property", "width");
-    await expect(page.locator(".sidebar-shell")).toHaveCSS("width", "44px");
+    await expect(page.locator(".sidebar-shell")).toHaveCSS("width", "0px");
+    await expect(sidebar).toBeHidden();
     const expand = page.getByRole("button", { name: "Expand sidebar" });
     await expect(expand).toBeFocused();
     await expect(
@@ -77,10 +76,17 @@ test("projects open an agent immediately and new tabs start the chosen profile",
       "true",
     );
     await page.screenshot({ path: "test-results/project-controls.png" });
+    // "+" itself skips the menu and opens a tab on the start screen.
+    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await expect(page.getByLabel("Project tabs").locator("[data-tab-id]")).toHaveCount(3);
+    await expect(page.getByRole("menu")).toHaveCount(0);
+    await expect(
+      page.getByRole("group", { name: "Start with", exact: true }).filter({ visible: true }),
+    ).toBeVisible();
     await page.emulateMedia({ reducedMotion: "reduce" });
     await expect(page.locator(".sidebar-shell")).toHaveCSS("transition-duration", "0s");
     await page.getByRole("button", { name: "Collapse sidebar" }).click();
-    await expect(page.locator(".sidebar-shell")).toHaveCSS("width", "44px");
+    await expect(page.locator(".sidebar-shell")).toHaveCSS("width", "0px");
     await page.getByRole("button", { name: "Expand sidebar" }).click();
     await expect(page.locator(".sidebar-shell")).toHaveCSS("width", "216px");
   } finally {

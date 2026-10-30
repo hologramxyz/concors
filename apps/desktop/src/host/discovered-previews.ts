@@ -28,7 +28,7 @@ export function discoveredPreviews(
         id: `${process.id}:${preview.port}`,
         name:
           preview.name ??
-          (process.previews.length > 1 ? `${process.name} · :${preview.port}` : process.name),
+          (process.previews.length > 1 ? `${process.name} :${preview.port}` : process.name),
         port: preview.port,
         preview,
         url,

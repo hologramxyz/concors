@@ -5,6 +5,7 @@ import { clampRatio, splitRatio } from "./split-ratio";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { useTerminalProfiles } from "@/terminal/profiles-context";
 import { paneProfiles, TAB_PROFILES } from "./tab-profiles";
+import { StartOptions } from "./start-options";
 import { useCommand } from "@/shortcuts/context";
 import { useShortcutLabels } from "@/shortcuts/preferences-context";
 import type { PaneFocusRequest } from "./session-pane";
@@ -20,7 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ChatPane } from "@/agents/chat";
 import { TerminalPane } from "@/terminal/terminal-pane";
-import { useContext, useEffect, useRef, useState } from "react";
+import { Fragment, useContext, useEffect, useRef, useState } from "react";
 import { AgentPaneIcon, AgentStatusIcon } from "@/agents/activity";
 import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
 import { isLiveTerminalAgent, terminalAgentStatus } from "@/agents/agent-status";
@@ -30,20 +31,13 @@ import { McpStatusDialog } from "@/agents/mcp-status-dialog";
 import {
   PANE_RENAME_CAPABILITY,
   type LayoutNode,
-  type PaneProfile,
   type WorkspaceOperation,
   type WorkspaceProject,
   type WorkspaceTab,
 } from "@concors/protocol";
 import { typingOutsidePanes } from "./typing-outside-panes";
+import { defaultPaneTitle, PROFILE_LABELS } from "./tab-title";
 
-const PROFILE_LABELS: Record<PaneProfile, string> = {
-  shell: "Terminal",
-  chat: "Agent",
-  codex: "Codex",
-  claude: "Claude Code",
-  opencode: "OpenCode",
-};
 interface Props {
   focusRequest?: PaneFocusRequest | null;
   onPaneFocus?: ((paneId: string) => void) | undefined;
@@ -114,6 +108,9 @@ export function PaneLayout(props: Props) {
     // moment no pane has it, after which this pane would see another pane focused and give up.
     pane.dataset.focusPending = "";
     let initial = true;
+    // Focus that moves to another pane meanwhile was asked for, by a click or by a dialog giving it
+    // back, so it is kept even before this pane has had its first try.
+    const started = document.activeElement;
     const settle = () => {
       pendingFocus.current = null;
       delete pane.dataset.focusPending;
@@ -127,7 +124,12 @@ export function PaneLayout(props: Props) {
         return;
       }
       const focusedPane = focused?.closest<HTMLElement>("[data-pane-id]");
-      if (!initial && focusedPane && focusedPane !== pane && focusedPane.getClientRects().length) {
+      if (
+        (!initial || focused !== started) &&
+        focusedPane &&
+        focusedPane !== pane &&
+        focusedPane.getClientRects().length
+      ) {
         settle();
         return;
       }
@@ -237,6 +239,8 @@ export function PaneLayout(props: Props) {
     const root = container.current;
     if (!root) return;
     let initial = true;
+    // As above: focus moved to another pane meanwhile was asked for, and is kept.
+    const started = document.activeElement;
     const focus = () => {
       const pane = container.current?.querySelector<HTMLElement>(
         `[data-pane-id="${target.paneId}"]`,
@@ -250,7 +254,10 @@ export function PaneLayout(props: Props) {
       if (focused?.closest(OPEN_OVERLAY)) return;
       if (
         typingOutsidePanes(focused) ||
-        (!initial && focusedPane && focusedPane !== pane && focusedPane.getClientRects().length)
+        ((!initial || focused !== started) &&
+          focusedPane &&
+          focusedPane !== pane &&
+          focusedPane.getClientRects().length)
       ) {
         observer.disconnect();
         return;
@@ -338,7 +345,7 @@ export function PaneLayout(props: Props) {
         setDragging(null);
         setDrop(null);
       }}
-      className="relative h-full min-h-[220px] min-w-[320px] px-2 pb-2"
+      className="relative h-full min-h-[220px] min-w-[320px]"
     >
       {render(props.tab.root)}
       {dragging && (
@@ -411,7 +418,7 @@ function Pane({
     TAB_PROFILES.find((item) => item.profile === (node.terminalProfile?.id ?? node.profile))
       ?.icon ?? Terminal;
   const label = node.terminalProfile?.name ?? PROFILE_LABELS[node.profile];
-  const fallbackTitle = node.profile === "chat" ? (agent?.name ?? "Agent") : label;
+  const fallbackTitle = defaultPaneTitle(node, agent ? [agent] : [], terminal ? [terminal] : []);
   const title = node.name ?? fallbackTitle;
   const target = {
     projectId: project.id,
@@ -436,7 +443,7 @@ function Pane({
       data-pane-id={node.id}
       tabIndex={-1}
       aria-label={`${label} pane`}
-      className={`relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border outline-none ${node.profile === "chat" ? "bg-card" : "bg-[var(--terminal-background)] text-[var(--terminal-foreground)]"}`}
+      className={`relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden outline-none ${node.profile === "chat" ? "bg-background" : "bg-[var(--terminal-background)] text-[var(--terminal-foreground)]"}`}
     >
       <header
         tabIndex={0}
@@ -452,7 +459,7 @@ function Pane({
           onDrag({ paneId: node.id, version: project.version });
         }}
         onDragEnd={() => onDrag(null)}
-        className={`flex h-9 shrink-0 items-center gap-1 border-b px-2 outline-none ${canDrag && tab.nodes.length > 1 ? "cursor-grab active:cursor-grabbing" : ""}`}
+        className={`flex h-9 shrink-0 items-center gap-1 px-2 outline-none ${canDrag && tab.nodes.length > 1 ? "cursor-grab active:cursor-grabbing" : ""}`}
       >
         {node.profile === "chat" ? (
           <AgentPaneIcon sessionId={node.sessionId} />
@@ -587,11 +594,14 @@ function Pane({
                   });
               }}
             >
-              {options.map(({ id, label: optionLabel, icon: Icon }) => (
-                <DropdownMenuRadioItem key={id} value={id} disabled={!canEdit}>
-                  <Icon className="size-4 shrink-0" aria-hidden="true" />
-                  <span className="truncate">{optionLabel}</span>
-                </DropdownMenuRadioItem>
+              {options.map(({ id, profile, label: optionLabel, icon: Icon }) => (
+                <Fragment key={id}>
+                  <DropdownMenuRadioItem value={id} disabled={!canEdit}>
+                    <Icon className="size-4 shrink-0" aria-hidden="true" />
+                    <span className="truncate">{optionLabel}</span>
+                  </DropdownMenuRadioItem>
+                  {profile === "chat" && <DropdownMenuSeparator />}
+                </Fragment>
               ))}
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
@@ -625,7 +635,28 @@ function Pane({
             directory: agent?.directory ?? node.directory ?? project.directory,
           }}
         >
-          <ChatPane project={project} tab={tab} node={node} canEdit={canEdit} />
+          <ChatPane
+            project={project}
+            tab={tab}
+            node={node}
+            canEdit={canEdit}
+            start={
+              <StartOptions
+                options={options}
+                disabled={!canEdit}
+                onOpen={(option) =>
+                  onCommand({
+                    kind: "pane.configure",
+                    ...target,
+                    profile: option.profile,
+                    ...(profiles.supported && option.terminalProfileId
+                      ? { terminalProfileId: option.terminalProfileId }
+                      : {}),
+                  })
+                }
+              />
+            }
+          />
         </ProjectFileLinks>
       )}
     </section>
@@ -702,7 +733,7 @@ function Split({
         aria-disabled={!canEdit}
         data-resizing={preview !== null || undefined}
         tabIndex={canEdit ? 0 : -1}
-        className={`pane-resize-handle shrink-0 touch-none ${horizontal ? "w-2 cursor-col-resize" : "h-2 cursor-row-resize"}`}
+        className={`pane-resize-handle shrink-0 touch-none bg-border ${horizontal ? "w-px cursor-col-resize" : "h-px cursor-row-resize"}`}
         onPointerDown={(event) => {
           if (!canEdit || event.button !== 0) return;
           // Otherwise the press starts a text selection that sweeps across both panes as the

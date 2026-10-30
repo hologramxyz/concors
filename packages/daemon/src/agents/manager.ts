@@ -52,6 +52,8 @@ import type { ConversationProvider as AgentProvider } from "./providers/contract
 import {
   agentProviderName,
   findAgentModel,
+  isUntitledChat,
+  UNTITLED_CHAT_NAME,
   NativeSessionSchema,
   type AgentProviderCatalog,
 } from "@concors/protocol";
@@ -184,15 +186,13 @@ export class AgentManager {
     this.#emit = emit;
     // Old closed chats removed to make room for a new one: stop anything still attached to them,
     // and send the whole list, which clients take as the full set of sessions.
-    store.onAgentsRetired = (ids) => {
-      for (const id of ids) {
-        const runtime = this.#runtimes.get(id);
-        if (!runtime) continue;
-        runtime.closed = true;
-        this.#runtimes.delete(id);
-        void runtime.provider.close().catch(() => undefined);
-      }
-      this.#emit({ type: "agent.list", agents: store.agents() });
+    store.onAgentsRetired = (retired) => {
+      for (const { id } of retired) this.#stop(id);
+      this.#emit({ type: "agent.list", agents: store.agents(), retired });
+    };
+    // Chats from a removed workspace that joined the one just opened on their folder.
+    store.onAgentsMoved = (moved) => {
+      for (const agent of moved) this.#emit({ type: "agent.state", agent });
     };
     // Switching provider or resuming another session can leave the pane's old agent hidden. It
     // runs after the change's own agent events, so those never overwrite the names it records.
@@ -878,7 +878,7 @@ export class AgentManager {
       info = {
         id,
         projectId,
-        name: config.label,
+        name: UNTITLED_CHAT_NAME,
         engine: config.engine,
         providerLabel: config.label,
         directory: project.directory,
@@ -1041,6 +1041,25 @@ export class AgentManager {
             updatedAt: info.updatedAt,
           });
         return this.result(request, op.sessionId);
+      }
+      if (op.kind === "pin") {
+        const info = this.#store.agent(op.sessionId);
+        // Pinning is not activity: the chat keeps its place among the recent ones.
+        if (!!info.pinned !== op.pinned)
+          this.update(info.id, { pinned: op.pinned || undefined, updatedAt: info.updatedAt });
+        return this.result(request, op.sessionId);
+      }
+      if (op.kind === "delete") {
+        const info = this.#store.agent(op.sessionId);
+        if (this.mutations.has(info.id)) throw new Error("This chat is being changed. Try again.");
+        this.#store.deleteAgent(info.id);
+        this.#stop(info.id);
+        this.#emit({ type: "agent.list", agents: this.#store.agents() });
+        return {
+          type: "agent.result",
+          requestId: request.requestId,
+          outcome: { status: "ok", conversation: { agent: info, items: [], hasMore: false } },
+        };
       }
       if (op.kind === "provider-catalog") {
         const info = this.#store.agent(op.sessionId);
@@ -1323,7 +1342,7 @@ export class AgentManager {
         const info: AgentInfo = {
           id: randomUUID(),
           projectId: project.id,
-          name: this.registry.config(providerId).label,
+          name: UNTITLED_CHAT_NAME,
           engine: this.registry.config(providerId).engine,
           providerLabel: this.registry.config(providerId).label,
           directory,
@@ -1624,10 +1643,9 @@ export class AgentManager {
           ...(implementation
             ? { settings: { ...(info.settings ?? defaultSettings), planMode: false } }
             : {}),
-          name:
-            info.name === (info.providerLabel ?? agentProviderName(info.provider))
-              ? op.text.split("\n")[0]?.slice(0, 80) || agentProviderName(info.provider)
-              : info.name,
+          name: isUntitledChat(info)
+            ? op.text.split("\n")[0]?.slice(0, 80) || UNTITLED_CHAT_NAME
+            : info.name,
           status: "working" as const,
           turnId,
           turnStartedAt: new Date().toISOString(),
@@ -1903,7 +1921,7 @@ export class AgentManager {
     const info: AgentInfo = {
       id: randomUUID(),
       projectId: previous.projectId,
-      name: label,
+      name: UNTITLED_CHAT_NAME,
       ...(previous.engine ? { engine: previous.engine } : {}),
       providerLabel: label,
       directory: previous.directory,
@@ -1948,6 +1966,14 @@ export class AgentManager {
       nativeTurnId: this.#store.nativeTurnId(info.id, next.turnId),
       numTurns: dropped.length,
     };
+  }
+  /** Stops whatever still runs for a session that is gone. */
+  #stop(id: string): void {
+    const runtime = this.#runtimes.get(id);
+    if (!runtime) return;
+    runtime.closed = true;
+    this.#runtimes.delete(id);
+    void runtime.provider.close().catch(() => undefined);
   }
   private result(request: AgentRequest, id: string, before?: number, after?: number): AgentResult {
     return {

@@ -20,6 +20,8 @@ async function expectNoSidebarTooltips(page: Page, sidebar: Locator) {
   for (const control of await sidebar
     .locator("button:not([data-workspace-id]):not([data-agent-id])")
     .all()) {
+    // A workspace's tab list stays in place while closed, hidden once it has eased shut.
+    if (!(await control.isVisible())) continue;
     await control.hover();
     await control.focus();
     // Focus would open an enabled tooltip immediately, even when hover is delayed.
@@ -29,9 +31,7 @@ async function expectNoSidebarTooltips(page: Page, sidebar: Locator) {
   }
 }
 
-test("collapsed sidebar keeps workspace, machine, search and account navigation accessible", async ({
-  page,
-}) => {
+test("a collapsed sidebar hides entirely and its toggle brings it back", async ({ page }) => {
   test.setTimeout(90_000);
   const directory = await mkdtemp(join(tmpdir(), "concors-sidebar-rail-"));
   const errors: string[] = [];
@@ -46,150 +46,83 @@ test("collapsed sidebar keeps workspace, machine, search and account navigation 
     await seedProject(page, "Alpha workspace", directory);
     await mkdir(join(directory, "beta"));
     await seedProject(page, "Beta workspace", join(directory, "beta"));
-    const rail = page.getByRole("navigation", { name: "Primary" });
+    const sidebar = page.getByRole("navigation", { name: "Primary" });
     const shell = page.locator(".sidebar-shell");
-    await expect(rail.getByText("No agents yet.", { exact: true })).toBeVisible();
-    await expect(rail.getByRole("button", { name: "Previews", exact: true })).toBeVisible();
-    await expectNoSidebarTooltips(page, rail);
-    await rail.getByRole("button", { name: "Collapse sidebar", exact: true }).click();
-    await expect(shell).toHaveCSS("width", "44px");
-    await expect(rail).toBeVisible();
-    await expect(shell).not.toHaveAttribute("inert");
-    const expand = rail.getByRole("button", { name: "Expand sidebar", exact: true });
+    await expect(sidebar.getByRole("button", { name: "Previews", exact: true })).toBeVisible();
+    await expectNoSidebarTooltips(page, sidebar);
+    const tabs = await page.getByLabel("Project tabs", { exact: true }).boundingBox();
+    await sidebar.getByRole("button", { name: "Collapse sidebar", exact: true }).click();
+    await expect(shell).toHaveCSS("width", "0px");
+    await expect(shell).toHaveAttribute("inert", "");
+    await expect(sidebar).toBeHidden();
+    // No rail: the content takes the width, led by the toggle that brings the sidebar back and
+    // search beside it.
+    const expand = page.getByRole("button", { name: "Expand sidebar", exact: true });
     await expect(expand).toBeFocused();
     await expect(expand).toHaveAttribute("aria-expanded", "false");
-    await expect(rail.getByRole("button", { name: "Workspaces", exact: true })).toHaveCount(0);
-    await expect(rail.getByRole("region", { name: "Agents", exact: true })).toHaveCount(0);
-    await expect(rail.getByRole("button", { name: "Previews", exact: true })).toHaveCount(0);
-    for (const button of await rail.locator(".sidebar-rail-control").all()) {
-      const bounds = await button.boundingBox();
-      expect(bounds?.width).toBe(32);
-      expect(bounds?.height).toBe(32);
-    }
-    for (const [name, label] of [
-      ["Switch machine", "This computer"],
-      ["Expand sidebar", "Expand sidebar"],
-      ["Search", "Search"],
-      ["Open workspace menu", "Workspaces"],
-      ["Account: E2E User", "Account and settings"],
-    ]) {
-      await hoverControl(page, rail.getByRole("button", { name, exact: true }));
-      await expect(page.getByRole("tooltip").filter({ hasText: label })).toBeVisible();
-    }
-    const alpha = rail.getByRole("button", { name: "Alpha workspace", exact: true });
-    const beta = rail.getByRole("button", { name: "Beta workspace", exact: true });
-    await expect(alpha.locator('[data-project-icon="folder"]')).toBeVisible();
-    await expect(beta.locator('[data-project-icon="folder"]')).toBeVisible();
-    await expect(beta).toHaveAttribute("aria-current", "page");
-    await hoverControl(page, alpha);
-    await expect(page.getByRole("tooltip")).toContainText("Alpha workspace");
-    await alpha.click();
-    await expect(page.getByRole("heading", { name: "Alpha workspace", exact: true })).toBeVisible();
-    await expect(alpha).toHaveAttribute("aria-current", "page");
-    await beta.focus();
-    // Alpha's tooltip may still be closing after the click.
-    await expect(page.getByRole("tooltip").filter({ hasText: "Beta workspace" })).toBeVisible();
-    await page.keyboard.press("Enter");
+    await expect(page.getByRole("button", { name: "Search", exact: true })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: /^Account:/ })).toHaveCount(0);
+    const surface = await page.locator(".workspace-surface").boundingBox();
+    expect(surface?.x).toBeLessThan(10);
+    const collapsedTabs = await page.getByLabel("Project tabs", { exact: true }).boundingBox();
+    expect(collapsedTabs?.x).toBeLessThan(tabs?.x ?? 0);
+    await hoverControl(page, expand);
+    await expect(page.getByRole("tooltip").filter({ hasText: "Expand sidebar" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Beta workspace", exact: true })).toBeVisible();
-    const search = rail.getByRole("button", { name: "Search", exact: true });
-    await search.click();
-    await expect(page.getByRole("dialog", { name: "Search", exact: true })).toBeVisible();
-    await page.keyboard.press("Escape");
-    await expect(search).toBeFocused();
-    await rail.getByRole("button", { name: "Open workspace menu", exact: true }).click();
-    await expect(page.getByRole("menuitem", { name: "Open folder…", exact: true })).toBeVisible();
-    await page.keyboard.press("Escape");
-    await rail.getByRole("button", { name: /^Account:/ }).click();
-    await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
-    await expect(page.getByRole("navigation", { name: "Settings" })).toBeVisible();
-    await expect(rail).toHaveCount(0);
-    await page.getByRole("button", { name: "Back to app", exact: true }).click();
-    await expect(shell).toHaveCSS("width", "44px");
-    await rail.getByRole("button", { name: "Switch machine", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Manage machines", exact: true }).click();
-    await expect(
-      page
-        .getByRole("navigation", { name: "Settings" })
-        .getByRole("button", { name: "Machines", exact: true }),
-    ).toHaveAttribute("aria-current", "page");
-    await expect(rail).toHaveCount(0);
-    await page.getByRole("button", { name: "Back to app", exact: true }).click();
-    await expect(shell).toHaveCSS("width", "44px");
-    await expect(beta).toHaveAttribute("aria-current", "page");
-    await expect(page.getByRole("heading", { name: "Beta workspace", exact: true })).toBeVisible();
-    await rail.getByRole("button", { name: "Switch machine", exact: true }).click();
-    await page.getByRole("menuitem", { name: /Second machine Online/ }).click();
-    await expect(rail.getByRole("img", { name: "Second machine: Connected" })).toBeVisible();
-    await expect(alpha).toHaveCount(0);
-    await expect(beta).toHaveCount(0);
-    await expect(rail.getByText("—", { exact: true })).toHaveCount(0);
-    await expect(rail.getByRole("button", { name: "Open workspace menu" })).toBeVisible();
-    await rail.getByRole("button", { name: "Switch machine", exact: true }).click();
-    await page.getByRole("menuitem", { name: "This computer", exact: true }).click();
-    await expect(beta).toHaveAttribute("aria-current", "page");
-    await expect(shell).toHaveCSS("width", "44px");
-    await page.screenshot({ path: test.info().outputPath("rail-light.png") });
+    await page.screenshot({ path: test.info().outputPath("collapsed-light.png") });
     await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
     await page.setViewportSize({ width: 390, height: 340 });
     await expect(shell).toHaveCSS("transition-duration", "0s");
-    await expect(
-      rail.getByRole("button", { name: "Switch machine", exact: true }),
-    ).toBeInViewport();
-    await expect(rail.getByRole("button", { name: /^Account:/ })).toBeInViewport();
-    await beta.scrollIntoViewIfNeeded();
-    await expect(beta).toBeInViewport();
-    expect(await rail.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
-    await page.screenshot({ path: test.info().outputPath("rail-narrow-dark.png") });
+    await page.screenshot({ path: test.info().outputPath("collapsed-narrow-dark.png") });
     await expand.focus();
     await page.keyboard.press("Enter");
     await expect(shell).toHaveCSS("width", "216px");
-    await expect(rail.getByRole("button", { name: "Collapse sidebar", exact: true })).toBeFocused();
-    await expect(beta).toHaveText("Beta workspace");
-    await expectNoSidebarTooltips(page, rail);
+    await expect(shell).not.toHaveAttribute("inert");
+    await expect(
+      sidebar.getByRole("button", { name: "Collapse sidebar", exact: true }),
+    ).toBeFocused();
+    await expect(page.getByRole("button", { name: "Expand sidebar", exact: true })).toHaveCount(0);
+    const beta = sidebar.getByRole("button", { name: "Beta workspace", exact: true });
+    await expect(beta).toHaveAttribute("aria-current", "page");
+    await expectNoSidebarTooltips(page, sidebar);
     await hoverControl(page, beta);
     await expect(page.getByRole("tooltip")).toContainText(join(directory, "beta"));
-    await expect(rail.getByText("No agents yet.", { exact: true })).toBeVisible();
-    await expect(rail.getByRole("button", { name: "Previews", exact: true })).toBeVisible();
     expect(errors).toEqual([]);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
 });
 
-test("collapsed agents show provider icons and live status without losing chat drafts", async ({
-  page,
-}) => {
+test("chats keep their drafts and live status while the sidebar is collapsed", async ({ page }) => {
   test.setTimeout(90_000);
   const directory = await mkdtemp(join(tmpdir(), "concors-rail-agents-"));
   try {
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Rail agents", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     const codex = page.getByRole("textbox", { name: "Message Codex", exact: true });
     await expect(codex).toBeEnabled();
     await page.getByRole("button", { name: "Collapse sidebar", exact: true }).click();
     const rail = page.getByRole("navigation", { name: "Primary" });
-    const agents = rail.getByRole("region", { name: "Agents", exact: true });
-    await expect(rail.getByRole("button", { name: "Agents", exact: true })).toHaveCount(0);
-    await expect(rail.getByRole("button", { name: "Previews", exact: true })).toHaveCount(0);
-    await expect(rail.getByText("—", { exact: true })).toHaveCount(0);
-    const codexButton = agents.locator('button[data-agent-id]:has([data-provider="codex"])');
-    await expect(codexButton.getByRole("img", { name: "Agent status: Ready" })).toBeVisible();
+    // Collapsed, the sidebar is hidden; the tab bar still shows each chat.
+    await expect(rail).toBeHidden();
+    const tabs = page.getByLabel("Project tabs", { exact: true });
+    const codexTab = tabs.locator("[data-tab-id]").nth(1).locator("button").first();
     await codex.fill("hello from the compact rail");
     await page.getByRole("button", { name: "Send message", exact: true }).click();
-    // The open chat has seen its finished turn, so it reads as Ready rather than a green Done.
+    // The open chat has seen its finished turn, so its tab carries no badge.
     await expect(page.getByText(/^Worked for /)).toHaveCount(1);
-    await expect(codexButton.getByRole("img", { name: "Agent status: Ready" })).toBeVisible();
-    await expect(codexButton.locator(".bg-emerald-500")).toHaveCount(0);
+    await expect(codexTab.locator('[data-provider="codex"]')).toBeVisible();
+    await expect(codexTab.locator("[data-agent-status-badge]")).toHaveCount(0);
     await codex.fill("Keep this draft");
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await expect(codex).toBeEnabled();
     await page.getByRole("button", { name: "Agent and model", exact: true }).click();
@@ -204,12 +137,8 @@ test("collapsed agents show provider icons and live status without losing chat d
     await expect(
       page.getByRole("textbox", { name: "Message Claude Code", exact: true }),
     ).toBeEnabled();
-    await expect(agents.locator("button[data-agent-id]")).toHaveCount(2);
-    await expect(agents.locator('[data-provider="claude"]')).toBeVisible();
-    await expect(agents.locator('[data-provider="codex"]')).toBeVisible();
-    await hoverControl(page, codexButton);
-    await expect(page.getByRole("tooltip")).toContainText("Rail agents");
-    await codexButton.click();
+    await expect(tabs.locator('[data-provider="claude"]')).toBeVisible();
+    await codexTab.click();
     await expect(codex).toHaveValue("Keep this draft");
     await expect(page.getByRole("log", { name: "Chat timeline" })).toContainText(
       "hello from the compact rail",
@@ -217,23 +146,30 @@ test("collapsed agents show provider icons and live status without losing chat d
     await page.screenshot({ path: test.info().outputPath("rail-providers-light.png") });
     await page.emulateMedia({ colorScheme: "dark" });
     await page.screenshot({ path: test.info().outputPath("rail-providers-dark.png") });
-    await rail.getByRole("button", { name: "Expand sidebar", exact: true }).click();
+    await page.getByRole("button", { name: "Expand sidebar", exact: true }).click();
     await expect(codex).toHaveValue("Keep this draft");
-    await expect(agents.getByRole("img", { name: "Agent status: Ready" })).toHaveCount(2);
+    // Expanded, the chats sit under their workspace instead.
+    await expect(
+      rail
+        .getByRole("list", { name: "Rail agents tabs", exact: true })
+        .getByRole("img", { name: "Agent status: Ready" }),
+    ).toHaveCount(2);
     await expectNoSidebarTooltips(page, rail);
     const expandedCodex = rail.locator('button[data-agent-id]:has([data-provider="codex"])');
     await expect(expandedCodex.locator('[data-provider="codex"]')).toBeVisible();
     await hoverControl(page, expandedCodex);
-    await expect(page.getByRole("tooltip")).toContainText("Rail agents");
     await expect(page.getByRole("tooltip")).toContainText("Codex");
     await page.keyboard.press("Escape");
     await codex.fill("hold");
     await page.getByRole("button", { name: "Send message", exact: true }).click();
-    await expect(expandedCodex.getByRole("img", { name: "Agent status: Working" })).toBeVisible();
-    const badge = expandedCodex.locator("[data-agent-status-badge]");
+    // Expanded, a working chat shows a quiet dot; the pane keeps its corner badge.
+    await expect(expandedCodex.getByRole("img", { name: "Agent status: Working" })).toHaveAttribute(
+      "data-row-state",
+      "working",
+    );
     const paneBadge = page.getByTestId("pane-agent-loading");
     await expect(paneBadge).toBeVisible();
-    for (const indicator of [badge, paneBadge]) {
+    for (const indicator of [paneBadge]) {
       const bounds = await indicator.boundingBox();
       const parent = await indicator.locator("..").boundingBox();
       if (!bounds || !parent) throw new Error("Missing status badge bounds");
@@ -241,7 +177,8 @@ test("collapsed agents show provider icons and live status without losing chat d
       expect(bounds.y + bounds.height / 2).toBeGreaterThan(parent.y + parent.height / 2);
     }
     await rail.getByRole("button", { name: "Collapse sidebar", exact: true }).click();
-    await expect(expandedCodex.getByRole("img", { name: "Agent status: Working" })).toBeVisible();
+    // Collapsed, the working chat is still marked on its tab.
+    await expect(codexTab.locator("[data-agent-status-badge]")).toBeVisible();
     await page.getByRole("button", { name: "Interrupt agent", exact: true }).click();
     await expect(paneBadge).toHaveCount(0);
   } finally {
@@ -249,7 +186,7 @@ test("collapsed agents show provider icons and live status without losing chat d
   }
 });
 
-test("collapsed tooltips follow menu colors in light, dark and custom palettes", async ({
+test("the collapsed sidebar's toggle tooltip follows menu colors in light, dark and custom palettes", async ({
   page,
 }) => {
   test.setTimeout(90_000);
@@ -257,7 +194,6 @@ test("collapsed tooltips follow menu colors in light, dark and custom palettes",
   await page.emulateMedia({ colorScheme: "light" });
   await page.goto("/");
   const sidebar = page.getByRole("navigation", { name: "Primary" });
-  await sidebar.getByRole("button", { name: "Collapse sidebar", exact: true }).click();
   const backgrounds: string[] = [];
   for (const palette of ["Concors", "Cobalt"]) {
     if (palette === "Cobalt") {
@@ -272,7 +208,7 @@ test("collapsed tooltips follow menu colors in light, dark and custom palettes",
       await page.emulateMedia({ colorScheme });
       if (colorScheme === "dark") await expect(page.locator("html")).toHaveClass(/dark/);
       else await expect(page.locator("html")).not.toHaveClass(/dark/);
-      await sidebar.getByRole("button", { name: "Switch machine", exact: true }).click();
+      await sidebar.getByRole("button", { name: /^Account:/ }).click();
       const menu = page.getByRole("menu");
       await expect(menu).toBeVisible();
       const colors = await menu.evaluate((element) => {
@@ -281,10 +217,15 @@ test("collapsed tooltips follow menu colors in light, dark and custom palettes",
       });
       await page.keyboard.press("Escape");
       await expect(menu).toHaveCount(0);
-      await hoverControl(page, sidebar.getByRole("button", { name: "Search", exact: true }));
+      await sidebar.getByRole("button", { name: "Collapse sidebar", exact: true }).click();
+      const expand = page.getByRole("button", { name: "Expand sidebar", exact: true });
+      // Focus moves to the toggle a frame after it changes, opening its tooltip; let it land
+      // before hoverControl's Escape, or the tooltip opens after Escape and stays.
+      await expect(expand).toBeFocused();
+      await hoverControl(page, expand);
       const tooltip = page.getByRole("tooltip");
       await expect(tooltip).toBeVisible();
-      await expect(tooltip).toContainText("Search");
+      await expect(tooltip).toContainText("Expand sidebar");
       await expect(tooltip).toHaveCSS("background-color", colors.background);
       await expect(tooltip).toHaveCSS("color", colors.foreground);
       await expect(tooltip.locator("svg")).toHaveCSS("fill", colors.background);
@@ -293,6 +234,7 @@ test("collapsed tooltips follow menu colors in light, dark and custom palettes",
       await page.screenshot({
         path: test.info().outputPath(`tooltip-${palette.toLowerCase()}-${colorScheme}.png`),
       });
+      await expand.click();
     }
   }
   expect(backgrounds[0]).not.toBe(backgrounds[1]);

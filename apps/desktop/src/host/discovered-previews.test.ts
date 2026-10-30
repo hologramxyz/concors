@@ -28,7 +28,7 @@ it("deduplicates shared ports and labels processes with multiple previews", () =
   ).toEqual([
     {
       id: "10:20:5173",
-      name: "Vite · :5173",
+      name: "Vite :5173",
       port: 5173,
       preview: { port: 5173, protocol: "http" },
       url: "http://127.0.0.1:5173/",
@@ -36,7 +36,7 @@ it("deduplicates shared ports and labels processes with multiple previews", () =
     },
     {
       id: "10:20:5174",
-      name: "Vite · :5174",
+      name: "Vite :5174",
       port: 5174,
       preview: { port: 5174, protocol: "https" },
       url: "https://127.0.0.1:5174/",

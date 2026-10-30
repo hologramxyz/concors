@@ -33,8 +33,8 @@ import { ProjectImage } from "@/workspace/project-image";
 import { projectIconKey } from "@/workspace/project-icons";
 import { useProjectIcons } from "@/workspace/use-project-icons";
 import { PullRequestView } from "./detail";
+import { shortAge } from "@/lib/format-date";
 import {
-  ageLabel,
   byOpenCount,
   checksLabel,
   foldersLabel,
@@ -161,7 +161,7 @@ export function PullRequestsPage({
         <div
           role="tablist"
           aria-label="Pull request state"
-          className="mt-5 inline-flex self-start rounded-lg border bg-muted/40 p-0.5"
+          className="mt-5 inline-flex self-start rounded-[calc(var(--radius-md)+(0.125rem+1px)*var(--concentric))] border bg-muted/40 p-0.5"
         >
           {states.map(({ state: option, label, Icon, tone }) => {
             const count =
@@ -470,7 +470,7 @@ function PullRequestRow({
           <p className="mt-0.5 truncate text-xs text-muted-foreground">
             #{pullRequest.number}
             {pullRequest.author ? ` · ${pullRequest.author}` : ""} · {pullRequest.branch} ·{" "}
-            {ageLabel(pullRequest.updatedAt)}
+            {shortAge(pullRequest.updatedAt)}
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 text-xs text-muted-foreground">

@@ -6,13 +6,13 @@ it("preserves desktop theme surfaces", () => {
   const original = colorThemeTokens(DEFAULT_COLOR_THEME, "light");
   expect(original["background"]).toBeUndefined();
   expect(original["primary"]).toBeUndefined();
-  expect(original["terminal-background"]).toBe(DEFAULT_COLOR_THEME.light.surface);
+  expect(original["terminal-background"]).toBe(DEFAULT_COLOR_THEME.light.background);
   expect(original["terminal-selection"]).toBe("#00000020");
   expect(original["syntax-keyword"]).toBe("#cf222e");
   for (const theme of COLOR_THEMES.filter((theme) => theme.id !== "concors")) {
     const tokens = colorThemeTokens(theme, "dark");
     expect(tokens["background"]).toBe(theme.dark.background);
-    expect(tokens["terminal-background"]).toBe(theme.dark.surface);
+    expect(tokens["terminal-background"]).toBe(theme.dark.background);
   }
 });
 

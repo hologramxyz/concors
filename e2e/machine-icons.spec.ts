@@ -125,7 +125,6 @@ test("icon picker handles custom emoji, errors, keyboard use, and narrow layouts
 }) => {
   const state = await fixture(page);
   await page.setViewportSize({ width: 390, height: 800 });
-  await page.getByRole("button", { name: "Collapse sidebar" }).click();
   await manage(page);
   const trigger = page.getByRole("button", { name: `Change icon for ${LONG_NAME}` });
   await trigger.focus();

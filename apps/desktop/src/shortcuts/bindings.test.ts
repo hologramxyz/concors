@@ -40,6 +40,12 @@ describe("default workspace shortcuts", () => {
       expect(bindingLabel(binding, mac)).toBe(shortcutLabel(command.id, mac));
     }
   });
+  it("opens a tab with Command+T in the Mac app only", () => {
+    const commandT = key({ key: "t", shiftKey: false, ctrlKey: false, metaKey: true });
+    expect(matchKeymap(commandT, defaultKeymap(true), false, true)[0]?.id).toBe("new-tab");
+    expect(matchKeymap(commandT, defaultKeymap(true), false, false)).toEqual([]);
+    expect(matchKeymap(commandT, defaultKeymap(false), false, true)).toEqual([]);
+  });
   it("leaves shell Ctrl+K alone while keeping the outside-terminal search alias", () => {
     expect(matchKeymap(key({ shiftKey: false }), defaultKeymap(), true, false)).toEqual([]);
     expect(matchKeymap(key({ shiftKey: false }), defaultKeymap(), false, false)[0]?.id).toBe(

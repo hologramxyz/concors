@@ -182,14 +182,12 @@ test("automatically detected previews open directly, say how long they ran and w
   await expect(popup).toHaveURL("http://127.0.0.1:5173/");
   await popup.close();
   expect(operations.some((operation) => operation.kind === "processes")).toBe(true);
-  await sidebar.getByRole("button", { name: "Collapse sidebar" }).click();
-  await link.hover();
-  await expect(page.getByRole("tooltip", { name: /^Vite preview/ })).toBeVisible();
-  const bounds = await link.boundingBox();
-  expect(bounds?.width).toBe(32);
-  expect(bounds?.height).toBe(32);
   await link.click({ button: "right" });
   await expect(page.getByRole("menuitem", { name: /preview/i })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  // Collapsed, the sidebar and its previews are hidden.
+  await sidebar.getByRole("button", { name: "Collapse sidebar" }).click();
+  await expect(link).toBeHidden();
   await page.screenshot({ path: "test-results/previews-sidebar.png" });
 });
 

@@ -26,8 +26,8 @@ export type TerminalProfileInput = z.infer<typeof TerminalProfileInputSchema>;
 export type SavedTerminalProfile = z.infer<typeof SavedTerminalProfileSchema>;
 
 export const DEFAULT_TERMINAL_PROFILES: readonly SavedTerminalProfile[] = [
-  { id: "codex", name: "Codex", command: "codex", args: [], version: 0 },
   { id: "claude", name: "Claude Code", command: "claude", args: [], version: 0 },
+  { id: "codex", name: "Codex", command: "codex", args: [], version: 0 },
   { id: "opencode", name: "OpenCode", command: "opencode", args: [], version: 0 },
 ];
 

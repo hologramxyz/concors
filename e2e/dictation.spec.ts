@@ -6,6 +6,7 @@ import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
 import { mockDictation } from "./support/dictation.ts";
 import { chooseProvider } from "./support/agents.ts";
+import { tab } from "./support/tabs.ts";
 
 test.beforeEach(async ({ page }) => {
   await signedIn(page);
@@ -16,8 +17,8 @@ test.beforeEach(async ({ page }) => {
 async function workspace(page: Page) {
   const directory = await mkdtemp(join(tmpdir(), "concors-dictation-"));
   await seedProject(page, "Dictation workspace", directory);
-  await page.getByRole("button", { name: "New tab", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+  await page.getByRole("button", { name: "New tab options", exact: true }).click();
+  await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
   await chooseProvider(page);
   const composer = page.getByRole("textbox", { name: "Message Codex", exact: true });
   await expect(composer).toBeEnabled();
@@ -164,10 +165,10 @@ test("permission failure and empty dictation never submit the existing draft", a
 test("changing tabs stops capture and preserves dictated words for editing", async ({ page }) => {
   const { composer, dispose } = await workspace(page);
   try {
-    const agentTab = page.getByRole("button", { name: "Tab 2", exact: true });
+    const agentTab = tab(page, 1);
     await page.getByRole("button", { name: "Start dictation", exact: true }).click();
     await page.evaluate(() => window.testDictation.result("Save my words", true));
-    await page.getByRole("button", { name: "Tab 1", exact: true }).click();
+    await tab(page, 0).click();
     await expect.poll(() => page.evaluate(() => window.testDictation.capture.tracks)).toBe(0);
     await agentTab.click();
     await expect(composer).toHaveValue("Save my words");

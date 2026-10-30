@@ -10,13 +10,14 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "title": "Concors",
-        "width": 1200,
+        "width": 1280,
         "height": 800,
-        "minWidth": 800,
-        "minHeight": 560,
+        "minWidth": 960,
+        "minHeight": 600,
         "resizable": true,
         "center": true,
         "dragDropEnabled": false

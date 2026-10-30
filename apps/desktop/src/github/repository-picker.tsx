@@ -135,7 +135,7 @@ function RepositorySkeleton() {
     >
       <div className="h-9 shrink-0 rounded-lg bg-muted/60 motion-safe:animate-pulse" />
       <div
-        className="min-h-0 flex-1 overflow-hidden rounded-xl border bg-background/30 p-1.5"
+        className="min-h-0 flex-1 overflow-hidden rounded-[calc(var(--radius-lg)+(0.375rem+1px)*var(--concentric))] border bg-background/30 p-1.5"
         aria-hidden="true"
       >
         {Array.from({ length: 6 }, (_, index) => (
@@ -284,7 +284,7 @@ function Repositories({
             <div
               aria-label="GitHub repositories"
               aria-busy={loading}
-              className="min-h-0 flex-1 [scrollbar-gutter:stable] overflow-y-auto rounded-xl border bg-background/30 p-1.5"
+              className="min-h-0 flex-1 [scrollbar-gutter:stable] overflow-y-auto rounded-[calc(var(--radius-lg)+(0.375rem+1px)*var(--concentric))] border bg-background/30 p-1.5"
             >
               {visible.map((repo) => (
                 <button

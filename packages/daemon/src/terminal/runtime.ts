@@ -163,6 +163,14 @@ export class TerminalRuntime {
     this.updateAgentActivity();
   }
 
+  /** What the shell runs in the foreground, labelled as `foregroundCommand` gives it. */
+  detectForeground(command: string | null): void {
+    if (this.#disposed || this.info.status !== "running" || this.info.profile !== "shell") return;
+    if ((this.info.foregroundCommand ?? null) === command) return;
+    this.info = { ...this.info, foregroundCommand: command };
+    this.#save(this.info);
+  }
+
   private updateAgentActivity(): void {
     if (this.#disposed || this.info.status !== "running") return;
     const buffer = this.#screen.buffer.active;

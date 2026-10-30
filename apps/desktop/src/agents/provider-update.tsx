@@ -1,169 +1,108 @@
-import { useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { CircleArrowUp, LoaderCircle } from "lucide-react";
-import { Popover } from "radix-ui";
-import { agentProviderName, type AgentInfo, type ProviderVersion } from "@concors/protocol";
-import { TerminalConnectionContext } from "@/terminal/connection-context";
+import { useState } from "react";
+import { ExternalLink, LoaderCircle } from "lucide-react";
+import { providerPresets, type ProviderVersion } from "@concors/protocol";
 import { Button } from "@/components/ui/button";
-import { invalidateModelCatalogs, modelCatalog } from "./model-catalog";
-import { ComposerSurfaceContext } from "./composer-expansion";
+import { openExternal } from "@/tauri/open-external";
 import { ControlTooltip } from "./control-tooltip";
-
-/** Whether a provider row should advertise an update, including one still in progress. */
-function providerUpdatePending(version: ProviderVersion | undefined): boolean {
-  return !!version && (version.updateAvailable || !!version.updating || !!version.updateError);
-}
+import { providerUpdatePending, useProviderUpdate } from "./provider-update-state";
 
 /**
- * Tells the user their agent CLI has a newer release, since new models often need it, and runs
- * the machine's update command when the daemon knows one. The daemon reports progress through
- * the provider list, which this polls until the update settles.
+ * Sits under a provider's model list while its CLI has a newer release, since new models often
+ * need it. Update runs the machine's update command; without one the CLI was installed some way
+ * the daemon cannot repeat, so the button opens the vendor's guide instead. The update itself is
+ * owned by the caller, so it keeps going after the menu closes.
  */
-export function ProviderUpdateNotice({
+export function ProviderUpdateFooter({
   provider,
   label,
   version,
-  className = "border-t",
+  error,
+  onUpdate,
 }: {
+  /** The provider's engine or ID, which names its vendor guide. */
   provider: string;
   label: string;
-  version: ProviderVersion;
-  className?: string;
+  version: ProviderVersion | undefined;
+  error: string | null | undefined;
+  onUpdate: () => void;
 }) {
-  const connection = useContext(TerminalConnectionContext);
-  const [live, setLive] = useState<ProviderVersion | null>(null),
-    [error, setError] = useState<string | null>(null);
-  const timer = useRef<number | undefined>(undefined);
-  useEffect(() => () => window.clearTimeout(timer.current), []);
-  const current = live ?? version;
-  if (!providerUpdatePending(current)) return null;
-  const update = async () => {
-    if (!connection) return;
-    setError(null);
-    try {
-      const request = async (operation: { kind: "update"; id: string } | { kind: "list" }) => {
-        const result = await connection.requestProvider(operation, crypto.randomUUID());
-        if (result.outcome.status === "error") throw new Error(result.outcome.message);
-        return result.outcome.providers.find((p) => p.id === provider)?.version;
-      };
-      const poll = (next: ProviderVersion | undefined) => {
-        setLive(next ?? null);
-        if (next?.updating)
-          timer.current = window.setTimeout(() => {
-            request({ kind: "list" }).then(poll, (e: Error) => setError(e.message));
-          }, 2000);
-        // A new CLI can report new models; drop cached catalogs so they are rediscovered.
-        else invalidateModelCatalogs(connection);
-      };
-      poll(await request({ kind: "update", id: provider }));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : `Could not update ${label}`);
-    }
-  };
+  const [guideError, setGuideError] = useState<string | null>(null);
+  if (!version || !providerUpdatePending(version)) return null;
+  const guide = providerPresets.find((p) => p.id === provider)?.installLink;
+  const command = !!version.updateCommand;
+  const message = error ?? guideError;
   return (
-    <div role="status" className={`${className} px-2 py-2 text-xs text-muted-foreground`}>
-      {current.updating ? (
-        <p className="flex items-center gap-1.5">
-          <LoaderCircle className="size-3.5 animate-spin" /> Updating {label}…
+    <div role="status" className="mt-1 border-t px-2 pt-2 pb-0.5 text-xs text-muted-foreground">
+      <div className="flex min-h-7 items-center gap-2">
+        <p className="min-w-0 flex-1 truncate">
+          {version.updating
+            ? `Updating ${label}…`
+            : version.latest
+              ? `Update to ${version.latest}`
+              : `${label} has an update`}
         </p>
-      ) : current.updateAvailable ? (
-        <>
-          <p>
-            {label} {current.latest} is available. Update to get the latest models.
-          </p>
-          {current.updateCommand ? (
-            <ControlTooltip text={`Update ${label} · installed: ${current.installed}`}>
-              <Button variant="outline" size="sm" className="mt-2" onClick={() => void update()}>
+        {version.updating ? (
+          <LoaderCircle className="size-4 shrink-0 animate-spin" aria-hidden="true" />
+        ) : (
+          version.updateAvailable &&
+          (command || guide) && (
+            <ControlTooltip
+              text={
+                command
+                  ? `Update ${label} · installed: ${version.installed ?? "unknown"}`
+                  : `Opens ${label}'s guide. Update it the way you installed it.`
+              }
+            >
+              <Button
+                size="sm"
+                onClick={() => {
+                  setGuideError(null);
+                  if (command) onUpdate();
+                  else if (guide)
+                    void openExternal(guide).catch(() =>
+                      setGuideError("Could not open the update guide."),
+                    );
+                }}
+              >
                 Update
+                {!command && <ExternalLink className="size-3" aria-hidden="true" />}
               </Button>
             </ControlTooltip>
-          ) : (
-            <p className="mt-1">Update it the way you installed it.</p>
-          )}
-        </>
-      ) : null}
-      {(error ?? current.updateError) && (
+          )
+        )}
+      </div>
+      {version.updateAvailable && !version.updating && !command && !guide && (
+        <p className="mt-0.5">Update it the way you installed it.</p>
+      )}
+      {message && (
         <p role="alert" className="mt-1 text-destructive">
-          {error ?? current.updateError}
+          {message}
         </p>
       )}
     </div>
   );
 }
 
-const noProviders = () => [];
-const noSubscription = () => () => undefined;
-
-/**
- * A quiet label beside the composer's send controls while the conversation's CLI is outdated,
- * like Claude Code's own "update available" hint. It reads the catalog the model picker already
- * keeps warm, so it never starts discovery itself.
- */
-export function ProviderUpdateLabel({ agent, compact }: { agent: AgentInfo; compact: boolean }) {
-  const connection = useContext(TerminalConnectionContext);
-  const composerSurface = useContext(ComposerSurfaceContext);
-  const [open, setOpen] = useState(false),
-    [quiet, setQuiet] = useState(false);
-  const epoch = connection?.workspace?.epoch;
-  const catalog = useMemo(
-    () => (connection ? modelCatalog(connection, agent.directory, epoch) : null),
-    [connection, agent.directory, epoch],
-  );
-  const snapshot = useSyncExternalStore(
-    catalog?.subscribe ?? noSubscription,
-    catalog ? () => catalog.getSnapshot().providers : noProviders,
-  );
-  const row = snapshot.find((p) => p.id === agent.provider);
-  const version = row?.version;
-  if (!version?.updateAvailable && !version?.updating) return null;
-  const label = agent.providerLabel ?? row?.label ?? agentProviderName(agent.provider);
-  const text = version.updating
-    ? `Updating ${label}…`
-    : compact
-      ? "Update available"
-      : `${label} ${version.latest} available`;
+/** The footer for a provider other than the selected agent's, which runs its own update. */
+export function ProviderUpdateNotice({
+  id,
+  provider,
+  label,
+  version,
+}: {
+  id: string;
+  provider: string;
+  label: string;
+  version: ProviderVersion;
+}) {
+  const current = useProviderUpdate(id, label, version);
   return (
-    <Popover.Root
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (!next) setQuiet(true);
-      }}
-    >
-      <ControlTooltip text={`${label} ${version.latest} is available`} hidden={open || quiet}>
-        <Popover.Trigger
-          type="button"
-          aria-label={text}
-          className="composer-update-label inline-flex min-w-0 items-center gap-1 rounded px-1.5 py-1 text-xs whitespace-nowrap text-muted-foreground hover:bg-muted hover:text-foreground"
-          onPointerEnter={() => setQuiet(false)}
-          onBlur={() => setQuiet(false)}
-        >
-          {/* A narrow desktop composer keeps only the icon, so the controls stay on one row. */}
-          {!compact &&
-            (version.updating ? (
-              <LoaderCircle className="size-3.5 shrink-0 animate-spin" aria-hidden="true" />
-            ) : (
-              <CircleArrowUp className="size-3.5 shrink-0" aria-hidden="true" />
-            ))}
-          <span className="truncate">{text}</span>
-        </Popover.Trigger>
-      </ControlTooltip>
-      <Popover.Portal>
-        <Popover.Content
-          data-composer-surface={composerSurface}
-          side="top"
-          align="end"
-          sideOffset={8}
-          collisionPadding={12}
-          className="z-50 w-64 rounded-xl border bg-popover p-1 text-popover-foreground shadow-lg"
-        >
-          <ProviderUpdateNotice
-            provider={agent.provider}
-            label={label}
-            version={version}
-            className=""
-          />
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+    <ProviderUpdateFooter
+      provider={provider}
+      label={label}
+      version={current.version}
+      error={current.error}
+      onUpdate={() => void current.update()}
+    />
   );
 }

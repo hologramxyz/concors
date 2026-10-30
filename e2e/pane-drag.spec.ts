@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
+import { tab } from "./support/tabs.ts";
 
 test("dragging moves panes across the workspace without replacing sessions", async ({
   page,
@@ -15,14 +16,11 @@ test("dragging moves panes across the workspace without replacing sessions", asy
     await Promise.all([signedIn(page), signedIn(second)]);
     await page.goto("/");
     await seedProject(page, "Pane dragging", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
-    // Tab 1's terminal is visible too until the new tab arrives, and so is its "Pane actions".
-    await expect(
-      page
-        .getByLabel("Project tabs", { exact: true })
-        .getByRole("button", { name: "Tab 2", exact: true }),
-    ).toHaveAttribute("aria-pressed", "true");
+    // The first tab's terminal is visible too until the new tab arrives, and so is its "Pane
+    // actions".
+    await expect(tab(page, 1)).toHaveAttribute("aria-pressed", "true");
     await expect(page.locator(".xterm").filter({ visible: true })).toBeVisible();
     await page.getByRole("button", { name: "Pane actions" }).click();
     await page.getByRole("menuitem", { name: "Split horizontally" }).click();
@@ -120,7 +118,7 @@ test("a pane menu opened while a new tab launches closes when that tab takes ove
     await page.goto("/");
     await seedProject(page, "Menu during launch", directory);
     holding = true;
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
     await expect.poll(() => held.some((raw) => raw.includes('"workspace.result"'))).toBe(true);
     await page.getByRole("button", { name: "Pane actions" }).click();
@@ -130,9 +128,7 @@ test("a pane menu opened while a new tab launches closes when that tab takes ove
     for (const raw of held.splice(0)) deliver?.(raw);
     // CSS, not roles: an open menu hides the rest of the page from the accessibility tree.
     await expect(
-      page.locator('[aria-label="Project tabs"] [data-tab-id] > button:first-child', {
-        hasText: "Tab 2",
-      }),
+      page.locator('[aria-label="Project tabs"] [data-tab-id] > button:first-child').nth(1),
     ).toHaveAttribute("aria-pressed", "true");
     // The menu belonged to a pane that is now hidden; left open it hung in the window's corner
     // with every item disabled.

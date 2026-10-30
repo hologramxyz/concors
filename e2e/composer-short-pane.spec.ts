@@ -11,10 +11,12 @@ test("a short chat pane gives the composer its room, send button included", asyn
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Short pane", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
-    const composer = page.getByRole("textbox", { name: "Message Codex" });
+    // The split below opens a second chat, which starts too, so look only at the first.
+    const pane = page.getByRole("region", { name: "Agent pane", exact: true }).first();
+    const composer = pane.getByRole("textbox", { name: "Message Codex" });
     await expect(composer).toBeEnabled();
     // A long draft is what grows the text box past a short pane.
     await composer.fill(
@@ -33,10 +35,10 @@ test("a short chat pane gives the composer its room, send button included", asyn
     await page.mouse.up();
 
     // The account notice above the composer is there too, as on a fresh machine.
-    await expect(page.getByText("Connect your ChatGPT account")).toBeVisible();
-    const footer = page.locator("[data-chat-footer]");
-    const composerBox = page.locator("[data-chat-footer] form");
-    const toolbar = page.locator(".agent-composer-toolbar");
+    await expect(pane.getByText("Connect your ChatGPT account")).toBeVisible();
+    const footer = pane.locator("[data-chat-footer]");
+    const composerBox = pane.locator("[data-chat-footer] form");
+    const toolbar = pane.locator(".agent-composer-toolbar");
     const inside = async () => {
       const [outer, form, row, input] = await Promise.all([
         footer.boundingBox(),

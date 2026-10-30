@@ -1519,12 +1519,20 @@ export class DaemonConnection {
     });
   }
 
-  /** Closes the connection. Safe to call in any state; a pending `connect()` rejects. */
-  disconnect(): void {
+  /**
+   * Closes the connection. Safe to call in any state; a pending `connect()` rejects. With
+   * `reconnecting`, the caller is about to `connect()` again, so agent requests keep waiting for
+   * the next socket (within their deadline) instead of failing now.
+   */
+  disconnect({ reconnecting = false }: { reconnecting?: boolean } = {}): void {
     this.#teardown(1000, "client disconnect");
     if (this.#state.status !== "disconnected") {
       this.#setState({ status: "disconnected", reason: "client disconnect" });
     }
+    this.#abortPending?.(
+      createProtocolError("INTERNAL_ERROR", "Disconnected by client before handshake completed"),
+    );
+    if (reconnecting) return;
     // Nothing reconnects this connection, so what still waits will never be answered.
     for (const pending of this.#agentRequests.values()) {
       clearTimeout(pending.timer);
@@ -1536,9 +1544,6 @@ export class DaemonConnection {
       );
     }
     this.#agentRequests.clear();
-    this.#abortPending?.(
-      createProtocolError("INTERNAL_ERROR", "Disconnected by client before handshake completed"),
-    );
   }
 
   #subscribeWorkspace(): void {

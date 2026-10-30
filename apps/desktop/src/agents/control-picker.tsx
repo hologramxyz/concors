@@ -33,6 +33,7 @@ export function ControlPicker({
   onOpen,
   onGroupChange,
   status,
+  notice,
 }: {
   label: string;
   value: string;
@@ -51,6 +52,8 @@ export function ControlPicker({
   onOpen?: () => void;
   onGroupChange?: (id: string) => void;
   status?: string | undefined;
+  /** Marks the trigger with a dot and adds this to its tooltip, e.g. an update for the agent. */
+  notice?: string | undefined;
 }) {
   const [open, setOpen] = useState(false),
     [query, setQuery] = useState(""),
@@ -76,7 +79,7 @@ export function ControlPicker({
   const group = groups?.find((item) => item.id === groupId);
   const statusText = group?.status ?? status;
   const choosingProvider = !!groups && !group;
-  const searchLabel = choosingProvider ? "Providers" : label;
+  const searchLabel = choosingProvider ? "Providers" : group ? "Models" : label;
   const visible = (groups ? (group?.options ?? groups) : options).filter((o) =>
     `${o.label} ${o.description ?? ""}`.toLowerCase().includes(query.toLowerCase()),
   );
@@ -103,6 +106,7 @@ export function ControlPicker({
       ref={trigger}
       type="button"
       aria-label={label}
+      aria-description={notice}
       data-value={value}
       disabled={disabled}
       className={`agent-control ${showValue ? "agent-control-value" : ""} ${primary ? "agent-control-primary" : ""}`}
@@ -111,6 +115,7 @@ export function ControlPicker({
     >
       {icon}
       {showValue && <span className="truncate">{currentLabel}</span>}
+      {notice && <span aria-hidden="true" className="agent-control-dot" />}
     </Popover.Trigger>
   );
   return (
@@ -125,7 +130,11 @@ export function ControlPicker({
         setGroupId(selectedGroupId);
       }}
     >
-      <ControlTooltip text={`${label}: ${currentLabel}`} shortcut={shortcut} hidden={open || quiet}>
+      <ControlTooltip
+        text={`${label}: ${currentLabel}${notice ? ` · ${notice}` : ""}`}
+        shortcut={shortcut}
+        hidden={open || quiet}
+      >
         {triggerButton}
       </ControlTooltip>
       <Popover.Portal>
@@ -134,7 +143,7 @@ export function ControlPicker({
           side="top"
           align="start"
           sideOffset={8}
-          className="z-50 w-72 max-w-[calc(100vw-24px)] overflow-hidden rounded-xl border bg-popover p-1.5 text-popover-foreground shadow-lg"
+          className="z-50 w-72 max-w-[calc(100vw-24px)] overflow-hidden rounded-[calc(var(--radius-lg)+(0.375rem+1px)*var(--concentric))] border bg-popover p-1.5 text-popover-foreground shadow-lg"
           onOpenAutoFocus={(event) => {
             event.preventDefault();
             search.current?.focus();
@@ -183,7 +192,7 @@ export function ControlPicker({
                 setQuery(e.target.value);
                 setActive(0);
               }}
-              placeholder={searchLabel}
+              placeholder={group ? "Search models" : searchLabel}
               className="min-w-0 flex-1 bg-transparent text-sm outline-none"
             />
           </div>

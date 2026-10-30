@@ -19,8 +19,8 @@ test("corner styles update the live workspace and portaled controls, sync, and p
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Corner styles", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
     await page
@@ -29,7 +29,7 @@ test("corner styles update the live workspace and portaled controls, sync, and p
     const model = page.getByRole("button", { name: "Agent and model", exact: true });
     await expect(model).toBeEnabled();
     await model.click();
-    const modelOptions = page.getByRole("listbox", { name: "Agent and model" });
+    const modelOptions = page.getByRole("listbox", { name: "Models" });
     await expect(modelOptions).toBeVisible();
 
     await signedIn(second);

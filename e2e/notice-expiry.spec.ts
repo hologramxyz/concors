@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
 import { chooseProvider } from "./support/agents.ts";
+import { tab } from "./support/tabs.ts";
 import { DaemonConnection, describeDaemonEndpoint } from "../packages/daemon-client/src/index.ts";
 
 test("an unanswered notice card goes away by itself, but not while the pointer is on it", async ({
@@ -42,8 +43,8 @@ test("an unanswered notice card goes away by itself, but not while the pointer i
     await settings.getByRole("button", { name: "Back to app", exact: true }).click();
 
     await seedProject(page, "Expiry", directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Agent", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
     await chooseProvider(page);
     await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
     await expect
@@ -55,7 +56,7 @@ test("an unanswered notice card goes away by itself, but not while the pointer i
     const agent = control.agents.find((a) => a.projectId === project.id);
     assert(agent);
     // Hide the agent's chat so its completion becomes a card.
-    await page.getByRole("button", { name: "Tab 1", exact: true }).click();
+    await tab(page, 0).click();
     await control.requestAgent({ kind: "send", sessionId: agent.id, text: "hello" }, randomUUID());
 
     const card = page

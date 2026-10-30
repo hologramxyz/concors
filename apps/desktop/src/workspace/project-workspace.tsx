@@ -14,12 +14,58 @@ import { nextWorkspaceTabName } from "@concors/protocol";
 import { ContextMenu } from "radix-ui";
 import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { FolderOpen, Pencil, Plus, X } from "lucide-react";
-import type { PaneProfile, WorkspaceOperation, WorkspaceSnapshot } from "@concors/protocol";
+import type {
+  AgentInfo,
+  PaneProfile,
+  WorkspaceOperation,
+  WorkspaceSnapshot,
+  WorkspaceTab,
+} from "@concors/protocol";
 import { Button } from "@/components/ui/button";
+import { cn } from "cn";
 import { PaneLayout } from "./pane-layout";
 import { VisitedTab } from "./visited-tab";
 import { useRetainedProjects } from "./retained-projects";
-import { TabButton } from "./tab-button";
+import { CloseTabButton, LatestAgents, TabButton } from "./tab-button";
+import { tabTitle } from "./tab-title";
+
+/** How long a tab takes to shrink away; matches `tab-close` in styles.css. */
+const TAB_CLOSE_MS = 180;
+
+interface TabDrag {
+  projectId: string;
+  tabId: string;
+  from: number;
+  /** The index the tab lands at, counted after it is taken out, as `tab.move` expects. */
+  to: number;
+  /** Where each tab sat in the tab list when the drag began. */
+  slots: { left: number; width: number }[];
+  gap: number;
+  /** Sent to the daemon; the tabs hold still until the reordered workspace arrives. */
+  dropped: boolean;
+}
+
+function tabListX(list: HTMLElement, clientX: number) {
+  return clientX - list.getBoundingClientRect().left + list.scrollLeft;
+}
+
+function tabDropIndex(drag: TabDrag, x: number) {
+  return drag.slots.filter((slot, i) => i !== drag.from && slot.left + slot.width / 2 < x).length;
+}
+
+function tabShift({ from, to, slots, gap }: TabDrag, index: number) {
+  const source = slots[from];
+  const target = slots[to];
+  if (!source || !target) return 0;
+  if (index === from) {
+    return to > from
+      ? target.left + target.width - (source.left + source.width)
+      : target.left - source.left;
+  }
+  if (from < index && index <= to) return -(source.width + gap);
+  if (to <= index && index < from) return source.width + gap;
+  return 0;
+}
 
 export function ProjectWorkspace({
   workspace,
@@ -49,6 +95,10 @@ export function ProjectWorkspace({
   const connection = useContext(TerminalConnectionContext);
   const files = useFiles();
   const windowChrome = useWindowChrome();
+  // Read by rename, which names the tab after what it shows; kept out of render on purpose.
+  const agentsRef = useRef<readonly AgentInfo[]>([]);
+  // The tab row is the window's title bar when the native one is hidden.
+  const titleBar = windowChrome.enabled || windowChrome.inset;
   const scope = fileScope(
     workspace.machineId,
     workspace.epoch,
@@ -65,8 +115,10 @@ export function ProjectWorkspace({
   const lastFocusedPane = useRef<string | null>(null);
   const [launching, setLaunching] = useState(false);
   const [launchError, setLaunchError] = useState<string | null>(null);
-  const [dragging, setDragging] = useState<{ projectId: string; tabId: string } | null>(null);
-  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  // A dragged tab leaves a grey slot that slides to where it will land while the others make room.
+  // Tabs only move by transform until the daemon's reordered workspace arrives.
+  const [tabDrag, setTabDrag] = useState<TabDrag | null>(null);
+  const tabDragStart = useRef<number | null>(null);
   // Inline tab rename: double-click, F2 or the context menu turn the label into an input. The ref
   // mirrors the state so blur after Enter/Escape cannot commit twice or resurrect a cancelled edit.
   const [renaming, setRenaming] = useState<{ tabId: string; value: string } | null>(null);
@@ -81,6 +133,19 @@ export function ProjectWorkspace({
     workspace.projects.map((p) => p.id),
   );
   const selected = project?.tabs.find((tab) => tab.id === workspace.selection?.tabId);
+  // The reordered tabs are drawn in place of the shifted ones in the same frame, without sliding.
+  const tabOrder = project?.tabs.map((tab) => tab.id).join();
+  const [shownTabOrder, setShownTabOrder] = useState(tabOrder);
+  if (tabOrder !== shownTabOrder) {
+    setShownTabOrder(tabOrder);
+    if (tabDrag?.dropped) setTabDrag(null);
+  }
+  // A move the daemon refused slides the tabs back.
+  useEffect(() => {
+    if (!tabDrag?.dropped) return;
+    const timer = setTimeout(() => setTabDrag(null), 1000);
+    return () => clearTimeout(timer);
+  }, [tabDrag?.dropped]);
   const tabCount = (project?.tabs.length ?? 0) + projectFiles.length;
   const cycleTab = (delta: number) => {
     if (!project || tabCount < 2) return;
@@ -96,6 +161,49 @@ export function ProjectWorkspace({
   };
   useCommand("previous-tab", tabCount > 1 && canEdit, () => cycleTab(-1));
   useCommand("next-tab", tabCount > 1 && canEdit, () => cycleTab(1));
+  // A tab shrinks away before it closes. The command goes out once the animation has ended, so the
+  // tabs after it never jump, and it reads the workspace as it is then.
+  const tabList = useRef<HTMLDivElement>(null);
+  const [closingTabs, setClosingTabs] = useState<ReadonlyMap<string, number>>(new Map());
+  const closeSent = useRef(new Set<string>());
+  const latestProject = useRef(project);
+  useEffect(() => {
+    latestProject.current = project;
+  });
+  const sendClose = (tabId: string) => {
+    if (closeSent.current.has(tabId)) return;
+    closeSent.current.add(tabId);
+    const current = latestProject.current;
+    if (current?.tabs.some((tab) => tab.id === tabId))
+      onCommand({
+        kind: "tab.close",
+        projectId: current.id,
+        expectedVersion: current.version,
+        tabId,
+      });
+    // A close the daemon refused brings the tab back.
+    setTimeout(() => {
+      closeSent.current.delete(tabId);
+      setClosingTabs((previous) => {
+        const next = new Map(previous);
+        next.delete(tabId);
+        return next;
+      });
+    }, 1000);
+  };
+  const closeTab = (tabId: string) => {
+    const element = tabList.current?.querySelector(`[data-tab-id="${tabId}"]`);
+    if (!element || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      closeSent.current.delete(tabId);
+      return sendClose(tabId);
+    }
+    closeSent.current.delete(tabId);
+    setClosingTabs((previous) =>
+      new Map(previous).set(tabId, element.getBoundingClientRect().width),
+    );
+    // In case the animation never runs, as in a window that is not being drawn.
+    setTimeout(() => sendClose(tabId), TAB_CLOSE_MS * 3);
+  };
   useCommand(
     "close-tab",
     !!project && (!!activeFile || (!!selected && canEdit)) && !launching,
@@ -104,13 +212,7 @@ export function ProjectWorkspace({
         files.close(activeFile);
         return;
       }
-      if (project && selected)
-        onCommand({
-          kind: "tab.close",
-          projectId: project.id,
-          expectedVersion: project.version,
-          tabId: selected.id,
-        });
+      if (selected) closeTab(selected.id);
     },
   );
   const shortcutTab = () => {
@@ -134,7 +236,8 @@ export function ProjectWorkspace({
   };
   useCommand("rename-tab", !!project && connected && !activeFile, () => {
     const tab = shortcutTab();
-    if (tab) setRename({ tabId: tab.id, value: tab.name });
+    if (tab)
+      setRename({ tabId: tab.id, value: tabTitle(tab, agentsRef.current, connection?.terminals) });
   });
   useCommand("move-tab-left", !!project && canEdit && !activeFile, () => moveTab(-1));
   useCommand("move-tab-right", !!project && canEdit && !activeFile, () => moveTab(1));
@@ -199,8 +302,9 @@ export function ProjectWorkspace({
   };
   // Not gated on `canEdit`: a double-click's first click selects the tab, which briefly marks a
   // command as pending, and the second click must still open the editor.
-  const startRename = (tab: { id: string; name: string }) => {
-    if (connected) setRename({ tabId: tab.id, value: tab.name });
+  const startRename = (tab: WorkspaceTab) => {
+    if (connected)
+      setRename({ tabId: tab.id, value: tabTitle(tab, agentsRef.current, connection?.terminals) });
   };
   const commitRename = () => {
     const current = renameRef.current;
@@ -208,7 +312,8 @@ export function ProjectWorkspace({
     setRename(null);
     const tab = project.tabs.find((item) => item.id === current.tabId);
     const name = current.value.trim().slice(0, 120);
-    if (!tab || !name || name === tab.name) return;
+    // Keeping the title it already shows leaves an unnamed tab following its pane.
+    if (!tab || !name || name === tabTitle(tab, agentsRef.current, connection?.terminals)) return;
     onCommand({
       kind: "tab.rename",
       projectId: project.id,
@@ -221,61 +326,100 @@ export function ProjectWorkspace({
     <ProjectFileLinks project={project}>
       <div className="flex h-full min-h-0 flex-col">
         <h1 className="sr-only">{project.name}</h1>
+        <LatestAgents targetRef={agentsRef} />
         <div
           data-tour="tabs"
-          data-tauri-drag-region={windowChrome.enabled ? "true" : undefined}
-          className="flex min-h-9 shrink-0 items-center gap-2 px-2 py-1 select-none"
+          data-tauri-drag-region={titleBar ? "true" : undefined}
+          className={cn(
+            "flex shrink-0 items-center gap-2 border-b px-2 select-none",
+            windowChrome.inset ? "title-bar-row h-11" : "min-h-9 py-1",
+          )}
         >
           {sidebarToggle}
           <div
+            ref={tabList}
             className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
-            data-tauri-drag-region={windowChrome.enabled ? "true" : undefined}
+            data-tauri-drag-region={titleBar ? "true" : undefined}
             aria-label="Project tabs"
+            onDragOver={(event) => {
+              const drag = tabDrag;
+              if (!canEdit || !drag || drag.dropped || drag.projectId !== project.id) return;
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "move";
+              const to = tabDropIndex(drag, tabListX(event.currentTarget, event.clientX));
+              if (to !== drag.to) setTabDrag({ ...drag, to });
+            }}
+            onDrop={(event) => {
+              const drag = tabDrag;
+              if (!drag || drag.dropped || drag.projectId !== project.id) return;
+              event.preventDefault();
+              if (!canEdit || drag.to === drag.from) return setTabDrag(null);
+              setTabDrag({ ...drag, dropped: true });
+              onCommand({
+                kind: "tab.move",
+                projectId: project.id,
+                expectedVersion: project.version,
+                tabId: drag.tabId,
+                index: drag.to,
+              });
+            }}
           >
             {project.tabs.map((tab, index) => (
               <ContextMenu.Root key={tab.id}>
                 <ContextMenu.Trigger asChild>
                   <div
                     data-tab-id={tab.id}
+                    onAnimationEnd={(event) => {
+                      if (event.animationName === "tab-close") sendClose(tab.id);
+                    }}
                     draggable={canEdit && renaming?.tabId !== tab.id}
                     onDragStart={(event) => {
                       event.dataTransfer.effectAllowed = "move";
                       event.dataTransfer.setData("text/plain", tab.id);
-                      setDragging({ projectId: project.id, tabId: tab.id });
-                    }}
-                    onDragOver={(event) => {
-                      if (!canEdit || dragging?.projectId !== project.id) return;
-                      event.preventDefault();
-                      event.dataTransfer.dropEffect = "move";
-                      setDropTarget(tab.id);
-                    }}
-                    onDrop={(event) => {
-                      event.preventDefault();
-                      setDropTarget(null);
-                      setDragging(null);
-                      if (
-                        !canEdit ||
-                        dragging?.projectId !== project.id ||
-                        dragging.tabId === tab.id
-                      )
-                        return;
-                      onCommand({
-                        kind: "tab.move",
+                      const list = tabList.current;
+                      if (!list) return;
+                      const slots = [...list.querySelectorAll("[data-tab-id]")].map((element) => {
+                        const rect = element.getBoundingClientRect();
+                        return { left: tabListX(list, rect.left), width: rect.width };
+                      });
+                      const drag: TabDrag = {
                         projectId: project.id,
-                        expectedVersion: project.version,
-                        tabId: dragging.tabId,
-                        index,
+                        tabId: tab.id,
+                        from: index,
+                        to: index,
+                        slots,
+                        gap: parseFloat(getComputedStyle(list).columnGap) || 0,
+                        dropped: false,
+                      };
+                      // Next frame, so the drag image is the tab and not its grey slot.
+                      tabDragStart.current = requestAnimationFrame(() => {
+                        tabDragStart.current = null;
+                        setTabDrag(drag);
                       });
                     }}
                     onDragEnd={() => {
-                      setDragging(null);
-                      setDropTarget(null);
+                      if (tabDragStart.current != null) cancelAnimationFrame(tabDragStart.current);
+                      tabDragStart.current = null;
+                      setTabDrag((drag) => (drag?.dropped ? drag : null));
                     }}
-                    style={{
-                      opacity: dragging?.tabId === tab.id ? 0.5 : 1,
-                      outline: dropTarget === tab.id ? "2px solid var(--primary)" : undefined,
-                    }}
-                    className={`group flex shrink-0 items-center rounded-md border ${!activeFile && selected?.id === tab.id ? "border-border bg-background shadow-xs" : "border-transparent"}`}
+                    style={
+                      {
+                        transform:
+                          tabDrag?.projectId === project.id
+                            ? `translateX(${tabShift(tabDrag, index)}px)`
+                            : undefined,
+                        "--tab-width": `${closingTabs.get(tab.id) ?? 0}px`,
+                      } as React.CSSProperties
+                    }
+                    className={cn(
+                      "project-tab group flex shrink-0 items-center rounded-md border",
+                      !activeFile && selected?.id === tab.id
+                        ? "border-transparent bg-muted"
+                        : "border-transparent",
+                      closingTabs.has(tab.id) && "tab-closing",
+                      tabDrag && !tabDrag.dropped && "tab-sliding",
+                      tabDrag?.tabId === tab.id && "bg-muted-foreground/20 *:invisible",
+                    )}
                   >
                     {renaming?.tabId === tab.id ? (
                       <input
@@ -321,27 +465,19 @@ export function ProjectWorkspace({
                         }}
                       />
                     )}
-                    <button
-                      type="button"
-                      aria-label={`Close ${tab.name} tab`}
+                    <CloseTabButton
+                      tab={tab}
                       disabled={!canEdit}
-                      onClick={() =>
-                        onCommand({
-                          kind: "tab.close",
-                          projectId: project.id,
-                          expectedVersion: project.version,
-                          tabId: tab.id,
-                        })
-                      }
+                      onClick={() => closeTab(tab.id)}
                       className="rounded p-1 text-muted-foreground opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 hover:text-foreground [@media(hover:none)]:opacity-100"
                     >
                       <X className="size-3" />
-                    </button>
+                    </CloseTabButton>
                   </div>
                 </ContextMenu.Trigger>
                 <ContextMenu.Portal>
                   <ContextMenu.Content
-                    className="z-50 min-w-40 rounded-lg border bg-popover p-1 text-ui text-popover-foreground shadow-md"
+                    className="z-50 min-w-40 rounded-[calc(var(--radius)+(0.25rem+1px)*var(--concentric))] border bg-popover p-1 text-ui text-popover-foreground shadow-md"
                     onCloseAutoFocus={(event) => {
                       // Keep focus on the rename input instead of returning it to the tab.
                       if (renameRef.current?.tabId === tab.id) event.preventDefault();
@@ -356,14 +492,7 @@ export function ProjectWorkspace({
                     </ContextMenu.Item>
                     <ContextMenu.Item
                       disabled={!canEdit}
-                      onSelect={() =>
-                        onCommand({
-                          kind: "tab.close",
-                          projectId: project.id,
-                          expectedVersion: project.version,
-                          tabId: tab.id,
-                        })
-                      }
+                      onSelect={() => closeTab(tab.id)}
                       className="flex items-center gap-2 rounded px-2 py-1.5 outline-none focus:bg-accent data-disabled:opacity-40"
                     >
                       <X className="size-4" /> Close tab
@@ -385,7 +514,7 @@ export function ProjectWorkspace({
               onResume={() => setResuming(true)}
             />
           </div>
-          {windowChrome.enabled && <div data-tauri-drag-region className="h-7 w-8 shrink-0" />}
+          {titleBar && <div data-tauri-drag-region className="h-7 w-8 shrink-0" />}
           <FilesToggle />
           {!files.sidebar.open && <WindowControls />}
         </div>
@@ -451,6 +580,7 @@ export function ProjectWorkspace({
         onOpenChange={setResuming}
         workspace={workspace}
         projectId={project.id}
+        execute={execute}
       />
     </ProjectFileLinks>
   );

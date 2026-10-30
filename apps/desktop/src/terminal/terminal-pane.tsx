@@ -11,6 +11,7 @@ import { PaneVisibilityContext } from "@/components/compact-layout";
 import { useViewedAgent } from "@/notifications/context";
 import { useTabVisible } from "@/workspace/tab-visibility";
 import { TerminalCliInstall } from "./cli-install";
+import { BackgroundTerminalsContext } from "./background-terminals";
 import { TerminalConnectionContext } from "./connection-context";
 import { TerminalSurface } from "./terminal-surface";
 import { useTerminalSessions } from "./use-terminal-sessions";
@@ -27,6 +28,7 @@ export function TerminalPane({
   canEdit: boolean;
 }) {
   const connection = useContext(TerminalConnectionContext);
+  const background = useContext(BackgroundTerminalsContext);
   const session = useTerminalSessions().find((item) => item.id === node.sessionId);
   const recovering = session?.status === "interrupted";
   const [busy, setBusy] = useState(false);
@@ -139,6 +141,11 @@ export function TerminalPane({
           >
             {busy ? "Starting…" : "Retry terminal"}
           </Button>
+          {/^Maximum of \d+ running terminals/.test(error) && background && (
+            <Button size="sm" variant="outline" onClick={background.manage}>
+              Manage terminals
+            </Button>
+          )}
         </div>
       ) : (
         <span role="status" className="text-muted-foreground">

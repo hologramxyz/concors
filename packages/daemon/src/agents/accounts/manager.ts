@@ -55,7 +55,8 @@ interface Entry {
 /** Socket-scoped sign-in state. Never broadcast, logged, or stored in conversation receipts. */
 export class AgentAccounts {
   private entries = new Map<string, Entry>();
-  private requests = new Set<string>();
+  /** The latest request for each chat on each connection; the next one waits for it. */
+  private requests = new Map<string, Promise<unknown>>();
   private factory: AccountBackendFactory;
   private connected: (info: AccountTarget) => void;
   constructor(
@@ -78,12 +79,17 @@ export class AgentAccounts {
     action: AgentAccountAction,
   ): Promise<AgentAccount> {
     const key = JSON.stringify([owner, info.id]);
-    if (this.requests.has(key)) throw new Error("Account request is already in progress");
-    this.requests.add(key);
+    // A second check while one runs (a pane shown again, a request repeated after a reconnect)
+    // waits its turn instead of failing.
+    const previous = this.requests.get(key);
+    const run = (previous ?? Promise.resolve())
+      .catch(() => undefined)
+      .then(() => this.perform(key, owner, info, action));
+    this.requests.set(key, run);
     try {
-      return await this.perform(key, owner, info, action);
+      return await run;
     } finally {
-      this.requests.delete(key);
+      if (this.requests.get(key) === run) this.requests.delete(key);
     }
   }
   private async perform(

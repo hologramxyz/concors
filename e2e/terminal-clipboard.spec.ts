@@ -39,7 +39,7 @@ test("terminal copies with Super, Ctrl+Shift and Insert shortcuts, pastes once, 
     await page.getByRole("button", { name: "Switch machine" }).click();
     await page.getByRole("menuitem", { name: /Second machine/ }).click();
     await openFolder(page, directory);
-    await page.getByRole("button", { name: "New tab", exact: true }).click();
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
     await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
     const terminal = page.getByLabel("Terminal output").filter({ visible: true });
     await expect(terminal).toHaveAttribute("aria-busy", "false");

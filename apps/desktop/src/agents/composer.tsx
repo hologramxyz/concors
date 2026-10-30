@@ -44,7 +44,6 @@ import { AgentModelPicker } from "./model-picker";
 import { ControlTooltip } from "./control-tooltip";
 import { useAgents } from "./context";
 import { switchDescription } from "./provider-switch";
-import { ProviderUpdateLabel } from "./provider-update";
 import { findAgentModel } from "@concors/protocol";
 import { useAgentModelSelection } from "./use-model-selection";
 import { useDictation } from "./dictation";
@@ -99,6 +98,7 @@ export function AgentComposer({
   reachable = connected,
   onInterrupt,
   onSend,
+  placeholder,
 }: {
   agent: AgentInfo;
   connected: boolean;
@@ -110,6 +110,8 @@ export function AgentComposer({
   onInterrupt: () => void;
   /** The user sent or queued a message: show the bottom of the chat. */
   onSend?: () => void;
+  /** Replaces the idle prompt, as the start screen does under its own heading. */
+  placeholder?: string | undefined;
 }) {
   const connection = useContext(TerminalConnectionContext);
   const compact = useContext(CompactLayoutContext);
@@ -973,7 +975,6 @@ export function AgentComposer({
   );
   const utilityControls = (
     <>
-      <ProviderUpdateLabel agent={agent} compact={!!compact} />
       <ContextMeter agent={agent} />
       <ControlTooltip
         text={
@@ -1265,11 +1266,13 @@ export function AgentComposer({
                 placeholder={
                   compact && !expanded
                     ? "Message your agent"
-                    : active
-                      ? followUps === "steer" && canSteer("steer", 0)
-                        ? "Steer the current turn…"
-                        : "Add a follow-up to the queue…"
-                      : "Ask your agent to build something…"
+                    : !active && placeholder
+                      ? placeholder
+                      : active
+                        ? followUps === "steer" && canSteer("steer", 0)
+                          ? "Steer the current turn…"
+                          : "Add a follow-up to the queue…"
+                        : "Reply…"
                 }
                 value={draft}
                 rows={compact && !expanded ? 1 : 2}
