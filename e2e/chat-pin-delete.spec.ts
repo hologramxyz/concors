@@ -116,9 +116,11 @@ async function send(page: Page, message: string) {
     .getByRole("button", { name: "Send message", exact: true })
     .filter({ visible: true });
   await expect(composer).toBeEnabled();
-  // A chat that has just opened can redraw its composer, dropping what was typed before.
+  // A chat that has just opened can redraw its composer, dropping what was typed before, and a
+  // tab still switching can briefly leave the previous chat's composer visible. Each attempt
+  // finds the composer again rather than waiting on one that was hidden.
   await expect(async () => {
-    await composer.fill(message);
+    await composer.fill(message, { timeout: 1_000 });
     await expect(button).toBeEnabled({ timeout: 1_000 });
   }).toPass();
   await button.click();

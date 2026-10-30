@@ -166,6 +166,17 @@ for (const native of [false, true]) {
             })
             .toBe(true);
           await nativeEvent({ kind: "press", control: "model", value: modelId });
+          // The chip shows the new provider at once, but the pane changes chat only when the
+          // switch is done; typing before then goes to the chat being left.
+          const paneProvider = () => {
+            const node = desktop.workspace?.projects
+              .find((project) => project.id === projectId)
+              ?.tabs.find((tab) => tab.id === tabId)
+              ?.nodes.find((item) => item.id === paneId);
+            const session = node?.kind === "pane" ? node.sessionId : null;
+            return desktop.agents.find((agent) => agent.id === session)?.provider;
+          };
+          await expect.poll(paneProvider).toBe(provider);
         } else {
           await ui.getByRole("textbox", { name: /^Message / }).click();
           await ui.getByRole("button", { name: "Agent and model", exact: true }).click();

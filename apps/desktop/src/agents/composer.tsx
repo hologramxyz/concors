@@ -1256,12 +1256,7 @@ export function AgentComposer({
               queued={active}
             />
           ) : native ? (
-            <div
-              ref={nativeField}
-              data-native-composer
-              aria-hidden="true"
-              style={{ height: nativeHeight }}
-            />
+            <div ref={nativeField} aria-hidden="true" style={{ height: nativeHeight }} />
           ) : (
             <>
               <textarea

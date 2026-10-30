@@ -25,13 +25,14 @@ async function pressNative(page: Page, label: string) {
     );
   await expect.poll(find).toBeTruthy();
   const state = await page.evaluate(() => (window as TestWindow).nativeSnapshot);
+  const surfaceId = await find();
   const frame = page.frames().find((item) => item !== page.mainFrame());
-  if (!state || !frame) throw new Error(`Missing native surface ${label}`);
+  if (!state || !surfaceId || !frame) throw new Error(`Missing native surface ${label}`);
   await frame.evaluate((message) => (window as TestWindow).concorsMobileReceive?.(message), {
     type: "native-event",
     scope: state.scope,
     connectionId: state.connectionId,
-    surfaceId: (await find())!,
+    surfaceId,
     event: { kind: "press", control: "activate" },
   } satisfies MobileHostMessage);
 }

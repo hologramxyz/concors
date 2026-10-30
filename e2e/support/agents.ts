@@ -18,6 +18,8 @@ export async function chooseProvider(scope: Scope, provider = "Codex", root: Sco
   if (await native.count()) return;
   await expect(composer).toBeVisible();
   if ((await composer.getAttribute("aria-label")) === `Message ${provider}`) return;
+  // A phone's compact composer shows its controls only once it has focus.
+  await composer.click();
   await scope.getByRole("button", { name: "Agent and model", exact: true }).first().click();
   await root.getByRole("button", { name: "Back to providers", exact: true }).click();
   await root.getByRole("option", { name: new RegExp(`^${provider} `) }).click();

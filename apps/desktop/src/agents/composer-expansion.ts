@@ -25,8 +25,14 @@ export function useComposerExpansion(compact: boolean) {
     };
     // Collapse after the click is delivered. Shrinking on pointerdown/focusin
     // moves timeline actions between press and release and can swallow their click.
+    // Ownership comes from the click's path, recorded as it began: a control that re-renders on
+    // click (a picker's Back) has left the page by the time the click reaches the document.
     const click = (event: MouseEvent) => {
-      if (!owns(event.target)) collapse();
+      const surface = event
+        .composedPath()
+        .find((node) => node instanceof Element && node.hasAttribute("data-composer-surface"));
+      if (!(surface instanceof Element && surface.getAttribute("data-composer-surface") === id))
+        collapse();
     };
     const focus = (event: FocusEvent) => {
       if (owns(event.target)) {

@@ -252,6 +252,12 @@ test("Android composer keeps the model picker open when returning to providers",
     await ui.getByRole("button", { name: "Back to providers", exact: true }).click();
     const providers = ui.getByRole("listbox", { name: "Providers", exact: true });
     await expect(providers).toBeVisible();
+    // Back re-renders the menu under the tap; the composer stays open around its picker, or the
+    // picker loses its anchor and jumps away from the next tap.
+    await expect(ui.getByRole("textbox", { name: "Message Codex" })).not.toHaveAttribute(
+      "placeholder",
+      "Message your agent",
+    );
     await expect(ui.getByRole("combobox", { name: "Search providers" })).toBeVisible();
     await providers.getByRole("option", { name: /^Codex\b/ }).click();
     await expect(ui.getByRole("listbox", { name: "Models", exact: true })).toBeVisible();
