@@ -1456,7 +1456,14 @@ export function AgentComposer({
                         label="Agent mode"
                         showValue={!compact}
                         value={settings.nativeMode ?? agent.controls.currentMode ?? ""}
-                        icon={<Shield className="size-4" />}
+                        icon={
+                          (settings.nativeMode ?? agent.controls.currentMode) ===
+                          "bypassPermissions" ? (
+                            <ShieldOff className="size-4 text-amber-500" />
+                          ) : (
+                            <Shield className="size-4" />
+                          )
+                        }
                         disabled={controlsDisabled}
                         options={agent.controls.modes}
                         onSelect={(nativeMode) => void configure({ ...settings, nativeMode })}
