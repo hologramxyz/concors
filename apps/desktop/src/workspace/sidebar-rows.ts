@@ -2,8 +2,12 @@ import { useEffect, useState } from "react";
 import type { AgentInfo, TerminalInfo, WorkspaceSnapshot } from "@concors/protocol";
 import {
   chatAgentStatus,
+  chatDot,
   isLiveTerminalAgent,
+  strongestDot,
+  tabAgentStatuses,
   terminalAgentStatus,
+  type AgentDot,
   type AgentStatus,
 } from "@/agents/agent-status";
 import { agentDisplayStatus } from "@/agents/context";
@@ -25,6 +29,8 @@ export interface OpenTabRow {
   readonly terminal?: TerminalInfo | undefined;
   /** What runs in the main pane when it is a terminal: a coding agent's CLI, or a shell. */
   readonly tool: "chat" | "codex" | "claude" | "opencode" | "shell";
+  /** The most urgent dot among its panes, as the tab bar marks each of them. */
+  readonly dot: AgentDot | undefined;
   readonly time: string;
 }
 
@@ -96,6 +102,7 @@ export function sidebarRows(
         chat,
         terminal,
         tool,
+        dot: strongestDot(tabAgentStatuses(tab, chats, terminals).map((status) => status.dot)),
         time: chat?.updatedAt ?? terminal?.startedAt ?? firstSeen(tab.id),
       };
     });
@@ -153,25 +160,24 @@ export function rowAgentStatus(row: SidebarRow): AgentStatus | undefined {
 }
 
 /**
- * What the row shows before its name: "attention" (red) when its agent waits for an answer or
- * failed, "done" (white) when it finished and nobody has looked yet, and "working" while an agent
- * replies, sub-agents included, even with its tab closed. A shell running a command, and any
- * terminal still running with its tab closed, is "running". A CLI agent in the background still
- * turns red when it waits for an answer.
+ * What the row shows before its name: its dot (see `AgentDot`), open or closed, then "working" while
+ * an agent replies, sub-agents included, even with its tab closed. A shell running a command, and
+ * any terminal still running with its tab closed, is "running". A CLI agent in the background keeps
+ * its dot too.
  */
 export function rowState(
   row: SidebarRow,
 ): "working" | "running" | "attention" | "done" | undefined {
   if (row.kind === "terminal") {
     if (!isLiveTerminalAgent(row.terminal)) return "running";
-    if (row.terminal.agentActivity === "needs_input") return "attention";
-    return terminalAgentStatus(row.terminal).running ? "running" : undefined;
+    const { dot, running } = terminalAgentStatus(row.terminal);
+    return dot ?? (running ? "running" : undefined);
   }
   const chat = row.kind === "closed" ? row.chat.agent : row.chat;
+  const dot = row.kind === "tab" ? row.dot : chat && chatDot(chat);
+  if (dot) return dot;
   if (chat) {
     const status = agentDisplayStatus(chat);
-    if (row.kind === "tab" && (status === "needs_input" || status === "failed")) return "attention";
-    if (row.kind === "tab" && chat.attention && !chat.attention.seen) return "done";
     if (status !== "starting" && status !== "working" && !chat.backgroundAgents) return undefined;
     return "working";
   }
@@ -180,8 +186,37 @@ export function rowState(
     return row.terminal.status === "running" && row.terminal.foregroundCommand
       ? "running"
       : undefined;
-  if (row.terminal.agentActivity === "needs_input") return "attention";
   return terminalAgentStatus(row.terminal).running ? "working" : undefined;
+}
+
+/** The dot a row shows, if any. */
+export function rowDot(row: SidebarRow): AgentDot | undefined {
+  const state = rowState(row);
+  return state === "attention" || state === "done" ? state : undefined;
+}
+
+/** A workspace lists this many closed rows before "Show more". */
+const CLOSED_ROWS_SHOWN = 3;
+
+/**
+ * Splits a workspace's rows into those listed and those behind "Show more". Open tabs are never
+ * folded, nor are pins, which someone asked to keep in sight. `surfaced` are the closed rows whose
+ * dot keeps them out of the fold: while the pointer holds the list still, one that gets a dot stays
+ * folded, so nothing moves under the pointer, and "Show more" carries its dot until then.
+ */
+export function foldRows(rows: readonly SidebarRow[], surfaced: ReadonlySet<string>) {
+  const listed: SidebarRow[] = [];
+  const folded: SidebarRow[] = [];
+  let closed = 0;
+  for (const row of rows) {
+    if (row.kind === "tab" || rowPinned(row)) {
+      listed.push(row);
+      continue;
+    }
+    (closed < CLOSED_ROWS_SHOWN || surfaced.has(row.key) ? listed : folded).push(row);
+    closed += 1;
+  }
+  return { listed, folded };
 }
 
 /**
@@ -190,7 +225,11 @@ export function rowState(
  */
 export function rowStatusLabel(row: SidebarRow): string | undefined {
   const state = rowState(row);
-  if (row.kind === "closed") return state === "working" ? "Working" : "Closed";
+  if (row.kind === "closed") {
+    if (state === "attention")
+      return row.chat.agent.status === "failed" ? "Failed" : "Needs your reply";
+    return state === "working" ? "Working" : "Closed";
+  }
   if (row.kind === "terminal")
     return state === "attention" ? "Needs your reply" : "Running in background";
   if (state === "attention")

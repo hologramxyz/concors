@@ -200,7 +200,7 @@ function AgentRow({
   /** Absent for terminals, and for a chat that cannot be forked right now. */
   onFork: (() => void) | undefined;
 }) {
-  const { status, unread, background } = agent;
+  const { status, dot, background } = agent;
   const backgroundLabel = background
     ? `${background} sub-agent${background === 1 ? "" : "s"} running`
     : "";
@@ -263,7 +263,7 @@ function AgentRow({
                 {status}
                 {backgroundLabel ? ` · ${backgroundLabel}` : ""}
                 {scheduled ? " · Scheduled" : ""}
-                {unread ? " · Unread update" : ""}
+                {dot === "done" ? " · Unread update" : ""}
               </p>
             </div>
           }

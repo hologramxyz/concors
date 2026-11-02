@@ -1,6 +1,12 @@
 import { expect, it } from "vitest";
 import type { AgentInfo, TerminalInfo, WorkspaceProject, WorkspaceTab } from "@concors/protocol";
-import { tabAgentStatuses, workspaceAttention, workspaceAttentionLabel } from "./agent-status";
+import {
+  chatDot,
+  tabAgentStatuses,
+  workspaceAttention,
+  workspaceAttentionLabel,
+} from "./agent-status";
+import { forgetTerminalTurn, markFailureSeen, markTerminalTurnSeen } from "./seen-updates";
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const pane = (n: number, profile: "chat" | "shell" | "codex", sessionId: string | null) => ({
@@ -10,7 +16,13 @@ const pane = (n: number, profile: "chat" | "shell" | "codex", sessionId: string 
   sessionId,
 });
 const chat = (n: number, status: AgentInfo["status"]) =>
-  ({ id: id(n), provider: "claude", name: "Claude", status }) as AgentInfo;
+  ({
+    id: id(n),
+    provider: "claude",
+    name: "Claude",
+    status,
+    updatedAt: new Date(0).toISOString(),
+  }) as AgentInfo;
 const terminal = (n: number, fields: Partial<TerminalInfo>) =>
   ({ id: id(n), profile: "codex", status: "running", ...fields }) as TerminalInfo;
 
@@ -69,9 +81,61 @@ it("shows a finished chat agent as Ready once its completion has been seen", () 
       attention: { id: id(31), kind: "done", createdAt: new Date(0).toISOString(), seen },
     }) as AgentInfo;
   const [unseen] = tabAgentStatuses(tab, [finished(false)], []);
-  expect(unseen).toMatchObject({ status: "Done", color: "bg-primary", unread: true });
+  expect(unseen).toMatchObject({ status: "Done", dot: "done" });
   const [seen] = tabAgentStatuses(tab, [finished(true)], []);
-  expect(seen).toMatchObject({ status: "Ready", color: "", unread: false });
+  expect(seen).toMatchObject({ status: "Ready", dot: undefined });
+});
+
+it("clears a finish or failure once opened, and a question only once answered", () => {
+  const attention = (kind: "done" | "needs_input", seen: boolean) => ({
+    id: id(31),
+    kind,
+    createdAt: new Date(0).toISOString(),
+    seen,
+  });
+  const dot = (status: AgentInfo["status"], fields: Partial<AgentInfo> = {}) =>
+    chatDot({ ...chat(21, status), ...fields });
+  expect(dot("done", { attention: attention("done", false) })).toBe("done");
+  expect(dot("done", { attention: attention("done", true) })).toBeUndefined();
+  expect(dot("needs_input", { attention: attention("needs_input", false) })).toBe("attention");
+  expect(dot("needs_input", { attention: attention("needs_input", true) })).toBe("attention");
+  expect(dot("working")).toBeUndefined();
+  expect(dot("interrupted")).toBeUndefined();
+
+  // A failure has no attention record, so this client remembers it, per failure.
+  const failed = { ...chat(21, "failed"), updatedAt: new Date(5).toISOString() };
+  expect(chatDot(failed)).toBe("attention");
+  markFailureSeen(failed);
+  expect(chatDot(failed)).toBeUndefined();
+  expect(chatDot({ ...failed, updatedAt: new Date(6).toISOString() })).toBe("attention");
+});
+
+it("clears a CLI's finished turn once viewed until its next turn, and keeps its questions", () => {
+  const tab = (activity: TerminalInfo["agentActivity"]) =>
+    tabAgentStatuses(
+      { id: id(1), name: "Build", root: id(11), nodes: [pane(11, "codex", id(22))] },
+      [],
+      [terminal(22, { agentActivity: activity, agentTurnCompleted: activity !== "working" })],
+    )[0];
+  expect(tab("idle")).toMatchObject({ status: "Done", dot: "done" });
+  markTerminalTurnSeen(id(22));
+  expect(tab("idle")).toMatchObject({ status: "Done", dot: undefined });
+  // Having viewed the terminal does not clear a question.
+  expect(tab("needs_input")).toMatchObject({ status: "Needs input", dot: "attention" });
+  forgetTerminalTurn(id(22));
+  expect(tab("idle")).toMatchObject({ status: "Done", dot: "done" });
+});
+
+it("counts closed chats in their workspace's sum, as their rows show dots", () => {
+  const project = { id: id(1), tabs: [] } as unknown as WorkspaceProject;
+  const closed = {
+    ...chat(21, "done"),
+    projectId: id(1),
+    turnId: id(40),
+    updatedAt: new Date(0).toISOString(),
+    attention: { id: id(31), kind: "done", createdAt: new Date(0).toISOString(), seen: false },
+  } as AgentInfo;
+  expect(workspaceAttention(project, [closed], [])).toMatchObject({ kind: "done", done: 1 });
 });
 
 it("sums a workspace's agents across its tabs, most urgent first, counting updates until seen", () => {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ChevronRight } from "lucide-react";
 import type { DaemonConnection } from "@concors/daemon-client";
-import { isDefaultTabName, type ProjectIcon } from "@concors/protocol";
+import { isDefaultTabName, type ProjectIcon, type TerminalInfo } from "@concors/protocol";
 import { NotificationContext } from "./context";
 import { AttentionEngine, type Notice } from "./engine";
 import { claimNotification, getNotificationPreferences } from "./preferences";
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { playAgentSound, unlockAudio } from "./sound";
 import { terminalAgentSound } from "./terminal";
 import { agentPane, paneNames } from "@/agents/visible-sessions";
+import { forgetTerminalTurn, markFailureSeen, markTerminalTurnSeen } from "@/agents/seen-updates";
 import { ProjectImage } from "@/workspace/project-image";
 import { projectIconKey, projectIcons } from "@/workspace/project-icons";
 
@@ -121,6 +122,12 @@ export function NotificationProvider({
           });
       },
     });
+    const noteTerminal = (session: TerminalInfo) => {
+      if (session.agentActivity === "working" || session.agentActivity === "needs_input")
+        forgetTerminalTurn(session.id);
+      else if (session.agentActivity === "idle" && focused(session.id))
+        markTerminalTurnSeen(session.id);
+    };
     const seen = () => {
       if (
         connection.state.status !== "ready" ||
@@ -128,7 +135,9 @@ export function NotificationProvider({
         !connection.state.daemon.capabilities?.includes("agent-attention")
       )
         return;
+      for (const session of connection.terminals) noteTerminal(session);
       for (const agent of connection.agents) {
+        if (agent.status === "failed" && focused(agent.id)) markFailureSeen(agent);
         const attention = agent.attention;
         if (!attention || attention.seen || !focused(agent.id) || seenRequests.has(attention.id))
           continue;
@@ -177,6 +186,7 @@ export function NotificationProvider({
     const offTerminal = connection.onTerminal((event) => {
       if (event.type !== "terminal.state" && event.type !== "terminal.snapshot") return;
       const session = event.session;
+      noteTerminal(session);
       const previous = terminals.get(session.id);
       terminals.set(session.id, session);
       if (previous?.agentActivity === session.agentActivity) return;

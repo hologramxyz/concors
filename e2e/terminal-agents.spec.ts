@@ -85,7 +85,7 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
     for (const client of [page, second]) {
       const done = agentRow(client, "Done", "codex");
       await expect(done).toBeVisible();
-      // Done and idle look alike in the sidebar: no dot.
+      // Both clients are viewing this terminal, so the finished turn has no dot.
       await expect(done.locator("[data-row-state]")).toHaveCount(0);
     }
     await expect(agents.getByRole("button", { name: /Agent status: Working.*Codex/ })).toHaveCount(

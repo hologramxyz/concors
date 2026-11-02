@@ -1,7 +1,14 @@
 import { expect, it } from "vitest";
 import type { AgentInfo, TerminalInfo, WorkspaceSnapshot } from "@concors/protocol";
 import { shortAge } from "@/lib/format-date";
-import { rowState, rowStatusLabel, sidebarRows, stableOrder } from "./sidebar-rows";
+import {
+  foldRows,
+  rowDot,
+  rowState,
+  rowStatusLabel,
+  sidebarRows,
+  stableOrder,
+} from "./sidebar-rows";
 
 const workspace: Pick<WorkspaceSnapshot, "projects"> = {
   projects: [
@@ -183,11 +190,112 @@ it("dots a row only while its agent works or needs you", () => {
   expect(cli({ agentActivity: "working" })).toBe("working");
   expect(cli({ agentActivity: "needs_input" })).toBe("attention");
   expect(cli({ agentActivity: "idle" })).toBeUndefined();
-  // A closed chat is muted, with a spinner only while it is still finishing its turn.
+  expect(cli({ agentActivity: "idle", agentTurnCompleted: true })).toBe("done");
+  // Closed chats keep their dots; otherwise they show a spinner only while finishing a turn.
   const closed = (patch: Partial<AgentInfo>) =>
     rowState(sidebarRows(workspace, [agent("closed", patch)], []).rows.get("p")![3]!);
-  expect(closed({ status: "needs_input" })).toBeUndefined();
+  const attention = (kind: "done" | "needs_input", seen: boolean) => ({
+    id: "a",
+    kind,
+    createdAt: "2026-09-20T00:00:00Z",
+    seen,
+  });
+  expect(closed({ status: "needs_input" })).toBe("attention");
   expect(closed({ status: "working" })).toBe("working");
+  expect(closed({ attention: attention("done", false) })).toBe("done");
+  expect(closed({ attention: attention("done", true) })).toBeUndefined();
+  // A question keeps its dot once opened, open or closed, until it is answered.
+  expect(closed({ status: "needs_input", attention: attention("needs_input", true) })).toBe(
+    "attention",
+  );
+  expect(
+    state(agent("open", { status: "needs_input", attention: attention("needs_input", true) })),
+  ).toBe("attention");
+});
+
+it("marks a split tab's row with the most urgent dot among its panes", () => {
+  const split: Pick<WorkspaceSnapshot, "projects"> = {
+    projects: [
+      {
+        id: "p",
+        name: "studio",
+        directory: "/repos/studio",
+        version: 1,
+        tabs: [
+          {
+            id: "tab",
+            name: "Tab 1",
+            root: "root",
+            nodes: [
+              {
+                kind: "split",
+                id: "root",
+                axis: "horizontal",
+                ratio: 0.5,
+                first: "a",
+                second: "b",
+              },
+              { kind: "pane", id: "a", profile: "chat", sessionId: "main" },
+              { kind: "pane", id: "b", profile: "chat", sessionId: "side" },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  const row = sidebarRows(
+    split,
+    [
+      agent("main"),
+      agent("side", {
+        attention: { id: "a", kind: "done", createdAt: "2026-09-20T00:00:00Z", seen: false },
+      }),
+    ],
+    [],
+  ).rows.get("p")![0]!;
+  expect(rowState(row)).toBe("done");
+});
+
+it("never folds open tabs, and folds closed ones after three unless a dot surfaces them", () => {
+  const tabs = Array.from({ length: 7 }, (_, n) => ({
+    id: `tab-${n}`,
+    name: `Tab ${n}`,
+    root: `pane-${n}`,
+    nodes: [{ kind: "pane" as const, id: `pane-${n}`, profile: "shell" as const, sessionId: null }],
+  }));
+  const seven: Pick<WorkspaceSnapshot, "projects"> = {
+    projects: [{ id: "p", name: "studio", directory: "/repos/studio", version: 1, tabs }],
+  };
+  const dated = (n: number, patch: Partial<AgentInfo> = {}) =>
+    agent(`c${n}`, { updatedAt: `2026-09-2${9 - n}T00:00:00Z`, ...patch });
+  const unread = {
+    attention: { id: "a", kind: "done" as const, createdAt: "2026-09-20T00:00:00Z", seen: false },
+  };
+  const rows = sidebarRows(
+    seven,
+    [dated(0), dated(1), dated(2), dated(3), dated(4, unread), dated(5, { pinned: true })],
+    [],
+  ).rows.get("p")!;
+  const keys = (list: readonly { key: string }[]) => list.map((row) => row.key);
+
+  // Everything open is listed in tab order, then the closed rows, newest first.
+  const surfacedNow = new Set(rows.filter((r) => r.kind !== "tab" && rowDot(r)).map((r) => r.key));
+  const { listed, folded } = foldRows(rows, surfacedNow);
+  expect(keys(listed)).toEqual([
+    "closed:c5",
+    ...tabs.map((tab) => `tab:${tab.id}`),
+    "closed:c0",
+    "closed:c1",
+    "closed:c2",
+    "closed:c4",
+  ]);
+  expect(keys(folded)).toEqual(["closed:c3"]);
+  expect(folded.map(rowDot)).toEqual([undefined]);
+
+  // While the list is held still, a row that just got its dot stays folded and speaks through it.
+  const held = foldRows(rows, new Set());
+  expect(keys(held.folded)).toEqual(["closed:c3", "closed:c4"]);
+  expect(held.folded.map(rowDot)).toEqual([undefined, "done"]);
 });
 
 it("labels a row's tooltip only while something is happening", () => {

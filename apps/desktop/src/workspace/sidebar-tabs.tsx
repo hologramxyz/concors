@@ -20,7 +20,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { BrailleSpinner } from "@/agents/activity";
-import type { AgentStatus } from "@/agents/agent-status";
+import { AGENT_DOT_COLOR, type AgentDot, type AgentStatus } from "@/agents/agent-status";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { BackgroundTerminalsContext } from "@/terminal/background-terminals";
 import { shortAge } from "@/lib/format-date";
@@ -35,8 +35,8 @@ import {
 /**
  * Sits under the workspace's icon, one indent in, so the row reads as the workspace's. The chat's
  * braille spinner while an agent replies, open or closed (closed rows are told apart by their
- * muted name), a grey dot while a terminal runs, a white dot when it finished unseen, a red one
- * when it failed or waits for an answer, and nothing otherwise.
+ * muted name), a grey dot while a terminal runs, its `AgentDot` until it has been opened, and
+ * nothing otherwise.
  */
 function RowDot({ row, status }: { row: SidebarRow; status: AgentStatus | undefined }) {
   const state = rowState(row);
@@ -53,23 +53,17 @@ function RowDot({ row, status }: { row: SidebarRow; status: AgentStatus | undefi
     >
       {state === "working" ? (
         <BrailleSpinner />
+      ) : state === "running" ? (
+        <span aria-hidden="true" className="size-1.5 rounded-full bg-muted-foreground" />
       ) : (
-        state && (
-          <span
-            aria-hidden="true"
-            className={cn(
-              "size-1.5 rounded-full",
-              state === "done"
-                ? "bg-primary"
-                : state === "running"
-                  ? "bg-muted-foreground"
-                  : "bg-destructive",
-            )}
-          />
-        )
+        state && <SidebarDot dot={state} />
       )}
     </span>
   );
+}
+
+export function SidebarDot({ dot }: { dot: AgentDot }) {
+  return <span aria-hidden="true" className={cn("size-1.5 rounded-full", AGENT_DOT_COLOR[dot])} />;
 }
 
 /**

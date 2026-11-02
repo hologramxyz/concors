@@ -17,6 +17,7 @@ import { useAgents } from "@/agents/context";
 import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
 import { useHomePath } from "./home-path";
 import {
+  AGENT_DOT_COLOR,
   workspaceAttention,
   workspaceAttentionLabel,
   type WorkspaceAttention,
@@ -28,6 +29,7 @@ export function WorkspaceSidebarItem({
   compact,
   selected,
   current,
+  expanded,
   canEdit,
   icon,
   pullRequests,
@@ -49,6 +51,8 @@ export function WorkspaceSidebarItem({
   canEdit: boolean;
   icon: ProjectIcon | undefined;
   pullRequests?: WorkspacePullRequests | undefined;
+  /** Its open list shows each dot on its own row, so the folder has no dot of its own. */
+  expanded?: boolean;
   onSelect: (id: string) => void;
   onOpenPullRequests?: (projectId: string, repository?: string) => void;
   execute: (operation: WorkspaceOperation) => Promise<void>;
@@ -56,7 +60,10 @@ export function WorkspaceSidebarItem({
 }) {
   const mobile = useContext(CompactLayoutContext);
   const connection = useContext(TerminalConnectionContext);
-  const attention = workspaceAttention(project, useAgents(), useTerminalSessions());
+  const summed = workspaceAttention(project, useAgents(), useTerminalSessions());
+  const attention = expanded
+    ? { ...summed, kind: null, needsInput: 0, failed: 0, done: 0 }
+    : summed;
   // Older daemons reject `project.rename` outright, so the menu item stays disabled for them.
   const canRename =
     canEdit &&
@@ -220,7 +227,7 @@ function AttentionBadge({ attention, label }: { attention: WorkspaceAttention; l
       <span
         className={cn(
           "size-2 rounded-full",
-          attention.kind === "done" ? "bg-primary" : "bg-destructive",
+          AGENT_DOT_COLOR[attention.kind === "done" ? "done" : "attention"],
         )}
       />
     </span>

@@ -8,8 +8,10 @@ import { WorkspaceSidebarItem } from "@/workspace/sidebar-item";
 import { clashingWorkspaceParents } from "@/workspace/workspace-parents";
 import { useProjectIcons } from "@/workspace/use-project-icons";
 import { projectIconKey } from "@/workspace/project-icons";
-import { SidebarTabRow, UnavailableChats } from "@/workspace/sidebar-tabs";
+import { SidebarDot, SidebarTabRow, UnavailableChats } from "@/workspace/sidebar-tabs";
 import {
+  foldRows,
+  rowDot,
   sidebarRows,
   stableOrder,
   useMinuteClock,
@@ -18,6 +20,7 @@ import {
 } from "@/workspace/sidebar-rows";
 import { defaultPaneTitle, mainPane } from "@/workspace/tab-title";
 import { useAgents } from "@/agents/context";
+import { strongestDot } from "@/agents/agent-status";
 import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { BackgroundTerminalsContext } from "@/terminal/background-terminals";
@@ -92,9 +95,6 @@ function followOrder(previous: ReadonlyMap<string, string[]>, order: string) {
 const rowChat = (row: SidebarRow) =>
   row.kind === "tab" ? row.chat : row.kind === "closed" ? row.chat.agent : undefined;
 const rowChatId = (row: SidebarRow) => rowChat(row)?.id;
-
-/** Each workspace lists this many rows before "Show more"; the selected tab is always among them. */
-const ROWS_SHOWN = 5;
 
 export function AppSidebar(props: AppSidebarProps) {
   const windowChrome = useWindowChrome();
@@ -264,9 +264,22 @@ function WorkspaceTree(props: AppSidebarProps) {
   const list = useRef<HTMLUListElement>(null);
   const [shownOrder, setShownOrder] = useState<ReadonlyMap<string, string[]>>(new Map());
   const order = JSON.stringify([...rows].map(([id, list]) => [id, list.map((row) => row.key)]));
+  // Closed rows whose dot keeps them out of the fold, held still with the order.
+  const [shownSurfaced, setShownSurfaced] = useState<ReadonlyMap<string, string[]>>(new Map());
+  const surfaced = JSON.stringify(
+    [...rows].map(([id, list]) => [
+      id,
+      list.filter((row) => row.kind !== "tab" && rowDot(row)).map((row) => row.key),
+    ]),
+  );
+  const followRows = () => {
+    setShownOrder((previous) => followOrder(previous, order));
+    setShownSurfaced((previous) => followOrder(previous, surfaced));
+  };
   useLayoutEffect(() => {
-    if (!list.current?.matches(":hover")) setShownOrder((previous) => followOrder(previous, order));
-  }, [order]);
+    if (!list.current?.matches(":hover")) followRows();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order, surfaced]);
   const canRenamePanes =
     connection?.state.status === "ready" &&
     !!connection.state.daemon.capabilities?.includes(PANE_RENAME_CAPABILITY);
@@ -347,23 +360,19 @@ function WorkspaceTree(props: AppSidebarProps) {
         }
       />
       {props.workspace?.projects.length ? (
-        <ul
-          ref={list}
-          className="mt-1 space-y-0.5"
-          onPointerLeave={() => setShownOrder((previous) => followOrder(previous, order))}
-        >
+        <ul ref={list} className="mt-1 space-y-0.5" onPointerLeave={followRows}>
           {props.workspace.projects.map((project) => {
             const expanded = !props.collapsed && isExpanded(project.id);
             const ordered = stableOrder(rows.get(project.id) ?? [], shownOrder.get(project.id));
             const selectedRow = ordered.find(
               (row) => row.kind === "tab" && row.tabId === selectedTabId,
             );
+            const fold = more.has(project.id)
+              ? { listed: ordered, folded: [] }
+              : foldRows(ordered, new Set(shownSurfaced.get(project.id)));
             // Rendered while collapsed too, so the list can ease open and shut.
-            const listed = props.collapsed
-              ? []
-              : more.has(project.id)
-                ? ordered
-                : ordered.filter((row, index) => index < ROWS_SHOWN || row === selectedRow);
+            const listed = props.collapsed ? [] : fold.listed;
+            const foldedDot = strongestDot(fold.folded.map(rowDot));
             const shown = expanded ? listed : [];
             const current = props.view === "projects" && currentProjectId === project.id;
             return (
@@ -374,6 +383,7 @@ function WorkspaceTree(props: AppSidebarProps) {
                   compact={props.collapsed}
                   selected={current && !(selectedRow && shown.includes(selectedRow))}
                   current={current}
+                  expanded={expanded}
                   canEdit={props.canEdit}
                   icon={
                     props.workspace
@@ -427,15 +437,21 @@ function WorkspaceTree(props: AppSidebarProps) {
                             onDelete={remove(rowChat(row))}
                           />
                         ))}
-                        {listed.length < ordered.length && (
+                        {fold.folded.length > 0 && (
                           <li>
                             <button
                               type="button"
                               onClick={() =>
                                 setMore((previous) => new Set(previous).add(project.id))
                               }
-                              className="flex h-8 w-full items-center rounded-md pr-2 pl-[calc(1rem+20px)] text-left text-ui text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                              className="flex h-8 w-full items-center gap-2 rounded-md pr-2 pl-2 text-left text-ui text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
                             >
+                              <span
+                                data-show-more-dot={foldedDot}
+                                className="flex size-[20px] shrink-0 items-center justify-center"
+                              >
+                                {foldedDot && <SidebarDot dot={foldedDot} />}
+                              </span>
                               Show more
                             </button>
                           </li>

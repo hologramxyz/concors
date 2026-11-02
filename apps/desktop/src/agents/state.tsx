@@ -1,5 +1,6 @@
 import { AgentsContext, AgentStartedContext, AGENT_STATUS, agentDisplayStatus } from "./context";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { seenUpdatesVersion, startSeenMemory, subscribeSeenUpdates } from "./seen-updates";
 import type { DaemonConnection } from "@concors/daemon-client";
 import type { AgentInfo } from "@concors/protocol";
 export function AgentsProvider({
@@ -22,8 +23,17 @@ export function AgentsProvider({
       }),
     [connection],
   );
+  useState(startSeenMemory);
+  // Seeing a failed chat or a finished CLI changes no session, so its dot goes by repainting
+  // everything that shows one.
+  const updatesSeen = useSyncExternalStore(subscribeSeenUpdates, seenUpdatesVersion);
+  const agents = useMemo(
+    () => [...(replica?.connection === connection ? (replica?.agents ?? []) : [])],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [replica, connection, updatesSeen],
+  );
   return (
-    <AgentsContext value={replica?.connection === connection ? (replica?.agents ?? []) : []}>
+    <AgentsContext value={agents}>
       <AgentStartedContext value={onStarted}>{children}</AgentStartedContext>
     </AgentsContext>
   );
