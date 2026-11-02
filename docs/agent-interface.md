@@ -44,6 +44,11 @@ Source provenance, adaptation notes, and license locations are recorded in
   the same sandbox; full access explicitly removes those restrictions. Other
   CLIs retain their own tool permissions and execution settings. A shared UI
   does not give every CLI Codex's OS isolation.
+- Claude Code offers **Bypass permissions**, which runs every tool without asking
+  and has no sandbox behind it. Questions and plan approvals still reach the
+  user. Like Codex's full access, it is remembered for new chats on that machine.
+  It is not offered where Claude Code runs as root outside a sandbox, because
+  Claude Code refuses to skip permissions there.
 - **Import session**, **Fork session**, **Rewind**, **Steer current turn**, and
   **MCP servers** appear only where the adapter exposes them. Rewind states
   whether it changes conversation history, checkpointed files, or both. Forks
