@@ -105,7 +105,7 @@ async function fixture(page: Page) {
     if (path === "/api/v1/machines")
       return json({
         machines:
-          activeOrganization === "team-org"
+          (url.searchParams.get("organizationId") ?? activeOrganization) === "team-org"
             ? [teamMachine]
             : [
                 machine,

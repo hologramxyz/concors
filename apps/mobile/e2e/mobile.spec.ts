@@ -507,7 +507,7 @@ test("new workspace completion opens its own project and closes the sidebar", as
     "New workspace",
   );
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
-  await ui.getByRole("button", { name: "Concors", exact: true }).click();
+  await ui.getByRole("button", { name: /^Concors(, |$)/ }).click();
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toHaveValue(
     "Keep my original draft",
   );
