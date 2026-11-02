@@ -48,8 +48,9 @@ import { deviceStorage } from "../platform/storage";
 import {
   LAST_TARGETS_KEY,
   lastTargetKey,
+  lastWorkspaceTargets,
   parseLastTargets,
-  rememberTarget,
+  rememberVisit,
   type LastTargets,
 } from "./last-target";
 
@@ -223,7 +224,10 @@ function SignedInWorkspace() {
           pushEnabled: push,
           target: target.success ? target.data : {},
           ...(machineId && lastTargets
-            ? { lastTarget: lastTargets[lastTargetKey(account, machineId)] ?? null }
+            ? {
+                lastTarget: lastTargets[lastTargetKey(account, machineId)] ?? null,
+                lastWorkspaceTargets: lastWorkspaceTargets(lastTargets, account, machineId),
+              }
             : {}),
           supportUrl: config.supportUrl,
           privacyUrl: config.privacyUrl,
@@ -350,7 +354,7 @@ function SignedInWorkspace() {
         const stored =
           lastTargetsRef.current ??
           parseLastTargets(await deviceStorage.get(LAST_TARGETS_KEY).catch(() => null));
-        const next = rememberTarget(stored, lastTargetKey(account, machineId), action.target);
+        const next = rememberVisit(stored, account, machineId, action.target);
         lastTargetsRef.current = next;
         setLastTargets(next);
         await deviceStorage.set(LAST_TARGETS_KEY, JSON.stringify(next));

@@ -386,7 +386,10 @@ function MobileWorkspaceContent({
     setError(null);
   };
   const selectProject = (projectId: string) =>
-    select(memories.current.get(`${host.machineId}:${projectId}`) ?? { projectId });
+    select(
+      memories.current.get(`${host.machineId}:${projectId}`) ??
+        host.lastWorkspaceTargets?.[projectId] ?? { projectId },
+    );
   const openAgent = useCallback(
     (sessionId: string) => {
       const target =
