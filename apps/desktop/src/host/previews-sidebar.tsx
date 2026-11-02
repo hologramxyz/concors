@@ -8,7 +8,7 @@ import {
   type MachineProcess,
 } from "@concors/protocol";
 import { SidebarEmpty, SidebarSection } from "@/components/sidebar-section";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { openPreview } from "@/tauri/open-external";
 import { discoveredPreviews, previewUsage, type DiscoveredPreview } from "./discovered-previews";
 import { StopProcessDialog } from "./stop-process-dialog";
@@ -88,65 +88,57 @@ export function PreviewsSidebar({ compact = false }: { compact?: boolean }) {
               />
             ) : (
               // How long it has run and what it holds show on hover, expanded or not.
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label={`Open preview: ${preview.name}`}
-                    onClick={() => open(preview)}
-                    className={
-                      compact
-                        ? "sidebar-rail-control flex items-center justify-center rounded-md hover:bg-sidebar-accent"
-                        : "flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-sidebar-accent"
-                    }
-                  >
-                    <span className="relative flex shrink-0">
-                      <ExternalLink className="size-4 text-muted-foreground" aria-hidden="true" />
-                      {compact && usage.warning && (
-                        <span
-                          aria-hidden="true"
-                          className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-amber-500"
-                        />
-                      )}
-                    </span>
-                    {!compact && <span className="min-w-0 flex-1 truncate">{preview.name}</span>}
-                  </button>
-                </TooltipTrigger>
-                {/* Above the row when expanded, so it never covers the row's Rename and Stop. */}
-                <TooltipContent
-                  side={compact ? "right" : "top"}
-                  align={compact ? "center" : "start"}
-                >
-                  <p className="flex gap-2 font-medium">
-                    <span>{preview.name}</span>
-                    <span className="opacity-75">:{preview.port}</span>
-                  </p>
-                  {usage.details.map((detail) => (
-                    <p key={detail} className="opacity-75">
-                      {detail}
+              <SidebarTooltip
+                content={
+                  <>
+                    <p className="flex gap-2 font-medium">
+                      <span>{preview.name}</span>
+                      <span className="opacity-75">:{preview.port}</span>
                     </p>
-                  ))}
-                  {compact && usage.warning && <p>{usage.warning}</p>}
-                </TooltipContent>
-              </Tooltip>
+                    {usage.details.map((detail) => (
+                      <p key={detail} className="opacity-75">
+                        {detail}
+                      </p>
+                    ))}
+                    {compact && usage.warning && <p>{usage.warning}</p>}
+                  </>
+                }
+              >
+                <button
+                  type="button"
+                  aria-label={`Open preview: ${preview.name}`}
+                  onClick={() => open(preview)}
+                  className={
+                    compact
+                      ? "sidebar-rail-control flex items-center justify-center rounded-md hover:bg-sidebar-accent"
+                      : "flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-sidebar-accent"
+                  }
+                >
+                  <span className="relative flex shrink-0">
+                    <ExternalLink className="size-4 text-muted-foreground" aria-hidden="true" />
+                    {compact && usage.warning && (
+                      <span
+                        aria-hidden="true"
+                        className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-amber-500"
+                      />
+                    )}
+                  </span>
+                  {!compact && <span className="min-w-0 flex-1 truncate">{preview.name}</span>}
+                </button>
+              </SidebarTooltip>
             )}
             {!compact && renaming?.id !== preview.id && usage.warning && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span
-                    role="img"
-                    tabIndex={0}
-                    aria-label={usage.warning}
-                    data-preview-warning
-                    className="mr-0.5 flex shrink-0 rounded p-1 text-amber-500 outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <TriangleAlert className="size-3.5" aria-hidden="true" />
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="right" className="max-w-64">
-                  {usage.warning}
-                </TooltipContent>
-              </Tooltip>
+              <SidebarTooltip content={usage.warning}>
+                <span
+                  role="img"
+                  tabIndex={0}
+                  aria-label={usage.warning}
+                  data-preview-warning
+                  className="mr-0.5 flex shrink-0 rounded p-1 text-amber-500 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <TriangleAlert className="size-3.5" aria-hidden="true" />
+                </span>
+              </SidebarTooltip>
             )}
             {!compact && renaming?.id !== preview.id && (
               <>

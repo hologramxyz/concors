@@ -7,6 +7,7 @@ import { useTerminalProfiles } from "@/terminal/profiles-context";
 import { paneProfiles, TAB_PROFILES } from "./tab-profiles";
 import { StartOptions } from "./start-options";
 import { useCommand } from "@/shortcuts/context";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { useShortcutLabels } from "@/shortcuts/preferences-context";
 import type { PaneFocusRequest } from "./session-pane";
 import {
@@ -609,16 +610,17 @@ function Pane({
         {agent && mcpOpen && (
           <McpStatusDialog agent={agent} open={mcpOpen} onOpenChange={setMcpOpen} />
         )}
-        <button
-          type="button"
-          aria-label="Close pane"
-          title={`Close pane (${shortcutLabel("close-pane")})`}
-          disabled={!canEdit}
-          onClick={() => onCommand({ kind: "pane.close", ...target })}
-          className="rounded p-1 hover:bg-muted disabled:opacity-40"
-        >
-          <X className="size-4" />
-        </button>
+        <SidebarTooltip place="title-bar" content="Close pane" shortcut="close-pane">
+          <button
+            type="button"
+            aria-label="Close pane"
+            disabled={!canEdit}
+            onClick={() => onCommand({ kind: "pane.close", ...target })}
+            className="rounded p-1 hover:bg-muted disabled:opacity-40"
+          >
+            <X className="size-4" />
+          </button>
+        </SidebarTooltip>
       </header>
       {node.profile !== "chat" ? (
         <TerminalPane

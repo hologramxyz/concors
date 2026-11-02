@@ -6,17 +6,16 @@ import {
   type WorkspacePullRequests,
 } from "@concors/protocol";
 import { cn } from "cn";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { ProjectActions } from "./project-actions";
 import { ProjectImage } from "./project-image";
 import { useContext, useRef, useState } from "react";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { WorkspacePullRequestCount } from "@/pull-requests/workspace-count";
-import { pullRequestsLabel } from "@/pull-requests/labels";
-import { workspaceOpenCount } from "@/pull-requests/store";
 import { useAgents } from "@/agents/context";
 import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
+import { useHomePath } from "./home-path";
 import {
   workspaceAttention,
   workspaceAttentionLabel,
@@ -57,7 +56,6 @@ export function WorkspaceSidebarItem({
 }) {
   const mobile = useContext(CompactLayoutContext);
   const connection = useContext(TerminalConnectionContext);
-  const openPullRequests = workspaceOpenCount(pullRequests);
   const attention = workspaceAttention(project, useAgents(), useTerminalSessions());
   // Older daemons reject `project.rename` outright, so the menu item stays disabled for them.
   const canRename =
@@ -86,6 +84,14 @@ export function WorkspaceSidebarItem({
       name: name || null,
     });
   };
+  const folder = useHomePath()(project.directory);
+  const attentionLabel = workspaceAttentionLabel(attention);
+  const details = (folder || attentionLabel) && (
+    <>
+      {folder && <p>{folder}</p>}
+      {attentionLabel && <p className="opacity-75">{attentionLabel}</p>}
+    </>
+  );
   const image = (
     <span className="relative flex shrink-0">
       <ProjectImage
@@ -94,22 +100,15 @@ export function WorkspaceSidebarItem({
         isGit={icon?.isGit ?? false}
         name={project.name}
       />
-      <AttentionBadge attention={attention} />
+      <AttentionBadge attention={attention} label={attentionLabel} />
     </span>
-  );
-  const details = (
-    <div className="min-w-0 break-words">
-      <p className="font-medium">{project.name}</p>
-      <p className="opacity-75">{project.directory}</p>
-      {attention.kind && <p className="opacity-75">Agents: {workspaceAttentionLabel(attention)}</p>}
-      {openPullRequests > 0 && <p className="opacity-75">{pullRequestsLabel(openPullRequests)}</p>}
-    </div>
   );
   const button = (
     <button
       type="button"
       disabled={!canEdit}
-      aria-label={project.name}
+      // A button's name replaces its contents for a screen reader, so the dot's text goes here too.
+      aria-label={attentionLabel ? `${project.name}, ${attentionLabel}` : project.name}
       data-workspace-id={project.id}
       onClick={() => onSelect(project.id)}
       // The workspace you are in, even while one of its tab rows carries the selection's fill.
@@ -125,16 +124,10 @@ export function WorkspaceSidebarItem({
           {mobile ? (
             project.name
           ) : (
-            // Only the name opens the details, and they open below it: beside the row they would
-            // cover its pull-request count and "…" menu.
-            <Tooltip delayDuration={600} disableHoverableContent>
-              <TooltipTrigger asChild>
-                <span>{project.name}</span>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" align="start" sideOffset={6}>
-                {details}
-              </TooltipContent>
-            </Tooltip>
+            // Only the name opens the tooltip, so the rest of the row stays free for its controls.
+            <SidebarTooltip content={details}>
+              <span>{project.name}</span>
+            </SidebarTooltip>
           )}
         </span>
       )}
@@ -181,12 +174,7 @@ export function WorkspaceSidebarItem({
       ) : mobile || !compact ? (
         button
       ) : (
-        <Tooltip delayDuration={250}>
-          <TooltipTrigger asChild>{button}</TooltipTrigger>
-          <TooltipContent side="right" sideOffset={8}>
-            {details}
-          </TooltipContent>
-        </Tooltip>
+        <SidebarTooltip content={details}>{button}</SidebarTooltip>
       )}
       {/* Before the menu, so every row's "…" sits at the same edge. */}
       {!compact && onOpenPullRequests && (
@@ -220,10 +208,12 @@ export function WorkspaceSidebarItem({
  * The corner of a workspace's icon, when something in it wants a look: a question, a failure or a
  * finished turn. Work in progress shows on its own row instead, so the icon stays still.
  */
-function AttentionBadge({ attention }: { attention: WorkspaceAttention }) {
+function AttentionBadge({ attention, label }: { attention: WorkspaceAttention; label: string }) {
   if (!attention.kind || attention.kind === "working") return null;
   return (
     <span
+      role="img"
+      aria-label={label}
       data-workspace-attention={attention.kind}
       className="absolute -right-1 -bottom-1 flex size-3 items-center justify-center rounded-full bg-sidebar ring-1 ring-sidebar"
     >

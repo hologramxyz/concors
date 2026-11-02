@@ -1,5 +1,4 @@
 import {
-  Fragment,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -8,25 +7,11 @@ import {
   type ReactNode,
 } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
-import {
-  ArrowBigUp,
-  ArrowDown,
-  ArrowLeft,
-  ArrowRight,
-  ArrowUp,
-  ChevronUp,
-  Command,
-  CornerDownLeft,
-  Delete,
-  Loader2,
-  Option,
-  type LucideIcon,
-} from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
-import { Kbd } from "@/components/ui/kbd";
+import { KeyChips } from "@/shortcuts/key-chips";
 import type { CommandId } from "@/shortcuts/bindings";
-import { strokeLabel, strokeSymbols } from "@/shortcuts/keymap";
 import { useShortcutPreferences } from "@/shortcuts/preferences-context";
 import {
   cardPosition,
@@ -547,66 +532,7 @@ function StepShortcut({ id }: { id: CommandId }) {
     <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
       {/* The chips speak for themselves on screen; a screen reader still hears what they are. */}
       <span className="sr-only">Shortcut</span>
-      {binding.keys.map((stroke, index) => (
-        <Fragment key={index}>
-          {index > 0 && " then "}
-          <Kbd className="h-6 px-1.5 text-[14px]">
-            {mac ? <Symbols text={strokeSymbols(stroke)} /> : strokeLabel(stroke)}
-          </Kbd>
-        </Fragment>
-      ))}
+      <KeyChips strokes={binding.keys} mac={mac} large />
     </p>
-  );
-}
-
-// Lucide pads each shape differently inside its box, so each icon gets the box that draws its shape
-// as tall as the chip's capital letter; the caret, a short shape, as wide as one. All of them centre
-// on the letter. The last number is the blank space each side of the shape, in Lucide's 24-unit
-// grid, so the icon can be spaced by its shape rather than its box.
-const KEY_ICONS: Record<string, [LucideIcon, string, number, number]> = {
-  "⌃": [ChevronUp, "Control", 18, 6],
-  "⌥": [Option, "Option", 12, 3],
-  "⇧": [ArrowBigUp, "Shift", 12.75, 4],
-  "⌘": [Command, "Command", 11.5, 3],
-  "↩": [CornerDownLeft, "Return", 12.75, 4],
-  "⌫": [Delete, "Delete", 12.75, 2],
-  "←": [ArrowLeft, "Left arrow", 12.75, 5],
-  "→": [ArrowRight, "Right arrow", 12.75, 5],
-  "↑": [ArrowUp, "Up arrow", 12.75, 5],
-  "↓": [ArrowDown, "Down arrow", 12.75, 5],
-};
-const KEY_STROKE = 1.5;
-/** The blank space a letter of the chip's font leaves each side of its shape. */
-const KEY_SIDE_BEARING = 1.25;
-
-/**
- * Key symbols as icons rather than text: the font draws each symbol at its own size and height (⌃
- * small and high, ⇧ large), so as text they never line up with the letter beside them. One tight
- * row, the way a Mac menu writes ⌃⇧N, with the same space between every two shapes.
- */
-function Symbols({ text }: { text: string }) {
-  return (
-    <span className="inline-flex items-center gap-0.5 leading-none">
-      {Array.from(text).map((char, index) => {
-        const icon = KEY_ICONS[char];
-        if (!icon) return <span key={index}>{char}</span>;
-        const [Icon, name, size, inset] = icon;
-        // Trim the box to the shape plus a letter's side bearing, so the gaps match the letter's.
-        const margin = KEY_SIDE_BEARING + KEY_STROKE / 2 - (inset * size) / 24;
-        // One line weight for every icon whatever its box, as heavy as the letter's stem. Lucide
-        // scales the line by the size prop, not the CSS size, so the size goes in as a prop.
-        return (
-          <Icon
-            key={index}
-            role="img"
-            aria-label={name}
-            size={size}
-            style={{ width: size, height: size, marginInline: margin }}
-            strokeWidth={KEY_STROKE}
-            absoluteStrokeWidth
-          />
-        );
-      })}
-    </span>
   );
 }

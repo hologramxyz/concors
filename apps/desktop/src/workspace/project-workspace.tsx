@@ -5,7 +5,7 @@ import { FileTab, FileTabLabel } from "@/files/file-tab";
 import { useFiles, fileScope } from "@/files/context";
 import { ProjectFileLinks } from "@/files/provider";
 import { useCommand } from "@/shortcuts/context";
-import { useShortcutLabels } from "@/shortcuts/preferences-context";
+import { useShortcutLabels, useShortcutText } from "@/shortcuts/preferences-context";
 import type { PaneFocusRequest } from "./session-pane";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { NewTabMenu } from "./new-tab-menu";
@@ -92,6 +92,7 @@ export function ProjectWorkspace({
   onOpenFolder: (mode: "open" | "clone", trigger?: HTMLElement | null) => void;
 }) {
   const shortcutLabel = useShortcutLabels();
+  const shortcutText = useShortcutText();
   const connection = useContext(TerminalConnectionContext);
   const files = useFiles();
   const windowChrome = useWindowChrome();
@@ -446,7 +447,7 @@ export function ProjectWorkspace({
                         tab={tab}
                         selected={!activeFile && selected?.id === tab.id}
                         data-shortcut-tab-id={tab.id}
-                        title={`Drag to reorder. Double-click to rename. Rename: ${shortcutLabel("rename-tab")}. Move left: ${shortcutLabel("move-tab-left")}. Move right: ${shortcutLabel("move-tab-right")}.`}
+                        title={`Drag to reorder. Double-click to rename. Rename: ${shortcutText("rename-tab")}. Move left: ${shortcutText("move-tab-left")}. Move right: ${shortcutText("move-tab-right")}.`}
                         onDoubleClick={() => startRename(tab)}
                         disabled={!connected}
                         onClick={() => {

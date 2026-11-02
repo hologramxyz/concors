@@ -8,6 +8,8 @@ import { useShortcutLabels } from "@/shortcuts/preferences-context";
 import { AgentStartedContext, useAgents } from "@/agents/context";
 import { ProviderIcon } from "@/agents/provider-icon";
 import { PaneProfileIcon } from "@/workspace/profile-icon";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
+import { useHomePath } from "@/workspace/home-path";
 import type { SessionPane } from "@/workspace/session-pane";
 import {
   Command,
@@ -116,6 +118,7 @@ function SearchContent({
   const compact = useContext(CompactLayoutContext);
   const commands = useCommands();
   const shortcutLabel = useShortcutLabels();
+  const homePath = useHomePath();
   const agents = useAgents();
   const openAgent = useContext(AgentStartedContext);
   const [query, setQuery] = useState("");
@@ -260,53 +263,63 @@ function SearchContent({
             }
           >
             {results.slice(0, limit).map((entry) => (
-              <CommandItem
+              <SidebarTooltip
                 key={entry.id}
-                value={entry.id}
-                data-search-result={entry.kind}
-                data-search-project-id={entry.projectId}
-                data-search-pane-id={entry.target?.paneId}
-                disabled={!props.canSelectProject}
-                onSelect={() =>
-                  run(() =>
-                    entry.target
-                      ? props.onSelectPane(entry.target)
-                      : entry.kind === "closed-chat" && entry.agent && openAgent
-                        ? openAgent(entry.agent.id)
-                        : props.onSelectProject(entry.projectId),
-                  )
-                }
-                className="flex-nowrap gap-3"
+                place="menu"
+                content={entry.kind === "workspace" ? homePath(entry.detail) : undefined}
               >
-                {entry.kind === "workspace" ? (
-                  <Folder aria-hidden="true" />
-                ) : entry.agent ? (
-                  <ProviderIcon provider={entry.agent.provider} />
-                ) : entry.profile ? (
-                  <PaneProfileIcon profile={entry.profile} />
-                ) : null}
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium">{entry.title}</span>
-                  <span
-                    className="block truncate text-xs text-muted-foreground"
-                    title={entry.detail}
-                    style={
-                      entry.kind === "workspace"
-                        ? { direction: "rtl", textAlign: "left" }
-                        : undefined
+                {/* cmdk replaces an item's onPointerMove, which a tooltip trigger needs. */}
+                <div role="presentation">
+                  <CommandItem
+                    value={entry.id}
+                    data-search-result={entry.kind}
+                    data-search-project-id={entry.projectId}
+                    data-search-pane-id={entry.target?.paneId}
+                    disabled={!props.canSelectProject}
+                    onSelect={() =>
+                      run(() =>
+                        entry.target
+                          ? props.onSelectPane(entry.target)
+                          : entry.kind === "closed-chat" && entry.agent && openAgent
+                            ? openAgent(entry.agent.id)
+                            : props.onSelectProject(entry.projectId),
+                      )
                     }
+                    className="flex-nowrap gap-3"
                   >
-                    <bdi dir="ltr">{entry.detail}</bdi>
-                  </span>
-                </span>
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  {entry.kind === "workspace"
-                    ? "Workspace"
-                    : entry.kind === "closed-chat"
-                      ? "Closed chat"
-                      : "Tab"}
-                </span>
-              </CommandItem>
+                    {entry.kind === "workspace" ? (
+                      <Folder aria-hidden="true" />
+                    ) : entry.agent ? (
+                      <ProviderIcon provider={entry.agent.provider} />
+                    ) : entry.profile ? (
+                      <PaneProfileIcon profile={entry.profile} />
+                    ) : null}
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium">{entry.title}</span>
+                      {(compact || entry.kind !== "workspace") && (
+                        <span
+                          className="block truncate text-xs text-muted-foreground"
+                          title={entry.detail}
+                          style={
+                            entry.kind === "workspace"
+                              ? { direction: "rtl", textAlign: "left" }
+                              : undefined
+                          }
+                        >
+                          <bdi dir="ltr">{entry.detail}</bdi>
+                        </span>
+                      )}
+                    </span>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {entry.kind === "workspace"
+                        ? "Workspace"
+                        : entry.kind === "closed-chat"
+                          ? "Closed chat"
+                          : "Tab"}
+                    </span>
+                  </CommandItem>
+                </div>
+              </SidebarTooltip>
             ))}
             {results.length > limit && (
               <CommandItem value="show-more" onSelect={() => setLimit((value) => value + 30)}>

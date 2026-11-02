@@ -43,10 +43,16 @@ test("a workspace shows what its agents want while another workspace is open", a
     // The agent finishes while workspace B is open: A says so until someone looks.
     await control.requestAgent({ kind: "send", sessionId: agent.id, text: "hello" }, randomUUID());
     await expect(badge).toHaveAttribute("data-workspace-attention", "done");
-    await page.getByRole("button", { name: "Attention A", exact: true }).hover();
-    await expect(page.getByRole("tooltip")).toContainText("Agents: 1 done");
+    await expect(badge).toHaveAttribute("aria-label", "1 chat finished");
+    const finished = page.getByRole("button", {
+      name: "Attention A, 1 chat finished",
+      exact: true,
+    });
+    await finished.getByText("Attention A").hover();
+    await expect(page.getByRole("tooltip")).toContainText("1 chat finished");
+    await expect(page.getByRole("tooltip")).not.toContainText("·");
     await page.screenshot({ path: test.info().outputPath("workspace-attention.png") });
-    await page.getByRole("button", { name: "Attention A", exact: true }).click();
+    await finished.click();
     await expect(page.getByRole("log")).toContainText("Hello from Codex");
     await expect(badge).toHaveCount(0);
 

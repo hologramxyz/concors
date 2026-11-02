@@ -14,8 +14,6 @@ import {
 } from "./machines";
 import { useEffect, useRef, useState } from "react";
 import { Activity, ChevronDown, Check, LoaderCircle, Settings2 } from "lucide-react";
-import { TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -97,50 +95,37 @@ export function MachineSwitcher({
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
-      <SidebarTooltip collapsed={compact}>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger
-            className={`group/machine relative flex min-w-0 items-center rounded-md hover:bg-sidebar-accent focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-sidebar-ring aria-expanded:bg-sidebar-accent ${compact ? "sidebar-rail-control" : "h-8 max-w-full gap-2 px-2 text-left"}`}
-            aria-label="Switch machine"
-            data-tour="machines"
-          >
-            {selected.machineId !== "local" && cloudMachines === null ? (
-              <span className="size-4 shrink-0 rounded bg-muted" aria-hidden="true" />
-            ) : (
-              <MachineIcon
-                local={selected.machineId === "local"}
-                icon={cloudMachines?.find((machine) => machine.id === selected.machineId)?.icon}
-                className="size-4 text-muted-foreground"
-              />
-            )}
-            {compact ? (
-              <span
-                role="img"
-                aria-label={`${selected.label}: ${connected ? "Connected" : "Disconnected"}`}
-                className={`absolute right-1 bottom-1 size-1.5 rounded-full ring-2 ring-sidebar ${connected ? "bg-emerald-500" : "bg-muted-foreground/60"}`}
-              />
-            ) : (
-              <span className="flex min-w-0 items-center gap-1">
-                <span className="truncate text-ui font-medium">{selected.label}</span>
-                <ChevronDown
-                  aria-hidden="true"
-                  className="size-3 shrink-0 text-muted-foreground transition-transform group-aria-expanded/machine:rotate-180 motion-reduce:transition-none"
-                />
-              </span>
-            )}
-          </DropdownMenuTrigger>
-        </TooltipTrigger>
-        <TooltipContent side={compact ? "right" : "bottom"} sideOffset={6}>
-          <span className="flex items-center gap-2">
-            {selected.label}
-            <span
-              role="img"
-              aria-label={connected ? "Connected" : "Disconnected"}
-              className={`size-1.5 shrink-0 rounded-full ${connected ? "bg-emerald-500" : "bg-muted-foreground/60"}`}
+      <DropdownMenuTrigger
+        className={`group/machine relative flex min-w-0 items-center rounded-md hover:bg-sidebar-accent focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-sidebar-ring aria-expanded:bg-sidebar-accent ${compact ? "sidebar-rail-control" : "h-8 max-w-full gap-2 px-2 text-left"}`}
+        aria-label="Switch machine"
+        data-tour="machines"
+      >
+        {selected.machineId !== "local" && cloudMachines === null ? (
+          <span className="size-4 shrink-0 rounded bg-muted" aria-hidden="true" />
+        ) : (
+          <MachineIcon
+            local={selected.machineId === "local"}
+            icon={cloudMachines?.find((machine) => machine.id === selected.machineId)?.icon}
+            className="size-4 text-muted-foreground"
+          />
+        )}
+        {compact ? (
+          <span
+            role="img"
+            aria-label={`${selected.label}: ${connected ? "Connected" : "Disconnected"}`}
+            className={`absolute right-1 bottom-1 size-1.5 rounded-full ring-2 ring-sidebar ${connected ? "bg-emerald-500" : "bg-muted-foreground/60"}`}
+          />
+        ) : (
+          <span className="flex min-w-0 items-center gap-1">
+            <span className="truncate text-ui font-medium">{selected.label}</span>
+            <ChevronDown
+              aria-hidden="true"
+              className="size-3 shrink-0 text-muted-foreground transition-transform group-aria-expanded/machine:rotate-180 motion-reduce:transition-none"
             />
           </span>
-        </TooltipContent>
-      </SidebarTooltip>
+        )}
+      </DropdownMenuTrigger>
+
       <DropdownMenuContent
         align="start"
         className="w-[calc(var(--sidebar-width)-16px)] max-w-[calc(100vw-24px)] p-1"

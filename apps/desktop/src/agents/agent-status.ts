@@ -165,14 +165,21 @@ export function workspaceAttention(
   };
 }
 
-/** "1 needs input · 2 done", for a workspace's tooltip. */
+/**
+ * What a workspace's dot is saying, such as "1 chat finished" or "2 chats need input, 1 failed".
+ * Empty when there is no dot: a chat that is only working does not show one.
+ */
 export function workspaceAttentionLabel(attention: WorkspaceAttention): string {
-  return [
-    attention.needsInput && `${attention.needsInput} needs input`,
-    attention.failed && `${attention.failed} failed`,
-    attention.done && `${attention.done} done`,
-    attention.working && `${attention.working} working`,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const counts: [number, string, string][] = [
+    [attention.needsInput, "needs input", "need input"],
+    [attention.failed, "failed", "failed"],
+    [attention.done, "finished", "finished"],
+  ];
+  return counts
+    .filter(([count]) => count > 0)
+    .map(([count, one, many], index) => {
+      const noun = index === 0 ? ` chat${count === 1 ? "" : "s"}` : "";
+      return `${count}${noun} ${count === 1 ? one : many}`;
+    })
+    .join(", ");
 }

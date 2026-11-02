@@ -46,8 +46,20 @@ test("Search finds duplicate workspaces, ranks tabs and focuses the exact agent 
     await dialog.getByRole("button", { name: "Workspaces", exact: true }).click();
     const workspaces = dialog.locator('[data-search-result="workspace"]');
     await expect(workspaces).toHaveCount(2);
-    await expect(workspaces.nth(0)).toContainText("frontend");
-    await expect(workspaces.nth(1)).toContainText("backend");
+    // Same name, so only the hover tells them apart: the rows themselves show no folder.
+    await expect(workspaces.nth(0)).not.toContainText("frontend");
+    await workspaces.nth(0).hover();
+    await expect(page.getByRole("tooltip")).toContainText("frontend");
+    await expect(page.getByRole("tooltip").locator("svg")).toHaveCount(0);
+    await workspaces.nth(1).hover();
+    await expect(page.getByRole("tooltip")).toContainText("backend");
+    // The tooltip does not take the Escape that closes Search.
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await opener.click();
+    await input.fill("Search Hologram");
+    await dialog.getByRole("button", { name: "Workspaces", exact: true }).click();
+    await expect(workspaces).toHaveCount(2);
     await input.fill("no-such-search-result");
     await expect(dialog.getByRole("status")).toHaveText("No results.");
     await input.press("Escape");

@@ -1,5 +1,5 @@
 import { useCommand } from "@/shortcuts/context";
-import { useShortcutLabels } from "@/shortcuts/preferences-context";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { PaneProfileIcon } from "./profile-icon";
 import { paneProfiles } from "./tab-profiles";
 import { useTerminalProfiles } from "@/terminal/profiles-context";
@@ -42,7 +42,6 @@ export function NewTabMenu({
   renderTrigger?: (open: () => void) => ReactNode;
 }) {
   const compact = useContext(CompactLayoutContext);
-  const shortcutLabel = useShortcutLabels();
   const profiles = useTerminalProfiles();
   const triggerContainer = useRef<HTMLSpanElement>(null);
   const menuTransfersFocus = useRef(false);
@@ -160,35 +159,37 @@ export function NewTabMenu({
           data-tour-frame
           className={cn("flex shrink-0 items-center", empty && "rounded-md border")}
         >
-          <button
-            type="button"
-            title={`New tab (${shortcutLabel("new-tab")})`}
-            aria-label={empty ? "Create a tab" : "New tab"}
-            disabled={createDisabled}
-            onClick={() => create("chat")}
-            className={
-              empty
-                ? "flex items-center gap-2 rounded-l-md px-3 py-1.5 hover:bg-muted disabled:opacity-40"
-                : "rounded-l p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
-            }
-          >
-            <Plus className="size-4" />
-            {empty && "Create a tab"}
-          </button>
-          <DropdownMenu open={open} onOpenChange={setOpen}>
-            <DropdownMenuTrigger
-              data-tour="new-tab"
-              title="New tab options"
-              aria-label="New tab options"
-              disabled={disabled}
+          <SidebarTooltip place="title-bar" content="New tab" shortcut="new-tab">
+            <button
+              type="button"
+              aria-label={empty ? "Create a tab" : "New tab"}
+              disabled={createDisabled}
+              onClick={() => create("chat")}
               className={
                 empty
-                  ? "self-stretch rounded-r-md border-l px-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
-                  : "self-stretch rounded-r px-0.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40 data-[state=open]:bg-muted"
+                  ? "flex items-center gap-2 rounded-l-md px-3 py-1.5 hover:bg-muted disabled:opacity-40"
+                  : "rounded-l p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
               }
             >
-              <ChevronDown className="size-3.5" aria-hidden="true" />
-            </DropdownMenuTrigger>
+              <Plus className="size-4" />
+              {empty && "Create a tab"}
+            </button>
+          </SidebarTooltip>
+          <DropdownMenu open={open} onOpenChange={setOpen}>
+            <SidebarTooltip place="title-bar" content="New tab options">
+              <DropdownMenuTrigger
+                data-tour="new-tab"
+                aria-label="New tab options"
+                disabled={disabled}
+                className={
+                  empty
+                    ? "self-stretch rounded-r-md border-l px-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
+                    : "self-stretch rounded-r px-0.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40 data-[state=open]:bg-muted"
+                }
+              >
+                <ChevronDown className="size-3.5" aria-hidden="true" />
+              </DropdownMenuTrigger>
+            </SidebarTooltip>
             <DropdownMenuContent
               className="w-72 max-w-[calc(100vw-16px)]"
               // Near the window's right edge the menu would sit flush with it, and its border

@@ -442,13 +442,8 @@ function AppContent() {
   // Without a native title bar they simply lead that row.
   const collapsedToggle = view !== "settings" && sidebarCollapsed && (
     <div className="flex shrink-0 items-center gap-0.5">
-      <SidebarToggle
-        collapsed
-        onToggle={() => toggleSidebar(false)}
-        side="bottom"
-        className="p-1.5"
-      />
-      <SearchButton collapsed onOpenSearch={openSearch} />
+      <SidebarToggle collapsed onToggle={() => toggleSidebar(false)} className="p-1.5" />
+      <SearchButton onOpenSearch={openSearch} />
     </div>
   );
   const titleBarToggle = windowChrome.inset ? null : collapsedToggle || null;

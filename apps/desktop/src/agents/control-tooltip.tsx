@@ -1,6 +1,6 @@
 import { useState, type ReactElement } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Kbd } from "@/components/ui/kbd";
+import { TextKeyChips } from "@/shortcuts/key-chips";
 
 /**
  * Names a composer control on hover. Most of them are bare icons, and the webview's own `title`
@@ -25,7 +25,7 @@ export function ControlTooltip({
       <TooltipTrigger asChild>{children}</TooltipTrigger>
       <TooltipContent side="top" sideOffset={6}>
         <span className="min-w-0 break-words">{text}</span>
-        {shortcut && <Kbd className="shrink-0">{shortcut}</Kbd>}
+        {shortcut && <TextKeyChips text={shortcut} />}
       </TooltipContent>
     </Tooltip>
   );

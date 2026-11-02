@@ -88,6 +88,10 @@ export function strokeSymbols(stroke: ShortcutStroke): string {
     macKeys[stroke.key] ?? keyLabel(stroke.key),
   ].join("");
 }
+/** A binding for plain text such as a native `title`, which cannot draw chips. */
+export function bindingText(binding: Shortcut, mac = false): string {
+  return binding.keys.map((key) => (mac ? strokeSymbols(key) : strokeLabel(key))).join(" then ");
+}
 export function bindingLabel(binding: Shortcut, mac = false): string {
   return binding.keys.map((key) => strokeLabel(key, mac)).join(" → ");
 }
@@ -200,6 +204,11 @@ export function shortcutsConflict(left: Shortcut, right: Shortcut): boolean {
       a.modifiers.every((modifier) => firstRight.modifiers.includes(modifier)))
   );
 }
+/** A shortcut written for display, such as "Esc" or "Control+D → K", or null if it is not one. */
+export function parseShortcutText(text: string): ShortcutStroke[] | null {
+  const strokes = text.split(" → ").map((part) => parseStroke(part === "Esc" ? "Escape" : part));
+  return strokes.every((stroke) => stroke !== null) ? strokes : null;
+}
 export function parseStroke(text: string): ShortcutStroke | null {
   const parts = text.split("+").map((part) => part.trim());
   const rawKey = parts.pop();
@@ -216,6 +225,7 @@ export function parseStroke(text: string): ShortcutStroke | null {
     cmd: "Meta",
     win: "Meta",
     super: "Meta",
+    "⌘": "Meta",
   };
   for (const part of parts) {
     const modifier = aliases[part.toLowerCase()];

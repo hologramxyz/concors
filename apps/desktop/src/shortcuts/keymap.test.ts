@@ -17,6 +17,7 @@ import {
   strokeSymbols,
   updateBindings,
   type ShortcutEvent,
+  parseShortcutText,
 } from "./keymap";
 const shortcut = (...keys: string[]): Shortcut => ({
   keys: keys.map((key) => parseStroke(key)!),
@@ -141,4 +142,16 @@ describe("custom keymaps", () => {
     expect(isTextNavigation(arrow({ shiftKey: true }), true)).toBe(false);
     expect(isTextNavigation(event({ key: "Home", code: "Home" }), false)).toBe(false);
   });
+});
+
+it("reads shortcuts written for display", () => {
+  const stroke = (key: string, ...modifiers: string[]) => ({ key, modifiers });
+  expect(parseShortcutText("Esc")).toEqual([stroke("Escape")]);
+  expect(parseShortcutText("Shift+Tab")).toEqual([stroke("Tab", "Shift")]);
+  expect(parseShortcutText("⌘+Enter")).toEqual([stroke("Enter", "Meta")]);
+  expect(parseShortcutText("Control+Shift+P → →")).toEqual([
+    stroke("p", "Control", "Shift"),
+    stroke("ArrowRight"),
+  ]);
+  expect(parseShortcutText("Not a shortcut")).toBeNull();
 });

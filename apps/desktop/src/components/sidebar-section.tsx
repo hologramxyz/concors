@@ -1,7 +1,5 @@
 import { useId, useState, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
-import { TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { SidebarTooltip } from "@/components/sidebar-tooltip";
 
 export function SidebarSection({
   title,
@@ -30,29 +28,22 @@ export function SidebarSection({
           </>
         ) : (
           <h2 className="min-w-0 flex-1">
-            <SidebarTooltip collapsed={compact}>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  aria-expanded={expanded}
-                  aria-controls={id}
-                  onClick={() => setExpanded(!expanded)}
-                  className={`flex items-center rounded-md text-ui font-medium text-muted-foreground group-hover/section:text-sidebar-foreground ${compact ? "sidebar-rail-control" : "h-8 w-full gap-2 px-2 py-1.5"}`}
-                >
-                  {compact ? (
-                    <span aria-hidden="true">{icon}</span>
-                  ) : (
-                    <ChevronRight
-                      className={`size-4 transition-transform ${expanded ? "rotate-90" : ""}`}
-                    />
-                  )}
-                  <span className={compact ? "sr-only" : undefined}>{title}</span>
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side={compact ? "right" : "bottom"} sideOffset={6}>
-                {title} · {expanded ? "Hide" : "Show"}
-              </TooltipContent>
-            </SidebarTooltip>
+            <button
+              type="button"
+              aria-expanded={expanded}
+              aria-controls={id}
+              onClick={() => setExpanded(!expanded)}
+              className={`flex items-center rounded-md text-ui font-medium text-muted-foreground group-hover/section:text-sidebar-foreground ${compact ? "sidebar-rail-control" : "h-8 w-full gap-2 px-2 py-1.5"}`}
+            >
+              {compact ? (
+                <span aria-hidden="true">{icon}</span>
+              ) : (
+                <ChevronRight
+                  className={`size-4 transition-transform ${expanded ? "rotate-90" : ""}`}
+                />
+              )}
+              <span className={compact ? "sr-only" : undefined}>{title}</span>
+            </button>
           </h2>
         )}
         {!compact && action}

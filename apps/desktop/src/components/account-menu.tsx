@@ -13,8 +13,6 @@ import {
 
 import { type SignedInAuth } from "@/auth/auth-state";
 import { replayTour } from "@/tour/store";
-import { TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,30 +44,24 @@ export function AccountMenu({
     return <MobileAccountMenu auth={auth} onSignOut={onSignOut} onOpenSettings={onOpenSettings} />;
   return (
     <DropdownMenu>
-      <SidebarTooltip collapsed={collapsed}>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger
-            className={`flex items-center rounded-md hover:bg-sidebar-accent aria-expanded:bg-sidebar-accent ${collapsed ? "sidebar-rail-control" : "w-full gap-2 p-[8px] text-left"}`}
-            aria-label={`Account: ${auth.user.name}`}
-          >
-            <AccountAvatar user={auth.user} githubEnabled />
-            {!collapsed && (
-              <>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-ui font-medium">{auth.user.name}</span>
-                </span>
-                <ChevronsUpDown
-                  className="size-3.5 shrink-0 text-muted-foreground"
-                  aria-hidden="true"
-                />
-              </>
-            )}
-          </DropdownMenuTrigger>
-        </TooltipTrigger>
-        <TooltipContent side={collapsed ? "right" : "top"} sideOffset={6}>
-          {auth.user.name} · Account and settings
-        </TooltipContent>
-      </SidebarTooltip>
+      <DropdownMenuTrigger
+        className={`flex items-center rounded-md hover:bg-sidebar-accent aria-expanded:bg-sidebar-accent ${collapsed ? "sidebar-rail-control" : "w-full gap-2 p-[8px] text-left"}`}
+        aria-label={`Account: ${auth.user.name}`}
+      >
+        <AccountAvatar user={auth.user} githubEnabled />
+        {!collapsed && (
+          <>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-ui font-medium">{auth.user.name}</span>
+            </span>
+            <ChevronsUpDown
+              className="size-3.5 shrink-0 text-muted-foreground"
+              aria-hidden="true"
+            />
+          </>
+        )}
+      </DropdownMenuTrigger>
+
       <DropdownMenuContent
         align="start"
         side="top"

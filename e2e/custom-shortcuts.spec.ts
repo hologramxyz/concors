@@ -41,9 +41,7 @@ test("recorded shortcuts replace aliases, update hints, persist across reloads a
   await page.getByRole("button", { name: "Back to app", exact: true }).click();
   await page.getByRole("button", { name: "Collapse sidebar" }).click();
   await searchButton(page).hover();
-  await expect(
-    page.getByRole("tooltip", { name: "Search (Ctrl+Alt+S)", exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("tooltip").locator("kbd")).toHaveText("Ctrl+Alt+S");
   await page.keyboard.press("Control+Shift+k");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.keyboard.press("Control+Alt+s");

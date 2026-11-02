@@ -28,6 +28,11 @@ test("closing a workspace stops its terminals and keeps it for the + menu to reo
     await expect(page.getByText("Unavailable workspace")).toHaveCount(0);
     await page.getByRole("button", { name: "Open workspace menu" }).click();
     await expect(page.getByRole("menuitem", { name: "Closing project" })).toBeVisible();
+    // Its folder shows on hover, in the same plain box as the sidebar's tooltips.
+    await page.getByRole("menuitem", { name: "Closing project" }).hover();
+    await expect(page.getByRole("tooltip")).toHaveText(directory);
+    await expect(page.getByRole("tooltip").locator("svg")).toHaveCount(0);
+    await page.screenshot({ path: test.info().outputPath("tooltip-recent-workspace.png") });
     await page.getByRole("menuitem", { name: "Closing project" }).click();
     await expect(page.getByRole("button", { name: "Closing project", exact: true })).toBeVisible();
     // Its tabs come back with it.

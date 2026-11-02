@@ -278,10 +278,16 @@ test("Mac workspace shortcuts use physical Control and display matching hints", 
     ).toBeVisible();
     const panes = page.getByRole("region", { name: "Terminal pane", exact: true });
     await expect(panes).toHaveCount(1);
-    await expect(page.getByRole("button", { name: "New tab", exact: true })).toHaveAttribute(
-      "title",
-      "New tab (Control+Shift+T → Enter)",
-    );
+    // One chip per press, in the tour's symbols: ⌃⇧T then ↩.
+    await page.getByRole("button", { name: "New tab", exact: true }).hover();
+    const chips = page.getByRole("tooltip").locator("kbd");
+    await expect(chips).toHaveCount(2);
+    await expect(chips.first().getByRole("img", { name: "Control" })).toBeVisible();
+    await expect(chips.first().getByRole("img", { name: "Shift" })).toBeVisible();
+    await expect(chips.first()).toHaveText("T");
+    await expect(chips.nth(1).getByRole("img", { name: "Return" })).toBeVisible();
+    await page.mouse.move(0, 0);
+    await expect(page.getByRole("tooltip")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Pane actions", exact: true })).toBeEnabled();
     await panes.first().focus();
     await page.keyboard.press("Control+Shift+p");

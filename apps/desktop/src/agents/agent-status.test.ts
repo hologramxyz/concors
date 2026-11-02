@@ -124,5 +124,12 @@ it("sums a workspace's agents across its tabs, most urgent first, counting updat
     terminals,
   );
   expect(all.kind).toBe("needs_input");
-  expect(workspaceAttentionLabel(all)).toBe("2 needs input · 1 failed · 1 done · 1 working");
+  expect(workspaceAttentionLabel(all)).toBe("2 chats need input, 1 failed, 1 finished");
+  const none = { kind: null, needsInput: 0, failed: 0, done: 0, working: 0 };
+  expect(workspaceAttentionLabel({ ...none, kind: "done", done: 1 })).toBe("1 chat finished");
+  expect(workspaceAttentionLabel({ ...none, kind: "needs_input", needsInput: 1 })).toBe(
+    "1 chat needs input",
+  );
+  // Working alone shows no dot, so there is nothing to say about one.
+  expect(workspaceAttentionLabel({ ...none, kind: "working", working: 2 })).toBe("");
 });

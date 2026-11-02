@@ -112,10 +112,8 @@ export function AppSidebar(props: AppSidebarProps) {
       onOpenResources={props.onOpenResources}
     />
   );
-  const search = <SearchButton collapsed={false} onOpenSearch={props.onOpenSearch} tour />;
-  const toggle = (
-    <SidebarToggle collapsed={false} onToggle={props.onCollapse} side="bottom" className="p-1.5" />
-  );
+  const search = <SearchButton onOpenSearch={props.onOpenSearch} tour />;
+  const toggle = <SidebarToggle collapsed={false} onToggle={props.onCollapse} className="p-1.5" />;
 
   return (
     // Collapsed, the sidebar keeps its layout and is clipped to nothing, so it slides away whole;
