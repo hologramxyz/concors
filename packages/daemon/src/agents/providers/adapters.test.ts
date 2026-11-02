@@ -94,7 +94,8 @@ it("lets a Claude chat switch into bypass mode and back, starting in the default
       },
     }) as unknown as Query;
   });
-  const provider = new ClaudeProvider(tmpdir(), async () => ({}), createQuery);
+  // Any launcher but the real one skips looking for a claude binary, which CI does not have.
+  const provider = new ClaudeProvider(tmpdir(), async () => ({}), createQuery, vi.fn());
   const { notifications } = observe(provider);
   await provider.initialize();
   await provider.request("thread/start");
