@@ -219,6 +219,9 @@ test("the collapsed sidebar's toggle tooltip follows menu colors in light, dark 
       await expect(menu).toHaveCount(0);
       await sidebar.getByRole("button", { name: "Collapse sidebar", exact: true }).click();
       const expand = page.getByRole("button", { name: "Expand sidebar", exact: true });
+      // Focus moves to the toggle a frame after it changes, opening its tooltip; let it land
+      // before hoverControl's Escape, or the tooltip opens after Escape and stays.
+      await expect(expand).toBeFocused();
       await hoverControl(page, expand);
       const tooltip = page.getByRole("tooltip");
       await expect(tooltip).toBeVisible();

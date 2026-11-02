@@ -72,9 +72,10 @@ Phone-specific behavior:
 - The composer collapses to a single line with attachment and primary actions.
   Text-field focus animates the measured height to reveal model, effort and permission icons,
   context/dictation on the right beside the primary button,
-  and a sliders control for Plan/Speed. iOS uses native action sheets for composer options
-  and a native sheet for context and plan usage; web/Android use popovers. Owned option
-  controls preserve expansion.
+  and a sliders control for Plan/Speed. The iOS model picker stays open while navigating between
+  providers and models; selecting a model or cancelling dismisses its native sheet. Other composer
+  options use native action sheets, and context/plan usage uses a native sheet; web/Android use
+  popovers. Owned option controls preserve expansion.
   Keyboard dismissal or an outside click collapses it without losing the draft.
   Height/content animations respect reduced motion; collapsed action taps do not move their target.
   One centered primary action shows Stop while active with an empty draft, Queue with

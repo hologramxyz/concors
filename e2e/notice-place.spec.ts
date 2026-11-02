@@ -71,6 +71,8 @@ test("an agent's notice names its workspace and tab apart from what the agent wa
 
     const notices = page.getByRole("complementary", { name: "Agent notifications" });
     const place = notices.locator("[data-notice-place]");
+    // The pointer on the card holds it past its five seconds, however slow the checks below are.
+    await place.hover();
     await expect(place).toHaveText("MarketingLaunch");
     await expect(place).toHaveAttribute("title", "Marketing › Launch");
     await expect(notices).toContainText("Agent finished");

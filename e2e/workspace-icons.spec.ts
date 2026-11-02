@@ -63,7 +63,8 @@ test("folders, repo initials and local favicons show in the sidebar and survive 
         // A tooltip still closing keeps its pointer-transit grace area, which would swallow the
         // hover that opens the next one (see hoverControl in sidebar-rail.spec.ts).
         await expect(page.getByRole("tooltip")).toHaveCount(0);
-        await button.hover();
+        // Only the name opens the details, so they do not cover the row's count and menu.
+        await button.getByText(name, { exact: true }).hover();
         await expect(page.getByRole("tooltip")).toContainText(join(root, name));
         await button.click();
         await expect(button).toHaveAttribute("aria-current", "page");

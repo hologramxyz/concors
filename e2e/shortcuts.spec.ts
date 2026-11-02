@@ -31,6 +31,12 @@ test("workspace shortcuts create, search, split and close the active pane withou
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await page.keyboard.press("Control+Shift+n");
     await expect(page.getByRole("dialog")).toHaveCount(0);
+    // A new workspace opens on the start screen; its Terminal chip starts a shell there.
+    await page
+      .getByRole("group", { name: "Start with", exact: true })
+      .filter({ visible: true })
+      .getByRole("button", { name: "Terminal", exact: true })
+      .click();
     await expect(page.locator(".concors-terminal .xterm").filter({ visible: true })).toHaveCount(1);
     await page.getByRole("button", { name: "Open workspace menu", exact: true }).click();
     await page.getByRole("menuitem", { name: "Clone repository…", exact: true }).click();

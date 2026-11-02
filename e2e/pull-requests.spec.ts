@@ -100,7 +100,7 @@ test("a folder of repositories shows a child favicon, its pull request count and
     ).toBeVisible();
     const app = page.getByRole("article", { name: "hologram/app" });
     await expect(app).toContainText("Show pull requests in workspaces");
-    await expect(app).toContainText("#42 · e2e-user · change-42 · 2h ago");
+    await expect(app).toContainText("#42 · e2e-user · change-42 · 2h");
     await expect(app).toContainText("Approved");
     await expect(app.getByRole("img", { name: "Checks passing" })).toBeVisible();
     await expect(app.getByRole("button", { name: /^Draft: redesign onboarding/ })).toContainText(

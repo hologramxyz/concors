@@ -166,6 +166,17 @@ for (const native of [false, true]) {
             })
             .toBe(true);
           await nativeEvent({ kind: "press", control: "model", value: modelId });
+          // The chip shows the new provider at once, but the pane changes chat only when the
+          // switch is done; typing before then goes to the chat being left.
+          const paneProvider = () => {
+            const node = desktop.workspace?.projects
+              .find((project) => project.id === projectId)
+              ?.tabs.find((tab) => tab.id === tabId)
+              ?.nodes.find((item) => item.id === paneId);
+            const session = node?.kind === "pane" ? node.sessionId : null;
+            return desktop.agents.find((agent) => agent.id === session)?.provider;
+          };
+          await expect.poll(paneProvider).toBe(provider);
         } else {
           await ui.getByRole("textbox", { name: /^Message / }).click();
           await ui.getByRole("button", { name: "Agent and model", exact: true }).click();
@@ -191,6 +202,18 @@ for (const native of [false, true]) {
             .click();
         }
       };
+      // A new chat starts with the provider an earlier test left last. The native composer has
+      // no chip for chooseProvider, so the bridge switches it to Codex.
+      if (native) {
+        const model = async () => {
+          const content = (await surface("composer"))?.content;
+          return content?.kind === "composer"
+            ? content.controls.find((control) => control.id === "model")?.label
+            : undefined;
+        };
+        await expect.poll(model).toMatch(/ · Agent and model$/);
+        if ((await model()) !== "Codex · Agent and model") await choose("codex", "Codex");
+      }
       await send("Codex", "Keep my original conversation");
       for (const [provider, label] of [
         ["claude", "Claude Code"],

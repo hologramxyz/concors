@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, expect, it } from "vitest";
@@ -205,7 +205,7 @@ it("turns each folder's stranded chats into a closed workspace on every start", 
   const closed = store.snapshot().closedProjects ?? [];
   expect(closed.map(({ name, directory, closedAt }) => ({ name, directory, closedAt }))).toEqual([
     { name: "app", directory: app, closedAt: newer.updatedAt },
-    { name: directory.split("/").at(-1), directory, closedAt: home.updatedAt },
+    { name: basename(directory), directory, closedAt: home.updatedAt },
   ]);
   expect(store.agent(older.id).projectId).toBe(closed[0]!.id);
   expect(store.agent(newer.id).projectId).toBe(closed[0]!.id);
@@ -218,7 +218,7 @@ it("turns each folder's stranded chats into a closed workspace on every start", 
   store.close();
   store = new WorkspaceStore(path);
   const next = store.snapshot().closedProjects ?? [];
-  expect(next.map((item) => item.name)).toEqual(["web", directory.split("/").at(-1)]);
+  expect(next.map((item) => item.name)).toEqual(["web", basename(directory)]);
   expect(store.agent(later.id).projectId).toBe(next[0]!.id);
   // Nothing stranded: nothing changes.
   const revision = store.snapshot().revision;

@@ -10,7 +10,7 @@ it("round-trips a full provider model catalog and long qualified IDs through nat
     icon: "model",
     disabled: false,
     options: [
-      { id: "__providers__", label: "Back to providers", selected: false },
+      { id: "__providers__", label: "Back to providers", selected: false, navigate: true },
       { id: "", label: "Machine default", selected: true },
       ...Array.from({ length: MAX_AGENT_MODELS }, (_, index) => ({
         id: index === 0 ? modelId : `provider/model-${index}`,
@@ -20,6 +20,8 @@ it("round-trips a full provider model catalog and long qualified IDs through nat
     ],
   });
   expect(control.options).toHaveLength(MAX_AGENT_MODELS + 2);
+  expect(control.options?.[0]?.navigate).toBe(true);
+  expect(control.options?.[1]?.navigate).toBeUndefined();
   expect(
     NativeSurfaceEventSchema.parse({ kind: "press", control: "model", value: modelId }),
   ).toMatchObject({ value: modelId });

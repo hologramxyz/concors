@@ -72,8 +72,7 @@
   "expo": {
     "autolinking": {
       "exclude": [
-        "react-native-reanimated",
-        "react-native-worklets"
+        "react-native-reanimated"
       ]
     }
   }

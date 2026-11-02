@@ -779,9 +779,16 @@ export class ClaudeProvider extends EventProvider {
         const c = object(value);
         if (c["type"] !== "tool_result") continue;
         const id = string(c["tool_use_id"]),
-          tool = this.tools.get(id);
+          tool = this.tools.get(id),
+          // A failed tool's result is its error text, a string, not an object.
+          result = m["tool_use_result"];
         // A sub-agent sent to the background answers at once; its row stays live until it is done.
-        if (tool && object(m["tool_use_result"] ?? {})["status"] === "async_launched") {
+        if (
+          tool &&
+          typeof result === "object" &&
+          result !== null &&
+          (result as Record<string, unknown>)["status"] === "async_launched"
+        ) {
           this.subAgentLaunched(id);
           this.tool(id, tool.name, tool.input, null, false);
         } else if (tool)
