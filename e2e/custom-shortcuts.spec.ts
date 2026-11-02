@@ -2,6 +2,7 @@ import { test, expect, signedIn } from "./signed-in.ts";
 import type { Page } from "@playwright/test";
 import { chooseProvider } from "./support/agents.ts";
 import { tab } from "./support/tabs.ts";
+import { reportNonMac } from "./support/platform.ts";
 const KEY = "concors.shortcuts.v1";
 const search = "Search workspaces, agents and tabs";
 // A collapsed sidebar stays mounted, inert, beside the title bar's copy of its search button.
@@ -24,6 +25,8 @@ async function record(page: Page, name: string, keys: string) {
   await page.getByRole("textbox", { name, exact: true }).focus();
   await page.keyboard.press(keys);
 }
+
+test.beforeEach(({ context }) => reportNonMac(context));
 
 test("recorded shortcuts replace aliases, update hints, persist across reloads and windows, and can be disabled", async ({
   page,

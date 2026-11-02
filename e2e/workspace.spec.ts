@@ -119,7 +119,9 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
     await expect(first.getByRole("separator", { name: "Resize split" })).toHaveCount(0);
 
     await tab(first, 0).focus();
-    await first.keyboard.press("Shift+F10");
+    // Chromium opens no context menu from the keyboard on a Mac.
+    if (process.platform === "darwin") await tab(first, 0).click({ button: "right" });
+    else await first.keyboard.press("Shift+F10");
     await first.getByRole("menuitem", { name: "Close tab", exact: true }).click();
     await expect(second.getByLabel("Project tabs").locator("[data-tab-id]")).toHaveCount(1);
 

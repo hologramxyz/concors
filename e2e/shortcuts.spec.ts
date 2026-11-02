@@ -5,6 +5,9 @@ import { test, expect, signedIn } from "./signed-in.ts";
 import { BINDINGS } from "../apps/desktop/src/shortcuts/bindings.ts";
 import { bindingLabel, defaultKeymap } from "../apps/desktop/src/shortcuts/keymap.ts";
 import { tabs } from "./support/tabs.ts";
+import { reportNonMac } from "./support/platform.ts";
+
+test.beforeEach(({ context }) => reportNonMac(context));
 
 test("workspace shortcuts create, search, split and close the active pane without leaking into terminals", async ({
   page,

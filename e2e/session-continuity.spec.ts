@@ -78,9 +78,13 @@ test("Codex and Claude panes reconnect to the same processes, then recover lost 
     await expect(terminals).toHaveCount(2);
     // The label can be on screen before its number, and the split remounts the first terminal,
     // which repaints its screen a moment later: read the IDs once both are complete.
-    for (const terminal of [terminals.last(), terminals.first()])
-      await expect(terminal).toContainText(/SESSION_PID:\d+/);
-    const pids = await terminals.allTextContents();
+    let pids: string[] = [];
+    await expect
+      .poll(async () => {
+        pids = await terminals.allTextContents();
+        return pids.every((text) => /SESSION_PID:\d+/.test(text));
+      })
+      .toBe(true);
     const paneIds = await page
       .locator("[data-pane-id]")
       .evaluateAll((nodes) => nodes.map((n) => n.getAttribute("data-pane-id")));

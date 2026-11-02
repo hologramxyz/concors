@@ -24,9 +24,9 @@ test("live palette changes recolor editor and cached previews without losing dra
     await files.getByRole("button", { name: "example.ts", exact: true }).click();
     const editor = page.getByRole("textbox", { name: "Code editor: example.ts" });
     await expect(editor).toContainText(source.trim());
-    await editor.press("Control+End");
+    await editor.press("ControlOrMeta+End");
     await page.keyboard.type("// unsaved theme draft");
-    await editor.press("Control+Home");
+    await editor.press("ControlOrMeta+Home");
     await editor.press("ArrowRight");
     const originalEditor = await editor.elementHandle();
     if (!originalEditor) throw new Error("Code editor is missing");
@@ -61,7 +61,7 @@ test("live palette changes recolor editor and cached previews without losing dra
     expect(new Set(colors).size).toBe(3);
     await page.emulateMedia({ colorScheme: "dark" });
     await expect(keyword).toHaveCSS("color", "rgb(255, 123, 114)");
-    await editor.press("Control+z");
+    await editor.press("ControlOrMeta+z");
     await expect(editor).not.toContainText("unsaved theme draft");
     expect(await readFile(join(root, "example.ts"), "utf8")).toBe(source);
 
