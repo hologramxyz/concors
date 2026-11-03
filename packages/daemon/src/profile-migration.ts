@@ -2,7 +2,9 @@ import { cp, mkdir, readdir, rename, rm, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import { stopSessionHost } from "./hosting/session-host.ts";
-import { baseDataDir, profilesDir } from "./profile.ts";
+import { GUEST_PROFILE_USER } from "@concors/protocol";
+
+import { baseDataDir, profileDir, profilesDir, type ProfileIdentity } from "./profile.ts";
 
 /** Everything an unpartitioned install kept directly in the base directory. */
 const LEGACY_ENTRIES = [
@@ -67,5 +69,35 @@ export async function adoptLegacyData(
   // The stopped host removes its own lock directory; clear a crashed leftover so it cannot be
   // mistaken for a live owner of the now-empty base directory.
   await rm(join(base, "session-host"), { recursive: true, force: true });
+  return true;
+}
+
+/**
+ * Moves what someone did on this computer without an account into the account they sign in with,
+ * so signing in never appears to lose their work.
+ *
+ * Only when that account has nothing here yet. An account that has used this computer keeps its own
+ * data, and the guest's stays where it is, there again after signing out: neither is overwritten,
+ * and nothing is merged. The next guest then starts empty, since the folder has moved.
+ *
+ * Runs before anything opens the database. Like adopting a legacy install, it stops the guest's
+ * session host, which ends running terminals while every persisted record survives.
+ */
+export async function adoptGuestData(
+  identity: ProfileIdentity,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<boolean> {
+  if (identity.userId === GUEST_PROFILE_USER) return false;
+  const target = profileDir(identity, env);
+  if (await exists(target)) return false;
+  const guest = profileDir({ origin: identity.origin, userId: GUEST_PROFILE_USER }, env);
+  if (!(await exists(join(guest, "workspace.sqlite")))) return false;
+
+  await stopSessionHost(guest);
+  // The stopped host removes its own lock directory; a crashed one's must not move along with the
+  // data, where it would be mistaken for a live owner of the account's folder.
+  await rm(join(guest, "session-host"), { recursive: true, force: true });
+  await mkdir(dirname(target), { recursive: true, mode: 0o700 });
+  await move(guest, target);
   return true;
 }
