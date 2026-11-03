@@ -137,3 +137,50 @@ test("shared chat streams, handles approvals and removes detached sidebar entrie
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("a quoted prompt in a reply copies as the Markdown the agent wrote", async ({ page }) => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-chat-quote-"));
+  try {
+    await signedIn(page);
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page.goto("/");
+    await seedProject(page, "Chat quote", directory);
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
+    await chooseProvider(page);
+    await page.getByRole("textbox", { name: "Message Codex" }).fill("quoted-prompt");
+    await page.getByRole("button", { name: "Send message", exact: true }).click();
+    const quote = page.getByRole("log").locator(".chat-quote");
+    await expect(quote.getByText("Part 1: Railway")).toBeVisible();
+    // A complete block, and no wider than the message it sits in.
+    await expect(quote).toHaveCSS("border-right-style", "solid");
+    await expect(quote).toHaveCSS("border-bottom-style", "solid");
+    const widths = await quote.evaluate((element) => ({
+      own: element.getBoundingClientRect().right,
+      message: element.parentElement?.getBoundingClientRect().right,
+      scrolled: element.scrollWidth - element.clientWidth,
+    }));
+    expect(widths.own).toBeLessThanOrEqual(widths.message ?? 0);
+    expect(widths.scrolled).toBe(0);
+    // One button for the whole quote, with the quote inside it copied along.
+    const copy = page.getByRole("button", { name: "Copy quote", exact: true });
+    await expect(copy).toHaveCount(1);
+    await copy.click();
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe(
+        [
+          "Put the site live at [the domain](https://example.com).",
+          "",
+          "**Part 1: Railway**",
+          "",
+          "1. Open the project.",
+          "2. Click **+ New**.",
+          "",
+          "> A note inside the prompt.",
+        ].join("\n"),
+      );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
