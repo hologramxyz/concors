@@ -11,16 +11,20 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAgents } from "@/agents/context";
+import { useHomePath } from "@/workspace/home-path";
 import { useSchedules } from "./use-schedules";
 import { days, parseTime, timeLabel } from "./schedule-labels";
-const selectClass =
-  "h-9 w-full min-w-0 rounded-md border border-input bg-background px-3 text-ui outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
+import { ScheduleSelect } from "./schedule-select";
+const repeatOptions = [
+  { value: "interval", label: "On an interval" },
+  { value: "daily", label: "Daily" },
+  { value: "weekly", label: "Weekly" },
+] as const;
 export function ScheduleForm({
   workspace,
   schedule,
@@ -32,6 +36,7 @@ export function ScheduleForm({
 }) {
   const { connection } = useSchedules(),
     agents = useAgents(),
+    homePath = useHomePath(),
     modelListId = useId();
   const [name, setName] = useState(schedule?.name ?? "");
   const [prompt, setPrompt] = useState(schedule?.prompt ?? "");
@@ -100,6 +105,7 @@ export function ScheduleForm({
         .flatMap((a) => (a.models ?? []).map((m) => m.id)),
     ]),
   ];
+  const projects = workspace.projects.filter((p) => p.directory);
   return (
     <Dialog
       open
@@ -107,8 +113,10 @@ export function ScheduleForm({
         if (!open && !pending) onClose();
       }}
     >
-      <DialogContent>
+      {/* Its form scrolls, so a tall one keeps its title and buttons in the window. */}
+      <DialogContent className="overflow-hidden" aria-describedby={undefined}>
         <form
+          className="flex min-h-0 flex-col gap-5"
           onSubmit={(event) => {
             event.preventDefault();
             setError(null);
@@ -170,218 +178,192 @@ export function ScheduleForm({
         >
           <DialogHeader>
             <DialogTitle>{schedule ? "Edit schedule" : "New schedule"}</DialogTitle>
-            <DialogDescription>
-              Run a prompt on this machine, even when the client is closed.
-            </DialogDescription>
           </DialogHeader>
-          <fieldset disabled={pending} className="my-5 space-y-4 text-ui">
-            <label className="block space-y-1.5">
-              <span>Name</span>
-              <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Daily code review"
-                maxLength={100}
-                required
-              />
-            </label>
-            <div className="grid gap-4 sm:grid-cols-2">
+          <div className="chat-scroll -m-1 min-h-0 overflow-y-auto overscroll-contain p-1">
+            <fieldset disabled={pending} className="min-w-0 space-y-4 text-ui">
               <label className="block space-y-1.5">
-                <span>Workspace</span>
-                <select
-                  className={selectClass}
-                  value={projectId}
+                <span>Name</span>
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Daily code review"
+                  maxLength={100}
                   required
-                  onChange={(e) => {
-                    setProjectId(e.target.value);
+                />
+              </label>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <ScheduleSelect
+                  label="Workspace"
+                  value={projectId}
+                  placeholder={projects[0]?.name}
+                  options={projects.map((p) => ({
+                    value: p.id,
+                    label: <span className="truncate">{p.name}</span>,
+                    tooltip: p.directory ? homePath(p.directory) : undefined,
+                  }))}
+                  onChange={(next) => {
+                    setProjectId(next);
                     setTarget("new");
                   }}
-                >
-                  {workspace.projects
-                    .filter((p) => p.directory)
-                    .map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                </select>
-              </label>
-              <label className="block space-y-1.5">
-                <span>Agent session</span>
-                <select
-                  className={selectClass}
+                />
+                <ScheduleSelect
+                  label="Agent session"
                   value={target}
-                  onChange={(e) => setTarget(e.target.value)}
-                >
-                  <option value="new">New dedicated session</option>
-                  {agents
-                    .filter((a) => a.projectId === projectId)
-                    .map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name} · {a.providerLabel ?? a.provider}
-                      </option>
-                    ))}
-                </select>
-              </label>
-            </div>
-            {target === "new" ? (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block space-y-1.5">
-                  <span>Provider</span>
-                  <select
-                    className={selectClass}
+                  placeholder="New dedicated session"
+                  options={[
+                    { value: "new", label: "New dedicated session" },
+                    ...agents
+                      .filter((a) => a.projectId === projectId)
+                      .map((a) => ({
+                        value: a.id,
+                        label: (
+                          <>
+                            <span className="truncate">{a.name}</span>
+                            <span className="shrink-0 text-muted-foreground">
+                              {a.providerLabel ?? a.provider}
+                            </span>
+                          </>
+                        ),
+                      })),
+                  ]}
+                  onChange={setTarget}
+                />
+              </div>
+              {target === "new" ? (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <ScheduleSelect
+                    label="Provider"
                     value={provider}
-                    required
                     disabled={loading}
-                    onChange={(e) => {
-                      setProvider(e.target.value);
+                    placeholder={
+                      <span className="truncate text-muted-foreground">
+                        {loading ? "Loading providers…" : "Choose a provider"}
+                      </span>
+                    }
+                    options={providers.map((p) => ({ value: p.id, label: p.label }))}
+                    onChange={(next) => {
+                      setProvider(next);
                       setModel("");
                     }}
-                  >
-                    <option value="" disabled>
-                      {loading ? "Loading providers…" : "Choose a provider"}
-                    </option>
-                    {providers.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block space-y-1.5">
-                  <span>Model</span>
-                  <Input
-                    list={modelListId}
-                    value={model}
-                    onChange={(e) => setModel(e.target.value)}
-                    placeholder="Provider default"
-                    maxLength={1024}
                   />
-                  <datalist id={modelListId}>
-                    {suggestions.map((id) => (
-                      <option key={id} value={id} />
-                    ))}
-                  </datalist>
-                </label>
-              </div>
-            ) : (
-              <p className="text-muted-foreground">
-                Uses this session’s current model and approval settings. Busy sessions are skipped.
-              </p>
-            )}
-            {target === "new" && (
-              <p className="text-muted-foreground">
-                Choose a known model or enter its ID. The schedule reuses its session after the
-                first run.
-              </p>
-            )}
-            {!loading && !providers.length && target === "new" && (
-              <p role="status">Sign in to Codex, Claude Code or OpenCode on this machine first.</p>
-            )}
-            <label className="block space-y-1.5">
-              <span>Prompt</span>
-              <textarea
-                className="min-h-24 w-full resize-y rounded-md border border-input bg-background px-3 py-2 outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                rows={3}
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                maxLength={16000}
-                placeholder="Review recent commits and summarize anything that needs attention."
-                required
-              />
-            </label>
-            <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="block space-y-1.5">
+                    <span>Model</span>
+                    <Input
+                      list={modelListId}
+                      value={model}
+                      onChange={(e) => setModel(e.target.value)}
+                      placeholder="Provider default"
+                      maxLength={1024}
+                    />
+                    <datalist id={modelListId}>
+                      {suggestions.map((id) => (
+                        <option key={id} value={id} />
+                      ))}
+                    </datalist>
+                  </label>
+                </div>
+              ) : null}
+              {!loading && !providers.length && target === "new" && (
+                <p role="status">
+                  Sign in to Codex, Claude Code or OpenCode on this machine first.
+                </p>
+              )}
               <label className="block space-y-1.5">
-                <span>Repeat</span>
-                <select
-                  className={selectClass}
-                  value={cadence}
-                  onChange={(e) => setCadence(e.target.value as typeof cadence)}
-                >
-                  <option value="interval">On an interval</option>
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
-                </select>
+                <span>Prompt</span>
+                <textarea
+                  className="min-h-24 w-full resize-y rounded-md border border-input bg-background px-3 py-2 outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                  rows={3}
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  maxLength={16000}
+                  placeholder="Review recent commits and summarize anything that needs attention."
+                  required
+                />
               </label>
-              {cadence === "interval" ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <ScheduleSelect
+                  label="Repeat"
+                  value={cadence}
+                  placeholder="Daily"
+                  options={repeatOptions}
+                  onChange={setCadence}
+                />
+                {cadence === "interval" ? (
+                  <label className="block space-y-1.5">
+                    <span>Every (minutes)</span>
+                    <Input
+                      type="number"
+                      min={15}
+                      max={43200}
+                      value={minutes}
+                      onChange={(e) => setMinutes(Number(e.target.value))}
+                      required
+                    />
+                  </label>
+                ) : (
+                  <label className="block space-y-1.5">
+                    <span>At</span>
+                    <Input
+                      value={typedTime ?? timeLabel(time)}
+                      onChange={(e) => setTypedTime(e.target.value)}
+                      onBlur={() => {
+                        const typed = typedTime === null ? null : parseTime(typedTime);
+                        if (!typed) return;
+                        setTime(typed);
+                        setTypedTime(null);
+                      }}
+                      placeholder={timeLabel("09:00")}
+                      autoComplete="off"
+                      required
+                    />
+                  </label>
+                )}
+              </div>
+              {cadence === "weekly" && (
+                <fieldset>
+                  <legend className="mb-2">On these days</legend>
+                  <div className="flex flex-wrap gap-1">
+                    {days.map((day, i) => (
+                      <Button
+                        key={day}
+                        type="button"
+                        size="sm"
+                        variant={weekdays.includes(i) ? "default" : "outline"}
+                        aria-pressed={weekdays.includes(i)}
+                        onClick={() =>
+                          setWeekdays((v) => (v.includes(i) ? v.filter((d) => d !== i) : [...v, i]))
+                        }
+                      >
+                        {day}
+                      </Button>
+                    ))}
+                  </div>
+                </fieldset>
+              )}
+              {cadence !== "interval" && (
                 <label className="block space-y-1.5">
-                  <span>Every (minutes)</span>
+                  <span>Time zone</span>
                   <Input
-                    type="number"
-                    min={15}
-                    max={43200}
-                    value={minutes}
-                    onChange={(e) => setMinutes(Number(e.target.value))}
-                    required
-                  />
-                </label>
-              ) : (
-                <label className="block space-y-1.5">
-                  <span>At</span>
-                  <Input
-                    value={typedTime ?? timeLabel(time)}
-                    onChange={(e) => setTypedTime(e.target.value)}
-                    onBlur={() => {
-                      const typed = typedTime === null ? null : parseTime(typedTime);
-                      if (!typed) return;
-                      setTime(typed);
-                      setTypedTime(null);
-                    }}
-                    placeholder={timeLabel("09:00")}
-                    autoComplete="off"
+                    value={timezone}
+                    onChange={(e) => setTimezone(e.target.value)}
+                    placeholder="America/Los_Angeles"
                     required
                   />
                 </label>
               )}
-            </div>
-            {cadence === "weekly" && (
-              <fieldset>
-                <legend className="mb-2">On these days</legend>
-                <div className="flex flex-wrap gap-1">
-                  {days.map((day, i) => (
-                    <Button
-                      key={day}
-                      type="button"
-                      size="sm"
-                      variant={weekdays.includes(i) ? "default" : "outline"}
-                      aria-pressed={weekdays.includes(i)}
-                      onClick={() =>
-                        setWeekdays((v) => (v.includes(i) ? v.filter((d) => d !== i) : [...v, i]))
-                      }
-                    >
-                      {day}
-                    </Button>
-                  ))}
-                </div>
-              </fieldset>
-            )}
-            {cadence !== "interval" && (
-              <label className="block space-y-1.5">
-                <span>Time zone</span>
-                <Input
-                  value={timezone}
-                  onChange={(e) => setTimezone(e.target.value)}
-                  placeholder="America/Los_Angeles"
-                  required
+              <label className="flex min-h-9 cursor-pointer items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={enabled}
+                  onChange={(e) => setEnabled(e.target.checked)}
+                  className="accent-foreground"
                 />
+                Enable schedule
               </label>
-            )}
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={enabled}
-                onChange={(e) => setEnabled(e.target.checked)}
-                className="accent-foreground"
-              />
-              Enable schedule
-            </label>
-            <p className="text-muted-foreground">
-              The machine must stay on. Missed runs aren’t replayed. Tool approvals may need your
-              input.
-            </p>
-          </fieldset>
+            </fieldset>
+          </div>
           {error && (
-            <p role="alert" className="mb-4 text-ui text-destructive">
+            <p role="alert" className="text-ui text-destructive">
               {error}
             </p>
           )}

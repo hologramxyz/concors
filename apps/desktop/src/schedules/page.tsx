@@ -352,11 +352,8 @@ export function SchedulesPage({
         >
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Delete {deleting.name}?</DialogTitle>
-              <DialogDescription>
-                This removes the schedule and its run history. The agent conversation remains
-                available.
-              </DialogDescription>
+              <DialogTitle>Delete “{deleting.name}”?</DialogTitle>
+              <DialogDescription>This can’t be undone.</DialogDescription>
             </DialogHeader>
             {error && (
               <p role="alert" className="text-ui text-destructive">
@@ -364,10 +361,16 @@ export function SchedulesPage({
               </p>
             )}
             <DialogFooter>
-              <Button variant="outline" disabled={!!pending} onClick={() => setDeleting(null)}>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!!pending}
+                onClick={() => setDeleting(null)}
+              >
                 Cancel
               </Button>
               <Button
+                type="button"
                 variant="destructive"
                 disabled={!!pending}
                 onClick={() =>
@@ -377,7 +380,7 @@ export function SchedulesPage({
                   )
                 }
               >
-                Delete schedule
+                Delete
               </Button>
             </DialogFooter>
           </DialogContent>

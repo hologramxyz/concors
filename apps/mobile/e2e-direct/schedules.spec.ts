@@ -35,7 +35,8 @@ test("mobile manages schedules through the native relay without horizontal overf
     await ui.getByRole("button", { name: "New schedule", exact: true }).click();
     const dialog = ui.getByRole("dialog");
     await dialog.getByLabel("Name", { exact: true }).fill("Mobile review");
-    await dialog.getByRole("combobox", { name: "Provider", exact: true }).selectOption("codex");
+    await dialog.getByRole("combobox", { name: "Provider", exact: true }).click();
+    await ui.getByRole("menuitemradio", { name: "Codex", exact: true }).click();
     await dialog.getByLabel("Model", { exact: true }).fill("fixture");
     await dialog.getByLabel("Prompt", { exact: true }).fill("Review the project");
     await expect(

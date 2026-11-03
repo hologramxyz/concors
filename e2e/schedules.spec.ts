@@ -1,8 +1,14 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
+import type { Locator } from "@playwright/test";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
+
+async function pick(dialog: Locator, field: string, option: string) {
+  await dialog.getByRole("combobox", { name: field, exact: true }).click();
+  await dialog.page().getByRole("menuitemradio", { name: option, exact: true }).click();
+}
 
 test("schedules create, run, reopen their agent, pause, edit and delete", async ({ page }) => {
   const directory = await mkdtemp(join(tmpdir(), "concors-schedule-ui-"));
@@ -23,7 +29,7 @@ test("schedules create, run, reopen their agent, pause, edit and delete", async 
     await page.getByRole("button", { name: "New schedule", exact: true }).click();
     const dialog = page.getByRole("dialog");
     await dialog.getByLabel("Name", { exact: true }).fill("Daily review");
-    await dialog.getByRole("combobox", { name: "Provider", exact: true }).selectOption("codex");
+    await pick(dialog, "Provider", "Codex");
     await dialog.getByLabel("Model", { exact: true }).fill("fixture");
     await dialog.getByLabel("Prompt", { exact: true }).fill("Review recent commits");
     await dialog.getByLabel("Time zone", { exact: true }).fill("Europe/Rome");
@@ -63,7 +69,7 @@ test("schedules create, run, reopen their agent, pause, edit and delete", async 
     await expect(card.getByText("No upcoming runs")).toHaveCount(0);
     await page.getByRole("button", { name: "Edit Daily review", exact: true }).click();
     await dialog.getByLabel("Name", { exact: true }).fill("Weekly review");
-    await dialog.getByRole("combobox", { name: "Repeat", exact: true }).selectOption("weekly");
+    await pick(dialog, "Repeat", "Weekly");
     const time = dialog.getByLabel("At", { exact: true });
     await expect(time).toHaveValue("9:00 AM");
     await time.fill("nonsense");
@@ -77,7 +83,11 @@ test("schedules create, run, reopen their agent, pause, edit and delete", async 
     await page.getByRole("button", { name: "Schedules", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Weekly review", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Delete Weekly review", exact: true }).click();
-    await dialog.getByRole("button", { name: "Delete schedule", exact: true }).click();
+    await expect(dialog.getByRole("heading")).toHaveText("Delete “Weekly review”?");
+    await expect(dialog.locator('[data-slot="dialog-description"]')).toHaveText(
+      "This can’t be undone.",
+    );
+    await dialog.getByRole("button", { name: "Delete", exact: true }).click();
     await expect(page.getByRole("heading", { name: "No schedules yet" })).toBeVisible();
   } finally {
     await rm(directory, { recursive: true, force: true });
@@ -104,6 +114,56 @@ test("pages without tabs start where a chat's content does, under an empty strip
   }
 });
 
+test("the schedule form keeps to its labels and to the window", async ({ page }) => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-schedule-form-"));
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Form project", directory);
+    await page.getByRole("button", { name: "Schedules", exact: true }).click();
+    await page.getByRole("button", { name: "New schedule", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.locator("select")).toHaveCount(0);
+    await expect(dialog.locator('[data-slot="dialog-description"]')).toHaveCount(0);
+    await expect(dialog.getByText(/known model|must stay on/)).toHaveCount(0);
+    await expect
+      .poll(async () => {
+        const [menu, input] = await Promise.all([
+          dialog.getByRole("combobox", { name: "Provider", exact: true }).boundingBox(),
+          dialog.getByLabel("Model", { exact: true }).boundingBox(),
+        ]);
+        return [menu?.y, menu?.height].join() === [input?.y, input?.height].join();
+      })
+      .toBe(true);
+
+    await dialog.getByRole("combobox", { name: "Workspace", exact: true }).click();
+    await page.getByRole("menuitemradio", { name: "Form project", exact: true }).hover();
+    await expect(page.getByRole("tooltip")).toContainText(basename(directory));
+    await page.keyboard.press("Escape");
+
+    const enable = dialog.getByRole("checkbox", { name: "Enable schedule", exact: true });
+    await expect(enable).toBeChecked();
+    const row = dialog.locator("label").filter({ hasText: "Enable schedule" });
+    const box = await row.boundingBox();
+    await row.click({ position: { x: (box?.width ?? 1) - 4, y: (box?.height ?? 1) / 2 } });
+    await expect(enable).not.toBeChecked();
+
+    // Short enough that the weekly form cannot fit: the body scrolls, its ends stay.
+    await page.setViewportSize({ width: 900, height: 420 });
+    await pick(dialog, "Repeat", "Weekly");
+    await expect(dialog.getByRole("heading", { name: "New schedule" })).toBeInViewport();
+    await expect(dialog.getByRole("button", { name: "Cancel", exact: true })).toBeInViewport();
+    const scroller = dialog.locator(".chat-scroll");
+    expect(await scroller.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+    await enable.scrollIntoViewIfNeeded();
+    await expect(enable).toBeInViewport();
+    await expect(dialog.getByRole("heading", { name: "New schedule" })).toBeInViewport();
+    await expect(dialog.getByRole("button", { name: "Cancel", exact: true })).toBeInViewport();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test.describe("on a 24-hour clock", () => {
   test.use({ locale: "en-GB" });
   test("schedule times follow it on the card and in the form", async ({ page }) => {
@@ -117,14 +177,14 @@ test.describe("on a 24-hour clock", () => {
       const dialog = page.getByRole("dialog");
       await expect(dialog.getByLabel("At", { exact: true })).toHaveValue("9:00");
       await dialog.getByLabel("Name", { exact: true }).fill("Clock review");
-      await dialog.getByRole("combobox", { name: "Provider", exact: true }).selectOption("codex");
+      await pick(dialog, "Provider", "Codex");
       await dialog.getByLabel("Prompt", { exact: true }).fill("Review recent commits");
       await dialog.getByLabel("At", { exact: true }).fill("17:30");
       await dialog.getByRole("button", { name: "Create schedule", exact: true }).click();
       await expect(dialog).not.toBeVisible();
       await expect(page.getByText("Daily at 17:30", { exact: true })).toBeVisible();
       await page.getByRole("button", { name: "Delete Clock review", exact: true }).click();
-      await dialog.getByRole("button", { name: "Delete schedule", exact: true }).click();
+      await dialog.getByRole("button", { name: "Delete", exact: true }).click();
       await expect(page.getByRole("heading", { name: "No schedules yet" })).toBeVisible();
     } finally {
       await rm(directory, { recursive: true, force: true });
