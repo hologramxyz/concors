@@ -1,6 +1,5 @@
 import { Clock } from "lucide-react";
 import { cn } from "cn";
-import { useSchedules } from "./use-schedules";
 export function SchedulesNav({
   selected,
   compact = false,
@@ -10,8 +9,6 @@ export function SchedulesNav({
   compact?: boolean;
   onClick: () => void;
 }) {
-  const { schedules } = useSchedules();
-  const count = schedules?.filter((s) => s.enabled).length ?? 0;
   return (
     <button
       type="button"
@@ -27,12 +24,7 @@ export function SchedulesNav({
       )}
     >
       <Clock className="size-4 shrink-0" aria-hidden="true" />
-      {!compact && (
-        <>
-          <span className="flex-1 text-left">Schedules</span>
-          {count > 0 && <span className="text-xs tabular-nums">{count}</span>}
-        </>
-      )}
+      {!compact && <span className="flex-1 text-left">Schedules</span>}
     </button>
   );
 }

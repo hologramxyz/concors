@@ -141,6 +141,11 @@ export function PullRequestsPage({
       ? repository.pullRequests.filter((pullRequest) => pullRequest.mine)
       : repository.pullRequests;
   const listed = connected && supported && state.status === "listed";
+  // Asked of the open list, which the filters below do not change: nothing to filter or refresh
+  // yet, and the merged and closed lists would only say the same thing.
+  const noRepositories =
+    open.status === "listed" &&
+    ![...open.workspaces.values()].some((listing) => listing.repositories.length);
   return (
     <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col px-4 py-6 sm:px-8 sm:py-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -152,14 +157,14 @@ export function PullRequestsPage({
             Pull requests in your workspaces&rsquo; GitHub repositories.
           </p>
         </div>
-        {listed && (
+        {listed && !noRepositories && (
           <Button variant="outline" onClick={state.refresh} disabled={state.refreshing}>
             <RefreshCw className={cn("size-4", state.refreshing && "animate-spin")} />
             Refresh
           </Button>
         )}
       </div>
-      {connected && capabilities?.includes(PULL_REQUESTS_CAPABILITY) && (
+      {connected && capabilities?.includes(PULL_REQUESTS_CAPABILITY) && !noRepositories && (
         <div
           role="tablist"
           aria-label="Pull request state"
