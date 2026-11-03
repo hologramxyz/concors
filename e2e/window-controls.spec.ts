@@ -1,3 +1,4 @@
+import { skipTour } from "./support/tour.ts";
 import { test, expect, type Page } from "@playwright/test";
 import { readFile, mkdtemp, rm } from "node:fs/promises";
 import { resolve, extname, join } from "node:path";
@@ -74,16 +75,23 @@ async function native(page: Page, port: number, decorated = false) {
   );
 }
 
+async function openSignIn(page: Page) {
+  await page.getByRole("button", { name: "Using this computer without an account" }).click();
+  await page.getByRole("menuitem", { name: "Sign in", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Continue to Concors" })).toBeVisible();
+}
+
 test("browser and decorated native windows retain their own window controls", async ({ page }) => {
+  await skipTour(page);
   await page.route("**/api/**", (route) =>
     route.fulfill({ status: 401, json: { message: "Sign in" } }),
   );
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Continue to Concors" })).toBeVisible();
+  await openSignIn(page);
   await expect(page.getByRole("group", { name: "Window controls" })).toHaveCount(0);
   await native(page, 7430, true);
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Continue to Concors" })).toBeVisible();
+  await openSignIn(page);
   await expect(page.getByRole("group", { name: "Window controls" })).toHaveCount(0);
 });
 
@@ -91,11 +99,13 @@ test("sign-in exposes native actions and updates maximize/resize state", async (
   page,
   baseURL,
 }) => {
+  await skipTour(page);
   await native(page, baseURL === "http://localhost:15397" ? 7430 : 7429);
   await page.route("**/api/**", (route) =>
     route.fulfill({ status: 401, json: { message: "Sign in" } }),
   );
   await page.goto("/");
+  await openSignIn(page);
   await expect(page.getByRole("group", { name: "Window controls" })).toHaveCount(1);
   await expect(page.locator("[data-window-resize]")).toHaveCount(8);
   await page.getByRole("button", { name: "Maximize window", exact: true }).click();

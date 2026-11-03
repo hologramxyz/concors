@@ -18,6 +18,8 @@ interface AuthScreenProps {
   /** Why sign-in cannot be offered here, shown in place of the buttons. */
   readonly signInUnavailable: string | null;
   readonly onRetry: () => void;
+  /** Set for a guest, who chose to come here and can go back to what they were doing. */
+  readonly onBack?: () => void;
 }
 
 const WAITING: Record<NativeSignInChoice["method"], string> = {
@@ -30,12 +32,18 @@ const WAITING: Record<NativeSignInChoice["method"], string> = {
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
- * The only thing a signed-out user sees. They choose how to continue: GitHub, Google or an emailed
- * code. There is no separate sign-up; a returning person reaches their account and anyone new gets
+ * Where someone signs in, when they choose to or when a saved session cannot be checked. They
+ * choose how to continue: GitHub, Google or an emailed code. There is no separate sign-up; a returning person reaches their account and anyone new gets
  * one. The system browser opens straight on that method, on the API's own page. While a saved
  * session is being checked it shows a quiet splash instead.
  */
-export function AuthScreen({ state, onSignIn, signInUnavailable, onRetry }: AuthScreenProps) {
+export function AuthScreen({
+  state,
+  onSignIn,
+  signInUnavailable,
+  onRetry,
+  onBack,
+}: AuthScreenProps) {
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [waiting, setWaiting] = useState<NativeSignInChoice["method"] | null>(null);
@@ -87,6 +95,13 @@ export function AuthScreen({ state, onSignIn, signInUnavailable, onRetry }: Auth
             "Use the account you signed up with. If you're new, this creates one. You'll finish in your browser."
           }
         </p>
+
+        {onBack && (
+          <p className="mt-3 text-sm text-muted-foreground">
+            Signing in restarts any terminals and agents running on this computer. If this account
+            hasn&rsquo;t been used here before, your workspaces move to it.
+          </p>
+        )}
 
         {state.status === "unavailable" && (
           <div
@@ -165,6 +180,12 @@ export function AuthScreen({ state, onSignIn, signInUnavailable, onRetry }: Auth
           <div role="alert" className="mt-4 text-sm text-destructive">
             {error}
           </div>
+        )}
+
+        {onBack && (
+          <Button variant="ghost" className="mt-4 min-h-9 w-full" onClick={onBack}>
+            Back to this computer
+          </Button>
         )}
       </div>
     </main>

@@ -32,6 +32,7 @@ import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { api } from "@/auth/api";
 import { AuthScreen } from "@/auth/auth-screen";
 import { activeOrganization, describeAuthError } from "@/auth/auth-state";
+import { GUEST_PROFILE_USER } from "@concors/protocol";
 import { UnreachableHelpButton } from "@/daemon/unreachable-dialog";
 import { useAuth } from "@/auth/use-auth";
 import { useSignInUnavailable } from "@/auth/sign-in";
@@ -152,19 +153,31 @@ function AppContent() {
   const signInUnavailable = useSignInUnavailable(api);
   const organizationId =
     auth.state.status === "signed-in" ? activeOrganization(auth.state)?.id : undefined;
+  // Nobody signed in is a guest using this computer. A saved session that could not be checked is
+  // not: that person has an account, and would otherwise land in an empty workspace.
+  const guest = auth.state.status === "signed-out";
   const hostScope =
-    auth.state.status === "signed-in" ? `${auth.state.user.id}:${organizationId ?? ""}` : "";
+    auth.state.status === "signed-in"
+      ? `${auth.state.user.id}:${organizationId ?? ""}`
+      : guest
+        ? GUEST_PROFILE_USER
+        : "";
   // Nothing is charged to this organization, so there is no billing to show.
   const billingStatus = useBillingStatus(organizationId ?? "", !!organizationId).data;
   const hiddenSettings = useMemo(
     () =>
       new Set<SettingsPage>(
-        billingStatus?.waived || billingStatus?.configured === false ? ["billing"] : [],
+        guest
+          ? ["billing", "ssh-keys"]
+          : billingStatus?.waived || billingStatus?.configured === false
+            ? ["billing"]
+            : [],
       ),
-    [billingStatus?.waived, billingStatus?.configured],
+    [guest, billingStatus?.waived, billingStatus?.configured],
   );
-  // The bundled runtime partitions its data by account, so it cannot start before sign-in.
-  const runtimeUser = auth.state.status === "signed-in" ? auth.state.user.id : "";
+  // The bundled runtime partitions its data by account, with a partition of its own for a guest.
+  const runtimeUser =
+    auth.state.status === "signed-in" ? auth.state.user.id : guest ? GUEST_PROFILE_USER : "";
   // Tagged with the account it was started for, so a newly signed-in user can never read the
   // previous account's gateway during the gap before its own runtime resolves.
   const localEndpoint =
@@ -214,7 +227,7 @@ function AppContent() {
   }, [memoryKey, selection?.projectId, selection?.tabId, view]);
 
   useEffect(() => {
-    // Signed out there is no partition to start; `localEndpoint` already reads as null.
+    // Until the session is known there is no partition to start; `localEndpoint` reads as null.
     if (!runtimeUser) return;
     let cancelled = false;
     let starting = false;
@@ -399,25 +412,28 @@ function AppContent() {
   };
 
   const signedIn = auth.state.status === "signed-in";
+  const usable = signedIn || guest;
+  const [signingIn, setSigningIn] = useState(false);
+  if (signingIn && signedIn) setSigningIn(false);
   const [openedScope, setOpenedScope] = useState<string | null>(null);
-  if (!signedIn && openedScope !== null) setOpenedScope(null);
+  if (!usable && openedScope !== null) setOpenedScope(null);
   else if (workspace && connection.workspaceReady && openedScope !== hostScope)
     setOpenedScope(hostScope);
   const starting =
     auth.state.status === "restoring" ||
-    (signedIn && view !== "settings" && openedScope !== hostScope && !workspace);
+    (usable && !signingIn && view !== "settings" && openedScope !== hostScope && !workspace);
   const connectionSettings = () => {
     setOpenedScope(hostScope);
     openSettings("machines");
   };
-  useCommand("search", signedIn && !starting, () => setSearchOpen((open) => !open));
-  useCommand("new-project", signedIn && canEdit && !newWorkspace.busy, startWorkspace);
-  useCommand("settings", signedIn && !starting, () => openSettings("account"));
-  useCommand("shortcuts", signedIn && !starting, () => openSettings("shortcuts"));
+  useCommand("search", usable && !starting, () => setSearchOpen((open) => !open));
+  useCommand("new-project", usable && canEdit && !newWorkspace.busy, startWorkspace);
+  useCommand("settings", usable && !starting, () => openSettings("account"));
+  useCommand("shortcuts", usable && !starting, () => openSettings("shortcuts"));
 
   // The same splash remains mounted through auth, machine restoration, and the first snapshot.
   // All hooks run above this line, so the connection can finish while the shell stays hidden.
-  if (starting || auth.state.status !== "signed-in") {
+  if (starting || !usable || signingIn) {
     return (
       <ColorThemeProvider
         connection={connection.transport}
@@ -427,19 +443,21 @@ function AppContent() {
       >
         <StandaloneWindowBar />
         {starting ? (
-          <StartupScreen {...(signedIn ? { onOpenSettings: connectionSettings } : {})} />
+          <StartupScreen {...(usable ? { onOpenSettings: connectionSettings } : {})} />
         ) : auth.state.status !== "signed-in" ? (
           <AuthScreen
             state={auth.state}
             onSignIn={auth.signIn}
             signInUnavailable={signInUnavailable}
             onRetry={() => void auth.refresh()}
+            {...(guest ? { onBack: () => setSigningIn(false) } : {})}
           />
         ) : null}
       </ColorThemeProvider>
     );
   }
-  const account = auth.state;
+  const account = auth.state.status === "signed-in" ? auth.state : null;
+  const signIn = () => setSigningIn(true);
   const execute = async (operation: WorkspaceOperation) => {
     // A selection shows at once and is not version-checked, so it never holds up the next action.
     if (operation.kind === "selection.set") return connection.execute(operation);
@@ -567,6 +585,7 @@ function AppContent() {
                           onViewCloud={manageMachines}
                           auth={account}
                           onSignOut={signOut}
+                          onSignIn={signIn}
                         />
                       )}
                       {windowChrome.inset && collapsedToggle && (
@@ -681,6 +700,7 @@ function AppContent() {
                               cornerStyle={corners.preference}
                               onSetCornerStyle={corners.setPreference}
                               auth={account}
+                              onSignIn={signIn}
                               onSetActiveOrganization={(organizationId) => {
                                 setError(null);
                                 void auth
@@ -782,6 +802,8 @@ function AppContent() {
                     />
                     {addingProject && (
                       <ProjectSetupDialog
+                        // Connecting GitHub belongs to an account; without one, clone by URL.
+                        githubEnabled={!!account}
                         machineId={selectedMachineId}
                         mode={addingProject}
                         onClose={cancelProjectDialog}
@@ -793,7 +815,7 @@ function AppContent() {
                     )}
                     <Tour
                       ready={connection.workspaceReady && !!workspace}
-                      firstName={account.user.name.trim().split(/\s+/)[0] ?? ""}
+                      firstName={account?.user.name.trim().split(/\s+/)[0] ?? ""}
                       hasWorkspace={!!workspace?.projects.length}
                       workspaceFailed={!!newWorkspace.error}
                       onCreateWorkspace={() => {

@@ -1,6 +1,6 @@
 # First-run tour
 
-The first time the desktop app opens on a device, after sign-in and once the workspace has loaded,
+The first time the desktop app opens on a device, once the workspace has loaded,
 the window dims behind a welcome card: **Take the tour** or **Skip**. Either answer is remembered
 in `localStorage` (`concors.tour`), so it is offered once per device and never reported anywhere.
 **Take the tour** in the account menu, or in Search as a command, replays it without the welcome.
