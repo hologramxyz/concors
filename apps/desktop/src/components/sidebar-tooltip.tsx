@@ -63,18 +63,13 @@ export function SidebarTooltip({
   if (compact || !content) return children;
   return (
     <Tooltip
-      // The box below counts the delay. A menu focuses the row under the pointer, and focus opens a
-      // tooltip at once whatever this says; and the provider's delay state goes stale when a
-      // tooltip closes on Escape here, making the next one skip its wait.
+      // The box below counts the delay: the provider's delay state goes stale when a tooltip closes
+      // on Escape here, making the next one skip its wait.
       delayDuration={0}
       disableHoverableContent
       open={open}
       onOpenChange={(next) => {
-        // A closing menu hands focus back to its trigger. That should not bring up a tooltip for a
-        // control the pointer has left, while Tab onto it still should.
-        const element = trigger.current;
-        if (next && element && !element.matches(":hover, :focus-visible")) return;
-        if (next && place === "sidebar") setOffsets(besideSidebar(element));
+        if (next && place === "sidebar") setOffsets(besideSidebar(trigger.current));
         setOpen(next);
       }}
     >

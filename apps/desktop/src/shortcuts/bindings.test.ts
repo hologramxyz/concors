@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BINDINGS, shortcutLabel } from "./bindings";
+import { BINDINGS, sequenceTitle, shortcutLabel } from "./bindings";
 import {
   bindingLabel,
   defaultKeymap,
@@ -106,5 +106,14 @@ describe("default workspace shortcuts", () => {
       matchKeymap(key({ key: "<", code: "Comma" }), defaultKeymap(), false, false)[0]?.id,
     ).toBe("settings");
     expect(matchKeymap(key({ key: "w" }), defaultKeymap(), false, false)).toEqual([]);
+  });
+});
+
+describe("sequenceTitle", () => {
+  it("names a panel by the commands it lists, whichever key opened it", () => {
+    expect(sequenceTitle(["new-tab", "resume-chat", "close-tab"])).toBe("Tab");
+    expect(sequenceTitle(["new-pane", "split-up", "close-pane"])).toBe("Pane");
+    expect(sequenceTitle(["new-tab", "new-pane"])).toBe("Shortcut actions");
+    expect(sequenceTitle(["search"])).toBe("Shortcut actions");
   });
 });

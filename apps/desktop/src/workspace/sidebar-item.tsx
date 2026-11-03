@@ -6,6 +6,7 @@ import {
   type WorkspacePullRequests,
 } from "@concors/protocol";
 import { cn } from "cn";
+import { ChevronRight } from "lucide-react";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { ProjectActions } from "./project-actions";
 import { ProjectImage } from "./project-image";
@@ -34,6 +35,7 @@ export function WorkspaceSidebarItem({
   icon,
   pullRequests,
   onSelect,
+  onToggleExpanded,
   onOpenPullRequests,
   execute,
   onCommand,
@@ -54,6 +56,8 @@ export function WorkspaceSidebarItem({
   /** Its open list shows each dot on its own row, so the folder has no dot of its own. */
   expanded?: boolean;
   onSelect: (id: string) => void;
+  /** Offers a chevron over the icon on hover and keyboard focus, which only folds the workspace. */
+  onToggleExpanded?: () => void;
   onOpenPullRequests?: (projectId: string, repository?: string) => void;
   execute: (operation: WorkspaceOperation) => Promise<void>;
   onCommand: (operation: WorkspaceOperation) => void;
@@ -99,14 +103,23 @@ export function WorkspaceSidebarItem({
       {attentionLabel && <p className="opacity-75">{attentionLabel}</p>}
     </>
   );
+  // Touch has no hover to reveal it, and the rail's icon is the whole control.
+  const foldable = onToggleExpanded && !mobile && !compact && renaming === null;
   const image = (
     <span className="relative flex shrink-0">
-      <ProjectImage
-        key={icon?.source ?? "fallback"}
-        source={icon?.source ?? null}
-        isGit={icon?.isGit ?? false}
-        name={project.name}
-      />
+      <span
+        className={cn(
+          "flex",
+          foldable && "group-hover:opacity-0 group-has-[:focus-visible]:opacity-0",
+        )}
+      >
+        <ProjectImage
+          key={icon?.source ?? "fallback"}
+          source={icon?.source ?? null}
+          isGit={icon?.isGit ?? false}
+          name={project.name}
+        />
+      </span>
       <AttentionBadge attention={attention} label={attentionLabel} />
     </span>
   );
@@ -147,11 +160,32 @@ export function WorkspaceSidebarItem({
     <li
       className={cn(
         // Keyboard focus shows, but a clicked row does not stay filled once selection moves on.
-        "group flex items-center rounded-md hover:bg-sidebar-accent/50 has-[:focus-visible]:bg-sidebar-accent/50 has-[[data-state=open]]:bg-sidebar-accent/50",
+        "group relative flex items-center rounded-md hover:bg-sidebar-accent/50 has-[:focus-visible]:bg-sidebar-accent/50 has-[[data-state=open]]:bg-sidebar-accent/50",
         selected && "bg-sidebar-accent hover:bg-sidebar-accent",
         mobile && "mobile-project",
       )}
     >
+      {foldable && (
+        // Laid over the icon rather than beside it, so the row's layout is the same either way.
+        <button
+          type="button"
+          aria-label={`${expanded ? "Collapse" : "Expand"} ${project.name}`}
+          aria-expanded={!!expanded}
+          data-workspace-toggle={project.id}
+          onClick={onToggleExpanded}
+          className="absolute inset-y-0 left-0 z-10 flex w-[calc(0.5rem+22px)] items-center rounded-md pl-2 text-muted-foreground opacity-0 group-hover:opacity-100 group-has-[:focus-visible]:opacity-100 hover:text-sidebar-foreground"
+        >
+          {/* In pixels, as `ProjectImage` is: the folder glyph it replaces is 16 of its 20. */}
+          <span className="flex size-[20px] items-center justify-center">
+            <ChevronRight
+              className={cn(
+                "size-[16px] transition-transform duration-200 motion-reduce:transition-none",
+                expanded && "rotate-90",
+              )}
+            />
+          </span>
+        </button>
+      )}
       {renaming !== null ? (
         <div className="flex h-8 min-w-0 flex-1 items-center gap-2 px-2">
           {image}
@@ -222,7 +256,8 @@ function AttentionBadge({ attention, label }: { attention: WorkspaceAttention; l
       role="img"
       aria-label={label}
       data-workspace-attention={attention.kind}
-      className="absolute -right-1 -bottom-1 flex size-3 items-center justify-center rounded-full bg-sidebar ring-1 ring-sidebar"
+      // Above the chevron that replaces the icon on hover, which still takes the click.
+      className="pointer-events-none absolute -right-1 -bottom-1 z-20 flex size-3 items-center justify-center rounded-full bg-sidebar ring-1 ring-sidebar"
     >
       <span
         className={cn(

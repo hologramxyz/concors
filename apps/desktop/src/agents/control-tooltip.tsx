@@ -12,18 +12,21 @@ export function ControlTooltip({
   text,
   shortcut,
   hidden = false,
+  side = "top",
   children,
 }: {
   text: string;
   shortcut?: string | undefined;
   hidden?: boolean;
+  /** Above, for the composer's controls; below for one with other controls above it. */
+  side?: "top" | "bottom";
   children: ReactElement;
 }) {
   const [open, setOpen] = useState(false);
   return (
     <Tooltip delayDuration={250} open={open && !hidden} onOpenChange={setOpen}>
       <TooltipTrigger asChild>{children}</TooltipTrigger>
-      <TooltipContent side="top" sideOffset={6}>
+      <TooltipContent side={side} sideOffset={6}>
         <span className="min-w-0 break-words">{text}</span>
         {shortcut && <TextKeyChips text={shortcut} />}
       </TooltipContent>

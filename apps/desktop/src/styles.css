@@ -915,6 +915,14 @@ html[data-pane-resizing="row"] * {
   color: var(--foreground);
   background: var(--muted);
 }
+.message-list-anchor {
+  position: absolute;
+  right: 8px;
+  top: 4px;
+  width: 36px;
+  height: 36px;
+  pointer-events: none;
+}
 .chat-timeline-shell > .chat-scroll {
   padding-top: 44px;
 }

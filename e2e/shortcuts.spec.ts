@@ -367,7 +367,7 @@ test("menus, Search, the sequence panel and a tab's tooltip draw shortcuts as ke
   await page.keyboard.press("Escape");
 
   await page.keyboard.press("Control+Shift+t");
-  const panel = page.getByRole("dialog", { name: "Shortcut actions", exact: true });
+  const panel = page.getByRole("dialog", { name: "Tab", exact: true });
   await expect(panel.locator('[data-slot="dialog-description"] kbd')).toHaveText("Ctrl+Shift+T");
   await expect(panel.getByRole("button", { name: /^Resume a chat…/ }).locator("kbd")).toHaveText(
     "R",

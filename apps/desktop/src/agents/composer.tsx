@@ -1490,7 +1490,20 @@ export function AgentComposer({
                       label={feature.label}
                       showValue={!compact}
                       value={String(settings.features?.[feature.id] ?? feature.value)}
-                      icon={<SlidersHorizontal className="size-4" />}
+                      icon={
+                        feature.id === "fast_mode" ? (
+                          <Zap className="size-4" />
+                        ) : (
+                          <SlidersHorizontal className="size-4" />
+                        )
+                      }
+                      {...(feature.id === "fast_mode"
+                        ? {
+                            chipLabel: "Fast",
+                            active: (settings.features?.[feature.id] ?? feature.value) === true,
+                          }
+                        : {})}
+                      searchable={!!feature.options}
                       disabled={controlsDisabled}
                       options={
                         feature.options ?? [

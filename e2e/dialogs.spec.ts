@@ -53,9 +53,7 @@ test("pane, tab, search and form dialogs share layout and preserve pointer and k
     const originalInput = panes.first().locator("textarea");
     await expect(originalInput).toBeFocused();
     await page.keyboard.press("Control+Shift+p");
-    // Pane and tab sequences share one dialog, told apart by the actions it lists.
-    const shortcutActions = page.getByRole("dialog", { name: "Shortcut actions", exact: true });
-    const paneDialog = shortcutActions.filter({ hasText: "New pane" });
+    const paneDialog = page.getByRole("dialog", { name: "Pane", exact: true });
     await expectModalLayout(page, paneDialog);
     await expect(paneDialog).toBeFocused();
     await page.screenshot({ path: test.info().outputPath("pane-shortcuts-light.png") });
@@ -65,7 +63,7 @@ test("pane, tab, search and form dialogs share layout and preserve pointer and k
     await expect(panes.last().locator("textarea")).toBeFocused();
 
     await page.keyboard.press("Control+Shift+t");
-    const tabDialog = shortcutActions.filter({ hasText: "New tab" });
+    const tabDialog = page.getByRole("dialog", { name: "Tab", exact: true });
     await expectModalLayout(page, tabDialog);
     await tabDialog.getByRole("button", { name: /New tab/ }).focus();
     await page.keyboard.press("Enter");

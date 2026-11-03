@@ -67,3 +67,16 @@ export function shortcutLabel(id: CommandId, mac = isMac()): string {
     .join("+");
   return `${prefix ? `${prefix}+` : ""}${keyLabel(binding.key)}${"then" in binding ? ` → ${keyLabel(binding.then)}` : ""}`;
 }
+
+/**
+ * What a two-key shortcut's panel is called. It goes by the commands listed rather than the key that
+ * opened it, which can be rebound. A panel mixing commands from both has no shorter name.
+ */
+export function sequenceTitle(ids: readonly string[]): string {
+  const prefixes = new Set(
+    ids.map((id) => BINDINGS.find((binding) => binding.id === id)).map((binding) => binding?.key),
+  );
+  if (prefixes.size === 1 && prefixes.has("t")) return "Tab";
+  if (prefixes.size === 1 && prefixes.has("p")) return "Pane";
+  return "Shortcut actions";
+}

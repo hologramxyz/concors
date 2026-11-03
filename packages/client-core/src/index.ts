@@ -22,6 +22,6 @@ export {
 export * from "./hosts.ts";
 export { MachineCredentialStore } from "./machine-credential-store.ts";
 
-export { modelLabel, modelOptions, modelSelection } from "./model-selection.ts";
+export { modelLabel, modelMenu, modelOptions, modelSelection } from "./model-selection.ts";
 export * from "./shortcuts.ts";
 export * from "./sign-in.ts";

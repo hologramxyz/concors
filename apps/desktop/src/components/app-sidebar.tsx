@@ -4,6 +4,7 @@ import { usePullRequests } from "@/pull-requests/use-pull-requests";
 import { pullRequestKey } from "@/pull-requests/store";
 import { NewWorkspaceMenu } from "@/workspace/new-workspace-menu";
 import { recentlyClosed } from "@/workspace/closed-workspaces";
+import { setWorkspaceExpanded, useCollapsedWorkspaces } from "@/workspace/collapsed-workspaces";
 import { WorkspaceSidebarItem } from "@/workspace/sidebar-item";
 import { clashingWorkspaceParents } from "@/workspace/workspace-parents";
 import { useProjectIcons } from "@/workspace/use-project-icons";
@@ -245,16 +246,15 @@ function WorkspaceTree(props: AppSidebarProps) {
   const currentProjectId = props.workspace?.selection?.projectId ?? null;
   const selectedTabId =
     props.view === "projects" ? (props.workspace?.selection?.tabId ?? null) : null;
-  // Only the workspace you are in starts expanded; what you expand or collapse yourself sticks.
-  const [expandedByHand, setExpandedByHand] = useState<Record<string, boolean>>({});
-  const isExpanded = (id: string) => expandedByHand[id] ?? id === currentProjectId;
+  const collapsedWorkspaces = useCollapsedWorkspaces();
+  const isExpanded = (id: string) => !collapsedWorkspaces.has(id);
   const selectWorkspace = (id: string) => {
     if (props.view === "projects" && id === currentProjectId) {
-      setExpandedByHand((previous) => ({ ...previous, [id]: !isExpanded(id) }));
+      setWorkspaceExpanded(id, !isExpanded(id));
       return;
     }
-    // Switching to a workspace expands it, even one collapsed by hand earlier.
-    if (expandedByHand[id] === false) setExpandedByHand(({ [id]: _collapsed, ...rest }) => rest);
+    // Switching to a workspace expands it, even one collapsed earlier.
+    setWorkspaceExpanded(id, true);
     props.onSelectProject(id);
   };
   const [more, setMore] = useState<ReadonlySet<string>>(new Set());
@@ -398,6 +398,7 @@ function WorkspaceTree(props: AppSidebarProps) {
                       : undefined
                   }
                   onSelect={selectWorkspace}
+                  onToggleExpanded={() => setWorkspaceExpanded(project.id, !expanded)}
                   onOpenPullRequests={props.onOpenPullRequests}
                   execute={props.execute}
                   onCommand={props.onCommand}

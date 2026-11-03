@@ -17,6 +17,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -84,6 +85,9 @@ export function NewWorkspaceMenu({
               <GitBranch />
               Clone repository…
             </button>
+            {recent.length > 0 && (
+              <p className="px-1 pt-2 text-xs font-medium text-muted-foreground">Recently closed</p>
+            )}
             {recent.map((project) => (
               <button
                 key={project.id}
@@ -135,7 +139,12 @@ export function NewWorkspaceMenu({
             <GitBranch />
             Clone repository…
           </DropdownMenuItem>
-          {recent.length > 0 && <DropdownMenuSeparator />}
+          {recent.length > 0 && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Recently closed</DropdownMenuLabel>
+            </>
+          )}
           {recent.map((project) => (
             <SidebarTooltip key={project.id} place="menu" content={homePath(project.directory)}>
               <DropdownMenuItem onSelect={() => onReopen?.(project.id)}>

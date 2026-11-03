@@ -95,7 +95,7 @@ test("custom sequences split from a terminal and run from an Agent input without
   await expect(terminals).toHaveCount(1);
   await terminals.first().focus();
   await page.keyboard.press("Control+Alt+p");
-  await expect(page.getByRole("dialog", { name: "Shortcut actions" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Pane", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(terminals.first()).toBeFocused();
   await page.keyboard.press("Control+Alt+p");

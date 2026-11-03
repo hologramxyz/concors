@@ -2,14 +2,36 @@ import * as React from "react";
 import { cn } from "cn";
 import { Tooltip as TooltipPrimitive } from "radix-ui";
 
+/**
+ * Whether Tab is down, the only key that moves focus to a control on purpose. Menus and dialogs
+ * hand focus back when they close, on a click or a key alike, and that is no reason to explain the
+ * control. It is cleared on release, so focus moved later by the app does not count either.
+ */
+let tabbing = false;
+if (typeof window !== "undefined") {
+  window.addEventListener(
+    "keydown",
+    (event) => {
+      tabbing = event.key === "Tab";
+    },
+    true,
+  );
+  window.addEventListener("keyup", () => (tabbing = false), true);
+  window.addEventListener("blur", () => (tabbing = false));
+}
+
 function TooltipProvider({
   delayDuration = 0,
+  // A tooltip that waits for the pointer to reach it holds the next control's back until the
+  // pointer has crossed the gap, so moving along a row kept showing the first one.
+  disableHoverableContent = true,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Provider>) {
   return (
     <TooltipPrimitive.Provider
       data-slot="tooltip-provider"
       delayDuration={delayDuration}
+      disableHoverableContent={disableHoverableContent}
       {...props}
     />
   );
@@ -19,8 +41,21 @@ function Tooltip({ ...props }: React.ComponentProps<typeof TooltipPrimitive.Root
   return <TooltipPrimitive.Root data-slot="tooltip" {...props} />;
 }
 
-function TooltipTrigger({ ...props }: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
-  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />;
+function TooltipTrigger({
+  onFocus,
+  ...props
+}: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
+  return (
+    <TooltipPrimitive.Trigger
+      data-slot="tooltip-trigger"
+      onFocus={(event) => {
+        onFocus?.(event);
+        // Radix opens on any focus unless the event is marked as handled.
+        if (!tabbing) event.preventDefault();
+      }}
+      {...props}
+    />
+  );
 }
 
 function TooltipContent({

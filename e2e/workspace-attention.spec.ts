@@ -39,6 +39,15 @@ test("a workspace shows what its agents want while another workspace is open", a
     await page.getByRole("button", { name: "Attention B", exact: true }).click();
     const badge = page.locator(`[data-workspace-id="${project.id}"] [data-workspace-attention]`);
     await expect(badge).toHaveCount(0);
+    // Switching away leaves A expanded, where the dot would be on its row: the folder has it once
+    // A is collapsed.
+    const collapseA = async () => {
+      const toggle = page.locator(`[data-workspace-toggle="${project.id}"]`);
+      await toggle.hover({ force: true });
+      await toggle.click();
+      await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    };
+    await collapseA();
 
     // The agent finishes while workspace B is open: A says so until someone looks.
     await control.requestAgent({ kind: "send", sessionId: agent.id, text: "hello" }, randomUUID());
@@ -58,6 +67,7 @@ test("a workspace shows what its agents want while another workspace is open", a
 
     // A question outranks everything else, and stays until it is answered.
     await page.getByRole("button", { name: "Attention B", exact: true }).click();
+    await collapseA();
     await control.requestAgent(
       { kind: "send", sessionId: agent.id, text: "question" },
       randomUUID(),

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { modelOptions } from "@concors/client-core";
+import { modelMenu, modelOptions } from "@concors/client-core";
 import { Download, LoaderCircle } from "lucide-react";
 import { agentProviderName, type AgentInfo } from "@concors/protocol";
 import { ControlPicker } from "./control-picker";
@@ -134,10 +134,9 @@ export function AgentModelPicker({
                 ]
               : []),
             // The header already shows the agent, so model rows carry no icon of their own.
-            ...(p.id === agent.provider ? selection.options : modelOptions(p.models)).map((m) => ({
-              id: m.id,
-              label: m.label,
-            })),
+            ...modelMenu(p.id === agent.provider ? selection.options : modelOptions(p.models)).map(
+              (m) => ({ id: m.id, label: m.label, older: m.older }),
+            ),
           ],
         }))}
         onSelect={(value, provider) => {

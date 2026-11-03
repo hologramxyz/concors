@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { type CommandId } from "./bindings";
+import { sequenceTitle, type CommandId } from "./bindings";
 import { KeyChips } from "./key-chips";
 import { eventStroke, matchContinuation, matchKeymap, strokeId, type KeymapEntry } from "./keymap";
 import { ShortcutPreferencesProvider } from "./preferences";
@@ -184,7 +184,7 @@ function ShortcutHandler({ children }: { children: ReactNode }) {
           }}
         >
           <DialogHeader>
-            <DialogTitle>Shortcut actions</DialogTitle>
+            <DialogTitle>{sequenceTitle(lastSequence.map(({ id }) => id))}</DialogTitle>
             <DialogDescription className="flex">
               {lastSequence[0] && (
                 <KeyChips strokes={lastSequence[0].binding.keys.slice(0, 1)} mac={mac} large />
