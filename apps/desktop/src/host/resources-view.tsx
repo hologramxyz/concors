@@ -70,9 +70,7 @@ function ResourceContent() {
           <h2 data-page-title className="text-xl font-semibold">
             Resources
           </h2>
-          <p className="mt-1 text-ui text-muted-foreground">
-            What&rsquo;s using this machine&rsquo;s CPU and memory.
-          </p>
+          <p className="mt-1 text-ui text-muted-foreground">CPU and memory by process.</p>
         </div>
       )}
       {uninspected && (

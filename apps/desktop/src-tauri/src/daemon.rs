@@ -74,7 +74,18 @@ impl LocalDaemon {
         let logs = app.path().app_log_dir().map_err(|e| e.to_string())?;
         fs::create_dir_all(&logs).map_err(|e| e.to_string())?;
         let log_path = logs.join("local-daemon.log");
-        let running = launch(&runtime, &log_path, &profile, Duration::from_secs(15))?;
+        let data_dir = separate_data_dir(
+            cfg!(debug_assertions),
+            app.path().home_dir().ok(),
+            std::env::var_os("CONCORS_DATA_DIR").is_some(),
+        );
+        let running = launch(
+            &runtime,
+            &log_path,
+            &profile,
+            data_dir.as_deref(),
+            Duration::from_secs(15),
+        )?;
         let status = LocalDaemonStatus::Running {
             pid: running.child.id(),
             port: running.port,
@@ -102,10 +113,23 @@ fn ready_port(line: &str) -> Option<u16> {
     address.trim().parse::<u16>().ok().filter(|port| *port > 0)
 }
 
+/// Where a debug build keeps its data, so it never shares a folder with an installed copy.
+///
+/// Two builds on one data folder stop each other's session host, because each replaces a host of
+/// any other build. Only a debug build moves: a release build answers `None` and the daemon uses
+/// its usual folder. A folder chosen explicitly through `CONCORS_DATA_DIR` still wins.
+fn separate_data_dir(debug: bool, home: Option<PathBuf>, configured: bool) -> Option<PathBuf> {
+    if !debug || configured {
+        return None;
+    }
+    Some(home?.join(".concors-dev"))
+}
+
 fn launch(
     runtime: &Runtime,
     log_path: &Path,
     profile: &Profile,
+    data_dir: Option<&Path>,
     timeout: Duration,
 ) -> Result<RunningDaemon, String> {
     let mut output = OpenOptions::new()
@@ -129,6 +153,9 @@ fn launch(
             Some(value) => command.env(name, value),
             None => command.env_remove(name),
         };
+    }
+    if let Some(directory) = data_dir {
+        command.env("CONCORS_DATA_DIR", directory);
     }
     let mut child = command
         .args([
@@ -327,15 +354,29 @@ pub fn stop_local_daemon(daemon: State<'_, LocalDaemon>) -> Result<LocalDaemonSt
 
 #[cfg(test)]
 mod tests {
-    use super::{appimage_environment, ready_port, runtime_in, Profile, Runtime};
+    use super::{
+        appimage_environment, ready_port, runtime_in, separate_data_dir, Profile, Runtime,
+    };
     use std::ffi::OsString;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     fn profile() -> Profile {
         Profile {
             origin: "https://api.concors.dev".into(),
             user: "user_1".into(),
         }
+    }
+
+    #[test]
+    fn only_a_debug_build_moves_its_data_and_an_explicit_folder_wins() {
+        let home = || Some(PathBuf::from("/home/person"));
+        assert_eq!(
+            separate_data_dir(true, home(), false),
+            Some(PathBuf::from("/home/person/.concors-dev"))
+        );
+        assert_eq!(separate_data_dir(false, home(), false), None);
+        assert_eq!(separate_data_dir(true, home(), true), None);
+        assert_eq!(separate_data_dir(true, None, false), None);
     }
 
     #[test]
@@ -373,6 +414,7 @@ mod tests {
             &runtime,
             &root.join("log"),
             &profile(),
+            None,
             Duration::from_millis(100)
         )
         .is_err());
@@ -382,6 +424,7 @@ mod tests {
             &runtime,
             &root.join("log"),
             &profile(),
+            None,
             Duration::from_secs(1)
         )
         .is_err());

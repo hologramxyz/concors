@@ -257,7 +257,7 @@ test("Resources uses the page header, and a machine without process inspection s
   await inspect(["Process inspection is available on Linux machines."]);
   const title = page.getByRole("heading", { name: "Resources", level: 2 });
   await expect(title).toHaveCSS("font-size", "20px");
-  await expect(page.getByText(/CPU and memory\.$/)).toBeVisible();
+  await expect(page.getByText("CPU and memory by process.", { exact: true })).toBeVisible();
   const main = page.getByRole("main");
   const empty = main.getByRole("heading", {
     name: "Process details aren’t available on this computer",

@@ -185,7 +185,9 @@ The native app owns its gateway and checks it every five seconds. If it exits, t
 another gateway and reconnects to the new port. Closing the app stops its gateway but leaves
 the persistent host running so existing terminals can be resumed on the next launch.
 
-Runtime data defaults to `~/.concors`, partitioned per signed-in account (see below); set
+Runtime data defaults to `~/.concors`, or `~/.concors-dev` for a debug build started by the desktop
+app, so it cannot stop an installed copy's session host. It is partitioned per signed-in account
+(see below); set
 `CONCORS_DATA_DIR` before launching the app to isolate a test installation. Native startup logs are written to Tauri's application log
 directory as `local-daemon.log` (normally
 `~/.local/share/dev.concors.desktop/logs/local-daemon.log` on Linux and
