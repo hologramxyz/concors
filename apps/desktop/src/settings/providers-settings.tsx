@@ -6,6 +6,7 @@ import {
   type ProviderStatus,
 } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -212,24 +213,28 @@ export function ProvidersSettings() {
                       </Button>
                     )}
                     {p.version?.updateAvailable && p.version.updateCommand && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        title={`Runs on this machine: ${p.version.updateCommand}`}
-                        disabled={busy || !!p.version.updating}
-                        onClick={() =>
-                          void execute({ kind: "update", id: p.id }).catch(() => {
-                            /* The operation already displayed its error. */
-                          })
-                        }
+                      <SidebarTooltip
+                        place="above"
+                        content={`Runs on this machine: ${p.version.updateCommand}`}
                       >
-                        {p.version.updating ? (
-                          <LoaderCircle className="animate-spin" />
-                        ) : (
-                          <Download />
-                        )}{" "}
-                        Update
-                      </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={busy || !!p.version.updating}
+                          onClick={() =>
+                            void execute({ kind: "update", id: p.id }).catch(() => {
+                              /* The operation already displayed its error. */
+                            })
+                          }
+                        >
+                          {p.version.updating ? (
+                            <LoaderCircle className="animate-spin" />
+                          ) : (
+                            <Download />
+                          )}{" "}
+                          Update
+                        </Button>
+                      </SidebarTooltip>
                     )}
                     {p.installLink && (
                       <a

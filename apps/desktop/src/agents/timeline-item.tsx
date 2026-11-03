@@ -16,6 +16,7 @@ import { buildToolCallDisplayModel } from "./paseo/tool-call-display";
 import type { ToolCallDetail } from "./paseo/agent-types";
 import { hasMeaningfulToolCallDetail } from "./paseo/tool-call-detail-state";
 import { thinkingExpandable, thinkingPreview, thinkingText } from "./thinking";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 
 /** Memoized: merges keep unchanged items' identity, so a streamed delta re-renders one row
  * instead of re-parsing every message's Markdown while the user scrolls. */
@@ -55,15 +56,16 @@ export const TimelineItem = memo(function TimelineItem({
           <div className="mt-2 flex items-center gap-2">
             <CopyButton text={item.text} />
             {onFork && (
-              <button
-                type="button"
-                aria-label="Fork from here"
-                title="Fork from here"
-                className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-                onClick={() => onFork(item.turnId)}
-              >
-                <GitFork className="size-3.5" />
-              </button>
+              <SidebarTooltip place="above" content="Fork from here">
+                <button
+                  type="button"
+                  aria-label="Fork from here"
+                  className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                  onClick={() => onFork(item.turnId)}
+                >
+                  <GitFork className="size-3.5" />
+                </button>
+              </SidebarTooltip>
             )}
             {workedFor && (
               <span className="text-xs text-muted-foreground">Worked for {workedFor}</span>

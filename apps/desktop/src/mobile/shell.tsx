@@ -772,7 +772,6 @@ function MobileWorkspaceContent({
                         aria-label="Project files"
                         aria-controls="mobile-project-files"
                         aria-expanded={files.sidebar.open}
-                        title="Browse project files"
                         onPointerEnter={preloadCodeEditor}
                         onFocus={preloadCodeEditor}
                         onClick={() => {

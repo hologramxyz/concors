@@ -1,4 +1,5 @@
 import { useContext, useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { cn } from "cn";
 import { flushSync } from "react-dom";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -30,6 +31,8 @@ export function SidebarTooltip({
   keys,
   place = "sidebar",
   hidden = false,
+  disabled,
+  anchorClassName,
   children,
 }: {
   /** Nothing to say means no tooltip, as for a workspace without a folder. */
@@ -41,6 +44,13 @@ export function SidebarTooltip({
   place?: TooltipPlace;
   /** Keeps it away for now, as while the control's own menu is open. */
   hidden?: boolean;
+  /**
+   * Set for a control that can be disabled and has to say why. A disabled button fires no hover or
+   * focus, so a wrapper takes them, and takes Tab while the button can't.
+   */
+  disabled?: boolean | undefined;
+  /** For the wrapper, when the control fills its row. */
+  anchorClassName?: string;
   children: ReactElement;
 }) {
   const compact = useContext(CompactLayoutContext);
@@ -79,7 +89,21 @@ export function SidebarTooltip({
       }}
     >
       <TooltipTrigger asChild ref={trigger}>
-        {children}
+        {disabled === undefined ? (
+          children
+        ) : (
+          <span
+            tabIndex={disabled ? 0 : undefined}
+            role={disabled ? "note" : undefined}
+            aria-label={disabled && typeof content === "string" ? content : undefined}
+            className={cn(
+              "inline-flex rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none [&>button:disabled]:pointer-events-none",
+              anchorClassName,
+            )}
+          >
+            {children}
+          </span>
+        )}
       </TooltipTrigger>
       {shown && (
         <TooltipBox place={place} offsets={offsets} shortcut={shortcut} keys={keys}>

@@ -4,6 +4,7 @@ import { ArrowRight, GitPullRequest } from "lucide-react";
 import type { WorkspacePullRequests, WorkspaceProject } from "@concors/protocol";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { CompactLayoutContext } from "@/components/compact-layout";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { byOpenCount, pullRequestsLabel, repositoryLabel } from "./labels";
 import { workspaceOpenCount } from "./store";
 
@@ -57,29 +58,30 @@ export function WorkspacePullRequestCount({
         <ul aria-label={`Pull requests by repository in ${project.name}`}>
           {repositories.map((repository) => (
             <li key={repository.name}>
-              <button
-                type="button"
-                onClick={() => {
-                  setOpen(false);
-                  onOpen(project.id, repository.name);
-                }}
-                title={repository.error ?? repository.name}
-                className={cn(
-                  "group/repository flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-ui hover:bg-accent focus-visible:bg-accent focus-visible:outline-none",
-                  !repository.openCount && "text-muted-foreground",
-                )}
-              >
-                <span className="min-w-0 flex-1 truncate">
-                  {repositoryLabel(repository.name, names)}
-                </span>
-                <ArrowRight
-                  className="size-3.5 text-muted-foreground opacity-0 group-hover/repository:opacity-100 group-focus-visible/repository:opacity-100"
-                  aria-hidden="true"
-                />
-                <span className="w-5 text-right text-xs text-muted-foreground tabular-nums">
-                  {repository.error ? "–" : repository.openCount}
-                </span>
-              </button>
+              <SidebarTooltip place="menu" content={repository.error ?? repository.name}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    onOpen(project.id, repository.name);
+                  }}
+                  className={cn(
+                    "group/repository flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-ui hover:bg-accent focus-visible:bg-accent focus-visible:outline-none",
+                    !repository.openCount && "text-muted-foreground",
+                  )}
+                >
+                  <span className="min-w-0 flex-1 truncate">
+                    {repositoryLabel(repository.name, names)}
+                  </span>
+                  <ArrowRight
+                    className="size-3.5 text-muted-foreground opacity-0 group-hover/repository:opacity-100 group-focus-visible/repository:opacity-100"
+                    aria-hidden="true"
+                  />
+                  <span className="w-5 text-right text-xs text-muted-foreground tabular-nums">
+                    {repository.error ? "–" : repository.openCount}
+                  </span>
+                </button>
+              </SidebarTooltip>
             </li>
           ))}
         </ul>

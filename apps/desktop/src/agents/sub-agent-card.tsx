@@ -5,6 +5,7 @@ import { BrailleSpinner } from "./activity";
 import { formatDuration } from "./duration";
 import { AgentMarkdown, CopyButton } from "./markdown";
 import { LIVE_SUB_AGENT, SubAgentViewContext } from "./sub-agent-context";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 
 const LIVE = LIVE_SUB_AGENT;
 
@@ -248,16 +249,17 @@ function OpenConversation({
   const open = useContext(SubAgentViewContext);
   if (!open) return null;
   return (
-    <button
-      type="button"
-      aria-label={
-        index === undefined ? "Open agent conversation" : `Open agent ${index + 1} conversation`
-      }
-      title="Open its conversation beside this chat"
-      className={className}
-      onClick={() => open({ item, childId, index })}
-    >
-      {children}
-    </button>
+    <SidebarTooltip place="above" content="Open its conversation beside this chat">
+      <button
+        type="button"
+        aria-label={
+          index === undefined ? "Open agent conversation" : `Open agent ${index + 1} conversation`
+        }
+        className={className}
+        onClick={() => open({ item, childId, index })}
+      >
+        {children}
+      </button>
+    </SidebarTooltip>
   );
 }

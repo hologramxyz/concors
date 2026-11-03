@@ -16,13 +16,15 @@ export function FilesToggle() {
     connection.state.daemon.capabilities?.includes("project-files");
   return (
     <div className="size-7 shrink-0">
-      <SidebarTooltip place="title-bar" content="Project files">
+      <SidebarTooltip
+        place="title-bar"
+        disabled={!available}
+        content={available ? "Project files" : "Update or reconnect the machine to browse files"}
+      >
         <button
           id="toggle-project-files"
           type="button"
           aria-label="Toggle project files"
-          // A disabled button fires no hover, so only the browser's own tooltip can say why.
-          title={available ? undefined : "Update or reconnect the machine to browse files"}
           aria-expanded={sidebar.open}
           aria-controls="project-file-tree"
           disabled={!available}

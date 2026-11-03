@@ -28,6 +28,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { activeOrganization, type SignedInAuth } from "@/auth/auth-state";
 import { useBillingStatus } from "@/billing/use-billing";
 import { PaymentFailedWarning } from "@/billing/payment-failed-warning";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -1017,33 +1018,37 @@ function CopyButton({ text }: { readonly text: string }) {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState(false);
   return (
-    <Button
-      variant="ghost"
-      size="icon-xs"
-      aria-label={error ? "Copy failed; try again" : "Copy SSH command"}
-      title={
+    <SidebarTooltip
+      place="above"
+      content={
         error
           ? "Could not copy. Select the SSH command and copy it manually."
           : copied
             ? "Copied"
             : "Copy SSH command"
       }
-      onClick={() => {
-        void copyText(text).then(
-          () => {
-            setCopied(true);
-            setError(false);
-            setTimeout(() => setCopied(false), 1500);
-          },
-          () => {
-            setCopied(false);
-            setError(true);
-          },
-        );
-      }}
     >
-      {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-    </Button>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        aria-label={error ? "Copy failed; try again" : "Copy SSH command"}
+        onClick={() => {
+          void copyText(text).then(
+            () => {
+              setCopied(true);
+              setError(false);
+              setTimeout(() => setCopied(false), 1500);
+            },
+            () => {
+              setCopied(false);
+              setError(true);
+            },
+          );
+        }}
+      >
+        {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+      </Button>
+    </SidebarTooltip>
   );
 }
 

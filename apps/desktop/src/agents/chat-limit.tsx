@@ -7,6 +7,7 @@ import {
   type RetiredAgent,
   type WorkspaceSnapshot,
 } from "@concors/protocol";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -250,18 +251,19 @@ function ReviewChatsDialog({
                 <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
                   {shortAge(chat.updatedAt, now)}
                 </span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`Pin ${chatName(chat)}`}
-                  title="Pin to keep"
-                  className="text-muted-foreground"
-                  disabled={busy}
-                  onClick={() => run(() => actions.pin(chat, true))}
-                >
-                  <Pin />
-                </Button>
+                <SidebarTooltip place="menu" content="Pin to keep">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Pin ${chatName(chat)}`}
+                    className="text-muted-foreground"
+                    disabled={busy}
+                    onClick={() => run(() => actions.pin(chat, true))}
+                  >
+                    <Pin />
+                  </Button>
+                </SidebarTooltip>
               </li>
             ))}
           </ul>

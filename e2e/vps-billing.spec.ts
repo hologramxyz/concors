@@ -336,6 +336,20 @@ test("badges share one size, with room above and below their text", async ({ pag
     expect(box.above, name).toBeGreaterThanOrEqual(2);
     paddings.add(box.padding);
     if (muted) expect(box.color, name).toBe(box.muted);
+    // On a white card the plain secondary colour was all but invisible.
+    if (muted) {
+      await page.emulateMedia({ colorScheme: "light" });
+      await page.waitForTimeout(400);
+      const colors = await badge.evaluate((node) => {
+        const probe = document.createElement("span");
+        probe.className = "bg-secondary";
+        document.body.append(probe);
+        const secondary = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return { own: getComputedStyle(node).backgroundColor, secondary };
+      });
+      expect(colors.own, name).not.toBe(colors.secondary);
+    }
     for (const colorScheme of ["light", "dark"] as const) {
       await page.emulateMedia({ colorScheme });
       await page.waitForTimeout(400);

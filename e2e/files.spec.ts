@@ -510,8 +510,13 @@ test("file actions create entries, toggle hidden files and refresh expanded fold
       "Show hidden files",
       "Refresh file tree",
     ]) {
-      expect(await iconSize(tree.getByRole("button", { name, exact: true }))).toBe(expectedSize);
+      const button = tree.getByRole("button", { name, exact: true });
+      expect(await iconSize(button)).toBe(expectedSize);
+      await expect(button).not.toHaveAttribute("title");
     }
+    await tree.getByRole("button", { name: "Refresh file tree", exact: true }).hover();
+    await expect(page.getByRole("tooltip")).toContainText("Refresh file tree");
+    await page.mouse.move(0, 0);
     const close = await bounds(tree.getByRole("button", { name: "Close files" }));
     const actions = await bounds(tree.getByRole("group", { name: "File actions" }));
     expect(actions.y).toBeGreaterThanOrEqual(close.y + close.height);

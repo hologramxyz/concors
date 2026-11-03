@@ -22,6 +22,7 @@ import {
   type PullRequestState,
   type WorkspaceSnapshot,
 } from "@concors/protocol";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -573,17 +574,23 @@ function RowActions({
   return (
     // Both halves share one height, including the taller touch targets on phones.
     <div className="mt-2.5 flex shrink-0 items-stretch">
-      <Button
-        variant="outline"
-        className="rounded-r-none"
+      <SidebarTooltip
+        place="above"
         disabled={offered.merge === "draft"}
-        title={offered.merge === "draft" ? "Drafts can't be merged" : undefined}
-        aria-label={`Merge #${pullRequest.number}`}
-        onClick={() => onAction("merge")}
+        hidden={offered.merge !== "draft"}
+        content="Drafts can't be merged"
       >
-        <GitMerge />
-        <span className="max-sm:sr-only">Merge</span>
-      </Button>
+        <Button
+          variant="outline"
+          className="rounded-r-none"
+          disabled={offered.merge === "draft"}
+          aria-label={`Merge #${pullRequest.number}`}
+          onClick={() => onAction("merge")}
+        >
+          <GitMerge />
+          <span className="max-sm:sr-only">Merge</span>
+        </Button>
+      </SidebarTooltip>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button

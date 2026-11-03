@@ -142,32 +142,34 @@ export function PreviewsSidebar({ compact = false }: { compact?: boolean }) {
             )}
             {!compact && renaming?.id !== preview.id && (
               <>
-                <button
-                  type="button"
-                  aria-label={`Rename ${preview.name}`}
-                  title="Rename"
-                  disabled={!renamable}
-                  onClick={() => {
-                    setError(null);
-                    setRenaming({ id: preview.id, value: preview.name });
-                  }}
-                  className={actionClass}
-                >
-                  <Pencil className="size-3.5" aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  aria-label={`Stop ${preview.name}`}
-                  title={preview.process.stopBlocked ?? "Stop"}
-                  disabled={!supported || !!preview.process.stopBlocked}
-                  onClick={() => {
-                    setError(null);
-                    setStopping(preview.process);
-                  }}
-                  className={actionClass}
-                >
-                  <Trash2 className="size-3.5" aria-hidden="true" />
-                </button>
+                <SidebarTooltip content="Rename">
+                  <button
+                    type="button"
+                    aria-label={`Rename ${preview.name}`}
+                    disabled={!renamable}
+                    onClick={() => {
+                      setError(null);
+                      setRenaming({ id: preview.id, value: preview.name });
+                    }}
+                    className={actionClass}
+                  >
+                    <Pencil className="size-3.5" aria-hidden="true" />
+                  </button>
+                </SidebarTooltip>
+                <SidebarTooltip content="Stop">
+                  <button
+                    type="button"
+                    aria-label={`Stop ${preview.name}`}
+                    disabled={!supported || !!preview.process.stopBlocked}
+                    onClick={() => {
+                      setError(null);
+                      setStopping(preview.process);
+                    }}
+                    className={actionClass}
+                  >
+                    <Trash2 className="size-3.5" aria-hidden="true" />
+                  </button>
+                </SidebarTooltip>
               </>
             )}
           </li>

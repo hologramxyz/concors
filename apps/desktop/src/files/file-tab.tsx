@@ -19,6 +19,7 @@ import { CompactLayoutContext } from "@/components/compact-layout";
 import { MediaFileTab } from "./media-tab";
 import { previewKind } from "./preview-kind";
 import { useFileRequest } from "./use-file-request";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 const CodeEditor = lazy(loadCodeEditor);
 
 export function FileTabLabel({ file }: { file: OpenFile }) {
@@ -30,17 +31,18 @@ export function FileTabLabel({ file }: { file: OpenFile }) {
       data-active-tab={files.active[file.scope] === file.id ? "" : undefined}
       className={`group flex shrink-0 items-center rounded-md border ${files.active[file.scope] === file.id ? "border-border bg-background shadow-xs" : "border-transparent"}`}
     >
-      <button
-        type="button"
-        title={`${file.directory}/${file.path}`}
-        aria-pressed={files.active[file.scope] === file.id}
-        onClick={() => files.select(file.scope, file.id)}
-        className="flex max-w-52 items-center gap-1.5 px-2 py-1 text-ui"
-      >
-        <FileTypeIcon path={file.path} className="size-[18px]" />
-        <span className="truncate">{file.path.split("/").pop()}</span>
-        {dirty && <span aria-label="Unsaved changes">●</span>}
-      </button>
+      <SidebarTooltip place="title-bar" content={`${file.directory}/${file.path}`}>
+        <button
+          type="button"
+          aria-pressed={files.active[file.scope] === file.id}
+          onClick={() => files.select(file.scope, file.id)}
+          className="flex max-w-52 items-center gap-1.5 px-2 py-1 text-ui"
+        >
+          <FileTypeIcon path={file.path} className="size-[18px]" />
+          <span className="truncate">{file.path.split("/").pop()}</span>
+          {dirty && <span aria-label="Unsaved changes">●</span>}
+        </button>
+      </SidebarTooltip>
       <button
         type="button"
         disabled={state.busy}

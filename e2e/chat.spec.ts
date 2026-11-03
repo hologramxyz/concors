@@ -102,9 +102,12 @@ test("shared chat streams, handles approvals and removes detached sidebar entrie
     await expect(page.getByRole("log")).toContainText("Hello from Codex");
     const replyFooter = page.getByRole("article").filter({ hasText: "Hello from Codex" }).last();
     await expect(replyFooter.getByText(/^Worked for /)).toBeVisible();
-    await expect(
-      replyFooter.getByRole("button", { name: "Copy message", exact: true }),
-    ).toBeVisible();
+    const copy = replyFooter.getByRole("button", { name: "Copy message", exact: true });
+    await expect(copy).toBeVisible();
+    await expect(copy).not.toHaveAttribute("title");
+    await copy.hover();
+    await expect(page.getByRole("tooltip")).toContainText("Copy message");
+    await page.mouse.move(0, 0);
     await page.getByRole("button", { name: "Pane actions" }).click();
     await page.getByRole("menuitemradio", { name: "Terminal", exact: true }).click();
     await expect(page.locator(".xterm").filter({ visible: true })).toBeVisible();

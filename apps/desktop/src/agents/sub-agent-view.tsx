@@ -1,6 +1,7 @@
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Bot, X } from "lucide-react";
 import type { AgentItem } from "@concors/protocol";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { Button } from "@/components/ui/button";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { Activity } from "./activity";
@@ -112,15 +113,16 @@ export function SubAgentPanel({
               ? "Failed"
               : "Done"}
         </span>
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Close sub-agent conversation"
-          title="Close (Esc)"
-          onClick={onClose}
-        >
-          <X className="size-4" />
-        </Button>
+        <SidebarTooltip place="title-bar" content="Close" keys="Esc">
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Close sub-agent conversation"
+            onClick={onClose}
+          >
+            <X className="size-4" />
+          </Button>
+        </SidebarTooltip>
       </header>
       <div
         ref={log}

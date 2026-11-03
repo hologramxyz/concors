@@ -55,6 +55,7 @@ import { CompactLayoutContext } from "@/components/compact-layout";
 import { ComposerSurfaceContext, useComposerExpansion } from "./composer-expansion";
 import { useComposerMotion } from "./composer-motion";
 import { NativeSurfaceContext, useNativeSurface } from "@/components/native-surface";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { matchCommands, needsArguments, slashQuery } from "./slash-commands";
 import { SlashCommandMenu } from "./slash-menu";
 import { clipboardHasImage, readClipboardImage } from "@/tauri";
@@ -1063,22 +1064,26 @@ export function AgentComposer({
                   {entry.text || entry.attachments.map((a) => a.name).join(", ")}
                 </span>
                 {queueSteer && canSteer(entry.text, entry.attachments.length) && (
-                  <button
-                    type="button"
-                    className="text-primary"
-                    title="Send it into the current turn now instead of after it"
-                    disabled={!connected}
-                    onClick={() =>
-                      void queueAction({
-                        kind: "queue-steer",
-                        sessionId: agent.id,
-                        id: entry.id,
-                        turnId: agent.turnId ?? "",
-                      })
-                    }
+                  <SidebarTooltip
+                    place="above"
+                    content="Send it into the current turn now instead of after it"
                   >
-                    Steer
-                  </button>
+                    <button
+                      type="button"
+                      className="text-primary"
+                      disabled={!connected}
+                      onClick={() =>
+                        void queueAction({
+                          kind: "queue-steer",
+                          sessionId: agent.id,
+                          id: entry.id,
+                          turnId: agent.turnId ?? "",
+                        })
+                      }
+                    >
+                      Steer
+                    </button>
+                  </SidebarTooltip>
                 )}
                 <button
                   type="button"
@@ -1121,14 +1126,18 @@ export function AgentComposer({
                   !busy &&
                   !uncertain &&
                   canSteer(entry.message, entry.attachments.length) && (
-                    <button
-                      type="button"
-                      className="text-primary"
-                      title="Send it into the current turn now instead of after it"
-                      onClick={() => void submit(entry, true, true)}
+                    <SidebarTooltip
+                      place="above"
+                      content="Send it into the current turn now instead of after it"
                     >
-                      Steer
-                    </button>
+                      <button
+                        type="button"
+                        className="text-primary"
+                        onClick={() => void submit(entry, true, true)}
+                      >
+                        Steer
+                      </button>
+                    </SidebarTooltip>
                   )}
                 <button
                   type="button"
@@ -1794,15 +1803,16 @@ function AttachmentChip({
         {state === "failed" && (
           <div className="absolute inset-0 flex items-center justify-center bg-background/80 text-destructive">
             {onRetry ? (
-              <button
-                type="button"
-                aria-label={`Retry uploading ${file.name}`}
-                title="Retry"
-                className="flex size-full items-center justify-center hover:bg-muted/60"
-                onClick={onRetry}
-              >
-                <RotateCw className="size-4" />
-              </button>
+              <SidebarTooltip place="above" content="Retry">
+                <button
+                  type="button"
+                  aria-label={`Retry uploading ${file.name}`}
+                  className="flex size-full items-center justify-center hover:bg-muted/60"
+                  onClick={onRetry}
+                >
+                  <RotateCw className="size-4" />
+                </button>
+              </SidebarTooltip>
             ) : (
               <CircleAlert className="size-4" aria-label={`${file.name} did not upload`} />
             )}
