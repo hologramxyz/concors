@@ -13,8 +13,8 @@ import { loadConfig, loadTls, ConfigError } from "./managed/config.ts";
 import { createTokenVerifier } from "./managed/auth.ts";
 import { createLogger } from "./managed/log.ts";
 import { DAEMON_VERSION } from "./version.ts";
-import { applyResolvedDataDir, ProfileError, resolveDataDir } from "./profile.ts";
-import { adoptLegacyData } from "./profile-migration.ts";
+import { applyResolvedDataDir, identityFromEnv, ProfileError, resolveDataDir } from "./profile.ts";
+import { adoptGuestData, adoptLegacyData } from "./profile-migration.ts";
 import { runSpeechWorker } from "./dictation/engine.ts";
 import { adoptLoginPath } from "./host/login-path.ts";
 
@@ -112,6 +112,8 @@ async function serve(cli: ParsedCli): Promise<number> {
   const dataDir = resolveDataDir(profileEnv(cli));
   // Adopt an existing unpartitioned install before anything opens the database.
   if (!cli.ephemeral) await adoptLegacyData(dataDir, profileEnv(cli));
+  const identity = identityFromEnv(profileEnv(cli));
+  if (!cli.ephemeral && identity) await adoptGuestData(identity, profileEnv(cli));
   // Only after adoption, which still needs the base directory to find an unpartitioned install.
   applyResolvedDataDir(dataDir);
   mkdirSync(dataDir, { recursive: true, mode: 0o700 });
