@@ -12,7 +12,8 @@ See [Expo's TestFlight guide](https://docs.expo.dev/submit/testflight/).
 The shared desktop workspace is bundled in the app; Metro, Expo Go and the browser preview are
 not required. Internet access and a reachable authenticated daemon are still needed. Mobile signs
 in to **existing accounts/machines**; creating/purchasing VPSs remains on desktop. Use a dedicated
-test account/machine. iPhone dictation uses the keyboard microphone, not desktop's browser recorder.
+test account/machine. iPhone dictation records through the machine, as on desktop. The machine needs
+its speech model, a 660 MB background download.
 
 ## Current state
 
@@ -157,7 +158,8 @@ without private code, credentials or personal data in screenshots.
   tabs/panes and files stay in sync. No VPS purchase on phone.
 - Native UI: glass and older-iOS fallback; square/subtle/rounded themes; sidebar/Files swipes;
   search/account/settings drawers; keyboard/safe areas; VoiceOver, large text and reduced motion.
-- Daily use: send/stop/queue, tool approval, attachments/cancel, keyboard dictation, long output,
+- Daily use: send/stop/queue, tool approval, attachments/cancel, dictation (allow and deny the
+  microphone, Send, Edit, Cancel, leaving the app while recording), long output,
   file browse/Markdown/edit/save/unsaved-change warnings. Use a test repository.
 - Lifecycle: Wi-Fi ↔ cellular, airplane mode/retry, lock/background/foreground, test-daemon restart,
   token expiry, team switch, sign-out and different-account sign-in without previous-account data.

@@ -82,8 +82,9 @@ No analytics or advertising SDK was intentionally added here. This is **not** a 
 that the service collects no data. Review Xcode's privacy report for the signed archive;
 do not copy SDK-level "no data" declarations into the app's store form.
 
-iOS uses the system document picker and OS keyboard dictation, so unused camera/microphone/
-photo-library purpose strings were removed. Android blocks camera, recording and broad
+iOS uses the system document picker, so the unused camera purpose string was removed. iPhone
+dictation declares the microphone: audio streams to the user's own machine, is transcribed there
+and is not kept, so update the store privacy form to match. Android blocks camera, recording and broad
 media/storage permissions. CI audits the APK; inspect the final AAB, signing, generated
 APKs and 16 KB runtime behavior too. These checks do not grant release approval.
 

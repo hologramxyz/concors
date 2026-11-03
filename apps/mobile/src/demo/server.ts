@@ -1,5 +1,6 @@
 import {
   AGENT_USAGE_CAPABILITY,
+  DICTATION_CAPABILITY,
   parseClientMessage,
   applyWorkspaceOperation,
   WorkspaceOperationError,
@@ -25,6 +26,8 @@ import {
   demoWorkspace,
   ids,
 } from "./fixtures";
+
+const DEMO_DICTATION = "This is a simulated dictation.";
 
 interface Conversation {
   agent: AgentInfo;
@@ -351,7 +354,31 @@ export function createDemoServer() {
                   "workspace-pane-rearrangement",
                   "folder-workspaces",
                   AGENT_USAGE_CAPABILITY,
+                  DICTATION_CAPABILITY,
                 ],
+              });
+              break;
+            case "dictation.request":
+              // Nothing is transcribed here: the demo has no machine to hear the words.
+              if (message.operation.kind === "finish")
+                this.emit({
+                  type: "dictation.transcript",
+                  dictationId: message.operation.dictationId,
+                  text: DEMO_DICTATION,
+                  final: true,
+                });
+              reply({
+                type: "dictation.result",
+                requestId: message.requestId,
+                outcome: { status: "ok", model: { state: "ready" } },
+              });
+              break;
+            case "dictation.audio":
+              this.emit({
+                type: "dictation.transcript",
+                dictationId: message.dictationId,
+                text: DEMO_DICTATION,
+                final: false,
               });
               break;
             case "workspace.subscribe":

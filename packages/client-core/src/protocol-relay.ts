@@ -32,6 +32,9 @@ export type RelayConnection = Pick<
   | "onUpload"
   | "requestUpload"
   | "sendUploadChunk"
+  | "onDictation"
+  | "requestDictation"
+  | "sendDictationAudio"
 >;
 export function createProtocolRelay(
   connection: RelayConnection,
@@ -44,6 +47,8 @@ export function createProtocolRelay(
   const viewers = new Set<string>();
   /** Uploads begun through this relay; the host's socket outlives it, so they are cancelled. */
   const uploads = new Set<string>();
+  /** Recordings begun through this relay, cancelled for the same reason. */
+  const dictations = new Set<string>();
   const emit = (message: DaemonMessage) => {
     if (!disposed) deliver(message);
   };
@@ -79,6 +84,14 @@ export function createProtocolRelay(
           connection.onUpload((event) => {
             if (!uploads.has(event.uploadId)) return;
             if (event.type === "upload.error") uploads.delete(event.uploadId);
+            emit(event);
+          }),
+          connection.onDictation((event) => {
+            if (
+              event.type === "dictation.error" ||
+              (event.type === "dictation.transcript" && event.final)
+            )
+              dictations.delete(event.dictationId);
             emit(event);
           }),
         );
@@ -141,6 +154,21 @@ export function createProtocolRelay(
           if (uploads.has(message.uploadId))
             connection.sendUploadChunk(message.uploadId, message.seq, message.data);
           break;
+        case "dictation.request": {
+          const { operation } = message;
+          if (operation.kind === "start") dictations.add(operation.dictationId);
+          if (operation.kind === "cancel") dictations.delete(operation.dictationId);
+          const result = await connection.requestDictation(operation, message.requestId);
+          if (operation.kind === "start" && result.outcome.status === "error")
+            dictations.delete(operation.dictationId);
+          emit(result);
+          break;
+        }
+        case "dictation.audio":
+          // As with upload chunks, audio can still be on its way after a recording ended.
+          if (dictations.has(message.dictationId))
+            connection.sendDictationAudio(message.dictationId, message.seq, message.pcm);
+          break;
         case "terminal.request": {
           const operation = message.operation;
           if (operation.kind === "attach") viewers.add(operation.sessionId);
@@ -170,6 +198,12 @@ export function createProtocolRelay(
             .requestUpload({ kind: "cancel", uploadId }, newRequestId())
             .catch(() => undefined);
       uploads.clear();
+      for (const dictationId of dictations)
+        if (connection.state.status === "ready")
+          void connection
+            .requestDictation({ kind: "cancel", dictationId }, newRequestId())
+            .catch(() => undefined);
+      dictations.clear();
     },
   };
 }
