@@ -42,3 +42,16 @@
     visibility: hidden;
   }
 }
+
+/* A phone has no waveform to fill the row: the words so far take its place, newest in view. */
+.dictation-preview {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  text-align: right;
+  white-space: nowrap;
+  direction: rtl;
+  text-overflow: ellipsis;
+}

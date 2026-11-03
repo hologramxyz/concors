@@ -106,7 +106,9 @@ const config: ExpoConfig = {
       {
         photosPermission: "Concors attaches the photos and videos you choose to your messages.",
         cameraPermission: false,
-        microphonePermission: false,
+        // This plugin owns the purpose string: `false` would delete one set under `infoPlist`.
+        microphonePermission:
+          "Concors uses the microphone only while you dictate a message to an agent. Your machine transcribes it, and no recording is kept.",
       },
     ],
     [

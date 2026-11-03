@@ -1167,6 +1167,13 @@ body {
   background: transparent;
   box-shadow: none;
 }
+/* The native field and its glass step aside while recording, so the row brings its own surface. */
+.mobile-pane .mobile-composer[data-native-composer="true"] .dictation-recording {
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 28px;
+  background: var(--card);
+}
 .mobile-pane [aria-label="Agent conversation"]:has([data-native-composer="true"]) {
   position: relative;
 }

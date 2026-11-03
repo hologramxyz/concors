@@ -68,7 +68,8 @@ daemon to test actual files, as described below. 6. Add a project from the sideb
 plans, thinking and sub-agent updates. Try `ask me a question` for an input request.
 Model, effort and permissions use icon-only desktop controls when expanded.
 Context usage and dictation sit on the right beside the primary button; the sliders button contains only
-Plan and Speed. Dictation focuses the native keyboard and explains how to use its microphone.
+Plan and Speed. On iPhone, dictation records through the machine, as on desktop; where the webview
+offers no microphone (Android) it focuses the keyboard and explains how to use its microphone.
 There is one primary button: Stop while working with an empty draft, Queue for a follow-up,
 or Send when idle. 7. Select **Mobile launch · 2** (Terminal) for the shared xterm terminal: type, use extra keys,
 reload the renderer or explicitly stop the process after confirmation.
@@ -116,9 +117,10 @@ link the team's Expo project as described in the release runbook. Native push ne
 physical devices, APNs/FCM credentials and the server integration.
 
 Tapping the real textarea focuses the system keyboard. Mobile Enter inserts a newline;
-Ctrl/Command+Enter sends. Dictation uses the phone keyboard's microphone, not browser
-speech recognition. Native iOS attachments use the system document picker; the app does
-not request camera, photo-library or microphone access. Android also blocks camera,
+Ctrl/Command+Enter sends. iPhone dictation streams the microphone to the machine, which
+transcribes it; Android uses the keyboard's microphone. Native iOS attachments use the system
+document picker; the app does not request camera access, and asks for the microphone only when
+dictation first starts. Android also blocks camera,
 recording and broad media/storage permissions.
 
 ## Connect to the real service
@@ -308,8 +310,10 @@ The iOS-specific imports do not enter Android or Safari bundles. Android/web ret
 controls and web styling. Older iOS or Reduce Transparency uses native bordered controls and an
 opaque composer. Both native glass availability checks run before mounting glass; accessibility
 changes are observed while running. Reduce Motion disables composer expansion animation.
-The model/effort/permission buttons open native action sheets. Dictation remains the iOS keyboard's
-microphone: the app never secretly starts recording. Attachments use the native document picker,
+The model/effort/permission buttons open native action sheets. The microphone button replaces the
+field with a recording row, in the webview: its stream runs on the workspace's secure origin
+(`IOS_WORKSPACE_ORIGIN`), which exists because WebKit offers no microphone to a page without one.
+Recording only ever starts from that button. Attachments use the native document picker,
 retain the three-file/1 MiB limits, and remove their temporary cached copies after reading.
 
 EAS profiles pin the SDK 57/Xcode 26.6 image (see [Expo build infrastructure](https://docs.expo.dev/build-reference/infrastructure/)).

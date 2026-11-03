@@ -10,6 +10,7 @@ const hello = {
 };
 function setup() {
   const off = vi.fn();
+  const dictation: { current?: Parameters<RelayConnection["onDictation"]>[0] } = {};
   const connection: RelayConnection = {
     state: {
       status: "ready",
@@ -88,12 +89,68 @@ function setup() {
       outcome: { status: "ok" },
     })),
     sendUploadChunk: vi.fn(),
+    onDictation: vi.fn<RelayConnection["onDictation"]>((listener) => {
+      dictation.current = listener;
+      return off;
+    }),
+    requestDictation: vi.fn<RelayConnection["requestDictation"]>(async (_, requestId) => ({
+      type: "dictation.result",
+      requestId,
+      outcome: { status: "ok", model: { state: "ready" } },
+    })),
+    sendDictationAudio: vi.fn(),
   };
   const messages: DaemonMessage[] = [];
   const relay = createProtocolRelay(connection, (message) => messages.push(message));
-  return { connection, messages, relay, off };
+  return { connection, messages, relay, off, dictation };
 }
+const dictationId = "22222222-2222-4222-8222-222222222222";
+const pcm = "AAAA";
+const dictate = (kind: "start" | "finish" | "cancel") => ({
+  type: "dictation.request",
+  requestId: crypto.randomUUID(),
+  operation: { kind, dictationId },
+});
+const audio = (seq: number) => ({ type: "dictation.audio", dictationId, seq, pcm });
 describe("offline UI protocol relay", () => {
+  it("relays a recording both ways and drops audio arriving after it ended", async () => {
+    const { connection, relay, messages, dictation } = setup();
+    await relay.receive(hello);
+    const start = dictate("start");
+    await relay.receive(start);
+    expect(connection.requestDictation).toHaveBeenCalledWith(start.operation, start.requestId);
+    expect(messages).toContainEqual(
+      expect.objectContaining({ type: "dictation.result", requestId: start.requestId }),
+    );
+    await relay.receive(audio(0));
+    expect(connection.sendDictationAudio).toHaveBeenCalledWith(dictationId, 0, pcm);
+    const partial = {
+      type: "dictation.transcript",
+      dictationId,
+      text: "Hello",
+      final: false,
+    } as const;
+    dictation.current?.(partial);
+    expect(messages).toContainEqual(partial);
+    await relay.receive(audio(1));
+    expect(connection.sendDictationAudio).toHaveBeenCalledTimes(2);
+    dictation.current?.({ ...partial, final: true });
+    await relay.receive(audio(2));
+    expect(connection.sendDictationAudio).toHaveBeenCalledTimes(2);
+    // It has ended, so leaving has nothing to cancel.
+    relay.dispose();
+    expect(connection.requestDictation).toHaveBeenCalledTimes(1);
+  });
+  it("cancels a recording still open when the UI goes away, since the socket stays", async () => {
+    const { connection, relay } = setup();
+    await relay.receive(hello);
+    await relay.receive(dictate("start"));
+    relay.dispose();
+    expect(connection.requestDictation).toHaveBeenLastCalledWith(
+      { kind: "cancel", dictationId },
+      expect.any(String),
+    );
+  });
   it("relays resource requests without changing process identities", async () => {
     const { connection, relay, messages } = setup();
     await relay.receive(hello);
@@ -124,7 +181,7 @@ describe("offline UI protocol relay", () => {
     expect(off).toHaveBeenCalledOnce();
     await relay.receive({ type: "host.subscribe", enabled: true });
     relay.dispose();
-    expect(off).toHaveBeenCalledTimes(8);
+    expect(off).toHaveBeenCalledTimes(9);
     const count = messages.length;
     listener(null);
     expect(messages).toHaveLength(count);
@@ -179,7 +236,7 @@ describe("offline UI protocol relay", () => {
     expect(connection.sendTerminalInput).toHaveBeenCalledOnce();
     relay.dispose();
     relay.dispose();
-    expect(off).toHaveBeenCalledTimes(6);
+    expect(off).toHaveBeenCalledTimes(7);
     expect(connection.requestTerminal).toHaveBeenLastCalledWith(
       { kind: "detach", sessionId: id },
       expect.any(String),

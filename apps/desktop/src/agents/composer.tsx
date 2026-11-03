@@ -241,8 +241,15 @@ export function AgentComposer({
     !deferred &&
     !!agent.threadId &&
     draft.length < 16000;
-  const startDictation = () => {
-    dictationBase.current = draft;
+  // A phone's webview may offer no microphone (Android), and a machine may not transcribe. Then
+  // the keyboard's own microphone is the way to dictate; iOS gives apps no way to start that one.
+  const dictationHelp = !compact
+    ? null
+    : dictation.supported && typeof navigator.mediaDevices?.getUserMedia === "function"
+      ? dictation.preparing
+      : "Use the microphone on your phone’s keyboard to dictate. Review your message before sending.";
+  const startDictation = (base = draft) => {
+    dictationBase.current = base;
     dictation.start();
   };
   useCommand(
@@ -844,6 +851,7 @@ export function AgentComposer({
           (control.id === "mode" && !!agent.controls?.modes.length) ||
           (control.id === "options" && !!agent.controls?.features.length),
       ),
+      dictationHelp,
       usage: usageView(agent, planUsage),
     },
     (event) => {
@@ -882,6 +890,12 @@ export function AgentComposer({
           if (!uncertain) void followUp({ message: event.text ?? draft, attachments });
         } else if (event.control === "stop") {
           if (connected && agent.turnId && !agent.turnId.startsWith("pending:")) onInterrupt();
+        } else if (event.control === "dictate") {
+          if (canDictate && !dictationHelp) {
+            // The recording replaces the field, which takes the keyboard with it.
+            setNativeExpanded(false);
+            startDictation(event.text ?? draft);
+          }
         } else if (event.control === "context" || event.control === "context-refresh") {
           // Like the desktop popover: plan usage is read while the sheet is open, not before.
           planUsage.refresh(agent.id, event.control === "context-refresh");
@@ -979,7 +993,7 @@ export function AgentComposer({
       <ControlTooltip
         text={
           compact
-            ? "Use dictation on your phone's keyboard."
+            ? (dictationHelp ?? "Dictate a message")
             : (dictation.preparing ??
               (dictation.supported
                 ? "Dictate a message"
@@ -996,7 +1010,7 @@ export function AgentComposer({
           aria-label="Start dictation"
           disabled={!canDictate}
           onClick={() => {
-            if (compact) {
+            if (dictationHelp) {
               textarea.current?.focus();
               setKeyboardHelp((value) => !value);
             } else {
@@ -1254,6 +1268,7 @@ export function AgentComposer({
                 connected && !busy && !uncertain && !attaching && !configuring && !!agent.threadId
               }
               queued={active}
+              levels={!compact}
             />
           ) : native ? (
             <div ref={nativeField} aria-hidden="true" style={{ height: nativeHeight }} />
@@ -1635,10 +1650,9 @@ export function AgentComposer({
           onChoose={(command) => chooseCommand(command)}
           onDismiss={() => setSlashDismissed(draft)}
         />
-        {compact && expanded && keyboardHelp && (
+        {compact && expanded && keyboardHelp && dictationHelp && (
           <p role="status" className="px-2 text-xs text-muted-foreground">
-            Use the microphone on your phone’s keyboard to dictate. Review your message before
-            sending.
+            {dictationHelp}
           </p>
         )}
         {compact && (!connected || configuring) && (

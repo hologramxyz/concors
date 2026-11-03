@@ -20,6 +20,17 @@ it("links the registered Expo project by default without changing the app identi
   expect(config.ios?.bundleIdentifier).toBe("dev.concors.mobile");
 });
 
+it("explains the microphone on iOS and keeps recording blocked on Android", async () => {
+  vi.stubEnv("APP_VARIANT", "production");
+  const { default: config } = await import("./app.config");
+  const picker = config.plugins?.find(
+    (plugin) => Array.isArray(plugin) && plugin[0] === "expo-image-picker",
+  ) as [string, { microphonePermission: unknown; cameraPermission: unknown }];
+  expect(picker[1].microphonePermission).toMatch(/while you dictate/);
+  expect(picker[1].cameraPermission).toBe(false);
+  expect(config.android?.blockedPermissions).toContain("android.permission.RECORD_AUDIO");
+});
+
 it("allows explicit Expo project overrides", async () => {
   vi.stubEnv("EXPO_OWNER", "test-team");
   vi.stubEnv("EXPO_PUBLIC_EAS_PROJECT_ID", "12345678-1234-4123-8123-123456789abc");

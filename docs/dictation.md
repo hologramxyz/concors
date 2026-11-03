@@ -19,7 +19,15 @@ The daemon hosting the agent transcribes, so dictation works the same in every d
 - **Model.** About 660 MB, downloaded in the background shortly after the session host starts. The files are pinned to one Hugging Face revision and verified by SHA-256 before they are used. They are kept in `<data dir>/models/speech`, shared by every profile on the machine. The download needs roughly 1.2 GB free, retries every five minutes after a failure, and while it is running the microphone button explains the progress instead of recording. The model is [`csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8`](https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8), a conversion of [nvidia/parakeet-tdt-0.6b-v2](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2) under CC-BY-4.0.
 - **Packaging.** `sherpa-onnx-node` and its platform addon sit beside the bundle like the PTY module, because esbuild cannot inline a native addon. The bundle smoke test loads the addon with the shipped Node, so a glibc or rpath problem fails CI rather than a user's dictation.
 - **Microphone access.** WebKitGTK denies `getUserMedia` unless the embedder answers its permission request, so the Linux shell grants audio-only capture to the app's page (`src-tauri/src/microphone.rs`). Camera and screen capture remain denied. macOS asks the user, using the usage text in `src-tauri/Info.plist`.
-- **Fallback.** Daemons without `dictation-v1` (older releases, ephemeral and test daemons) use the webview's SpeechRecognition where it exists, as before; elsewhere dictation stays disabled. Mobile retains OS keyboard dictation.
+- **Fallback.** Daemons without `dictation-v1` (older releases, ephemeral and test daemons) use the webview's SpeechRecognition where it exists, as before; elsewhere dictation stays disabled. Mobile has no speech service to fall back to: without `dictation-v1`, or where the webview offers no microphone, its button points at the OS keyboard's microphone.
+
+## On a phone
+
+On iPhone the microphone button records the same way, through the same `DaemonRecognition` and review flow, and the machine transcribes. Three things differ:
+
+- **Microphone access.** WebKit offers `getUserMedia` only to a secure origin, so the iOS app loads the workspace page with an `https://workspace.concors.invalid/` base URL. Nothing is fetched from it. The app declares a microphone purpose string, and iOS asks the first time. Android keeps its opaque origin and blocks `RECORD_AUDIO`, so it stays on the keyboard's microphone.
+- **The bridge.** The webview's connection reaches the daemon through the host's protocol relay, which forwards recordings and cancels any still open when the webview goes away.
+- **No level meter.** Levels would need a second microphone stream, and iOS may silence the stream being transcribed when another one starts. The row shows the words so far instead.
 
 Real microphone hardware and OS-specific audio stacks need manual device verification. Automated coverage uses deterministic speech events, microphone samples, and a fake transcriber.
 

@@ -1,5 +1,5 @@
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
-import { View } from "react-native";
+import { Platform, View } from "react-native";
 import {
   parseMobileRendererMessage,
   type MobileHostMessage,
@@ -10,7 +10,9 @@ import { NativeChrome } from "./native-chrome";
 import type { NativeSurfaceSnapshot } from "./native-chrome-types";
 import { workspaceHtml } from "../../assets/workspace-html";
 import {
+  isWorkspaceDocument,
   workspaceScript,
+  workspaceSource,
   type WorkspaceRendererHandle,
   type WorkspaceRendererProps,
 } from "./renderer-types";
@@ -36,12 +38,16 @@ export const WorkspaceRenderer = forwardRef<WorkspaceRendererHandle, WorkspaceRe
       <View style={{ flex: 1, backgroundColor }}>
         <WebView
           ref={view}
-          source={{ html: workspaceHtml }}
+          source={workspaceSource(workspaceHtml, Platform.OS)}
           style={{ flex: 1, backgroundColor }}
           // Route every navigation through the deny-by-default callback. An origin excluded
           // here would otherwise be handed to the OS by react-native-webview itself.
           originWhitelist={["*"]}
-          onShouldStartLoadWithRequest={(request) => request.url === "about:blank"}
+          onShouldStartLoadWithRequest={(request) => isWorkspaceDocument(request.url)}
+          // Dictation starts from a native button, so neither prompt nor audio follows a tap the
+          // page saw. The system's own microphone prompt still appears the first time.
+          mediaCapturePermissionGrantType="grantIfSameHostElsePrompt"
+          mediaPlaybackRequiresUserAction={false}
           javaScriptEnabled
           domStorageEnabled={false}
           allowFileAccess={false}
