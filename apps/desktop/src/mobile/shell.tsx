@@ -980,10 +980,6 @@ function MobileWorkspaceContent({
               />
               <WorkspaceSearch
                 key={`${host.machineId}:${workspace?.epoch}`}
-                machine={
-                  host.machines.find((machine) => machine.id === host.machineId)?.name ??
-                  "this machine"
-                }
                 activeProjectId={project?.id}
                 projects={workspace?.projects ?? []}
                 canSelectProject={!!workspace}

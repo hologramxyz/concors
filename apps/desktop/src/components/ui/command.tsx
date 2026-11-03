@@ -2,13 +2,7 @@ import * as React from "react";
 import { Command as CommandPrimitive } from "cmdk";
 import { cn } from "cn";
 
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { InputGroup, InputGroupAddon } from "@/components/ui/input-group";
 import { SearchIcon, CheckIcon } from "lucide-react";
 import { CompactLayoutContext } from "@/components/compact-layout";
@@ -28,7 +22,6 @@ function Command({ className, ...props }: React.ComponentProps<typeof CommandPri
 
 function CommandDialog({
   title = "Command Palette",
-  description = "Search for a command to run...",
   children,
   className,
   showCloseButton = true,
@@ -37,7 +30,6 @@ function CommandDialog({
   ...props
 }: React.ComponentProps<typeof Dialog> & {
   title?: string;
-  description?: string;
   className?: string;
   showCloseButton?: boolean;
   onOpenAutoFocus?: React.ComponentProps<typeof DialogContent>["onOpenAutoFocus"];
@@ -49,12 +41,12 @@ function CommandDialog({
       <DialogContent
         className={cn("overflow-hidden", compact && "mobile-search-drawer", className)}
         showCloseButton={compact || showCloseButton}
+        aria-describedby={undefined}
         onOpenAutoFocus={onOpenAutoFocus}
         onCloseAutoFocus={onCloseAutoFocus}
       >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         {children}
       </DialogContent>

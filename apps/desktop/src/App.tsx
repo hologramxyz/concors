@@ -714,7 +714,7 @@ function AppContent() {
                               <StartupScreen embedded onOpenSettings={connectionSettings} />
                             )
                           ) : (
-                            <ResourcesView />
+                            <ResourcesView machine={selectedHost.label} />
                           )}
                         </main>
                         {view !== "settings" && (
@@ -790,7 +790,6 @@ function AppContent() {
                     />
                     <WorkspaceSearch
                       key={`${hostScope}:${memoryKey}`}
-                      machine={selectedHost.label}
                       activeProjectId={selection?.projectId}
                       canSelectProject={canEdit}
                       projects={workspace?.projects ?? []}

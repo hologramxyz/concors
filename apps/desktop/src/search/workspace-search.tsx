@@ -28,7 +28,6 @@ import { matchScore, searchEntries, workspaceEntries, type SearchCategory } from
 interface WorkspaceSearchProps {
   projects: readonly WorkspaceProject[];
   activeProjectId: string | undefined;
-  machine: string;
   canSelectProject: boolean;
   onSelectProject(id: string): void;
   onSelectPane(target: SessionPane): void;
@@ -65,7 +64,8 @@ export function WorkspaceSearch(props: WorkspaceSearchProps) {
       open={props.open}
       onOpenChange={props.onOpenChange}
       title="Search"
-      description={`Workspaces, agents and tabs on ${props.machine}.`}
+      // At the top, so it stays put as results come and go. The mobile drawer sits at the bottom.
+      className={compact ? "" : "top-[12dvh] max-h-[76dvh] translate-y-0"}
       onOpenAutoFocus={() => {
         returnFocus.current =
           document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -288,10 +288,9 @@ function SearchContent({
                     ) : null}
                     <span className="min-w-0 flex-1">
                       <span className="block truncate font-medium">{entry.title}</span>
-                      {(compact || entry.kind !== "workspace") && (
+                      {(compact || entry.kind !== "workspace") && entry.detail !== entry.title && (
                         <span
                           className="block truncate text-xs text-muted-foreground"
-                          title={entry.detail}
                           style={
                             entry.kind === "workspace"
                               ? { direction: "rtl", textAlign: "left" }
@@ -302,13 +301,9 @@ function SearchContent({
                         </span>
                       )}
                     </span>
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {entry.kind === "workspace"
-                        ? "Workspace"
-                        : entry.kind === "closed-chat"
-                          ? "Closed chat"
-                          : "Tab"}
-                    </span>
+                    {entry.kind === "closed-chat" && (
+                      <span className="shrink-0 text-xs text-muted-foreground">Closed chat</span>
+                    )}
                   </CommandItem>
                 </div>
               </SidebarTooltip>
@@ -346,10 +341,11 @@ function SearchContent({
           </div>
         )}
       </CommandList>
-      <p className="shrink-0 px-2 pt-3 text-xs text-muted-foreground">
-        Searches names and paths, not messages or file contents.
-        {!props.canSelectProject && " Reconnect to open workspace results."}
-      </p>
+      {!props.canSelectProject && (
+        <p className="shrink-0 px-2 pt-3 text-xs text-muted-foreground">
+          Reconnect to open workspace results.
+        </p>
+      )}
     </Command>
   );
 }

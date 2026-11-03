@@ -8,6 +8,11 @@ export interface ProcessState {
   loading: boolean;
 }
 export const EMPTY_PROCESSES: ProcessState = { snapshot: null, error: null, loading: false };
+/** A machine says it cannot list processes only in this sentence, which every daemon sends. */
+export const isInspectionWarning = (warning: string) =>
+  warning.startsWith("Process inspection is available on Linux");
+export const canInspectProcesses = (snapshot: ProcessSnapshot) =>
+  !snapshot.warnings.some(isInspectionWarning);
 const stores = new WeakMap<DaemonConnection, ReturnType<typeof createProcessStore>>();
 export function processStore(connection: DaemonConnection) {
   let store = stores.get(connection);

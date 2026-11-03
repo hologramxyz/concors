@@ -41,7 +41,17 @@ test("Search finds duplicate workspaces, ranks tabs and focuses the exact agent 
     await expect(input).toBeFocused();
     await page.screenshot({ path: test.info().outputPath("desktop-search.png") });
     await expect(dialog.getByRole("heading", { name: "Command palette" })).toHaveCount(0);
-    await expect(dialog).toContainText("not messages or file contents");
+    await expect(dialog).not.toContainText("not messages or file contents");
+    await expect(dialog).not.toContainText("·");
+    await expect(dialog).not.toContainText("Workspaces, agents and tabs on");
+    await expect(dialog.locator('[data-search-result="pane"]').first()).toContainText(
+      "Search Hologram",
+    );
+    await expect(dialog.locator('[data-search-result="pane"]').first()).not.toContainText("Tab");
+    const top = (await dialog.boundingBox())?.y;
+    await input.fill("no such thing anywhere");
+    await expect(dialog.getByRole("status")).toHaveText("No results.");
+    expect((await dialog.boundingBox())?.y).toBe(top);
     await input.fill("Search Hologram");
     await dialog.getByRole("button", { name: "Workspaces", exact: true }).click();
     const workspaces = dialog.locator('[data-search-result="workspace"]');
@@ -74,7 +84,7 @@ test("Search finds duplicate workspaces, ranks tabs and focuses the exact agent 
     const terminal = dialog.locator(
       `[data-search-result="pane"][data-search-pane-id="${fixture.terminalId}"]`,
     );
-    await expect(terminal).toContainText("Build review · 2");
+    await expect(terminal).toContainText("Build review 2");
     await expect(dialog.getByRole("option")).toHaveCount(1);
     await input.press("Enter");
     await expect(dialog).toHaveCount(0);

@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import type { DaemonConnection, ConnectionState } from "@concors/daemon-client";
-import { createProcessStore } from "./process-store";
+import { canInspectProcesses, createProcessStore } from "./process-store";
 
 afterEach(() => vi.useRealTimers());
 function fixture() {
@@ -107,4 +107,19 @@ it("keeps readings through a reconnect and ignores requests resolving after disp
   });
   await vi.advanceTimersByTimeAsync(0);
   expect(pendingStore.getSnapshot().snapshot).toBeNull();
+});
+
+it("tells a machine that cannot list processes from one with nothing to list", () => {
+  const snapshot = (warnings: string[]) => ({ sampledAt: 1, processes: [], warnings });
+  expect(
+    canInspectProcesses(
+      snapshot([
+        "Process inspection is available on Linux machines. Whole-machine CPU and RAM remain available on other platforms.",
+      ]),
+    ),
+  ).toBe(false);
+  expect(canInspectProcesses(snapshot([]))).toBe(true);
+  expect(
+    canInspectProcesses(snapshot(["Process scan limited to 8,192 operating-system entries."])),
+  ).toBe(true);
 });

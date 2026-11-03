@@ -58,8 +58,8 @@ it("indexes exact pane targets in display order without rewriting the desktop la
   const entries = workspaceEntries([project], [agent]);
   expect(entries.map((entry) => [entry.kind, entry.title, entry.target?.paneId])).toEqual([
     ["workspace", "Hologram", undefined],
-    ["pane", "Backend review · 1", "chat"],
-    ["pane", "Backend review · 2", "shell"],
+    ["pane", "Backend review 1", "chat"],
+    ["pane", "Backend review 2", "shell"],
   ]);
   expect(entries[1]?.target).toEqual({ projectId: "p", tabId: "t", paneId: "chat" });
   expect(project).toEqual(before);
