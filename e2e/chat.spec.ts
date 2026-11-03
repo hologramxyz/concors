@@ -73,7 +73,14 @@ test("shared chat streams, handles approvals and removes detached sidebar entrie
     await expect(page.getByLabel("Agent status: Interrupted").first()).toBeVisible();
     await page.getByRole("textbox", { name: "Message Codex" }).fill("approve command");
     await page.getByRole("button", { name: "Send message", exact: true }).click();
-    await expect(second.getByRole("region", { name: "Allow command execution?" })).toBeVisible();
+    const approval = second.getByRole("region", { name: "Allow command execution?" });
+    await expect(approval).toBeVisible();
+    // What an agent asks can be selected and copied, like the messages above it.
+    const asked = approval.getByRole("heading", { name: "Allow command execution?" });
+    await asked.click({ clickCount: 3 });
+    expect(
+      await asked.evaluate((element) => element.ownerDocument.getSelection()?.toString().trim()),
+    ).toBe("Allow command execution?");
     await second.getByRole("button", { name: "Decline", exact: true }).click();
     // The open chat has seen its finished turn, so it reads as Ready rather than Done.
     await expect(page.getByText(/^Worked for /)).toBeVisible();

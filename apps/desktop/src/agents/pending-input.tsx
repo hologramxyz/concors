@@ -29,7 +29,8 @@ export function PendingInput({
   return (
     <section
       aria-label={pending.title}
-      className="min-w-0 overflow-hidden rounded-xl border bg-card shadow-sm"
+      // Sits below the timeline, outside its selectable area: what it asks is worth copying too.
+      className="selectable min-w-0 overflow-hidden rounded-xl border bg-card shadow-sm"
     >
       <header className="flex items-start gap-2.5 px-4 pt-3.5">
         <span className="mt-px flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
