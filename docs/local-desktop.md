@@ -22,7 +22,7 @@ VITE_CONCORS_API_URL=https://concors-server-dev.up.railway.app pnpm desktop:pack
 The command builds the daemon archive, checks its relocated runtime with a real PTY,
 embeds the full directory as an application resource, and builds a `.deb` under
 `apps/desktop/src-tauri/target/release/bundle/deb/`. Install the package and launch Concors.
-A normal Concors account login is still required for the client. The control plane must
+No account is needed to use it on this computer (see [auth](auth.md)). The control plane must
 include `tauri://localhost` in its CORS/auth trusted origins for the Linux native app.
 
 For a faster local test, append `--debug --no-bundle`; run

@@ -75,10 +75,14 @@ async function mockApi(page: Page) {
   return state;
 }
 
+const GUEST_MENU = "Using this computer without an account";
+
 test("the sign-in screen remains scrollable in short windows", async ({ page }) => {
   await mockApi(page);
-  await page.setViewportSize({ width: 640, height: 320 });
   await page.goto("/");
+  await page.getByRole("button", { name: GUEST_MENU }).click();
+  await page.getByRole("menuitem", { name: "Sign in", exact: true }).click();
+  await page.setViewportSize({ width: 640, height: 320 });
   await expect(page.getByRole("heading", { name: "Continue to Concors" })).toBeVisible();
   const main = page.getByRole("main");
   await main.evaluate((element) => {
@@ -100,24 +104,24 @@ test("the sign-in screen remains scrollable in short windows", async ({ page }) 
   await page.screenshot({ path: "test-results/auth-short-window.png" });
 });
 
-test("the app is gated behind sign-in: restore a saved session, reload, sign out", async ({
+test("a saved session opens its account, and without one the app runs as a guest", async ({
   page,
 }) => {
   const api = await mockApi(page);
   const sidebar = page.getByRole("navigation", { name: "Primary" });
   const signInHeading = page.getByRole("heading", { name: "Continue to Concors" });
 
-  // Signed out: only the sign-in screen exists, offering no form of its own.
-  await page.goto("/");
-  await expect(signInHeading).toBeVisible();
-  await expect(sidebar).toHaveCount(0);
-  await expect(page.getByRole("textbox")).toHaveCount(0);
+  const guestMenu = sidebar.getByRole("button", { name: GUEST_MENU });
 
-  // A stale saved token is rejected and dropped.
+  // Nobody signed in: straight into the app, on this computer.
+  await page.goto("/");
+  await expect(guestMenu).toBeVisible();
+  await expect(signInHeading).toHaveCount(0);
+
+  // A stale saved token is rejected and dropped, which leaves a guest.
   await page.evaluate((key) => localStorage.setItem(key, "stale-token"), TOKEN_KEY);
   await page.reload();
-  await expect(signInHeading).toBeVisible();
-  await expect(sidebar).toHaveCount(0);
+  await expect(guestMenu).toBeVisible();
   expect(await page.evaluate((key) => localStorage.getItem(key), TOKEN_KEY)).toBeNull();
   expect(api.bearer.at(-1)).toBe("Bearer stale-token");
 
@@ -158,13 +162,13 @@ test("the app is gated behind sign-in: restore a saved session, reload, sign out
   await expect(sidebar.getByRole("button", { name: `Account: ${USER.name}` })).toBeVisible();
   await expect(signInHeading).toHaveCount(0);
 
-  // Sign out from the account menu → back to the sign-in screen, token gone and revoked.
+  // Sign out from the account menu → a guest again, token gone and revoked.
   await sidebar.getByRole("button", { name: `Account: ${USER.name}` }).click();
   await page.getByRole("menuitem", { name: "Sign out" }).click();
-  await expect(signInHeading).toBeVisible();
-  await expect(sidebar).toHaveCount(0);
+  await expect(guestMenu).toBeVisible();
+  await expect(sidebar.getByRole("button", { name: `Account: ${USER.name}` })).toHaveCount(0);
   expect(await page.evaluate((key) => localStorage.getItem(key), TOKEN_KEY)).toBeNull();
   await expect.poll(() => api.sessions.has(SESSION_TOKEN)).toBe(false);
   await page.reload();
-  await expect(signInHeading).toBeVisible();
+  await expect(guestMenu).toBeVisible();
 });

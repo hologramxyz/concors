@@ -1,9 +1,16 @@
 # Accounts and authentication
 
-The desktop app is gated behind a Concors account: a signed-out user sees nothing but the sign-in
-screen, and the workspace, machines and agents only render once the control plane
-(`concors-server`) confirms the session. This document describes how the client authenticates and
-what the server provides for it.
+The desktop app works without an account. With nobody signed in, it runs as a guest on this computer
+with a data folder of its own, and asks for an account only for what needs one: buying a machine,
+connecting a server, billing, SSH keys and connecting GitHub. On first sign-in, a guest's folder moves
+to the account unless that account already has one on this computer; then both stay as they are and
+the guest's reappears on signing out (`adoptGuestData`). Moving it stops the guest's session host, so
+running terminals and agents restart, and the sign-in screen says so.
+
+A saved session that cannot be checked is not a guest: that person has an account, so they see the
+sign-in screen and a retry instead of an empty workspace. The phone app still requires an account.
+
+This document describes how the client authenticates and what the server provides for it.
 
 ## Flow
 

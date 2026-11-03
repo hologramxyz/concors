@@ -1,5 +1,5 @@
 import { AccountAvatar } from "./account-avatar";
-import { ChevronsUpDown, Compass, LogOut, UserRound, Settings } from "lucide-react";
+import { ChevronsUpDown, Compass, LogIn, LogOut, UserRound, Settings } from "lucide-react";
 import { useContext, useState, type ReactNode } from "react";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import {
@@ -25,22 +25,70 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 interface AccountMenuProps {
-  readonly auth: SignedInAuth;
+  /** Null for a guest using this computer without an account. */
+  readonly auth: SignedInAuth | null;
   readonly onSignOut: () => void;
+  readonly onSignIn: () => void;
   readonly onOpenSettings: () => void;
   readonly collapsed?: boolean;
 }
 
-/** Sidebar footer: who is signed in, with settings and sign out. */
+/** Sidebar footer: who is signed in, with settings and sign out, or the way to sign in. */
 export function AccountMenu({
   auth,
   onSignOut,
+  onSignIn,
   onOpenSettings,
   collapsed = false,
 }: AccountMenuProps) {
   const compact = useContext(CompactLayoutContext);
   if (compact)
     return <MobileAccountMenu auth={auth} onSignOut={onSignOut} onOpenSettings={onOpenSettings} />;
+  if (!auth)
+    return (
+      <DropdownMenu>
+        <SidebarTooltip collapsed={collapsed}>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger
+              className={`flex items-center rounded-md hover:bg-sidebar-accent aria-expanded:bg-sidebar-accent ${collapsed ? "sidebar-rail-control" : "w-full gap-2 p-[8px] text-left"}`}
+              aria-label="Using this computer without an account"
+            >
+              <UserRound className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              {!collapsed && (
+                <>
+                  <span className="min-w-0 flex-1 truncate text-ui font-medium">This computer</span>
+                  <ChevronsUpDown
+                    className="size-3.5 shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                </>
+              )}
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent side={collapsed ? "right" : "top"} sideOffset={6}>
+            Settings and sign in
+          </TooltipContent>
+        </SidebarTooltip>
+        <DropdownMenuContent
+          align="start"
+          side="top"
+          className="w-[calc(var(--sidebar-width)-16px)] max-w-[calc(100vw-16px)]"
+        >
+          <DropdownMenuItem className="p-[8px] text-ui" onSelect={onOpenSettings}>
+            <Settings aria-hidden="true" />
+            Settings
+          </DropdownMenuItem>
+          <DropdownMenuItem className="p-[8px] text-ui" onSelect={replayTour}>
+            <Compass aria-hidden="true" />
+            Take the tour
+          </DropdownMenuItem>
+          <DropdownMenuItem className="p-[8px] text-ui" onSelect={onSignIn}>
+            <LogIn aria-hidden="true" />
+            Sign in
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
   return (
     <DropdownMenu>
       <SidebarTooltip collapsed={collapsed}>
@@ -103,7 +151,7 @@ export function MobileAccountMenu({
   organizationPicker,
   profile,
   onOpenProfile,
-}: Omit<AccountMenuProps, "auth"> & {
+}: Omit<AccountMenuProps, "auth" | "onSignIn"> & {
   auth: SignedInAuth | null;
   organizationPicker?: ReactNode;
   profile?: { name: string; email: string; image?: string | null } | null;
