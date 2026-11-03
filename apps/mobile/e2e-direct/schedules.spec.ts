@@ -49,7 +49,7 @@ test("mobile manages schedules through the native relay without horizontal overf
     await expect.poll(() => desktop.schedules?.[0]?.name).toBe("Mobile review");
     await ui.getByRole("button", { name: "Run Mobile review now", exact: true }).click();
     await expect(ui.getByRole("article").getByRole("status")).toHaveText("Done");
-    await ui.getByText("Recent runs · 1", { exact: true }).click();
+    await ui.getByText("Recent runs", { exact: true }).click();
     await page.screenshot({ path: test.info().outputPath("schedules-mobile.png") });
     await ui.getByRole("button", { name: "Open agent", exact: true }).click();
     await expect(ui.getByRole("log")).toContainText("Review the project");

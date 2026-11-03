@@ -7,9 +7,10 @@ import { BoundKeyChips } from "@/shortcuts/key-chips";
 
 /**
  * Where a tooltip sits. Sidebar rows and their icons open beside the sidebar, level with the row,
- * so they never cover another row or a row's "…" menu. Title-bar icons open below, where a tooltip
- * beside them would cover the next icon. Inside a menu or dialog, whose rows someone is scanning,
- * it opens sooner and just right of its row: beside the sidebar it would sit behind the dialog.
+ * so they never cover another row or a row's "…" menu. Title-bar icons, and other rows of icons,
+ * open below, where a tooltip beside them would cover the next icon. Inside a menu or dialog, whose
+ * rows someone is scanning, it opens sooner and just right of its row: beside the sidebar it would
+ * sit behind the dialog.
  */
 type TooltipPlace = "sidebar" | "title-bar" | "menu";
 

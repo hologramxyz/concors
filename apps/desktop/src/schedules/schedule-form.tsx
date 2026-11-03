@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAgents } from "@/agents/context";
 import { useSchedules } from "./use-schedules";
-import { days } from "./schedule-labels";
+import { days, parseTime, timeLabel } from "./schedule-labels";
 const selectClass =
   "h-9 w-full min-w-0 rounded-md border border-input bg-background px-3 text-ui outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
 export function ScheduleForm({
@@ -54,6 +54,9 @@ export function ScheduleForm({
   const [time, setTime] = useState(
     schedule?.cadence.kind !== "interval" ? (schedule?.cadence.time ?? "09:00") : "09:00",
   );
+  // The native time input draws "09:00 AM", which matches nothing else on the page. `null` while
+  // the field shows `time` as it is written everywhere; text only while someone is typing.
+  const [typedTime, setTypedTime] = useState<string | null>(null);
   const [timezone, setTimezone] = useState(
     schedule?.cadence.kind !== "interval"
       ? (schedule?.cadence.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone)
@@ -109,6 +112,11 @@ export function ScheduleForm({
           onSubmit={(event) => {
             event.preventDefault();
             setError(null);
+            const at = typedTime === null ? time : parseTime(typedTime);
+            if (cadence !== "interval" && !at) {
+              setError(`Enter a time like ${timeLabel("09:00")}`);
+              return;
+            }
             const value = ScheduleDefinitionSchema.safeParse({
               name,
               prompt,
@@ -123,7 +131,7 @@ export function ScheduleForm({
                   ? { kind: cadence, minutes }
                   : {
                       kind: cadence,
-                      time,
+                      time: at,
                       timezone,
                       ...(cadence === "weekly" ? { days: weekdays } : {}),
                     },
@@ -311,9 +319,16 @@ export function ScheduleForm({
                 <label className="block space-y-1.5">
                   <span>At</span>
                   <Input
-                    type="time"
-                    value={time}
-                    onChange={(e) => setTime(e.target.value)}
+                    value={typedTime ?? timeLabel(time)}
+                    onChange={(e) => setTypedTime(e.target.value)}
+                    onBlur={() => {
+                      const typed = typedTime === null ? null : parseTime(typedTime);
+                      if (!typed) return;
+                      setTime(typed);
+                      setTypedTime(null);
+                    }}
+                    placeholder={timeLabel("09:00")}
+                    autoComplete="off"
                     required
                   />
                 </label>

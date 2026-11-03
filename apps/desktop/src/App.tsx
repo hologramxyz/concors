@@ -44,6 +44,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { resolveStartupEndpoint, resolveHostEndpoint } from "@/daemon/resolve-endpoint";
 import { env } from "@/config/env";
 import { useDaemonConnection } from "@/daemon/use-daemon-connection";
+import { cn } from "@/lib/utils";
 import { navItemFor, type View } from "@/navigation";
 import { settingsNavItemFor, type SettingsPage } from "@/settings/navigation";
 import { SettingsSidebar } from "@/settings/settings-sidebar";
@@ -552,14 +553,24 @@ function AppContent() {
                             data-tauri-drag-region={
                               windowChrome.enabled || windowChrome.inset ? "deep" : undefined
                             }
-                            className="title-bar-row flex h-11 shrink-0 items-center gap-2 border-b pr-2 pl-4 select-none"
+                            className={cn(
+                              "title-bar-row flex shrink-0 items-center gap-2 border-b border-transparent pr-2 pl-4 select-none",
+                              windowChrome.inset ? "h-11" : "min-h-9 py-1",
+                            )}
                           >
                             {titleBarToggle}
-                            <h1 className="min-w-0 flex-1 truncate text-ui font-medium">
+                            {/* Each page titles itself. This strip only has to take the tab bar's
+                                height, which without a native title bar a tab decides, so that the
+                                content stays put moving between a chat and a page. */}
+                            <span aria-hidden="true" className="invisible border py-0.5 text-ui">
+                              &nbsp;
+                            </span>
+                            <h1 className="sr-only">
                               {view === "settings"
                                 ? settingsNavItemFor(settingsPage).label
                                 : navItemFor(view).label}
                             </h1>
+                            <span className="flex-1" aria-hidden="true" />
                             <WindowControls />
                           </header>
                         )}
