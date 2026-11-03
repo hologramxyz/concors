@@ -15,9 +15,9 @@ export function AboutSettings({
   buildVersion,
 }: AboutSettingsProps) {
   return (
-    <Section title="About" description="Version and service details for this Concors client.">
+    <Section title="About">
       <SettingsCard className="divide-y">
-        <Row label="Client version">
+        <Row label="Version">
           <Mono>{clientVersion}</Mono>
         </Row>
         {buildVersion !== undefined && (
@@ -25,10 +25,7 @@ export function AboutSettings({
             <Mono>{buildVersion ?? "Development / browser preview"}</Mono>
           </Row>
         )}
-        <Row
-          label="Concors API"
-          hint="Control plane for accounts, organizations, and cloud machines."
-        >
+        <Row label="Concors API">
           <Mono>{apiUrl}</Mono>
         </Row>
       </SettingsCard>

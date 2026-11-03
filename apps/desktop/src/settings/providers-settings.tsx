@@ -163,14 +163,14 @@ export function ProvidersSettings() {
                         : !p.installed
                           ? "Not installed"
                           : p.enabled
-                            ? "Installed · Enabled"
-                            : "Installed · Disabled"}
-                      {p.engine === "acp" ? " · ACP" : ""}
-                      {p.version?.installed ? ` · ${p.version.installed}` : ""}
+                            ? "Installed, enabled"
+                            : "Installed, disabled"}
+                      {p.engine === "acp" ? ", ACP" : ""}
+                      {p.version?.installed ? `, ${p.version.installed}` : ""}
                       {p.version?.updating
-                        ? " · Updating…"
+                        ? ", updating…"
                         : p.version?.updateAvailable
-                          ? ` · ${p.version.latest} available`
+                          ? `, ${p.version.latest} available`
                           : ""}
                     </p>
                     {p.version?.updateAvailable &&
@@ -398,7 +398,7 @@ function ProviderEditor({
             />
           </label>
           <label className="block space-y-1 text-sm">
-            Arguments · one per line
+            Arguments, one per line
             <Textarea
               className="font-mono text-sm"
               value={args}
@@ -454,7 +454,7 @@ function ProviderEditor({
                 />
               </label>
               <label className="block space-y-1 text-sm">
-                Model IDs · one per line
+                Model IDs, one per line
                 <Textarea
                   className="font-mono text-sm"
                   value={models}

@@ -12,11 +12,13 @@ test("Settings lists the plugins Claude Code and Codex installed, and turns them
   await open();
   const claude = page.getByRole("region", { name: "Claude Code plugins" });
   const codex = page.getByRole("region", { name: "Codex plugins" });
-  await expect(claude).toContainText("acme · v1.2.0");
+  await expect(claude).toContainText("acme");
+  await expect(claude).toContainText("v1.2.0");
+  await expect(claude).not.toContainText("·");
   await expect(codex).toContainText("Ship previews from a chat");
   // An organization's plugin is shown but changed where it is set.
   await expect(claude.getByRole("switch", { name: "house-style" })).toBeDisabled();
-  await expect(claude).toContainText("Set by a project or your organization");
+  await expect(claude.getByText(/managed by a project or your organization/)).toHaveCount(1);
 
   // The fixture CLIs keep their plugins across tests, so each switch is flipped and put back.
   for (const toggle of [

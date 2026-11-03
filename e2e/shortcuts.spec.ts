@@ -309,9 +309,8 @@ test("Mac workspace shortcuts use physical Control and display matching hints", 
     await page.keyboard.press("Backspace");
     await expect(panes).toHaveCount(0);
     await page.keyboard.press("Control+Shift+Slash");
-    await expect(page.getByRole("main")).toContainText(
-      "Default Mac bindings use Control (⌃), not Command (⌘).",
-    );
+    await expect(page.getByRole("main")).toContainText("Escape cancels a sequence.");
+    await expect(page.getByRole("main")).not.toContainText("Default Mac bindings");
     const closePane = page
       .getByRole("main")
       .getByText("Close pane", { exact: true })
@@ -413,7 +412,7 @@ test("each app teaches its own main shortcut, and Settings lists the rest beside
   await expect(row("Search workspaces, agents and tabs").locator("kbd")).toHaveCount(1);
   await expect(row("Search workspaces, agents and tabs")).toContainText("also");
   await expect(row("Search workspaces, agents and tabs")).toContainText("outside terminals");
-  await expect(row("Rename tab")).toContainText("Focused tab");
+  await expect(row("Rename tab")).toContainText("focused tab");
   await expect(page.getByRole("main")).not.toContainText("Desktop app only");
   await expect(page.getByRole("main")).not.toContainText("release the first combination");
 

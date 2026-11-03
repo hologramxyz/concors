@@ -183,7 +183,7 @@ export function MachinesView({
             >
               <RefreshCw className={cn(state.loading && "animate-spin")} aria-hidden="true" />
             </Button>
-            {purchases && (
+            {purchases && !empty && (
               <NewMachineMenu
                 variant="outline"
                 size="sm"
@@ -228,9 +228,6 @@ export function MachinesView({
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2.5">
                   <h3 className="text-base font-semibold">This computer</h3>
-                  <Badge variant="outline" className={BADGE_TONE_CLASS.info}>
-                    Local
-                  </Badge>
                   {localSelected && <Badge variant="secondary">Current</Badge>}
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">

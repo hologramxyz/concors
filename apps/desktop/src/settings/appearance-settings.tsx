@@ -43,12 +43,9 @@ export function AppearanceSettings({
 
   return (
     <>
-      <Section
-        title="Theme"
-        description="Use one theme across your workspace, agent chats, and terminals."
-      >
+      <Section title="Theme">
         <SettingsCard>
-          <Row label="Interface theme" hint="Follow the system or choose one explicitly.">
+          <Row label="Interface theme">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -81,10 +78,7 @@ export function AppearanceSettings({
         </SettingsCard>
       </Section>
       <ColorThemeSettings />
-      <Section
-        title="Interface"
-        description="Choose the corner style for frames, tabs, buttons, menus, and agent inputs."
-      >
+      <Section title="Interface">
         <SettingsCard className="p-4">
           <fieldset>
             <legend className="mb-3 text-sm font-medium">Corner style</legend>

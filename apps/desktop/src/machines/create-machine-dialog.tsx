@@ -306,7 +306,7 @@ export function CreateMachineDialog({
                           <span className="flex min-w-0 items-start gap-2 text-xs leading-relaxed text-muted-foreground">
                             <Server className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
                             <span>
-                              {candidate.vcpus} vCPU · {candidate.ramGb} GB RAM · {candidate.diskGb}{" "}
+                              {candidate.vcpus} vCPU, {candidate.ramGb} GB RAM, {candidate.diskGb}{" "}
                               GB disk
                             </span>
                           </span>
@@ -346,10 +346,10 @@ export function CreateMachineDialog({
                     <div className="min-w-0 space-y-1">
                       <p className="font-medium break-all">{name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {chosenRegion?.location} · <span className="capitalize">{size}</span>
+                        {chosenRegion?.location}, <span className="capitalize">{size}</span>
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {chosenSize?.vcpus} vCPU · {chosenSize?.ramGb} GB RAM · {chosenSize?.diskGb}{" "}
+                        {chosenSize?.vcpus} vCPU, {chosenSize?.ramGb} GB RAM, {chosenSize?.diskGb}{" "}
                         GB disk
                       </p>
                     </div>
@@ -377,7 +377,7 @@ export function CreateMachineDialog({
                               tools.docker ? "Docker & Compose" : null,
                             ]
                               .filter(Boolean)
-                              .join(" · ") || "No optional tools selected"
+                              .join(", ") || "No optional tools selected"
                           : "No optional tools selected"}
                       </p>
                     </div>

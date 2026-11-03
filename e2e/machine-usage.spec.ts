@@ -151,7 +151,7 @@ test("machine cards display usage, poll, and identify stale or missing reports",
   expect(reads).toBeGreaterThan(before);
   fail = true;
   await page.clock.fastForward(90000);
-  await expect(page.getByText(/Out of date · last updated/)).toBeVisible();
+  await expect(page.getByText(/Out of date\. Last updated/)).toBeVisible();
   await expect(memory).toHaveAttribute("aria-valuetext", "50%, last reported");
   fail = false;
   usage = { ...usage, sampledAt: await page.evaluate(() => new Date().toISOString()), disk: null };

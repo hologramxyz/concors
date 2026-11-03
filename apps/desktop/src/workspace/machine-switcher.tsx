@@ -138,12 +138,7 @@ export function MachineSwitcher({
           <MachineIcon local />
           <span className="min-w-0 flex-1 truncate">This computer</span>
           <span className="flex w-9 shrink-0 items-center justify-end gap-2" aria-hidden="true">
-            {selected.machineId === "local" && (
-              <>
-                {connected && <span className="size-1.5 shrink-0 rounded-full bg-emerald-500" />}
-                <Check className="size-4 text-primary" />
-              </>
-            )}
+            {selected.machineId === "local" && <Check className="size-4 text-primary" />}
           </span>
         </DropdownMenuItem>
         {cloudMachines?.map((machine) => {
@@ -187,9 +182,11 @@ export function MachineSwitcher({
                 {checking === machine.id ? (
                   <LoaderCircle className="size-3 shrink-0 animate-spin text-muted-foreground" />
                 ) : (
-                  <span
-                    className={`size-1.5 shrink-0 rounded-full ${(isSelected && connected) || machineState === "connectable" ? "bg-emerald-500" : machineState === "provisioning" ? "bg-amber-500" : "bg-muted-foreground/50"}`}
-                  />
+                  !isSelected && (
+                    <span
+                      className={`size-1.5 shrink-0 rounded-full ${machineState === "connectable" ? "bg-emerald-500" : machineState === "provisioning" ? "bg-amber-500" : "bg-muted-foreground/50"}`}
+                    />
+                  )
                 )}
                 {isSelected ? (
                   <Check className="size-4 text-primary" />

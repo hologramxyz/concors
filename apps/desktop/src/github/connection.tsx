@@ -17,28 +17,34 @@ export function GitHubConnection({ github }: { readonly github: ReturnType<typeo
           <GitHubIcon className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-medium">
-                {status?.connected ? `GitHub · ${status.login}` : "GitHub"}
+              <p className="flex min-w-0 items-baseline gap-2 text-sm font-medium whitespace-nowrap">
+                GitHub
+                {status?.connected && (
+                  <span className="min-w-0 truncate font-normal text-muted-foreground">
+                    {status.login}
+                  </span>
+                )}
               </p>
               {(status?.connected || identityConnected) && (
                 <Badge variant="secondary">Connected</Badge>
               )}
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {!status
-                ? error
-                  ? "Could not check connection."
-                  : "Checking connection…"
-                : !status.configured
-                  ? "GitHub integration is not available yet."
-                  : status.connected
-                    ? accounts?.length === 0
+            {/* Connected says so in its badge; there is only more to say when it needs doing. */}
+            {!(status?.connected && accounts?.length !== 0) && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {!status
+                  ? error
+                    ? "Could not check connection."
+                    : "Checking connection…"
+                  : !status.configured
+                    ? "GitHub integration is not available yet."
+                    : status.connected
                       ? "GitHub connected. Choose an account or organization to access its repositories."
-                      : "Connected across your VPSs."
-                    : identityConnected
-                      ? "Connected for sign-in. Enable repository access to use private repositories on your VPSs."
-                      : "Connect GitHub, then choose your accounts and repositories."}
-            </p>
+                      : identityConnected
+                        ? "Connected for sign-in. Enable repository access to use private repositories on your VPSs."
+                        : "Connect GitHub, then choose your accounts and repositories."}
+              </p>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap gap-2 md:justify-end">
@@ -103,10 +109,6 @@ export function GitHubConnection({ github }: { readonly github: ReturnType<typeo
               ))}
             </div>
           ) : null}
-          <p className="text-xs text-muted-foreground">
-            Missing an organization or repository? Add it on GitHub and choose all repositories or
-            specific ones. Some organizations require an owner’s approval.
-          </p>
         </div>
       )}
       {waiting && (

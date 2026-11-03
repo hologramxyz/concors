@@ -1623,7 +1623,7 @@ function SubscriptionLibraryRow({
           : !account
             ? "Checking sign-in…"
             : connected
-              ? `Connected${account.label && account.label !== name ? ` · ${account.label}` : ""}`
+              ? `Connected${account.label && account.label !== name ? ` as ${account.label}` : ""}`
               : "Not connected";
   const checkingAccount = usable && !account && !failed;
   // Not signed in here: limits read from a machine that is.
@@ -1643,20 +1643,10 @@ function SubscriptionLibraryRow({
             <span className="text-xs text-muted-foreground">{usage.usage.planLabel}</span>
           )}
         </div>
-        <div className="mt-1 flex flex-wrap items-center gap-x-1 text-xs text-muted-foreground">
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
           <span>{status}</span>
-          {!!usedOn.length && (
-            <>
-              <span aria-hidden="true">·</span>
-              <MachineAssignmentsHover machines={usedOn} />
-            </>
-          )}
-          {remoteUsage && (
-            <>
-              <span aria-hidden="true">·</span>
-              <span>Usage from {remoteUsage.from}</span>
-            </>
-          )}
+          {!!usedOn.length && <MachineAssignmentsHover machines={usedOn} />}
+          {remoteUsage && <span>Usage from {remoteUsage.from}</span>}
         </div>
         {usageSupported && (connected || checkingAccount) ? (
           <SubscriptionUsage usage={connected ? usage : undefined} />

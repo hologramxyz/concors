@@ -53,7 +53,7 @@ export function PluginsSettings() {
   return (
     <Section
       title="Plugins"
-      description="Skills, commands and tools that Claude Code and Codex plugins add to every chat on this machine."
+      description="Skills, commands and tools for every chat on this machine."
     >
       {!supported ? (
         <p role="status" className="text-sm text-muted-foreground">
@@ -77,8 +77,7 @@ export function PluginsSettings() {
             <ProviderPlugins key={provider.id} provider={provider} />
           ))}
           <p className="text-sm text-muted-foreground">
-            Chats started after a change load it; open chats keep the plugins they started with. A
-            plugin that connects to an account asks you to sign in through its CLI.
+            Changes apply to new chats. Open chats keep the plugins they started with.
           </p>
         </div>
       )}
@@ -154,19 +153,13 @@ function ProviderPlugins({ provider }: { provider: ProviderStatus }) {
           >
             <span className="min-w-0 flex-1">
               <span className="block text-sm font-medium">{plugin.name}</span>
-              <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                {[plugin.marketplace, plugin.version && `v${plugin.version}`]
-                  .filter(Boolean)
-                  .join(" · ")}
+              <span className="mt-0.5 flex gap-2 text-xs text-muted-foreground">
+                <span className="min-w-0 truncate">{plugin.marketplace}</span>
+                {plugin.version && <span className="shrink-0">v{plugin.version}</span>}
               </span>
               {plugin.description && (
                 <span className="mt-1 block text-xs text-muted-foreground">
                   {plugin.description}
-                </span>
-              )}
-              {!plugin.canToggle && (
-                <span className="mt-1 block text-xs text-muted-foreground">
-                  Set by a project or your organization, so it is changed there.
                 </span>
               )}
             </span>
@@ -182,6 +175,11 @@ function ProviderPlugins({ provider }: { provider: ProviderStatus }) {
           </label>
         ))}
       </SettingsCard>
+      {plugins?.some((plugin) => !plugin.canToggle) && (
+        <p className="text-xs text-muted-foreground">
+          Plugins that can’t be switched here are managed by a project or your organization.
+        </p>
+      )}
       {plugins && plugins.length > 0 && (
         <p className="text-xs text-muted-foreground">{INSTALL_HINTS[provider.id]}</p>
       )}
