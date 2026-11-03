@@ -718,7 +718,7 @@ function AppContent() {
                               <StartupScreen embedded onOpenSettings={connectionSettings} />
                             )
                           ) : (
-                            <ResourcesView machine={selectedHost.label} />
+                            <ResourcesView />
                           )}
                         </main>
                         {view !== "settings" && (

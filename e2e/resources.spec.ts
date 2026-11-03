@@ -228,7 +228,7 @@ test("a preview left running for days, or holding a lot of memory, is flagged wi
   ).toBeEnabled();
 });
 
-test("Resources uses the page header, and a machine without process inspection has no process help", async ({
+test("Resources uses the page header, and a machine without process inspection says so instead of listing", async ({
   page,
 }) => {
   const inspect = async (warnings: string[]) => {
@@ -258,8 +258,24 @@ test("Resources uses the page header, and a machine without process inspection h
   const title = page.getByRole("heading", { name: "Resources", level: 2 });
   await expect(title).toHaveCSS("font-size", "20px");
   await expect(page.getByText(/CPU and memory\.$/)).toBeVisible();
+  const main = page.getByRole("main");
+  const empty = main.getByRole("heading", {
+    name: "Process details aren’t available on this computer",
+    level: 3,
+  });
+  await expect(empty).toBeVisible();
+  await expect(
+    main.getByText("They’re available on Linux machines, such as cloud machines."),
+  ).toBeVisible();
+  await expect(main.getByRole("group", { name: "Machine resource usage" })).toHaveCount(0);
+  await expect(main.getByRole("list", { name: "Running processes" })).toHaveCount(0);
+  await expect(main.getByRole("textbox", { name: "Filter resources" })).toHaveCount(0);
   await expect(page.getByText("About resource usage")).toHaveCount(0);
   await page.unrouteAll({ behavior: "ignoreErrors" });
   await inspect([]);
   await expect(page.getByText("About resource usage")).toBeVisible();
+  await expect(empty).toHaveCount(0);
+  await expect(main.getByRole("textbox", { name: "Filter resources" })).toBeVisible();
+  await expect(main.getByRole("combobox", { name: "Sort processes" })).toBeVisible();
+  await expect(main.getByRole("list", { name: "Running processes" })).toBeVisible();
 });

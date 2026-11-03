@@ -1,5 +1,5 @@
 import { useContext, useState } from "react";
-import { ChevronDown, RefreshCw } from "lucide-react";
+import { ChevronDown, Cpu, RefreshCw } from "lucide-react";
 import { RESOURCES_CAPABILITY, type MachineProcess } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { Button } from "@/components/ui/button";
@@ -9,21 +9,15 @@ import { useProcesses } from "./use-processes";
 import { canInspectProcesses, isInspectionWarning, processStore } from "./process-store";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import { ResourceProcessRow } from "./process-row";
-import { ResourceStatus } from "./resource-status";
 import { StopProcessDialog } from "./stop-process-dialog";
 
-export function ResourcesView({ machine = "" }: { machine?: string }) {
+export function ResourcesView() {
   const connection = useContext(TerminalConnectionContext);
   // Discard confirmations when the selected machine changes.
-  return (
-    <ResourceContent
-      key={connection ? processStore(connection).scope : "offline"}
-      machine={machine}
-    />
-  );
+  return <ResourceContent key={connection ? processStore(connection).scope : "offline"} />;
 }
 
-function ResourceContent({ machine }: { machine: string }) {
+function ResourceContent() {
   const compact = useContext(CompactLayoutContext);
   const { connection, snapshot, error: processError, loading, refresh } = useProcesses();
   const [query, setQuery] = useState("");
@@ -65,7 +59,10 @@ function ResourceContent({ machine }: { machine: string }) {
   return (
     <div
       className={
-        compact ? "space-y-4 py-2" : "mx-auto w-full max-w-5xl space-y-5 px-4 py-6 sm:px-8 sm:py-8"
+        compact
+          ? "space-y-4 py-2"
+          : // Only the empty state fills the page, to centre as Schedules' and Pull requests' do.
+            `mx-auto w-full max-w-5xl space-y-5 px-4 py-6 sm:px-8 sm:py-8 ${uninspected ? "flex min-h-full flex-col" : ""}`
       }
     >
       {!compact && (
@@ -78,13 +75,20 @@ function ResourceContent({ machine }: { machine: string }) {
           </p>
         </div>
       )}
-      {uninspected && !compact && connection && (
-        <ResourceStatus
-          connection={connection}
-          state={connection.state}
-          machine={machine}
-          compact
-        />
+      {uninspected && (
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 py-20 text-center">
+          <div className="flex size-14 items-center justify-center rounded-xl border bg-muted/40">
+            <Cpu className="size-6 text-muted-foreground" />
+          </div>
+          <div className="flex max-w-xl flex-col items-center">
+            <h3 className="text-lg font-medium">
+              Process details aren&rsquo;t available on this computer
+            </h3>
+            <p className="mt-2 text-ui leading-relaxed text-muted-foreground">
+              They&rsquo;re available on Linux machines, such as cloud machines.
+            </p>
+          </div>
+        </div>
       )}
       {showControls && (
         <div className="flex flex-wrap items-center gap-2">

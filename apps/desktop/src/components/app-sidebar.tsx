@@ -286,10 +286,11 @@ function WorkspaceTree(props: AppSidebarProps) {
     connection?.state.status === "ready" &&
     !!connection.state.daemon.capabilities?.includes(PANE_RENAME_CAPABILITY);
   // Chats of a closed workspace come back with its folder, so they are not listed apart. Older
-  // daemons remove workspaces instead, and their chats can only be listed as unavailable.
-  const keepsClosed =
+  // daemons remove workspaces instead, and their chats can only be listed as unavailable. Only a
+  // daemon that has answered can be called older: one out of reach still has its closed workspaces.
+  const removesWorkspaces =
     connection?.state.status === "ready" &&
-    !!connection.state.daemon.capabilities?.includes(PROJECT_CLOSE_CAPABILITY);
+    !connection.state.daemon.capabilities?.includes(PROJECT_CLOSE_CAPABILITY);
   /**
    * A tab nobody named shows its main pane's title, so renaming its row names that pane, as the
    * pane's own menu does: the tab, the pane and the chat once closed all keep the name, and
@@ -466,7 +467,9 @@ function WorkspaceTree(props: AppSidebarProps) {
               </Fragment>
             );
           })}
-          {!props.collapsed && !keepsClosed && <UnavailableChats chats={unavailable} now={now} />}
+          {!props.collapsed && removesWorkspaces && (
+            <UnavailableChats chats={unavailable} now={now} />
+          )}
         </ul>
       ) : null}
     </>
