@@ -75,9 +75,10 @@ interface AppSidebarProps {
   machineConnected: boolean;
   onSelectMachine: (host: Host) => void;
   onViewCloud: (machineId?: string) => void;
-  auth: SignedInAuth;
+  auth: SignedInAuth | null;
   /** The workspace is loaded, so Take the tour has something to point at. */
   canTour: boolean;
+  onSignIn: () => void;
   onSignOut: () => void;
   execute: (operation: WorkspaceOperation) => Promise<void>;
   /** Like `execute`, but a failure is shown in the window's error banner. */
@@ -102,8 +103,8 @@ export function AppSidebar(props: AppSidebarProps) {
   const machineSwitcher = (
     <MachineSwitcher
       compact={false}
-      key={activeOrganization(props.auth)?.id}
-      organizationId={activeOrganization(props.auth)?.id}
+      key={props.auth ? activeOrganization(props.auth)?.id : undefined}
+      organizationId={props.auth ? activeOrganization(props.auth)?.id : undefined}
       onViewCloud={props.onViewCloud}
       scope={props.hostScope}
       selected={props.selectedHost}
@@ -194,6 +195,7 @@ export function AppSidebar(props: AppSidebarProps) {
             auth={props.auth}
             canTour={props.canTour}
             onSignOut={props.onSignOut}
+            onSignIn={props.onSignIn}
             onOpenSettings={props.onOpenSettings}
           />
         </div>

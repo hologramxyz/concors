@@ -4,7 +4,9 @@ import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { adoptLegacyData } from "./profile-migration.ts";
+import { GUEST_PROFILE_USER } from "@concors/protocol";
+
+import { adoptGuestData, adoptLegacyData } from "./profile-migration.ts";
 import { profileDir } from "./profile.ts";
 
 const PROD = "https://api.concors.dev";
@@ -86,5 +88,90 @@ describe("adoptLegacyData", () => {
     expect(await adoptLegacyData(prod, env)).toBe(true);
     expect(await adoptLegacyData(dev, env)).toBe(false);
     expect(prod).not.toBe(dev);
+  });
+});
+
+describe("adoptGuestData", () => {
+  const guest = { origin: PROD, userId: GUEST_PROFILE_USER };
+  const account = { origin: PROD, userId: "user_1" };
+
+  async function guestWork(dir: string): Promise<string> {
+    const env = { CONCORS_DATA_DIR: dir };
+    const folder = profileDir(guest, env);
+    await mkdir(join(folder, "providers"), { recursive: true });
+    await writeFile(join(folder, "workspace.sqlite"), "guest work");
+    await writeFile(join(folder, "providers", "anthropic.json"), "credential");
+    return folder;
+  }
+
+  it("moves a guest's whole folder to the first account that signs in", async () => {
+    const dir = await base();
+    const folder = await guestWork(dir);
+    const env = { CONCORS_DATA_DIR: dir };
+
+    expect(await adoptGuestData(account, env)).toBe(true);
+
+    const target = profileDir(account, env);
+    expect(await readFile(join(target, "workspace.sqlite"), "utf8")).toBe("guest work");
+    expect(await readFile(join(target, "providers", "anthropic.json"), "utf8")).toBe("credential");
+    // The next guest starts empty.
+    expect(existsSync(folder)).toBe(false);
+  });
+
+  it("leaves both untouched when the account already has data on this computer", async () => {
+    const dir = await base();
+    const folder = await guestWork(dir);
+    const env = { CONCORS_DATA_DIR: dir };
+    const target = profileDir(account, env);
+    await mkdir(target, { recursive: true });
+    await writeFile(join(target, "workspace.sqlite"), "account work");
+
+    expect(await adoptGuestData(account, env)).toBe(false);
+
+    expect(await readFile(join(target, "workspace.sqlite"), "utf8")).toBe("account work");
+    expect(await readFile(join(folder, "workspace.sqlite"), "utf8")).toBe("guest work");
+  });
+
+  it("gives a second account nothing once the first has taken the work", async () => {
+    const dir = await base();
+    await guestWork(dir);
+    const env = { CONCORS_DATA_DIR: dir };
+    await adoptGuestData(account, env);
+
+    const second = { origin: PROD, userId: "user_2" };
+    expect(await adoptGuestData(second, env)).toBe(false);
+    expect(existsSync(profileDir(second, env))).toBe(false);
+  });
+
+  it("does nothing when there is no guest work, or when the guest itself starts", async () => {
+    const dir = await base();
+    const env = { CONCORS_DATA_DIR: dir };
+    expect(await adoptGuestData(account, env)).toBe(false);
+    expect(existsSync(profileDir(account, env))).toBe(false);
+
+    const folder = await guestWork(dir);
+    expect(await adoptGuestData(guest, env)).toBe(false);
+    expect(existsSync(folder)).toBe(true);
+  });
+
+  it("keeps work apart between control planes", async () => {
+    const dir = await base();
+    await guestWork(dir);
+    const env = { CONCORS_DATA_DIR: dir };
+    const other = { origin: "https://dev.example.com", userId: "user_1" };
+
+    expect(await adoptGuestData(other, env)).toBe(false);
+    expect(existsSync(profileDir(guest, env))).toBe(true);
+  });
+
+  it("does not carry a crashed host's lock into the account's folder", async () => {
+    const dir = await base();
+    const folder = await guestWork(dir);
+    const env = { CONCORS_DATA_DIR: dir };
+    await mkdir(join(folder, "session-host"), { recursive: true });
+
+    await adoptGuestData(account, env);
+
+    expect(existsSync(join(profileDir(account, env), "session-host"))).toBe(false);
   });
 });
