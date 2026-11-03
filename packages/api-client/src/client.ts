@@ -169,12 +169,15 @@ export class ApiClient {
     readonly platform: string;
     readonly arch: string;
     readonly formats: readonly string[];
+    /** Adds this copy to today's anonymous total. Sent once a day; see `findUpdate`. */
+    readonly count?: "account" | "guest";
   }): Promise<DesktopUpdate | null> {
     if (input.formats.length === 0) return null;
     const path =
       `/api/v1/releases/desktop/${encodeURIComponent(input.platform)}` +
       `/${encodeURIComponent(input.arch)}/${encodeURIComponent(input.version)}` +
-      `?formats=${encodeURIComponent(input.formats.join(","))}`;
+      `?formats=${encodeURIComponent(input.formats.join(","))}` +
+      (input.count ? `&count=${input.count}` : "");
     const { response } = await this.#request("GET", path, { schema: null });
     if (response.status === 204) return null;
 

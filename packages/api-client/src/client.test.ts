@@ -363,6 +363,16 @@ describe("ApiClient desktop updates", () => {
     sha256: "2d1a94216e316fc8af081e7204a1b7f0a1dbcb1f5a6ae07f9dbc9fda46bbecfa",
   };
 
+  it("asks to be counted only when told to", async () => {
+    const fetch = vi.fn(async () => new Response(null, { status: 204 }));
+    const { api } = client(fetch as unknown as typeof globalThis.fetch);
+    const input = { version: "0.6.18", platform: "darwin", arch: "aarch64", formats: ["dmg"] };
+    await api.getDesktopUpdate({ ...input, count: "guest" });
+    await api.getDesktopUpdate(input);
+    expect(String(fetch.mock.calls[0]?.[0 as never])).toContain("?formats=dmg&count=guest");
+    expect(String(fetch.mock.calls[1]?.[0 as never])).not.toContain("count");
+  });
+
   it.each(["dmg", "nsis", "pacman"])("accepts a %s update", async (format) => {
     const fetch = vi.fn(async () => json({ ...MAC_UPDATE, format }));
     const { api } = client(fetch as unknown as typeof globalThis.fetch);

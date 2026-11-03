@@ -70,18 +70,36 @@ export interface AppUpdateDependencies {
     platform: string;
     arch: string;
     formats: readonly string[];
+    count?: "account" | "guest";
   }): Promise<DesktopUpdate | null>;
   install(input: {
     url: string;
     sha256: string;
     size: number;
     format: string;
-    token: string;
     version: string;
   }): Promise<void>;
-  /** The session token; builds are served only to signed-in clients. */
-  token(): string | null;
+  /** Whether this copy is signed in, which is the only thing a count says about it. */
+  signedIn(): boolean;
+  /** The UTC day this copy was last counted, if any. */
+  countedDay(): string | null;
+  rememberCounted(day: string): void;
+  now?(): number;
   version?: string;
+}
+
+/**
+ * What a check adds to the anonymous count of active copies: copies check every half hour, so only
+ * the first check of a UTC day says anything. No ID is involved, here or on the control plane, so
+ * this counts copies without being able to tell them apart.
+ */
+export function copyToCount(
+  countedDay: string | null,
+  today: string,
+  signedIn: boolean,
+): "account" | "guest" | undefined {
+  if (countedDay === today) return undefined;
+  return signedIn ? "account" : "guest";
 }
 
 /** The update this copy should be told about, or `null`. Never throws: a failed check is silence. */
@@ -92,12 +110,17 @@ export async function findUpdate(
     const report = await dependencies.installation();
     const { formats, installable } = updateQuery(report);
     if (formats.length === 0) return null;
+    const today = new Date(dependencies.now?.() ?? Date.now()).toISOString().slice(0, 10);
+    const count = copyToCount(dependencies.countedDay(), today, dependencies.signedIn());
     const update = await dependencies.check({
       version: dependencies.version ?? APP_VERSION,
       platform: report.platform,
       arch: report.arch,
       formats,
+      ...(count ? { count } : {}),
     });
+    // Only once it arrived: a check that failed offline should not use up the day's count.
+    if (count) dependencies.rememberCounted(today);
     return update ? { update, installable } : null;
   } catch {
     // The control plane being unreachable is not something to interrupt anyone about.
@@ -119,23 +142,36 @@ export async function applyUpdate(
   dependencies: AppUpdateDependencies,
   update: DesktopUpdate,
 ): Promise<void> {
-  const token = dependencies.token();
-  if (!token) throw new Error("Sign in to download this update.");
   await dependencies.install({
     url: update.url,
     sha256: update.sha256,
     size: update.size,
     format: update.format,
-    token,
     version: update.version,
   });
 }
+
+const COUNTED_DAY_KEY = "concors.update-counted-day";
 
 const liveDependencies: AppUpdateDependencies = {
   installation: () => appUpdate.installation(),
   check: (input) => api.getDesktopUpdate(input),
   install: (input) => appUpdate.install(input),
-  token: () => api.tokens.get(),
+  signedIn: () => !!api.tokens.get(),
+  countedDay: () => {
+    try {
+      return localStorage.getItem(COUNTED_DAY_KEY);
+    } catch {
+      return null;
+    }
+  },
+  rememberCounted: (day) => {
+    try {
+      localStorage.setItem(COUNTED_DAY_KEY, day);
+    } catch {
+      // Counted again tomorrow as usual; a repeat today only makes a rough total slightly rougher.
+    }
+  },
 };
 
 export interface AppUpdateControls {

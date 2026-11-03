@@ -6,6 +6,7 @@ import { InstallationReportSchema } from "@/tauri/app-update";
 
 import {
   applyUpdate,
+  copyToCount,
   CHECK_INTERVAL_MS,
   findUpdate,
   FOCUS_THROTTLE_MS,
@@ -40,7 +41,9 @@ function dependencies(over: Partial<AppUpdateDependencies> = {}): AppUpdateDepen
     installation: () => Promise.resolve(report()),
     check: () => Promise.resolve(UPDATE),
     install: () => Promise.resolve(),
-    token: () => "session-token",
+    signedIn: () => true,
+    countedDay: () => null,
+    rememberCounted: () => undefined,
     version: "0.1.0",
     ...over,
   };
@@ -148,6 +151,7 @@ describe("findUpdate", () => {
       platform: "linux",
       arch: "x86_64",
       formats: ["pacman"],
+      count: "account",
     });
     expect(found).toEqual({ update: UPDATE, installable: true });
   });
@@ -194,7 +198,7 @@ describe("findUpdate", () => {
 });
 
 describe("applyUpdate", () => {
-  it("hands the native side the build, its digest and a session token", async () => {
+  it("hands the native side the build and its digest, with no credential", async () => {
     const install = vi.fn(() => Promise.resolve());
 
     await applyUpdate(dependencies({ install }), UPDATE);
@@ -205,18 +209,56 @@ describe("applyUpdate", () => {
       // Passed through so a truncated download is reported as one, not as a checksum failure.
       size: 48_765_146,
       format: "pacman",
-      token: "session-token",
       version: "0.2.0",
     });
   });
+});
 
-  it("refuses to download without a session instead of failing in the shell", async () => {
-    const install = vi.fn(() => Promise.resolve());
+describe("counting copies", () => {
+  const today = "2026-11-03";
+  const now = () => Date.UTC(2026, 10, 3, 12, 0, 0);
 
-    await expect(applyUpdate(dependencies({ install, token: () => null }), UPDATE)).rejects.toThrow(
-      "Sign in",
+  it("says what a copy is on its first check of the day, then nothing", () => {
+    expect(copyToCount(null, today, false)).toBe("guest");
+    expect(copyToCount("2026-11-02", today, true)).toBe("account");
+    expect(copyToCount(today, today, true)).toBeUndefined();
+    expect(copyToCount(today, today, false)).toBeUndefined();
+  });
+
+  it("sends the count once, and remembers the day only when the check got through", async () => {
+    const check = vi.fn<AppUpdateDependencies["check"]>(() => Promise.resolve(null));
+    const rememberCounted = vi.fn();
+    await findUpdate(dependencies({ check, rememberCounted, signedIn: () => false, now }));
+    expect(check.mock.calls[0]?.[0]).toMatchObject({ count: "guest" });
+    expect(rememberCounted).toHaveBeenCalledWith(today);
+
+    check.mockClear();
+    rememberCounted.mockClear();
+    await findUpdate(dependencies({ check, rememberCounted, countedDay: () => today, now }));
+    expect(check.mock.calls[0]?.[0]).not.toHaveProperty("count");
+    expect(rememberCounted).not.toHaveBeenCalled();
+  });
+
+  it("keeps the day's count for later when the check fails", async () => {
+    const rememberCounted = vi.fn();
+    await findUpdate(
+      dependencies({ check: () => Promise.reject(new Error("offline")), rememberCounted, now }),
     );
-    expect(install).not.toHaveBeenCalled();
+    expect(rememberCounted).not.toHaveBeenCalled();
+  });
+
+  it("does not count a build from a checkout", async () => {
+    const check = vi.fn<AppUpdateDependencies["check"]>(() => Promise.resolve(null));
+    const rememberCounted = vi.fn();
+    await findUpdate(
+      dependencies({
+        check,
+        rememberCounted,
+        installation: () => Promise.resolve(report({ kind: "development", formats: [] })),
+      }),
+    );
+    expect(check).not.toHaveBeenCalled();
+    expect(rememberCounted).not.toHaveBeenCalled();
   });
 });
 

@@ -9,9 +9,8 @@
 //! Downloading and verifying use the system's `curl` and `sha256sum` (`certutil` on Windows, which
 //! has had `curl` since Windows 10 1803 but has no `sha256sum`) rather than HTTP and digest crates,
 //! for the same reason `ssh_key.rs` uses `ssh-keygen`: they are present wherever this app runs, and
-//! their behaviour around redirects and proxies is the one users already configured.
-//! `curl` is told not to carry our credential across a redirect, so the session token reaches the
-//! control plane and never the host storing the build.
+//! their behaviour around redirects and proxies is the one users already configured. Downloads
+//! carry no credential: a copy without an account has to be able to update too.
 
 use std::ffi::OsStr;
 use std::fs;
@@ -237,8 +236,6 @@ pub struct UpdateRequest {
     size: u64,
     /// Release format, which must be one this installation can apply.
     format: String,
-    /// Session token for the control plane. Never written to the command line.
-    token: String,
     /// Version being installed; used for the downloaded file's name only.
     version: String,
 }
@@ -321,7 +318,7 @@ fn download_and_install(
         _ => format!("concors-{}.tar.gz", request.version),
     };
     let file = directory.join(name);
-    download(&request.url, &request.token, &file)?;
+    download(&request.url, &file)?;
     verify(&file, &request.sha256, request.size)?;
     match installation {
         Installation::Pacman { .. } => install_package(&file),
@@ -336,44 +333,26 @@ fn download_and_install(
 }
 
 /// `curl` reads the credential from a config on stdin, so it never appears in the process list.
-fn download(url: &str, token: &str, destination: &Path) -> Result<(), String> {
-    use std::io::Write;
-
-    let mut child = windowless("curl")
+fn download(url: &str, destination: &Path) -> Result<(), String> {
+    let output = windowless("curl")
         .args([
             "--fail",
             "--silent",
             "--show-error",
-            // Follow the control plane's redirect to wherever the build is stored. curl sends the
-            // credential below to the first host only and drops it on a cross-host redirect, which
-            // is exactly what we want here. `--no-location-trusted` is NOT the careful spelling of
-            // that: it cancels following redirects altogether, and curl then writes the empty body
-            // of the 302 and exits successfully, leaving a 0-byte "build".
+            // Follow the control plane's redirect to wherever the build is stored. Without this,
+            // curl writes the empty body of the 302 and exits successfully, leaving a 0-byte build.
             "--location",
             "--retry",
             "2",
-            "--config",
-            "-",
             "--output",
         ])
         .arg(destination)
         .arg(url)
-        .stdin(Stdio::piped())
+        .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
-        .spawn()
+        .output()
         .map_err(|error| format!("Could not run curl to download the update: {error}"))?;
-
-    child
-        .stdin
-        .take()
-        .ok_or("curl did not accept its configuration")?
-        .write_all(format!("header = \"authorization: Bearer {token}\"\n").as_bytes())
-        .map_err(|error| format!("Could not pass the download credential: {error}"))?;
-
-    let output = child
-        .wait_with_output()
-        .map_err(|error| format!("Downloading the update failed: {error}"))?;
     if !output.status.success() {
         let reason = String::from_utf8_lossy(&output.stderr).trim().to_owned();
         log::warn!("update download failed: {reason}");
