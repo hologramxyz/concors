@@ -39,17 +39,54 @@ test("dragging moves panes across the workspace without replacing sessions", asy
     await second.goto("/");
     await expect(second.locator(".xterm").filter({ visible: true })).toHaveCount(2);
     const workspace = page.getByTestId("pane-workspace").filter({ visible: true });
-    const transfer = await page.evaluateHandle(() => new DataTransfer());
-    await source.locator("header").dispatchEvent("dragstart", { dataTransfer: transfer });
-    const overlay = page.getByTestId("pane-drop-targets");
-    await expect(overlay.locator("[data-drop-zone]")).toHaveCount(4);
-    await expect(overlay).toHaveText("");
-    const overlayBounds = await overlay.boundingBox();
-    const workspaceBounds = await workspace.boundingBox();
-    expect(overlayBounds?.width).toBe(workspaceBounds?.width);
-    expect(overlayBounds?.height).toBe(workspaceBounds?.height);
-    await source.locator("header").dispatchEvent("dragend");
-    await transfer.dispose();
+    const header = source.locator("header");
+    await expect(header).not.toHaveAttribute("title");
+    await expect(header).toHaveCSS("cursor", "grab");
+    const preview = page.getByTestId("pane-drop-preview");
+    const workspaceBox = await workspace.boundingBox();
+    const headerBox = await header.boundingBox();
+    if (!workspaceBox || !headerBox) throw new Error("Workspace missing");
+    await page.mouse.move(headerBox.x + 60, headerBox.y + headerBox.height / 2);
+    await page.mouse.down();
+    // Inside the threshold this is still a click, so nothing is dragged yet.
+    await page.mouse.move(headerBox.x + 61, headerBox.y + headerBox.height / 2);
+    await expect(page.locator("html")).not.toHaveAttribute("data-pane-dragging");
+    await page.mouse.move(workspaceBox.x + workspaceBox.width - 8, workspaceBox.y + 200, {
+      steps: 4,
+    });
+    await expect(page.locator("html")).toHaveAttribute("data-pane-dragging");
+    await expect(page.locator("body")).toHaveCSS("cursor", "grabbing");
+    await expect(source).toHaveCSS("opacity", "0.6");
+    // One outline only, and it covers exactly where the pane lands: the right half.
+    await expect(preview).toHaveCount(1);
+    await expect(preview).toHaveAttribute("data-placement", "right");
+    const area = await preview.boundingBox();
+    expect(Math.abs((area?.width ?? 0) - (workspaceBox.width / 2 - 6.5))).toBeLessThanOrEqual(1);
+    expect(Math.abs((area?.height ?? 0) - (workspaceBox.height - 6.5))).toBeLessThanOrEqual(3);
+    // The tint stays faint and in the link colour, not the foreground grey it replaced.
+    const colors = await preview.evaluate((element) => {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--link)";
+      element.append(probe);
+      const link = getComputedStyle(probe).color;
+      probe.remove();
+      const style = getComputedStyle(element);
+      return { link, border: style.borderTopColor, fill: style.backgroundColor };
+    });
+    expect(colors.border).toBe(colors.link);
+    expect(colors.fill).toMatch(/\/ 0\.1\)$|, 0\.1\)$/);
+    // Off the workspace there is nowhere to land.
+    await page.mouse.move(workspaceBox.x - 20, workspaceBox.y + 200);
+    await expect(preview).toHaveCount(0);
+    await page.mouse.move(workspaceBox.x + 8, workspaceBox.y + 200);
+    await expect(preview).toHaveAttribute("data-placement", "left");
+    // Escape cancels: the release that follows moves nothing.
+    await page.keyboard.press("Escape");
+    await expect(preview).toHaveCount(0);
+    await expect(source).toHaveCSS("opacity", "1");
+    await page.mouse.up();
+    await expect(page.locator("html")).not.toHaveAttribute("data-pane-dragging");
+    await expect(panes.first()).toHaveAttribute("data-pane-id", sourceId);
     const bounds = await workspace.boundingBox();
     if (!bounds) throw new Error("Workspace missing");
     await source
@@ -89,6 +126,92 @@ test("dragging moves panes across the workspace without replacing sessions", asy
     await expect(page.getByRole("alert")).toHaveCount(0);
   } finally {
     await context.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("a lone pane cannot be dragged, and a split one still renames by double-click", async ({
+  page,
+}) => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-pane-lone-"));
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Lone pane", directory);
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
+    await expect(tab(page, 1)).toHaveAttribute("aria-pressed", "true");
+    const panes = page.locator("[data-pane-id]").filter({ visible: true });
+    await expect(panes).toHaveCount(1);
+    const header = panes.first().locator("header");
+    await expect(header).toHaveCSS("cursor", "auto");
+    const box = await header.boundingBox();
+    if (!box) throw new Error("Header missing");
+    await page.mouse.move(box.x + 60, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 60, box.y + 300, { steps: 4 });
+    await expect(page.locator("html")).not.toHaveAttribute("data-pane-dragging");
+    await expect(page.getByTestId("pane-drop-preview")).toHaveCount(0);
+    await page.mouse.up();
+
+    await page.getByRole("button", { name: "Pane actions" }).click();
+    await page.getByRole("menuitem", { name: "Split horizontally" }).click();
+    await expect(panes).toHaveCount(2);
+    const name = panes.first().locator("header span.truncate");
+    await name.dblclick();
+    const input = panes.first().getByRole("textbox", { name: "Pane name" });
+    await expect(input).toBeVisible();
+    // Renaming, the header is a text field's surroundings and not a handle.
+    await expect(panes.first().locator("header")).toHaveCSS("cursor", "auto");
+    await page.keyboard.press("Escape");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("with three panes the outline shows the half of the workspace the pane lands on", async ({
+  page,
+}) => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-pane-three-"));
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Three panes", directory);
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
+    await expect(tab(page, 1)).toHaveAttribute("aria-pressed", "true");
+    const panes = page.locator("[data-pane-id]").filter({ visible: true });
+    await page.getByRole("button", { name: "Pane actions" }).click();
+    await page.getByRole("menuitem", { name: "Split horizontally" }).click();
+    await expect(panes).toHaveCount(2);
+    await panes.last().getByRole("button", { name: "Pane actions" }).click();
+    await page.getByRole("menuitem", { name: "Split vertically" }).click();
+    await expect(panes).toHaveCount(3);
+    const workspace = page.getByTestId("pane-workspace").filter({ visible: true });
+    const source = panes.first();
+    const sourceId = await source.getAttribute("data-pane-id");
+    const headerBox = await source.locator("header").boundingBox();
+    const box = await workspace.boundingBox();
+    if (!headerBox || !box) throw new Error("Workspace missing");
+    await page.mouse.move(headerBox.x + 60, headerBox.y + headerBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height - 8, { steps: 4 });
+    const preview = page.getByTestId("pane-drop-preview");
+    await expect(preview).toHaveCount(1);
+    await expect(preview).toHaveAttribute("data-placement", "bottom");
+    const area = await preview.boundingBox();
+    expect(Math.abs((area?.height ?? 0) - (box.height / 2 - 6.5))).toBeLessThanOrEqual(3);
+    expect(Math.abs((area?.width ?? 0) - (box.width - 6.5))).toBeLessThanOrEqual(3);
+    await page.mouse.up();
+    // The pane landed in the bottom half, spanning the whole width, as the outline promised.
+    const moved = page.locator(`[data-pane-id="${sourceId}"]`);
+    await expect
+      .poll(async () => (await moved.boundingBox())?.width ?? 0)
+      .toBeGreaterThan(box.width - 4);
+    const landed = await moved.boundingBox();
+    expect((landed?.y ?? 0) + 2).toBeGreaterThan(box.y + box.height / 2 - 2);
+    await expect(page.locator("html")).not.toHaveAttribute("data-pane-dragging");
+  } finally {
     await rm(directory, { recursive: true, force: true });
   }
 });

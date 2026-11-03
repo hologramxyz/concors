@@ -22,7 +22,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ChatPane } from "@/agents/chat";
 import { TerminalPane } from "@/terminal/terminal-pane";
-import { Fragment, useContext, useEffect, useRef, useState } from "react";
+import {
+  Fragment,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { AgentPaneIcon, AgentStatusIcon } from "@/agents/activity";
 import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
 import { isLiveTerminalAgent, terminalAgentStatus } from "@/agents/agent-status";
@@ -55,15 +62,21 @@ const OPEN_OVERLAY =
 const PANE_INPUT =
   "textarea.agent-composer-input:not(:disabled), textarea.xterm-helper-textarea:not(:disabled)";
 type Placement = "left" | "right" | "top" | "bottom";
-interface PaneDrag {
-  paneId: string;
-  version: number;
-}
+/** Where a dropped pane lands: the reducer gives it half of the whole workspace on that side. */
+const DROP_AREA: Record<Placement, string> = {
+  top: "inset-x-1 top-1 h-[calc(50%-0.5rem)]",
+  bottom: "inset-x-1 bottom-1 h-[calc(50%-0.5rem)]",
+  left: "inset-y-1 left-1 w-[calc(50%-0.5rem)]",
+  right: "inset-y-1 right-1 w-[calc(50%-0.5rem)]",
+};
+/** How far a press on a pane header travels before it is a drag and no longer a click. */
+const DRAG_THRESHOLD = 4;
 
 export function PaneLayout(props: Props) {
   const visible = useTabVisible();
-  const [dragging, setDragging] = useState<PaneDrag | null>(null);
+  const [draggedPaneId, setDraggedPaneId] = useState<string | null>(null);
   const [drop, setDrop] = useState<Placement | null>(null);
+  const stopDrag = useRef<(() => void) | null>(null);
   const container = useRef<HTMLDivElement>(null);
   const pendingFocus = useRef<string | null>(null);
   const navigationFocus = useRef<MutationObserver | null>(null);
@@ -71,6 +84,13 @@ export function PaneLayout(props: Props) {
     if (!visible) navigationFocus.current?.disconnect();
     return () => navigationFocus.current?.disconnect();
   }, [visible]);
+  // A drag must not outlive its pane or tab, or the whole app keeps the grabbing cursor.
+  const paneCount = props.tab.nodes.filter((node) => node.kind === "pane").length;
+  const draggedPaneExists = props.tab.nodes.some((node) => node.id === draggedPaneId);
+  useEffect(() => {
+    if (!visible || paneCount < 2 || !draggedPaneExists) stopDrag.current?.();
+  }, [visible, paneCount, draggedPaneExists]);
+  useEffect(() => () => stopDrag.current?.(), []);
   const [activePaneId, setActivePaneId] = useState<string | null>(null);
   const activePane =
     props.tab.nodes.find((node) => node.kind === "pane" && node.id === activePaneId) ??
@@ -306,7 +326,84 @@ export function PaneLayout(props: Props) {
           second={render(node.second)}
         />
       );
-    return <Pane key={id} {...props} node={node} onDrag={setDragging} />;
+    return (
+      <Pane
+        key={id}
+        {...props}
+        node={node}
+        dragged={draggedPaneId === id}
+        onHeaderPress={(event) => startDrag(event, id)}
+      />
+    );
+  };
+  // Pointer events, not HTML drag and drop: a native drag ignores CSS, so it could never show the
+  // grabbing cursor. Listening on the window sees a quick flick that leaves the header before the
+  // threshold; capture starts only past it, because a captured press loses the title's double-click.
+  const startDrag = (event: ReactPointerEvent<HTMLElement>, paneId: string) => {
+    if (event.pointerType === "touch" || event.button !== 0) return;
+    stopDrag.current?.();
+    const header = event.currentTarget;
+    const { pointerId, clientX: startX, clientY: startY } = event;
+    const { project, tab, onCommand } = props;
+    let started = false;
+    let placement: Placement | null = null;
+    const move = (moved: PointerEvent) => {
+      if (moved.pointerId !== pointerId) return;
+      if (!started) {
+        if (Math.hypot(moved.clientX - startX, moved.clientY - startY) < DRAG_THRESHOLD) return;
+        started = true;
+        header.setPointerCapture(pointerId);
+        document.documentElement.dataset["paneDragging"] = "";
+        setDraggedPaneId(paneId);
+      }
+      placement = container.current
+        ? dropPlacement(moved.clientX, moved.clientY, container.current.getBoundingClientRect())
+        : null;
+      setDrop(placement);
+    };
+    const release = (released: PointerEvent) => {
+      if (released.pointerId !== pointerId) return;
+      const target = tab.nodes.find((node) => node.kind === "pane" && node.id !== paneId);
+      const finalPlacement = placement;
+      stop();
+      if (!finalPlacement || !target) return;
+      onCommand({
+        kind: "pane.move",
+        projectId: project.id,
+        tabId: tab.id,
+        expectedVersion: project.version,
+        paneId,
+        targetPaneId: target.id,
+        scope: "workspace",
+        placement: finalPlacement,
+        splitId: crypto.randomUUID(),
+      });
+    };
+    const key = (pressed: KeyboardEvent) => {
+      if (pressed.key !== "Escape" || !started) return;
+      // The focused terminal or composer would otherwise take this Escape too.
+      pressed.preventDefault();
+      pressed.stopPropagation();
+      stop();
+    };
+    const stop = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", release);
+      window.removeEventListener("pointercancel", stop);
+      window.removeEventListener("keydown", key, true);
+      window.removeEventListener("blur", stop);
+      if (header.hasPointerCapture(pointerId)) header.releasePointerCapture(pointerId);
+      delete document.documentElement.dataset["paneDragging"];
+      stopDrag.current = null;
+      setDraggedPaneId(null);
+      setDrop(null);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", release);
+    window.addEventListener("pointercancel", stop);
+    window.addEventListener("keydown", key, true);
+    window.addEventListener("blur", stop);
+    stopDrag.current = stop;
   };
   return (
     <div
@@ -314,63 +411,27 @@ export function PaneLayout(props: Props) {
       onFocusCapture={rememberPane}
       onPointerDownCapture={rememberPane}
       data-testid="pane-workspace"
-      onDragOver={(event) => {
-        if (!dragging) return;
-        event.preventDefault();
-        event.dataTransfer.dropEffect = "move";
-        const rect = event.currentTarget.getBoundingClientRect();
-        const x = (event.clientX - rect.left) / rect.width;
-        const y = (event.clientY - rect.top) / rect.height;
-        setDrop(y < 0.25 ? "top" : y > 0.75 ? "bottom" : x < 0.5 ? "left" : "right");
-      }}
-      onDragLeave={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDrop(null);
-      }}
-      onDrop={(event) => {
-        const target = props.tab.nodes.find(
-          (node) => node.kind === "pane" && node.id !== dragging?.paneId,
-        );
-        if (!dragging || !drop || !target) return;
-        event.preventDefault();
-        props.onCommand({
-          kind: "pane.move",
-          projectId: props.project.id,
-          tabId: props.tab.id,
-          expectedVersion: dragging.version,
-          paneId: dragging.paneId,
-          targetPaneId: target.id,
-          scope: "workspace",
-          placement: drop,
-          splitId: crypto.randomUUID(),
-        });
-        setDragging(null);
-        setDrop(null);
-      }}
       className="relative h-full min-h-[220px] min-w-[320px]"
     >
       {render(props.tab.root)}
-      {dragging && (
-        <div className="pointer-events-none absolute inset-0 z-30" data-testid="pane-drop-targets">
-          {(
-            [
-              ["top", "inset-x-1 top-1 h-[calc(25%-0.5rem)]"],
-              ["bottom", "inset-x-1 bottom-1 h-[calc(25%-0.5rem)]"],
-              ["left", "inset-y-1/4 left-1 w-[calc(50%-0.5rem)]"],
-              ["right", "inset-y-1/4 right-1 w-[calc(50%-0.5rem)]"],
-            ] as const
-          ).map(([placement, area]) => (
-            <div
-              key={placement}
-              aria-label={`Move pane ${placement}`}
-              data-drop-zone={placement}
-              data-active={drop === placement}
-              className={`absolute rounded-md border ${area} ${drop === placement ? "border-primary bg-primary/30" : "border-primary/40 bg-primary/10"}`}
-            />
-          ))}
-        </div>
+      {draggedPaneId && drop && (
+        <div
+          aria-hidden="true"
+          data-testid="pane-drop-preview"
+          data-placement={drop}
+          className={`pointer-events-none absolute z-30 rounded-md border border-(--link) bg-(--link)/10 ${DROP_AREA[drop]}`}
+        />
       )}
     </div>
   );
+}
+
+/** Which side of the workspace a pointer means, or none once it has left the workspace. */
+function dropPlacement(clientX: number, clientY: number, rect: DOMRect): Placement | null {
+  const x = (clientX - rect.left) / rect.width;
+  const y = (clientY - rect.top) / rect.height;
+  if (x < 0 || x > 1 || y < 0 || y > 1) return null;
+  return y < 0.25 ? "top" : y > 0.75 ? "bottom" : x < 0.5 ? "left" : "right";
 }
 
 function Pane({
@@ -379,10 +440,12 @@ function Pane({
   project,
   canEdit,
   onCommand,
-  onDrag,
+  dragged,
+  onHeaderPress,
 }: Props & {
   node: Extract<LayoutNode, { kind: "pane" }>;
-  onDrag: (drag: PaneDrag | null) => void;
+  dragged: boolean;
+  onHeaderPress: (event: ReactPointerEvent<HTMLElement>) => void;
 }) {
   const connection = useContext(TerminalConnectionContext);
   const canDrag =
@@ -395,6 +458,7 @@ function Pane({
     !!connection.state.daemon.capabilities?.includes(PANE_RENAME_CAPABILITY);
   // Mirrors the tab rename: the ref stops blur after Enter/Escape from committing a second time.
   const [renaming, setRenaming] = useState<string | null>(null);
+  const movable = canDrag && tab.nodes.length > 1 && renaming === null;
   const renameRef = useRef<string | null>(null);
   const renameInput = useRef<HTMLInputElement>(null);
   const setRename = (value: string | null) => {
@@ -443,23 +507,15 @@ function Pane({
       data-pane-id={node.id}
       tabIndex={-1}
       aria-label={`${label} pane`}
-      className={`relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden outline-none ${node.profile === "chat" ? "bg-background" : "bg-[var(--terminal-background)] text-[var(--terminal-foreground)]"}`}
+      className={`relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden outline-none ${dragged ? "opacity-60" : ""} ${node.profile === "chat" ? "bg-background" : "bg-[var(--terminal-background)] text-[var(--terminal-foreground)]"}`}
     >
       <header
         tabIndex={0}
-        draggable={canDrag && tab.nodes.length > 1 && renaming === null}
-        title="Drag to move pane"
-        onDragStart={(event) => {
-          if ((event.target as HTMLElement).closest("button, input") || !canDrag) {
-            event.preventDefault();
-            return;
-          }
-          event.dataTransfer.effectAllowed = "move";
-          event.dataTransfer.setData("application/x-concors-pane", node.id);
-          onDrag({ paneId: node.id, version: project.version });
+        onPointerDown={(event) => {
+          if (movable && !(event.target as HTMLElement).closest("button, input"))
+            onHeaderPress(event);
         }}
-        onDragEnd={() => onDrag(null)}
-        className={`flex h-9 shrink-0 items-center gap-1 px-2 outline-none ${canDrag && tab.nodes.length > 1 ? "cursor-grab active:cursor-grabbing" : ""}`}
+        className={`flex h-9 shrink-0 items-center gap-1 px-2 outline-none ${movable ? "cursor-grab select-none active:cursor-grabbing" : ""}`}
       >
         {node.profile === "chat" ? (
           <AgentPaneIcon sessionId={node.sessionId} />

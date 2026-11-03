@@ -559,9 +559,13 @@
   cursor: default;
 }
 /* While a split is dragged nothing else selects text or shows its own cursor. */
-html[data-pane-resizing] * {
+html[data-pane-resizing] *,
+html[data-pane-dragging] * {
   user-select: none !important;
   -webkit-user-select: none !important;
+}
+html[data-pane-dragging] * {
+  cursor: grabbing !important;
 }
 html[data-pane-resizing="column"] * {
   cursor: col-resize !important;

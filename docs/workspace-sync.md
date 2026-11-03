@@ -33,13 +33,14 @@ The test starts two temporary daemons on ports 7429/7430, builds the web app and
 
 ## Rearranging panes
 
-Drag a pane header within its tab. Four unlabeled drop zones cover the entire pane workspace.
+Drag a pane header within its tab; a tab with one pane has nothing to drag. The workspace reads
+as four sides, and one outline shows the half the pane will take on the side under the pointer.
 Dropping left/right/top/bottom moves the source beside all remaining panes in a new half-width
-or half-height split. The active zone is highlighted; there is no center swap target.
-The old source split collapses automatically.
+or half-height split; there is no center swap target. Escape, or letting go outside the workspace,
+cancels. The old source split collapses automatically.
 
 `pane.move` with `scope: "workspace"` commits the tree change atomically using the project version captured at drag start.
 Pane IDs, profiles, and session bindings stay unchanged; no terminal or agent is stopped or
 restarted. Layouts sync across clients and survive reload. Clients only enable dragging when
 the daemon advertises `workspace-pane-rearrangement`. Cross-tab dragging and touch dragging are not
-implemented in this browser interaction.
+implemented. The drag uses pointer events rather than HTML drag and drop, which ignores CSS cursors.
