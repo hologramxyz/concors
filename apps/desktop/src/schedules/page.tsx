@@ -67,7 +67,9 @@ export function SchedulesPage({
     <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col px-4 py-6 sm:px-8 sm:py-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="text-xl font-semibold">Schedules</h2>
+          <h2 data-page-title className="text-xl font-semibold">
+            Schedules
+          </h2>
           <p className="mt-1 text-ui text-muted-foreground">Run your agents on a cadence.</p>
         </div>
         {!!schedules?.length && (

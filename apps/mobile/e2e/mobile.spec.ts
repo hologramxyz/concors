@@ -1351,14 +1351,20 @@ test("pages opened from a chat start below the header, and the chat scrolls unde
       .first()
       .click();
   };
-  for (const name of ["Pull requests", "Schedules"]) {
+  for (const [name, summary] of [
+    ["Pull requests", /^Pull requests in your workspaces/],
+    ["Schedules", /^Run your agents on a cadence/],
+  ] as const) {
     await openFromSidebar(name);
-    const heading = ui.getByRole("heading", { level: 2, name, exact: true });
-    await expect(heading).toBeVisible();
+    // The header names the page, so the page does not name it a second time.
+    await expect(ui.getByRole("heading", { level: 1, name, exact: true })).toBeVisible();
+    await expect(ui.getByRole("heading", { level: 2, name, exact: true })).toHaveCount(0);
+    const content = ui.locator(".mobile-pane").getByText(summary);
+    await expect(content).toBeVisible();
     await expect
       .poll(async () => {
-        const [title, bar] = await Promise.all([heading.boundingBox(), header.boundingBox()]);
-        return title && bar ? title.y - (bar.y + bar.height) : null;
+        const [top, bar] = await Promise.all([content.boundingBox(), header.boundingBox()]);
+        return top && bar ? top.y - (bar.y + bar.height) : null;
       })
       .toBeGreaterThanOrEqual(0);
   }
