@@ -1338,6 +1338,34 @@ test("the Tabs sheet shows each agent's status, as desktop's tab strip does", as
   await expect(terminal.locator("[data-pane-status]")).toHaveCount(0);
   await page.screenshot({ path: "apps/mobile/test-results/mobile-tabs-status.png" });
 });
+test("pages opened from a chat start below the header, and the chat scrolls under it again", async ({
+  page,
+}) => {
+  const ui = await enter(page);
+  const header = ui.locator(".mobile-header");
+  const openFromSidebar = async (name: string) => {
+    await ui.locator("#mobile-sidebar-toggle").click();
+    await ui
+      .getByRole("dialog", { name: "Workspace sidebar" })
+      .getByRole("button", { name, exact: true })
+      .first()
+      .click();
+  };
+  for (const name of ["Pull requests", "Schedules"]) {
+    await openFromSidebar(name);
+    const heading = ui.getByRole("heading", { level: 2, name, exact: true });
+    await expect(heading).toBeVisible();
+    await expect
+      .poll(async () => {
+        const [title, bar] = await Promise.all([heading.boundingBox(), header.boundingBox()]);
+        return title && bar ? title.y - (bar.y + bar.height) : null;
+      })
+      .toBeGreaterThanOrEqual(0);
+  }
+  await openFromSidebar("Concors");
+  await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
+  await expect(ui.locator(".mobile-pane")).toHaveCSS("padding-top", "0px");
+});
 test("the app reopens the tab last opened on this machine", async ({ page }) => {
   let ui = await enter(page);
   const tabs = ui.getByRole("combobox", { name: "Tabs", exact: true });
