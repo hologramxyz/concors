@@ -257,13 +257,15 @@ test("Resources uses the page header, and a machine without process inspection s
   await inspect(["Process inspection is available on Linux machines."]);
   const title = page.getByRole("heading", { name: "Resources", level: 2 });
   await expect(title).toHaveCSS("font-size", "20px");
-  await expect(page.getByText("CPU and memory by process.", { exact: true })).toBeVisible();
+  const description = page.getByText("CPU and memory by process.", { exact: true });
   const main = page.getByRole("main");
   const empty = main.getByRole("heading", {
     name: "Process details aren’t available on this computer",
     level: 3,
   });
   await expect(empty).toBeVisible();
+  await expect(title).toBeVisible();
+  await expect(description).toHaveCount(0);
   await expect(
     main.getByText("They’re available on Linux machines, such as cloud machines."),
   ).toBeVisible();
@@ -275,6 +277,7 @@ test("Resources uses the page header, and a machine without process inspection s
   await inspect([]);
   await expect(page.getByText("About resource usage")).toBeVisible();
   await expect(empty).toHaveCount(0);
+  await expect(description).toBeVisible();
   await expect(main.getByRole("textbox", { name: "Filter resources" })).toBeVisible();
   await expect(main.getByRole("combobox", { name: "Sort processes" })).toBeVisible();
   await expect(main.getByRole("list", { name: "Running processes" })).toBeVisible();
