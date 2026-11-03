@@ -27,6 +27,7 @@ export function FileTabLabel({ file }: { file: OpenFile }) {
   const dirty = state.base !== null && state.content !== state.base.content;
   return (
     <div
+      data-active-tab={files.active[file.scope] === file.id ? "" : undefined}
       className={`group flex shrink-0 items-center rounded-md border ${files.active[file.scope] === file.id ? "border-border bg-background shadow-xs" : "border-transparent"}`}
     >
       <button
