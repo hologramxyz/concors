@@ -36,8 +36,6 @@ export function ControlPicker({
   onGroupChange,
   status,
   notice,
-  chipLabel,
-  active: highlighted = false,
   searchable = true,
 }: {
   label: string;
@@ -59,10 +57,6 @@ export function ControlPicker({
   status?: string | undefined;
   /** Marks the trigger with a dot and adds this to its tooltip, e.g. an update for the agent. */
   notice?: string | undefined;
-  /** The trigger's text when it names the control rather than its value. */
-  chipLabel?: string;
-  /** Highlights the trigger, for a control that is switched on. */
-  active?: boolean;
   /** A menu of a few options has nothing worth searching. */
   searchable?: boolean;
 }) {
@@ -120,12 +114,12 @@ export function ControlPicker({
       aria-description={notice}
       data-value={value}
       disabled={disabled}
-      className={`agent-control ${showValue ? "agent-control-value" : ""} ${primary ? "agent-control-primary" : ""} ${highlighted ? "bg-primary/10 text-primary!" : ""}`}
+      className={`agent-control ${showValue ? "agent-control-value" : ""} ${primary ? "agent-control-primary" : ""}`}
       onPointerEnter={() => setQuiet(false)}
       onBlur={() => setQuiet(false)}
     >
       {icon}
-      {showValue && <span className="truncate">{chipLabel ?? currentLabel}</span>}
+      {showValue && <span className="truncate">{currentLabel}</span>}
       {notice && <span aria-hidden="true" className="agent-control-dot" />}
     </Popover.Trigger>
   );

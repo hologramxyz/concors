@@ -285,6 +285,33 @@ test("create a workspace VPS with a test card and keep billing out of Account", 
   await expect(page.getByRole("button", { name: /Cancel build-agent|Delete/ })).toHaveCount(0);
 });
 
+test("the no-card pill is the same badge as Connected and Current", async ({ page }) => {
+  await billingApi(page);
+  const box = (node: Element) => {
+    const style = getComputedStyle(node);
+    return [style.padding, style.height, style.borderRadius, style.fontSize, style.backgroundColor];
+  };
+  await openMachines(page);
+  const current = page.locator('[data-slot="badge"]', { hasText: "Current" }).first();
+  await expect(current).toBeVisible();
+  const reference = await current.evaluate(box);
+  await page.goto("/");
+  await page.getByRole("button", { name: "Account: E2E User" }).click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
+  await page
+    .getByRole("navigation", { name: "Settings" })
+    .getByRole("button", { name: "Billing", exact: true })
+    .click();
+  const pill = page.locator('[data-slot="badge"]', { hasText: "No card yet" });
+  await expect(pill).toBeVisible();
+  expect(await pill.evaluate(box)).toEqual(reference);
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: test.info().outputPath(`badge-no-card-${colorScheme}.png`) });
+  }
+});
+
 test("a declined payment keeps the form and does not create a VPS", async ({ page }) => {
   const state = await billingApi(page, { card: true, decline: true });
   await openCreation(page);

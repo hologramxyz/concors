@@ -44,41 +44,147 @@ async function openChat(page: Page, name: string, directory: string) {
   await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
 }
 
-test("the Fast chip names itself, lights up when on and has no search in its menu", async ({
-  page,
-}) => {
+test("the Fast chip is one toggle, lit only while on", async ({ page }) => {
   const directory = await mkdtemp(join(tmpdir(), "concors-fast-chip-"));
+  const sent: boolean[] = [];
   let fast = false;
-  await rewriteAgents(page, (agent) => {
-    agent["controls"] = {
-      ...(agent["controls"] as object),
-      features: [{ id: "fast_mode", label: "Fast mode", description: "Faster", value: fast }],
-    };
+  // The test provider has no Fast mode, so the daemon would refuse it: the spec plays that part.
+  await page.routeWebSocket("ws://127.0.0.1:7429/ws", (socket) => {
+    const server = socket.connectToServer();
+    socket.onMessage((raw) => {
+      const message = JSON.parse(String(raw), (_key, value) => {
+        if (value?.kind === "configure" && value.settings?.features) {
+          fast = value.settings.features.fast_mode === true;
+          sent.push(fast);
+          value.settings.features = {};
+        }
+        return value;
+      });
+      server.send(JSON.stringify(message));
+    });
+    server.onMessage((raw) => {
+      const message = JSON.parse(String(raw), (_key, value) => {
+        if (value && typeof value === "object" && "threadId" in value && "provider" in value) {
+          value.controls = {
+            ...value.controls,
+            features: [{ id: "fast_mode", label: "Fast mode", description: "Faster", value: fast }],
+          };
+          value.settings = { ...value.settings, features: { fast_mode: fast } };
+        }
+        return value;
+      });
+      socket.send(JSON.stringify(message));
+    });
   });
   try {
     await openChat(page, "Fast chip", directory);
     const chip = page.getByRole("button", { name: "Fast mode", exact: true });
+    const tooltip = page.getByRole("tooltip");
+    const look = () =>
+      chip.evaluate((node) => {
+        const style = getComputedStyle(node);
+        return { background: style.backgroundColor, color: style.color };
+      });
     await expect(chip).toHaveText("Fast");
-    await expect(chip).not.toHaveClass(/text-primary/);
-    await shots(page, "fast-off");
-    await chip.click();
-    const menu = page.getByRole("listbox", { name: "Fast mode" });
-    await expect(menu.getByRole("option")).toHaveText(["On", "Off"]);
-    await expect(page.getByRole("combobox")).toHaveCount(0);
-    // The list takes focus in place of the search box, so the keys still work.
-    await expect(menu).toBeFocused();
-    await page.keyboard.press("ArrowDown");
-    await expect(menu).toHaveAttribute("aria-activedescendant", /-1$/);
-    await shots(page, "fast-menu");
-    await page.keyboard.press("Escape");
-    await expect(menu).toHaveCount(0);
-
-    fast = true;
-    await page.reload();
-    await expect(chip).toHaveClass(/text-primary/);
-    await expect(chip).toHaveText("Fast");
+    await expect(chip).toHaveAttribute("aria-pressed", "false");
     await page.mouse.move(700, 300);
+    await page.waitForTimeout(300);
+    const off = await look();
+    await shots(page, "fast-off");
+
+    await chip.hover();
+    await expect(tooltip).toHaveText("Fast mode: Off");
+    await page.waitForTimeout(300);
+    const offHover = await look();
+    expect(offHover.background).not.toBe(off.background);
+    await shots(page, "fast-off-hover");
+
+    // One click, and no menu.
+    await chip.click();
+    await expect(chip).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("listbox")).toHaveCount(0);
+    await expect(chip).toHaveText("Fast");
+    expect(sent).toEqual([true]);
+    await page.mouse.move(700, 300);
+    await page.waitForTimeout(300);
+    const on = await look();
+    expect(on.color).not.toBe(off.color);
+    expect(on.background).not.toBe(offHover.background);
     await shots(page, "fast-on");
+
+    await chip.hover();
+    await expect(tooltip).toHaveText("Fast mode: On");
+    await shots(page, "fast-on-hover");
+    await page.mouse.move(700, 300);
+
+    // Space and Enter both switch it and leave focus on it, ready for the next press.
+    await chip.focus();
+    await page.keyboard.press("Space");
+    await expect(chip).toHaveAttribute("aria-pressed", "false");
+    await expect(chip).toBeEnabled();
+    await expect(chip).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(chip).toHaveAttribute("aria-pressed", "true");
+    await expect(chip).toBeEnabled();
+    await expect(chip).toBeFocused();
+    expect(sent).toEqual([true, false, true]);
+    await shots(page, "fast-on-focus");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("every tooltip is the same box, waits as long and sits as close", async ({ page }) => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-tooltip-box-"));
+  try {
+    await openChat(page, "Tooltip box", directory);
+    const box = page.locator('[data-slot="tooltip-content"]');
+    const measured: { look: string; gap: number; name: string }[] = [];
+    const controls = [
+      ["Composer chip", page.getByRole("button", { name: "Attach files", exact: true }), "top"],
+      ["Title bar", page.getByRole("button", { name: "Search", exact: true }).first(), "bottom"],
+      ["Tab bar", page.getByRole("button", { name: "New tab", exact: true }), "bottom"],
+    ] as const;
+    for (const [name, control, side] of controls) {
+      await page.mouse.move(700, 300);
+      await expect(box).toHaveCount(0);
+      // Past the moment moving along a row shows the next one at once.
+      await page.waitForTimeout(400);
+      await control.hover();
+      await page.waitForTimeout(400);
+      await expect(box).toHaveCount(0);
+      await expect(box).toBeVisible();
+      // Past its opening animation, which scales the box.
+      await page.waitForTimeout(300);
+      await expect(box.locator("polygon")).toHaveCount(0);
+      const tip = await box.boundingBox();
+      const target = await control.boundingBox();
+      if (!tip || !target) throw new Error(`${name} has no box`);
+      const gap =
+        side === "top" ? target.y - (tip.y + tip.height) : tip.y - (target.y + target.height);
+      const look = await box.evaluate((node) => {
+        const style = getComputedStyle(node);
+        return [
+          style.backgroundColor,
+          style.borderRadius,
+          // Not the right padding, which tightens around key chips.
+          style.paddingTop,
+          style.paddingLeft,
+          style.fontSize,
+          style.backdropFilter,
+          style.boxShadow,
+        ].join("|");
+      });
+      measured.push({ name, gap, look });
+      await shots(page, `tooltip-${name.toLowerCase().replace(" ", "-")}`);
+    }
+    for (const { name, gap } of measured) {
+      expect(gap, name).toBeGreaterThanOrEqual(4);
+      expect(gap, name).toBeLessThanOrEqual(6);
+    }
+    const gaps = measured.map(({ gap }) => gap);
+    expect(Math.max(...gaps) - Math.min(...gaps)).toBeLessThan(1);
+    expect(new Set(measured.map(({ look }) => look)).size).toBe(1);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

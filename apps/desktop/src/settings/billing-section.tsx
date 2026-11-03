@@ -101,7 +101,7 @@ export function BillingSection({ organization }: BillingSectionProps) {
                 ) : status.hasPaymentMethod ? (
                   "Card on file"
                 ) : (
-                  <Badge variant="outline">No card yet</Badge>
+                  <Badge variant="secondary">No card yet</Badge>
                 )}
               </span>
             </Row>

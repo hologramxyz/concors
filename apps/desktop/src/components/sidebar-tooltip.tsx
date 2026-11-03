@@ -3,19 +3,18 @@ import { flushSync } from "react-dom";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { CommandId } from "@/shortcuts/bindings";
-import { BoundKeyChips } from "@/shortcuts/key-chips";
+import { BoundKeyChips, TextKeyChips } from "@/shortcuts/key-chips";
 
 /**
  * Where a tooltip sits. Sidebar rows and their icons open beside the sidebar, level with the row,
  * so they never cover another row or a row's "…" menu. Title-bar icons, and other rows of icons,
- * open below, where a tooltip beside them would cover the next icon. Inside a menu or dialog, whose
- * rows someone is scanning, it opens sooner and just right of its row: beside the sidebar it would
- * sit behind the dialog.
+ * open below, where a tooltip beside them would cover the next icon, or above when they sit at the
+ * bottom of a pane, as the composer's do. Inside a menu or dialog it opens just right of its row:
+ * beside the sidebar it would sit behind the dialog.
  */
-type TooltipPlace = "sidebar" | "title-bar" | "menu";
+type TooltipPlace = "sidebar" | "title-bar" | "above" | "menu";
 
 const HOVER_DELAY = 600;
-const MENU_DELAY = 300;
 /** Sweeping along a list shows each row's tooltip at once, after the first has waited. */
 const SWEEP_WINDOW = 300;
 let lastClosedAt = 0;
@@ -23,31 +22,37 @@ let lastClosedAt = 0;
 let closeOpenTooltip: (() => void) | null = null;
 
 /**
- * The one plain tooltip box for the sidebar, the title bar and the workspace lists. Compact layouts
- * get none: touch has no hover.
+ * The one plain tooltip box for the whole app. Compact layouts get none: touch has no hover.
  */
 export function SidebarTooltip({
   content,
   shortcut,
+  keys,
   place = "sidebar",
+  hidden = false,
   children,
 }: {
   /** Nothing to say means no tooltip, as for a workspace without a folder. */
   content: ReactNode;
   /** Shown as key chips after the content, as this person has the command bound. */
-  shortcut?: CommandId;
+  shortcut?: CommandId | undefined;
+  /** Key chips for a key that is not a bindable command, such as Esc. */
+  keys?: string | undefined;
   place?: TooltipPlace;
+  /** Keeps it away for now, as while the control's own menu is open. */
+  hidden?: boolean;
   children: ReactElement;
 }) {
   const compact = useContext(CompactLayoutContext);
   const trigger = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
+  const shown = open && !hidden;
   const [offsets, setOffsets] = useState(NEXT_TO_TRIGGER);
   // An open tooltip is the topmost dismissable layer, so it would take the Escape meant for the
   // menu or dialog around it. Removing it first, and without an exit animation that would keep the
   // layer mounted, lets one press close what the person is looking at.
   useEffect(() => {
-    if (!open) return;
+    if (!shown) return;
     closeOpenTooltip?.();
     const closeThis = () => setOpen(false);
     closeOpenTooltip = closeThis;
@@ -59,7 +64,7 @@ export function SidebarTooltip({
       if (closeOpenTooltip === closeThis) closeOpenTooltip = null;
       window.removeEventListener("keydown", close, { capture: true });
     };
-  }, [open]);
+  }, [shown]);
   if (compact || !content) return children;
   return (
     <Tooltip
@@ -67,7 +72,7 @@ export function SidebarTooltip({
       // on Escape here, making the next one skip its wait.
       delayDuration={0}
       disableHoverableContent
-      open={open}
+      open={shown}
       onOpenChange={(next) => {
         if (next && place === "sidebar") setOffsets(besideSidebar(trigger.current));
         setOpen(next);
@@ -76,8 +81,8 @@ export function SidebarTooltip({
       <TooltipTrigger asChild ref={trigger}>
         {children}
       </TooltipTrigger>
-      {open && (
-        <TooltipBox place={place} offsets={offsets} shortcut={shortcut}>
+      {shown && (
+        <TooltipBox place={place} offsets={offsets} shortcut={shortcut} keys={keys}>
           {content}
         </TooltipBox>
       )}
@@ -89,11 +94,13 @@ function TooltipBox({
   place,
   offsets,
   shortcut,
+  keys,
   children,
 }: {
   place: TooltipPlace;
   offsets: { side: number; align: number };
   shortcut: CommandId | undefined;
+  keys: string | undefined;
   children: ReactNode;
 }) {
   const [ready, setReady] = useState(() => Date.now() - lastClosedAt < SWEEP_WINDOW);
@@ -103,26 +110,31 @@ function TooltipBox({
         lastClosedAt = Date.now();
       };
     }
-    const timer = setTimeout(() => setReady(true), place === "menu" ? MENU_DELAY : HOVER_DELAY);
+    const timer = setTimeout(() => setReady(true), HOVER_DELAY);
     return () => clearTimeout(timer);
-  }, [place, ready]);
+  }, [ready]);
   if (!ready) return null;
   return (
     <TooltipContent
-      arrow={false}
-      collisionPadding={8}
-      className="max-w-[320px] bg-popover/60 shadow-none backdrop-blur-md"
       {...(place === "title-bar"
-        ? { side: "bottom", sideOffset: 6 }
-        : { side: "right", align: "start", sideOffset: offsets.side, alignOffset: offsets.align })}
+        ? { side: "bottom" }
+        : place === "above"
+          ? { side: "top" }
+          : {
+              side: "right",
+              align: "start",
+              sideOffset: offsets.side,
+              alignOffset: offsets.align,
+            })}
     >
       <div className="min-w-0 break-words">{children}</div>
       {shortcut && <BoundKeyChips id={shortcut} />}
+      {keys && <TextKeyChips text={keys} />}
     </TooltipContent>
   );
 }
 
-const NEXT_TO_TRIGGER = { side: 4, align: 0 };
+const NEXT_TO_TRIGGER = { side: 5, align: 0 };
 
 /**
  * The offsets that carry a tooltip from its trigger, which may be only a row's name, to just past
@@ -136,5 +148,5 @@ function besideSidebar(trigger: HTMLElement | null): { side: number; align: numb
     sidebar.getBoundingClientRect().right;
   const box = trigger.getBoundingClientRect();
   const row = trigger.closest("li") ?? trigger;
-  return { side: edge - box.right + 4, align: row.getBoundingClientRect().top - box.top };
+  return { side: edge - box.right + 5, align: row.getBoundingClientRect().top - box.top };
 }

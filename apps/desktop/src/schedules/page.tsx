@@ -18,6 +18,7 @@ import {
   type WorkspaceSnapshot,
 } from "@concors/protocol";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -162,13 +163,13 @@ export function SchedulesPage({
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-medium break-words">{schedule.name}</h3>
-                      <span className="inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs text-muted-foreground">
+                      <Badge variant="secondary">
                         <span
                           className={`size-1.5 rounded-full ${schedule.enabled ? "bg-foreground" : "bg-muted-foreground/50"}`}
                           aria-hidden="true"
                         />
                         {schedule.enabled ? "Active" : "Paused"}
-                      </span>
+                      </Badge>
                       {last && (
                         <span
                           className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"

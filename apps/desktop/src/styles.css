@@ -661,6 +661,17 @@ html[data-pane-resizing="row"] * {
   background: var(--muted);
   color: var(--foreground);
 }
+/* Switched on. `--link` is the theme's accent; `--primary` is plain text colour in the default theme,
+   which would look like hover. */
+.agent-control.agent-control-on {
+  background: color-mix(in srgb, var(--link) 14%, transparent);
+  color: var(--link);
+}
+
+.agent-control.agent-control-on:hover {
+  background: color-mix(in srgb, var(--link) 22%, transparent);
+}
+
 .agent-control:disabled {
   opacity: 0.4;
   cursor: default;

@@ -42,6 +42,7 @@ import { usageView } from "./context-window";
 import { usePlanUsage } from "./use-plan-usage";
 import { AgentModelPicker } from "./model-picker";
 import { ControlTooltip } from "./control-tooltip";
+import { FastModeToggle } from "./fast-mode-toggle";
 import { useAgents } from "./context";
 import { switchDescription } from "./provider-switch";
 import { findAgentModel } from "@concors/protocol";
@@ -1484,44 +1485,51 @@ export function AgentComposer({
                         onSelect={(nativeMode) => void configure({ ...settings, nativeMode })}
                       />
                     )}
-                  {(agent.controls?.features ?? []).map((feature) => (
-                    <ControlPicker
-                      key={feature.id}
-                      label={feature.label}
-                      showValue={!compact}
-                      value={String(settings.features?.[feature.id] ?? feature.value)}
-                      icon={
-                        feature.id === "fast_mode" ? (
-                          <Zap className="size-4" />
-                        ) : (
-                          <SlidersHorizontal className="size-4" />
-                        )
-                      }
-                      {...(feature.id === "fast_mode"
-                        ? {
-                            chipLabel: "Fast",
-                            active: (settings.features?.[feature.id] ?? feature.value) === true,
-                          }
-                        : {})}
-                      searchable={!!feature.options}
-                      disabled={controlsDisabled}
-                      options={
-                        feature.options ?? [
-                          { id: "true", label: "On" },
-                          { id: "false", label: "Off" },
-                        ]
-                      }
-                      onSelect={(value) =>
-                        void configure({
-                          ...settings,
-                          features: {
-                            ...settings.features,
-                            [feature.id]: feature.options ? value : value === "true",
-                          },
-                        })
-                      }
-                    />
-                  ))}
+                  {(agent.controls?.features ?? []).map((feature) =>
+                    feature.id === "fast_mode" ? (
+                      <FastModeToggle
+                        key={feature.id}
+                        on={(settings.features?.[feature.id] ?? feature.value) === true}
+                        showLabel={!compact}
+                        disabled={controlsDisabled}
+                        onToggle={() =>
+                          void configure({
+                            ...settings,
+                            features: {
+                              ...settings.features,
+                              [feature.id]:
+                                (settings.features?.[feature.id] ?? feature.value) !== true,
+                            },
+                          })
+                        }
+                      />
+                    ) : (
+                      <ControlPicker
+                        key={feature.id}
+                        label={feature.label}
+                        showValue={!compact}
+                        value={String(settings.features?.[feature.id] ?? feature.value)}
+                        icon={<SlidersHorizontal className="size-4" />}
+                        searchable={!!feature.options}
+                        disabled={controlsDisabled}
+                        options={
+                          feature.options ?? [
+                            { id: "true", label: "On" },
+                            { id: "false", label: "Off" },
+                          ]
+                        }
+                        onSelect={(value) =>
+                          void configure({
+                            ...settings,
+                            features: {
+                              ...settings.features,
+                              [feature.id]: feature.options ? value : value === "true",
+                            },
+                          })
+                        }
+                      />
+                    ),
+                  )}
                   {(agent.engine ?? agent.provider) === "codex" && (
                     <ControlPicker
                       label="Permission mode"

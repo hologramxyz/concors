@@ -1,12 +1,10 @@
-import { useState, type ReactElement } from "react";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { TextKeyChips } from "@/shortcuts/key-chips";
+import type { ReactElement } from "react";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 
 /**
- * Names a composer control on hover. Most of them are bare icons, and the webview's own `title`
- * tooltip waits a second or more before it appears, when it appears at all. `hidden` keeps it away
- * while the control's own menu is open, and after the menu closes until the pointer comes back to
- * the control, so picking an option does not bring the tooltip straight back as focus returns.
+ * The shared tooltip as a composer control uses it. Most of them are bare icons. `hidden` keeps it
+ * away while the control's own menu is open, and after the menu closes until the pointer comes back
+ * to the control.
  */
 export function ControlTooltip({
   text,
@@ -22,14 +20,14 @@ export function ControlTooltip({
   side?: "top" | "bottom";
   children: ReactElement;
 }) {
-  const [open, setOpen] = useState(false);
   return (
-    <Tooltip delayDuration={250} open={open && !hidden} onOpenChange={setOpen}>
-      <TooltipTrigger asChild>{children}</TooltipTrigger>
-      <TooltipContent side={side} sideOffset={6}>
-        <span className="min-w-0 break-words">{text}</span>
-        {shortcut && <TextKeyChips text={shortcut} />}
-      </TooltipContent>
-    </Tooltip>
+    <SidebarTooltip
+      content={text}
+      keys={shortcut}
+      hidden={hidden}
+      place={side === "top" ? "above" : "title-bar"}
+    >
+      {children}
+    </SidebarTooltip>
   );
 }

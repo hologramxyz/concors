@@ -66,6 +66,13 @@ test("schedules create, run, reopen their agent, pause, edit and delete", async 
       page.getByRole("button", { name: "Resume Daily review", exact: true }),
     ).toBeEnabled();
     await expect(card.getByText("Paused", { exact: true })).toBeVisible();
+    await expect(card.locator('[data-slot="badge"]', { hasText: "Paused" })).toBeVisible();
+    for (const colorScheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme });
+      await page.waitForTimeout(500);
+      await page.screenshot({ path: test.info().outputPath(`badge-paused-${colorScheme}.png`) });
+    }
+    await page.emulateMedia({ colorScheme: "light" });
     await expect(card.getByText("No upcoming runs")).toHaveCount(0);
     await page.getByRole("button", { name: "Edit Daily review", exact: true }).click();
     await dialog.getByLabel("Name", { exact: true }).fill("Weekly review");
