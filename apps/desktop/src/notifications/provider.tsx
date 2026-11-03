@@ -7,7 +7,8 @@ import { AttentionEngine, type Notice } from "./engine";
 import { claimNotification, getNotificationPreferences } from "./preferences";
 import { countdown } from "./countdown";
 import { desktopNotice, notificationAccess, openNotificationSettings } from "./platform";
-import { errorMessage } from "./access";
+import { errorMessage, firstNotificationProblem, notificationProblem } from "./access";
+import { isMac } from "@/shortcuts/bindings";
 import { isTauri } from "@/tauri";
 import { Button } from "@/components/ui/button";
 import { playAgentSound, unlockAudio } from "./sound";
@@ -113,12 +114,16 @@ export function NotificationProvider({
             else closes.set(notice.sessionId, { id: notice.id, close });
           })
           .catch(async (cause: unknown) => {
-            const access = await notificationAccess().catch(() => "unknown");
-            if (disposed) return;
-            setProblem({
-              message: `A desktop notification could not be shown: ${errorMessage(cause, "unknown error")}`,
-              settings: isTauri() && (access === "blocked" || access === "quiet"),
-            });
+            const access = await notificationAccess().catch(() => "unknown" as const);
+            if (disposed || !firstNotificationProblem()) return;
+            setProblem(
+              // Only macOS has a settings page to open; elsewhere the button could not do anything.
+              notificationProblem(
+                errorMessage(cause, "unknown error"),
+                access,
+                isTauri() && isMac(),
+              ),
+            );
           });
       },
     });

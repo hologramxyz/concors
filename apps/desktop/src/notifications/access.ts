@@ -61,3 +61,26 @@ export function errorMessage(cause: unknown, fallback: string): string {
   if (typeof cause === "string" && cause) return cause;
   return fallback;
 }
+
+/**
+ * What to say when a notification could not be shown. macOS's own wording ("UNErrorDomain error 1")
+ * tells nobody what to do, and refusing permission is all it usually means. Other failures keep
+ * their detail, since a browser's already says what to change.
+ */
+export function notificationProblem(
+  detail: string,
+  access: NotificationAccess | "unknown",
+  native: boolean,
+): { message: string; settings: boolean } {
+  return native && (access === "blocked" || access === "quiet" || /allow/i.test(detail))
+    ? { message: "Notifications are off for Concors", settings: true }
+    : { message: `A desktop notification could not be shown: ${detail}`, settings: false };
+}
+
+let problemReported = false;
+/** True the first time it is asked: one popup a session says it, not one per notification. */
+export function firstNotificationProblem(): boolean {
+  const first = !problemReported;
+  problemReported = true;
+  return first;
+}

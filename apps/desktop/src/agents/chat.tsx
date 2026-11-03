@@ -332,6 +332,7 @@ export function Chat({
     conversation.ready,
     conversation.items,
   );
+  const slowLoad = useSlowLoad(conversation.loading === "latest");
   const footers = useMemo(() => completedTurnFooters(conversation.items), [conversation.items]);
   const replies = useMemo(() => forkReplies(conversation.items), [conversation.items]);
   const latestReply = conversation.hasNewer
@@ -480,11 +481,11 @@ export function Chat({
                       Loading conversation…
                     </p>
                   )}
-                {(conversation.hasEarlier || conversation.loading === "latest") && (
+                {(conversation.hasEarlier || slowLoad) && (
                   <div className="h-5 text-center text-xs text-muted-foreground" role="status">
                     {conversation.loading === "earlier"
                       ? "Loading earlier messages…"
-                      : conversation.loading === "latest"
+                      : slowLoad
                         ? "Loading messages…"
                         : ""}
                   </div>
@@ -634,6 +635,21 @@ export function Chat({
       </div>
     </SubAgentViewContext>
   );
+}
+
+/** Most chats open faster than this, and a line that flashes by only looks like a glitch. */
+const SLOW_LOAD_MS = 300;
+function useSlowLoad(loading: boolean) {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (!loading) return;
+    const timer = setTimeout(() => setSlow(true), SLOW_LOAD_MS);
+    return () => {
+      clearTimeout(timer);
+      setSlow(false);
+    };
+  }, [loading]);
+  return slow;
 }
 
 function HistoryError({ message, onRetry }: { message: string; onRetry: () => void }) {
