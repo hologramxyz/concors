@@ -166,7 +166,7 @@ export function MediaFileTab({ file, kind }: { file: OpenFile; kind: PreviewKind
       )}
       <div className="min-h-0 min-w-0 flex-1 overflow-hidden">{body}</div>
       <div className="shrink-0 border-t px-3 py-1 font-mono text-xs text-muted-foreground">
-        Read-only preview{preview ? ` · ${formatSize(preview.size)}` : ""}
+        Read-only preview{preview ? `, ${formatSize(preview.size)}` : ""}
       </div>
     </section>
   );

@@ -87,7 +87,7 @@ export function AgentModelPicker({
           description:
             p.installed === false
               ? "Not installed on this machine"
-              : `${switchDescription(agents, agent, p.id)}${p.version?.updateAvailable ? ` · Update available (${p.version.latest})` : ""}`,
+              : `${switchDescription(agents, agent, p.id)}${p.version?.updateAvailable ? `. Update available (${p.version.latest})` : ""}`,
           icon: <ProviderIcon provider={p.id} />,
           emptyMessage:
             p.error ??

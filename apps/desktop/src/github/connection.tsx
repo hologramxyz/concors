@@ -1,5 +1,6 @@
 import { GitHubIcon } from "./icon";
 import { RefreshCw } from "lucide-react";
+import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import type { useGitHub } from "./use-github";
@@ -11,16 +12,20 @@ export function GitHubConnection({ github }: { readonly github: ReturnType<typeo
       <div
         role="group"
         aria-label="GitHub integration"
-        className="grid gap-4 rounded-xl border p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
+        className={cn(
+          "grid gap-4 rounded-xl border p-4",
+          // A connected row keeps its actions on their own line, so the account name shows in full.
+          !status?.connected && "md:grid-cols-[minmax(0,1fr)_auto] md:items-center",
+        )}
       >
         <div className="flex min-w-0 items-start gap-3">
           <GitHubIcon className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="flex min-w-0 items-baseline gap-2 text-sm font-medium whitespace-nowrap">
+              <p className="flex min-w-0 flex-wrap items-baseline gap-x-2 text-sm font-medium">
                 GitHub
                 {status?.connected && (
-                  <span className="min-w-0 truncate font-normal text-muted-foreground">
+                  <span className="min-w-0 font-normal break-all text-muted-foreground">
                     {status.login}
                   </span>
                 )}
@@ -47,7 +52,7 @@ export function GitHubConnection({ github }: { readonly github: ReturnType<typeo
             )}
           </div>
         </div>
-        <div className="flex flex-wrap gap-2 md:justify-end">
+        <div className={cn("flex flex-wrap gap-2", status?.connected ? "pl-8" : "md:justify-end")}>
           {status?.configured && (
             <Button
               type="button"

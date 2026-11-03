@@ -78,7 +78,7 @@ test("a chat that hits its plan limit offers to switch the machine to another ac
     await expect(prompt).toContainText("This ChatGPT account reached its usage limit");
     // The other account shows how much room it has before anyone picks it.
     await expect(prompt).toContainText("work@example.test");
-    await expect(prompt).toContainText("Weekly · Fable 91% · Session 42%");
+    await expect(prompt).toContainText("Weekly · Fable 91%, Session 42%");
     await prompt.getByRole("button", { name: "Switch to work@example.test" }).click();
 
     // The machine now runs on that account, and the limit went with the old one.

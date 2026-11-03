@@ -39,7 +39,7 @@ const back = {
 };
 function props(): ComponentProps<typeof NativeControlPicker> {
   return {
-    label: "Codex · Agent and model",
+    label: "Codex: Agent and model",
     options: [back, { id: "codex-model", label: "Codex model", selected: true }],
     dark: false,
     anchor: (onClick) => createElement("button", { onClick }),
@@ -107,11 +107,11 @@ it("keeps the native picker open across delayed provider/model pages and dismiss
   expect(initial.onSelect).toHaveBeenLastCalledWith("claude");
   expect(sheet().props.isPresented).toBe(true);
 
-  await render({ ...initial, label: "Claude Code · Agent and model", options: [back] });
+  await render({ ...initial, label: "Claude Code: Agent and model", options: [back] });
   expect(sheet().props.isPresented).toBe(true);
   await render({
     ...initial,
-    label: "Claude Code · Agent and model",
+    label: "Claude Code: Agent and model",
     options: [back, { id: "sonnet", label: "Sonnet", selected: false }],
   });
   await choose("Sonnet");

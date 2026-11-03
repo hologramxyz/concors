@@ -160,7 +160,7 @@ test("directional pane sequences, tab cycling, project memory and immediate Agen
       page.getByRole("heading", { name: "Other navigation project", exact: true }),
     ).toBeVisible();
     await page.keyboard.press("Control+Shift+k");
-    await page.getByPlaceholder("Search workspaces, agents, tabs…").fill("Navigation project");
+    await page.getByPlaceholder("Search workspaces and tabs…").fill("Navigation project");
     await page
       .locator('[data-search-result="workspace"]')
       .filter({ hasText: /^Navigation project/ })

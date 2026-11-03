@@ -45,7 +45,7 @@ it("counts down to a reset in at most two units", () => {
 
 it("puts a window's share and its reset in one line", () => {
   const window = { id: "five-hour", label: "Session", usedPercent: 42, resetsAt: at(3_600_000) };
-  expect(windowSummary(window, now)).toBe("42% · resets in 1h");
+  expect(windowSummary(window, now)).toBe("42%, resets in 1h");
   expect(windowSummary({ ...window, resetsAt: null }, now)).toBe("42%");
   expect(windowSummary({ ...window, usedPercent: null, resetsAt: null }, now)).toBe("—");
 });
@@ -54,7 +54,7 @@ it("stops showing a window's figure once it has rolled over", () => {
   const window = { id: "five-hour", label: "Session", usedPercent: 92, resetsAt: at(-60_000) };
   expect(hasReset(window, now)).toBe(true);
   // The 92% belongs to the window that ended; the new one is unknown until asked again.
-  expect(windowSummary(currentWindow(window, now), now)).toBe("— · resetting now");
+  expect(windowSummary(currentWindow(window, now), now)).toBe("—, resetting now");
   const running = { ...window, resetsAt: at(60_000) };
   expect(hasReset(running, now)).toBe(false);
   expect(currentWindow(running, now)).toBe(running);

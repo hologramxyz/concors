@@ -256,14 +256,14 @@ function AgentRow({
           content={
             <div className="min-w-0">
               <p className="font-medium break-words">
-                {agent.name} · {agent.providerName}
+                {agent.name}, {agent.providerName}
               </p>
               <p className="font-medium break-words">{projectName}</p>
               <p className="opacity-75">
                 {status}
-                {backgroundLabel ? ` · ${backgroundLabel}` : ""}
-                {scheduled ? " · Scheduled" : ""}
-                {dot === "done" ? " · Unread update" : ""}
+                {backgroundLabel ? `, ${backgroundLabel}` : ""}
+                {scheduled ? ", Scheduled" : ""}
+                {dot === "done" ? ", Unread update" : ""}
               </p>
             </div>
           }
@@ -273,7 +273,7 @@ function AgentRow({
             className={`flex items-center rounded-md text-ui ${compact ? "sidebar-rail-control w-full hover:bg-sidebar-accent" : "h-8 min-w-0 flex-1 gap-2 px-2 text-left"}`}
             aria-label={
               compact
-                ? `Agent status: ${status}${backgroundLabel ? ` · ${backgroundLabel}` : ""} · ${agent.name} · ${projectName}`
+                ? `Agent status: ${status}${backgroundLabel ? `, ${backgroundLabel}` : ""}, ${agent.name}, ${projectName}`
                 : undefined
             }
             data-agent-id={agent.id}

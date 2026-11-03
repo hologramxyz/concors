@@ -76,7 +76,7 @@ it("words context and plan usage once for the popover and the phone's native she
   );
   expect(view).toEqual({
     context: {
-      summary: "120k / 200k tokens · 60% used",
+      summary: "120k / 200k tokens, 60% used",
       detail: "2m cumulative tokens",
       percent: 60,
       tone: "ok",
@@ -90,7 +90,7 @@ it("words context and plan usage once for the popover and the phone's native she
         {
           id: "five-hour",
           label: "Session",
-          summary: "42% · resets in 2h",
+          summary: "42%, resets in 2h",
           percent: 42,
           tone: "ok",
         },

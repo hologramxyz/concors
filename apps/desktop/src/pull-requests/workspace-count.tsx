@@ -52,7 +52,7 @@ export function WorkspacePullRequestCount({
       <HoverCardTrigger asChild>{trigger}</HoverCardTrigger>
       <HoverCardContent side="right" align="start" sideOffset={10} className="w-72">
         <p className="truncate px-2 pt-1.5 pb-1 text-xs text-muted-foreground">
-          {project.name} · {pullRequestsLabel(count)}
+          {project.name}, {pullRequestsLabel(count)}
         </p>
         <ul aria-label={`Pull requests by repository in ${project.name}`}>
           {repositories.map((repository) => (

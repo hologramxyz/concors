@@ -61,7 +61,7 @@ test("PDFs and images open in a read-only preview instead of the text editor", a
         }),
       )
       .toBe(true);
-    await expect(pdf.getByText(/Read-only preview · \d+ B/)).toBeVisible();
+    await expect(pdf.getByText(/Read-only preview, \d+ B/)).toBeVisible();
 
     await tree.getByRole("button", { name: "dot.png", exact: true }).click();
     const image = page.getByRole("img", { name: "dot.png", exact: true });

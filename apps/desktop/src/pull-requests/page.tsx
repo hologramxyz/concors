@@ -4,6 +4,7 @@ import {
   CircleCheck,
   CircleDot,
   CircleX,
+  FolderOpen,
   GitMerge,
   GitPullRequest,
   GitPullRequestClosed,
@@ -77,11 +78,17 @@ const states = [
 export function PullRequestsPage({
   workspace,
   connected,
+  connectionFailed,
+  canOpenFolder,
+  onOpenFolder,
   view,
   onNavigate,
 }: {
   workspace: WorkspaceSnapshot | null;
   connected: boolean;
+  connectionFailed: boolean;
+  canOpenFolder: boolean;
+  onOpenFolder: (mode: "open" | "clone", trigger?: HTMLElement | null) => void;
   view: PullRequestsView;
   onNavigate: (view: PullRequestsView) => void;
 }) {
@@ -270,7 +277,8 @@ export function PullRequestsPage({
         </p>
       )}
       {!connected ? (
-        <Status>Connect to a machine to see its pull requests.</Status>
+        // Still connecting says nothing: the machine is usually here a moment later.
+        connectionFailed && <Status>Connect to a machine to see its pull requests.</Status>
       ) : !supported ? (
         <Status>
           {view.state === "open"
@@ -299,8 +307,25 @@ export function PullRequestsPage({
             filtered ? `No GitHub repositories in ${filtered.name}` : "No GitHub repositories yet"
           }
         >
-          Open a folder that is a GitHub repository, or that contains repositories, to see its pull
-          requests here.
+          Open a GitHub repository to see its pull requests.
+          {!filtered && (
+            <div className="mt-4 flex flex-col items-center gap-4">
+              <Button
+                disabled={!canOpenFolder}
+                onClick={(event) => onOpenFolder("open", event.currentTarget)}
+              >
+                <FolderOpen />
+                Open folder…
+              </Button>
+              <Button
+                variant="ghost"
+                disabled={!canOpenFolder}
+                onClick={(event) => onOpenFolder("clone", event.currentTarget)}
+              >
+                Clone repository…
+              </Button>
+            </div>
+          )}
         </Empty>
       ) : (
         <div className="mt-6 space-y-8">
@@ -474,10 +499,11 @@ function PullRequestRow({
         <Icon className={cn("mt-0.5 size-4 shrink-0", tone)} aria-hidden="true" />
         <div className="min-w-0 flex-1">
           <p className="font-medium break-words">{pullRequest.title}</p>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">
-            #{pullRequest.number}
-            {pullRequest.author ? ` · ${pullRequest.author}` : ""} · {pullRequest.branch} ·{" "}
-            {shortAge(pullRequest.updatedAt)}
+          <p className="mt-0.5 flex min-w-0 gap-2 text-xs text-muted-foreground">
+            <span className="shrink-0">#{pullRequest.number}</span>
+            {pullRequest.author && <span className="shrink-0">{pullRequest.author}</span>}
+            <span className="min-w-0 truncate">{pullRequest.branch}</span>
+            <span className="shrink-0">{shortAge(pullRequest.updatedAt)}</span>
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 text-xs text-muted-foreground">

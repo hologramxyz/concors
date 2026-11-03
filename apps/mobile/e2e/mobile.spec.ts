@@ -789,8 +789,8 @@ test("flat tab picker opens from its text and padding and dismisses without reop
   await expect(list.locator(".mobile-tab-card")).toHaveCount(0);
   await expect(list.locator("[data-pane-choice]")).toHaveCount(3);
   await expect(list.locator(".mobile-pane-choice")).toContainText([
-    "Mobile launch · 1",
-    "Mobile launch · 2",
+    "Mobile launch 1",
+    "Mobile launch 2",
     "Tab 2",
   ]);
   await closePickerSheet(ui);
@@ -822,7 +822,7 @@ test("flat tab actions configure and close inactive leaves without changing the 
   const drawer = ui.getByRole("dialog", { name: "Tabs", exact: true });
   const inactive = drawer.locator(`.mobile-pane-row:has([data-value="${activeTerminal}"])`);
   await inactive
-    .getByRole("button", { name: "Actions for tab Mobile launch · 2", exact: true })
+    .getByRole("button", { name: "Actions for tab Mobile launch 2", exact: true })
     .click();
   await expect(ui.getByRole("menuitem", { name: "Rename tab", exact: true })).toHaveCount(0);
   await expect(ui.getByRole("menuitem", { name: /Add pane|Move tab|Split/ })).toHaveCount(0);
@@ -831,7 +831,7 @@ test("flat tab actions configure and close inactive leaves without changing the 
   await expect(picker).toHaveAttribute("data-value", selected);
   await page.screenshot({ path: test.info().outputPath("mobile-flat-tabs.png") });
   await inactive
-    .getByRole("button", { name: "Actions for tab Mobile launch · 2", exact: true })
+    .getByRole("button", { name: "Actions for tab Mobile launch 2", exact: true })
     .click();
   await ui.getByRole("menuitem", { name: "Close tab…", exact: true }).click();
   await ui.getByRole("button", { name: "Close tab", exact: true }).click();

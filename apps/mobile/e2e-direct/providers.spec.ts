@@ -120,7 +120,7 @@ for (const native of [false, true]) {
                 content.controls.find((control) => control.id === "model")?.label
               );
             })
-            .toBe(`${label} · Agent and model`);
+            .toBe(`${label}: Agent and model`);
           await nativeEvent({ kind: "focus", focused: true });
           await nativeEvent({ kind: "text", text, sequence: ++sequence });
           await expect
@@ -211,8 +211,8 @@ for (const native of [false, true]) {
             ? content.controls.find((control) => control.id === "model")?.label
             : undefined;
         };
-        await expect.poll(model).toMatch(/ · Agent and model$/);
-        if ((await model()) !== "Codex · Agent and model") await choose("codex", "Codex");
+        await expect.poll(model).toMatch(/: Agent and model$/);
+        if ((await model()) !== "Codex: Agent and model") await choose("codex", "Codex");
       }
       await send("Codex", "Keep my original conversation");
       for (const [provider, label] of [

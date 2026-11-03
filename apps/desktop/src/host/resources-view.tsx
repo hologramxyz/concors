@@ -65,10 +65,19 @@ function ResourceContent({ machine }: { machine: string }) {
   return (
     <div
       className={
-        compact ? "space-y-4 py-2" : "mx-auto w-full max-w-4xl space-y-5 px-4 py-6 sm:px-6"
+        compact ? "space-y-4 py-2" : "mx-auto w-full max-w-5xl space-y-5 px-4 py-6 sm:px-8 sm:py-8"
       }
     >
-      {!compact && <h2 className="text-base font-medium">Resources</h2>}
+      {!compact && (
+        <div>
+          <h2 data-page-title className="text-xl font-semibold">
+            Resources
+          </h2>
+          <p className="mt-1 text-ui text-muted-foreground">
+            What&rsquo;s using this machine&rsquo;s CPU and memory.
+          </p>
+        </div>
+      )}
       {uninspected && !compact && connection && (
         <ResourceStatus
           connection={connection}
@@ -154,20 +163,22 @@ function ResourceContent({ machine }: { machine: string }) {
           Show more processes ({processLimit} of {filtered.length})
         </Button>
       )}
-      <details className="group rounded-lg border">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-4 py-3 text-sm text-muted-foreground transition-colors select-none hover:bg-muted/30 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none [&::-webkit-details-marker]:hidden">
-          About resource usage
-          <ChevronDown
-            className="size-4 shrink-0 transition-transform duration-150 group-open:rotate-180"
-            aria-hidden="true"
-          />
-        </summary>
-        <p className="border-t px-4 py-3 text-xs leading-relaxed text-muted-foreground">
-          Processes visible to the daemon’s OS user. CPU is a share of the whole machine; RAM is
-          resident memory and may include shared pages. Sleeping does not mean safe to stop.
-          Container and other-user usage may not be fully attributed.
-        </p>
-      </details>
+      {!uninspected && (
+        <details className="group rounded-lg border">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-4 py-3 text-sm text-muted-foreground transition-colors select-none hover:bg-muted/30 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none [&::-webkit-details-marker]:hidden">
+            About resource usage
+            <ChevronDown
+              className="size-4 shrink-0 transition-transform duration-150 group-open:rotate-180"
+              aria-hidden="true"
+            />
+          </summary>
+          <p className="border-t px-4 py-3 text-xs leading-relaxed text-muted-foreground">
+            Processes visible to the daemon’s OS user. CPU is a share of the whole machine; RAM is
+            resident memory and may include shared pages. Sleeping does not mean safe to stop.
+            Container and other-user usage may not be fully attributed.
+          </p>
+        </details>
+      )}
       <StopProcessDialog
         connection={connection}
         process={action}

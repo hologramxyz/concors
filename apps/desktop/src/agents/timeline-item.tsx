@@ -83,7 +83,7 @@ export const TimelineItem = memo(function TimelineItem({
           item.status === "completed" &&
           /^\d+s$/.test(item.text)
             ? `Worked for ${formatDuration(Number(item.text.slice(0, -1)))}`
-            : `${item.title}${item.text ? ` · ${item.text}` : ""}`}
+            : `${item.title}${item.text ? `: ${item.text}` : ""}`}
         </span>
       </article>
     );

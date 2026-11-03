@@ -47,7 +47,7 @@ export function SubAgentCard({
     running && elapsed > 0 ? formatDuration(elapsed) : null,
   ]
     .filter(Boolean)
-    .join(" · ");
+    .join(", ");
   return (
     <article
       data-tool-status={item.status}
@@ -102,7 +102,7 @@ export function SubAgentCard({
                 title={`${current.title} ${current.text}`}
               >
                 {current.title}
-                {current.text ? ` · ${current.text}` : ""}
+                {current.text ? ` ${current.text}` : ""}
               </span>
             )}
           </span>

@@ -95,7 +95,7 @@ test("workspace shortcuts create, search, split and close the active pane withou
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await page.keyboard.press("Control+Shift+k");
     await expect(page.getByRole("dialog")).toBeVisible();
-    await page.getByPlaceholder("Search workspaces, agents, tabs…").fill("Shortcuts");
+    await page.getByPlaceholder("Search workspaces and tabs…").fill("Shortcuts");
     await page.getByRole("option", { name: /Shortcuts/ }).click();
     await expect(page.getByRole("heading", { name: "Shortcuts", exact: true })).toBeVisible();
     await expect(page.getByRole("main")).toContainText("Ctrl+Shift+P then Backspace");
@@ -171,7 +171,7 @@ test("workspace shortcuts create, search, split and close the active pane withou
     await expect(panes).toHaveCount(0);
     await expect(tab).toHaveCount(0);
     await page.keyboard.press("Control+Shift+k");
-    await page.getByPlaceholder("Search workspaces, agents, tabs…").fill(basename(directory));
+    await page.getByPlaceholder("Search workspaces and tabs…").fill(basename(directory));
     await page
       .locator('[data-search-result="workspace"]')
       .filter({ hasText: basename(directory) })
@@ -180,7 +180,7 @@ test("workspace shortcuts create, search, split and close the active pane withou
       page.getByRole("heading", { name: basename(directory), exact: true }),
     ).toBeVisible();
     await page.keyboard.press("Control+Shift+k");
-    await page.getByPlaceholder("Search workspaces, agents, tabs…").fill("New tab");
+    await page.getByPlaceholder("Search workspaces and tabs…").fill("New tab");
     await page.getByRole("option", { name: /New tab/ }).click();
     await expect(
       page.getByRole("group", { name: "Start with", exact: true }).filter({ visible: true }),
@@ -375,7 +375,7 @@ test("menus, Search, the sequence panel and a tab's tooltip draw shortcuts as ke
   await page.keyboard.press("Escape");
 
   await page.keyboard.press("Control+Shift+k");
-  await page.getByPlaceholder("Search workspaces, agents, tabs…").fill("Resume a chat");
+  await page.getByPlaceholder("Search workspaces and tabs…").fill("Resume a chat");
   await expect(page.getByRole("option", { name: /^Resume a chat…/ }).locator("kbd")).toHaveText([
     "Ctrl+Shift+T",
     "R",

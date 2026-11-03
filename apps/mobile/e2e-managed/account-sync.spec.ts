@@ -298,7 +298,7 @@ test("organization drawer preserves a failed switch and isolates machine lists a
   await profile.getByRole("combobox", { name: "Organization", exact: true }).click();
   await expect(sheet(ui, "Organization")).toHaveAttribute("data-mobile-drawer", "true");
   mock.failSwitch();
-  await ui.getByRole("option", { name: /Hologram team Team · admin/ }).click();
+  await ui.getByRole("option", { name: /Hologram team Team, admin/ }).click();
   await expect(profile.getByRole("alert")).toContainText("Switch temporarily unavailable");
   await expect(profile.getByRole("combobox", { name: "Organization", exact: true })).toContainText(
     "Personal",
@@ -313,7 +313,7 @@ test("organization drawer preserves a failed switch and isolates machine lists a
   await close(ui, "Machine");
   await account(ui);
   await profile.getByRole("combobox", { name: "Organization", exact: true }).click();
-  await ui.getByRole("option", { name: /Hologram team Team · admin/ }).click();
+  await ui.getByRole("option", { name: /Hologram team Team, admin/ }).click();
   await expect(sheet(ui, "Account")).toHaveCount(0);
   // Switching organizations retains isolation without an extra onboarding prompt.
   await expect(page.getByRole("button", { name: "Allow AI data sharing" })).toHaveCount(0);
@@ -331,7 +331,7 @@ test("organization drawer preserves a failed switch and isolates machine lists a
   await profile.getByRole("button", { name: "Settings", exact: true }).click();
   const settings = sheet(ui, "Settings");
   await settings.getByRole("combobox", { name: "Organization", exact: true }).click();
-  await ui.getByRole("option", { name: /Personal Personal · owner/ }).click();
+  await ui.getByRole("option", { name: /Personal Personal, owner/ }).click();
   await expect(settings).toHaveCount(0);
   await expect(ui.getByRole("button", { name: "Open sidebar", exact: true })).toBeVisible();
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();

@@ -250,7 +250,7 @@ export function MessageNavigation({
           onClick={() => setOpen(true)}
           className="absolute top-12 right-2 z-10 rounded border bg-background px-2 py-1 text-xs"
         >
-          Could not load messages · Retry
+          Could not load messages. Retry
         </button>
       )}
     </>

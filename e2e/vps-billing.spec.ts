@@ -626,3 +626,35 @@ test("machines page says nothing about payments while the card works", async ({ 
   await expect(page.getByRole("alert", { name: "Payment failed" })).toHaveCount(0);
   await expect(page.locator("#cloud-machine-vps-1").getByText("At risk")).toHaveCount(0);
 });
+
+test("billing prices never overlap their label, at any window width", async ({ page }) => {
+  await billingApi(page, { card: true });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Account: E2E User" }).click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
+  await page
+    .getByRole("navigation", { name: "Settings" })
+    .getByRole("button", { name: "Billing", exact: true })
+    .click();
+  const row = page.locator("[data-settings-row]").filter({ hasText: "Prices" });
+  await expect(row).toContainText("/month");
+  await expect(page.getByText("Per machine, per month.")).toHaveCount(0);
+  for (const width of [1600, 1360, 1100, 900, 768, 700, 480, 390]) {
+    await page.setViewportSize({ width, height: 850 });
+    const overlap = await row.evaluate((node) => {
+      const label = node.querySelector(":scope > div:first-child")?.getBoundingClientRect();
+      if (!label) throw new Error("The Prices row has no label");
+      const box = node.getBoundingClientRect();
+      const prices = [...node.querySelectorAll(":scope > div:last-child > span > span")].map((p) =>
+        p.getBoundingClientRect(),
+      );
+      return prices.some(
+        (p) =>
+          p.right > box.right + 0.5 ||
+          p.left < box.left - 0.5 ||
+          !(p.left >= label.right || p.top >= label.bottom),
+      );
+    });
+    expect(overlap, `prices at ${width}px`).toBe(false);
+  }
+});

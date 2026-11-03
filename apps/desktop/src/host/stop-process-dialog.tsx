@@ -78,7 +78,7 @@ export function StopProcessDialog({
         </DialogHeader>
         {process && (
           <p className="text-sm break-all">
-            {process.name} · PID {process.pid}
+            {process.name}, PID {process.pid}
             <br />
             {process.directory}
           </p>

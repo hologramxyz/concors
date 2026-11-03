@@ -44,10 +44,12 @@ const runStatusColor = {
 export function SchedulesPage({
   workspace,
   connected,
+  connectionFailed,
   onOpenAgent,
 }: {
   workspace: WorkspaceSnapshot | null;
   connected: boolean;
+  connectionFailed: boolean;
   onOpenAgent: (id: string) => void;
 }) {
   const { connection, schedules } = useSchedules(),
@@ -114,13 +116,16 @@ export function SchedulesPage({
         </p>
       )}
       {!available ? (
-        <p role="status" className="my-16 text-center text-ui text-muted-foreground">
-          {!connected
-            ? "Connect to a machine to manage its schedules."
-            : !supported
-              ? "Update the daemon on this machine to use schedules."
-              : "Loading schedules…"}
-        </p>
+        // Still connecting says nothing: the machine is usually here a moment later.
+        (connected || connectionFailed) && (
+          <p role="status" className="my-16 text-center text-ui text-muted-foreground">
+            {!connected
+              ? "Connect to a machine to manage its schedules."
+              : !supported
+                ? "Update the daemon on this machine to use schedules."
+                : "Loading schedules…"}
+          </p>
+        )
       ) : !schedules.length ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-4 py-20 text-center">
           <div className="flex size-14 items-center justify-center rounded-xl border bg-muted/40">

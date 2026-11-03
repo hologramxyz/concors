@@ -37,16 +37,16 @@ test("the context ring shows the conversation's window and the plan's usage bars
     await ring.click();
     await expect(page.getByRole("tooltip")).toHaveCount(0);
     const context = page.getByRole("region", { name: "Context window" });
-    await expect(context).toContainText("32k / 128k tokens · 25% used");
+    await expect(context).toContainText("32k / 128k tokens, 25% used");
 
     const plan = page.getByRole("region", { name: "Plan usage" });
     await expect(plan).toContainText("Max 20x");
     const bars = plan.getByRole("progressbar");
     await expect(bars).toHaveCount(3);
     await expect(plan.getByRole("listitem").nth(0)).toContainText("Session");
-    await expect(plan.getByRole("listitem").nth(0)).toContainText(/42% · resets in (1h 5\d|2h)/);
+    await expect(plan.getByRole("listitem").nth(0)).toContainText(/42%, resets in (1h 5\d|2h)/);
     await expect(plan.getByRole("listitem").nth(1)).toContainText(
-      /Weekly13% · resets in 2d 2\dh|Weekly13% · resets in 3d/,
+      /Weekly13%, resets in 2d 2\dh|Weekly13%, resets in 3d/,
     );
     await expect(plan.getByRole("listitem").nth(2)).toContainText("Weekly · Fable91%");
     await expect(bars.nth(0)).toHaveAttribute("aria-valuenow", "42");

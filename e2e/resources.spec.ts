@@ -147,7 +147,7 @@ test("detected previews stop from the sidebar after a confirmation", async ({ pa
   await sidebar.getByRole("button", { name: "Open preview: Vite preview", exact: true }).hover();
   await sidebar.getByRole("button", { name: "Stop Vite preview", exact: true }).click();
   const stop = page.getByRole("dialog", { name: "Stop process?" });
-  await expect(stop).toContainText("Vite preview · PID 11");
+  await expect(stop).toContainText("Vite preview, PID 11");
   await stop.getByRole("button", { name: "Cancel" }).click();
   expect(operations.some((op) => op.kind === "stop")).toBe(false);
   await sidebar.getByRole("button", { name: "Stop Vite preview", exact: true }).click();
@@ -226,4 +226,40 @@ test("a preview left running for days, or holding a lot of memory, is flagged wi
   await expect(
     sidebar.getByRole("button", { name: "Stop next-server", exact: true }),
   ).toBeEnabled();
+});
+
+test("Resources uses the page header, and a machine without process inspection has no process help", async ({
+  page,
+}) => {
+  const inspect = async (warnings: string[]) => {
+    await page.routeWebSocket("ws://127.0.0.1:7429/ws", (socket) => {
+      const server = socket.connectToServer();
+      socket.onMessage((raw) => {
+        const request = JSON.parse(String(raw));
+        if (request.type !== "resource.request") return server.send(raw);
+        socket.send(
+          JSON.stringify({
+            type: "resource.result",
+            requestId: request.requestId,
+            outcome: {
+              status: "processes",
+              snapshot: { sampledAt: Date.now(), processes: [], warnings },
+            },
+          }),
+        );
+      });
+      server.onMessage((raw) => socket.send(raw));
+    });
+    await page.goto("/");
+    await page.getByRole("button", { name: "Open resources" }).click();
+  };
+  await signedIn(page);
+  await inspect(["Process inspection is available on Linux machines."]);
+  const title = page.getByRole("heading", { name: "Resources", level: 2 });
+  await expect(title).toHaveCSS("font-size", "20px");
+  await expect(page.getByText(/CPU and memory\.$/)).toBeVisible();
+  await expect(page.getByText("About resource usage")).toHaveCount(0);
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+  await inspect([]);
+  await expect(page.getByText("About resource usage")).toBeVisible();
 });

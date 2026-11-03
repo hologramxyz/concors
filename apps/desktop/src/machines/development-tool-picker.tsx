@@ -104,7 +104,7 @@ export function DevelopmentToolPicker({
           >
             {catalog.nodeVersions.map((version) => (
               <option key={version} value={version}>
-                {version === "lts" ? "Latest LTS" : `Node ${version} · latest patch`}
+                {version === "lts" ? "Latest LTS" : `Node ${version}, latest patch`}
               </option>
             ))}
           </select>
@@ -134,7 +134,7 @@ export function DevelopmentToolPicker({
       <ToolCard
         wide
         name="Docker"
-        description="Containers & Compose · latest stable"
+        description="Containers & Compose, latest stable"
         logo={dockerLogo}
         color="#2496ED"
         checked={tools.docker}

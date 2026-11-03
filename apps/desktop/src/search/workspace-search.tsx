@@ -214,8 +214,8 @@ function SearchContent({
       <CommandInput
         ref={input}
         maxLength={200}
-        aria-label="Search workspaces, agents and tabs"
-        placeholder="Search workspaces, agents, tabs…"
+        aria-label="Search workspaces and tabs"
+        placeholder="Search workspaces and tabs…"
         value={query}
         onValueChange={(value) => {
           setQuery(value);

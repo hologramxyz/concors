@@ -192,7 +192,7 @@ test("an outdated agent CLI is flagged in the picker and can be updated from it"
     await page.getByRole("button", { name: "Back to providers", exact: true }).click();
     await expect(
       page.getByRole("option", {
-        name: "Codex Current conversation · Update available (0.156.0)",
+        name: "Codex Current conversation. Update available (0.156.0)",
         exact: true,
       }),
     ).toBeVisible();

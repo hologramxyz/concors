@@ -131,7 +131,7 @@ export function ControlPicker({
       }}
     >
       <ControlTooltip
-        text={`${label}: ${currentLabel}${notice ? ` · ${notice}` : ""}`}
+        text={`${label}: ${currentLabel}${notice ? `. ${notice}` : ""}`}
         shortcut={shortcut}
         hidden={open || quiet}
       >

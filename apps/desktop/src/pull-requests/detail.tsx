@@ -108,7 +108,7 @@ export function PullRequestView({
                 />
               )}
               <span className="min-w-0 truncate">
-                {detail.repository} · #{detail.number}
+                {detail.repository} #{detail.number}
               </span>
             </p>
             <h2 className="mt-1.5 text-xl font-semibold break-words">{detail.title}</h2>
@@ -122,8 +122,8 @@ export function PullRequestView({
             </div>
             <p className="mt-1.5 text-xs text-muted-foreground tabular-nums">
               <span className="text-emerald-600 dark:text-emerald-500">+{detail.additions}</span>{" "}
-              <span className="text-destructive">−{detail.deletions}</span> · {detail.changedFiles}{" "}
-              file{detail.changedFiles === 1 ? "" : "s"} · updated {ageLabel(detail.updatedAt)}
+              <span className="text-destructive">−{detail.deletions}</span>, {detail.changedFiles}{" "}
+              file{detail.changedFiles === 1 ? "" : "s"}, updated {ageLabel(detail.updatedAt)}
             </p>
             {detail.labels.length > 0 && (
               <ul aria-label="Labels" className="mt-2.5 flex flex-wrap gap-1.5">
@@ -346,8 +346,8 @@ function MergeStatus({ detail }: { detail: PullRequestDetail }) {
           >
             <span className="flex-1">
               {detail.checkCount} check{detail.checkCount === 1 ? "" : "s"}
-              {failing ? ` · ${failing} failing` : ""}
-              {pending ? ` · ${pending} running` : ""}
+              {failing ? `, ${failing} failing` : ""}
+              {pending ? `, ${pending} running` : ""}
             </span>
             <span className="text-xs">{expanded ? "Hide" : "Show"}</span>
           </button>
@@ -391,7 +391,7 @@ function TimelineEntry({ entry }: { entry: PullRequestTimelineEntry }) {
       <p className="flex flex-wrap items-center gap-x-1.5 border-b bg-muted/30 px-4 py-2 text-muted-foreground">
         <span className="font-medium text-foreground">{entry.author ?? "Someone"}</span>
         {review ? <span className={review[1]}>{review[0]}</span> : <span>commented</span>}
-        <span>· {shortAge(entry.createdAt)}</span>
+        <span>{shortAge(entry.createdAt)}</span>
       </p>
       {entry.body && (
         <div className="px-4 py-3">

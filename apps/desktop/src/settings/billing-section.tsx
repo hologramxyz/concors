@@ -105,15 +105,15 @@ export function BillingSection({ organization }: BillingSectionProps) {
                 )}
               </span>
             </Row>
-            <Row label="Prices" hint="Per machine, per month.">
-              <span className="flex justify-end gap-x-3 text-xs whitespace-nowrap">
+            <Row label="Prices">
+              <span className="flex flex-wrap gap-x-3 gap-y-1 text-xs md:justify-end">
                 {[...status.prices]
                   .sort(
                     (a, b) =>
                       (a.monthlyPrice?.amount ?? Infinity) - (b.monthlyPrice?.amount ?? Infinity),
                   )
                   .map((price) => (
-                    <span key={price.size}>
+                    <span key={price.size} className="whitespace-nowrap">
                       <span className="capitalize">{price.size}</span>{" "}
                       {formatMonthly(price.monthlyPrice)}
                     </span>

@@ -342,8 +342,8 @@ function TextFileTab({ file }: { file: OpenFile }) {
         )}
       </div>
       <div className="shrink-0 border-t px-3 py-1 font-mono text-xs text-muted-foreground">
-        {dirty ? "Unsaved changes" : state.base ? "Saved on machine" : "File preview"} ·{" "}
-        {vimEnabled ? "Vim · :w to save" : "⌘/Ctrl+S to save"}
+        {dirty ? "Unsaved changes" : state.base ? "Saved on machine" : "File preview"}.{" "}
+        {vimEnabled ? "Vim: :w to save" : "⌘/Ctrl+S to save"}
       </div>
     </section>
   );

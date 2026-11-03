@@ -700,7 +700,7 @@ export function AgentComposer({
         {
           id: "model",
           label: nativeProvider
-            ? `${nativeProvider.label ?? agentProviderName(nativeProvider.id)} · Agent and model`
+            ? `${nativeProvider.label ?? agentProviderName(nativeProvider.id)}: Agent and model`
             : "Choose an agent provider",
           icon:
             nativeProviderIcons[
@@ -749,8 +749,8 @@ export function AgentComposer({
                   label:
                     (provider.label ?? agentProviderName(provider.id)) +
                     (provider.installed === false
-                      ? " · Not installed"
-                      : ` · ${switchDescription(agents, agent, provider.id)}`),
+                      ? ": Not installed"
+                      : `: ${switchDescription(agents, agent, provider.id)}`),
                   selected: provider.id === agent.provider,
                   navigate: true,
                 })),
@@ -788,17 +788,17 @@ export function AgentComposer({
               : [
                   {
                     id: "default",
-                    label: "Default permissions · asks for approval",
+                    label: "Default permissions: asks for approval",
                     selected: settings.mode === "default",
                   },
                   {
                     id: "auto-review",
-                    label: "Auto-review · same sandbox",
+                    label: "Auto-review: same sandbox",
                     selected: settings.mode === "auto-review",
                   },
                   {
                     id: "full-access",
-                    label: "Full access · no approval prompts",
+                    label: "Full access: no approval prompts",
                     selected: settings.mode === "full-access",
                   },
                 ],
@@ -813,7 +813,7 @@ export function AgentComposer({
               ? [
                   {
                     id: "plan",
-                    label: "Plan mode · read-only exploration",
+                    label: "Plan mode: read-only exploration",
                     selected: !!settings.planMode,
                   },
                 ]
@@ -1030,8 +1030,8 @@ export function AgentComposer({
         {!dictation.active && !compact && active && canSteer(draft, attachments.length) && (
           <p data-follow-up-hint className="px-2 text-xs text-muted-foreground">
             {followUps === "steer"
-              ? `Enter steers the current turn · ${MOD_KEY}+Enter queues it for after`
-              : `Enter queues it for after this turn · ${MOD_KEY}+Enter steers the current turn`}
+              ? `Enter steers the current turn. ${MOD_KEY}+Enter queues it for after`
+              : `Enter queues it for after this turn. ${MOD_KEY}+Enter steers the current turn`}
           </p>
         )}
         {durableQueue && !!agent.queue?.length && (
@@ -1396,8 +1396,8 @@ export function AgentComposer({
                 <ControlTooltip
                   text={
                     uploads
-                      ? `Attach files · up to ${UPLOAD_LIMIT} each`
-                      : "Attach files · up to three, 1 MB each"
+                      ? `Attach files: up to ${UPLOAD_LIMIT} each`
+                      : "Attach files: up to three, 1 MB each"
                   }
                 >
                   <button

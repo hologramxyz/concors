@@ -64,6 +64,12 @@ test("without GitHub repositories, Pull requests is only its empty state", async
   await expect(page.getByRole("heading", { name: "No GitHub repositories yet" })).toBeVisible();
   await expect(page.getByRole("tablist", { name: "Pull request state" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Refresh", exact: true })).toHaveCount(0);
+  await expect(page.getByText("Open a GitHub repository to see its pull requests.")).toBeVisible();
+  await page.getByRole("button", { name: "Open folder…", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Open folder" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Clone repository…", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Clone repository" })).toBeVisible();
 });
 
 test("the sidebar shows no count of active schedules", async ({ page }) => {

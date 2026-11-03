@@ -676,6 +676,7 @@ function AppContent() {
                               connected={
                                 connection.workspaceReady && connection.state.status === "ready"
                               }
+                              connectionFailed={connection.failed}
                               onOpenAgent={openAgent}
                             />
                           ) : view === "pull-requests" ? (
@@ -685,6 +686,9 @@ function AppContent() {
                               connected={
                                 connection.workspaceReady && connection.state.status === "ready"
                               }
+                              connectionFailed={connection.failed}
+                              canOpenFolder={canEdit && !newWorkspace.busy}
+                              onOpenFolder={openProjectDialog}
                               view={pullRequestsView}
                               onNavigate={setPullRequestsView}
                             />

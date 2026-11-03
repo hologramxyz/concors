@@ -78,7 +78,7 @@ test("native model pages distinguish provider navigation from a committed model 
     .poll(async () => (await model())?.options?.find((option) => option.id === "codex")?.navigate)
     .toBe(true);
   await event(page, "composer", "", { kind: "press", control: "model", value: "codex" });
-  await expect.poll(async () => (await model())?.label).toBe("Codex · Agent and model");
+  await expect.poll(async () => (await model())?.label).toBe("Codex: Agent and model");
   await expect
     .poll(async () =>
       (await model())?.options?.some((option) => option.id === "demo-codex" && !option.navigate),
@@ -212,7 +212,7 @@ test("native surface bridge preserves navigation, drafts, settings, attachments 
   expect(search?.frame.height).toBe(menu?.frame.height);
   await expect(ui.getByRole("button", { name: "Close sidebar", exact: true })).toHaveCount(0);
   await event(page, "button", "Search workspace", { kind: "press", control: "activate" });
-  await expect(ui.getByPlaceholder("Search workspaces, agents, tabs…")).toBeVisible();
+  await expect(ui.getByPlaceholder("Search workspaces and tabs…")).toBeVisible();
   await expect.poll(async () => (await snapshot(page))?.surfaces).toEqual([]);
   await page.keyboard.press("Escape");
   await expect.poll(sidebarSurfaces).toEqual([["Search workspace", "search"]]);
@@ -384,7 +384,7 @@ test("the native context sheet reads plan usage when it opens", async ({ page })
   // The composer carries the context window from the start; plan usage waits for the sheet.
   expect((await composer(page))?.usage).toEqual({
     context: {
-      summary: "12k / 200k tokens · 6% used",
+      summary: "12k / 200k tokens, 6% used",
       detail: "18k cumulative tokens",
       percent: 6.2,
       tone: "ok",
@@ -409,7 +409,7 @@ test("the native context sheet reads plan usage when it opens", async ({ page })
           label: "Session",
           percent: 28,
           tone: "ok",
-          summary: expect.stringMatching(/^28% · resets in (3h|2h 59m)$/),
+          summary: expect.stringMatching(/^28%, resets in (3h|2h 59m)$/),
         },
         { label: "Weekly", percent: 74, tone: "warning" },
       ],
