@@ -20,7 +20,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ShortcutEditor } from "@/shortcuts/editor";
 import { useShortcutPreferences } from "@/shortcuts/preferences-context";
-import { bindingLabel } from "@/shortcuts/keymap";
+import { KeyChips, PlainKeys } from "@/shortcuts/key-chips";
+import { bindingLabel, mainBinding, usableBindings } from "@/shortcuts/keymap";
+import { isTauri } from "@/tauri";
 
 const GROUPS: readonly {
   title: string;
@@ -121,6 +123,35 @@ function FollowUpSettings() {
   );
 }
 
+/** A row's shortcuts: the main one as chips, any others on the same line in muted text. */
+function ShortcutList({ id }: { id: CommandId }) {
+  const { keymap, mac } = useShortcutPreferences();
+  const main = mainBinding(keymap[id], isTauri());
+  if (!main) return <span className="text-muted-foreground">Unassigned</span>;
+  const others = usableBindings(keymap[id], isTauri()).filter((binding) => binding !== main);
+  return (
+    <span className="flex flex-col items-end gap-1 text-right">
+      <span className="flex flex-wrap items-center justify-end gap-1.5">
+        <KeyChips strokes={main.keys} mac={mac} />
+        {others.map((binding, index) => (
+          <span
+            key={index}
+            className="inline-flex items-center gap-1 text-xs whitespace-nowrap text-muted-foreground"
+          >
+            also <PlainKeys strokes={binding.keys} mac={mac} />
+            {binding.context === "outside-terminal" && " outside terminals"}
+            {binding.context === "tab" && " focused tab"}
+          </span>
+        ))}
+      </span>
+      {main.context === "tab" && <span className="text-xs text-muted-foreground">Focused tab</span>}
+      {main.context === "outside-terminal" && (
+        <span className="text-xs text-muted-foreground">Outside terminals</span>
+      )}
+    </span>
+  );
+}
+
 export function ShortcutSettings() {
   const compact = useContext(CompactLayoutContext);
   const preferences = useShortcutPreferences();
@@ -130,7 +161,9 @@ export function ShortcutSettings() {
   const [error, setError] = useState<string | null>(null);
   const matches = (id: CommandId) => {
     const label = BINDINGS.find((binding) => binding.id === id)?.label ?? id;
-    return `${label} ${preferences.keymap[id].map((binding) => bindingLabel(binding, preferences.mac)).join(" ")}`
+    return `${label} ${usableBindings(preferences.keymap[id], isTauri())
+      .map((binding) => bindingLabel(binding, preferences.mac))
+      .join(" ")}`
       .toLowerCase()
       .includes(query.trim().toLowerCase());
   };
@@ -171,9 +204,8 @@ export function ShortcutSettings() {
           <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
             {compact && "An external keyboard can use these commands on mobile. "}
             {isMac() && "Default Mac bindings use Control (⌃), not Command (⌘). "}
-            For sequences, release the first combination before pressing the next key. Escape
-            cancels a sequence. Closing a {compact ? "tab" : "pane or tab"} leaves its sessions
-            running.
+            Escape cancels a sequence. Closing a {compact ? "tab" : "pane or tab"} leaves its
+            sessions running.
           </p>
           {error && (
             <p role="alert" className="mt-3 text-sm text-destructive">
@@ -214,25 +246,7 @@ export function ShortcutSettings() {
                 >
                   <dt className="font-medium">{binding.label}</dt>
                   <dd className="flex max-w-full flex-wrap items-center justify-end gap-2">
-                    {preferences.keymap[binding.id].map((shortcut, index) => (
-                      <span key={index} className="flex flex-col gap-1 text-right">
-                        <kbd className="rounded border bg-muted px-2 py-1 font-mono text-xs text-muted-foreground">
-                          {bindingLabel(shortcut, preferences.mac)}
-                        </kbd>
-                        {shortcut.context !== "app" && (
-                          <span className="text-xs text-muted-foreground">
-                            {shortcut.context === "native"
-                              ? "Desktop app only"
-                              : shortcut.context === "tab"
-                                ? "Focused tab"
-                                : "Outside terminals"}
-                          </span>
-                        )}
-                      </span>
-                    ))}
-                    {!preferences.keymap[binding.id].length && (
-                      <span className="text-muted-foreground">Unassigned</span>
-                    )}
+                    <ShortcutList id={binding.id} />
                     <Button
                       variant="outline"
                       aria-label={`Edit ${binding.label} shortcuts`}

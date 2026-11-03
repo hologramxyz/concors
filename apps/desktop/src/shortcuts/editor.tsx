@@ -13,9 +13,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { BINDINGS, type CommandId } from "./bindings";
+import { KeyChips } from "./key-chips";
 import {
   bindingError,
-  bindingLabel,
   browserWarning,
   conflictsFor,
   defaultKeymap,
@@ -219,8 +219,11 @@ export function ShortcutEditor({ id, onClose }: { id: CommandId; onClose(): void
               <p>Already assigned:</p>
               <ul className="space-y-1">
                 {conflicts.map((conflict) => (
-                  <li key={`${conflict.id}:${conflict.index}`}>
-                    {conflict.label}: {bindingLabel(conflict.binding, mac)}
+                  <li
+                    key={`${conflict.id}:${conflict.index}`}
+                    className="flex flex-wrap items-center gap-1.5"
+                  >
+                    {conflict.label}: <KeyChips strokes={conflict.binding.keys} mac={mac} />
                   </li>
                 ))}
               </ul>

@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 
 import { type SignedInAuth } from "@/auth/auth-state";
+import { MenuKeyChips } from "@/shortcuts/key-chips";
 import { replayTour } from "@/tour/store";
 import {
   DropdownMenu,
@@ -77,6 +78,7 @@ export function AccountMenu({
         <DropdownMenuItem className="p-[8px] text-ui" onSelect={onOpenSettings}>
           <Settings aria-hidden="true" />
           Settings
+          <MenuKeyChips id="settings" />
         </DropdownMenuItem>
         <DropdownMenuItem className="p-[8px] text-ui" disabled={!canTour} onSelect={replayTour}>
           <MapIcon aria-hidden="true" />

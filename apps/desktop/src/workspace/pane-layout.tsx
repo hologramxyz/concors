@@ -8,7 +8,7 @@ import { paneProfiles, TAB_PROFILES } from "./tab-profiles";
 import { StartOptions } from "./start-options";
 import { useCommand } from "@/shortcuts/context";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
-import { useShortcutLabels } from "@/shortcuts/preferences-context";
+import { MenuKeyChips } from "@/shortcuts/key-chips";
 import type { PaneFocusRequest } from "./session-pane";
 import {
   DropdownMenu,
@@ -384,7 +384,6 @@ function Pane({
   node: Extract<LayoutNode, { kind: "pane" }>;
   onDrag: (drag: PaneDrag | null) => void;
 }) {
-  const shortcutLabel = useShortcutLabels();
   const connection = useContext(TerminalConnectionContext);
   const canDrag =
     canEdit &&
@@ -550,12 +549,7 @@ function Pane({
               }
             >
               <Columns2 /> <span className="whitespace-nowrap">Split horizontally</span>
-              <span
-                aria-hidden="true"
-                className="ml-auto shrink-0 pl-4 text-xs whitespace-nowrap text-muted-foreground"
-              >
-                {shortcutLabel("split-horizontal")}
-              </span>
+              <MenuKeyChips id="split-horizontal" />
             </DropdownMenuItem>
             <DropdownMenuItem
               disabled={!canEdit || tab.nodes.length >= 63}
@@ -571,12 +565,7 @@ function Pane({
               }
             >
               <Rows2 /> <span className="whitespace-nowrap">Split vertically</span>
-              <span
-                aria-hidden="true"
-                className="ml-auto shrink-0 pl-4 text-xs whitespace-nowrap text-muted-foreground"
-              >
-                {shortcutLabel("split-vertical")}
-              </span>
+              <MenuKeyChips id="split-vertical" />
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuLabel>Pane profile</DropdownMenuLabel>

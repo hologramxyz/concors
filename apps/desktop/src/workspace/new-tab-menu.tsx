@@ -1,5 +1,6 @@
 import { useCommand } from "@/shortcuts/context";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
+import { MenuKeyChips } from "@/shortcuts/key-chips";
 import { PaneProfileIcon } from "./profile-icon";
 import { paneProfiles } from "./tab-profiles";
 import { useTerminalProfiles } from "@/terminal/profiles-context";
@@ -130,7 +131,7 @@ export function NewTabMenu({
                 {onResume && (
                   <button
                     type="button"
-                    aria-label="Resume a closed chat"
+                    aria-label="Resume a chat…"
                     disabled={createDisabled}
                     onClick={() => {
                       setOpen(false);
@@ -141,7 +142,7 @@ export function NewTabMenu({
                       <History className="size-5" aria-hidden="true" />
                     </span>
                     <span>
-                      <span className="block font-medium">Resume a closed chat</span>
+                      <span className="block font-medium">Resume a chat…</span>
                       <span className="mobile-select-description">
                         Reopen a chat with its name, settings and history
                       </span>
@@ -191,7 +192,7 @@ export function NewTabMenu({
               </DropdownMenuTrigger>
             </SidebarTooltip>
             <DropdownMenuContent
-              className="w-72 max-w-[calc(100vw-16px)]"
+              className="w-max max-w-[min(24rem,calc(100vw-16px))] min-w-72"
               // Near the window's right edge the menu would sit flush with it, and its border
               // (a ring drawn just outside the box) would fall off the window.
               collisionPadding={8}
@@ -213,6 +214,7 @@ export function NewTabMenu({
                     >
                       <Icon className="size-4 shrink-0" aria-hidden="true" />
                       <span className="truncate">{label}</span>
+                      {profile === "chat" && <MenuKeyChips id="new-tab" />}
                     </DropdownMenuItem>
                     {profile === "chat" && <DropdownMenuSeparator />}
                   </Fragment>
@@ -230,6 +232,7 @@ export function NewTabMenu({
                   >
                     <History className="size-4 shrink-0" aria-hidden="true" />
                     <span className="truncate">Resume a chat…</span>
+                    <MenuKeyChips id="resume-chat" />
                   </DropdownMenuItem>
                 </>
               )}

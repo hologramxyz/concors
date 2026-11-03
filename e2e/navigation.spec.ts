@@ -6,11 +6,11 @@ import type { Page } from "@playwright/test";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { chooseProvider } from "./support/agents.ts";
 import { tab } from "./support/tabs.ts";
-// Pane and tab sequences share one dialog, which names the combination that opened it.
+// Pane and tab sequences share one dialog, told apart by the actions it lists.
 const shortcutActions = (page: Page, prefix: "p" | "t") =>
   page
     .getByRole("dialog", { name: "Shortcut actions", exact: true })
-    .filter({ hasText: `Shift+${prefix.toUpperCase()}:` });
+    .filter({ hasText: prefix === "p" ? "New pane" : "New tab" });
 const sequence = async (page: Page, prefix: "p" | "t", key: string) => {
   await page.keyboard.press(`Control+Shift+${prefix}`);
   await expect(shortcutActions(page, prefix)).toBeVisible();

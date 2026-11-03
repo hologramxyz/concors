@@ -11,15 +11,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { type CommandId } from "./bindings";
-import {
-  bindingLabel,
-  eventStroke,
-  matchContinuation,
-  matchKeymap,
-  strokeId,
-  strokeLabel,
-  type KeymapEntry,
-} from "./keymap";
+import { KeyChips } from "./key-chips";
+import { eventStroke, matchContinuation, matchKeymap, strokeId, type KeymapEntry } from "./keymap";
 import { ShortcutPreferencesProvider } from "./preferences";
 import { useShortcutPreferences, type ExternalShortcutPreferences } from "./preferences-context";
 export function ShortcutProvider({
@@ -192,13 +185,10 @@ function ShortcutHandler({ children }: { children: ReactNode }) {
         >
           <DialogHeader>
             <DialogTitle>Shortcut actions</DialogTitle>
-            <DialogDescription>
-              {lastSequence[0] &&
-                bindingLabel(
-                  { ...lastSequence[0].binding, keys: lastSequence[0].binding.keys.slice(0, 1) },
-                  mac,
-                )}
-              : release the keys, then choose an action. Esc cancels.
+            <DialogDescription className="flex">
+              {lastSequence[0] && (
+                <KeyChips strokes={lastSequence[0].binding.keys.slice(0, 1)} mac={mac} large />
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogBody>
@@ -215,9 +205,7 @@ function ShortcutHandler({ children }: { children: ReactNode }) {
                 className="h-auto min-h-11 w-full justify-between gap-3 px-3 py-2.5 text-left text-[15px] font-normal whitespace-normal"
               >
                 <span>{binding.label}</span>
-                <kbd className="min-w-9 shrink-0 rounded border bg-muted px-2 py-1 text-center font-mono text-sm">
-                  {binding.binding.keys[1] ? strokeLabel(binding.binding.keys[1], mac) : ""}
-                </kbd>
+                <KeyChips strokes={binding.binding.keys.slice(1)} mac={mac} large />
               </Button>
             ))}
           </DialogBody>

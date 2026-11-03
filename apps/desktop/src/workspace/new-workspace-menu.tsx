@@ -1,4 +1,5 @@
 import { Folder, FolderOpen, GitBranch, Plus } from "lucide-react";
+import { MenuKeyChips } from "@/shortcuts/key-chips";
 import { useContext, useRef, useState } from "react";
 import type { RecentlyClosed } from "./closed-workspaces";
 import { CompactLayoutContext } from "@/components/compact-layout";
@@ -116,10 +117,15 @@ export function NewWorkspaceMenu({
             <Plus className="size-4" />
           </DropdownMenuTrigger>
         </SidebarTooltip>
-        <DropdownMenuContent align="end" className="w-52">
+        <DropdownMenuContent
+          align="end"
+          className="w-max max-w-[min(24rem,calc(100vw-16px))] min-w-52"
+          collisionPadding={8}
+        >
           <DropdownMenuItem onSelect={onNew}>
             <Plus />
-            New workspace
+            <span className="whitespace-nowrap">New workspace</span>
+            <MenuKeyChips id="new-project" />
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => onOpen("open", trigger.current)}>
             <FolderOpen />

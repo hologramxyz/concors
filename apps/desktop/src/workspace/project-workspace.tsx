@@ -5,7 +5,8 @@ import { FileTab, FileTabLabel } from "@/files/file-tab";
 import { useFiles, fileScope } from "@/files/context";
 import { ProjectFileLinks } from "@/files/provider";
 import { useCommand } from "@/shortcuts/context";
-import { useShortcutLabels, useShortcutText } from "@/shortcuts/preferences-context";
+import { MenuKeyChips } from "@/shortcuts/key-chips";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import type { PaneFocusRequest } from "./session-pane";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { NewTabMenu } from "./new-tab-menu";
@@ -26,7 +27,7 @@ import { cn } from "cn";
 import { PaneLayout } from "./pane-layout";
 import { VisitedTab } from "./visited-tab";
 import { useRetainedProjects } from "./retained-projects";
-import { CloseTabButton, LatestAgents, TabButton } from "./tab-button";
+import { CloseTabButton, LatestAgents, TabButton, TabTooltip } from "./tab-button";
 import { tabTitle } from "./tab-title";
 
 /** How long a tab takes to shrink away; matches `tab-close` in styles.css. */
@@ -91,8 +92,6 @@ export function ProjectWorkspace({
   onAddProject: () => void;
   onOpenFolder: (mode: "open" | "clone", trigger?: HTMLElement | null) => void;
 }) {
-  const shortcutLabel = useShortcutLabels();
-  const shortcutText = useShortcutText();
   const connection = useContext(TerminalConnectionContext);
   const files = useFiles();
   const windowChrome = useWindowChrome();
@@ -443,23 +442,24 @@ export function ProjectWorkspace({
                         className="max-w-44 rounded bg-background px-2 py-0.5 text-ui ring-1 ring-ring outline-none"
                       />
                     ) : (
-                      <TabButton
-                        tab={tab}
-                        selected={!activeFile && selected?.id === tab.id}
-                        data-shortcut-tab-id={tab.id}
-                        title={`Drag to reorder. Double-click to rename. Rename: ${shortcutText("rename-tab")}. Move left: ${shortcutText("move-tab-left")}. Move right: ${shortcutText("move-tab-right")}.`}
-                        onDoubleClick={() => startRename(tab)}
-                        disabled={!connected}
-                        onClick={() => {
-                          files.select(scope, null);
-                          if (!activeFile && selected?.id === tab.id) return;
-                          onCommand({
-                            kind: "selection.set",
-                            projectId: project.id,
-                            tabId: tab.id,
-                          });
-                        }}
-                      />
+                      <SidebarTooltip place="title-bar" content={<TabTooltip />}>
+                        <TabButton
+                          tab={tab}
+                          selected={!activeFile && selected?.id === tab.id}
+                          data-shortcut-tab-id={tab.id}
+                          onDoubleClick={() => startRename(tab)}
+                          disabled={!connected}
+                          onClick={() => {
+                            files.select(scope, null);
+                            if (!activeFile && selected?.id === tab.id) return;
+                            onCommand({
+                              kind: "selection.set",
+                              projectId: project.id,
+                              tabId: tab.id,
+                            });
+                          }}
+                        />
+                      </SidebarTooltip>
                     )}
                     <CloseTabButton
                       tab={tab}
@@ -492,9 +492,7 @@ export function ProjectWorkspace({
                       className="flex items-center gap-2 rounded px-2 py-1.5 outline-none focus:bg-accent data-disabled:opacity-40"
                     >
                       <X className="size-4" /> Close tab
-                      <span aria-hidden="true" className="ml-auto text-xs text-muted-foreground">
-                        {shortcutLabel("close-tab")}
-                      </span>
+                      <MenuKeyChips id="close-tab" />
                     </ContextMenu.Item>
                   </ContextMenu.Content>
                 </ContextMenu.Portal>

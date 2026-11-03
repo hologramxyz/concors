@@ -88,9 +88,25 @@ export function strokeSymbols(stroke: ShortcutStroke): string {
     macKeys[stroke.key] ?? keyLabel(stroke.key),
   ].join("");
 }
-/** A binding for plain text such as a native `title`, which cannot draw chips. */
-export function bindingText(binding: Shortcut, mac = false): string {
-  return binding.keys.map((key) => (mac ? strokeSymbols(key) : strokeLabel(key))).join(" then ");
+/** What this app can use: a desktop-only binding means nothing in a browser. */
+export function usableBindings(bindings: readonly Shortcut[], native: boolean): Shortcut[] {
+  return bindings.filter((binding) => native || binding.context !== "native");
+}
+/**
+ * The one shortcut to teach when a command has several: the simplest that works wherever focus is.
+ * So a binding limited to outside terminals or a focused tab loses to one that is not, then fewer
+ * presses win, then the order the person listed them in.
+ */
+export function mainBinding(bindings: readonly Shortcut[], native: boolean): Shortcut | undefined {
+  const limited = ({ context }: Shortcut) => context === "outside-terminal" || context === "tab";
+  return usableBindings(bindings, native)
+    .map((binding, index) => ({ binding, index }))
+    .sort(
+      (a, b) =>
+        Number(limited(a.binding)) - Number(limited(b.binding)) ||
+        a.binding.keys.length - b.binding.keys.length ||
+        a.index - b.index,
+    )[0]?.binding;
 }
 export function bindingLabel(binding: Shortcut, mac = false): string {
   return binding.keys.map((key) => strokeLabel(key, mac)).join(" → ");

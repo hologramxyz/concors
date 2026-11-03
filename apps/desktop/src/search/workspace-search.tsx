@@ -1,10 +1,10 @@
-import { Cloud, Compass, Folder, LogOut, Monitor, Moon, RefreshCw, Sun } from "lucide-react";
-import { useContext, useMemo, useRef, useState, type ReactNode } from "react";
+import { Folder } from "lucide-react";
+import { useContext, useMemo, useRef, useState } from "react";
 import type { WorkspaceProject } from "@concors/protocol";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import { useCommands } from "@/shortcuts/context";
-import { isCompactCommand } from "@/shortcuts/bindings";
-import { useShortcutLabels } from "@/shortcuts/preferences-context";
+import { isCompactCommand, type CommandId } from "@/shortcuts/bindings";
+import { BoundKeyChips } from "@/shortcuts/key-chips";
 import { AgentStartedContext, useAgents } from "@/agents/context";
 import { ProviderIcon } from "@/agents/provider-icon";
 import { PaneProfileIcon } from "@/workspace/profile-icon";
@@ -45,8 +45,7 @@ interface Action {
   id: string;
   title: string;
   keywords: string;
-  icon?: ReactNode;
-  shortcut?: string;
+  shortcut?: CommandId;
   run(): void;
 }
 const CATEGORIES = [
@@ -117,7 +116,6 @@ function SearchContent({
 }: WorkspaceSearchProps & { run(action: () => void, ownsFocus?: boolean): void }) {
   const compact = useContext(CompactLayoutContext);
   const commands = useCommands();
-  const shortcutLabel = useShortcutLabels();
   const homePath = useHomePath();
   const agents = useAgents();
   const openAgent = useContext(AgentStartedContext);
@@ -135,7 +133,6 @@ function SearchContent({
       id: "settings:machines",
       title: "Go to Machines",
       keywords: "manage computers cloud settings",
-      icon: <Cloud aria-hidden="true" />,
       run: () => run(props.onManageMachines),
     },
     ...commands.items
@@ -146,7 +143,7 @@ function SearchContent({
         id: `command:${item.id}`,
         title: item.label,
         keywords: "action command",
-        ...(!compact ? { shortcut: shortcutLabel(item.id) } : {}),
+        ...(!compact ? { shortcut: item.id } : {}),
         run: () => {
           // Closing a mobile search above the sidebar unregisters workspace commands.
           // Capture the enabled handler before closing, then open its destination next frame.
@@ -159,7 +156,6 @@ function SearchContent({
         id: `navigate:${item.view}`,
         title: `Go to ${item.label}`,
         keywords: "navigate page",
-        icon: <item.icon aria-hidden="true" />,
         run: () => run(() => props.onNavigate(item.view)),
       }),
     ),
@@ -169,7 +165,6 @@ function SearchContent({
             id: "tour",
             title: "Take the tour",
             keywords: "onboarding welcome tour help getting started",
-            icon: <Compass aria-hidden="true" />,
             run: () => run(replayTour, false),
           },
         ]
@@ -180,7 +175,6 @@ function SearchContent({
             id: "reconnect",
             title: "Reconnect to machine",
             keywords: "daemon connection retry",
-            icon: <RefreshCw aria-hidden="true" />,
             run: () => run(props.onReconnect, false),
           },
         ]
@@ -189,20 +183,18 @@ function SearchContent({
       id: "sign-out",
       title: "Sign out",
       keywords: "account logout",
-      icon: <LogOut aria-hidden="true" />,
       run: () => run(props.onSignOut),
     },
     ...(
       [
-        { theme: "light", label: "Light", icon: Sun },
-        { theme: "dark", label: "Dark", icon: Moon },
-        { theme: "system", label: "System", icon: Monitor },
+        { theme: "light", label: "Light" },
+        { theme: "dark", label: "Dark" },
+        { theme: "system", label: "System" },
       ] as const
     ).map((item): Action => ({
       id: `theme:${item.theme}`,
       title: `${item.label} theme`,
       keywords: "appearance theme",
-      icon: <item.icon aria-hidden="true" />,
       run: () => run(() => props.onSetTheme(item.theme), false),
     })),
   ];
@@ -332,9 +324,12 @@ function SearchContent({
           <CommandGroup heading="Commands">
             {matches.map((action) => (
               <CommandItem key={action.id} value={action.id} onSelect={action.run}>
-                {action.icon}
                 {action.title}
-                {action.shortcut && <CommandShortcut>{action.shortcut}</CommandShortcut>}
+                {action.shortcut && (
+                  <CommandShortcut className="flex">
+                    <BoundKeyChips id={action.shortcut} />
+                  </CommandShortcut>
+                )}
               </CommandItem>
             ))}
           </CommandGroup>

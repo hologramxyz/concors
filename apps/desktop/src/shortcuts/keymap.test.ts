@@ -8,14 +8,17 @@ import {
   defaultKeymap,
   eventStroke,
   isTextNavigation,
+  mainBinding,
   matchContinuation,
   matchKeymap,
   parseOverrides,
   parseStroke,
   resolveKeymap,
+  strokeId,
   shortcutsConflict,
   strokeSymbols,
   updateBindings,
+  usableBindings,
   type ShortcutEvent,
   parseShortcutText,
 } from "./keymap";
@@ -141,6 +144,40 @@ describe("custom keymaps", () => {
     );
     expect(isTextNavigation(arrow({ shiftKey: true }), true)).toBe(false);
     expect(isTextNavigation(event({ key: "Home", code: "Home" }), false)).toBe(false);
+  });
+});
+
+describe("the main shortcut", () => {
+  const keys = (id: "new-tab" | "next-tab" | "previous-tab" | "search", mac: boolean) =>
+    defaultKeymap(mac)[id];
+  const stroke = (binding: Shortcut | undefined) => binding?.keys.map(strokeId);
+
+  it("is the single-press binding in the desktop app, wherever focus is", () => {
+    expect(stroke(mainBinding(keys("new-tab", true), true))).toEqual(["Meta+t"]);
+    expect(stroke(mainBinding(keys("next-tab", true), true))).toEqual(["Control+tab"]);
+    expect(stroke(mainBinding(keys("previous-tab", true), true))).toEqual(["Control+Shift+tab"]);
+  });
+
+  it("stays the chord in a browser, which keeps the desktop bindings for itself", () => {
+    expect(stroke(mainBinding(keys("new-tab", true), false))).toEqual(["Control+Shift+t", "enter"]);
+    expect(stroke(mainBinding(keys("next-tab", true), false))).toEqual([
+      "Control+Shift+t",
+      "arrowright",
+    ]);
+    expect(usableBindings(keys("new-tab", true), false)).toHaveLength(1);
+  });
+
+  it("does not pick a shorter binding that stops working in a terminal", () => {
+    for (const native of [true, false])
+      expect(stroke(mainBinding(keys("search", true), native))).toEqual(["Control+Shift+k"]);
+  });
+
+  it("keeps the listed order between equals and is empty with no usable binding", () => {
+    const first: Shortcut = { keys: [{ key: "a", modifiers: ["Alt"] }], context: "app" };
+    const second: Shortcut = { keys: [{ key: "b", modifiers: ["Alt"] }], context: "app" };
+    expect(mainBinding([first, second], false)).toBe(first);
+    expect(mainBinding([], true)).toBeUndefined();
+    expect(mainBinding([{ ...first, context: "native" }], false)).toBeUndefined();
   });
 });
 

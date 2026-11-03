@@ -12,7 +12,7 @@ import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
 import { KeyChips } from "@/shortcuts/key-chips";
 import type { CommandId } from "@/shortcuts/bindings";
-import { useShortcutPreferences } from "@/shortcuts/preferences-context";
+import { useMainBinding, useShortcutPreferences } from "@/shortcuts/preferences-context";
 import {
   cardPosition,
   frameInside,
@@ -525,8 +525,8 @@ function StepNext({ label, onNext }: { label: string; onNext: () => void }) {
  * reads as two presses. Nothing when the command has no binding.
  */
 function StepShortcut({ id }: { id: CommandId }) {
-  const { keymap, mac } = useShortcutPreferences();
-  const binding = keymap[id][0];
+  const { mac } = useShortcutPreferences();
+  const binding = useMainBinding(id);
   if (!binding) return null;
   return (
     <p className="flex items-center gap-1.5 text-xs text-muted-foreground">

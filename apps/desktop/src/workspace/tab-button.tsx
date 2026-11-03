@@ -5,6 +5,11 @@ import { AgentStatusIcon, StartingChatIcon } from "@/agents/activity";
 import { ProviderIcon } from "@/agents/provider-icon";
 import { tabAgentStatuses } from "@/agents/agent-status";
 import { useAgents } from "@/agents/context";
+import type { CommandId } from "@/shortcuts/bindings";
+import { BoundKeyChips } from "@/shortcuts/key-chips";
+import { mainBinding } from "@/shortcuts/keymap";
+import { useShortcutPreferences } from "@/shortcuts/preferences-context";
+import { isTauri } from "@/tauri";
 import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
 import { mainPane, tabTitle } from "./tab-title";
 
@@ -63,6 +68,28 @@ function PaneMark({ profile }: { profile: PaneProfile | undefined }) {
   if (profile === "codex" || profile === "claude" || profile === "opencode")
     return <ProviderIcon provider={profile} />;
   return <Terminal className="size-4 text-muted-foreground" />;
+}
+
+const TAB_SHORTCUTS: readonly { id: CommandId; label: string }[] = [
+  { id: "rename-tab", label: "Rename" },
+  { id: "move-tab-left", label: "Move left" },
+  { id: "move-tab-right", label: "Move right" },
+];
+
+/** What a tab in the tab bar can do beyond a click. An unassigned shortcut gets no row. */
+export function TabTooltip() {
+  const { keymap } = useShortcutPreferences();
+  return (
+    <div className="flex flex-col gap-1 pr-1.5">
+      <p>Drag to reorder. Double-click to rename.</p>
+      {TAB_SHORTCUTS.filter(({ id }) => mainBinding(keymap[id], isTauri())).map(({ id, label }) => (
+        <p key={id} className="flex items-center justify-between gap-3">
+          {label}
+          <BoundKeyChips id={id} />
+        </p>
+      ))}
+    </div>
+  );
 }
 
 export function CloseTabButton({

@@ -16,11 +16,11 @@ import { Kbd } from "@/components/ui/kbd";
 import { isMac, type CommandId } from "./bindings";
 import type { ShortcutStroke } from "@concors/client-core";
 import { parseShortcutText, strokeLabel, strokeSymbols } from "./keymap";
-import { useShortcutPreferences } from "./preferences-context";
+import { useMainBinding, useShortcutPreferences } from "./preferences-context";
 
 /**
- * Keys as the tour and tooltips show them: one chip per stroke, so a sequence such as ⌃⇧P then →
- * reads as two presses. Mac symbols on a Mac, "Ctrl+Shift+P" elsewhere.
+ * Keys as the app shows them everywhere: one chip per stroke, so a sequence such as ⌃⇧P then → reads
+ * as two presses. Mac symbols on a Mac, "Ctrl+Shift+P" elsewhere.
  */
 export function KeyChips({
   strokes,
@@ -29,11 +29,11 @@ export function KeyChips({
 }: {
   strokes: readonly ShortcutStroke[];
   mac: boolean;
-  /** The tour's chip, beside its body text; a tooltip's text is smaller. */
+  /** The chip for beside 15px body text, as in the tour; tooltips and lists use the smaller one. */
   large?: boolean;
 }) {
   return (
-    <>
+    <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap">
       {strokes.map((stroke, index) => (
         <Fragment key={index}>
           {index > 0 && " then "}
@@ -46,15 +46,45 @@ export function KeyChips({
           </Kbd>
         </Fragment>
       ))}
-    </>
+    </span>
   );
 }
 
-/** A command's chips as this person has it bound. Nothing when the command has no binding. */
+/** A command's main shortcut as chips. Nothing when the command has no binding here. */
 export function BoundKeyChips({ id }: { id: CommandId }) {
-  const { keymap, mac } = useShortcutPreferences();
-  const binding = keymap[id][0];
+  const { mac } = useShortcutPreferences();
+  const binding = useMainBinding(id);
   return binding ? <KeyChips strokes={binding.keys} mac={mac} /> : null;
+}
+
+/** A secondary binding beside a main chip: the same keys, without a chip's weight. */
+export function PlainKeys({ strokes, mac }: { strokes: readonly ShortcutStroke[]; mac: boolean }) {
+  return (
+    <span className="inline-flex items-center gap-1 whitespace-nowrap">
+      {strokes.map((stroke, index) => (
+        <Fragment key={index}>
+          {index > 0 && " then "}
+          {mac ? (
+            <Symbols text={strokeSymbols(stroke)} scale={12 / 14} />
+          ) : (
+            <span>{strokeLabel(stroke)}</span>
+          )}
+        </Fragment>
+      ))}
+    </span>
+  );
+}
+
+/**
+ * A menu row's shortcut, at the row's end. Hidden from screen readers so the row's name stays its
+ * label.
+ */
+export function MenuKeyChips({ id }: { id: CommandId }) {
+  return (
+    <span aria-hidden="true" className="-my-1 ml-auto flex shrink-0 pl-4">
+      <BoundKeyChips id={id} />
+    </span>
+  );
 }
 
 /** A fixed shortcut, written as text such as "Shift+Tab", drawn with the same chips. */
@@ -91,9 +121,10 @@ const KEY_SIDE_BEARING = 1.25;
 function Symbols({ text, scale }: { text: string; scale: number }) {
   return (
     <span className="inline-flex items-center gap-0.5 leading-none">
-      {Array.from(text).map((char, index) => {
-        const icon = KEY_ICONS[char];
-        if (!icon) return <span key={index}>{char}</span>;
+      {/* Letters stay together, so a named key reads as F2 rather than F 2. */}
+      {(text.match(/[^\p{Script=Latin}\d]|[\p{Script=Latin}\d]+/gu) ?? []).map((part, index) => {
+        const icon = KEY_ICONS[part];
+        if (!icon) return <span key={index}>{part}</span>;
         const [Icon, name, box, inset] = icon;
         const size = box * scale;
         // Trim the box to the shape plus a letter's side bearing, so the gaps match the letter's.
