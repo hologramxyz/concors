@@ -62,7 +62,9 @@ test("welcomes a new device, sets up a workspace, and tours each area for real",
     // One click moves on, even with a menu open; the menu closes behind it. A person's click holds
     // the button down for a moment, during which the card must not move away.
     await current.locator("button", { hasText: "Next" }).click({ delay: 250 });
-    await expect(page.getByRole("menu")).toHaveCount(0);
+    // A step that holds its own menu open may already have opened it.
+    const next = STEPS[index + 1];
+    if (!next || !("menu" in next)) await expect(page.getByRole("menu")).toHaveCount(0);
   }
 
   const finish = page.getByRole("dialog", { name: "You’re all set" });
