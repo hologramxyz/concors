@@ -1,6 +1,10 @@
 import {
   AGENT_USAGE_CAPABILITY,
   DICTATION_CAPABILITY,
+  PULL_REQUEST_ACTIONS_CAPABILITY,
+  PULL_REQUEST_STATES_CAPABILITY,
+  PULL_REQUESTS_CAPABILITY,
+  SCHEDULES_CAPABILITY,
   parseClientMessage,
   applyWorkspaceOperation,
   WorkspaceOperationError,
@@ -15,6 +19,7 @@ import {
 import { MachineIconSchema, type Machine, type SshKey } from "@concors/api-client";
 import type { WebSocketLike } from "@concors/daemon-client";
 import { newRequestId } from "@concors/client-core";
+import { applyDemoSchedule, demoPullRequests, demoScheduleOutcome, demoSchedules } from "./pages";
 import { demoResources } from "./resources";
 import {
   demoAgent,
@@ -64,6 +69,7 @@ export function createDemoServer() {
   const replies = new Map<string, DaemonMessage>();
   const machines: Machine[] = [structuredClone(demoMachine)];
   let keys: SshKey[] = [];
+  let schedules = demoSchedules();
   const broadcast = (message: DaemonMessage) => {
     for (const socket of sockets) socket.emit(message);
   };
@@ -355,9 +361,32 @@ export function createDemoServer() {
                   "folder-workspaces",
                   AGENT_USAGE_CAPABILITY,
                   DICTATION_CAPABILITY,
+                  PULL_REQUESTS_CAPABILITY,
+                  PULL_REQUEST_ACTIONS_CAPABILITY,
+                  PULL_REQUEST_STATES_CAPABILITY,
+                  SCHEDULES_CAPABILITY,
                 ],
               });
+              this.emit({ type: "schedule.list", schedules });
               break;
+            case "pull-request.request":
+              reply({
+                type: "pull-request.result",
+                requestId: message.requestId,
+                outcome: demoPullRequests(message.operation, workspace),
+              });
+              break;
+            case "schedule.request": {
+              const result = applyDemoSchedule(schedules, message.operation);
+              if (typeof result !== "string") schedules = result;
+              reply({
+                type: "schedule.result",
+                requestId: message.requestId,
+                outcome: demoScheduleOutcome(result),
+              });
+              if (typeof result !== "string") broadcast({ type: "schedule.list", schedules });
+              break;
+            }
             case "dictation.request":
               // Nothing is transcribed here: the demo has no machine to hear the words.
               if (message.operation.kind === "finish")
