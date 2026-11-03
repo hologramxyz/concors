@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 import type { query, Query, Options } from "@anthropic-ai/claude-agent-sdk";
-import { ClaudeProvider } from "./claude.ts";
+import { canBypassPermissions, ClaudeProvider } from "./claude.ts";
 import { OpenCodeProvider, resumableOpenCodeSessions } from "./opencode.ts";
 import { PiProvider } from "./pi.ts";
 import { launch } from "./launch.ts";
@@ -62,6 +62,63 @@ function child() {
   });
   return process as unknown as ChildProcessWithoutNullStreams;
 }
+it("does not offer Claude's bypass mode to root outside a sandbox", () => {
+  expect(canBypassPermissions(1000, undefined)).toBe(true);
+  expect(canBypassPermissions(undefined, undefined)).toBe(true);
+  expect(canBypassPermissions(0, undefined)).toBe(false);
+  expect(canBypassPermissions(0, "0")).toBe(false);
+  expect(canBypassPermissions(0, "1")).toBe(true);
+});
+it("lets a Claude chat switch into bypass mode and back, starting in the default mode", async () => {
+  vi.stubEnv("IS_SANDBOX", "1");
+  let options: Options;
+  let emit: (value: unknown) => void = () => undefined;
+  const setPermissionMode = vi.fn(async () => undefined);
+  const createQuery = vi.fn(({ options: inputOptions }: Parameters<typeof query>[0]) => {
+    options = inputOptions!;
+    const messages = new PassThrough({ objectMode: true });
+    emit = (value) => {
+      messages.write(value);
+    };
+    return Object.assign(messages, {
+      initializationResult: async () => ({ models: [] }),
+      supportedModels: async () => [
+        { value: "sonnet", displayName: "Sonnet", supportsAutoMode: true },
+      ],
+      getContextUsage: async () => ({ model: "sonnet" }),
+      setModel: async () => undefined,
+      setPermissionMode,
+      interrupt: async () => undefined,
+      close: () => {
+        messages.end();
+      },
+    }) as unknown as Query;
+  });
+  // Any launcher but the real one skips looking for a claude binary, which CI does not have.
+  const provider = new ClaudeProvider(tmpdir(), async () => ({}), createQuery, vi.fn());
+  const { notifications } = observe(provider);
+  await provider.initialize();
+  await provider.request("thread/start");
+  expect(options!.permissionMode).toBe("default");
+  expect(options!.allowDangerouslySkipPermissions).toBe(true);
+  // The flag only makes the mode available: nothing bypasses until a turn asks for it.
+  await provider.request("model/list");
+  const controls = object(await provider.request("session/controls"));
+  expect((controls["modes"] as { id: string }[]).map((m) => m.id)).toEqual([
+    "default",
+    "plan",
+    "acceptEdits",
+    "auto",
+    "bypassPermissions",
+  ]);
+  expect(setPermissionMode).not.toHaveBeenCalled();
+  await provider.request("turn/start", { ...turn, nativeMode: "bypassPermissions" });
+  expect(setPermissionMode).toHaveBeenLastCalledWith("bypassPermissions");
+  emit({ type: "result", subtype: "success", is_error: false, result: "done" });
+  await expect.poll(() => notifications.some((n) => n.method === "turn/completed")).toBe(true);
+  await provider.request("turn/start", { ...turn, nativeMode: "default" });
+  expect(setPermissionMode).toHaveBeenLastCalledWith("default");
+});
 it("maps Claude streaming and tool decisions, interrupts, and resumes the native session", async () => {
   const directory = await mkdtemp(join(tmpdir(), "concors-claude-adapter-"));
   cleanup.push(() => rm(directory, { recursive: true, force: true }));
@@ -118,7 +175,6 @@ it("maps Claude streaming and tool decisions, interrupts, and resumes the native
   });
   await provider.request("turn/start", turn);
   expect(options!.permissionMode).toBe("default");
-  expect(options!.allowDangerouslySkipPermissions).toBeUndefined();
   emit({ type: "stream_event", event: { type: "message_start", message: { id: "a" } } });
   emit({
     type: "stream_event",

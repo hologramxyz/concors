@@ -124,6 +124,8 @@ export const MobileStateSchema = z.object({
   target: MobileTargetSchema,
   /** The tab last opened on this phone on the current machine, reopened at launch. */
   lastTarget: MobileTargetSchema.nullable().optional(),
+  /** The tab last opened on this phone in each workspace of the current machine, by workspace. */
+  lastWorkspaceTargets: z.record(z.string(), MobileTargetSchema).optional(),
   supportUrl: z.string(),
   privacyUrl: z.string(),
   apiUrl: z.string(),

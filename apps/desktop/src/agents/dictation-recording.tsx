@@ -16,6 +16,7 @@ export function DictationRecording({
   onCancel,
   canSend,
   queued,
+  levels: showLevels = true,
 }: {
   state: DictationState;
   onStop: (action: DictationAction) => void;
@@ -23,6 +24,11 @@ export function DictationRecording({
   canSend: boolean;
   /** A turn is running, so a sent message waits in the queue. */
   queued: boolean;
+  /**
+   * Levels come from a second microphone stream. Phones go without: iOS may silence the stream
+   * being transcribed when another one starts, and losing words is worse than losing a meter.
+   */
+  levels?: boolean;
 }) {
   // The button that ended the recording shows the wait for the last words.
   const [chosen, setChosen] = useState<DictationAction | null>(null);
@@ -43,15 +49,17 @@ export function DictationRecording({
     if (!recording) return;
     const start = Date.now();
     const timer = setInterval(() => setSeconds(Math.floor((Date.now() - start) / 1000)), 250);
-    const stop = observeMicrophone(
-      (value) => setLevels((values) => [...values.slice(1), value]),
-      () => setMeterAvailable(false),
-    );
+    const stop = showLevels
+      ? observeMicrophone(
+          (value) => setLevels((values) => [...values.slice(1), value]),
+          () => setMeterAvailable(false),
+        )
+      : () => undefined;
     return () => {
       clearInterval(timer);
       stop();
     };
-  }, [recording]);
+  }, [recording, showLevels]);
   const volume = Math.round((levels.at(-1) ?? 0) * 100);
   return (
     <div
@@ -93,48 +101,58 @@ export function DictationRecording({
         </ControlTooltip>
         <div className="flex shrink-0 items-center gap-2 text-primary">
           <Mic className="size-4" aria-hidden="true" />
-          <div
-            role="meter"
-            aria-label="Microphone volume"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={recording && meterAvailable ? volume : 0}
-            aria-valuetext={
-              !meterAvailable ? "Level unavailable" : !recording ? "Microphone off" : `${volume}%`
-            }
-            title={
-              !meterAvailable
-                ? "Microphone level is unavailable in this browser"
-                : "Microphone volume"
-            }
-            className="dictation-volume"
-          >
-            {[0, 1, 2, 3].map((index) => (
-              <span key={index} data-lit={recording && meterAvailable && volume > index * 25} />
-            ))}
-          </div>
+          {showLevels && (
+            <div
+              role="meter"
+              aria-label="Microphone volume"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={recording && meterAvailable ? volume : 0}
+              aria-valuetext={
+                !meterAvailable ? "Level unavailable" : !recording ? "Microphone off" : `${volume}%`
+              }
+              title={
+                !meterAvailable
+                  ? "Microphone level is unavailable in this browser"
+                  : "Microphone volume"
+              }
+              className="dictation-volume"
+            >
+              {[0, 1, 2, 3].map((index) => (
+                <span key={index} data-lit={recording && meterAvailable && volume > index * 25} />
+              ))}
+            </div>
+          )}
         </div>
-        <svg
-          data-dictation-waveform
-          aria-hidden="true"
-          viewBox="0 0 384 48"
-          preserveAspectRatio="none"
-          className="dictation-waveform"
-        >
-          {levels.map((value, index) => {
-            const height = 3 + value * 41;
-            return (
-              <rect
-                key={index}
-                x={index * 8 + 2}
-                y={(48 - height) / 2}
-                width={3}
-                height={height}
-                rx={1.5}
-              />
-            );
-          })}
-        </svg>
+        {!showLevels && (
+          <p data-dictation-preview aria-live="polite" className="dictation-preview">
+            {/* Right-to-left only to clip the oldest words; the text itself keeps its own order. */}
+            <bdi>{state.transcript.slice(-120) || (recording ? "Listening…" : "Finishing…")}</bdi>
+          </p>
+        )}
+        {showLevels && (
+          <svg
+            data-dictation-waveform
+            aria-hidden="true"
+            viewBox="0 0 384 48"
+            preserveAspectRatio="none"
+            className="dictation-waveform"
+          >
+            {levels.map((value, index) => {
+              const height = 3 + value * 41;
+              return (
+                <rect
+                  key={index}
+                  x={index * 8 + 2}
+                  y={(48 - height) / 2}
+                  width={3}
+                  height={height}
+                  rx={1.5}
+                />
+              );
+            })}
+          </svg>
+        )}
         <time
           className="shrink-0 text-xs text-muted-foreground tabular-nums"
           aria-label="Dictation duration"

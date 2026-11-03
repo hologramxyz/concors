@@ -85,6 +85,85 @@ test("native model pages distinguish provider navigation from a committed model 
     )
     .toBe(true);
 });
+/** A microphone that hears silence, standing in for the one WebKit offers on iOS. */
+async function fakeMicrophone(page: Page) {
+  await page.addInitScript(() => {
+    if (window.parent === window) return;
+    const track = { stop: () => undefined };
+    class FakeAudioContext {
+      sampleRate = 16_000;
+      state = "running";
+      destination = {};
+      resume = async () => undefined;
+      close = async () => {
+        this.state = "closed";
+      };
+      createMediaStreamSource = () => ({ connect: () => undefined });
+      createGain = () => ({ gain: { value: 1 }, connect: () => undefined });
+      createScriptProcessor = () => {
+        const processor = {
+          onaudioprocess: null as ((event: unknown) => void) | null,
+          connect: () => undefined,
+        };
+        const timer = setInterval(() => {
+          if (this.state === "closed") clearInterval(timer);
+          else
+            processor.onaudioprocess?.({
+              inputBuffer: { getChannelData: () => new Float32Array(4096) },
+            });
+        }, 100);
+        return processor;
+      };
+    }
+    Object.defineProperty(window, "AudioContext", { value: FakeAudioContext });
+    Object.defineProperty(navigator, "mediaDevices", {
+      value: { getUserMedia: async () => ({ getTracks: () => [track] }) },
+    });
+  });
+}
+test("the native microphone dictates through the machine and returns the words to the field", async ({
+  page,
+}) => {
+  await fakeMicrophone(page);
+  const ui = await openNativeDemo(page);
+  await expect.poll(async () => (await composer(page))?.dictationHelp ?? null).toBeNull();
+  // The native field's latest text is kept, even if its last keystroke has not arrived yet.
+  await event(page, "composer", "composer", {
+    kind: "press",
+    control: "dictate",
+    text: "Before:",
+  });
+  const recording = ui.getByRole("group", { name: "Dictation", exact: true });
+  await expect(recording).toBeVisible();
+  // The native field gets out of the way, and no second microphone stream is opened for a meter.
+  await expect.poll(() => composer(page)).toBeNull();
+  await expect(recording.getByRole("meter")).toHaveCount(0);
+  await expect(
+    recording.getByRole("button", { name: /^(Send|Queue) dictated message$/ }),
+  ).toBeVisible();
+  // With no waveform on a phone, the words so far show that it is hearing you.
+  await expect(recording.getByText("This is a simulated dictation.")).toBeVisible();
+  await recording.getByRole("button", { name: "Edit dictated message", exact: true }).click();
+  await expect(recording).toHaveCount(0);
+  await expect
+    .poll(async () => (await composer(page))?.draft)
+    .toBe("Before: This is a simulated dictation.");
+});
+test("the native microphone explains the keyboard where the webview offers no microphone", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    if (window.parent !== window)
+      Object.defineProperty(navigator, "mediaDevices", { value: undefined });
+  });
+  const ui = await openNativeDemo(page);
+  await expect
+    .poll(async () => (await composer(page))?.dictationHelp)
+    .toMatch(/microphone on your phone’s keyboard/);
+  // Nothing starts even if a press arrives.
+  await event(page, "composer", "composer", { kind: "press", control: "dictate", text: "" });
+  await expect(ui.getByRole("group", { name: "Dictation", exact: true })).toHaveCount(0);
+});
 test("native surface bridge preserves navigation, drafts, settings, attachments and submission", async ({
   page,
 }) => {

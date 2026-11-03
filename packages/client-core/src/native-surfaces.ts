@@ -107,6 +107,8 @@ export const NativeSurfaceContentSchema = z.discriminatedUnion("kind", [
      */
     uploads: z.boolean().optional(),
     controls: z.array(NativeControlSchema).max(4),
+    /** Why the microphone cannot start dictation right now; without it, pressing "dictate" does. */
+    dictationHelp: z.string().max(500).nullable().optional(),
     /** Null when the provider reports neither context nor plan usage: there is no sheet. */
     usage: NativeUsageSchema.nullable(),
   }),

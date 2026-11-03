@@ -129,9 +129,11 @@ backgrounding or APNs/FCM.
 - Recheck encryption/export compliance (current HTTPS/WSS config declares no non-exempt
   encryption), dependency privacy manifests and permissions in the generated binary.
   Android camera, broad media/storage and recording permissions remain blocked. iOS
-  attachments use the native system document picker, not in-app capture, so unused
-  camera/microphone/photo-library purpose strings were removed. Chat dictation uses the
-  OS keyboard. Exercise document selection, cancellation and denial on physical devices.
+  attachments use the native system document picker, not in-app capture, so the unused
+  camera purpose string was removed. iPhone chat dictation declares the microphone: audio
+  streams to the user's own machine for transcription and no recording is kept; Android
+  dictation uses the OS keyboard. Exercise document selection, cancellation and denial, and
+  microphone allow and deny, on physical devices.
 - Start required closed testing early. Applicable new personal Google accounts require
   12 opted-in testers continuously for 14 days before production access; check the
   [current account requirements](https://support.google.com/googleplay/android-developer/answer/14151465).

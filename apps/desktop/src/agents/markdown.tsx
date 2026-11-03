@@ -10,7 +10,7 @@ import {
   type ComponentProps,
   type ReactNode,
 } from "react";
-import Markdown, { defaultUrlTransform, type Components } from "react-markdown";
+import Markdown, { defaultUrlTransform, type Components, type ExtraProps } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Check, Copy, ImageOff } from "lucide-react";
 import type { AgentItem } from "@concors/protocol";
@@ -23,6 +23,7 @@ import { LinkMenu } from "./link-menu";
 import { isFileLink, localPreviewLink, previewLinkUrl } from "./preview-links";
 import { InlineImage } from "./attachment-preview";
 import { messageImageIndex } from "./message-images";
+import { quotedSource } from "./markdown-quote";
 const HighlightedCode = lazy(() => import("./highlighted-code"));
 
 export function CopyButton({ text, label = "Copy message" }: { text: string; label?: string }) {
@@ -89,7 +90,29 @@ function CodeBlock({ children }: { children?: ReactNode }) {
 const MarkdownScope = createContext<{
   item?: AgentItem | undefined;
   sourcePath?: string | undefined;
+  source?: string | undefined;
 }>({});
+/** A quote inside a quote is copied with the one around it. */
+const InsideQuote = createContext(false);
+
+/** Agents quote what is meant to be pasted elsewhere, such as a prompt, so it copies like code. */
+function MarkdownQuote({ children, node }: ComponentProps<"blockquote"> & ExtraProps) {
+  const { source } = useContext(MarkdownScope);
+  const nested = useContext(InsideQuote);
+  const start = node?.position?.start.offset,
+    end = node?.position?.end.offset;
+  if (nested) return <blockquote>{children}</blockquote>;
+  return (
+    <div className="chat-quote">
+      <InsideQuote value>
+        <blockquote>{children}</blockquote>
+      </InsideQuote>
+      {source !== undefined && start !== undefined && end !== undefined && (
+        <CopyButton text={quotedSource(source, start, end)} label="Copy quote" />
+      )}
+    </div>
+  );
+}
 
 function MarkdownImage({ src, alt }: ComponentProps<"img">) {
   const { item } = useContext(MarkdownScope);
@@ -192,7 +215,12 @@ type LinkProps = ComponentProps<"a"> & { node?: unknown };
 // Fixed components that read their message from MarkdownScope. Components built per render would
 // be new element types each time, remounting every image and closing its viewer whenever the chat
 // re-renders, which it does every second while an agent works.
-const components: Components = { pre: CodeBlock, img: MarkdownImage, a: MarkdownLink };
+const components: Components = {
+  pre: CodeBlock,
+  img: MarkdownImage,
+  a: MarkdownLink,
+  blockquote: MarkdownQuote,
+};
 
 export function AgentMarkdown({
   children,
@@ -206,7 +234,7 @@ export function AgentMarkdown({
 }) {
   const openFile = useContext(FileLinkContext);
   return (
-    <MarkdownScope value={{ item, sourcePath }}>
+    <MarkdownScope value={{ item, sourcePath, source: children }}>
       <div className="chat-markdown min-w-0 break-words">
         <Markdown
           remarkPlugins={[remarkGfm]}

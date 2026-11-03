@@ -534,6 +534,10 @@ body {
 .mobile-main:has(.mobile-notice) .mobile-pane {
   padding-top: 0;
 }
+/* The header already names the page, directly above. */
+.mobile-pane [data-page-title] {
+  display: none;
+}
 .mobile-select-trigger {
   display: flex;
   align-items: center;
@@ -1166,6 +1170,13 @@ body {
   border: 0;
   background: transparent;
   box-shadow: none;
+}
+/* The native field and its glass step aside while recording, so the row brings its own surface. */
+.mobile-pane .mobile-composer[data-native-composer="true"] .dictation-recording {
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 28px;
+  background: var(--card);
 }
 .mobile-pane [aria-label="Agent conversation"]:has([data-native-composer="true"]) {
   position: relative;

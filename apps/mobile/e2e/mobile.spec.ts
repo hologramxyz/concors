@@ -1338,6 +1338,69 @@ test("the Tabs sheet shows each agent's status, as desktop's tab strip does", as
   await expect(terminal.locator("[data-pane-status]")).toHaveCount(0);
   await page.screenshot({ path: "apps/mobile/test-results/mobile-tabs-status.png" });
 });
+test("pages opened from a chat start below the header, and the chat scrolls under it again", async ({
+  page,
+}) => {
+  const ui = await enter(page);
+  const header = ui.locator(".mobile-header");
+  const openFromSidebar = async (name: string) => {
+    await ui.locator("#mobile-sidebar-toggle").click();
+    await ui
+      .getByRole("dialog", { name: "Workspace sidebar" })
+      .getByRole("button", { name, exact: true })
+      .first()
+      .click();
+  };
+  for (const [name, summary] of [
+    ["Pull requests", /^Pull requests in your workspaces/],
+    ["Schedules", /^Run your agents on a cadence/],
+  ] as const) {
+    await openFromSidebar(name);
+    // The header names the page, so the page does not name it a second time.
+    await expect(ui.getByRole("heading", { level: 1, name, exact: true })).toBeVisible();
+    await expect(ui.getByRole("heading", { level: 2, name, exact: true })).toHaveCount(0);
+    const content = ui.locator(".mobile-pane").getByText(summary);
+    await expect(content).toBeVisible();
+    await expect
+      .poll(async () => {
+        const [top, bar] = await Promise.all([content.boundingBox(), header.boundingBox()]);
+        return top && bar ? top.y - (bar.y + bar.height) : null;
+      })
+      .toBeGreaterThanOrEqual(0);
+  }
+  await openFromSidebar("Concors");
+  await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
+  await expect(ui.locator(".mobile-pane")).toHaveCSS("padding-top", "0px");
+});
+test("the demo's Pull requests and Schedules pages show sample work, read-only for GitHub", async ({
+  page,
+}) => {
+  const ui = await enter(page);
+  const open = async (name: string) => {
+    await ui.locator("#mobile-sidebar-toggle").click();
+    await ui
+      .getByRole("dialog", { name: "Workspace sidebar" })
+      .getByRole("button", { name })
+      .first()
+      .click();
+  };
+  await open("Pull requests");
+  await expect(ui.getByText(/Update the daemon/)).toHaveCount(0);
+  const row = ui.getByText("Keep the composer at the bottom of the screen");
+  await expect(row).toBeVisible();
+  await ui.getByRole("tab", { name: /Merged/ }).click();
+  await expect(ui.getByText("Reopen the last tab at launch")).toBeVisible();
+  await expect(row).toHaveCount(0);
+  await ui.getByRole("tab", { name: /Open/ }).click();
+  await row.click();
+  await expect(ui.getByText("Everything in this preview is simulated.")).toBeVisible();
+  await expect(ui.getByRole("button", { name: /^Merge/ })).toBeDisabled();
+  await expect(ui.getByRole("button", { name: /^Close/ })).toHaveCount(0);
+  await open("Schedules");
+  await expect(ui.getByText(/Update the daemon/)).toHaveCount(0);
+  await expect(ui.getByText("Morning review")).toBeVisible();
+  await expect(ui.getByText("Dependency check")).toBeVisible();
+});
 test("the app reopens the tab last opened on this machine", async ({ page }) => {
   let ui = await enter(page);
   const tabs = ui.getByRole("combobox", { name: "Tabs", exact: true });

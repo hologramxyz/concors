@@ -99,8 +99,9 @@ test("welcomes a new device, sets up a workspace, and tours each area for real",
     const last = index === STEPS.length - 1;
     if (last) await expect(current.locator("button", { hasText: "Next" })).toHaveCount(0);
     await current.locator("button", { hasText: last ? "Done" : "Next" }).click({ delay: 250 });
-    // The next step may open a menu of its own straight away, so only a menu step checks.
-    if ("menu" in step) await expect(page.getByRole("menu")).toHaveCount(0);
+    // A step that holds its own menu open may already have opened it.
+    const next = STEPS[index + 1];
+    if (!next || !("menu" in next)) await expect(page.getByRole("menu")).toHaveCount(0);
   }
 
   const finish = page.getByRole("dialog", { name: "You’re all set" });

@@ -64,6 +64,28 @@ function completeClaudeModels(models: ModelInfo[]): ModelInfo[] {
     : [...models.slice(0, fable51 + 1), fable5, ...models.slice(fable51 + 1)];
 }
 
+const AUTO_MODE = {
+  id: "auto",
+  label: "Auto review",
+  description: "Claude reviews permission requests",
+};
+const BYPASS_MODE = {
+  id: "bypassPermissions",
+  label: "Bypass permissions",
+  description: "Claude runs every tool without asking",
+};
+/**
+ * Claude Code refuses to skip permissions as root outside a sandbox. Its flag is passed to every
+ * session so the mode can be picked later, so on such a machine neither the flag nor the mode exist:
+ * a choice that cannot work must not be able to stop every other chat from starting.
+ */
+export function canBypassPermissions(
+  uid: number | undefined = process.getuid?.(),
+  sandboxed: string | undefined = process.env["IS_SANDBOX"],
+) {
+  return uid !== 0 || sandboxed === "1";
+}
+
 export class ClaudeProvider extends EventProvider {
   private session: Query | undefined;
   private pending: SDKUserMessage[] = [];
@@ -133,6 +155,7 @@ export class ClaudeProvider extends EventProvider {
       }
     };
     const executable = this.launcher === launch ? resolveProfile("claude").command : "claude";
+    const bypassable = canBypassPermissions();
     const options: Options = {
       cwd: this.cwd,
       pathToClaudeCodeExecutable: executable,
@@ -164,6 +187,8 @@ export class ClaudeProvider extends EventProvider {
       // Left unset, the SDK uses its minimal agent prompt, without Claude Code's own instructions.
       systemPrompt: { type: "preset", preset: "claude_code", append: AGENT_INSTRUCTIONS },
       permissionMode: "default",
+      // Only makes the mode available to pick; each session still starts in "default".
+      ...(bypassable ? { allowDangerouslySkipPermissions: true } : {}),
       hooks: {
         PostCompact: [
           {
@@ -344,6 +369,7 @@ export class ClaudeProvider extends EventProvider {
           label: "Accept edits",
           description: "Approve edits automatically; other tools still follow Claude permissions",
         },
+        ...(bypassable ? [BYPASS_MODE] : []),
       ],
       currentMode: "default",
       commands: [
@@ -441,9 +467,11 @@ export class ClaudeProvider extends EventProvider {
     if (method === "model/list") {
       this.models = completeClaudeModels(await session.supportedModels());
       if (this.models.some((m) => m.supportsAutoMode))
+        // Least to most permissive, so bypass stays last.
         this.controls.modes = [
-          ...this.controls.modes.filter((m) => m.id !== "auto"),
-          { id: "auto", label: "Auto review", description: "Claude reviews permission requests" },
+          ...this.controls.modes.filter((m) => m.id !== AUTO_MODE.id && m.id !== BYPASS_MODE.id),
+          AUTO_MODE,
+          ...this.controls.modes.filter((m) => m.id === BYPASS_MODE.id),
         ];
       this.updateModelFeatures();
       return modelCatalog(

@@ -386,7 +386,10 @@ function MobileWorkspaceContent({
     setError(null);
   };
   const selectProject = (projectId: string) =>
-    select(memories.current.get(`${host.machineId}:${projectId}`) ?? { projectId });
+    select(
+      memories.current.get(`${host.machineId}:${projectId}`) ??
+        host.lastWorkspaceTargets?.[projectId] ?? { projectId },
+    );
   const openAgent = useCallback(
     (sessionId: string) => {
       const target =
@@ -806,7 +809,8 @@ function MobileWorkspaceContent({
                         <main
                           className="mobile-pane"
                           data-pane-id={pane?.id}
-                          data-pane-profile={pane?.profile}
+                          // A page shows instead of the pane, so it must not get a chat's layout.
+                          data-pane-profile={page ? undefined : pane?.profile}
                         >
                           {page?.kind === "schedules" ? (
                             <div className="h-full overflow-y-auto">

@@ -363,6 +363,30 @@ export class TestAgentProvider implements AgentProvider {
           });
         }, 3500);
       }
+      if (text.includes("quoted-prompt")) {
+        this.emit("item/completed", {
+          item: {
+            id: `quoted-${this.turnId}`,
+            type: "agentMessage",
+            text: [
+              "Here's the prompt:",
+              "",
+              "---",
+              "",
+              "> Put the site live at [the domain](https://example.com).",
+              ">",
+              "> **Part 1: Railway**",
+              ">",
+              "> 1. Open the project.",
+              "> 2. Click **+ New**.",
+              ">",
+              "> > A note inside the prompt.",
+              "",
+              "That's all.",
+            ].join("\n"),
+          },
+        });
+      }
       if (text.includes("file-links")) {
         this.emit("item/completed", {
           item: {

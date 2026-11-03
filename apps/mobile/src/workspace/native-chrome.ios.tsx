@@ -761,12 +761,14 @@ function Composer({
             width={controlWidth}
             blocked={!content.editable}
             onPress={() => {
+              if (!content.dictationHelp) {
+                emit({ kind: "press", control: "dictate", text: draft });
+                return;
+              }
               onPresent(true);
-              Alert.alert(
-                "Keyboard dictation",
-                "Use the microphone on your iPhone keyboard to dictate. Review your message before sending.",
-                [{ text: "OK", onPress: () => onPresent(false) }],
-              );
+              Alert.alert("Dictation", content.dictationHelp, [
+                { text: "OK", onPress: () => onPresent(false) },
+              ]);
             }}
           />
           {sendButton}
