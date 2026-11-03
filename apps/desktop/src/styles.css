@@ -5,6 +5,8 @@
 @import "@fontsource-variable/geist-mono";
 
 @custom-variant dark (&:is(.dark *));
+/* See markPointerFocus: focus that followed a click shows no ring, in any browser. */
+@custom-variant focus-visible (&:focus-visible:not([data-pointer-focus]));
 
 /*
  * Neutral application colors: paper, ink, and quiet rules in both themes.
@@ -165,6 +167,9 @@
 }
 
 @layer base {
+  [data-pointer-focus]:focus-visible {
+    outline: none;
+  }
   * {
     @apply border-border outline-ring/50;
   }
@@ -687,7 +692,7 @@ html[data-pane-resizing="row"] * {
   opacity: 0.4;
   cursor: default;
 }
-.agent-control:focus-visible {
+.agent-control:focus-visible:not([data-pointer-focus]) {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }

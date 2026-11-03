@@ -1752,13 +1752,9 @@ function AttachmentChip({
         : "uploading";
   const percent =
     upload && upload.size ? Math.min(100, Math.round((progress.received / upload.size) * 100)) : 0;
+  const label = upload?.error ? `${file.name}: ${upload.error}` : file.name;
   return (
-    <div
-      data-composer-attachment
-      data-upload={state}
-      title={upload?.error ? `${file.name}: ${upload.error}` : file.name}
-      className="group relative size-12 shrink-0"
-    >
+    <div data-composer-attachment data-upload={state} className="group relative size-12 shrink-0">
       <div className="relative size-full overflow-hidden rounded-lg border bg-muted/40">
         {image ? (
           <ImageViewer
@@ -1766,6 +1762,7 @@ function AttachmentChip({
             name={file.name}
             description="Image attached to the message you are writing."
             downloadable={false}
+            tooltip={label}
           >
             <button
               type="button"
@@ -1780,10 +1777,12 @@ function AttachmentChip({
             </button>
           </ImageViewer>
         ) : (
-          <div className="flex size-full flex-col items-center justify-center gap-0.5 px-1 text-muted-foreground">
-            <FileIcon className="size-4 shrink-0" aria-hidden="true" />
-            <span className="w-full truncate text-center text-[9px]">{file.name}</span>
-          </div>
+          <SidebarTooltip place="above" content={label}>
+            <div className="flex size-full flex-col items-center justify-center gap-0.5 px-1 text-muted-foreground">
+              <FileIcon className="size-4 shrink-0" aria-hidden="true" />
+              <span className="w-full truncate text-center text-[9px]">{file.name}</span>
+            </div>
+          </SidebarTooltip>
         )}
         {state === "uploading" && (
           <div
@@ -1803,7 +1802,10 @@ function AttachmentChip({
         {state === "failed" && (
           <div className="absolute inset-0 flex items-center justify-center bg-background/80 text-destructive">
             {onRetry ? (
-              <SidebarTooltip place="above" content="Retry">
+              <SidebarTooltip
+                place="above"
+                content={upload?.error ? `Retry: ${upload.error}` : "Retry"}
+              >
                 <button
                   type="button"
                   aria-label={`Retry uploading ${file.name}`}
@@ -1814,20 +1816,24 @@ function AttachmentChip({
                 </button>
               </SidebarTooltip>
             ) : (
-              <CircleAlert className="size-4" aria-label={`${file.name} did not upload`} />
+              <SidebarTooltip place="above" content={label}>
+                <CircleAlert className="size-4" aria-label={`${file.name} did not upload`} />
+              </SidebarTooltip>
             )}
           </div>
         )}
       </div>
-      <button
-        type="button"
-        aria-label={`Remove ${file.name}`}
-        disabled={disabled}
-        onClick={onRemove}
-        className={`absolute -top-1.5 -left-1.5 flex size-5 items-center justify-center rounded-full border bg-background text-foreground shadow-sm hover:bg-muted focus-visible:opacity-100 disabled:opacity-50 ${compact ? "" : "opacity-0 group-hover:opacity-100"}`}
-      >
-        <X className="size-3" />
-      </button>
+      <SidebarTooltip place="above" content="Remove">
+        <button
+          type="button"
+          aria-label={`Remove ${file.name}`}
+          disabled={disabled}
+          onClick={onRemove}
+          className={`absolute -top-1.5 -left-1.5 flex size-5 items-center justify-center rounded-full border bg-background text-foreground shadow-sm hover:bg-muted focus-visible:opacity-100 disabled:opacity-50 ${compact ? "" : "opacity-0 group-hover:opacity-100"}`}
+        >
+          <X className="size-3" />
+        </button>
+      </SidebarTooltip>
     </div>
   );
 }

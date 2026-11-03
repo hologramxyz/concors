@@ -31,7 +31,8 @@ function ResourceContent() {
     connection.state.daemon.capabilities?.includes(RESOURCES_CAPABILITY);
   // Nothing to filter or list on this machine, and no way to know that until it first answers.
   const uninspected = !!snapshot && !canInspectProcesses(snapshot);
-  const showControls = !uninspected && !(loading && !snapshot);
+  const firstLoad = loading && !snapshot;
+  const showControls = !uninspected && !firstLoad;
   const filtered = (snapshot?.processes ?? [])
     .filter((item) =>
       [item.name, item.pid, item.directory ?? ""]
@@ -70,8 +71,10 @@ function ResourceContent() {
           <h2 data-page-title className="text-xl font-semibold">
             Resources
           </h2>
-          {showControls && (
-            <p className="mt-1 text-ui text-muted-foreground">CPU and memory by process.</p>
+          {!firstLoad && (
+            <p className="mt-1 text-ui text-muted-foreground">
+              See what&rsquo;s using a machine&rsquo;s CPU and memory.
+            </p>
           )}
         </div>
       )}

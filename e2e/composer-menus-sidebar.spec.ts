@@ -618,3 +618,101 @@ test("shortcut panels are titled Tab and Pane", async ({ page }) => {
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("a tooltip closes when the pointer reaches a control without one, even with no leave event", async ({
+  page,
+}) => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-tooltip-leave-"));
+  try {
+    await openChat(page, "Tooltip leave", directory);
+    const tooltip = page.getByRole("tooltip");
+    const close = page.getByRole("button", { name: "Close pane", exact: true }).first();
+    const options = page.getByRole("button", { name: "Pane actions", exact: true }).first();
+    const files = page.getByRole("button", { name: "Toggle project files", exact: true });
+
+    await options.hover();
+    await expect(tooltip).toContainText("Pane options");
+    await options.click();
+    await expect(page.getByRole("menuitem", { name: "Rename pane" })).toBeVisible();
+    await expect(tooltip).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await page.mouse.move(0, 0);
+
+    await files.hover();
+    await expect(tooltip).toContainText("Files");
+    await expect(tooltip).not.toContainText("Project");
+    await page.mouse.move(0, 0);
+    await expect(tooltip).toHaveCount(0);
+
+    // The Mac app's web view can lose the event for leaving a control, so it is held back here.
+    await page.evaluate(() => {
+      for (const type of ["pointerout", "pointerleave", "mouseout", "mouseleave"])
+        window.addEventListener(
+          type,
+          (event) => {
+            if (event.isTrusted) event.stopImmediatePropagation();
+          },
+          true,
+        );
+    });
+    const neighbour = await page
+      .locator("header")
+      .filter({ has: close })
+      .first()
+      .evaluate((header) => {
+        const span = document.createElement("button");
+        span.setAttribute("data-no-tooltip", "");
+        span.textContent = "x";
+        header.append(span);
+        return true;
+      });
+    expect(neighbour).toBe(true);
+    await close.hover();
+    await expect(tooltip).toContainText("Close pane");
+    await page.locator("[data-no-tooltip]").hover();
+    await expect(tooltip).toHaveCount(0);
+    // And it can open again when the pointer comes back.
+    await close.hover();
+    await expect(tooltip).toContainText("Close pane");
+    await page.locator("[data-no-tooltip]").hover();
+    await expect(tooltip).toHaveCount(0);
+
+    // A tooltip reached with Tab stays while the mouse moves elsewhere.
+    await options.focus();
+    await page.keyboard.press("Tab");
+    await expect(close).toBeFocused();
+    await expect(tooltip).toContainText("Close pane");
+    await page.mouse.move(5, 5);
+    await page.mouse.move(40, 40);
+    await expect(tooltip).toContainText("Close pane");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("a button shows a focus ring for the keyboard, not after the mouse", async ({ page }) => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-focus-ring-"));
+  try {
+    await openChat(page, "Focus ring", directory);
+    const options = page.getByRole("button", { name: "Pane actions", exact: true }).first();
+    const ring = () =>
+      options.evaluate((node) => {
+        const style = getComputedStyle(node);
+        return node === document.activeElement && style.outlineStyle !== "none";
+      });
+    // Choosing nothing from a menu with the mouse hands focus back to its trigger.
+    await options.click();
+    await page.getByRole("menuitem").first().hover();
+    await page.mouse.click(600, 500);
+    await expect(page.getByRole("menu")).toHaveCount(0);
+    await options.focus();
+    await expect.poll(ring).toBe(false);
+    await expect(options).toHaveAttribute("data-pointer-focus");
+    // Any key brings it back, for someone who carries on from the keyboard.
+    await page.keyboard.press("ArrowLeft");
+    await expect(options).not.toHaveAttribute("data-pointer-focus");
+    await expect.poll(ring).toBe(true);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

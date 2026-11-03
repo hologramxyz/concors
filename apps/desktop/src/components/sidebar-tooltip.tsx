@@ -69,10 +69,22 @@ export function SidebarTooltip({
     const close = (event: KeyboardEvent) => {
       if (event.key === "Escape") flushSync(() => setOpen(false));
     };
+    // The trigger's own leave event can go missing, which left its tooltip open until another one
+    // opened. Sending it from here also resets Radix, so the tooltip can open again on the way back.
+    const moved = (event: PointerEvent) => {
+      const control = trigger.current;
+      if (!control || !(event.target instanceof Node) || control.contains(event.target)) return;
+      if (control.matches(":focus-visible")) return;
+      control.dispatchEvent(
+        new PointerEvent("pointerout", { bubbles: true, relatedTarget: event.target }),
+      );
+    };
     window.addEventListener("keydown", close, { capture: true });
+    window.addEventListener("pointermove", moved, { capture: true });
     return () => {
       if (closeOpenTooltip === closeThis) closeOpenTooltip = null;
       window.removeEventListener("keydown", close, { capture: true });
+      window.removeEventListener("pointermove", moved, { capture: true });
     };
   }, [shown]);
   if (compact || !content) return children;

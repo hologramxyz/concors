@@ -12,6 +12,7 @@ import { useShortcutPreferences } from "@/shortcuts/preferences-context";
 import { isTauri } from "@/tauri";
 import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
 import { mainPane, tabTitle } from "./tab-title";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 
 /**
  * A tab's label: the provider and status of every agent in its panes, then its name. A tab with no
@@ -97,7 +98,11 @@ export function CloseTabButton({
   ...props
 }: { tab: WorkspaceTab } & ComponentProps<"button">) {
   const label = tabTitle(tab, useAgents(), useTerminalSessions());
-  return <button type="button" aria-label={`Close ${label} tab`} {...props} />;
+  return (
+    <SidebarTooltip place="title-bar" content="Close tab" shortcut="close-tab">
+      <button type="button" aria-label={`Close ${label} tab`} {...props} />
+    </SidebarTooltip>
+  );
 }
 
 /** Keeps the latest agents in `targetRef` for event handlers, without repainting the tab bar. */

@@ -509,12 +509,14 @@ function Pane({
           </span>
         )}
         <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-          <DropdownMenuTrigger
-            aria-label="Pane actions"
-            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <Ellipsis className="size-4" />
-          </DropdownMenuTrigger>
+          <SidebarTooltip place="title-bar" hidden={menuOpen} content="Pane options">
+            <DropdownMenuTrigger
+              aria-label="Pane actions"
+              className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <Ellipsis className="size-4" />
+            </DropdownMenuTrigger>
+          </SidebarTooltip>
           <DropdownMenuContent
             align="end"
             className="w-max max-w-[calc(100vw-16px)] min-w-[280px]"

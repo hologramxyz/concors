@@ -67,6 +67,7 @@ import {
 import { ProjectWorkspace } from "@/workspace/project-workspace";
 import { Tour } from "@/tour/tour";
 import { machineListResource, SETTLING_POLL_MS } from "@/machines/use-machines";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 
 export function App() {
   const setup = new URLSearchParams(window.location.search).get("setup");
@@ -739,16 +740,18 @@ function AppContent() {
                         className="fixed top-14 left-1/2 z-50 flex max-w-[90vw] -translate-x-1/2 items-center gap-3 rounded-md border bg-popover p-3 text-ui shadow-md duration-200 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-2"
                       >
                         <span>{newWorkspace.error}</span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label="Dismiss"
-                          className="text-muted-foreground"
-                          onClick={newWorkspace.dismiss}
-                        >
-                          <X />
-                        </Button>
+                        <SidebarTooltip place="title-bar" content="Dismiss">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label="Dismiss"
+                            className="text-muted-foreground"
+                            onClick={newWorkspace.dismiss}
+                          >
+                            <X />
+                          </Button>
+                        </SidebarTooltip>
                       </div>
                     )}
                     {background.closed && (

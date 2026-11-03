@@ -110,7 +110,8 @@ export function WorkspaceSidebarItem({
       <span
         className={cn(
           "flex",
-          foldable && "group-hover:opacity-0 group-has-[:focus-visible]:opacity-0",
+          foldable &&
+            "group-hover:opacity-0 group-has-[:focus-visible:not([data-pointer-focus])]:opacity-0",
         )}
       >
         <ProjectImage
@@ -160,31 +161,33 @@ export function WorkspaceSidebarItem({
     <li
       className={cn(
         // Keyboard focus shows, but a clicked row does not stay filled once selection moves on.
-        "group relative flex items-center rounded-md hover:bg-sidebar-accent/50 has-[:focus-visible]:bg-sidebar-accent/50 has-[[data-state=open]]:bg-sidebar-accent/50",
+        "group relative flex items-center rounded-md hover:bg-sidebar-accent/50 has-[:focus-visible:not([data-pointer-focus])]:bg-sidebar-accent/50 has-[[data-state=open]]:bg-sidebar-accent/50",
         selected && "bg-sidebar-accent hover:bg-sidebar-accent",
         mobile && "mobile-project",
       )}
     >
       {foldable && (
         // Laid over the icon rather than beside it, so the row's layout is the same either way.
-        <button
-          type="button"
-          aria-label={`${expanded ? "Collapse" : "Expand"} ${project.name}`}
-          aria-expanded={!!expanded}
-          data-workspace-toggle={project.id}
-          onClick={onToggleExpanded}
-          className="absolute inset-y-0 left-0 z-10 flex w-[calc(0.5rem+22px)] items-center rounded-md pl-2 text-muted-foreground opacity-0 group-hover:opacity-100 group-has-[:focus-visible]:opacity-100 hover:text-sidebar-foreground"
-        >
-          {/* In pixels, as `ProjectImage` is: the folder glyph it replaces is 16 of its 20. */}
-          <span className="flex size-[20px] items-center justify-center">
-            <ChevronRight
-              className={cn(
-                "size-[16px] transition-transform duration-200 motion-reduce:transition-none",
-                expanded && "rotate-90",
-              )}
-            />
-          </span>
-        </button>
+        <SidebarTooltip content={expanded ? "Collapse" : "Expand"}>
+          <button
+            type="button"
+            aria-label={`${expanded ? "Collapse" : "Expand"} ${project.name}`}
+            aria-expanded={!!expanded}
+            data-workspace-toggle={project.id}
+            onClick={onToggleExpanded}
+            className="absolute inset-y-0 left-0 z-10 flex w-[calc(0.5rem+22px)] items-center rounded-md pl-2 text-muted-foreground opacity-0 group-hover:opacity-100 group-has-[:focus-visible:not([data-pointer-focus])]:opacity-100 hover:text-sidebar-foreground"
+          >
+            {/* In pixels, as `ProjectImage` is: the folder glyph it replaces is 16 of its 20. */}
+            <span className="flex size-[20px] items-center justify-center">
+              <ChevronRight
+                className={cn(
+                  "size-[16px] transition-transform duration-200 motion-reduce:transition-none",
+                  expanded && "rotate-90",
+                )}
+              />
+            </span>
+          </button>
+        </SidebarTooltip>
       )}
       {renaming !== null ? (
         <div className="flex h-8 min-w-0 flex-1 items-center gap-2 px-2">

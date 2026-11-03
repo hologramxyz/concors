@@ -26,6 +26,8 @@ async function expectOnlyIconControlTooltips(page: Page, sidebar: Locator) {
     // A workspace's tab list stays in place while closed, hidden once it has eased shut.
     if (!(await control.isVisible())) continue;
     if (ICON_ONLY.includes((await control.getAttribute("aria-label")) ?? "")) continue;
+    // With no words of its own, it says what it is in a tooltip.
+    if (!(await control.innerText()).trim()) continue;
     await control.hover();
     await control.focus();
     // Focus would open an enabled tooltip immediately, even when hover is delayed.

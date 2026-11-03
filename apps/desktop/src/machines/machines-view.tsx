@@ -175,15 +175,17 @@ export function MachinesView({
         }
         actions={
           <>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={state.reload}
-              disabled={state.loading}
-              aria-label="Refresh"
-            >
-              <RefreshCw className={cn(state.loading && "animate-spin")} aria-hidden="true" />
-            </Button>
+            <SidebarTooltip place="title-bar" content="Refresh">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={state.reload}
+                disabled={state.loading}
+                aria-label="Refresh"
+              >
+                <RefreshCw className={cn(state.loading && "animate-spin")} aria-hidden="true" />
+              </Button>
+            </SidebarTooltip>
             {purchases && !empty && (
               <NewMachineMenu
                 variant="outline"
@@ -553,14 +555,16 @@ function MachineCard({
               {resuming ? "Resuming…" : "Keep machine"}
             </Button>
           ) : (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={onCancel}
-              aria-label={`${external ? "Remove" : "Cancel"} ${machine.name}`}
-            >
-              {external ? <Trash2 aria-hidden="true" /> : <CalendarX aria-hidden="true" />}
-            </Button>
+            <SidebarTooltip place="title-bar" content={`${external ? "Remove" : "Cancel"} machine`}>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={onCancel}
+                aria-label={`${external ? "Remove" : "Cancel"} ${machine.name}`}
+              >
+                {external ? <Trash2 aria-hidden="true" /> : <CalendarX aria-hidden="true" />}
+              </Button>
+            </SidebarTooltip>
           )}
         </div>
       </div>

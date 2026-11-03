@@ -23,6 +23,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 
 export function ProjectActions({
   project,
@@ -59,16 +60,18 @@ export function ProjectActions({
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger
-          aria-label={`Actions for ${project.name}`}
-          className={cn(
-            "rounded p-1 text-muted-foreground opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 hover:text-sidebar-foreground data-[state=open]:opacity-100 [@media(hover:none)]:opacity-100",
-            // Kept mounted while renaming so closing the menu can hand focus to the input.
-            renaming && "invisible",
-          )}
-        >
-          <Ellipsis className="size-4" />
-        </DropdownMenuTrigger>
+        <SidebarTooltip content="Workspace options">
+          <DropdownMenuTrigger
+            aria-label={`Actions for ${project.name}`}
+            className={cn(
+              "rounded p-1 text-muted-foreground opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 hover:text-sidebar-foreground data-[state=open]:opacity-100 [@media(hover:none)]:opacity-100",
+              // Kept mounted while renaming so closing the menu can hand focus to the input.
+              renaming && "invisible",
+            )}
+          >
+            <Ellipsis className="size-4" />
+          </DropdownMenuTrigger>
+        </SidebarTooltip>
         <DropdownMenuContent align="start" className="w-56" onCloseAutoFocus={onCloseAutoFocus}>
           <DropdownMenuItem disabled={!onRename} onSelect={() => onRename?.()}>
             <Pencil /> Rename workspace

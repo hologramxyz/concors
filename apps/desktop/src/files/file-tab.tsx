@@ -43,15 +43,17 @@ export function FileTabLabel({ file }: { file: OpenFile }) {
           {dirty && <span aria-label="Unsaved changes">●</span>}
         </button>
       </SidebarTooltip>
-      <button
-        type="button"
-        disabled={state.busy}
-        aria-label={`Close ${file.path} file`}
-        onClick={() => files.close(file)}
-        className="px-1.5 text-muted-foreground hover:text-foreground disabled:opacity-40"
-      >
-        ×
-      </button>
+      <SidebarTooltip place="title-bar" content="Close file">
+        <button
+          type="button"
+          disabled={state.busy}
+          aria-label={`Close ${file.path} file`}
+          onClick={() => files.close(file)}
+          className="px-1.5 text-muted-foreground hover:text-foreground disabled:opacity-40"
+        >
+          ×
+        </button>
+      </SidebarTooltip>
     </div>
   );
 }

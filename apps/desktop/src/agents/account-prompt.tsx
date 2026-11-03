@@ -17,6 +17,7 @@ import { openExternal } from "@/tauri/open-external";
 import { invalidateModelCatalogs } from "./model-catalog";
 
 import { Button } from "@/components/ui/button";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 function dismissed(key: string) {
   try {
     return sessionStorage.getItem(key) === "dismissed";
@@ -305,15 +306,17 @@ function AccountPrompt({
                 : `Install ${cli.label} on this machine using its guide, then come back here.`}
             </p>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-muted-foreground"
-            aria-label="Dismiss installation"
-            onClick={hide}
-          >
-            <X className="size-4" />
-          </Button>
+          <SidebarTooltip place="above" content="Dismiss">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground"
+              aria-label="Dismiss installation"
+              onClick={hide}
+            >
+              <X className="size-4" />
+            </Button>
+          </SidebarTooltip>
         </div>
         {failure && (
           <p role="alert" className="mt-2 text-xs text-destructive">
@@ -385,15 +388,17 @@ function AccountPrompt({
             setup.
           </p>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="text-muted-foreground"
-          aria-label="Dismiss account connection"
-          onClick={hide}
-        >
-          <X className="size-4" />
-        </Button>
+        <SidebarTooltip place="above" content="Dismiss">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground"
+            aria-label="Dismiss account connection"
+            onClick={hide}
+          >
+            <X className="size-4" />
+          </Button>
+        </SidebarTooltip>
       </div>
       {(error || account?.message) && (
         <p role="alert" className="mt-2 text-xs text-destructive">

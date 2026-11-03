@@ -342,16 +342,18 @@ export function RetiredChatsNotice({
           <Button type="button" variant="ghost" onClick={() => setListing(true)}>
             See which
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Dismiss"
-            className="text-muted-foreground"
-            onClick={dismiss}
-          >
-            <X />
-          </Button>
+          <SidebarTooltip place="above" content="Dismiss">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Dismiss"
+              className="text-muted-foreground"
+              onClick={dismiss}
+            >
+              <X />
+            </Button>
+          </SidebarTooltip>
         </div>
       )}
       <Dialog open={listing} onOpenChange={(open) => !open && dismiss()}>

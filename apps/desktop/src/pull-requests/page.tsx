@@ -592,16 +592,18 @@ function RowActions({
         </Button>
       </SidebarTooltip>
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="outline"
-            size="icon"
-            className="-ml-px h-auto w-7 rounded-l-none"
-            aria-label={`More actions for #${pullRequest.number}`}
-          >
-            <ChevronDown />
-          </Button>
-        </DropdownMenuTrigger>
+        <SidebarTooltip place="above" content="More actions">
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon"
+              className="-ml-px h-auto w-7 rounded-l-none"
+              aria-label={`More actions for #${pullRequest.number}`}
+            >
+              <ChevronDown />
+            </Button>
+          </DropdownMenuTrigger>
+        </SidebarTooltip>
         <DropdownMenuContent align="end" className="w-52">
           <DropdownMenuItem onSelect={onOpen}>
             <GitPullRequest /> View details

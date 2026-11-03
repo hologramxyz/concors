@@ -19,7 +19,7 @@ export function FilesToggle() {
       <SidebarTooltip
         place="title-bar"
         disabled={!available}
-        content={available ? "Project files" : "Update or reconnect the machine to browse files"}
+        content={available ? "Files" : "Update or reconnect the machine to browse files"}
       >
         <button
           id="toggle-project-files"

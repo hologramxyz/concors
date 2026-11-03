@@ -19,7 +19,7 @@ export function SidebarSection({
   return (
     <section aria-label={title}>
       <div
-        className={`group/section flex items-center gap-1 rounded-md hover:bg-sidebar-accent/50 has-[:focus-visible]:bg-sidebar-accent/50 ${compact ? "h-[32px] justify-center" : "h-8"}`}
+        className={`group/section flex items-center gap-1 rounded-md hover:bg-sidebar-accent/50 has-[:focus-visible:not([data-pointer-focus])]:bg-sidebar-accent/50 ${compact ? "h-[32px] justify-center" : "h-8"}`}
       >
         {compact && action ? (
           <>

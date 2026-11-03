@@ -3,6 +3,7 @@ import { RefreshCw } from "lucide-react";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import type { useGitHub } from "./use-github";
 export function GitHubConnection({ github }: { readonly github: ReturnType<typeof useGitHub> }) {
   const { status, accounts, error, busy, waiting } = github;
@@ -89,15 +90,17 @@ export function GitHubConnection({ github }: { readonly github: ReturnType<typeo
               </Button>
             </>
           )}
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            aria-label="Refresh GitHub"
-            onClick={github.refresh}
-          >
-            <RefreshCw className="size-4" />
-          </Button>
+          <SidebarTooltip place="above" content="Refresh GitHub">
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              aria-label="Refresh GitHub"
+              onClick={github.refresh}
+            >
+              <RefreshCw className="size-4" />
+            </Button>
+          </SidebarTooltip>
         </div>
       </div>
       {status?.connected && (
