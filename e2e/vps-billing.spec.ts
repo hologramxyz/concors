@@ -285,31 +285,83 @@ test("create a workspace VPS with a test card and keep billing out of Account", 
   await expect(page.getByRole("button", { name: /Cancel build-agent|Delete/ })).toHaveCount(0);
 });
 
-test("the no-card pill is the same badge as Connected and Current", async ({ page }) => {
+test("badges share one size, with room above and below their text", async ({ page }) => {
   await billingApi(page);
-  const box = (node: Element) => {
-    const style = getComputedStyle(node);
-    return [style.padding, style.height, style.borderRadius, style.fontSize, style.backgroundColor];
+  await page.route("**/api/v1/github/**", (route) =>
+    route.fulfill({
+      headers: {
+        "access-control-allow-origin": route.request().headers()["origin"] ?? "*",
+        "access-control-allow-credentials": "true",
+        "access-control-allow-headers": "authorization, content-type",
+      },
+      json: {
+        configured: true,
+        identityConnected: true,
+        connected: true,
+        login: "alice",
+        updatedAt: "2026-09-12T00:00:00Z",
+        manageUrl: "https://github.com/apps/concors-test/installations/new",
+        accounts: [{ id: 1, login: "alice" }],
+        nextPage: null,
+      },
+    }),
+  );
+  const paddings = new Set<string>();
+  const measure = async (name: string, muted: boolean) => {
+    const badge = page.locator('[data-slot="badge"]', { hasText: name }).first();
+    await expect(badge).toBeVisible();
+    const box = await badge.evaluate((node) => {
+      const style = getComputedStyle(node);
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      const text = range.getBoundingClientRect();
+      const outer = node.getBoundingClientRect();
+      return {
+        height: outer.height,
+        above: text.top - outer.top,
+        padding: style.paddingLeft,
+        fontSize: style.fontSize,
+        color: style.color,
+        muted: (() => {
+          const probe = document.createElement("span");
+          probe.className = "text-muted-foreground";
+          document.body.append(probe);
+          const color = getComputedStyle(probe).color;
+          probe.remove();
+          return color;
+        })(),
+      };
+    });
+    expect(box.height, name).toBe(22);
+    expect(box.above, name).toBeGreaterThanOrEqual(2);
+    paddings.add(box.padding);
+    if (muted) expect(box.color, name).toBe(box.muted);
+    for (const colorScheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme });
+      await page.waitForTimeout(400);
+      const area = await badge.boundingBox();
+      if (!area) throw new Error(`${name} has no box`);
+      await page.screenshot({
+        path: test
+          .info()
+          .outputPath(`badge-${name.toLowerCase().replace(/ /g, "-")}-${colorScheme}.png`),
+        clip: { x: area.x - 40, y: area.y - 14, width: area.width + 80, height: area.height + 28 },
+      });
+    }
+    await page.emulateMedia({ colorScheme: "light" });
   };
   await openMachines(page);
-  const current = page.locator('[data-slot="badge"]', { hasText: "Current" }).first();
-  await expect(current).toBeVisible();
-  const reference = await current.evaluate(box);
+  await measure("Current", true);
   await page.goto("/");
   await page.getByRole("button", { name: "Account: E2E User" }).click();
   await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
-  await page
-    .getByRole("navigation", { name: "Settings" })
-    .getByRole("button", { name: "Billing", exact: true })
-    .click();
-  const pill = page.locator('[data-slot="badge"]', { hasText: "No card yet" });
-  await expect(pill).toBeVisible();
-  expect(await pill.evaluate(box)).toEqual(reference);
-  for (const colorScheme of ["light", "dark"] as const) {
-    await page.emulateMedia({ colorScheme });
-    await page.waitForTimeout(500);
-    await page.screenshot({ path: test.info().outputPath(`badge-no-card-${colorScheme}.png`) });
-  }
+  const navigation = page.getByRole("navigation", { name: "Settings" });
+  await navigation.getByRole("button", { name: "Account", exact: true }).click();
+  await measure("Personal", false);
+  await measure("Connected", true);
+  await navigation.getByRole("button", { name: "Billing", exact: true }).click();
+  await measure("No card yet", true);
+  expect(paddings.size).toBe(1);
 });
 
 test("a declined payment keeps the form and does not create a VPS", async ({ page }) => {

@@ -589,6 +589,13 @@ html[data-pane-resizing="row"] * {
   padding-inline: 7px;
   font-size: 12px;
 }
+.agent-control.agent-control-switch {
+  width: auto;
+  gap: 6px;
+  padding-inline: 7px;
+  font-size: 12px;
+}
+
 .agent-control > svg {
   flex-shrink: 0;
 }
@@ -638,6 +645,11 @@ html[data-pane-resizing="row"] * {
     display: none;
   }
 }
+@container agent-composer (max-width: 585px) {
+  .agent-composer-toolbar .agent-control-switch-label {
+    display: none;
+  }
+}
 @container agent-composer (max-width: 400px) {
   .agent-composer-toolbar .agent-control-primary {
     width: 28px;
@@ -649,11 +661,21 @@ html[data-pane-resizing="row"] * {
     display: none;
   }
 }
+@container agent-composer (max-width: 400px) {
+  .agent-composer-toolbar .agent-control-switch {
+    gap: 3px;
+    padding-inline: 3px;
+  }
+}
 @container agent-composer (max-width: 345px) {
   /* The narrowest panes fit every icon only once the gaps between them go. */
   .agent-composer-toolbar,
   .agent-composer-toolbar .mobile-composer-primary {
     gap: 0;
+  }
+  .agent-composer-toolbar .agent-control-switch {
+    gap: 2px;
+    padding-inline: 2px;
   }
 }
 .agent-control:hover,
@@ -661,17 +683,6 @@ html[data-pane-resizing="row"] * {
   background: var(--muted);
   color: var(--foreground);
 }
-/* Switched on. `--link` is the theme's accent; `--primary` is plain text colour in the default theme,
-   which would look like hover. */
-.agent-control.agent-control-on {
-  background: color-mix(in srgb, var(--link) 14%, transparent);
-  color: var(--link);
-}
-
-.agent-control.agent-control-on:hover {
-  background: color-mix(in srgb, var(--link) 22%, transparent);
-}
-
 .agent-control:disabled {
   opacity: 0.4;
   cursor: default;

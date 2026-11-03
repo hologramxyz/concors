@@ -44,7 +44,7 @@ async function openChat(page: Page, name: string, directory: string) {
   await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
 }
 
-test("the Fast chip is one toggle, lit only while on", async ({ page }) => {
+test("Fast mode is one switch with its icon and name", async ({ page }) => {
   const directory = await mkdtemp(join(tmpdir(), "concors-fast-chip-"));
   const sent: boolean[] = [];
   let fast = false;
@@ -64,6 +64,9 @@ test("the Fast chip is one toggle, lit only while on", async ({ page }) => {
     });
     server.onMessage((raw) => {
       const message = JSON.parse(String(raw), (_key, value) => {
+        // Claude has no separate Speed chip, and the toolbar has to fit what it does show.
+        if (value && typeof value === "object" && "serviceTiers" in value)
+          delete value.serviceTiers;
         if (value && typeof value === "object" && "threadId" in value && "provider" in value) {
           value.controls = {
             ...value.controls,
@@ -78,57 +81,119 @@ test("the Fast chip is one toggle, lit only while on", async ({ page }) => {
   });
   try {
     await openChat(page, "Fast chip", directory);
-    const chip = page.getByRole("button", { name: "Fast mode", exact: true });
+    const chip = page.getByRole("switch", { name: "Fast mode", exact: true });
+    const track = chip.locator("[data-switch-track]");
+    const knob = chip.locator("[data-switch-knob]");
     const tooltip = page.getByRole("tooltip");
+    const away = async () => {
+      await page.mouse.move(700, 300);
+      await expect(tooltip).toHaveCount(0);
+      await page.waitForTimeout(300);
+    };
     const look = () =>
       chip.evaluate((node) => {
-        const style = getComputedStyle(node);
-        return { background: style.backgroundColor, color: style.color };
+        const track = node.querySelector("[data-switch-track]") as Element;
+        return {
+          chip: getComputedStyle(node).backgroundColor,
+          color: getComputedStyle(node).color,
+          track: getComputedStyle(track).backgroundColor,
+        };
       });
+    const knobOffset = async () => {
+      await page.waitForTimeout(300);
+      const [outer, inner] = await Promise.all([track.boundingBox(), knob.boundingBox()]);
+      if (!outer || !inner) throw new Error("The switch has no box");
+      return inner.x - outer.x;
+    };
+
     await expect(chip).toHaveText("Fast");
-    await expect(chip).toHaveAttribute("aria-pressed", "false");
-    await page.mouse.move(700, 300);
-    await page.waitForTimeout(300);
+    await expect(chip).toHaveAttribute("aria-checked", "false");
+    const size = await track.boundingBox();
+    expect([size?.width, size?.height]).toEqual([26, 16]);
+    const height = await chip.evaluate((node) => node.getBoundingClientRect().height);
+    expect(height).toBe(
+      await page
+        .getByRole("button", { name: "Attach files", exact: true })
+        .evaluate((node) => node.getBoundingClientRect().height),
+    );
+    await away();
     const off = await look();
+    expect(await knobOffset()).toBe(2);
     await shots(page, "fast-off");
 
     await chip.hover();
-    await expect(tooltip).toHaveText("Fast mode: Off");
+    await expect(tooltip).toHaveText("Fast mode");
     await page.waitForTimeout(300);
     const offHover = await look();
-    expect(offHover.background).not.toBe(off.background);
+    expect(offHover.chip).not.toBe(off.chip);
     await shots(page, "fast-off-hover");
 
-    // One click, and no menu.
-    await chip.click();
-    await expect(chip).toHaveAttribute("aria-pressed", "true");
+    // The label, the icon and the switch each toggle it, and no menu opens.
+    await chip.getByText("Fast", { exact: true }).click();
+    await expect(chip).toHaveAttribute("aria-checked", "true");
     await expect(page.getByRole("listbox")).toHaveCount(0);
-    await expect(chip).toHaveText("Fast");
-    expect(sent).toEqual([true]);
-    await page.mouse.move(700, 300);
-    await page.waitForTimeout(300);
-    const on = await look();
-    expect(on.color).not.toBe(off.color);
-    expect(on.background).not.toBe(offHover.background);
-    await shots(page, "fast-on");
+    await expect(chip).toBeEnabled();
+    await chip.locator("svg").first().click();
+    await expect(chip).toHaveAttribute("aria-checked", "false");
+    await expect(chip).toBeEnabled();
+    await track.click();
+    await expect(chip).toHaveAttribute("aria-checked", "true");
+    await expect(chip).toBeEnabled();
+    expect(sent).toEqual([true, false, true]);
 
+    // Only the switch shows the state; the chip itself looks the same either way.
+    await away();
+    const on = await look();
+    expect(on.chip).toBe(off.chip);
+    expect(on.color).toBe(off.color);
+    expect(on.track).not.toBe(off.track);
+    expect(await knobOffset()).toBe(12);
+    await shots(page, "fast-on");
     await chip.hover();
-    await expect(tooltip).toHaveText("Fast mode: On");
+    await expect(tooltip).toHaveText("Fast mode");
+    await page.waitForTimeout(300);
+    expect(await look()).toEqual({ ...offHover, track: on.track });
     await shots(page, "fast-on-hover");
-    await page.mouse.move(700, 300);
+    await away();
 
     // Space and Enter both switch it and leave focus on it, ready for the next press.
     await chip.focus();
     await page.keyboard.press("Space");
-    await expect(chip).toHaveAttribute("aria-pressed", "false");
+    await expect(chip).toHaveAttribute("aria-checked", "false");
     await expect(chip).toBeEnabled();
     await expect(chip).toBeFocused();
     await page.keyboard.press("Enter");
-    await expect(chip).toHaveAttribute("aria-pressed", "true");
+    await expect(chip).toHaveAttribute("aria-checked", "true");
     await expect(chip).toBeEnabled();
     await expect(chip).toBeFocused();
-    expect(sent).toEqual([true, false, true]);
+    expect(await chip.evaluate((node) => getComputedStyle(node).outlineStyle)).toBe("solid");
     await shots(page, "fast-on-focus");
+    await chip.blur();
+
+    // In narrow panes the word gives way, and the switch stays.
+    const toolbar = page.locator(".agent-composer-toolbar");
+    for (const width of [900, 760, 640, 560]) {
+      await page.setViewportSize({ width, height: 850 });
+      await expect
+        .poll(
+          () =>
+            toolbar.evaluate((row) => {
+              const edge = row.getBoundingClientRect().right;
+              return [...row.querySelectorAll("button")].some(
+                (button) => button.getBoundingClientRect().right > edge + 0.5,
+              );
+            }),
+          { message: `${width}px` },
+        )
+        .toBe(false);
+      await expect(track).toBeVisible();
+    }
+    await expect(chip.getByText("Fast", { exact: true })).toBeHidden();
+    await shots(page, "fast-narrow-on");
+    await chip.click();
+    await expect(chip).toHaveAttribute("aria-checked", "false");
+    await page.mouse.move(100, 400);
+    await shots(page, "fast-narrow-off");
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

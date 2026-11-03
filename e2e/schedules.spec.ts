@@ -1,13 +1,28 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import type { Locator } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
 
 async function pick(dialog: Locator, field: string, option: string) {
   await dialog.getByRole("combobox", { name: field, exact: true }).click();
   await dialog.page().getByRole("menuitemradio", { name: option, exact: true }).click();
+}
+
+/** A badge with a little of what surrounds it, in both themes, for comparing them. */
+async function badgeShots(page: Page, badge: Locator, name: string) {
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    await page.waitForTimeout(400);
+    const area = await badge.boundingBox();
+    if (!area) throw new Error(`${name} has no box`);
+    await page.screenshot({
+      path: test.info().outputPath(`badge-${name}-${colorScheme}.png`),
+      clip: { x: area.x - 40, y: area.y - 14, width: area.width + 80, height: area.height + 28 },
+    });
+  }
+  await page.emulateMedia({ colorScheme: "light" });
 }
 
 test("schedules create, run, reopen their agent, pause, edit and delete", async ({ page }) => {
@@ -61,18 +76,14 @@ test("schedules create, run, reopen their agent, pause, edit and delete", async 
     await expect(page.getByRole("log")).toContainText("Review recent commits");
     await expect(page.getByLabel("Scheduled agent")).toBeVisible();
     await page.getByRole("button", { name: "Schedules", exact: true }).click();
+    await badgeShots(page, card.locator('[data-slot="badge"]', { hasText: "Active" }), "active");
     await page.getByRole("button", { name: "Pause Daily review", exact: true }).click();
     await expect(
       page.getByRole("button", { name: "Resume Daily review", exact: true }),
     ).toBeEnabled();
     await expect(card.getByText("Paused", { exact: true })).toBeVisible();
     await expect(card.locator('[data-slot="badge"]', { hasText: "Paused" })).toBeVisible();
-    for (const colorScheme of ["light", "dark"] as const) {
-      await page.emulateMedia({ colorScheme });
-      await page.waitForTimeout(500);
-      await page.screenshot({ path: test.info().outputPath(`badge-paused-${colorScheme}.png`) });
-    }
-    await page.emulateMedia({ colorScheme: "light" });
+    await badgeShots(page, card.locator('[data-slot="badge"]', { hasText: "Paused" }), "paused");
     await expect(card.getByText("No upcoming runs")).toHaveCount(0);
     await page.getByRole("button", { name: "Edit Daily review", exact: true }).click();
     await dialog.getByLabel("Name", { exact: true }).fill("Weekly review");
