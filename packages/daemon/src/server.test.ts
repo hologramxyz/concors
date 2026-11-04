@@ -176,6 +176,7 @@ describe("WebSocket handshake", () => {
           "agent-plan-implementation",
           "pane-rearrangement",
           "workspace-pane-rearrangement",
+          "chat-move",
           "directional-pane-split",
           "pane-rename",
           "project-rename",

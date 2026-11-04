@@ -218,6 +218,34 @@ export function applyWorkspaceOperation(
           case "tab.close":
             closeTab(state, project.id, tab.id);
             break;
+          case "tab.transfer": {
+            const destination = requireValue(
+              state.projects.find((p) => p.id === op.targetProjectId),
+              "Workspace",
+            );
+            if (destination.id === project.id)
+              throw new WorkspaceOperationError("INVALID_OPERATION", "Choose another workspace");
+            // A terminal's session is tied to its workspace, which stops it when it closes.
+            if (tab.nodes.some((node) => node.kind === "pane" && node.profile !== "chat"))
+              throw new WorkspaceOperationError(
+                "INVALID_OPERATION",
+                "Only chats can move to another workspace",
+              );
+            // A CLI ties a conversation to its folder, so a chat under way stays in its own. One
+            // not yet started has no conversation to lose, and starts where it now is.
+            for (const node of tab.nodes)
+              if (node.kind === "pane")
+                node.directory = node.sessionId
+                  ? (node.directory ?? project.directory)
+                  : destination.directory;
+            const selected = state.selection?.tabId === tab.id;
+            closeTab(state, project.id, tab.id);
+            destination.tabs.push(tab);
+            destination.version++;
+            // Moving the tab in view takes the view along; moving another leaves it where it is.
+            if (selected) state.selection = { projectId: destination.id, tabId: tab.id };
+            break;
+          }
           case "pane.resize": {
             const split = requireValue(
               tab.nodes.find((n) => n.id === op.splitId),
