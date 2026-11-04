@@ -530,3 +530,113 @@ it.each(["horizontal", "vertical"] as const)(
     validateLayout(tab);
   },
 );
+
+describe("pane.transfer", () => {
+  /** A workspace of two tabs: `split` holds two panes, `other` one. */
+  function twoTabs() {
+    const { state, projectId, tabId, paneId } = fixture();
+    const newPaneId = id();
+    const otherTabId = id();
+    const otherPaneId = id();
+    let next = applyWorkspaceOperation(state, {
+      kind: "pane.split",
+      projectId,
+      expectedVersion: 1,
+      tabId,
+      paneId,
+      splitId: id(),
+      newPaneId,
+      axis: "horizontal",
+      profile: "shell",
+    });
+    next = applyWorkspaceOperation(next, {
+      kind: "tab.create",
+      projectId,
+      expectedVersion: 2,
+      tabId: otherTabId,
+      paneId: otherPaneId,
+      name: "Review",
+      profile: "chat",
+    });
+    return { next, projectId, tabId, paneId, newPaneId, otherTabId, otherPaneId };
+  }
+  const tabOf = (snapshot: WorkspaceSnapshot, tabId: string) =>
+    snapshot.projects[0]!.tabs.find((tab) => tab.id === tabId);
+
+  it("moves a pane into another tab, keeping its session, and collapses the split it left", () => {
+    const { next, projectId, tabId, paneId, newPaneId, otherTabId, otherPaneId } = twoTabs();
+    const bound = JSON.parse(JSON.stringify(next)) as WorkspaceSnapshot;
+    const pane = tabOf(bound, tabId)!.nodes.find((node) => node.id === newPaneId);
+    if (pane?.kind === "pane") pane.sessionId = id();
+    const sessionId = pane?.kind === "pane" ? pane.sessionId : null;
+    const splitId = id();
+    const moved = applyWorkspaceOperation(bound, {
+      kind: "pane.transfer",
+      projectId,
+      expectedVersion: 3,
+      tabId,
+      paneId: newPaneId,
+      targetTabId: otherTabId,
+      splitId,
+    });
+    const source = tabOf(moved, tabId)!;
+    expect(source.root).toBe(paneId);
+    expect(source.nodes.map((node) => node.id)).toEqual([paneId]);
+    const destination = tabOf(moved, otherTabId)!;
+    expect(destination.root).toBe(splitId);
+    expect(destination.nodes.find((node) => node.id === splitId)).toMatchObject({
+      first: otherPaneId,
+      second: newPaneId,
+      ratio: 0.5,
+    });
+    expect(destination.nodes.find((node) => node.id === newPaneId)).toMatchObject({ sessionId });
+    expect(moved.selection).toEqual({ projectId, tabId: otherTabId });
+    validateLayout(source);
+    validateLayout(destination);
+  });
+
+  it("closes a tab whose only pane left", () => {
+    const { next, projectId, otherTabId, otherPaneId, tabId } = twoTabs();
+    const moved = applyWorkspaceOperation(next, {
+      kind: "pane.transfer",
+      projectId,
+      expectedVersion: 3,
+      tabId: otherTabId,
+      paneId: otherPaneId,
+      targetTabId: tabId,
+      splitId: id(),
+    });
+    expect(tabOf(moved, otherTabId)).toBeUndefined();
+    expect(moved.selection).toEqual({ projectId, tabId });
+    expect(tabOf(moved, tabId)!.nodes.some((node) => node.id === otherPaneId)).toBe(true);
+  });
+
+  it("refuses its own tab, a missing tab, a split, and a stale version", () => {
+    const { next, projectId, tabId, paneId, otherTabId } = twoTabs();
+    const base = { kind: "pane.transfer", projectId, expectedVersion: 3, tabId } as const;
+    expect(() =>
+      applyWorkspaceOperation(next, { ...base, paneId, targetTabId: tabId, splitId: id() }),
+    ).toThrow("different tab");
+    expect(() =>
+      applyWorkspaceOperation(next, { ...base, paneId, targetTabId: id(), splitId: id() }),
+    ).toThrow();
+    const split = tabOf(next, tabId)!.root;
+    expect(() =>
+      applyWorkspaceOperation(next, {
+        ...base,
+        paneId: split,
+        targetTabId: otherTabId,
+        splitId: id(),
+      }),
+    ).toThrow("different tab");
+    expect(() =>
+      applyWorkspaceOperation(next, {
+        ...base,
+        expectedVersion: 1,
+        paneId,
+        targetTabId: otherTabId,
+        splitId: id(),
+      }),
+    ).toThrow("another client");
+  });
+});
