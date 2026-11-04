@@ -2,8 +2,9 @@
 
 Desktop and mobile agent panes check the selected provider's account as soon as they open. A
 prompt above the composer offers sign-in when no account is configured. Dismissal
-applies to every pane and tab of that provider on that machine, and this client remembers it across
-restarts. While a provider is not signed in, its page of the model menu offers **Connect <Provider>
+applies to every pane and tab of that provider on that machine. This client remembers it across
+restarts until the provider is next signed in, so a login that later expires brings the prompt back.
+Dismissing the offer to install a missing CLI lasts only until the app restarts. While a provider is not signed in, its page of the model menu offers **Connect <Provider>
 account**, which opens the same sign-in dialog as Settings → Subscriptions. Neither the check nor dismissal disables
 sending prompts. Existing environment credentials and configurations remain usable.
 
