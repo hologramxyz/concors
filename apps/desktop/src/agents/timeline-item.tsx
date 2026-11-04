@@ -41,7 +41,7 @@ export const TimelineItem = memo(function TimelineItem({
     return (
       <article
         className={
-          item.kind === "user" ? "ml-auto max-w-[90%] rounded-2xl bg-muted/65 px-4 py-3" : "py-1"
+          item.kind === "user" ? "ml-auto max-w-[90%] rounded-2xl bg-raised-fill px-4 py-3" : "py-1"
         }
       >
         {item.kind === "user" && <MessageAttachments item={item} className="mb-2" />}

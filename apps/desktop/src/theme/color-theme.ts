@@ -44,7 +44,7 @@ export function colorThemeTokens(
     "sidebar-foreground": c.foreground,
     "sidebar-primary": c.accent,
     "sidebar-primary-foreground": c.accentForeground,
-    "sidebar-accent": c.muted,
+    "sidebar-accent": "var(--raised-fill)",
     "sidebar-accent-foreground": c.foreground,
     "sidebar-border": c.border,
     "sidebar-ring": c.accent,

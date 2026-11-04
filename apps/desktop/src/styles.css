@@ -43,6 +43,7 @@
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-raised-fill: var(--raised-fill);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
@@ -100,6 +101,8 @@
   --secondary-foreground: var(--foreground);
   --muted: oklch(0.965 0 0);
   --muted-foreground: #65665f;
+  /* Selected and raised surfaces. Tinted from the theme's own text color, so any theme and surface works. */
+  --raised-fill: color-mix(in srgb, var(--foreground) 12%, transparent);
   --accent: oklch(0.955 0 0);
   --accent-foreground: var(--foreground);
   --destructive: oklch(0.6 0.2 25);
@@ -115,7 +118,7 @@
   --sidebar-foreground: oklch(0.4 0 0);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: oklch(0.935 0 0);
+  --sidebar-accent: var(--raised-fill);
   --sidebar-accent-foreground: var(--foreground);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
@@ -145,6 +148,7 @@
   --secondary-foreground: var(--foreground);
   --muted: #242424;
   --muted-foreground: #a0a0a0;
+  --raised-fill: color-mix(in srgb, var(--foreground) 8%, transparent);
   --accent: #292929;
   --accent-foreground: var(--foreground);
   --destructive: oklch(0.68 0.19 25);
@@ -160,7 +164,7 @@
   --sidebar-foreground: #b0b0b0;
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: #222222;
+  --sidebar-accent: var(--raised-fill);
   --sidebar-accent-foreground: var(--foreground);
   --sidebar-border: oklch(1 0 0 / 7%);
   --sidebar-ring: var(--ring);
@@ -1110,6 +1114,13 @@ html[data-pane-resizing="row"] * {
 }
 .tab-strip-fade[data-visible="true"] {
   opacity: 1;
+}
+/* A status badge on the selected tab: opaque enough to cut into the logo, in the tab's exact color. */
+.tab-badge-surface {
+  background: linear-gradient(var(--raised-fill), var(--raised-fill)), var(--background);
+  box-shadow:
+    0 0 0 1px var(--raised-fill),
+    0 0 0 1px var(--background);
 }
 
 /* Tabs grow in when they open and shrink away before they close (`TAB_CLOSE_MS`). */
