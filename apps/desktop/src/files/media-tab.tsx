@@ -4,13 +4,13 @@ import { FILE_PREVIEW_CAPABILITY, type FilePreview } from "@concors/protocol";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { Button } from "@/components/ui/button";
 import type { OpenFile } from "./context";
-import type { PreviewKind } from "./preview-kind";
+import { formatSize } from "./file-size";
 import { useFileRequest } from "./use-file-request";
 import { MAX_ZOOM, MIN_ZOOM, stepZoom, useZoomAnchor, useZoomGestures, zoomKey } from "./zoom";
 const PdfView = lazy(() => import("./pdf-view"));
 
 /** A read-only tab for PDFs and images, which the text editor cannot open. */
-export function MediaFileTab({ file, kind }: { file: OpenFile; kind: PreviewKind }) {
+export function MediaFileTab({ file, kind }: { file: OpenFile; kind: "pdf" | "image" }) {
   const { available, request, capabilities } = useFileRequest(file);
   const supported = capabilities.includes(FILE_PREVIEW_CAPABILITY);
   const ready = available && supported;
@@ -247,10 +247,4 @@ function decodeBase64(data: string) {
   const bytes = new Uint8Array(binary.length);
   for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
   return bytes;
-}
-
-function formatSize(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }

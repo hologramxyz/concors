@@ -43,6 +43,8 @@ import { ProviderIcon } from "./provider-icon";
 import { defaultProvider } from "./default-provider";
 import { hasConversation } from "./provider-switch";
 import { timelineView } from "./thinking";
+import { PinnedSubAgents } from "./pinned-sub-agents";
+import { knownSubAgentRows, runningSubAgents } from "./running-sub-agents";
 import { SubAgentViewContext, type SubAgentTarget } from "./sub-agent-context";
 import { SubAgentPanel } from "./sub-agent-view";
 
@@ -387,6 +389,11 @@ export function Chat({
     () => timelineView(conversation.items, footers.hidden),
     [conversation.items, footers.hidden],
   );
+  const subAgentRows = useMemo(
+    () => knownSubAgentRows(conversation.items, conversation.subAgents),
+    [conversation.items, conversation.subAgents],
+  );
+  const runningAgents = agent ? runningSubAgents(subAgentRows, agent) : [];
   const latestPlan = conversation.items.findLast((item) => item.kind === "plan");
   const proposal = conversation.items.findLast(
     (item) => item.kind === "plan" && item.text.trim() && !item.presentation?.steps?.length,
@@ -459,6 +466,8 @@ export function Chat({
         return;
       const pane = root.current?.closest("[data-pane-id]");
       if (!pane?.contains(document.activeElement)) return;
+      // Escape there closes the sub-agent panel; it must not also stop the turn behind it.
+      if (document.activeElement?.closest(".sub-agent-panel")) return;
       // Escape dismisses menus, dialogs and shortcut sequences before stopping a turn.
       if (
         document.querySelector(
@@ -498,6 +507,12 @@ export function Chat({
   const prompts = (
     <>
       {!compact && feedback}
+      <PinnedSubAgents
+        agents={runningAgents}
+        open={subAgent}
+        onOpen={(target) => setSubAgent(target)}
+        onClose={() => setSubAgent(null)}
+      />
       {latestPlan && <PlanProgress compact item={latestPlan} />}
       {canImplement && (
         <Button
@@ -692,8 +707,9 @@ export function Chat({
             key={`${subAgent.item.id}:${subAgent.childId}`}
             sessionId={sessionId}
             target={subAgent}
-            item={conversation.items.find((item) => item.id === subAgent.item.id)}
+            item={subAgentRows.find((item) => item.id === subAgent.item.id)}
             turnActive={!!active}
+            hasConversation={!!agent?.controls?.childHistory}
             onClose={() => setSubAgent(null)}
           />
         )}

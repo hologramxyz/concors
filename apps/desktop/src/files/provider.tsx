@@ -11,6 +11,7 @@ import type { WorkspaceProject } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { useFileSidebar } from "./sidebar-state";
 import { FileDocument } from "./document";
+import { locateFileTarget } from "./locate";
 import { resolveFileLink, type FileLocation } from "./links";
 import {
   FilesContext,
@@ -166,7 +167,22 @@ export function ProjectFileLinks({
     <FileLinkContext
       value={(href, sourcePath) => {
         const location = resolveFileLink(href, project.directory, sourcePath);
-        return location ? () => files.open(project, location) : null;
+        if (!location) return null;
+        return () => {
+          // A path an agent wrote may be relative to wherever it had moved to, so it is looked for.
+          void (async () => {
+            const { path } =
+              connection && epoch
+                ? await locateFileTarget(connection, {
+                    projectId: project.id,
+                    epoch,
+                    directory: project.directory,
+                    path: location.path,
+                  })
+                : location;
+            files.open(project, { ...location, path });
+          })();
+        };
       }}
     >
       <FileLinkTargetContext

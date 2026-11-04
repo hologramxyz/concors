@@ -172,6 +172,8 @@ const withinBound = (v: { attachments?: unknown[] | undefined; uploads?: unknown
 const tooMany = `Attach up to ${MAX_MESSAGE_ATTACHMENTS} files per message`;
 /** The latest steps a sub-agent row keeps; its full conversation stays with the CLI. */
 export const SUB_AGENT_STEPS = 40;
+/** How many running sub-agents one read of a conversation reports; the newest are kept. */
+export const MAX_LIVE_SUB_AGENTS = 16;
 export const AgentActivityStepSchema = z.object({
   id: z.string().max(200),
   /** The tool it ran, as the CLI names it. */
@@ -332,6 +334,11 @@ export const AgentConversationSchema = z.object({
   hasMore: z.boolean(),
   // Optional for compatibility with daemons that only support backward paging.
   hasNewer: z.boolean().optional(),
+  /**
+   * The sub-agents still running, wherever they sit in the history: one that started long ago is
+   * outside the page in `items`, yet the chat keeps showing it. Absent from older daemons.
+   */
+  liveSubAgents: z.array(AgentItemSchema).max(MAX_LIVE_SUB_AGENTS).optional(),
 });
 export type AgentConversation = z.infer<typeof AgentConversationSchema>;
 export const AgentMessageIndexSchema = z.object({

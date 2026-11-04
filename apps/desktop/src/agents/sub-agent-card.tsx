@@ -1,24 +1,15 @@
-import { useContext, useEffect, useState } from "react";
+import { useContext, useState } from "react";
 import { Bot, Check, ChevronRight, PanelRightOpen, X } from "lucide-react";
 import type { AgentActivityStep, AgentItem } from "@concors/protocol";
 import { BrailleSpinner } from "./activity";
 import { formatDuration } from "./duration";
 import { AgentMarkdown, CopyButton } from "./markdown";
+import { stepCount } from "./running-sub-agents";
 import { LIVE_SUB_AGENT, SubAgentViewContext } from "./sub-agent-context";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
+import { useElapsed } from "./use-elapsed";
 
 const LIVE = LIVE_SUB_AGENT;
-
-/** Seconds since `since`, ticking while `running`. */
-function useElapsed(since: string, running: boolean) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!running) return;
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [running]);
-  return Math.max(0, Math.floor((now - Date.parse(since)) / 1000));
-}
 
 /**
  * A sub-agent a turn started: one quiet row, as a tool call is, naming its kind and task. While
@@ -43,10 +34,7 @@ export function SubAgentCard({
   const elapsed = useElapsed(item.createdAt, running);
   const current = running ? steps.findLast((step) => step.status === "running") : undefined;
   const label = data?.agentType?.trim() || "Sub-agent";
-  const summary = [
-    steps.length ? `${steps.length} ${steps.length === 1 ? "step" : "steps"}` : null,
-    running && elapsed > 0 ? formatDuration(elapsed) : null,
-  ]
+  const summary = [stepCount(steps), running && elapsed > 0 ? formatDuration(elapsed) : null]
     .filter(Boolean)
     .join(", ");
   return (
@@ -160,7 +148,7 @@ export function SubAgentCard({
   );
 }
 
-function Steps({ steps }: { steps: readonly AgentActivityStep[] }) {
+export function Steps({ steps }: { steps: readonly AgentActivityStep[] }) {
   if (!steps.length) return null;
   return (
     <ol aria-label="Steps" className="space-y-1 border-l pl-3">
@@ -189,8 +177,8 @@ function Steps({ steps }: { steps: readonly AgentActivityStep[] }) {
   );
 }
 
-/** What the sub-agent reported back, and its whole conversation where the CLI keeps one. */
-function Report({
+/** What the sub-agent reported back, and a way to its details where the CLI keeps a conversation. */
+export function Report({
   item,
   childId,
   index,
@@ -225,14 +213,14 @@ function Report({
           index={index}
           className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
         >
-          Open agent conversation
+          Open agent details
         </OpenConversation>
       )}
     </div>
   );
 }
 
-/** Opens the sub-agent's conversation beside the chat, where its provider keeps one. */
+/** Opens the sub-agent's progress and conversation beside the chat. */
 function OpenConversation({
   item,
   childId,
@@ -249,12 +237,10 @@ function OpenConversation({
   const open = useContext(SubAgentViewContext);
   if (!open) return null;
   return (
-    <SidebarTooltip place="above" content="Open its conversation beside this chat">
+    <SidebarTooltip place="above" content="Open details">
       <button
         type="button"
-        aria-label={
-          index === undefined ? "Open agent conversation" : `Open agent ${index + 1} conversation`
-        }
+        aria-label={index === undefined ? "Open agent details" : `Open agent ${index + 1} details`}
         className={className}
         onClick={() => open({ item, childId, index })}
       >

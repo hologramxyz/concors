@@ -837,7 +837,14 @@ function MobileWorkspaceContent({
                               />
                             </div>
                           ) : project && tab && pane ? (
-                            <ProjectFileLinks project={project}>
+                            <ProjectFileLinks
+                              // A chat stays where it started; the workspace may follow a terminal.
+                              project={
+                                pane.profile === "chat" && pane.directory
+                                  ? { ...project, directory: pane.directory }
+                                  : project
+                              }
+                            >
                               {pane.profile === "chat" ? (
                                 <ChatPane
                                   key={`${host.machineId}:${pane.id}`}

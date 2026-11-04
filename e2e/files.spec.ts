@@ -302,6 +302,37 @@ test("agent file links open Markdown and code tabs without leaving the workspace
   }
 });
 
+test("a link written from a folder the agent moved into still finds the file", async ({ page }) => {
+  const root = await project(page);
+  // The agent worked in render/ and wrote its link from there; the chat started at the root.
+  mkdirSync(join(root, "render", "clips"), { recursive: true });
+  writeFileSync(join(root, "render", "clips", "render.txt"), "rendered\n");
+  try {
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
+    await chooseProvider(page);
+    await expect(page.getByLabel("Message Codex").filter({ visible: true })).toBeEnabled();
+    await page.getByLabel("Message Codex").filter({ visible: true }).fill("nested-link");
+    await page.getByLabel("Message Codex").filter({ visible: true }).press("Enter");
+    const link = page.getByRole("link", { name: "the clip", exact: true });
+
+    await link.click({ button: "right" });
+    const saved = page.waitForEvent("download");
+    await page.getByRole("menu").getByRole("menuitem", { name: "Download", exact: true }).click();
+    const download = await saved;
+    expect(download.suggestedFilename()).toBe("render.txt");
+    expect(readFileSync(await download.path(), "utf8")).toBe("rendered\n");
+
+    await link.click();
+    await expect(
+      page.getByRole("textbox", { name: "Code editor: render/clips/render.txt" }),
+    ).toBeVisible();
+    await expect(page.getByText("not found")).toHaveCount(0);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("right-clicking an agent's file link offers Concors actions, and Download saves the file", async ({
   page,
 }) => {

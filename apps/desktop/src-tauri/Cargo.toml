@@ -1,6 +1,6 @@
 [package]
 name = "concors-desktop"
-version = "0.11.0"
+version = "0.12.0"
 description = "Concors desktop client"
 authors = ["Concors contributors"]
 license = "MIT"
