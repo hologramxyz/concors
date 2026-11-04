@@ -49,7 +49,7 @@ export function ProviderUpdateFooter({
             <ControlTooltip
               text={
                 command
-                  ? `Update ${label} · installed: ${version.installed ?? "unknown"}`
+                  ? `Update ${label}, installed: ${version.installed ?? "unknown"}`
                   : `Opens ${label}'s guide. Update it the way you installed it.`
               }
             >

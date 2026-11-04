@@ -33,13 +33,26 @@ The test starts two temporary daemons on ports 7429/7430, builds the web app and
 
 ## Rearranging panes
 
-Drag a pane header within its tab. Four unlabeled drop zones cover the entire pane workspace.
-Dropping left/right/top/bottom moves the source beside all remaining panes in a new half-width
-or half-height split. The active zone is highlighted; there is no center swap target.
-The old source split collapses automatically.
+Drag a pane header within its tab; a tab with one pane has nothing to drag. As in split editors:
 
-`pane.move` with `scope: "workspace"` commits the tree change atomically using the project version captured at drag start.
+- A narrow band along the outside of the workspace moves the pane beside all the others, in a new
+  half-width or half-height split (`scope: "workspace"`).
+- A band along another pane's edge, a quarter of its size, splits that pane and puts the dragged
+  pane on that side of it (`scope: "pane"`).
+- Another pane's centre swaps the two (`placement: "center"`).
+
+One outline shows the target: half of the hovered pane, the whole of it for a swap, or half of the
+tab. It never covers another pane, except for the outer band. After an edge drop a `pane.resize`
+puts the new divider on the hovered pane's midline, the outline's inner edge, so the pane lands on
+the outline. Panes are rectangles that fill the tab, though, so the space the pane left must go to
+someone: when it lies beyond the outline or across the split, the dragged or hovered pane also
+covers it. Over the dragged pane itself there is no target. Escape, or letting go outside the
+workspace or over the pane itself, cancels.
+
+A tab nobody named is called after its oldest pane, so rearranging panes never renames it.
+
+`pane.move` commits the tree change atomically using the project version captured at drag start.
 Pane IDs, profiles, and session bindings stay unchanged; no terminal or agent is stopped or
 restarted. Layouts sync across clients and survive reload. Clients only enable dragging when
 the daemon advertises `workspace-pane-rearrangement`. Cross-tab dragging and touch dragging are not
-implemented in this browser interaction.
+implemented. The drag uses pointer events rather than HTML drag and drop, which ignores CSS cursors.

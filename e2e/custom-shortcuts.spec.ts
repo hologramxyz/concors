@@ -2,8 +2,9 @@ import { test, expect, signedIn } from "./signed-in.ts";
 import type { Page } from "@playwright/test";
 import { chooseProvider } from "./support/agents.ts";
 import { tab } from "./support/tabs.ts";
+import { reportNonMac } from "./support/platform.ts";
 const KEY = "concors.shortcuts.v1";
-const search = "Search workspaces, agents and tabs";
+const search = "Search workspaces and tabs";
 // A collapsed sidebar stays mounted, inert, beside the title bar's copy of its search button.
 const searchButton = (page: Page) =>
   page.getByRole("button", { name: "Search", exact: true }).and(page.locator(":not([inert] *)"));
@@ -25,6 +26,8 @@ async function record(page: Page, name: string, keys: string) {
   await page.keyboard.press(keys);
 }
 
+test.beforeEach(({ context }) => reportNonMac(context));
+
 test("recorded shortcuts replace aliases, update hints, persist across reloads and windows, and can be disabled", async ({
   page,
   context,
@@ -41,9 +44,7 @@ test("recorded shortcuts replace aliases, update hints, persist across reloads a
   await page.getByRole("button", { name: "Back to app", exact: true }).click();
   await page.getByRole("button", { name: "Collapse sidebar" }).click();
   await searchButton(page).hover();
-  await expect(
-    page.getByRole("tooltip", { name: "Search (Ctrl+Alt+S)", exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("tooltip").locator("kbd")).toHaveText("Ctrl+Alt+S");
   await page.keyboard.press("Control+Shift+k");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.keyboard.press("Control+Alt+s");
@@ -94,7 +95,7 @@ test("custom sequences split from a terminal and run from an Agent input without
   await expect(terminals).toHaveCount(1);
   await terminals.first().focus();
   await page.keyboard.press("Control+Alt+p");
-  await expect(page.getByRole("dialog", { name: "Shortcut actions" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Pane", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(terminals.first()).toBeFocused();
   await page.keyboard.press("Control+Alt+p");

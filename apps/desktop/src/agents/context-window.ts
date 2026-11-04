@@ -41,7 +41,7 @@ export function usageView(
   return {
     context: {
       summary: window
-        ? `${formatTokenCount(window.used)} / ${formatTokenCount(window.limit)} tokens · ${Math.round(window.percent)}% used`
+        ? `${formatTokenCount(window.used)} / ${formatTokenCount(window.limit)} tokens, ${Math.round(window.percent)}% used`
         : agent.controls?.contextUsage === false
           ? "This provider does not report context usage."
           : "Usage will appear after the agent reports it.",

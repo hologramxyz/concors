@@ -6,6 +6,7 @@ import {
   type ProviderStatus,
 } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -163,14 +164,14 @@ export function ProvidersSettings() {
                         : !p.installed
                           ? "Not installed"
                           : p.enabled
-                            ? "Installed · Enabled"
-                            : "Installed · Disabled"}
-                      {p.engine === "acp" ? " · ACP" : ""}
-                      {p.version?.installed ? ` · ${p.version.installed}` : ""}
+                            ? "Installed, enabled"
+                            : "Installed, disabled"}
+                      {p.engine === "acp" ? ", ACP" : ""}
+                      {p.version?.installed ? `, ${p.version.installed}` : ""}
                       {p.version?.updating
-                        ? " · Updating…"
+                        ? ", updating…"
                         : p.version?.updateAvailable
-                          ? ` · ${p.version.latest} available`
+                          ? `, ${p.version.latest} available`
                           : ""}
                     </p>
                     {p.version?.updateAvailable &&
@@ -212,24 +213,28 @@ export function ProvidersSettings() {
                       </Button>
                     )}
                     {p.version?.updateAvailable && p.version.updateCommand && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        title={`Runs on this machine: ${p.version.updateCommand}`}
-                        disabled={busy || !!p.version.updating}
-                        onClick={() =>
-                          void execute({ kind: "update", id: p.id }).catch(() => {
-                            /* The operation already displayed its error. */
-                          })
-                        }
+                      <SidebarTooltip
+                        place="above"
+                        content={`Runs on this machine: ${p.version.updateCommand}`}
                       >
-                        {p.version.updating ? (
-                          <LoaderCircle className="animate-spin" />
-                        ) : (
-                          <Download />
-                        )}{" "}
-                        Update
-                      </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={busy || !!p.version.updating}
+                          onClick={() =>
+                            void execute({ kind: "update", id: p.id }).catch(() => {
+                              /* The operation already displayed its error. */
+                            })
+                          }
+                        >
+                          {p.version.updating ? (
+                            <LoaderCircle className="animate-spin" />
+                          ) : (
+                            <Download />
+                          )}{" "}
+                          Update
+                        </Button>
+                      </SidebarTooltip>
                     )}
                     {p.installLink && (
                       <a
@@ -398,7 +403,7 @@ function ProviderEditor({
             />
           </label>
           <label className="block space-y-1 text-sm">
-            Arguments · one per line
+            Arguments, one per line
             <Textarea
               className="font-mono text-sm"
               value={args}
@@ -454,7 +459,7 @@ function ProviderEditor({
                 />
               </label>
               <label className="block space-y-1 text-sm">
-                Model IDs · one per line
+                Model IDs, one per line
                 <Textarea
                   className="font-mono text-sm"
                   value={models}

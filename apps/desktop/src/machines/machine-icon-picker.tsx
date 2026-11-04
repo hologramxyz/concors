@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MachineIcon } from "./machine-icon";
 import { CompactLayoutContext } from "@/components/compact-layout";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import {
   Dialog,
   DialogContent,
@@ -57,7 +58,6 @@ export function MachineIconPicker({
     <button
       type="button"
       aria-label={`Change icon for ${machine.name}`}
-      title="Change icon"
       className="-ml-1 inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-transparent text-muted-foreground transition-colors hover:border-border hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     >
       <MachineIcon icon={machine.icon} className="size-5 text-xl" />
@@ -93,7 +93,9 @@ export function MachineIconPicker({
     );
   return (
     <Popover.Root open={open} onOpenChange={onOpenChange}>
-      <Popover.Trigger asChild>{trigger}</Popover.Trigger>
+      <SidebarTooltip place="title-bar" hidden={open} content="Change icon">
+        <Popover.Trigger asChild>{trigger}</Popover.Trigger>
+      </SidebarTooltip>
       <Popover.Portal>
         <Popover.Content
           align="start"

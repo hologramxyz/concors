@@ -7,7 +7,8 @@ import { useTerminalProfiles } from "@/terminal/profiles-context";
 import { paneProfiles, TAB_PROFILES } from "./tab-profiles";
 import { StartOptions } from "./start-options";
 import { useCommand } from "@/shortcuts/context";
-import { useShortcutLabels } from "@/shortcuts/preferences-context";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
+import { MenuKeyChips } from "@/shortcuts/key-chips";
 import type { PaneFocusRequest } from "./session-pane";
 import {
   DropdownMenu,
@@ -21,7 +22,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ChatPane } from "@/agents/chat";
 import { TerminalPane } from "@/terminal/terminal-pane";
-import { Fragment, useContext, useEffect, useRef, useState } from "react";
+import {
+  Fragment,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { AgentPaneIcon, AgentStatusIcon } from "@/agents/activity";
 import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
 import { isLiveTerminalAgent, terminalAgentStatus } from "@/agents/agent-status";
@@ -35,6 +43,14 @@ import {
   type WorkspaceProject,
   type WorkspaceTab,
 } from "@concors/protocol";
+import { forgetFocusedPane, publishFocusedPane } from "./focused-panes";
+import {
+  paneDropTargetAt,
+  planPaneDrop,
+  type PaneArea,
+  type PaneDropPlan,
+  type PaneDropTarget,
+} from "./pane-drop";
 import { typingOutsidePanes } from "./typing-outside-panes";
 import { defaultPaneTitle, PROFILE_LABELS } from "./tab-title";
 
@@ -53,16 +69,23 @@ const OPEN_OVERLAY =
 // Queue editing and pending-input forms can also contain textareas; navigation targets the prompt.
 const PANE_INPUT =
   "textarea.agent-composer-input:not(:disabled), textarea.xterm-helper-textarea:not(:disabled)";
-type Placement = "left" | "right" | "top" | "bottom";
-interface PaneDrag {
-  paneId: string;
-  version: number;
-}
+/** How far a press on a pane header travels before it is a drag and no longer a click. */
+const DRAG_THRESHOLD = 4;
 
 export function PaneLayout(props: Props) {
   const visible = useTabVisible();
-  const [dragging, setDragging] = useState<PaneDrag | null>(null);
-  const [drop, setDrop] = useState<Placement | null>(null);
+  const [draggedPaneId, setDraggedPaneId] = useState<string | null>(null);
+  const [drop, setDrop] = useState<{ target: PaneDropTarget; area: PaneArea } | null>(null);
+  const stopDrag = useRef<(() => void) | null>(null);
+  // The ratio a dropped pane's new split is about to get, shown from the moment the split arrives:
+  // the move and its resize are two commands, and between them the pane would jump to half.
+  const [arriving, setArriving] = useState<{ splitId: string; ratio: number } | null>(null);
+  useEffect(() => {
+    if (!arriving) return;
+    // A rejected resize never comes back; fall back to the workspace's own ratio.
+    const timer = setTimeout(() => setArriving(null), 3000);
+    return () => clearTimeout(timer);
+  }, [arriving]);
   const container = useRef<HTMLDivElement>(null);
   const pendingFocus = useRef<string | null>(null);
   const navigationFocus = useRef<MutationObserver | null>(null);
@@ -70,10 +93,23 @@ export function PaneLayout(props: Props) {
     if (!visible) navigationFocus.current?.disconnect();
     return () => navigationFocus.current?.disconnect();
   }, [visible]);
+  // A drag must not outlive its pane or tab, or the whole app keeps the grabbing cursor.
+  const paneCount = props.tab.nodes.filter((node) => node.kind === "pane").length;
+  const draggedPaneExists = props.tab.nodes.some((node) => node.id === draggedPaneId);
+  useEffect(() => {
+    if (!visible || paneCount < 2 || !draggedPaneExists) stopDrag.current?.();
+  }, [visible, paneCount, draggedPaneExists]);
+  useEffect(() => () => stopDrag.current?.(), []);
   const [activePaneId, setActivePaneId] = useState<string | null>(null);
   const activePane =
     props.tab.nodes.find((node) => node.kind === "pane" && node.id === activePaneId) ??
     props.tab.nodes.find((node) => node.kind === "pane");
+  const focusedPaneId = activePane?.id;
+  useEffect(() => {
+    if (!focusedPaneId) return;
+    publishFocusedPane(props.tab.id, focusedPaneId);
+    return () => forgetFocusedPane(props.tab.id);
+  }, [props.tab.id, focusedPaneId]);
   const split = (axis: "horizontal" | "vertical", before = false) => {
     if (!activePane || activePane.kind !== "pane") return;
     const newPaneId = crypto.randomUUID();
@@ -291,6 +327,7 @@ export function PaneLayout(props: Props) {
           key={id}
           node={node}
           canEdit={props.canEdit}
+          arrivingRatio={arriving?.splitId === id ? arriving.ratio : undefined}
           onResize={(ratio) =>
             props.onCommand({
               kind: "pane.resize",
@@ -305,7 +342,94 @@ export function PaneLayout(props: Props) {
           second={render(node.second)}
         />
       );
-    return <Pane key={id} {...props} node={node} onDrag={setDragging} />;
+    return (
+      <Pane
+        key={id}
+        {...props}
+        node={node}
+        dragged={draggedPaneId === id}
+        onHeaderPress={(event) => startDrag(event, id)}
+      />
+    );
+  };
+  // Pointer events, not HTML drag and drop: a native drag ignores CSS, so it could never show the
+  // grabbing cursor. Listening on the window sees a quick flick that leaves the header before the
+  // threshold; capture starts only past it, because a captured press loses the title's double-click.
+  const startDrag = (event: ReactPointerEvent<HTMLElement>, paneId: string) => {
+    if (event.pointerType === "touch" || event.button !== 0) return;
+    stopDrag.current?.();
+    const header = event.currentTarget;
+    const { pointerId, clientX: startX, clientY: startY } = event;
+    const { project, tab, onCommand } = props;
+    let started = false;
+    let target: PaneDropTarget | null = null;
+    let plan: PaneDropPlan | null = null;
+    // Generated once, so the plan that is previewed and the commands that are sent are the same.
+    const splitId = crypto.randomUUID();
+    const move = (moved: PointerEvent) => {
+      if (moved.pointerId !== pointerId) return;
+      if (!started) {
+        if (Math.hypot(moved.clientX - startX, moved.clientY - startY) < DRAG_THRESHOLD) return;
+        started = true;
+        header.setPointerCapture(pointerId);
+        document.documentElement.dataset["paneDragging"] = "";
+        setDraggedPaneId(paneId);
+      }
+      const workspace = container.current;
+      if (!workspace) return;
+      const panes = tab.nodes.flatMap((node) => {
+        const element =
+          node.kind === "pane" && workspace.querySelector(`[data-pane-id="${node.id}"]`);
+        return element ? [{ id: node.id, rect: element.getBoundingClientRect() }] : [];
+      });
+      const next = paneDropTargetAt(
+        moved.clientX,
+        moved.clientY,
+        workspace.getBoundingClientRect(),
+        panes,
+        paneId,
+      );
+      // Pointer moves far outnumber changes of target, and each repaint lays out every pane.
+      if (JSON.stringify(next) === JSON.stringify(target)) return;
+      plan = next && planPaneDrop(project, tab, paneId, next, splitId);
+      target = plan ? next : null;
+      setDrop(target && plan ? { target, area: plan.area } : null);
+    };
+    const release = (released: PointerEvent) => {
+      if (released.pointerId !== pointerId) return;
+      const dropped = plan;
+      stop();
+      if (!dropped) return;
+      onCommand(dropped.move);
+      if (!dropped.resize) return;
+      setArriving({ splitId, ratio: dropped.resize.ratio });
+      onCommand(dropped.resize);
+    };
+    const key = (pressed: KeyboardEvent) => {
+      if (pressed.key !== "Escape" || !started) return;
+      // The focused terminal or composer would otherwise take this Escape too.
+      pressed.preventDefault();
+      pressed.stopPropagation();
+      stop();
+    };
+    const stop = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", release);
+      window.removeEventListener("pointercancel", stop);
+      window.removeEventListener("keydown", key, true);
+      window.removeEventListener("blur", stop);
+      if (header.hasPointerCapture(pointerId)) header.releasePointerCapture(pointerId);
+      delete document.documentElement.dataset["paneDragging"];
+      stopDrag.current = null;
+      setDraggedPaneId(null);
+      setDrop(null);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", release);
+    window.addEventListener("pointercancel", stop);
+    window.addEventListener("keydown", key, true);
+    window.addEventListener("blur", stop);
+    stopDrag.current = stop;
   };
   return (
     <div
@@ -313,60 +437,24 @@ export function PaneLayout(props: Props) {
       onFocusCapture={rememberPane}
       onPointerDownCapture={rememberPane}
       data-testid="pane-workspace"
-      onDragOver={(event) => {
-        if (!dragging) return;
-        event.preventDefault();
-        event.dataTransfer.dropEffect = "move";
-        const rect = event.currentTarget.getBoundingClientRect();
-        const x = (event.clientX - rect.left) / rect.width;
-        const y = (event.clientY - rect.top) / rect.height;
-        setDrop(y < 0.25 ? "top" : y > 0.75 ? "bottom" : x < 0.5 ? "left" : "right");
-      }}
-      onDragLeave={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDrop(null);
-      }}
-      onDrop={(event) => {
-        const target = props.tab.nodes.find(
-          (node) => node.kind === "pane" && node.id !== dragging?.paneId,
-        );
-        if (!dragging || !drop || !target) return;
-        event.preventDefault();
-        props.onCommand({
-          kind: "pane.move",
-          projectId: props.project.id,
-          tabId: props.tab.id,
-          expectedVersion: dragging.version,
-          paneId: dragging.paneId,
-          targetPaneId: target.id,
-          scope: "workspace",
-          placement: drop,
-          splitId: crypto.randomUUID(),
-        });
-        setDragging(null);
-        setDrop(null);
-      }}
       className="relative h-full min-h-[220px] min-w-[320px]"
     >
       {render(props.tab.root)}
-      {dragging && (
-        <div className="pointer-events-none absolute inset-0 z-30" data-testid="pane-drop-targets">
-          {(
-            [
-              ["top", "inset-x-1 top-1 h-[calc(25%-0.5rem)]"],
-              ["bottom", "inset-x-1 bottom-1 h-[calc(25%-0.5rem)]"],
-              ["left", "inset-y-1/4 left-1 w-[calc(50%-0.5rem)]"],
-              ["right", "inset-y-1/4 right-1 w-[calc(50%-0.5rem)]"],
-            ] as const
-          ).map(([placement, area]) => (
-            <div
-              key={placement}
-              aria-label={`Move pane ${placement}`}
-              data-drop-zone={placement}
-              data-active={drop === placement}
-              className={`absolute rounded-md border ${area} ${drop === placement ? "border-primary bg-primary/30" : "border-primary/40 bg-primary/10"}`}
-            />
-          ))}
-        </div>
+      {draggedPaneId && drop && (
+        <div
+          aria-hidden="true"
+          data-testid="pane-drop-preview"
+          data-scope={drop.target.scope}
+          data-placement={drop.target.placement}
+          data-target-pane={drop.target.scope === "pane" ? drop.target.paneId : undefined}
+          className="pointer-events-none absolute z-30 rounded-md border border-(--link) bg-(--link)/10"
+          style={{
+            left: `calc(${drop.area.left * 100}% + 0.25rem)`,
+            top: `calc(${drop.area.top * 100}% + 0.25rem)`,
+            width: `calc(${drop.area.width * 100}% - 0.5rem)`,
+            height: `calc(${drop.area.height * 100}% - 0.5rem)`,
+          }}
+        />
       )}
     </div>
   );
@@ -378,12 +466,13 @@ function Pane({
   project,
   canEdit,
   onCommand,
-  onDrag,
+  dragged,
+  onHeaderPress,
 }: Props & {
   node: Extract<LayoutNode, { kind: "pane" }>;
-  onDrag: (drag: PaneDrag | null) => void;
+  dragged: boolean;
+  onHeaderPress: (event: ReactPointerEvent<HTMLElement>) => void;
 }) {
-  const shortcutLabel = useShortcutLabels();
   const connection = useContext(TerminalConnectionContext);
   const canDrag =
     canEdit &&
@@ -395,6 +484,7 @@ function Pane({
     !!connection.state.daemon.capabilities?.includes(PANE_RENAME_CAPABILITY);
   // Mirrors the tab rename: the ref stops blur after Enter/Escape from committing a second time.
   const [renaming, setRenaming] = useState<string | null>(null);
+  const movable = canDrag && tab.nodes.length > 1 && renaming === null;
   const renameRef = useRef<string | null>(null);
   const renameInput = useRef<HTMLInputElement>(null);
   const setRename = (value: string | null) => {
@@ -443,23 +533,15 @@ function Pane({
       data-pane-id={node.id}
       tabIndex={-1}
       aria-label={`${label} pane`}
-      className={`relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden outline-none ${node.profile === "chat" ? "bg-background" : "bg-[var(--terminal-background)] text-[var(--terminal-foreground)]"}`}
+      className={`relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden outline-none ${dragged ? "opacity-60" : ""} ${node.profile === "chat" ? "bg-background" : "bg-[var(--terminal-background)] text-[var(--terminal-foreground)]"}`}
     >
       <header
         tabIndex={0}
-        draggable={canDrag && tab.nodes.length > 1 && renaming === null}
-        title="Drag to move pane"
-        onDragStart={(event) => {
-          if ((event.target as HTMLElement).closest("button, input") || !canDrag) {
-            event.preventDefault();
-            return;
-          }
-          event.dataTransfer.effectAllowed = "move";
-          event.dataTransfer.setData("application/x-concors-pane", node.id);
-          onDrag({ paneId: node.id, version: project.version });
+        onPointerDown={(event) => {
+          if (movable && !(event.target as HTMLElement).closest("button, input"))
+            onHeaderPress(event);
         }}
-        onDragEnd={() => onDrag(null)}
-        className={`flex h-9 shrink-0 items-center gap-1 px-2 outline-none ${canDrag && tab.nodes.length > 1 ? "cursor-grab active:cursor-grabbing" : ""}`}
+        className={`flex h-9 shrink-0 items-center gap-1 px-2 outline-none ${movable ? "cursor-grab select-none active:cursor-grabbing" : ""}`}
       >
         {node.profile === "chat" ? (
           <AgentPaneIcon sessionId={node.sessionId} />
@@ -509,12 +591,14 @@ function Pane({
           </span>
         )}
         <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-          <DropdownMenuTrigger
-            aria-label="Pane actions"
-            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <Ellipsis className="size-4" />
-          </DropdownMenuTrigger>
+          <SidebarTooltip place="title-bar" hidden={menuOpen} content="Pane options">
+            <DropdownMenuTrigger
+              aria-label="Pane actions"
+              className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <Ellipsis className="size-4" />
+            </DropdownMenuTrigger>
+          </SidebarTooltip>
           <DropdownMenuContent
             align="end"
             className="w-max max-w-[calc(100vw-16px)] min-w-[280px]"
@@ -549,12 +633,7 @@ function Pane({
               }
             >
               <Columns2 /> <span className="whitespace-nowrap">Split horizontally</span>
-              <span
-                aria-hidden="true"
-                className="ml-auto shrink-0 pl-4 text-xs whitespace-nowrap text-muted-foreground"
-              >
-                {shortcutLabel("split-horizontal")}
-              </span>
+              <MenuKeyChips id="split-horizontal" />
             </DropdownMenuItem>
             <DropdownMenuItem
               disabled={!canEdit || tab.nodes.length >= 63}
@@ -570,12 +649,7 @@ function Pane({
               }
             >
               <Rows2 /> <span className="whitespace-nowrap">Split vertically</span>
-              <span
-                aria-hidden="true"
-                className="ml-auto shrink-0 pl-4 text-xs whitespace-nowrap text-muted-foreground"
-              >
-                {shortcutLabel("split-vertical")}
-              </span>
+              <MenuKeyChips id="split-vertical" />
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuLabel>Pane profile</DropdownMenuLabel>
@@ -609,16 +683,17 @@ function Pane({
         {agent && mcpOpen && (
           <McpStatusDialog agent={agent} open={mcpOpen} onOpenChange={setMcpOpen} />
         )}
-        <button
-          type="button"
-          aria-label="Close pane"
-          title={`Close pane (${shortcutLabel("close-pane")})`}
-          disabled={!canEdit}
-          onClick={() => onCommand({ kind: "pane.close", ...target })}
-          className="rounded p-1 hover:bg-muted disabled:opacity-40"
-        >
-          <X className="size-4" />
-        </button>
+        <SidebarTooltip place="title-bar" content="Close pane" shortcut="close-pane">
+          <button
+            type="button"
+            aria-label="Close pane"
+            disabled={!canEdit}
+            onClick={() => onCommand({ kind: "pane.close", ...target })}
+            className="rounded p-1 hover:bg-muted disabled:opacity-40"
+          >
+            <X className="size-4" />
+          </button>
+        </SidebarTooltip>
       </header>
       {node.profile !== "chat" ? (
         <TerminalPane
@@ -668,12 +743,14 @@ function Split({
   first,
   second,
   canEdit,
+  arrivingRatio,
   onResize,
 }: {
   node: Extract<LayoutNode, { kind: "split" }>;
   first: React.ReactNode;
   second: React.ReactNode;
   canEdit: boolean;
+  arrivingRatio: number | undefined;
   onResize: (ratio: number) => void;
 }) {
   const container = useRef<HTMLDivElement>(null);
@@ -692,7 +769,9 @@ function Split({
   const horizontal = node.axis === "horizontal";
   // Once the workspace's ratio moves, it is the answer, whether it is ours or another client's.
   const pending = committed?.from === node.ratio ? committed.ratio : null;
-  const ratio = preview ?? pending ?? node.ratio;
+  // Every new split starts at half, so any other ratio means the resize has landed.
+  const ratio =
+    preview ?? pending ?? (node.ratio === 0.5 ? arrivingRatio : undefined) ?? node.ratio;
   const resize = (value: number) => {
     if (value === (pending ?? node.ratio)) return;
     setCommitted({ ratio: value, from: node.ratio });

@@ -1,13 +1,15 @@
-import { Cloud, Compass, Folder, LogOut, Monitor, Moon, RefreshCw, Sun } from "lucide-react";
-import { useContext, useMemo, useRef, useState, type ReactNode } from "react";
+import { Folder } from "lucide-react";
+import { useContext, useMemo, useRef, useState } from "react";
 import type { WorkspaceProject } from "@concors/protocol";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import { useCommands } from "@/shortcuts/context";
-import { isCompactCommand } from "@/shortcuts/bindings";
-import { useShortcutLabels } from "@/shortcuts/preferences-context";
+import { isCompactCommand, type CommandId } from "@/shortcuts/bindings";
+import { BoundKeyChips } from "@/shortcuts/key-chips";
 import { AgentStartedContext, useAgents } from "@/agents/context";
 import { ProviderIcon } from "@/agents/provider-icon";
 import { PaneProfileIcon } from "@/workspace/profile-icon";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
+import { useHomePath } from "@/workspace/home-path";
 import type { SessionPane } from "@/workspace/session-pane";
 import {
   Command,
@@ -26,7 +28,6 @@ import { matchScore, searchEntries, workspaceEntries, type SearchCategory } from
 interface WorkspaceSearchProps {
   projects: readonly WorkspaceProject[];
   activeProjectId: string | undefined;
-  machine: string;
   canSelectProject: boolean;
   onSelectProject(id: string): void;
   onSelectPane(target: SessionPane): void;
@@ -43,8 +44,7 @@ interface Action {
   id: string;
   title: string;
   keywords: string;
-  icon?: ReactNode;
-  shortcut?: string;
+  shortcut?: CommandId;
   run(): void;
 }
 const CATEGORIES = [
@@ -64,7 +64,8 @@ export function WorkspaceSearch(props: WorkspaceSearchProps) {
       open={props.open}
       onOpenChange={props.onOpenChange}
       title="Search"
-      description={`Workspaces, agents and tabs on ${props.machine}.`}
+      // At the top, so it stays put as results come and go. The mobile drawer sits at the bottom.
+      className={compact ? "" : "top-[12dvh] max-h-[76dvh] translate-y-0"}
       onOpenAutoFocus={() => {
         returnFocus.current =
           document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -115,7 +116,7 @@ function SearchContent({
 }: WorkspaceSearchProps & { run(action: () => void, ownsFocus?: boolean): void }) {
   const compact = useContext(CompactLayoutContext);
   const commands = useCommands();
-  const shortcutLabel = useShortcutLabels();
+  const homePath = useHomePath();
   const agents = useAgents();
   const openAgent = useContext(AgentStartedContext);
   const [query, setQuery] = useState("");
@@ -132,7 +133,6 @@ function SearchContent({
       id: "settings:machines",
       title: "Go to Machines",
       keywords: "manage computers cloud settings",
-      icon: <Cloud aria-hidden="true" />,
       run: () => run(props.onManageMachines),
     },
     ...commands.items
@@ -143,7 +143,7 @@ function SearchContent({
         id: `command:${item.id}`,
         title: item.label,
         keywords: "action command",
-        ...(!compact ? { shortcut: shortcutLabel(item.id) } : {}),
+        ...(!compact ? { shortcut: item.id } : {}),
         run: () => {
           // Closing a mobile search above the sidebar unregisters workspace commands.
           // Capture the enabled handler before closing, then open its destination next frame.
@@ -154,9 +154,8 @@ function SearchContent({
     ...ALL_NAV.filter((item) => item.view !== "settings" && !item.comingSoon).map(
       (item): Action => ({
         id: `navigate:${item.view}`,
-        title: `Go to ${item.view === "projects" ? "Workspaces" : item.label}`,
+        title: `Go to ${item.label}`,
         keywords: "navigate page",
-        icon: <item.icon aria-hidden="true" />,
         run: () => run(() => props.onNavigate(item.view)),
       }),
     ),
@@ -166,7 +165,6 @@ function SearchContent({
             id: "tour",
             title: "Take the tour",
             keywords: "onboarding welcome tour help getting started",
-            icon: <Compass aria-hidden="true" />,
             run: () => run(replayTour, false),
           },
         ]
@@ -177,7 +175,6 @@ function SearchContent({
             id: "reconnect",
             title: "Reconnect to machine",
             keywords: "daemon connection retry",
-            icon: <RefreshCw aria-hidden="true" />,
             run: () => run(props.onReconnect, false),
           },
         ]
@@ -186,20 +183,18 @@ function SearchContent({
       id: "sign-out",
       title: "Sign out",
       keywords: "account logout",
-      icon: <LogOut aria-hidden="true" />,
       run: () => run(props.onSignOut),
     },
     ...(
       [
-        { theme: "light", label: "Light", icon: Sun },
-        { theme: "dark", label: "Dark", icon: Moon },
-        { theme: "system", label: "System", icon: Monitor },
+        { theme: "light", label: "Light" },
+        { theme: "dark", label: "Dark" },
+        { theme: "system", label: "System" },
       ] as const
     ).map((item): Action => ({
       id: `theme:${item.theme}`,
       title: `${item.label} theme`,
       keywords: "appearance theme",
-      icon: <item.icon aria-hidden="true" />,
       run: () => run(() => props.onSetTheme(item.theme), false),
     })),
   ];
@@ -219,8 +214,8 @@ function SearchContent({
       <CommandInput
         ref={input}
         maxLength={200}
-        aria-label="Search workspaces, agents and tabs"
-        placeholder="Search workspaces, agents, tabs…"
+        aria-label="Search workspaces and tabs"
+        placeholder="Search workspaces and tabs…"
         value={query}
         onValueChange={(value) => {
           setQuery(value);
@@ -260,53 +255,58 @@ function SearchContent({
             }
           >
             {results.slice(0, limit).map((entry) => (
-              <CommandItem
+              <SidebarTooltip
                 key={entry.id}
-                value={entry.id}
-                data-search-result={entry.kind}
-                data-search-project-id={entry.projectId}
-                data-search-pane-id={entry.target?.paneId}
-                disabled={!props.canSelectProject}
-                onSelect={() =>
-                  run(() =>
-                    entry.target
-                      ? props.onSelectPane(entry.target)
-                      : entry.kind === "closed-chat" && entry.agent && openAgent
-                        ? openAgent(entry.agent.id)
-                        : props.onSelectProject(entry.projectId),
-                  )
-                }
-                className="flex-nowrap gap-3"
+                place="menu"
+                content={entry.kind === "workspace" ? homePath(entry.detail) : undefined}
               >
-                {entry.kind === "workspace" ? (
-                  <Folder aria-hidden="true" />
-                ) : entry.agent ? (
-                  <ProviderIcon provider={entry.agent.provider} />
-                ) : entry.profile ? (
-                  <PaneProfileIcon profile={entry.profile} />
-                ) : null}
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium">{entry.title}</span>
-                  <span
-                    className="block truncate text-xs text-muted-foreground"
-                    title={entry.detail}
-                    style={
-                      entry.kind === "workspace"
-                        ? { direction: "rtl", textAlign: "left" }
-                        : undefined
+                {/* cmdk replaces an item's onPointerMove, which a tooltip trigger needs. */}
+                <div role="presentation">
+                  <CommandItem
+                    value={entry.id}
+                    data-search-result={entry.kind}
+                    data-search-project-id={entry.projectId}
+                    data-search-pane-id={entry.target?.paneId}
+                    disabled={!props.canSelectProject}
+                    onSelect={() =>
+                      run(() =>
+                        entry.target
+                          ? props.onSelectPane(entry.target)
+                          : entry.kind === "closed-chat" && entry.agent && openAgent
+                            ? openAgent(entry.agent.id)
+                            : props.onSelectProject(entry.projectId),
+                      )
                     }
+                    className="flex-nowrap gap-3"
                   >
-                    <bdi dir="ltr">{entry.detail}</bdi>
-                  </span>
-                </span>
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  {entry.kind === "workspace"
-                    ? "Workspace"
-                    : entry.kind === "closed-chat"
-                      ? "Closed chat"
-                      : "Tab"}
-                </span>
-              </CommandItem>
+                    {entry.kind === "workspace" ? (
+                      <Folder aria-hidden="true" />
+                    ) : entry.agent ? (
+                      <ProviderIcon provider={entry.agent.provider} />
+                    ) : entry.profile ? (
+                      <PaneProfileIcon profile={entry.profile} />
+                    ) : null}
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium">{entry.title}</span>
+                      {(compact || entry.kind !== "workspace") && entry.detail !== entry.title && (
+                        <span
+                          className="block truncate text-xs text-muted-foreground"
+                          style={
+                            entry.kind === "workspace"
+                              ? { direction: "rtl", textAlign: "left" }
+                              : undefined
+                          }
+                        >
+                          <bdi dir="ltr">{entry.detail}</bdi>
+                        </span>
+                      )}
+                    </span>
+                    {entry.kind === "closed-chat" && (
+                      <span className="shrink-0 text-xs text-muted-foreground">Closed chat</span>
+                    )}
+                  </CommandItem>
+                </div>
+              </SidebarTooltip>
             ))}
             {results.length > limit && (
               <CommandItem value="show-more" onSelect={() => setLimit((value) => value + 30)}>
@@ -319,9 +319,12 @@ function SearchContent({
           <CommandGroup heading="Commands">
             {matches.map((action) => (
               <CommandItem key={action.id} value={action.id} onSelect={action.run}>
-                {action.icon}
                 {action.title}
-                {action.shortcut && <CommandShortcut>{action.shortcut}</CommandShortcut>}
+                {action.shortcut && (
+                  <CommandShortcut className="flex">
+                    <BoundKeyChips id={action.shortcut} />
+                  </CommandShortcut>
+                )}
               </CommandItem>
             ))}
           </CommandGroup>
@@ -338,10 +341,11 @@ function SearchContent({
           </div>
         )}
       </CommandList>
-      <p className="shrink-0 px-2 pt-3 text-xs text-muted-foreground">
-        Searches names and paths, not messages or file contents.
-        {!props.canSelectProject && " Reconnect to open workspace results."}
-      </p>
+      {!props.canSelectProject && (
+        <p className="shrink-0 px-2 pt-3 text-xs text-muted-foreground">
+          Reconnect to open workspace results.
+        </p>
+      )}
     </Command>
   );
 }

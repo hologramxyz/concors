@@ -38,7 +38,7 @@ for (const [provider, label] of [
       await page.getByRole("button", { name: "Back to providers" }).click();
       await page
         .getByRole("option", {
-          name: new RegExp(`^${label} Starts a new conversation in this pane$`),
+          name: new RegExp(`^${label}$`),
         })
         .click();
       await expect(
@@ -48,7 +48,7 @@ for (const [provider, label] of [
       await page.getByRole("button", { name: "Back to providers" }).click();
       await page
         .getByRole("option", {
-          name: new RegExp(`^${label} Starts a new conversation in this pane$`),
+          name: new RegExp(`^${label}$`),
         })
         .click();
       await expect(
@@ -85,9 +85,7 @@ for (const [provider, label] of [
       await expect(page.getByRole("log")).toContainText("new provider conversation");
       await page.getByLabel("Agent and model", { exact: true }).click();
       await page.getByRole("button", { name: "Back to providers" }).click();
-      await page
-        .getByRole("option", { name: "Codex Back to its conversation in this pane", exact: true })
-        .click();
+      await page.getByRole("option", { name: "Codex", exact: true }).click();
       await page.getByRole("option", { name: "Fixture model", exact: true }).click();
       await page
         .getByRole("dialog", { name: "Switch to Codex?" })

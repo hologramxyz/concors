@@ -12,7 +12,7 @@ export function Section({
   children,
 }: {
   readonly title: string;
-  readonly description?: string;
+  readonly description?: string | undefined;
   readonly actions?: ReactNode;
   readonly children: ReactNode;
 }) {

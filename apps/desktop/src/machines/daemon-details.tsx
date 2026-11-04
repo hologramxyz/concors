@@ -40,7 +40,7 @@ export function DaemonDetails({
               {seenAt && (
                 <span className="text-muted-foreground">
                   {" "}
-                  · last seen{" "}
+                  last seen{" "}
                   {new Date(seenAt).toLocaleString(undefined, {
                     dateStyle: "medium",
                     timeStyle: "short",

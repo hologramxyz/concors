@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import {
   BackgroundTerminalsContext,
   shownSessions,
@@ -71,16 +72,18 @@ export function ClosedTerminalNotice({
       <Button type="button" variant="ghost" onClick={() => actions.stop(live)}>
         Stop
       </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Dismiss"
-        className="text-muted-foreground"
-        onClick={onDismiss}
-      >
-        <X />
-      </Button>
+      <SidebarTooltip place="above" content="Dismiss">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Dismiss"
+          className="text-muted-foreground"
+          onClick={onDismiss}
+        >
+          <X />
+        </Button>
+      </SidebarTooltip>
     </div>
   );
 }

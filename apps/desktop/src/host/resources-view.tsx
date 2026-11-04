@@ -1,12 +1,12 @@
 import { useContext, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { ChevronDown, Cpu, RefreshCw } from "lucide-react";
 import { RESOURCES_CAPABILITY, type MachineProcess } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { openPreview as openDetectedPreview } from "@/tauri/open-external";
 import { useProcesses } from "./use-processes";
-import { processStore } from "./process-store";
+import { canInspectProcesses, isInspectionWarning, processStore } from "./process-store";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import { ResourceProcessRow } from "./process-row";
 import { StopProcessDialog } from "./stop-process-dialog";
@@ -29,6 +29,10 @@ function ResourceContent() {
   const supported =
     connection?.state.status === "ready" &&
     connection.state.daemon.capabilities?.includes(RESOURCES_CAPABILITY);
+  // Nothing to filter or list on this machine, and no way to know that until it first answers.
+  const uninspected = !!snapshot && !canInspectProcesses(snapshot);
+  const firstLoad = loading && !snapshot;
+  const showControls = !uninspected && !firstLoad;
   const filtered = (snapshot?.processes ?? [])
     .filter((item) =>
       [item.name, item.pid, item.directory ?? ""]
@@ -56,38 +60,69 @@ function ResourceContent() {
   return (
     <div
       className={
-        compact ? "space-y-4 py-2" : "mx-auto w-full max-w-4xl space-y-5 px-4 py-6 sm:px-6"
+        compact
+          ? "space-y-4 py-2"
+          : // Only the empty state fills the page, to centre as Schedules' and Pull requests' do.
+            `mx-auto w-full max-w-5xl space-y-5 px-4 py-6 sm:px-8 sm:py-8 ${uninspected ? "flex min-h-full flex-col" : ""}`
       }
     >
-      {!compact && <h2 className="text-base font-medium">Resources</h2>}
-      <div className="flex flex-wrap items-center gap-2">
-        <Input
-          aria-label="Filter resources"
-          placeholder="Filter by process, PID, or folder…"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          className="min-w-0 flex-1"
-        />
-        <select
-          aria-label="Sort processes"
-          value={sort}
-          onChange={(event) => setSort(event.target.value)}
-          className="rounded-md border bg-background px-2 text-sm"
-        >
-          <option value="memory">RAM usage</option>
-          <option value="cpu">CPU usage</option>
-          <option value="name">Name</option>
-        </select>
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Refresh"
-          disabled={!supported || loading}
-          onClick={() => void refresh()}
-        >
-          <RefreshCw className={loading ? "animate-spin" : ""} />
-        </Button>
-      </div>
+      {!compact && (
+        <div>
+          <h2 data-page-title className="text-xl font-semibold">
+            Resources
+          </h2>
+          {!firstLoad && (
+            <p className="mt-1 text-ui text-muted-foreground">
+              See what&rsquo;s using a machine&rsquo;s CPU and memory.
+            </p>
+          )}
+        </div>
+      )}
+      {uninspected && (
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 py-20 text-center">
+          <div className="flex size-14 items-center justify-center rounded-xl border bg-muted/40">
+            <Cpu className="size-6 text-muted-foreground" />
+          </div>
+          <div className="flex max-w-xl flex-col items-center">
+            <h3 className="text-lg font-medium">
+              Process details aren&rsquo;t available on this computer
+            </h3>
+            <p className="mt-2 text-ui leading-relaxed text-muted-foreground">
+              They&rsquo;re available on Linux machines, such as cloud machines.
+            </p>
+          </div>
+        </div>
+      )}
+      {showControls && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            aria-label="Filter resources"
+            placeholder="Filter by process, PID, or folder…"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            className="min-w-0 flex-1"
+          />
+          <select
+            aria-label="Sort processes"
+            value={sort}
+            onChange={(event) => setSort(event.target.value)}
+            className="rounded-md border bg-background px-2 text-sm"
+          >
+            <option value="memory">RAM usage</option>
+            <option value="cpu">CPU usage</option>
+            <option value="name">Name</option>
+          </select>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Refresh"
+            disabled={!supported || loading}
+            onClick={() => void refresh()}
+          >
+            <RefreshCw className={loading ? "animate-spin" : ""} />
+          </Button>
+        </div>
+      )}
       {(error || processError) && (
         <p role="alert" className="text-sm text-destructive">
           {error ?? processError}
@@ -98,47 +133,59 @@ function ResourceContent() {
           {message}
         </p>
       )}
-      {snapshot?.warnings.map((warning) => (
-        <p key={warning} className="text-xs text-muted-foreground">
-          {warning}
-        </p>
-      ))}
-      <ul className="space-y-0.5" aria-label="Running processes">
-        {filtered.slice(0, processLimit).map((item) => (
-          <ResourceProcessRow
-            key={item.id}
-            item={item}
-            canStop={!!supported}
-            onPreview={() => openPreview(item)}
-            onStop={() => {
-              setAction(item);
-              setError(null);
-            }}
-          />
+      {snapshot?.warnings
+        .filter((warning) => !isInspectionWarning(warning))
+        .map((warning) => (
+          <p key={warning} className="text-xs text-muted-foreground">
+            {warning}
+          </p>
         ))}
-        {!filtered.length && (
-          <li className="p-6 text-center text-sm text-muted-foreground">
-            {loading
-              ? "Discovering processes…"
-              : query
-                ? "No matching processes."
-                : "No processes to show."}
-          </li>
-        )}
-      </ul>
+      {!uninspected && (
+        <ul className="space-y-0.5" aria-label="Running processes">
+          {filtered.slice(0, processLimit).map((item) => (
+            <ResourceProcessRow
+              key={item.id}
+              item={item}
+              canStop={!!supported}
+              onPreview={() => openPreview(item)}
+              onStop={() => {
+                setAction(item);
+                setError(null);
+              }}
+            />
+          ))}
+          {!filtered.length && (
+            <li className="p-6 text-center text-sm text-muted-foreground">
+              {loading
+                ? "Discovering processes…"
+                : query
+                  ? "No matching processes."
+                  : "No processes to show."}
+            </li>
+          )}
+        </ul>
+      )}
       {filtered.length > processLimit && (
         <Button variant="ghost" onClick={() => setProcessLimit((limit) => limit + 100)}>
           Show more processes ({processLimit} of {filtered.length})
         </Button>
       )}
-      <details className="text-xs leading-relaxed text-muted-foreground">
-        <summary className="cursor-pointer">About resource usage</summary>
-        <p className="mt-2">
-          Processes visible to the daemon’s OS user. CPU is a share of the whole machine; RAM is
-          resident memory and may include shared pages. Sleeping does not mean safe to stop.
-          Container and other-user usage may not be fully attributed.
-        </p>
-      </details>
+      {!uninspected && (
+        <details className="group rounded-lg border">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-4 py-3 text-sm text-muted-foreground transition-colors select-none hover:bg-muted/30 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none [&::-webkit-details-marker]:hidden">
+            About resource usage
+            <ChevronDown
+              className="size-4 shrink-0 transition-transform duration-150 group-open:rotate-180"
+              aria-hidden="true"
+            />
+          </summary>
+          <p className="border-t px-4 py-3 text-xs leading-relaxed text-muted-foreground">
+            Processes visible to the daemon’s OS user. CPU is a share of the whole machine; RAM is
+            resident memory and may include shared pages. Sleeping does not mean safe to stop.
+            Container and other-user usage may not be fully attributed.
+          </p>
+        </details>
+      )}
       <StopProcessDialog
         connection={connection}
         process={action}

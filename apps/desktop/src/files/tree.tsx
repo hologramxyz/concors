@@ -22,6 +22,7 @@ import { useFiles } from "./context";
 import { CreateEntry } from "./create-entry";
 import { FileTypeIcon } from "./file-type-icon";
 import { CompactLayoutContext } from "@/components/compact-layout";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { useDirectory } from "./use-directory";
 
 export function FileTree({
@@ -105,15 +106,11 @@ export function FileTree({
         >
           <FolderOpen className="size-4" />
           <h2 className="min-w-0 flex-1 truncate text-ui font-medium">Files</h2>
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            aria-label="Close files"
-            title="Close files"
-            onClick={onClose}
-          >
-            <X className="size-4" />
-          </Button>
+          <SidebarTooltip place="title-bar" content="Close files">
+            <Button size="icon-sm" variant="ghost" aria-label="Close files" onClick={onClose}>
+              <X className="size-4" />
+            </Button>
+          </SidebarTooltip>
           <WindowControls />
         </div>
       )}
@@ -122,46 +119,56 @@ export function FileTree({
         aria-label="File actions"
         className="mx-2 flex shrink-0 items-center gap-1 border-b px-1 pb-2 text-muted-foreground"
       >
-        <Button
-          size="icon-sm"
-          variant="ghost"
-          aria-label="New file"
+        <SidebarTooltip
+          place="title-bar"
           disabled={!canCreate}
-          title={canCreate ? "New file" : "Update or reconnect the machine to create files"}
-          onClick={() => setCreating("file")}
+          content={canCreate ? "New file" : "Update or reconnect the machine to create files"}
         >
-          <FilePlus2 className="size-4" />
-        </Button>
-        <Button
-          size="icon-sm"
-          variant="ghost"
-          aria-label="New folder"
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="New file"
+            disabled={!canCreate}
+            onClick={() => setCreating("file")}
+          >
+            <FilePlus2 className="size-4" />
+          </Button>
+        </SidebarTooltip>
+        <SidebarTooltip
+          place="title-bar"
           disabled={!canCreate}
-          title={canCreate ? "New folder" : "Update or reconnect the machine to create folders"}
-          onClick={() => setCreating("directory")}
+          content={canCreate ? "New folder" : "Update or reconnect the machine to create folders"}
         >
-          <FolderPlus className="size-4" />
-        </Button>
-        <Button
-          size="icon-sm"
-          variant="ghost"
-          aria-label={showHidden ? "Hide hidden files" : "Show hidden files"}
-          title={showHidden ? "Hide hidden files" : "Show hidden files"}
-          aria-pressed={showHidden}
-          className={showHidden ? "bg-muted text-foreground" : undefined}
-          onClick={() => setShowHidden((value) => !value)}
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="New folder"
+            disabled={!canCreate}
+            onClick={() => setCreating("directory")}
+          >
+            <FolderPlus className="size-4" />
+          </Button>
+        </SidebarTooltip>
+        <SidebarTooltip
+          place="title-bar"
+          content={showHidden ? "Hide hidden files" : "Show hidden files"}
         >
-          {showHidden ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
-        </Button>
-        <Button
-          size="icon-sm"
-          variant="ghost"
-          aria-label="Refresh file tree"
-          title="Refresh file tree"
-          onClick={refresh}
-        >
-          <RefreshCw className="size-4" />
-        </Button>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label={showHidden ? "Hide hidden files" : "Show hidden files"}
+            aria-pressed={showHidden}
+            className={showHidden ? "bg-muted text-foreground" : undefined}
+            onClick={() => setShowHidden((value) => !value)}
+          >
+            {showHidden ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
+          </Button>
+        </SidebarTooltip>
+        <SidebarTooltip place="title-bar" content="Refresh file tree">
+          <Button size="icon-sm" variant="ghost" aria-label="Refresh file tree" onClick={refresh}>
+            <RefreshCw className="size-4" />
+          </Button>
+        </SidebarTooltip>
       </div>
       <div className="shrink-0 p-2">
         <input
@@ -284,33 +291,42 @@ function Directory({
               : File;
           return (
             <li key={entry.path}>
-              <button
-                type="button"
-                title={
+              <SidebarTooltip
+                place="menu"
+                disabled={!supported}
+                anchorClassName="flex w-full"
+                content={
                   supported
                     ? entry.path
                     : `${entry.path} — open links or special files in a terminal`
                 }
-                disabled={!supported}
-                aria-expanded={directory ? open : undefined}
-                onClick={() => (directory ? onToggle(entry.path) : onOpen(entry))}
-                className="flex w-full items-center gap-1.5 py-1.5 pr-3 text-left text-ui hover:bg-muted focus-visible:bg-muted focus-visible:outline-none disabled:opacity-40"
-                style={{ paddingLeft: `${12 + Math.min(depth, 12) * 14}px` }}
               >
-                {directory ? (
-                  <ChevronRight
-                    className={`size-3 shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
-                  />
-                ) : (
-                  <span className="w-3 shrink-0" />
-                )}
-                {entry.kind === "file" ? (
-                  <FileTypeIcon path={entry.name} />
-                ) : (
-                  <Icon aria-hidden="true" className="size-[20px] shrink-0 text-muted-foreground" />
-                )}
-                <span className="truncate">{entry.name}</span>
-              </button>
+                <button
+                  type="button"
+                  disabled={!supported}
+                  aria-expanded={directory ? open : undefined}
+                  onClick={() => (directory ? onToggle(entry.path) : onOpen(entry))}
+                  className="flex w-full items-center gap-1.5 py-1.5 pr-3 text-left text-ui hover:bg-muted focus-visible:bg-muted focus-visible:outline-none disabled:opacity-40"
+                  style={{ paddingLeft: `${12 + Math.min(depth, 12) * 14}px` }}
+                >
+                  {directory ? (
+                    <ChevronRight
+                      className={`size-3 shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
+                    />
+                  ) : (
+                    <span className="w-3 shrink-0" />
+                  )}
+                  {entry.kind === "file" ? (
+                    <FileTypeIcon path={entry.name} />
+                  ) : (
+                    <Icon
+                      aria-hidden="true"
+                      className="size-[20px] shrink-0 text-muted-foreground"
+                    />
+                  )}
+                  <span className="truncate">{entry.name}</span>
+                </button>
+              </SidebarTooltip>
               {directory && open && (
                 <Directory
                   project={project}

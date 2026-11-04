@@ -60,7 +60,7 @@ export function MergeDialog({
           <DialogTitle>Merge pull request #{number}?</DialogTitle>
           <DialogDescription>
             {detail
-              ? `${detail.title} · ${detail.headBranch} into ${detail.baseBranch}`
+              ? `${detail.title}: ${detail.headBranch} into ${detail.baseBranch}`
               : "Checking the pull request…"}
           </DialogDescription>
         </DialogHeader>

@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import type { AgentInfo } from "@concors/protocol";
 import {
   hasConversation,
+  providerState,
   setAsideConversation,
   switchConfirmation,
   switchDescription,
@@ -31,6 +32,13 @@ it("finds the conversation a pane set aside for a provider, and nothing from oth
   expect(switchDescription(agents, claude, "opencode")).toBe(
     "Starts a new conversation in this pane",
   );
+});
+
+it("labels a provider only by a state worth noting", () => {
+  const update = { updateAvailable: true };
+  expect(providerState({})).toBeUndefined();
+  expect(providerState({ version: update })).toBe("Update available");
+  expect(providerState({ installed: false, version: update })).toBe("Not installed");
 });
 
 it("only confirms switches that would set a conversation with content aside", () => {

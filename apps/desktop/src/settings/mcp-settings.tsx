@@ -75,7 +75,7 @@ export function McpSettings() {
   return (
     <Section
       title="MCP servers"
-      description="Tools every agent on this machine can use: Claude Code, Codex, OpenCode and ACP agents. Each agent also keeps the MCP servers in its own configuration on the machine."
+      description="Tools every agent on this machine can use."
       actions={
         <Button
           variant="outline"
@@ -152,9 +152,7 @@ export function McpSettings() {
       )}
       {supported && (
         <p className="mt-4 text-sm text-muted-foreground">
-          Agents load MCP servers when they start, so a change restarts idle agents; their
-          conversations are kept. Pi manages MCP itself, and Codex uses HTTP and command servers but
-          not SSE.
+          A change restarts idle agents. Their conversations are kept.
         </p>
       )}
       {error && (

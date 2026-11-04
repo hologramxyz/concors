@@ -43,7 +43,7 @@ export function SshKeysSection({ organization }: SshKeysSectionProps) {
   return (
     <Section
       title="SSH keys"
-      description="Keys for connecting to your machines from your own terminal. You don't need one to use your machines in Concors. Keys you add or remove reach your running machines within a few seconds."
+      description="Keys for connecting to your machines from your own terminal."
     >
       {error && (
         <p role="alert" className="py-2 text-sm text-destructive">
@@ -56,9 +56,7 @@ export function SshKeysSection({ organization }: SshKeysSectionProps) {
             Loading keys…
           </p>
         ) : keys !== null && keys.length === 0 ? (
-          <p className="p-4 text-sm text-muted-foreground">
-            No keys yet. Add one only if you want to connect from your own terminal.
-          </p>
+          <p className="p-4 text-sm text-muted-foreground">No keys yet.</p>
         ) : (
           <ul className="flex flex-col divide-y">
             {(keys ?? []).map((key) => (
@@ -71,9 +69,12 @@ export function SshKeysSection({ organization }: SshKeysSectionProps) {
                       <Badge variant="secondary">This computer</Badge>
                     )}
                   </div>
-                  <div className="selectable mt-0.5 truncate text-xs text-muted-foreground">
-                    <Mono>{key.type}</Mono> · <Mono>{key.fingerprint}</Mono> · added{" "}
-                    {formatDate(key.createdAt)}
+                  <div className="selectable mt-0.5 flex gap-2 truncate text-xs text-muted-foreground">
+                    <Mono>{key.type}</Mono>
+                    <span className="min-w-0 truncate">
+                      <Mono>{key.fingerprint}</Mono>
+                    </span>
+                    <span className="shrink-0">Added {formatDate(key.createdAt)}</span>
                   </div>
                 </div>
                 <Button

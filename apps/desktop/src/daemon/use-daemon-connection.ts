@@ -34,6 +34,11 @@ export interface DaemonConnectionHandle {
   readonly link: "connected" | "reconnecting" | "offline";
   /** A failure that needs the user; transient errors while reconnecting are not reported. */
   readonly error: string | null;
+  /**
+   * This machine could not be reached, as opposed to still being reached at launch. It holds
+   * through the retries that follow a failure, until the connection is ready again.
+   */
+  readonly failed: boolean;
   /** Retry immediately instead of waiting for the current backoff. */
   readonly reconnectNow: () => void;
 }
@@ -134,6 +139,11 @@ export function useDaemonConnection(
   }, [restoring, snapshot.restoringSince]);
 
   const { state: current, transport } = snapshot;
+  const error = current.status === "error" && restoring === null ? current.error.message : null;
+  const failing = error !== null || (restoring !== null && noticed === restoring);
+  const [failedKey, setFailedKey] = useState<string | null>(null);
+  if (failing && failedKey !== key) setFailedKey(key);
+  else if (current.status === "ready" && failedKey === key) setFailedKey(null);
   return {
     state: current,
     transport: transport?.endpoint.url === endpoint?.url ? transport : null,
@@ -159,7 +169,8 @@ export function useDaemonConnection(
           : noticed === restoring
             ? "reconnecting"
             : "connected",
-    error: current.status === "error" && restoring === null ? current.error.message : null,
+    error,
+    failed: failing || failedKey === key,
     reconnectNow: () => pool.reconnect(key),
   };
 }

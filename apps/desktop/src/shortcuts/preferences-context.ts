@@ -1,7 +1,8 @@
 import { createContext, useContext } from "react";
+import { isTauri } from "@/tauri";
 import type { ShortcutOverrides } from "@concors/client-core";
 import type { CommandId } from "./bindings";
-import { bindingLabel, parseOverrides, type Keymap } from "./keymap";
+import { bindingLabel, mainBinding, parseOverrides, type Keymap } from "./keymap";
 export const SHORTCUT_STORAGE_KEY = "concors.shortcuts.v1";
 export function readShortcutPreferences(storage: Pick<Storage, "getItem">): ShortcutOverrides {
   try {
@@ -26,8 +27,15 @@ export function useShortcutPreferences() {
   if (!value) throw new Error("ShortcutProvider is missing");
   return value;
 }
-/** Menu hints subscribe to the same bindings used by keyboard dispatch. */
+/** The shortcut menus, tooltips and the tour show for a command, among those dispatch accepts. */
+export function useMainBinding(id: CommandId) {
+  return mainBinding(useShortcutPreferences().keymap[id], isTauri());
+}
+/** Shortcuts as text subscribe to the same bindings used by keyboard dispatch. */
 export function useShortcutLabels() {
   const { keymap, mac } = useShortcutPreferences();
-  return (id: CommandId) => (keymap[id][0] ? bindingLabel(keymap[id][0], mac) : "Unassigned");
+  return (id: CommandId) => {
+    const binding = mainBinding(keymap[id], isTauri());
+    return binding ? bindingLabel(binding, mac) : "Unassigned";
+  };
 }

@@ -48,18 +48,16 @@ export function workspaceEntries(
           const agent = candidate?.projectId === project.id ? candidate : undefined;
           const label = pane.terminalProfile?.name ?? profileNames[pane.profile];
           const name = tabTitle(tab, agents);
-          const title = panes.length > 1 ? `${name} · ${index + 1}` : name;
-          const context = [project.name, pane.name ?? agent?.name ?? label];
-          if (agent && agent.name !== (agent.providerLabel ?? agent.provider))
-            context.push(agent.providerLabel ?? agent.provider);
+          const title = panes.length > 1 ? `${name} ${index + 1}` : name;
           return {
             id: `pane:${project.id}:${tab.id}:${pane.id}`,
             kind: "pane",
             title,
-            detail: context.join(" · "),
+            detail: project.name,
             keywords: [
               "tab pane",
               pane.name,
+              agent?.name,
               label,
               pane.directory ?? project.directory,
               agent?.directory,
@@ -84,12 +82,13 @@ export function workspaceEntries(
           id: `closed-chat:${agent.id}`,
           kind: "closed-chat",
           title,
-          detail: [projectName, agent.providerLabel ?? agent.provider].join(" · "),
+          detail: projectName,
           keywords: [
             "agent chat closed",
             agent.name,
             agent.directory,
             agent.provider,
+            agent.providerLabel,
             agent.engine,
             agent.model,
             agent.tabName,

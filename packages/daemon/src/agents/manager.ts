@@ -337,6 +337,14 @@ export class AgentManager {
       status: "completed",
     });
   }
+  /**
+   * A change that is not activity of the chat's own, such as its CLI starting because someone
+   * opened it: the chat keeps its time and its place among the recent ones. The time is read here
+   * rather than passed in, because a message sent while the CLI starts has already moved it on.
+   */
+  private updateQuietly(id: string, patch: Partial<AgentInfo>): AgentInfo {
+    return this.update(id, { ...patch, updatedAt: this.#store.agent(id).updatedAt });
+  }
   private update(id: string, patch: Partial<AgentInfo>): AgentInfo {
     const prior = this.#store.agent(id);
     const next = {
@@ -435,12 +443,16 @@ export class AgentManager {
       this.#runtimes.delete(id);
       void runtime.provider.close().catch(() => undefined);
     }
+    const current = this.#store.agent(id);
+    // A turn that fails is news; a resting chat whose CLI could not start, or stopped, is not.
+    const activity = ["working", "needs_input"].includes(current.status);
     this.update(id, {
       status: "failed",
       backgroundAgents: 0,
       queuePaused: true,
-      pending: this.#store.agent(id).pending.filter((p) => p.asynchronous),
+      pending: current.pending.filter((p) => p.asynchronous),
       error: (error instanceof Error ? error.message : String(error)).slice(0, 4000),
+      ...(activity ? {} : { updatedAt: current.updatedAt }),
     });
   }
   /**
@@ -557,7 +569,7 @@ export class AgentManager {
         response = ThreadResponse.parse(await provider.request("thread/start", options));
       }
       if (runtime.closed || this.#closed) throw new Error("Agent connection ended");
-      this.update(id, {
+      this.updateQuietly(id, {
         threadId: response.thread.id,
         model: response.model ?? info.model,
         engine: this.registry.config(info.provider).engine,
@@ -568,7 +580,7 @@ export class AgentManager {
           await provider.request("model/list", {}),
           this.registry.config(info.provider).models,
         );
-        this.update(id, { models });
+        this.updateQuietly(id, { models });
         const revision = `${this.registry.revision}:${this.catalogGeneration}`;
         const result: AgentProviderCatalog = {
           id: info.provider,
@@ -591,12 +603,12 @@ export class AgentManager {
         const modes = z
           .object({ data: z.array(z.object({ mode: z.string().nullable().optional() })) })
           .parse(await provider.request("collaborationMode/list", {}));
-        this.update(id, { supportsPlan: modes.data.some((mode) => mode.mode === "plan") });
+        this.updateQuietly(id, { supportsPlan: modes.data.some((mode) => mode.mode === "plan") });
       } catch {
-        this.update(id, { supportsPlan: false });
+        this.updateQuietly(id, { supportsPlan: false });
       }
       try {
-        this.update(id, {
+        this.updateQuietly(id, {
           controls: withClear(
             AgentControlsSchema.parse(await provider.request("session/controls")),
             info.engine ?? info.provider,
@@ -2215,7 +2227,7 @@ export class AgentManager {
       return;
     }
     if (method === "session/models/updated") {
-      this.update(id, {
+      this.updateQuietly(id, {
         models: parseModels(params["models"], this.registry.config(info.provider).models),
       });
       return;
@@ -2230,7 +2242,7 @@ export class AgentManager {
         AgentControlsSchema.parse(params["controls"]),
         info.engine ?? info.provider,
       );
-      this.update(id, {
+      this.updateQuietly(id, {
         controls,
         ...(controls.currentMode
           ? {

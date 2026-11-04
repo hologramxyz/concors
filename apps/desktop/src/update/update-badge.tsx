@@ -10,7 +10,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { APP_VERSION } from "@/version";
 import { cn } from "cn";
 
@@ -43,31 +43,26 @@ export function UpdateBadge({
 
   return (
     <Dialog open={open} onOpenChange={(next) => !busy && setOpen(next)}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <DialogTrigger
-            aria-label={label}
-            className={cn(
-              "flex w-full items-center gap-2 rounded-md px-2 py-2 text-ui text-sidebar-foreground hover:bg-sidebar-accent",
-              collapsed && "sidebar-rail-control justify-center px-0",
-            )}
-          >
-            {busy ? (
-              <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden="true" />
-            ) : (
-              <ArrowUpCircle className="size-4 shrink-0 text-primary" aria-hidden="true" />
-            )}
-            {!collapsed && (
-              <span className="flex-1 truncate text-left">
-                {busy ? "Installing…" : `Update to ${state.update.version}`}
-              </span>
-            )}
-          </DialogTrigger>
-        </TooltipTrigger>
-        <TooltipContent side={collapsed ? "right" : "top"} sideOffset={6}>
-          {label}
-        </TooltipContent>
-      </Tooltip>
+      <SidebarTooltip content={label}>
+        <DialogTrigger
+          aria-label={label}
+          className={cn(
+            "flex w-full items-center gap-2 rounded-md px-2 py-2 text-ui text-sidebar-foreground hover:bg-sidebar-accent",
+            collapsed && "sidebar-rail-control justify-center px-0",
+          )}
+        >
+          {busy ? (
+            <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden="true" />
+          ) : (
+            <ArrowUpCircle className="size-4 shrink-0 text-primary" aria-hidden="true" />
+          )}
+          {!collapsed && (
+            <span className="flex-1 truncate text-left">
+              {busy ? "Installing…" : `Update to ${state.update.version}`}
+            </span>
+          )}
+        </DialogTrigger>
+      </SidebarTooltip>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Concors {state.update.version} is available</DialogTitle>

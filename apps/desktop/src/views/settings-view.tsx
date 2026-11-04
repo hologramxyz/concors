@@ -151,11 +151,5 @@ export function SettingsView({
     }
   }
 
-  return (
-    <div
-      className={`mx-auto w-full px-4 py-6 sm:px-6 ${page === "subscriptions" ? "max-w-5xl" : "max-w-3xl"}`}
-    >
-      {content}
-    </div>
-  );
+  return <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">{content}</div>;
 }

@@ -1,7 +1,9 @@
 import { GitHubIcon } from "./icon";
 import { RefreshCw } from "lucide-react";
+import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import type { useGitHub } from "./use-github";
 export function GitHubConnection({ github }: { readonly github: ReturnType<typeof useGitHub> }) {
   const { status, accounts, error, busy, waiting } = github;
@@ -11,37 +13,47 @@ export function GitHubConnection({ github }: { readonly github: ReturnType<typeo
       <div
         role="group"
         aria-label="GitHub integration"
-        className="grid gap-4 rounded-xl border p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
+        className={cn(
+          "grid gap-4 rounded-xl border p-4",
+          // A connected row keeps its actions on their own line, so the account name shows in full.
+          !status?.connected && "md:grid-cols-[minmax(0,1fr)_auto] md:items-center",
+        )}
       >
         <div className="flex min-w-0 items-start gap-3">
           <GitHubIcon className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-medium">
-                {status?.connected ? `GitHub · ${status.login}` : "GitHub"}
+              <p className="flex min-w-0 flex-wrap items-baseline gap-x-2 text-sm font-medium">
+                GitHub
+                {status?.connected && (
+                  <span className="min-w-0 font-normal break-all text-muted-foreground">
+                    {status.login}
+                  </span>
+                )}
               </p>
               {(status?.connected || identityConnected) && (
                 <Badge variant="secondary">Connected</Badge>
               )}
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {!status
-                ? error
-                  ? "Could not check connection."
-                  : "Checking connection…"
-                : !status.configured
-                  ? "GitHub integration is not available yet."
-                  : status.connected
-                    ? accounts?.length === 0
+            {/* Connected says so in its badge; there is only more to say when it needs doing. */}
+            {!(status?.connected && accounts?.length !== 0) && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {!status
+                  ? error
+                    ? "Could not check connection."
+                    : "Checking connection…"
+                  : !status.configured
+                    ? "GitHub integration is not available yet."
+                    : status.connected
                       ? "GitHub connected. Choose an account or organization to access its repositories."
-                      : "Connected across your VPSs."
-                    : identityConnected
-                      ? "Connected for sign-in. Enable repository access to use private repositories on your VPSs."
-                      : "Connect GitHub, then choose your accounts and repositories."}
-            </p>
+                      : identityConnected
+                        ? "Connected for sign-in. Enable repository access to use private repositories on your VPSs."
+                        : "Connect GitHub, then choose your accounts and repositories."}
+              </p>
+            )}
           </div>
         </div>
-        <div className="flex flex-wrap gap-2 md:justify-end">
+        <div className={cn("flex flex-wrap gap-2", status?.connected ? "pl-8" : "md:justify-end")}>
           {status?.configured && (
             <Button
               type="button"
@@ -78,15 +90,17 @@ export function GitHubConnection({ github }: { readonly github: ReturnType<typeo
               </Button>
             </>
           )}
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            aria-label="Refresh GitHub"
-            onClick={github.refresh}
-          >
-            <RefreshCw className="size-4" />
-          </Button>
+          <SidebarTooltip place="above" content="Refresh GitHub">
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              aria-label="Refresh GitHub"
+              onClick={github.refresh}
+            >
+              <RefreshCw className="size-4" />
+            </Button>
+          </SidebarTooltip>
         </div>
       </div>
       {status?.connected && (
@@ -103,10 +117,6 @@ export function GitHubConnection({ github }: { readonly github: ReturnType<typeo
               ))}
             </div>
           ) : null}
-          <p className="text-xs text-muted-foreground">
-            Missing an organization or repository? Add it on GitHub and choose all repositories or
-            specific ones. Some organizations require an owner’s approval.
-          </p>
         </div>
       )}
       {waiting && (

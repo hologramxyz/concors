@@ -56,10 +56,8 @@ export function currentWindow(window: AgentUsageWindow, now = Date.now()): Agent
   return hasReset(window, now) ? { ...window, usedPercent: null } : window;
 }
 
-/** The trailing text of a bar: "42% · resets in 2h 14m". */
+/** The trailing text of a bar: "42%, resets in 2h 14m". */
 export function windowSummary(window: AgentUsageWindow, now = Date.now()): string {
   const reset = resetLabel(window.resetsAt, now);
-  return reset
-    ? `${percentLabel(window.usedPercent)} · ${reset}`
-    : percentLabel(window.usedPercent);
+  return reset ? `${percentLabel(window.usedPercent)}, ${reset}` : percentLabel(window.usedPercent);
 }

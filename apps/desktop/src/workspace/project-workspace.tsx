@@ -5,7 +5,7 @@ import { FileTab, FileTabLabel } from "@/files/file-tab";
 import { useFiles, fileScope } from "@/files/context";
 import { ProjectFileLinks } from "@/files/provider";
 import { useCommand } from "@/shortcuts/context";
-import { useShortcutLabels } from "@/shortcuts/preferences-context";
+import { MenuKeyChips } from "@/shortcuts/key-chips";
 import type { PaneFocusRequest } from "./session-pane";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { NewTabMenu } from "./new-tab-menu";
@@ -26,8 +26,10 @@ import { cn } from "cn";
 import { PaneLayout } from "./pane-layout";
 import { VisitedTab } from "./visited-tab";
 import { useRetainedProjects } from "./retained-projects";
-import { CloseTabButton, LatestAgents, TabButton } from "./tab-button";
+import { CloseTabButton, LatestAgents, TabButton, TabTooltip } from "./tab-button";
 import { tabTitle } from "./tab-title";
+import { TabStrip } from "./tab-strip";
+import { tabDragEdgeScroll } from "./tab-strip-scroll";
 
 /** How long a tab takes to shrink away; matches `tab-close` in styles.css. */
 const TAB_CLOSE_MS = 180;
@@ -67,6 +69,14 @@ function tabShift({ from, to, slots, gap }: TabDrag, index: number) {
   return 0;
 }
 
+/** Where a dragged tab will land, in tab list coordinates. */
+function tabLandingSlot(drag: TabDrag) {
+  const source = drag.slots[drag.from];
+  if (!source) return null;
+  const left = source.left + tabShift(drag, drag.from);
+  return { left, right: left + source.width };
+}
+
 export function ProjectWorkspace({
   workspace,
   sidebarToggle,
@@ -91,7 +101,6 @@ export function ProjectWorkspace({
   onAddProject: () => void;
   onOpenFolder: (mode: "open" | "clone", trigger?: HTMLElement | null) => void;
 }) {
-  const shortcutLabel = useShortcutLabels();
   const connection = useContext(TerminalConnectionContext);
   const files = useFiles();
   const windowChrome = useWindowChrome();
@@ -248,12 +257,7 @@ export function ProjectWorkspace({
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
         <FolderOpen className="size-10 text-muted-foreground/50" />
-        <div>
-          <h2 className="text-lg font-medium">Start working on this machine</h2>
-          <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-            Open a terminal and navigate to your code. Your workspace follows its folder.
-          </p>
-        </div>
+        <h2 className="text-lg font-medium">Start working on this machine</h2>
         <Button onClick={onAddProject} disabled={!canEdit}>
           <Plus />
           New workspace
@@ -337,16 +341,18 @@ export function ProjectWorkspace({
         >
           {sidebarToggle}
           <div
-            ref={tabList}
-            className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
+            className="flex min-w-0 flex-1 items-center gap-1"
             data-tauri-drag-region={titleBar ? "true" : undefined}
             aria-label="Project tabs"
             onDragOver={(event) => {
               const drag = tabDrag;
-              if (!canEdit || !drag || drag.dropped || drag.projectId !== project.id) return;
+              const list = tabList.current;
+              if (!canEdit || !list || !drag || drag.dropped || drag.projectId !== project.id)
+                return;
               event.preventDefault();
               event.dataTransfer.dropEffect = "move";
-              const to = tabDropIndex(drag, tabListX(event.currentTarget, event.clientX));
+              list.scrollLeft += tabDragEdgeScroll(event.clientX, list.getBoundingClientRect());
+              const to = tabDropIndex(drag, tabListX(list, event.clientX));
               if (to !== drag.to) setTabDrag({ ...drag, to });
             }}
             onDrop={(event) => {
@@ -364,149 +370,172 @@ export function ProjectWorkspace({
               });
             }}
           >
-            {project.tabs.map((tab, index) => (
-              <ContextMenu.Root key={tab.id}>
-                <ContextMenu.Trigger asChild>
-                  <div
-                    data-tab-id={tab.id}
-                    onAnimationEnd={(event) => {
-                      if (event.animationName === "tab-close") sendClose(tab.id);
-                    }}
-                    draggable={canEdit && renaming?.tabId !== tab.id}
-                    onDragStart={(event) => {
-                      event.dataTransfer.effectAllowed = "move";
-                      event.dataTransfer.setData("text/plain", tab.id);
-                      const list = tabList.current;
-                      if (!list) return;
-                      const slots = [...list.querySelectorAll("[data-tab-id]")].map((element) => {
-                        const rect = element.getBoundingClientRect();
-                        return { left: tabListX(list, rect.left), width: rect.width };
-                      });
-                      const drag: TabDrag = {
-                        projectId: project.id,
-                        tabId: tab.id,
-                        from: index,
-                        to: index,
-                        slots,
-                        gap: parseFloat(getComputedStyle(list).columnGap) || 0,
-                        dropped: false,
-                      };
-                      // Next frame, so the drag image is the tab and not its grey slot.
-                      tabDragStart.current = requestAnimationFrame(() => {
+            <TabStrip
+              listRef={tabList}
+              scopeId={project.id}
+              activeId={activeFile?.id ?? selected?.id}
+              order={[...project.tabs, ...projectFiles].map((item) => item.id).join()}
+              dragSlot={
+                // Only the active tab: following another dragged tab would drag the strip away
+                // from the active one. The active tab comes back into view on the drop.
+                tabDrag &&
+                !tabDrag.dropped &&
+                !activeFile &&
+                tabDrag.projectId === project.id &&
+                tabDrag.tabId === selected?.id
+                  ? tabLandingSlot(tabDrag)
+                  : null
+              }
+              dragRegion={titleBar}
+            >
+              {project.tabs.map((tab, index) => (
+                <ContextMenu.Root key={tab.id}>
+                  <ContextMenu.Trigger asChild>
+                    <div
+                      data-tab-id={tab.id}
+                      data-active-tab={!activeFile && selected?.id === tab.id ? "" : undefined}
+                      onAnimationEnd={(event) => {
+                        if (event.animationName === "tab-close") sendClose(tab.id);
+                      }}
+                      draggable={canEdit && renaming?.tabId !== tab.id}
+                      onDragStart={(event) => {
+                        event.dataTransfer.effectAllowed = "move";
+                        event.dataTransfer.setData("text/plain", tab.id);
+                        const list = tabList.current;
+                        if (!list) return;
+                        const slots = [...list.querySelectorAll("[data-tab-id]")].map((element) => {
+                          const rect = element.getBoundingClientRect();
+                          return { left: tabListX(list, rect.left), width: rect.width };
+                        });
+                        const drag: TabDrag = {
+                          projectId: project.id,
+                          tabId: tab.id,
+                          from: index,
+                          to: index,
+                          slots,
+                          gap:
+                            parseFloat(
+                              getComputedStyle(event.currentTarget.parentElement ?? list).columnGap,
+                            ) || 0,
+                          dropped: false,
+                        };
+                        // Next frame, so the drag image is the tab and not its grey slot.
+                        tabDragStart.current = requestAnimationFrame(() => {
+                          tabDragStart.current = null;
+                          setTabDrag(drag);
+                        });
+                      }}
+                      onDragEnd={() => {
+                        if (tabDragStart.current != null)
+                          cancelAnimationFrame(tabDragStart.current);
                         tabDragStart.current = null;
-                        setTabDrag(drag);
-                      });
-                    }}
-                    onDragEnd={() => {
-                      if (tabDragStart.current != null) cancelAnimationFrame(tabDragStart.current);
-                      tabDragStart.current = null;
-                      setTabDrag((drag) => (drag?.dropped ? drag : null));
-                    }}
-                    style={
-                      {
-                        transform:
-                          tabDrag?.projectId === project.id
-                            ? `translateX(${tabShift(tabDrag, index)}px)`
-                            : undefined,
-                        "--tab-width": `${closingTabs.get(tab.id) ?? 0}px`,
-                      } as React.CSSProperties
-                    }
-                    className={cn(
-                      "project-tab group flex shrink-0 items-center rounded-md border",
-                      !activeFile && selected?.id === tab.id
-                        ? "border-transparent bg-muted"
-                        : "border-transparent",
-                      closingTabs.has(tab.id) && "tab-closing",
-                      tabDrag && !tabDrag.dropped && "tab-sliding",
-                      tabDrag?.tabId === tab.id && "bg-muted-foreground/20 *:invisible",
-                    )}
-                  >
-                    {renaming?.tabId === tab.id ? (
-                      <input
-                        aria-label="Tab name"
-                        autoFocus
-                        value={renaming.value}
-                        maxLength={120}
-                        size={Math.max(4, Math.min(40, renaming.value.length + 1))}
-                        onFocus={(event) => event.currentTarget.select()}
-                        onChange={(event) =>
-                          setRename({ tabId: tab.id, value: event.target.value })
-                        }
-                        onBlur={commitRename}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") {
-                            event.preventDefault();
-                            commitRename();
-                          } else if (event.key === "Escape") {
-                            event.preventDefault();
-                            setRename(null);
+                        setTabDrag((drag) => (drag?.dropped ? drag : null));
+                      }}
+                      style={
+                        {
+                          transform:
+                            tabDrag?.projectId === project.id
+                              ? `translateX(${tabShift(tabDrag, index)}px)`
+                              : undefined,
+                          "--tab-width": `${closingTabs.get(tab.id) ?? 0}px`,
+                        } as React.CSSProperties
+                      }
+                      className={cn(
+                        "project-tab group flex shrink-0 items-center rounded-md border",
+                        !activeFile && selected?.id === tab.id
+                          ? "border-transparent bg-muted"
+                          : "border-transparent",
+                        closingTabs.has(tab.id) && "tab-closing",
+                        tabDrag && !tabDrag.dropped && "tab-sliding",
+                        tabDrag?.tabId === tab.id && "bg-muted-foreground/20 *:invisible",
+                      )}
+                    >
+                      {renaming?.tabId === tab.id ? (
+                        <input
+                          aria-label="Tab name"
+                          autoFocus
+                          value={renaming.value}
+                          maxLength={120}
+                          size={Math.max(4, Math.min(40, renaming.value.length + 1))}
+                          onFocus={(event) => event.currentTarget.select()}
+                          onChange={(event) =>
+                            setRename({ tabId: tab.id, value: event.target.value })
                           }
-                        }}
-                        onPointerDown={(event) => event.stopPropagation()}
-                        onDoubleClick={(event) => event.stopPropagation()}
-                        className="max-w-44 rounded bg-background px-2 py-0.5 text-ui ring-1 ring-ring outline-none"
-                      />
-                    ) : (
-                      <TabButton
+                          onBlur={commitRename}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              commitRename();
+                            } else if (event.key === "Escape") {
+                              event.preventDefault();
+                              setRename(null);
+                            }
+                          }}
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onDoubleClick={(event) => event.stopPropagation()}
+                          className="max-w-44 rounded bg-background px-2 py-0.5 text-ui ring-1 ring-ring outline-none"
+                        />
+                      ) : (
+                        <TabTooltip tab={tab}>
+                          <TabButton
+                            tab={tab}
+                            selected={!activeFile && selected?.id === tab.id}
+                            data-shortcut-tab-id={tab.id}
+                            onDoubleClick={() => startRename(tab)}
+                            disabled={!connected}
+                            onClick={() => {
+                              files.select(scope, null);
+                              if (!activeFile && selected?.id === tab.id) return;
+                              onCommand({
+                                kind: "selection.set",
+                                projectId: project.id,
+                                tabId: tab.id,
+                              });
+                            }}
+                          />
+                        </TabTooltip>
+                      )}
+                      <CloseTabButton
                         tab={tab}
-                        selected={!activeFile && selected?.id === tab.id}
-                        data-shortcut-tab-id={tab.id}
-                        title={`Drag to reorder. Double-click to rename. Rename: ${shortcutLabel("rename-tab")}. Move left: ${shortcutLabel("move-tab-left")}. Move right: ${shortcutLabel("move-tab-right")}.`}
-                        onDoubleClick={() => startRename(tab)}
+                        disabled={!canEdit}
+                        onClick={() => closeTab(tab.id)}
+                        className="rounded p-1 text-muted-foreground opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 hover:text-foreground [@media(hover:none)]:opacity-100"
+                      >
+                        <X className="size-3" />
+                      </CloseTabButton>
+                    </div>
+                  </ContextMenu.Trigger>
+                  <ContextMenu.Portal>
+                    <ContextMenu.Content
+                      className="z-50 min-w-40 rounded-[calc(var(--radius)+(0.25rem+1px)*var(--concentric))] border bg-popover p-1 text-ui text-popover-foreground shadow-md"
+                      onCloseAutoFocus={(event) => {
+                        // Keep focus on the rename input instead of returning it to the tab.
+                        if (renameRef.current?.tabId === tab.id) event.preventDefault();
+                      }}
+                    >
+                      <ContextMenu.Item
                         disabled={!connected}
-                        onClick={() => {
-                          files.select(scope, null);
-                          if (!activeFile && selected?.id === tab.id) return;
-                          onCommand({
-                            kind: "selection.set",
-                            projectId: project.id,
-                            tabId: tab.id,
-                          });
-                        }}
-                      />
-                    )}
-                    <CloseTabButton
-                      tab={tab}
-                      disabled={!canEdit}
-                      onClick={() => closeTab(tab.id)}
-                      className="rounded p-1 text-muted-foreground opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 hover:text-foreground [@media(hover:none)]:opacity-100"
-                    >
-                      <X className="size-3" />
-                    </CloseTabButton>
-                  </div>
-                </ContextMenu.Trigger>
-                <ContextMenu.Portal>
-                  <ContextMenu.Content
-                    className="z-50 min-w-40 rounded-[calc(var(--radius)+(0.25rem+1px)*var(--concentric))] border bg-popover p-1 text-ui text-popover-foreground shadow-md"
-                    onCloseAutoFocus={(event) => {
-                      // Keep focus on the rename input instead of returning it to the tab.
-                      if (renameRef.current?.tabId === tab.id) event.preventDefault();
-                    }}
-                  >
-                    <ContextMenu.Item
-                      disabled={!connected}
-                      onSelect={() => startRename(tab)}
-                      className="flex items-center gap-2 rounded px-2 py-1.5 outline-none focus:bg-accent data-disabled:opacity-40"
-                    >
-                      <Pencil className="size-4" /> Rename tab
-                    </ContextMenu.Item>
-                    <ContextMenu.Item
-                      disabled={!canEdit}
-                      onSelect={() => closeTab(tab.id)}
-                      className="flex items-center gap-2 rounded px-2 py-1.5 outline-none focus:bg-accent data-disabled:opacity-40"
-                    >
-                      <X className="size-4" /> Close tab
-                      <span aria-hidden="true" className="ml-auto text-xs text-muted-foreground">
-                        {shortcutLabel("close-tab")}
-                      </span>
-                    </ContextMenu.Item>
-                  </ContextMenu.Content>
-                </ContextMenu.Portal>
-              </ContextMenu.Root>
-            ))}
-            {projectFiles.map((file) => (
-              <FileTabLabel key={file.id} file={file} />
-            ))}
+                        onSelect={() => startRename(tab)}
+                        className="flex items-center gap-2 rounded px-2 py-1.5 outline-none focus:bg-accent data-disabled:opacity-40"
+                      >
+                        <Pencil className="size-4" /> Rename tab
+                      </ContextMenu.Item>
+                      <ContextMenu.Item
+                        disabled={!canEdit}
+                        onSelect={() => closeTab(tab.id)}
+                        className="flex items-center gap-2 rounded px-2 py-1.5 outline-none focus:bg-accent data-disabled:opacity-40"
+                      >
+                        <X className="size-4" /> Close tab
+                        <MenuKeyChips id="close-tab" />
+                      </ContextMenu.Item>
+                    </ContextMenu.Content>
+                  </ContextMenu.Portal>
+                </ContextMenu.Root>
+              ))}
+              {projectFiles.map((file) => (
+                <FileTabLabel key={file.id} file={file} />
+              ))}
+            </TabStrip>
             <NewTabMenu
               keyboard
               disabled={!canEdit || launching || project.tabs.length >= 32}

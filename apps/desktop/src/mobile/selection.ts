@@ -11,7 +11,7 @@ export function projectPanes(project: WorkspaceProject) {
       pane,
       // Use the shared tab name and display position; never manufacture local-only names or
       // change the shared tab to flatten it. A pane's own name, when set, replaces its profile.
-      label: panes.length === 1 ? tab.name : `${tab.name} · ${index + 1}`,
+      label: panes.length === 1 ? tab.name : `${tab.name} ${index + 1}`,
       profileLabel: pane.name ?? pane.terminalProfile?.name ?? PROFILE_LABELS[pane.profile],
     }));
   });

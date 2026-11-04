@@ -36,7 +36,7 @@ export function usageGlance(usage: AgentPlanUsage | null | undefined): string | 
     .sort((a, b) => (b.usedPercent ?? 0) - (a.usedPercent ?? 0))
     .slice(0, 2);
   return windows.length
-    ? windows.map((w) => `${w.label} ${percentLabel(w.usedPercent)}`).join(" · ")
+    ? windows.map((w) => `${w.label} ${percentLabel(w.usedPercent)}`).join(", ")
     : null;
 }
 
@@ -45,5 +45,5 @@ export function limitHeadline(engine: string, resetsAt: string | null, now = Dat
     engine === "codex" ? "ChatGPT account" : engine === "claude" ? "Claude account" : "account";
   const reset = resetLabel(resetsAt, now);
   // A reset already passed says nothing useful here; trying again is the answer then.
-  return `This ${account} reached its usage limit${reset && reset !== "resetting now" ? ` · ${reset}` : ""}`;
+  return `This ${account} reached its usage limit${reset && reset !== "resetting now" ? `, ${reset}` : ""}`;
 }

@@ -285,6 +285,101 @@ test("create a workspace VPS with a test card and keep billing out of Account", 
   await expect(page.getByRole("button", { name: /Cancel build-agent|Delete/ })).toHaveCount(0);
 });
 
+test("badges share one size, with room above and below their text", async ({ page }) => {
+  await billingApi(page);
+  await page.route("**/api/v1/github/**", (route) =>
+    route.fulfill({
+      headers: {
+        "access-control-allow-origin": route.request().headers()["origin"] ?? "*",
+        "access-control-allow-credentials": "true",
+        "access-control-allow-headers": "authorization, content-type",
+      },
+      json: {
+        configured: true,
+        identityConnected: true,
+        connected: true,
+        login: "alice",
+        updatedAt: "2026-09-12T00:00:00Z",
+        manageUrl: "https://github.com/apps/concors-test/installations/new",
+        accounts: [{ id: 1, login: "alice" }],
+        nextPage: null,
+      },
+    }),
+  );
+  const paddings = new Set<string>();
+  const measure = async (name: string, muted: boolean) => {
+    const badge = page.locator('[data-slot="badge"]', { hasText: name }).first();
+    await expect(badge).toBeVisible();
+    const box = await badge.evaluate((node) => {
+      const style = getComputedStyle(node);
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      const text = range.getBoundingClientRect();
+      const outer = node.getBoundingClientRect();
+      return {
+        height: outer.height,
+        above: text.top - outer.top,
+        padding: style.paddingLeft,
+        fontSize: style.fontSize,
+        color: style.color,
+        muted: (() => {
+          const probe = document.createElement("span");
+          probe.className = "text-muted-foreground";
+          document.body.append(probe);
+          const color = getComputedStyle(probe).color;
+          probe.remove();
+          return color;
+        })(),
+      };
+    });
+    expect(box.height, name).toBe(22);
+    expect(box.above, name).toBeGreaterThanOrEqual(2);
+    paddings.add(box.padding);
+    if (muted) expect(box.color, name).toBe(box.muted);
+    // On a white card the plain secondary colour was all but invisible.
+    if (muted) {
+      await page.emulateMedia({ colorScheme: "light" });
+      await page.waitForTimeout(400);
+      const colors = await badge.evaluate((node) => {
+        const probe = document.createElement("span");
+        probe.className = "bg-secondary";
+        document.body.append(probe);
+        const secondary = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return { own: getComputedStyle(node).backgroundColor, secondary };
+      });
+      expect(colors.own, name).not.toBe(colors.secondary);
+    }
+    for (const colorScheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme });
+      await page.waitForTimeout(400);
+      const area = await badge.boundingBox();
+      if (!area) throw new Error(`${name} has no box`);
+      await page.screenshot({
+        path: test
+          .info()
+          .outputPath(`badge-${name.toLowerCase().replace(/ /g, "-")}-${colorScheme}.png`),
+        clip: { x: area.x - 40, y: area.y - 14, width: area.width + 80, height: area.height + 28 },
+      });
+    }
+    await page.emulateMedia({ colorScheme: "light" });
+    // Badges fade between schemes; the next one measured must not be caught mid-fade.
+    await page.waitForTimeout(400);
+  };
+  await openMachines(page);
+  await measure("Current", true);
+  await page.goto("/");
+  await page.getByRole("button", { name: "Account: E2E User" }).click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
+  const navigation = page.getByRole("navigation", { name: "Settings" });
+  await navigation.getByRole("button", { name: "Account", exact: true }).click();
+  await measure("Personal", false);
+  await measure("Connected", true);
+  await navigation.getByRole("button", { name: "Billing", exact: true }).click();
+  await measure("No card yet", true);
+  expect(paddings.size).toBe(1);
+});
+
 test("a declined payment keeps the form and does not create a VPS", async ({ page }) => {
   const state = await billingApi(page, { card: true, decline: true });
   await openCreation(page);
@@ -625,4 +720,36 @@ test("machines page says nothing about payments while the card works", async ({ 
   await expect(page.getByRole("heading", { name: "Machines", exact: true }).first()).toBeVisible();
   await expect(page.getByRole("alert", { name: "Payment failed" })).toHaveCount(0);
   await expect(page.locator("#cloud-machine-vps-1").getByText("At risk")).toHaveCount(0);
+});
+
+test("billing prices never overlap their label, at any window width", async ({ page }) => {
+  await billingApi(page, { card: true });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Account: E2E User" }).click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
+  await page
+    .getByRole("navigation", { name: "Settings" })
+    .getByRole("button", { name: "Billing", exact: true })
+    .click();
+  const row = page.locator("[data-settings-row]").filter({ hasText: "Prices" });
+  await expect(row).toContainText("/month");
+  await expect(page.getByText("Per machine, per month.")).toHaveCount(0);
+  for (const width of [1600, 1360, 1100, 900, 768, 700, 480, 390]) {
+    await page.setViewportSize({ width, height: 850 });
+    const overlap = await row.evaluate((node) => {
+      const label = node.querySelector(":scope > div:first-child")?.getBoundingClientRect();
+      if (!label) throw new Error("The Prices row has no label");
+      const box = node.getBoundingClientRect();
+      const prices = [...node.querySelectorAll(":scope > div:last-child > span > span")].map((p) =>
+        p.getBoundingClientRect(),
+      );
+      return prices.some(
+        (p) =>
+          p.right > box.right + 0.5 ||
+          p.left < box.left - 0.5 ||
+          !(p.left >= label.right || p.top >= label.bottom),
+      );
+    });
+    expect(overlap, `prices at ${width}px`).toBe(false);
+  }
 });

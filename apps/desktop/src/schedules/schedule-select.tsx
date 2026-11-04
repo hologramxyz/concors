@@ -1,0 +1,81 @@
+import { ChevronDown } from "lucide-react";
+import { useId, type ReactNode } from "react";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+export interface ScheduleSelectOption<Value extends string> {
+  value: Value;
+  label: ReactNode;
+  tooltip?: string | undefined;
+}
+
+/** A labelled field that opens the app's menu, for the choices in the schedule form. */
+export function ScheduleSelect<Value extends string>({
+  label,
+  value,
+  options,
+  placeholder,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: Value;
+  options: readonly ScheduleSelectOption<Value>[];
+  /** Shown while nothing listed is chosen. A saved choice can outlive what it pointed at. */
+  placeholder: ReactNode;
+  disabled?: boolean;
+  onChange: (value: Value) => void;
+}) {
+  const labelId = useId();
+  const chosen = options.find((option) => option.value === value);
+  return (
+    <div className="min-w-0 space-y-1.5">
+      <span id={labelId}>{label}</span>
+      <DropdownMenu>
+        <SidebarTooltip place="menu" content={chosen?.tooltip}>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              role="combobox"
+              aria-labelledby={labelId}
+              disabled={disabled}
+              className="flex h-8 min-h-0 w-full min-w-0 justify-start bg-transparent px-2.5 py-1 font-normal dark:bg-input/30"
+            >
+              <span className="flex min-w-0 flex-1 gap-2 truncate text-left">
+                {chosen ? chosen.label : placeholder}
+              </span>
+              <ChevronDown className="shrink-0 text-muted-foreground" aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+        </SidebarTooltip>
+        <DropdownMenuContent
+          align="start"
+          collisionPadding={16}
+          className="max-h-[min(16rem,var(--radix-dropdown-menu-content-available-height))]"
+        >
+          <DropdownMenuRadioGroup
+            aria-labelledby={labelId}
+            value={value}
+            onValueChange={(next) => onChange(next as Value)}
+          >
+            {options.map((option) => (
+              <SidebarTooltip key={option.value} place="menu" content={option.tooltip}>
+                <DropdownMenuRadioItem value={option.value}>
+                  <span className="flex min-w-0 flex-1 gap-2 truncate">{option.label}</span>
+                </DropdownMenuRadioItem>
+              </SidebarTooltip>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}

@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { basename, join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { managedHost } from "./support/managed-host.ts";
 import { seedProject } from "./support/projects.ts";
@@ -15,13 +15,19 @@ async function hoverControl(page: Page, control: Locator) {
   await control.hover();
 }
 
-async function expectNoSidebarTooltips(page: Page, sidebar: Locator) {
+// While the sidebar is open only its icon-only controls explain themselves; the rest are labelled.
+const ICON_ONLY = ["Search", "Collapse sidebar", "Open workspace menu"];
+
+async function expectOnlyIconControlTooltips(page: Page, sidebar: Locator) {
   await page.keyboard.press("Escape");
   for (const control of await sidebar
     .locator("button:not([data-workspace-id]):not([data-agent-id])")
     .all()) {
     // A workspace's tab list stays in place while closed, hidden once it has eased shut.
     if (!(await control.isVisible())) continue;
+    if (ICON_ONLY.includes((await control.getAttribute("aria-label")) ?? "")) continue;
+    // With no words of its own, it says what it is in a tooltip.
+    if (!(await control.innerText()).trim()) continue;
     await control.hover();
     await control.focus();
     // Focus would open an enabled tooltip immediately, even when hover is delayed.
@@ -49,7 +55,7 @@ test("a collapsed sidebar hides entirely and its toggle brings it back", async (
     const sidebar = page.getByRole("navigation", { name: "Primary" });
     const shell = page.locator(".sidebar-shell");
     await expect(sidebar.getByRole("button", { name: "Previews", exact: true })).toBeVisible();
-    await expectNoSidebarTooltips(page, sidebar);
+    await expectOnlyIconControlTooltips(page, sidebar);
     const tabs = await page.getByLabel("Project tabs", { exact: true }).boundingBox();
     await sidebar.getByRole("button", { name: "Collapse sidebar", exact: true }).click();
     await expect(shell).toHaveCSS("width", "0px");
@@ -87,10 +93,105 @@ test("a collapsed sidebar hides entirely and its toggle brings it back", async (
     await expect(page.getByRole("button", { name: "Expand sidebar", exact: true })).toHaveCount(0);
     const beta = sidebar.getByRole("button", { name: "Beta workspace", exact: true });
     await expect(beta).toHaveAttribute("aria-current", "page");
-    await expectNoSidebarTooltips(page, sidebar);
+    await expectOnlyIconControlTooltips(page, sidebar);
     await hoverControl(page, beta);
     await expect(page.getByRole("tooltip")).toContainText(join(directory, "beta"));
     expect(errors).toEqual([]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("sidebar rows open tooltips beside the sidebar and title-bar icons below themselves", async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  // Under the home folder, so its tooltip can shorten the path.
+  const directory = await mkdtemp(join(homedir(), "concors-sidebar-tooltips-"));
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Tooltip workspace", directory);
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
+    await chooseProvider(page);
+    const sidebar = page.getByRole("navigation", { name: "Primary" });
+    const tooltip = page.getByRole("tooltip");
+    const surface = await page.locator(".workspace-surface").boundingBox();
+    if (!surface) throw new Error("The content surface is missing");
+    const expectBesideSidebar = async (trigger: Locator, row: Locator) => {
+      await hoverControl(page, trigger);
+      await expect(tooltip).toBeVisible();
+      await expect(tooltip.locator("svg")).toHaveCount(0);
+      const [box, rowBox] = await Promise.all([tooltip.boundingBox(), row.boundingBox()]);
+      if (!box || !rowBox) throw new Error("Missing tooltip bounds");
+      expect(box.x).toBeGreaterThanOrEqual(surface.x);
+      expect(Math.abs(box.y - rowBox.y)).toBeLessThanOrEqual(1);
+    };
+    const expectBelow = async (control: Locator) => {
+      await hoverControl(page, control);
+      await expect(tooltip).toBeVisible();
+      const [box, controlBox] = await Promise.all([tooltip.boundingBox(), control.boundingBox()]);
+      if (!box || !controlBox) throw new Error("Missing tooltip bounds");
+      expect(box.y).toBeGreaterThanOrEqual(controlBox.y + controlBox.height);
+      expect(box.x).toBeLessThan(controlBox.x + controlBox.width);
+      expect(box.x + box.width).toBeGreaterThan(controlBox.x);
+    };
+
+    const workspace = sidebar.getByRole("button", { name: "Tooltip workspace", exact: true });
+    await expectBesideSidebar(
+      workspace.getByText("Tooltip workspace", { exact: true }),
+      workspace.locator("xpath=ancestor::li[1]"),
+    );
+    await expect(tooltip).toHaveText(`~/${basename(directory)}`);
+
+    const chat = sidebar.locator("button[data-agent-id]").first();
+    await expectBesideSidebar(chat.locator("[data-state]"), chat.locator("xpath=ancestor::li[1]"));
+
+    const add = sidebar.getByRole("button", { name: "Open workspace menu", exact: true });
+    await expectBesideSidebar(add, add);
+
+    const search = sidebar.getByRole("button", { name: "Search", exact: true });
+    await expectBelow(search);
+    await expect(tooltip).toContainText("Search");
+    await expect(tooltip.locator("kbd")).not.toHaveCount(0);
+    const collapse = sidebar.getByRole("button", { name: "Collapse sidebar", exact: true });
+    await expectBelow(collapse);
+    await expectBelow(page.getByRole("button", { name: "New tab", exact: true }));
+
+    await collapse.click();
+    const expand = page.getByRole("button", { name: "Expand sidebar", exact: true });
+    await expect(expand).toBeFocused();
+    await expectBelow(expand);
+    await expectBelow(page.getByRole("main").getByRole("button", { name: "Search", exact: true }));
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("only one sidebar tooltip shows, even when two were waiting out their delay", async ({
+  page,
+}) => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-one-tooltip-"));
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "One tooltip", directory);
+    const sidebar = page.getByRole("navigation", { name: "Primary" });
+    await page.mouse.move(700, 700);
+    // Tabbing between controls without tooltips makes the focus that follows count as keyboard.
+    await sidebar.getByRole("button", { name: "Schedules", exact: true }).focus();
+    await page.keyboard.press("Tab");
+    await sidebar.getByRole("button", { name: "Search", exact: true }).focus();
+    await sidebar
+      .getByRole("button", { name: "One tooltip", exact: true })
+      .getByText("One tooltip")
+      .hover();
+    const boxes = page.locator('[data-slot="tooltip-content"]');
+    await expect(boxes.filter({ hasText: directory })).toBeVisible();
+    // Past the moment the focused icon's tooltip would have appeared as well.
+    await page.waitForTimeout(300);
+    await expect(boxes).toHaveCount(1);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -129,7 +230,7 @@ test("chats keep their drafts and live status while the sidebar is collapsed", a
     await page.getByRole("button", { name: "Back to providers", exact: true }).click();
     await page
       .getByRole("option", {
-        name: "Claude Code Starts a new conversation in this pane",
+        name: "Claude Code",
         exact: true,
       })
       .click();
@@ -154,7 +255,7 @@ test("chats keep their drafts and live status while the sidebar is collapsed", a
         .getByRole("list", { name: "Rail agents tabs", exact: true })
         .getByRole("img", { name: "Agent status: Ready" }),
     ).toHaveCount(2);
-    await expectNoSidebarTooltips(page, rail);
+    await expectOnlyIconControlTooltips(page, rail);
     const expandedCodex = rail.locator('button[data-agent-id]:has([data-provider="codex"])');
     await expect(expandedCodex.locator('[data-provider="codex"]')).toBeVisible();
     await hoverControl(page, expandedCodex);
@@ -226,9 +327,17 @@ test("the collapsed sidebar's toggle tooltip follows menu colors in light, dark 
       const tooltip = page.getByRole("tooltip");
       await expect(tooltip).toBeVisible();
       await expect(tooltip).toContainText("Expand sidebar");
-      await expect(tooltip).toHaveCSS("background-color", colors.background);
+      // The tooltip is the menu's color, translucent over a blur.
+      const expected = await page.evaluate((background) => {
+        const probe = document.createElement("div");
+        probe.style.backgroundColor = `color-mix(in oklab, ${background} 60%, transparent)`;
+        document.body.append(probe);
+        const color = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return color;
+      }, colors.background);
+      await expect(tooltip).toHaveCSS("background-color", expected);
       await expect(tooltip).toHaveCSS("color", colors.foreground);
-      await expect(tooltip.locator("svg")).toHaveCSS("fill", colors.background);
       await expect(tooltip).toHaveCSS("opacity", "1");
       backgrounds.push(colors.background);
       await page.screenshot({

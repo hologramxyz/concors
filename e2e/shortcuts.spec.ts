@@ -3,8 +3,11 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { BINDINGS } from "../apps/desktop/src/shortcuts/bindings.ts";
-import { bindingLabel, defaultKeymap } from "../apps/desktop/src/shortcuts/keymap.ts";
-import { tabs } from "./support/tabs.ts";
+import { defaultKeymap, mainBinding, strokeLabel } from "../apps/desktop/src/shortcuts/keymap.ts";
+import { tab, tabs } from "./support/tabs.ts";
+import { reportNonMac } from "./support/platform.ts";
+
+test.beforeEach(({ context }) => reportNonMac(context));
 
 test("workspace shortcuts create, search, split and close the active pane without leaking into terminals", async ({
   page,
@@ -19,7 +22,7 @@ test("workspace shortcuts create, search, split and close the active pane withou
     ).toBeEnabled();
     await expect(page.getByRole("button", { name: "Shortcuts", exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: /^Account:/ }).click();
-    await expect(page.getByRole("menuitem")).toHaveText(["Settings", "Take the tour", "Sign out"]);
+    await expect(page.getByRole("menuitem")).toHaveText([/^Settings/, "Take the tour", "Sign out"]);
     await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
     await page
       .getByRole("navigation", { name: "Settings" })
@@ -92,10 +95,10 @@ test("workspace shortcuts create, search, split and close the active pane withou
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await page.keyboard.press("Control+Shift+k");
     await expect(page.getByRole("dialog")).toBeVisible();
-    await page.getByPlaceholder("Search workspaces, agents, tabs…").fill("Shortcuts");
+    await page.getByPlaceholder("Search workspaces and tabs…").fill("Shortcuts");
     await page.getByRole("option", { name: /Shortcuts/ }).click();
     await expect(page.getByRole("heading", { name: "Shortcuts", exact: true })).toBeVisible();
-    await expect(page.getByRole("main")).toContainText("Ctrl+Shift+P → Backspace");
+    await expect(page.getByRole("main")).toContainText("Ctrl+Shift+P then Backspace");
     await page.getByRole("button", { name: "Back to app", exact: true }).click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await panes.first().locator("textarea").focus();
@@ -168,7 +171,7 @@ test("workspace shortcuts create, search, split and close the active pane withou
     await expect(panes).toHaveCount(0);
     await expect(tab).toHaveCount(0);
     await page.keyboard.press("Control+Shift+k");
-    await page.getByPlaceholder("Search workspaces, agents, tabs…").fill(basename(directory));
+    await page.getByPlaceholder("Search workspaces and tabs…").fill(basename(directory));
     await page
       .locator('[data-search-result="workspace"]')
       .filter({ hasText: basename(directory) })
@@ -177,7 +180,7 @@ test("workspace shortcuts create, search, split and close the active pane withou
       page.getByRole("heading", { name: basename(directory), exact: true }),
     ).toBeVisible();
     await page.keyboard.press("Control+Shift+k");
-    await page.getByPlaceholder("Search workspaces, agents, tabs…").fill("New tab");
+    await page.getByPlaceholder("Search workspaces and tabs…").fill("New tab");
     await page.getByRole("option", { name: /New tab/ }).click();
     await expect(
       page.getByRole("group", { name: "Start with", exact: true }).filter({ visible: true }),
@@ -196,7 +199,7 @@ test("shortcuts have a dedicated settings page and the account menu only shows i
   await account.focus();
   await page.keyboard.press("Enter");
   const menu = page.getByRole("menu");
-  await expect(menu.getByRole("menuitem")).toHaveText(["Settings", "Take the tour", "Sign out"]);
+  await expect(menu.getByRole("menuitem")).toHaveText([/^Settings/, "Take the tour", "Sign out"]);
   await expect(menu.getByText("E2E User", { exact: true })).toBeVisible();
   await expect(menu.getByText("e2e@example.com", { exact: true })).toBeVisible();
   await expect(menu.getByText("Personal organization", { exact: true })).toHaveCount(0);
@@ -228,7 +231,9 @@ test("shortcuts have a dedicated settings page and the account menu only shows i
     const label = main.getByText(binding.label, { exact: true });
     await expect(label).toHaveCount(1);
     await expect(label.locator("..").locator("kbd")).toHaveText(
-      defaultKeymap(false)[binding.id].map((shortcut) => bindingLabel(shortcut, false)),
+      mainBinding(defaultKeymap(false)[binding.id], false)?.keys.map((stroke) =>
+        strokeLabel(stroke),
+      ) ?? [],
     );
   }
   await page.screenshot({ path: "test-results/settings-shortcuts-light.png" });
@@ -278,10 +283,16 @@ test("Mac workspace shortcuts use physical Control and display matching hints", 
     ).toBeVisible();
     const panes = page.getByRole("region", { name: "Terminal pane", exact: true });
     await expect(panes).toHaveCount(1);
-    await expect(page.getByRole("button", { name: "New tab", exact: true })).toHaveAttribute(
-      "title",
-      "New tab (Control+Shift+T → Enter)",
-    );
+    // One chip per press, in the tour's symbols: ⌃⇧T then ↩.
+    await page.getByRole("button", { name: "New tab", exact: true }).hover();
+    const chips = page.getByRole("tooltip").locator("kbd");
+    await expect(chips).toHaveCount(2);
+    await expect(chips.first().getByRole("img", { name: "Control" })).toBeVisible();
+    await expect(chips.first().getByRole("img", { name: "Shift" })).toBeVisible();
+    await expect(chips.first()).toHaveText("T");
+    await expect(chips.nth(1).getByRole("img", { name: "Return" })).toBeVisible();
+    await page.mouse.move(0, 0);
+    await expect(page.getByRole("tooltip")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Pane actions", exact: true })).toBeEnabled();
     await panes.first().focus();
     await page.keyboard.press("Control+Shift+p");
@@ -298,12 +309,145 @@ test("Mac workspace shortcuts use physical Control and display matching hints", 
     await page.keyboard.press("Backspace");
     await expect(panes).toHaveCount(0);
     await page.keyboard.press("Control+Shift+Slash");
-    await expect(page.getByRole("main")).toContainText(
-      "Default Mac bindings use Control (⌃), not Command (⌘).",
-    );
-    await expect(page.getByRole("main")).toContainText("Control+Shift+P → Backspace");
+    await expect(page.getByRole("main")).toContainText("Escape cancels a sequence.");
+    await expect(page.getByRole("main")).not.toContainText("Default Mac bindings");
+    const closePane = page
+      .getByRole("main")
+      .getByText("Close pane", { exact: true })
+      .locator("..")
+      .locator("kbd");
+    await expect(closePane).toHaveCount(2);
+    await expect(closePane.first().getByRole("img", { name: "Control" })).toBeVisible();
+    await expect(closePane.first()).toHaveText("P");
+    await expect(closePane.nth(1).getByRole("img", { name: "Delete" })).toBeVisible();
     await expect(page.getByRole("dialog")).toHaveCount(0);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("menus, Search and the sequence panel draw shortcuts as key chips", async ({ page }) => {
+  await signedIn(page);
+  await page.goto("/");
+  const workspaceMenu = page.getByRole("button", { name: "Open workspace menu", exact: true });
+  await expect(workspaceMenu.first()).toBeEnabled();
+
+  await workspaceMenu.first().click();
+  await expect(
+    page.getByRole("menuitem", { name: "New workspace", exact: true }).locator("kbd"),
+  ).toHaveText("Ctrl+Shift+N");
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("button", { name: /^Account:/ }).click();
+  await expect(
+    page.getByRole("menuitem", { name: "Settings", exact: true }).locator("kbd"),
+  ).toHaveText("Ctrl+Shift+,");
+  await page.keyboard.press("Escape");
+
+  await page.keyboard.press("Control+Shift+n");
+  await page
+    .getByRole("group", { name: "Start with", exact: true })
+    .filter({ visible: true })
+    .getByRole("button", { name: "Terminal", exact: true })
+    .click();
+  await expect(page.locator(".concors-terminal .xterm").filter({ visible: true })).toHaveCount(1);
+
+  await page.getByRole("button", { name: "New tab options", exact: true }).click();
+  await expect(
+    page.getByRole("menuitem", { name: "New chat", exact: true }).locator("kbd"),
+  ).toHaveText(["Ctrl+Shift+T", "Enter"]);
+  await expect(
+    page.getByRole("menuitem", { name: "Resume a chat…", exact: true }).locator("kbd"),
+  ).toHaveText(["Ctrl+Shift+T", "R"]);
+  await expect(
+    page.getByRole("menuitem", { name: "Terminal", exact: true }).locator("kbd"),
+  ).toHaveCount(0);
+  await page.keyboard.press("Escape");
+
+  await page.keyboard.press("Control+Shift+t");
+  const panel = page.getByRole("dialog", { name: "Tab", exact: true });
+  await expect(panel.locator('[data-slot="dialog-description"] kbd')).toHaveText("Ctrl+Shift+T");
+  await expect(panel.getByRole("button", { name: /^Resume a chat…/ }).locator("kbd")).toHaveText(
+    "R",
+  );
+  await page.keyboard.press("Escape");
+
+  await page.keyboard.press("Control+Shift+k");
+  await page.getByPlaceholder("Search workspaces and tabs…").fill("Resume a chat");
+  await expect(page.getByRole("option", { name: /^Resume a chat…/ }).locator("kbd")).toHaveText([
+    "Ctrl+Shift+T",
+    "R",
+  ]);
+  await page.keyboard.press("Escape");
+
+  // A tab says nothing about shortcuts: a lone idle pane has no tooltip at all.
+  await tab(page, 0).hover();
+  await page.waitForTimeout(800);
+  await expect(page.getByRole("tooltip")).toHaveCount(0);
+  await expect(tab(page, 0)).not.toHaveAttribute("title");
+});
+
+test("each app teaches its own main shortcut, and Settings lists the rest beside it", async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    Object.defineProperty(navigator, "platform", { get: () => "MacIntel" }),
+  );
+  await signedIn(page);
+  await page.goto("/");
+  await expect(
+    page.getByRole("button", { name: "Open workspace menu", exact: true }).first(),
+  ).toBeEnabled();
+  const row = (label: string) =>
+    page.getByRole("main").getByText(label, { exact: true }).locator("..");
+
+  // A browser keeps ⌘T and ⌃Tab for itself, so its Settings never mention them.
+  await page.keyboard.press("Control+Shift+Slash");
+  await expect(row("New tab").locator("kbd")).toHaveCount(2);
+  await expect(row("New tab")).not.toContainText("also");
+  await expect(row("New tab").getByRole("img", { name: "Command" })).toHaveCount(0);
+  await expect(row("Next tab")).not.toContainText("also");
+  await expect(row("Search workspaces and tabs").locator("kbd")).toHaveCount(1);
+  await expect(row("Search workspaces and tabs")).toContainText("also");
+  await expect(row("Search workspaces and tabs")).toContainText("outside terminals");
+  await expect(row("Rename tab")).toContainText("focused tab");
+  await expect(page.getByRole("main")).not.toContainText("Desktop app only");
+  await expect(page.getByRole("main")).not.toContainText("release the first combination");
+
+  // Select only the native branch; this page keeps its browser runtime.
+  await page.evaluate(() => Object.assign(window, { isTauri: true }));
+  await page.getByRole("button", { name: "Back to app", exact: true }).click();
+  await page.keyboard.press("Control+Shift+Slash");
+  const newTab = row("New tab");
+  await expect(newTab.locator("kbd")).toHaveCount(1);
+  await expect(newTab.locator("kbd").getByRole("img", { name: "Command" })).toBeVisible();
+  await expect(newTab.locator("kbd")).toHaveText("T");
+  await expect(newTab).toContainText(/also\s*T\s*then/);
+  await expect(row("Next tab").locator("kbd").getByRole("img", { name: "Control" })).toBeVisible();
+  await expect(row("Next tab").locator("kbd")).toHaveCount(1);
+  await expect(page.getByRole("main")).not.toContainText("Desktop app only");
+
+  await page.getByRole("button", { name: "Back to app", exact: true }).click();
+  await page.keyboard.press("Control+Shift+n");
+  await page
+    .getByRole("group", { name: "Start with", exact: true })
+    .filter({ visible: true })
+    .getByRole("button", { name: "Terminal", exact: true })
+    .click();
+  await page.getByRole("button", { name: "New tab options", exact: true }).click();
+  const newChat = page.getByRole("menuitem", { name: "New chat", exact: true }).locator("kbd");
+  await expect(newChat).toHaveCount(1);
+  // A menu row's chips are hidden from its accessible name, so the role query has to look there.
+  await expect(newChat.getByRole("img", { name: "Command", includeHidden: true })).toBeVisible();
+  await expect(newChat).toHaveText("T");
+  await page.keyboard.press("Escape");
+
+  await page.keyboard.press("Control+Shift+k");
+  await page.getByRole("button", { name: "Commands", exact: true }).click();
+  // No command row has an icon of its own, whichever kind of command it is. The only drawing left in
+  // a row is its key chips and the selected-row check, which stays hidden until then.
+  await expect(page.getByRole("option", { name: "Go to Machines", exact: true })).toBeVisible();
+  await expect(page.getByRole("option", { name: "Sign out", exact: true })).toBeVisible();
+  await expect(page.getByRole("option").locator("svg:not(kbd svg):not(.opacity-0)")).toHaveCount(0);
+  await expect(page.getByRole("option", { name: /^New tab/ }).locator("kbd")).toHaveCount(1);
 });

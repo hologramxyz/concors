@@ -253,3 +253,30 @@ test("direct settings links can open without waiting for a workspace connection"
   await expect(page.getByRole("navigation", { name: "Settings" })).toBeVisible();
   await expect(page.locator("[data-startup-screen]")).toHaveCount(0);
 });
+
+for (const [name, message] of [
+  ["Schedules", "Connect to a machine to manage its schedules."],
+  ["Pull requests", "Connect to a machine to see its pull requests."],
+] as const)
+  test(`${name} stays quiet while connecting and only then says it cannot connect`, async ({
+    page,
+  }) => {
+    await signedIn(page);
+    let hold = false;
+    let disconnect: () => void = () => undefined;
+    await page.routeWebSocket("**/ws", (client) => {
+      if (hold) return;
+      client.connectToServer();
+      disconnect = () => client.close({ code: 1001, reason: "Test reconnect" });
+    });
+    await page.goto("/");
+    await page.getByRole("button", { name, exact: true }).click();
+    await expect(page.getByRole("heading", { name, level: 2 })).toBeVisible();
+    hold = true;
+    disconnect();
+    // The attempt has neither failed nor run long enough to say so.
+    await expect(page.getByRole("button", { name: "Retry now" })).toHaveCount(0);
+    await expect(page.getByText(message)).toHaveCount(0);
+    await expect(page.getByRole("status").filter({ hasText: "Reconnecting to" })).toBeVisible();
+    await expect(page.getByText(message)).toBeVisible();
+  });

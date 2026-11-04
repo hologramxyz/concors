@@ -45,7 +45,7 @@ export function MobileOrganizationPicker({
               value: item.id,
               label: item.name,
               icon: item.isPersonal ? <UserRound /> : <Users />,
-              description: `${item.isPersonal ? "Personal" : "Team"} · ${item.role}`,
+              description: `${item.isPersonal ? "Personal" : "Team"}, ${item.role}`,
             })),
           },
         ]}

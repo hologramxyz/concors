@@ -3,6 +3,7 @@ import { cn } from "cn";
 import { Check, ChevronDown, CircleAlert, CircleCheck, Copy, LoaderCircle } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -406,27 +407,32 @@ function CommandBox({
       >
         {text}
       </code>
-      <Button
-        type="button"
-        variant={compact ? "ghost" : "outline"}
-        size={compact ? "icon-xs" : "sm"}
-        className="shrink-0"
-        aria-label={failed ? "Copy failed; select the text and copy it" : label}
-        title={failed ? "Could not copy. Select the text and copy it manually." : undefined}
-        onClick={() => {
-          void copyText(text).then(
-            () => {
-              setCopied(true);
-              setFailed(false);
-              setTimeout(() => setCopied(false), 1500);
-            },
-            () => setFailed(true),
-          );
-        }}
+      <SidebarTooltip
+        place="above"
+        hidden={!failed}
+        content="Could not copy. Select the text and copy it manually."
       >
-        {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-        {!compact && (copied ? "Copied" : "Copy")}
-      </Button>
+        <Button
+          type="button"
+          variant={compact ? "ghost" : "outline"}
+          size={compact ? "icon-xs" : "sm"}
+          className="shrink-0"
+          aria-label={failed ? "Copy failed; select the text and copy it" : label}
+          onClick={() => {
+            void copyText(text).then(
+              () => {
+                setCopied(true);
+                setFailed(false);
+                setTimeout(() => setCopied(false), 1500);
+              },
+              () => setFailed(true),
+            );
+          }}
+        >
+          {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+          {!compact && (copied ? "Copied" : "Copy")}
+        </Button>
+      </SidebarTooltip>
     </div>
   );
 }

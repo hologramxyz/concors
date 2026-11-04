@@ -8,6 +8,7 @@ import {
   DialogDescription,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { Check, Download, File, ImageOff, LoaderCircle } from "lucide-react";
 import type { AgentAttachment, AgentItem } from "@concors/protocol";
 import { Button } from "@/components/ui/button";
@@ -39,22 +40,26 @@ function useSave(file: FileToSave | null) {
   };
   const button =
     canSaveFiles && file ? (
-      <Button
-        variant="ghost"
-        size="icon"
-        aria-label={`Download ${file.name}`}
-        title={state === "saved" ? "Saved to Downloads" : "Download"}
-        disabled={state === "saving"}
-        onClick={() => void save()}
+      <SidebarTooltip
+        place="title-bar"
+        content={state === "saved" ? "Saved to Downloads" : "Download"}
       >
-        {state === "saving" ? (
-          <LoaderCircle className="size-4.5 animate-spin" />
-        ) : state === "saved" ? (
-          <Check className="size-4.5" />
-        ) : (
-          <Download className="size-4.5" />
-        )}
-      </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={`Download ${file.name}`}
+          disabled={state === "saving"}
+          onClick={() => void save()}
+        >
+          {state === "saving" ? (
+            <LoaderCircle className="size-4.5 animate-spin" />
+          ) : state === "saved" ? (
+            <Check className="size-4.5" />
+          ) : (
+            <Download className="size-4.5" />
+          )}
+        </Button>
+      </SidebarTooltip>
     ) : null;
   return { button, error };
 }
@@ -125,6 +130,7 @@ export function ImageViewer({
   name = file.name,
   description,
   downloadable = true,
+  tooltip,
   children,
 }: {
   file: FileToSave;
@@ -132,11 +138,14 @@ export function ImageViewer({
   name?: string;
   description: string;
   downloadable?: boolean;
+  tooltip?: string;
   children: ReactNode;
 }) {
   return (
     <Dialog>
-      <DialogTrigger asChild>{children}</DialogTrigger>
+      <SidebarTooltip place="above" content={tooltip}>
+        <DialogTrigger asChild>{children}</DialogTrigger>
+      </SidebarTooltip>
       <ImageViewerContent
         file={file}
         name={name}
@@ -208,12 +217,16 @@ export function InlineImage({ item, index, alt }: { item: AgentItem; index: numb
       </span>
     );
   return (
-    <ImageViewer file={file} name={name} description="Image the agent showed in its reply.">
+    <ImageViewer
+      file={file}
+      name={name}
+      tooltip={name}
+      description="Image the agent showed in its reply."
+    >
       <button
         type="button"
         data-inline-image="ready"
         aria-label={`Open ${name}`}
-        title={name}
         className="my-2 block max-w-full cursor-pointer overflow-hidden rounded-lg border hover:opacity-95 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       >
         <img className="block max-h-[28rem] max-w-full object-contain" src={source} alt={name} />
@@ -251,12 +264,16 @@ function ImageThumbnail({
       </div>
     );
   return (
-    <ImageViewer file={file} name={attachment.name} description="Image sent with this message.">
+    <ImageViewer
+      file={file}
+      name={attachment.name}
+      tooltip={attachment.name}
+      description="Image sent with this message."
+    >
       <button
         type="button"
         data-image-attachment="ready"
         aria-label={`Open ${attachment.name}`}
-        title={attachment.name}
         className={`${tile} cursor-pointer hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none`}
       >
         <img className="size-full object-cover" src={source} alt={attachment.name} />

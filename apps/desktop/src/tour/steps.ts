@@ -20,13 +20,15 @@ export interface TourStep {
   readonly opensMenu?: boolean;
   /** The target lives inside an open workspace. */
   readonly inWorkspace?: boolean;
+  /** Space between the lit area and its frame, when the default would run over a neighbour. */
+  readonly framePadding?: number;
 }
 
 export const TOUR_STEPS: readonly TourStep[] = [
   {
     target: "workspaces",
     title: "Workspaces",
-    body: "Each workspace is a folder on your computer. Your agents work inside it.",
+    body: "Each workspace is tied to a folder, and its agents work there.",
     shortcut: "new-project",
   },
   {
@@ -39,7 +41,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
   {
     target: "new-tab",
     title: "Start agents here",
-    body: "Choose New chat to work with Claude or Codex. Unlike a Terminal, it gives you approvals, model choice and chat history.",
+    body: "New chat gives you approvals, model choice and history.",
     shortcut: "new-tab",
     opensMenu: true,
     inWorkspace: true,
@@ -52,8 +54,10 @@ export const TOUR_STEPS: readonly TourStep[] = [
   {
     target: "search",
     title: "Search",
-    body: "Jump to any workspace, agent or tab from the keyboard.",
+    body: "Jump to any workspace or tab.",
     shortcut: "search",
+    // The sidebar toggle sits under 2px away: the frame hugs the button so its ring stays clear.
+    framePadding: -1,
   },
   {
     target: "machines",
@@ -83,6 +87,21 @@ const GAP = 16;
 const MARGIN = 12;
 
 /**
+ * A step's lit frame pulled in from the window's edges, so its ring is drawn whole even when the
+ * area it frames runs to the edge of the window.
+ */
+export function frameInside(frame: Box, viewport: Size, inset: number): Box {
+  const left = Math.max(inset, frame.left);
+  const top = Math.max(inset, frame.top);
+  return {
+    left,
+    top,
+    width: Math.min(frame.left + frame.width, viewport.width - inset) - left,
+    height: Math.min(frame.top + frame.height, viewport.height - inset) - top,
+  };
+}
+
+/**
  * Where a step's card goes: beside a sidebar control, otherwise below the control, or above it when
  * there is no room below. Always inside the window.
  */
@@ -102,6 +121,15 @@ export function cardPosition(
   if (below + card.height + MARGIN <= viewport.height)
     return { left: clampLeft(target.left), top: below };
   return { left: clampLeft(target.left), top: clampTop(target.top - GAP - card.height) };
+}
+
+/**
+ * The welcome card's title: by first name when it has two letters or more, since a single letter
+ * (an initial, or a name typed as "z") reads as a mistake rather than a greeting.
+ */
+export function welcomeTitle(firstName: string): string {
+  const letters = firstName.match(/\p{L}/gu)?.length ?? 0;
+  return letters >= 2 ? `Welcome to Concors, ${firstName}` : "Welcome to Concors";
 }
 
 /** What the person did with the tour on this device. */

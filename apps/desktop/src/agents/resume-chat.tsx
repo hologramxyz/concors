@@ -20,6 +20,8 @@ import {
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { shortAge } from "@/lib/format-date";
 import { matchScore } from "@/search/index";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
+import { useHomePath } from "@/workspace/home-path";
 import { AgentStartedContext, useAgents } from "./context";
 import { ProviderIcon } from "./provider-icon";
 import { closedChats, RESUMABLE_ENGINES, type ResumableEngine } from "./closed-chats";
@@ -103,10 +105,16 @@ function FilterMenu({
   label: string;
   value: string;
   /** A null entry draws a divider. */
-  options: ({ id: string; label: string; icon?: React.ReactNode } | null)[];
+  options: ({
+    id: string;
+    label: string;
+    icon?: React.ReactNode;
+    directory?: string | undefined;
+  } | null)[];
   onChange: (id: string) => void;
 }) {
   const current = options.find((option) => option?.id === value);
+  const homePath = useHomePath();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -125,10 +133,16 @@ function FilterMenu({
         <DropdownMenuRadioGroup value={value} onValueChange={onChange}>
           {options.map((option, index) =>
             option ? (
-              <DropdownMenuRadioItem key={option.id} value={option.id}>
-                {option.icon}
-                <span className="truncate">{option.label}</span>
-              </DropdownMenuRadioItem>
+              <SidebarTooltip
+                key={option.id}
+                place="menu"
+                content={option.directory && homePath(option.directory)}
+              >
+                <DropdownMenuRadioItem value={option.id}>
+                  {option.icon}
+                  <span className="truncate">{option.label}</span>
+                </DropdownMenuRadioItem>
+              </SidebarTooltip>
             ) : (
               <DropdownMenuSeparator key={`divider-${index}`} />
             ),
@@ -360,10 +374,22 @@ function ResumeChatContent({
               setActive(null);
             }}
             options={[
-              ...(projectId ? [{ id: "this", label: "This workspace" }] : []),
+              ...(projectId
+                ? [
+                    {
+                      id: "this",
+                      label: "This workspace",
+                      directory: projects.find((item) => item.id === projectId)?.directory,
+                    },
+                  ]
+                : []),
               { id: "all", label: "All workspaces" },
               ...(others.length ? [null] : []),
-              ...others.map((item) => ({ id: item.id, label: item.name })),
+              ...others.map((item) => ({
+                id: item.id,
+                label: item.name,
+                directory: item.directory,
+              })),
             ]}
           />
           <FilterMenu

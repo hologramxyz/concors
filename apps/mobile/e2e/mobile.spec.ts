@@ -2,7 +2,13 @@ import { expect, test, type Page, type FrameLocator } from "@playwright/test";
 import { ids } from "../src/demo/fixtures";
 import { swipe as touchSwipe, scrollTimelineUp } from "./support/swipe";
 import { BINDINGS, isCompactCommand } from "../../desktop/src/shortcuts/bindings";
-import { bindingLabel, defaultKeymap, strokeLabel } from "../../desktop/src/shortcuts/keymap";
+import {
+  bindingLabel,
+  defaultKeymap,
+  mainBinding,
+  strokeLabel,
+  usableBindings,
+} from "../../desktop/src/shortcuts/keymap";
 const workspace = (page: Page) => page.frameLocator('iframe[title="Concors workspace"]');
 const activeChat = `${ids.tab}:${ids.pane}`;
 const activeTerminal = `${ids.tab}:${ids.terminalPane}`;
@@ -494,7 +500,7 @@ test("folder workspaces and shared settings remain available from the sidebar", 
   await choose(ui, "Settings section", "ssh-keys");
   await expect(ui.getByRole("dialog", { name: "Settings", exact: true })).toContainText("SSH");
   await choose(ui, "Settings section", "about");
-  await expect(ui.getByText("Client version", { exact: true })).toBeVisible();
+  await expect(ui.getByText("Version", { exact: true })).toBeVisible();
 });
 test("new workspace completion opens its own project and closes the sidebar", async ({ page }) => {
   const ui = await enter(page);
@@ -507,7 +513,7 @@ test("new workspace completion opens its own project and closes the sidebar", as
     "New workspace",
   );
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
-  await ui.getByRole("button", { name: "Concors", exact: true }).click();
+  await ui.getByRole("button", { name: /^Concors(, |$)/ }).click();
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toHaveValue(
     "Keep my original draft",
   );
@@ -621,7 +627,7 @@ test("message history uses the shared mobile drawer and returns focus to its tri
   // A hardware keyboard uses the same compact presentation as touch-triggered dialogs.
   await ui.getByRole("textbox", { name: "Message Codex" }).focus();
   await page.keyboard.press("Control+Shift+t");
-  const shortcuts = ui.getByRole("dialog", { name: "Shortcut actions", exact: true });
+  const shortcuts = ui.getByRole("dialog", { name: "Tab", exact: true });
   await expect(shortcuts).toHaveAttribute("data-mobile-drawer", "true");
   await page.keyboard.press("Escape");
   await expect(shortcuts).toHaveCount(0);
@@ -789,8 +795,8 @@ test("flat tab picker opens from its text and padding and dismisses without reop
   await expect(list.locator(".mobile-tab-card")).toHaveCount(0);
   await expect(list.locator("[data-pane-choice]")).toHaveCount(3);
   await expect(list.locator(".mobile-pane-choice")).toContainText([
-    "Mobile launch · 1",
-    "Mobile launch · 2",
+    "Mobile launch 1",
+    "Mobile launch 2",
     "Tab 2",
   ]);
   await closePickerSheet(ui);
@@ -822,7 +828,7 @@ test("flat tab actions configure and close inactive leaves without changing the 
   const drawer = ui.getByRole("dialog", { name: "Tabs", exact: true });
   const inactive = drawer.locator(`.mobile-pane-row:has([data-value="${activeTerminal}"])`);
   await inactive
-    .getByRole("button", { name: "Actions for tab Mobile launch · 2", exact: true })
+    .getByRole("button", { name: "Actions for tab Mobile launch 2", exact: true })
     .click();
   await expect(ui.getByRole("menuitem", { name: "Rename tab", exact: true })).toHaveCount(0);
   await expect(ui.getByRole("menuitem", { name: /Add pane|Move tab|Split/ })).toHaveCount(0);
@@ -831,7 +837,7 @@ test("flat tab actions configure and close inactive leaves without changing the 
   await expect(picker).toHaveAttribute("data-value", selected);
   await page.screenshot({ path: test.info().outputPath("mobile-flat-tabs.png") });
   await inactive
-    .getByRole("button", { name: "Actions for tab Mobile launch · 2", exact: true })
+    .getByRole("button", { name: "Actions for tab Mobile launch 2", exact: true })
     .click();
   await ui.getByRole("menuitem", { name: "Close tab…", exact: true }).click();
   await ui.getByRole("button", { name: "Close tab", exact: true }).click();
@@ -1034,7 +1040,7 @@ test("sidebar has no logo or duplicate menu, with glass search behind the rounde
   await expect(search).toHaveCSS("border-radius", glass.radius);
   await expect(search).toHaveCSS("box-shadow", glass.shadow);
   await ui.getByRole("button", { name: "Search workspace", exact: true }).click();
-  await expect(ui.getByPlaceholder("Search workspaces, agents, tabs…")).toBeVisible();
+  await expect(ui.getByPlaceholder("Search workspaces and tabs…")).toBeVisible();
   await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "true");
   await page.keyboard.press("Escape");
   await expect(ui.getByRole("button", { name: "Search workspace", exact: true })).toBeFocused();
@@ -1069,9 +1075,17 @@ test("mobile Shortcuts settings preserve supported commands and all entry points
   await expect(settings.locator("dt")).toHaveCount(bindings.length);
   for (const binding of bindings) {
     const row = settings.locator("dt").filter({ hasText: binding.label }).locator("..");
-    await expect(row.locator("kbd")).toHaveText(
-      defaultKeymap(mac)[binding.id].map((shortcut) => bindingLabel(shortcut, mac)),
-    );
+    // The main shortcut as a chip per press; any others follow in words.
+    const keymap = defaultKeymap(mac)[binding.id];
+    const main = mainBinding(keymap, false);
+    if (!main) throw new Error(`${binding.id} has no shortcut`);
+    // A Mac draws its modifiers as icons, so only the plain labels can be compared as text.
+    await expect(row.locator("kbd")).toHaveCount(main.keys.length);
+    if (!mac)
+      await expect(row.locator("kbd")).toHaveText(main.keys.map((stroke) => strokeLabel(stroke)));
+    if (!mac)
+      for (const other of usableBindings(keymap, false).filter((entry) => entry !== main))
+        await expect(row).toContainText(bindingLabel(other, mac));
   }
   await expect(settings.getByText("New pane beside current", { exact: true })).toHaveCount(0);
   expect(await settings.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
@@ -1086,7 +1100,7 @@ test("mobile Shortcuts settings preserve supported commands and all entry points
   );
   await settings.getByRole("button", { name: "Close", exact: true }).click();
   await input.press("Control+Shift+k");
-  await ui.getByPlaceholder("Search workspaces, agents, tabs…").fill("Shortcuts");
+  await ui.getByPlaceholder("Search workspaces and tabs…").fill("Shortcuts");
   await ui.getByRole("option", { name: /Shortcuts/ }).click();
   await expect(settings.getByRole("combobox", { name: "Settings section" })).toHaveAttribute(
     "data-value",
@@ -1146,7 +1160,7 @@ test("compact account footer and machine management live in settings", async ({ 
   await settings.getByRole("button", { name: "Close", exact: true }).click();
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
   await ui.getByRole("button", { name: "Search workspace", exact: true }).click();
-  await ui.getByPlaceholder("Search workspaces, agents, tabs…").fill("Go to Machines");
+  await ui.getByPlaceholder("Search workspaces and tabs…").fill("Go to Machines");
   await ui.getByRole("option", { name: "Go to Machines", exact: true }).click();
   await expect(settings.getByRole("combobox", { name: "Settings section" })).toHaveAttribute(
     "data-value",
@@ -1242,7 +1256,7 @@ test("sidebar, chat and files share header spacing at narrow phone widths", asyn
   await expect(ui.getByRole("dialog", { name: "Machine", exact: true })).toBeVisible();
   await closePickerSheet(ui, "Machine");
   await ui.getByRole("button", { name: "Search workspace", exact: true }).click();
-  await expect(ui.getByPlaceholder("Search workspaces, agents, tabs…")).toBeVisible();
+  await expect(ui.getByPlaceholder("Search workspaces and tabs…")).toBeVisible();
   await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "true");
 });
 
@@ -1255,10 +1269,10 @@ test("custom shortcuts persist through the mobile preference bridge and renderer
   await openSettings(ui);
   await choose(ui, "Settings section", "shortcuts");
   await ui
-    .getByRole("button", { name: "Edit Search workspaces, agents and tabs shortcuts", exact: true })
+    .getByRole("button", { name: "Edit Search workspaces and tabs shortcuts", exact: true })
     .click();
   const editor = ui.getByRole("dialog", {
-    name: "Edit shortcut: Search workspaces, agents and tabs",
+    name: "Edit shortcut: Search workspaces and tabs",
     exact: true,
   });
   await editor.getByRole("button", { name: "Type combinations instead" }).click();
@@ -1345,9 +1359,10 @@ test("pages opened from a chat start below the header, and the chat scrolls unde
   const header = ui.locator(".mobile-header");
   const openFromSidebar = async (name: string) => {
     await ui.locator("#mobile-sidebar-toggle").click();
+    // A workspace's row also says when one of its chats needs attention.
     await ui
       .getByRole("dialog", { name: "Workspace sidebar" })
-      .getByRole("button", { name, exact: true })
+      .getByRole("button", { name: new RegExp(`^${name}(,|$)`) })
       .first()
       .click();
   };

@@ -7,6 +7,7 @@ import { api } from "@/auth/api";
 import { Button } from "@/components/ui/button";
 import { AccountAvatar } from "@/components/account-avatar";
 import { Input } from "@/components/ui/input";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { useGitHub } from "./use-github";
 
 interface PickerProps {
@@ -61,16 +62,18 @@ export function GitHubRepositoryPicker(props: PickerProps) {
               <Plus className="size-4" /> Add account
             </Button>
           )}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label="Refresh GitHub"
-            disabled={props.disabled}
-            onClick={github.refresh}
-          >
-            <RefreshCw className="size-4" />
-          </Button>
+          <SidebarTooltip place="above" content="Refresh GitHub">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Refresh GitHub"
+              disabled={props.disabled}
+              onClick={github.refresh}
+            >
+              <RefreshCw className="size-4" />
+            </Button>
+          </SidebarTooltip>
         </div>
       </div>
       {github.status?.connected ? (

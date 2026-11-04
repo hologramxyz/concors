@@ -14,16 +14,17 @@ import {
 } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { openExternal } from "@/tauri/open-external";
+import { accountName } from "./account-name";
+import { accountChanges } from "./account-requests";
+import {
+  accountPromptKey,
+  setAccountPromptDismissed,
+  useAccountPromptDismissed,
+} from "./dismissed-account-prompts";
 import { invalidateModelCatalogs } from "./model-catalog";
 
 import { Button } from "@/components/ui/button";
-function dismissed(key: string) {
-  try {
-    return sessionStorage.getItem(key) === "dismissed";
-  } catch {
-    return false;
-  }
-}
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 export function AgentAccountPrompt({
   agent,
   canEdit,
@@ -67,8 +68,11 @@ function AccountPrompt({
   connection: DaemonConnection;
   onInstallPrompt?: ((shown: boolean) => void) | undefined;
 }) {
-  const storageKey = `concors:account-prompt:${connection.endpoint.url}:${agent.provider}`;
-  const [hidden, setHidden] = useState(() => dismissed(storageKey));
+  const dismissalKey = accountPromptKey(
+    connection.workspace?.machineId ?? connection.endpoint.url,
+    agent.provider,
+  );
+  const hidden = useAccountPromptDismissed(dismissalKey);
   const [account, setAccount] = useState<AgentAccount | null>(null);
   /** What went wrong with something the user did; a failed check alone is not shown. */
   const [error, setError] = useState<string | null>(null);
@@ -178,6 +182,15 @@ function AccountPrompt({
       mounted.current = false;
     };
   }, []);
+  // Whichever pane it was dismissed in, this one's unfinished sign-in ends with it. A dismissal
+  // never signs out an existing account.
+  useEffect(() => {
+    isDismissed.current = hidden;
+    if (!hidden) return;
+    const challenge = latest.current?.challenge;
+    if (challenge) void request({ type: "cancel", flowId: challenge.flowId });
+    setValue("");
+  }, [hidden, request]);
   const provider = useCallback(
     async (operation: ProviderOperation) => {
       const result = await connection.requestProvider(operation, crypto.randomUUID());
@@ -240,26 +253,18 @@ function AccountPrompt({
       if (!latest.current?.challenge) void request({ type: "read" }, true);
     };
     window.addEventListener("focus", check);
-    return () => window.removeEventListener("focus", check);
+    accountChanges.addEventListener("change", check);
+    return () => {
+      window.removeEventListener("focus", check);
+      accountChanges.removeEventListener("change", check);
+    };
   }, [hidden, canEdit, request, checkInstall]);
   useEffect(() => {
     if (hidden || account?.status !== "pending") return;
     const timer = setInterval(() => void request({ type: "read" }), 2000);
     return () => clearInterval(timer);
   }, [hidden, account?.status, request]);
-  const hide = () => {
-    // A dismissal cancels an unfinished sign-in; it never signs out an existing account.
-    const challenge = latest.current?.challenge;
-    if (challenge) void request({ type: "cancel", flowId: challenge.flowId });
-    setValue("");
-    isDismissed.current = true;
-    setHidden(true);
-    try {
-      sessionStorage.setItem(storageKey, "dismissed");
-    } catch {
-      /* In-memory dismissal still works. */
-    }
-  };
+  const hide = () => setAccountPromptDismissed(dismissalKey, true);
   // While the CLI is missing, or a failed check is still asking, the chat's start error is noise.
   const installPrompt =
     canEdit && !hidden && (cli ? !cli.installed : cli === undefined && troubled);
@@ -268,24 +273,7 @@ function AccountPrompt({
   }, [installPrompt, onInstallPrompt]);
   useEffect(() => () => onInstallPrompt?.(false), [onInstallPrompt]);
   if (!canEdit) return null;
-  if (hidden)
-    return (
-      <Button
-        variant="ghost"
-        className="text-muted-foreground"
-        onClick={() => {
-          isDismissed.current = false;
-          setHidden(false);
-          try {
-            sessionStorage.removeItem(storageKey);
-          } catch {
-            /* Optional browser storage. */
-          }
-        }}
-      >
-        Connect account
-      </Button>
-    );
+  if (hidden) return null;
   // A failed check may only mean the CLI is missing; wait to know before showing it.
   if (cli === undefined && troubled) return null;
   const label = agent.providerLabel ?? agentProviderName(agent.provider);
@@ -305,15 +293,17 @@ function AccountPrompt({
                 : `Install ${cli.label} on this machine using its guide, then come back here.`}
             </p>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-muted-foreground"
-            aria-label="Dismiss installation"
-            onClick={hide}
-          >
-            <X className="size-4" />
-          </Button>
+          <SidebarTooltip place="above" content="Dismiss">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground"
+              aria-label="Dismiss installation"
+              onClick={hide}
+            >
+              <X className="size-4" />
+            </Button>
+          </SidebarTooltip>
         </div>
         {failure && (
           <p role="alert" className="mt-2 text-xs text-destructive">
@@ -367,33 +357,28 @@ function AccountPrompt({
   return (
     <section
       aria-label={`${label} account connection`}
-      className="rounded-xl border bg-muted/30 p-3 text-sm"
+      className="account-prompt rounded-xl border bg-muted/30 p-3 text-sm"
     >
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="font-medium">
-            Connect your{" "}
-            {(agent.engine ?? agent.provider) === "codex"
-              ? "ChatGPT"
-              : (agent.engine ?? agent.provider) === "claude"
-                ? "Claude"
-                : "model provider"}{" "}
-            account
+            Connect your {accountName(agent.engine ?? agent.provider, "model provider")} account
           </p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Use your account on this machine. You can dismiss this and continue with your current
-            setup.
+          <p className="account-prompt-body mt-0.5 text-xs text-muted-foreground">
+            Use your account on this machine.
           </p>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="text-muted-foreground"
-          aria-label="Dismiss account connection"
-          onClick={hide}
-        >
-          <X className="size-4" />
-        </Button>
+        <SidebarTooltip place="above" content="Dismiss">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground"
+            aria-label="Dismiss account connection"
+            onClick={hide}
+          >
+            <X className="size-4" />
+          </Button>
+        </SidebarTooltip>
       </div>
       {(error || account?.message) && (
         <p role="alert" className="mt-2 text-xs text-destructive">

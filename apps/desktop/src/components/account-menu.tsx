@@ -1,5 +1,5 @@
 import { AccountAvatar } from "./account-avatar";
-import { ChevronsUpDown, Compass, LogIn, LogOut, UserRound, Settings } from "lucide-react";
+import { ChevronsUpDown, LogIn, LogOut, MapIcon, UserRound, Settings } from "lucide-react";
 import { useContext, useState, type ReactNode } from "react";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import {
@@ -12,9 +12,8 @@ import {
 } from "@/components/ui/dialog";
 
 import { type SignedInAuth } from "@/auth/auth-state";
+import { MenuKeyChips } from "@/shortcuts/key-chips";
 import { replayTour } from "@/tour/store";
-import { TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,6 +30,8 @@ interface AccountMenuProps {
   readonly onSignIn: () => void;
   readonly onOpenSettings: () => void;
   readonly collapsed?: boolean;
+  /** The tour points at the live workspace, so it cannot run while that is not loaded. */
+  readonly canTour?: boolean;
 }
 
 /** Sidebar footer: who is signed in, with settings and sign out, or the way to sign in. */
@@ -40,6 +41,7 @@ export function AccountMenu({
   onSignIn,
   onOpenSettings,
   collapsed = false,
+  canTour = true,
 }: AccountMenuProps) {
   const compact = useContext(CompactLayoutContext);
   if (compact)
@@ -47,28 +49,21 @@ export function AccountMenu({
   if (!auth)
     return (
       <DropdownMenu>
-        <SidebarTooltip collapsed={collapsed}>
-          <TooltipTrigger asChild>
-            <DropdownMenuTrigger
-              className={`flex items-center rounded-md hover:bg-sidebar-accent aria-expanded:bg-sidebar-accent ${collapsed ? "sidebar-rail-control" : "w-full gap-2 p-[8px] text-left"}`}
-              aria-label="Using this computer without an account"
-            >
-              <UserRound className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-              {!collapsed && (
-                <>
-                  <span className="min-w-0 flex-1 truncate text-ui font-medium">This computer</span>
-                  <ChevronsUpDown
-                    className="size-3.5 shrink-0 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                </>
-              )}
-            </DropdownMenuTrigger>
-          </TooltipTrigger>
-          <TooltipContent side={collapsed ? "right" : "top"} sideOffset={6}>
-            Settings and sign in
-          </TooltipContent>
-        </SidebarTooltip>
+        <DropdownMenuTrigger
+          className={`flex items-center rounded-md hover:bg-sidebar-accent aria-expanded:bg-sidebar-accent ${collapsed ? "sidebar-rail-control" : "w-full gap-2 p-[8px] text-left"}`}
+          aria-label="Using this computer without an account"
+        >
+          <UserRound className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          {!collapsed && (
+            <>
+              <span className="min-w-0 flex-1 truncate text-ui font-medium">This computer</span>
+              <ChevronsUpDown
+                className="size-3.5 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
+            </>
+          )}
+        </DropdownMenuTrigger>
         <DropdownMenuContent
           align="start"
           side="top"
@@ -77,9 +72,10 @@ export function AccountMenu({
           <DropdownMenuItem className="p-[8px] text-ui" onSelect={onOpenSettings}>
             <Settings aria-hidden="true" />
             Settings
+            <MenuKeyChips id="settings" />
           </DropdownMenuItem>
-          <DropdownMenuItem className="p-[8px] text-ui" onSelect={replayTour}>
-            <Compass aria-hidden="true" />
+          <DropdownMenuItem className="p-[8px] text-ui" disabled={!canTour} onSelect={replayTour}>
+            <MapIcon aria-hidden="true" />
             Take the tour
           </DropdownMenuItem>
           <DropdownMenuItem className="p-[8px] text-ui" onSelect={onSignIn}>
@@ -91,30 +87,24 @@ export function AccountMenu({
     );
   return (
     <DropdownMenu>
-      <SidebarTooltip collapsed={collapsed}>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger
-            className={`flex items-center rounded-md hover:bg-sidebar-accent aria-expanded:bg-sidebar-accent ${collapsed ? "sidebar-rail-control" : "w-full gap-2 p-[8px] text-left"}`}
-            aria-label={`Account: ${auth.user.name}`}
-          >
-            <AccountAvatar user={auth.user} githubEnabled />
-            {!collapsed && (
-              <>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-ui font-medium">{auth.user.name}</span>
-                </span>
-                <ChevronsUpDown
-                  className="size-3.5 shrink-0 text-muted-foreground"
-                  aria-hidden="true"
-                />
-              </>
-            )}
-          </DropdownMenuTrigger>
-        </TooltipTrigger>
-        <TooltipContent side={collapsed ? "right" : "top"} sideOffset={6}>
-          {auth.user.name} · Account and settings
-        </TooltipContent>
-      </SidebarTooltip>
+      <DropdownMenuTrigger
+        className={`flex items-center rounded-md hover:bg-sidebar-accent aria-expanded:bg-sidebar-accent ${collapsed ? "sidebar-rail-control" : "w-full gap-2 p-[8px] text-left"}`}
+        aria-label={`Account: ${auth.user.name}`}
+      >
+        <AccountAvatar user={auth.user} githubEnabled />
+        {!collapsed && (
+          <>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-ui font-medium">{auth.user.name}</span>
+            </span>
+            <ChevronsUpDown
+              className="size-3.5 shrink-0 text-muted-foreground"
+              aria-hidden="true"
+            />
+          </>
+        )}
+      </DropdownMenuTrigger>
+
       <DropdownMenuContent
         align="start"
         side="top"
@@ -130,9 +120,10 @@ export function AccountMenu({
         <DropdownMenuItem className="p-[8px] text-ui" onSelect={onOpenSettings}>
           <Settings aria-hidden="true" />
           Settings
+          <MenuKeyChips id="settings" />
         </DropdownMenuItem>
-        <DropdownMenuItem className="p-[8px] text-ui" onSelect={replayTour}>
-          <Compass aria-hidden="true" />
+        <DropdownMenuItem className="p-[8px] text-ui" disabled={!canTour} onSelect={replayTour}>
+          <MapIcon aria-hidden="true" />
           Take the tour
         </DropdownMenuItem>
         <DropdownMenuItem className="p-[8px] text-ui" onSelect={onSignOut}>

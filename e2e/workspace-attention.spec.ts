@@ -39,19 +39,35 @@ test("a workspace shows what its agents want while another workspace is open", a
     await page.getByRole("button", { name: "Attention B", exact: true }).click();
     const badge = page.locator(`[data-workspace-id="${project.id}"] [data-workspace-attention]`);
     await expect(badge).toHaveCount(0);
+    // Switching away leaves A expanded, where the dot would be on its row: the folder has it once
+    // A is collapsed.
+    const collapseA = async () => {
+      const toggle = page.locator(`[data-workspace-toggle="${project.id}"]`);
+      await toggle.hover({ force: true });
+      await toggle.click();
+      await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    };
+    await collapseA();
 
     // The agent finishes while workspace B is open: A says so until someone looks.
     await control.requestAgent({ kind: "send", sessionId: agent.id, text: "hello" }, randomUUID());
     await expect(badge).toHaveAttribute("data-workspace-attention", "done");
-    await page.getByRole("button", { name: "Attention A", exact: true }).hover();
-    await expect(page.getByRole("tooltip")).toContainText("Agents: 1 done");
+    await expect(badge).toHaveAttribute("aria-label", "1 chat finished");
+    const finished = page.getByRole("button", {
+      name: "Attention A, 1 chat finished",
+      exact: true,
+    });
+    await finished.getByText("Attention A").hover();
+    await expect(page.getByRole("tooltip")).toContainText("1 chat finished");
+    await expect(page.getByRole("tooltip")).not.toContainText("·");
     await page.screenshot({ path: test.info().outputPath("workspace-attention.png") });
-    await page.getByRole("button", { name: "Attention A", exact: true }).click();
+    await finished.click();
     await expect(page.getByRole("log")).toContainText("Hello from Codex");
     await expect(badge).toHaveCount(0);
 
     // A question outranks everything else, and stays until it is answered.
     await page.getByRole("button", { name: "Attention B", exact: true }).click();
+    await collapseA();
     await control.requestAgent(
       { kind: "send", sessionId: agent.id, text: "question" },
       randomUUID(),
@@ -91,6 +107,11 @@ test("a pane shows its agent's status on its own icon, as its tab does", async (
 
     const pane = page.getByRole("region", { name: "Agent pane", exact: true }).locator("header");
     const tab = tabs(page).nth(1).locator("> button").first();
+    // An agent just sitting there earns no line, and alone in its tab leaves nothing to say.
+    await tab.hover();
+    await page.waitForTimeout(800);
+    await expect(page.getByRole("tooltip")).toHaveCount(0);
+    await page.mouse.move(0, 0);
     for (const [text, status] of [
       ["hold", "Working"],
       ["question", "Needs input"],
@@ -107,6 +128,12 @@ test("a pane shows its agent's status on its own icon, as its tab does", async (
       // The pane's icon carries the same badge as the tab's, from the same status.
       await expect(pane.getByRole("img", { name: `Agent status: ${status}` })).toBeVisible();
       await expect(tab).toHaveAttribute("aria-description", `Codex: ${status}`);
+      // The status is in the tab's one tooltip; a native title would open on top of it.
+      await expect(tab.locator("[title]")).toHaveCount(0);
+      await tab.hover();
+      await expect(page.getByRole("tooltip")).toHaveText(`Codex: ${status}`);
+      await page.mouse.move(0, 0);
+      await expect(page.getByRole("tooltip")).toHaveCount(0);
     }
   } finally {
     control.disconnect();

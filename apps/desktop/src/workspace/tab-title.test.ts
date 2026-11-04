@@ -23,7 +23,7 @@ it("names an unnamed tab after its main pane, and keeps a name someone chose", (
   expect(tabTitle(tab("Tab 1", [pane("a", { name: "Build" })]), agents)).toBe("Build");
   expect(tabTitle(tab("Research", [pane("a")]), agents)).toBe("Research");
 });
-it("names a split tab after the first pane in its layout", () => {
+it("names a split tab after its oldest pane, wherever the layout puts it", () => {
   const split = {
     id: "s",
     kind: "split" as const,
@@ -34,10 +34,15 @@ it("names a split tab after the first pane in its layout", () => {
   };
   const nodes = [
     split,
-    pane("a"),
     pane("b", { profile: "claude", terminalProfile: { name: "Claude Code" } }),
+    pane("a"),
   ] as WorkspaceTab["nodes"];
   expect(tabTitle(tab("Tab 1", nodes, "s"), [])).toBe("Claude Code");
+  // Swapped, or moved to the other side, it keeps that name.
+  const swapped = nodes.map((node) =>
+    node.kind === "split" ? { ...node, first: "a", second: "b" } : node,
+  );
+  expect(tabTitle(tab("Tab 1", swapped, "s"), [])).toBe("Claude Code");
 });
 it("shows a parent folder only for workspaces in different folders with the same name", () => {
   const project = (id: string, name: string, directory: string) =>

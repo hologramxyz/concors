@@ -63,6 +63,7 @@ export function ChatPane({
   start?: ReactNode;
 }) {
   const connection = useContext(TerminalConnectionContext);
+  const compact = useContext(CompactLayoutContext);
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
   const attempted = useRef(false);
@@ -209,10 +210,15 @@ export function ChatPane({
   // Asked only when no provider could be picked: none is installed, or the picked one failed.
   const asking = choosesProvider && !!providers && !provider;
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="Agent conversation">
+    <div
+      className={`flex min-h-0 min-w-0 flex-1 flex-col ${compact ? "" : "agent-conversation"}`}
+      aria-label="Agent conversation"
+    >
       <div className="min-h-0 flex-1" role="log" aria-label="Chat timeline" />
       {start && <StartHeading provider={provider} />}
-      <div className="shrink-0 px-[24px] pt-2 pb-3">
+      <div
+        className={`shrink-0 px-[24px] pt-2 pb-3 ${compact ? "" : "agent-composer-dock sticky bottom-0 bg-background"}`}
+      >
         <div className="mx-auto max-w-chat space-y-3">
           {error && (
             <div role="alert" className="flex items-center gap-2 text-xs text-destructive">
@@ -270,18 +276,20 @@ export function ChatPane({
 }
 
 /** The heading says what the start screen is for, so its prompt box asks more briefly. */
-const START_PLACEHOLDER = "Ask your agent to build something…";
+const START_PLACEHOLDER = "Ask anything…";
 
 /** Above the start screen's prompt box: the mark of the provider its chip has selected. */
 function StartHeading({ provider }: { provider: string | null }) {
   return (
     // 48px to the prompt box, less the 0.5rem its footer already pads above it.
-    <div className="flex shrink-0 flex-col items-center gap-3 px-[24px] pt-2 pb-[calc(48px-0.5rem)] text-muted-foreground">
-      {provider ? (
-        <ProviderIcon provider={provider} size={40} />
-      ) : (
-        <MessageSquare className="size-10" aria-hidden="true" />
-      )}
+    <div className="start-heading flex shrink-0 flex-col items-center gap-3 px-[24px] pt-2 pb-[calc(48px-0.5rem)] text-center text-muted-foreground">
+      <span className="start-heading-icon flex">
+        {provider ? (
+          <ProviderIcon provider={provider} size={40} />
+        ) : (
+          <MessageSquare className="size-10" aria-hidden="true" />
+        )}
+      </span>
       <h2 className="text-lg font-medium text-foreground">What should we build?</h2>
     </div>
   );
@@ -290,18 +298,54 @@ function StartHeading({ provider }: { provider: string | null }) {
 /**
  * Below the prompt box on the start screen. It is taller than the timeline above, so the column
  * sits a little above the middle of the pane. It holds the other ways to start, which a short
- * pane clips before the prompt box gives up any room, and shrinks away with the first message,
- * easing the box down.
+ * pane hides first, which is also what lets the box down to the bottom of the pane. It shrinks away
+ * with the first message, easing the box down.
  */
 function StartSpace({ open, children }: { open: boolean; children: ReactNode }) {
+  const space = useRef<HTMLDivElement>(null);
+  const [room, setRoom] = useState(true);
+  // A notice above the composer can take the room a height query would count on. Worked out from
+  // what the rest of the pane uses, since this space's own height is gone once it is hidden.
+  useLayoutEffect(() => {
+    const own = space.current;
+    const conversation = own?.closest(".agent-conversation");
+    if (!open || !own || !conversation) return;
+    const others = () =>
+      [...conversation.children].filter(
+        (child) => child !== own && !child.matches(".chat-timeline-shell, [role=log]"),
+      );
+    const measure = () => {
+      const used = others().reduce((sum, child) => sum + child.getBoundingClientRect().height, 0);
+      setRoom((conversation.clientHeight - used) * START_SPACE_SHARE >= START_ROW_HEIGHT);
+    };
+    const resized = new ResizeObserver(measure);
+    const watch = () => {
+      resized.disconnect();
+      resized.observe(conversation);
+      others().forEach((child) => resized.observe(child));
+      measure();
+    };
+    const changed = new MutationObserver(watch);
+    changed.observe(conversation, { childList: true });
+    watch();
+    return () => {
+      resized.disconnect();
+      changed.disconnect();
+    };
+  }, [open]);
   return (
     <div
-      className={`min-h-0 basis-0 overflow-hidden px-[24px] transition-[flex-grow] duration-300 ease-out motion-reduce:transition-none ${open ? "grow-[1.5]" : "grow-0"}`}
+      ref={space}
+      className={`start-space min-h-0 basis-0 overflow-hidden px-[24px] transition-[flex-grow] duration-300 ease-out motion-reduce:transition-none ${open ? "grow-[1.5]" : "grow-0"} ${room ? "" : "hidden"}`}
     >
-      <div className="mx-auto max-w-chat">{children}</div>
+      <div className="mx-auto h-full max-w-chat">{children}</div>
     </div>
   );
 }
+
+/** Its share of the room left over, against the timeline's 1 to its 1.5. */
+const START_SPACE_SHARE = 0.6;
+const START_ROW_HEIGHT = 36;
 
 export function Chat({
   sessionId,
@@ -334,6 +378,7 @@ export function Chat({
     conversation.ready,
     conversation.items,
   );
+  const slowLoad = useSlowLoad(conversation.loading === "latest");
   const footers = useMemo(() => completedTurnFooters(conversation.items), [conversation.items]);
   const replies = useMemo(() => forkReplies(conversation.items), [conversation.items]);
   const latestReply = conversation.hasNewer
@@ -459,15 +504,67 @@ export function Chat({
       )}
     </>
   );
+  const prompts = (
+    <>
+      {!compact && feedback}
+      <PinnedSubAgents
+        agents={runningAgents}
+        open={subAgent}
+        onOpen={(target) => setSubAgent(target)}
+        onClose={() => setSubAgent(null)}
+      />
+      {latestPlan && <PlanProgress compact item={latestPlan} />}
+      {canImplement && (
+        <Button
+          variant="outline"
+          disabled={!connected || busy}
+          onClick={() =>
+            void run(() =>
+              perform({
+                kind: "implement-plan",
+                sessionId,
+                itemId: proposal.id,
+                expectedRevision: agent.revision,
+              }),
+            )
+          }
+        >
+          Implement plan
+        </Button>
+      )}
+      {agent && (
+        <AgentAccountPrompt
+          agent={agent}
+          canEdit={!!connected}
+          onInstallPrompt={setInstallPrompt}
+        />
+      )}
+      {agent && <AgentLimitPrompt agent={agent} canEdit={!!connected} />}
+    </>
+  );
+  const composer = agent && (
+    <AgentComposer
+      key={agent.id}
+      agent={agent}
+      connected={!!connected && !busy}
+      reachable={connection?.state.status === "ready"}
+      onSend={latest}
+      onInterrupt={interrupt}
+      placeholder={start && fresh ? START_PLACEHOLDER : undefined}
+    />
+  );
   return (
     <SubAgentViewContext value={agent?.controls?.childHistory ? setSubAgent : null}>
       <div ref={root} className="chat-with-sub-agent relative flex min-h-0 min-w-0 flex-1">
         <div
           // A size container, so the composer can size its text box to the pane, not the window.
-          className={`flex min-h-0 min-w-0 flex-1 flex-col ${compact ? "" : "[container-type:size]"}`}
+          className={`flex min-h-0 min-w-0 flex-1 flex-col ${compact ? "" : "agent-conversation"}`}
           aria-label="Agent conversation"
         >
-          <div className="chat-timeline-shell relative flex min-h-0 flex-1">
+          <div
+            // Beside a composer that fills a very short pane, the messages keep a window to scroll.
+            className={`chat-timeline-shell relative flex flex-1 ${compact || fresh ? "min-h-0" : "min-h-12"}`}
+          >
             <div
               ref={scroll}
               role="log"
@@ -489,11 +586,11 @@ export function Chat({
                       Loading conversation…
                     </p>
                   )}
-                {(conversation.hasEarlier || conversation.loading === "latest") && (
+                {(conversation.hasEarlier || slowLoad) && (
                   <div className="h-5 text-center text-xs text-muted-foreground" role="status">
                     {conversation.loading === "earlier"
                       ? "Loading earlier messages…"
-                      : conversation.loading === "latest"
+                      : slowLoad
                         ? "Loading messages…"
                         : ""}
                   </div>
@@ -578,62 +675,31 @@ export function Chat({
             )}
           </div>
           {start && fresh && <StartHeading provider={agent.provider} />}
-          <div
-            data-chat-footer
-            // In a short pane the timeline gives up its room first. Prompts and notices above the
-            // composer scroll before the composer itself loses any of its height.
-            className={`${compact ? "px-3" : "flex max-h-[min(100%,max(55%,12rem))] flex-col px-[24px]"} shrink-0 pt-2 pb-3`}
-          >
-            <div className="mx-auto flex min-h-0 w-full max-w-chat flex-col gap-3">
-              <div className="min-h-0 space-y-3 overflow-y-auto empty:hidden">
-                {!compact && feedback}
-                <PinnedSubAgents
-                  agents={runningAgents}
-                  open={subAgent}
-                  onOpen={(target) => setSubAgent(target)}
-                  onClose={() => setSubAgent(null)}
-                />
-                {latestPlan && <PlanProgress compact item={latestPlan} />}
-                {canImplement && (
-                  <Button
-                    variant="outline"
-                    disabled={!connected || busy}
-                    onClick={() =>
-                      void run(() =>
-                        perform({
-                          kind: "implement-plan",
-                          sessionId,
-                          itemId: proposal.id,
-                          expectedRevision: agent.revision,
-                        }),
-                      )
-                    }
-                  >
-                    Implement plan
-                  </Button>
-                )}
-                {agent && (
-                  <AgentAccountPrompt
-                    agent={agent}
-                    canEdit={!!connected}
-                    onInstallPrompt={setInstallPrompt}
-                  />
-                )}
-                {agent && <AgentLimitPrompt agent={agent} canEdit={!!connected} />}
+          {compact ? (
+            <div data-chat-footer className="shrink-0 px-3 pt-2 pb-3">
+              <div className="mx-auto flex min-h-0 w-full max-w-chat flex-col gap-3">
+                <div className="min-h-0 space-y-3 overflow-y-auto empty:hidden">{prompts}</div>
+                {composer}
               </div>
-              {agent && (
-                <AgentComposer
-                  key={agent.id}
-                  agent={agent}
-                  connected={!!connected && !busy}
-                  reachable={connection?.state.status === "ready"}
-                  onSend={latest}
-                  onInterrupt={interrupt}
-                  placeholder={start && fresh ? START_PLACEHOLDER : undefined}
-                />
-              )}
             </div>
-          </div>
+          ) : (
+            <>
+              {/*
+               * In a short pane the timeline gives up its room first, then the prompts and notices
+               * above the composer scroll, and the composer stays whole and pinned. When there is
+               * not even room for those, the conversation itself scrolls behind the composer.
+               */}
+              <div className="chat-prompts flex max-h-[max(calc(55cqh-8.5rem),3rem)] min-h-12 shrink overflow-y-auto px-[24px] pt-2 has-[>div:empty]:hidden">
+                <div className="mx-auto h-fit w-full max-w-chat space-y-3">{prompts}</div>
+              </div>
+              <div
+                data-chat-footer
+                className="agent-composer-dock sticky bottom-0 z-10 shrink-0 bg-background px-[24px] pt-2 pb-3"
+              >
+                <div className="mx-auto w-full max-w-chat">{composer}</div>
+              </div>
+            </>
+          )}
           {start && <StartSpace open={fresh}>{fresh && start}</StartSpace>}
         </div>
         {subAgent && (
@@ -650,6 +716,21 @@ export function Chat({
       </div>
     </SubAgentViewContext>
   );
+}
+
+/** Most chats open faster than this, and a line that flashes by only looks like a glitch. */
+const SLOW_LOAD_MS = 300;
+function useSlowLoad(loading: boolean) {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (!loading) return;
+    const timer = setTimeout(() => setSlow(true), SLOW_LOAD_MS);
+    return () => {
+      clearTimeout(timer);
+      setSlow(false);
+    };
+  }, [loading]);
+  return slow;
 }
 
 function HistoryError({ message, onRetry }: { message: string; onRetry: () => void }) {

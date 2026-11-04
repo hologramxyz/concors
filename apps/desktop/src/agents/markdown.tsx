@@ -25,33 +25,38 @@ import { isFileLink, localPreviewLink, previewLinkUrl } from "./preview-links";
 import { InlineImage } from "./attachment-preview";
 import { messageImageIndex } from "./message-images";
 import { quotedSource } from "./markdown-quote";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 const HighlightedCode = lazy(() => import("./highlighted-code"));
 
 export function CopyButton({ text, label = "Copy message" }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false),
     [error, setError] = useState(false);
   return (
-    <button
-      type="button"
-      aria-label={copied ? "Copied" : error ? "Copy failed; try again" : label}
-      title={copied ? "Copied" : error ? "Copy failed; try again" : label}
-      className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-      onClick={() => {
-        void copyText(text).then(
-          () => {
-            setCopied(true);
-            setError(false);
-          },
-          () => {
-            setCopied(false);
-            setError(true);
-          },
-        );
-      }}
-      onBlur={() => setCopied(false)}
+    <SidebarTooltip
+      place="above"
+      content={copied ? "Copied" : error ? "Copy failed; try again" : label}
     >
-      {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-    </button>
+      <button
+        type="button"
+        aria-label={copied ? "Copied" : error ? "Copy failed; try again" : label}
+        className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+        onClick={() => {
+          void copyText(text).then(
+            () => {
+              setCopied(true);
+              setError(false);
+            },
+            () => {
+              setCopied(false);
+              setError(true);
+            },
+          );
+        }}
+        onBlur={() => setCopied(false)}
+      >
+        {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+      </button>
+    </SidebarTooltip>
   );
 }
 function codeText(value: ReactNode): string {

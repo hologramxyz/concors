@@ -78,7 +78,7 @@ test("settings replace the app sidebar with grouped pages and return to the app"
   // About describes this client; each machine's daemon details are on the Machines page.
   await settingsNavigation.getByRole("button", { name: "About", exact: true }).click();
   await expect(page.locator("header").getByRole("heading", { name: "About" })).toBeVisible();
-  await expect(main.getByText("Client version", { exact: true })).toBeVisible();
+  await expect(main.getByText("Version", { exact: true })).toBeVisible();
 
   await settingsNavigation.getByRole("button", { name: "Back to app", exact: true }).click();
   await expect(primaryNavigation).toBeVisible();

@@ -30,7 +30,7 @@ export function AccountSettings({ auth, onSetActiveOrganization }: AccountSettin
 
   return (
     <>
-      <Section title="Profile" description="Your identity across Concors.">
+      <Section title="Profile">
         <SettingsCard className="flex items-center gap-3 p-4">
           <AccountAvatar user={auth.user} githubEnabled className="size-10 shrink-0" />
           <div className="min-w-0">
@@ -47,14 +47,11 @@ export function AccountSettings({ auth, onSetActiveOrganization }: AccountSettin
         </SettingsCard>
       </Section>
 
-      <Section title="Integrations" description="Connect services to your Concors account.">
+      <Section title="Integrations">
         <GitHubConnection github={github} />
       </Section>
 
-      <Section
-        title="Organization"
-        description="Machines, access, and billing are scoped to the active organization."
-      >
+      <Section title="Organization">
         <SettingsCard className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between md:gap-6">
           <div className="min-w-0">
             <p className="text-sm font-medium text-foreground">Active organization</p>
@@ -81,7 +78,7 @@ export function AccountSettings({ auth, onSetActiveOrganization }: AccountSettin
                     >
                       <span className="truncate">{candidate.name}</span>
                       {candidate.isPersonal && (
-                        <span className="text-xs text-muted-foreground">· personal</span>
+                        <span className="text-xs text-muted-foreground">Personal</span>
                       )}
                       {candidate.id === organization?.id && (
                         <Check className="ml-auto" aria-hidden="true" />

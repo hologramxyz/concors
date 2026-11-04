@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw, ZoomIn, ZoomOut } from "lucide-react";
 import { FILE_PREVIEW_CAPABILITY, type FilePreview } from "@concors/protocol";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { Button } from "@/components/ui/button";
 import type { OpenFile } from "./context";
 import { formatSize } from "./file-size";
@@ -112,36 +113,39 @@ export function MediaFileTab({ file, kind }: { file: OpenFile; kind: "pdf" | "im
         </span>
         {preview && (
           <div role="group" aria-label="Zoom" className="flex items-center">
-            <Button
-              size="icon-xs"
-              variant="ghost"
-              aria-label="Zoom out"
-              title="Zoom out (⌘−)"
-              disabled={zoom <= MIN_ZOOM}
-              onClick={() => setZoom(stepZoom(zoom, -1))}
-            >
-              <ZoomOut />
-            </Button>
-            <Button
-              size="xs"
-              variant="ghost"
-              aria-label={`Zoom ${Math.round(zoom * 100)}%, reset to fit`}
-              title="Fit to the tab (⌘0)"
-              className="min-h-6 min-w-12 px-1.5 py-0 font-mono text-xs tabular-nums"
-              onClick={() => setZoom(1)}
-            >
-              {Math.round(zoom * 100)}%
-            </Button>
-            <Button
-              size="icon-xs"
-              variant="ghost"
-              aria-label="Zoom in"
-              title="Zoom in (⌘+)"
-              disabled={zoom >= MAX_ZOOM}
-              onClick={() => setZoom(stepZoom(zoom, 1))}
-            >
-              <ZoomIn />
-            </Button>
+            <SidebarTooltip place="title-bar" content="Zoom out" keys="⌘−">
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                aria-label="Zoom out"
+                disabled={zoom <= MIN_ZOOM}
+                onClick={() => setZoom(stepZoom(zoom, -1))}
+              >
+                <ZoomOut />
+              </Button>
+            </SidebarTooltip>
+            <SidebarTooltip place="title-bar" content="Fit to the tab" keys="⌘0">
+              <Button
+                size="xs"
+                variant="ghost"
+                aria-label={`Zoom ${Math.round(zoom * 100)}%, reset to fit`}
+                className="min-h-6 min-w-12 px-1.5 py-0 font-mono text-xs tabular-nums"
+                onClick={() => setZoom(1)}
+              >
+                {Math.round(zoom * 100)}%
+              </Button>
+            </SidebarTooltip>
+            <SidebarTooltip place="title-bar" content="Zoom in" keys="⌘+">
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                aria-label="Zoom in"
+                disabled={zoom >= MAX_ZOOM}
+                onClick={() => setZoom(stepZoom(zoom, 1))}
+              >
+                <ZoomIn />
+              </Button>
+            </SidebarTooltip>
           </div>
         )}
         <Button
@@ -166,7 +170,7 @@ export function MediaFileTab({ file, kind }: { file: OpenFile; kind: "pdf" | "im
       )}
       <div className="min-h-0 min-w-0 flex-1 overflow-hidden">{body}</div>
       <div className="shrink-0 border-t px-3 py-1 font-mono text-xs text-muted-foreground">
-        Read-only preview{preview ? ` · ${formatSize(preview.size)}` : ""}
+        Read-only preview{preview ? `, ${formatSize(preview.size)}` : ""}
       </div>
     </section>
   );

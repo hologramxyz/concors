@@ -83,14 +83,14 @@ it("summarises the two windows nearest their limit", () => {
         ["Weekly · Fable", 71.6, null],
       ]),
     ),
-  ).toBe("Weekly · Fable 72% · Weekly 40%");
+  ).toBe("Weekly · Fable 72%, Weekly 40%");
   expect(usageGlance(usage([["Session", null, null]]))).toBeNull();
 });
 
 it("names the engine's account and when the limit lifts", () => {
   const now = Date.parse("2026-09-30T12:00:00Z");
   expect(limitHeadline("claude", "2026-09-30T14:14:00Z", now)).toBe(
-    "This Claude account reached its usage limit · resets in 2h 14m",
+    "This Claude account reached its usage limit, resets in 2h 14m",
   );
   expect(limitHeadline("codex", null, now)).toBe("This ChatGPT account reached its usage limit");
   expect(limitHeadline("claude", "2026-09-30T11:00:00Z", now)).toBe(

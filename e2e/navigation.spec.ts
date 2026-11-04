@@ -6,11 +6,8 @@ import type { Page } from "@playwright/test";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { chooseProvider } from "./support/agents.ts";
 import { tab } from "./support/tabs.ts";
-// Pane and tab sequences share one dialog, which names the combination that opened it.
 const shortcutActions = (page: Page, prefix: "p" | "t") =>
-  page
-    .getByRole("dialog", { name: "Shortcut actions", exact: true })
-    .filter({ hasText: `Shift+${prefix.toUpperCase()}:` });
+  page.getByRole("dialog", { name: prefix === "p" ? "Pane" : "Tab", exact: true });
 const sequence = async (page: Page, prefix: "p" | "t", key: string) => {
   await page.keyboard.press(`Control+Shift+${prefix}`);
   await expect(shortcutActions(page, prefix)).toBeVisible();
@@ -160,7 +157,7 @@ test("directional pane sequences, tab cycling, project memory and immediate Agen
       page.getByRole("heading", { name: "Other navigation project", exact: true }),
     ).toBeVisible();
     await page.keyboard.press("Control+Shift+k");
-    await page.getByPlaceholder("Search workspaces, agents, tabs…").fill("Navigation project");
+    await page.getByPlaceholder("Search workspaces and tabs…").fill("Navigation project");
     await page
       .locator('[data-search-result="workspace"]')
       .filter({ hasText: /^Navigation project/ })

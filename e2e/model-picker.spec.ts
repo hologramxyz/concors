@@ -55,7 +55,7 @@ test("effective models stay selected and warm provider menus reopen without load
     await page.getByRole("button", { name: "Back to providers", exact: true }).click();
     await page
       .getByRole("option", {
-        name: "Claude Code Starts a new conversation in this pane",
+        name: "Claude Code",
         exact: true,
       })
       .click();
@@ -67,7 +67,7 @@ test("effective models stay selected and warm provider menus reopen without load
       await page.getByRole("button", { name: "Back to providers", exact: true }).click();
       await page
         .getByRole("option", {
-          name: "Claude Code Starts a new conversation in this pane",
+          name: "Claude Code",
           exact: true,
         })
         .click();
@@ -192,11 +192,17 @@ test("an outdated agent CLI is flagged in the picker and can be updated from it"
     await page.getByRole("button", { name: "Back to providers", exact: true }).click();
     await expect(
       page.getByRole("option", {
-        name: "Codex Current conversation · Update available (0.156.0)",
+        name: "Codex Update available",
         exact: true,
       }),
     ).toBeVisible();
-    await page.getByRole("option", { name: /^Codex Current conversation/ }).click();
+    // The provider in use has the same check as the selected model, the others none.
+    const current = page.getByRole("option", { name: /^Codex/ });
+    await expect(current.locator("svg.lucide-check")).toBeVisible();
+    await expect(
+      page.getByRole("option", { name: /^Claude Code/ }).locator("svg.lucide-check"),
+    ).toHaveCount(0);
+    await current.click();
     await page.getByRole("button", { name: "Update", exact: true }).click();
     await expect(page.getByText("Updating Codex…", { exact: true })).toBeVisible();
     await expect(notice).toHaveCount(0);
@@ -233,7 +239,7 @@ test("switching provider explains that the conversation is kept, and switching b
     await picker.click();
     await page.getByRole("button", { name: "Back to providers", exact: true }).click();
     const claude = page.getByRole("option", { name: /^Claude Code/ });
-    await expect(claude).toContainText("Starts a new conversation in this pane");
+    await expect(claude).toHaveText("Claude Code");
     await claude.click();
     await page.getByRole("option").first().click();
     // A conversation with content is not set aside without saying what happens to it.
@@ -259,9 +265,7 @@ test("switching provider explains that the conversation is kept, and switching b
     await expect(notice).toBeVisible();
     await picker.click();
     await page.getByRole("button", { name: "Back to providers", exact: true }).click();
-    await expect(page.getByRole("option", { name: /^Codex/ })).toContainText(
-      "Back to its conversation in this pane",
-    );
+    await expect(page.getByRole("option", { name: /^Codex/ })).toHaveText("Codex");
     await page.keyboard.press("Escape");
 
     // One click returns to the conversation that was set aside, intact.

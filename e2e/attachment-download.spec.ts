@@ -67,10 +67,16 @@ test("images open as large as the window allows, and attachments download", asyn
     ]);
     expect(download.suggestedFilename()).toBe("banner.png");
     expect(await readFile(await download.path())).toEqual(Buffer.from(banner));
-    await expect(viewer.getByRole("button", { name: "Download banner.png" })).toHaveAttribute(
-      "title",
-      "Saved to Downloads",
-    );
+    const saved = viewer.getByRole("button", { name: "Download banner.png" });
+    await expect(saved).not.toHaveAttribute("title");
+    await expect(async () => {
+      await page.mouse.move(0, 0);
+      await saved.hover();
+      await expect(page.getByRole("tooltip")).toContainText("Saved to Downloads", {
+        timeout: 1500,
+      });
+    }).toPass();
+    await page.mouse.move(0, 0);
     await viewer.getByRole("button", { name: "Close image" }).click();
 
     await log.getByRole("button", { name: "notes.txt", exact: true }).click();

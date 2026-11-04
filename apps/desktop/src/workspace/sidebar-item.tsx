@@ -6,18 +6,19 @@ import {
   type WorkspacePullRequests,
 } from "@concors/protocol";
 import { cn } from "cn";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { ChevronRight } from "lucide-react";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { ProjectActions } from "./project-actions";
 import { ProjectImage } from "./project-image";
 import { useContext, useRef, useState } from "react";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { WorkspacePullRequestCount } from "@/pull-requests/workspace-count";
-import { pullRequestsLabel } from "@/pull-requests/labels";
-import { workspaceOpenCount } from "@/pull-requests/store";
 import { useAgents } from "@/agents/context";
 import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
+import { useHomePath } from "./home-path";
 import {
+  AGENT_DOT_COLOR,
   workspaceAttention,
   workspaceAttentionLabel,
   type WorkspaceAttention,
@@ -29,10 +30,12 @@ export function WorkspaceSidebarItem({
   compact,
   selected,
   current,
+  expanded,
   canEdit,
   icon,
   pullRequests,
   onSelect,
+  onToggleExpanded,
   onOpenPullRequests,
   execute,
   onCommand,
@@ -50,15 +53,21 @@ export function WorkspaceSidebarItem({
   canEdit: boolean;
   icon: ProjectIcon | undefined;
   pullRequests?: WorkspacePullRequests | undefined;
+  /** Its open list shows each dot on its own row, so the folder has no dot of its own. */
+  expanded?: boolean;
   onSelect: (id: string) => void;
+  /** Offers a chevron over the icon on hover and keyboard focus, which only folds the workspace. */
+  onToggleExpanded?: () => void;
   onOpenPullRequests?: (projectId: string, repository?: string) => void;
   execute: (operation: WorkspaceOperation) => Promise<void>;
   onCommand: (operation: WorkspaceOperation) => void;
 }) {
   const mobile = useContext(CompactLayoutContext);
   const connection = useContext(TerminalConnectionContext);
-  const openPullRequests = workspaceOpenCount(pullRequests);
-  const attention = workspaceAttention(project, useAgents(), useTerminalSessions());
+  const summed = workspaceAttention(project, useAgents(), useTerminalSessions());
+  const attention = expanded
+    ? { ...summed, kind: null, needsInput: 0, failed: 0, done: 0 }
+    : summed;
   // Older daemons reject `project.rename` outright, so the menu item stays disabled for them.
   const canRename =
     canEdit &&
@@ -86,30 +95,41 @@ export function WorkspaceSidebarItem({
       name: name || null,
     });
   };
+  const folder = useHomePath()(project.directory);
+  const attentionLabel = workspaceAttentionLabel(attention);
+  const details = (folder || attentionLabel) && (
+    <>
+      {folder && <p>{folder}</p>}
+      {attentionLabel && <p className="opacity-75">{attentionLabel}</p>}
+    </>
+  );
+  // Touch has no hover to reveal it, and the rail's icon is the whole control.
+  const foldable = onToggleExpanded && !mobile && !compact && renaming === null;
   const image = (
     <span className="relative flex shrink-0">
-      <ProjectImage
-        key={icon?.source ?? "fallback"}
-        source={icon?.source ?? null}
-        isGit={icon?.isGit ?? false}
-        name={project.name}
-      />
-      <AttentionBadge attention={attention} />
+      <span
+        className={cn(
+          "flex",
+          foldable &&
+            "group-hover:opacity-0 group-has-[:focus-visible:not([data-pointer-focus])]:opacity-0",
+        )}
+      >
+        <ProjectImage
+          key={icon?.source ?? "fallback"}
+          source={icon?.source ?? null}
+          isGit={icon?.isGit ?? false}
+          name={project.name}
+        />
+      </span>
+      <AttentionBadge attention={attention} label={attentionLabel} />
     </span>
-  );
-  const details = (
-    <div className="min-w-0 break-words">
-      <p className="font-medium">{project.name}</p>
-      <p className="opacity-75">{project.directory}</p>
-      {attention.kind && <p className="opacity-75">Agents: {workspaceAttentionLabel(attention)}</p>}
-      {openPullRequests > 0 && <p className="opacity-75">{pullRequestsLabel(openPullRequests)}</p>}
-    </div>
   );
   const button = (
     <button
       type="button"
       disabled={!canEdit}
-      aria-label={project.name}
+      // A button's name replaces its contents for a screen reader, so the dot's text goes here too.
+      aria-label={attentionLabel ? `${project.name}, ${attentionLabel}` : project.name}
       data-workspace-id={project.id}
       onClick={() => onSelect(project.id)}
       // The workspace you are in, even while one of its tab rows carries the selection's fill.
@@ -125,16 +145,10 @@ export function WorkspaceSidebarItem({
           {mobile ? (
             project.name
           ) : (
-            // Only the name opens the details, and they open below it: beside the row they would
-            // cover its pull-request count and "…" menu.
-            <Tooltip delayDuration={600} disableHoverableContent>
-              <TooltipTrigger asChild>
-                <span>{project.name}</span>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" align="start" sideOffset={6}>
-                {details}
-              </TooltipContent>
-            </Tooltip>
+            // Only the name opens the tooltip, so the rest of the row stays free for its controls.
+            <SidebarTooltip content={details}>
+              <span>{project.name}</span>
+            </SidebarTooltip>
           )}
         </span>
       )}
@@ -147,11 +161,34 @@ export function WorkspaceSidebarItem({
     <li
       className={cn(
         // Keyboard focus shows, but a clicked row does not stay filled once selection moves on.
-        "group flex items-center rounded-md hover:bg-sidebar-accent/50 has-[:focus-visible]:bg-sidebar-accent/50 has-[[data-state=open]]:bg-sidebar-accent/50",
+        "group relative flex items-center rounded-md hover:bg-sidebar-accent/50 has-[:focus-visible:not([data-pointer-focus])]:bg-sidebar-accent/50 has-[[data-state=open]]:bg-sidebar-accent/50",
         selected && "bg-sidebar-accent hover:bg-sidebar-accent",
         mobile && "mobile-project",
       )}
     >
+      {foldable && (
+        // Laid over the icon rather than beside it, so the row's layout is the same either way.
+        <SidebarTooltip content={expanded ? "Collapse" : "Expand"}>
+          <button
+            type="button"
+            aria-label={`${expanded ? "Collapse" : "Expand"} ${project.name}`}
+            aria-expanded={!!expanded}
+            data-workspace-toggle={project.id}
+            onClick={onToggleExpanded}
+            className="absolute inset-y-0 left-0 z-10 flex w-[calc(0.5rem+22px)] items-center rounded-md pl-2 text-muted-foreground opacity-0 group-hover:opacity-100 group-has-[:focus-visible:not([data-pointer-focus])]:opacity-100 hover:text-sidebar-foreground"
+          >
+            {/* In pixels, as `ProjectImage` is: the folder glyph it replaces is 16 of its 20. */}
+            <span className="flex size-[20px] items-center justify-center">
+              <ChevronRight
+                className={cn(
+                  "size-[16px] transition-transform duration-200 motion-reduce:transition-none",
+                  expanded && "rotate-90",
+                )}
+              />
+            </span>
+          </button>
+        </SidebarTooltip>
+      )}
       {renaming !== null ? (
         <div className="flex h-8 min-w-0 flex-1 items-center gap-2 px-2">
           {image}
@@ -181,12 +218,7 @@ export function WorkspaceSidebarItem({
       ) : mobile || !compact ? (
         button
       ) : (
-        <Tooltip delayDuration={250}>
-          <TooltipTrigger asChild>{button}</TooltipTrigger>
-          <TooltipContent side="right" sideOffset={8}>
-            {details}
-          </TooltipContent>
-        </Tooltip>
+        <SidebarTooltip content={details}>{button}</SidebarTooltip>
       )}
       {/* Before the menu, so every row's "…" sits at the same edge. */}
       {!compact && onOpenPullRequests && (
@@ -220,17 +252,20 @@ export function WorkspaceSidebarItem({
  * The corner of a workspace's icon, when something in it wants a look: a question, a failure or a
  * finished turn. Work in progress shows on its own row instead, so the icon stays still.
  */
-function AttentionBadge({ attention }: { attention: WorkspaceAttention }) {
+function AttentionBadge({ attention, label }: { attention: WorkspaceAttention; label: string }) {
   if (!attention.kind || attention.kind === "working") return null;
   return (
     <span
+      role="img"
+      aria-label={label}
       data-workspace-attention={attention.kind}
-      className="absolute -right-1 -bottom-1 flex size-3 items-center justify-center rounded-full bg-sidebar ring-1 ring-sidebar"
+      // Above the chevron that replaces the icon on hover, which still takes the click.
+      className="pointer-events-none absolute -right-1 -bottom-1 z-20 flex size-3 items-center justify-center rounded-full bg-sidebar ring-1 ring-sidebar"
     >
       <span
         className={cn(
           "size-2 rounded-full",
-          attention.kind === "done" ? "bg-primary" : "bg-destructive",
+          AGENT_DOT_COLOR[attention.kind === "done" ? "done" : "attention"],
         )}
       />
     </span>

@@ -10,10 +10,13 @@ import { Dialog as DialogPrimitive } from "radix-ui";
 import { Loader2 } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
-import { Kbd } from "@/components/ui/kbd";
-import { useShortcutLabels } from "@/shortcuts/preferences-context";
+import { KeyChips } from "@/shortcuts/key-chips";
+import type { CommandId } from "@/shortcuts/bindings";
+import { useMainBinding, useShortcutPreferences } from "@/shortcuts/preferences-context";
 import {
   cardPosition,
+  frameInside,
+  welcomeTitle,
   TOUR_STEPS,
   tourSteps,
   type Box,
@@ -28,6 +31,8 @@ const FIND_TIMEOUT_MS = 800;
 /** How long to wait for the default workspace before touring without it. */
 const SETUP_TIMEOUT_MS = 10_000;
 const HOLE_PADDING = 6;
+/** Keeps the hole's 2px ring, and clear space, inside the window's edges. */
+const HOLE_INSET = 8;
 // Dark enough to pull the eye to the lit area, light enough that the app still reads behind it.
 const DIM = "rgb(0 0 0 / 0.5)";
 
@@ -99,7 +104,9 @@ function useStepBox(step: TourStep): Box | null | "pending" {
           frame = requestAnimationFrame(follow);
           return;
         }
-        const next = boxOf(element, menu);
+        // A control can be part of a larger one the frame should take in whole, as ⌄ is of the
+        // split "+" button.
+        const next = boxOf(element.closest<HTMLElement>("[data-tour-frame]") ?? element, menu);
         setBox((current) =>
           current !== null &&
           current !== "pending" &&
@@ -273,7 +280,7 @@ function Welcome({
         <BrandMark className="size-12 text-foreground" />
         <div className="space-y-2">
           <DialogPrimitive.Title className="text-xl font-semibold">
-            Welcome to Concors{firstName ? `, ${firstName}` : ""}
+            {welcomeTitle(firstName)}
           </DialogPrimitive.Title>
           <DialogPrimitive.Description className="text-muted-foreground">
             Run coding agents side by side, right on your computer.
@@ -331,9 +338,7 @@ function Finish({
             You’re all set
           </DialogPrimitive.Title>
           <DialogPrimitive.Description className="text-muted-foreground">
-            {hasWorkspace
-              ? "Start your first agent: click + in the tab bar and ask it something."
-              : "Add a folder from your computer, then start a chat."}
+            Type below to start, or click + for more.
           </DialogPrimitive.Description>
         </div>
         {hasWorkspace ? (
@@ -371,7 +376,6 @@ function Step({
   onSkip: () => void;
 }) {
   const box = useStepBox(step);
-  const shortcutLabel = useShortcutLabels();
   const card = useRef<HTMLDivElement>(null);
   const [measured, setMeasured] = useState<{ index: number; height: number } | null>(null);
   useLayoutEffect(() => {
@@ -385,14 +389,19 @@ function Step({
     event.preventDefault();
   };
   const viewport = { width: window.innerWidth, height: window.innerHeight };
+  const padding = step.framePadding ?? HOLE_PADDING;
   const hole =
     box && box !== "pending"
-      ? {
-          top: box.top - HOLE_PADDING,
-          left: box.left - HOLE_PADDING,
-          width: box.width + HOLE_PADDING * 2,
-          height: box.height + HOLE_PADDING * 2,
-        }
+      ? frameInside(
+          {
+            top: box.top - padding,
+            left: box.left - padding,
+            width: box.width + padding * 2,
+            height: box.height + padding * 2,
+          },
+          viewport,
+          HOLE_INSET,
+        )
       : null;
   const place = (height: number) =>
     hole
@@ -452,11 +461,7 @@ function Step({
             {step.body}
           </DialogPrimitive.Description>
         </div>
-        {step.shortcut && (
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            Shortcut <Kbd>{shortcutLabel(step.shortcut)}</Kbd>
-          </p>
-        )}
+        {step.shortcut && <StepShortcut id={step.shortcut} />}
         <div className="flex items-center gap-2">
           <Button type="button" variant="ghost" onClick={onSkip}>
             Skip tour
@@ -468,7 +473,11 @@ function Step({
               </Button>
             )}
             {/* Mounted once the card shows: a hidden button cannot take focus. */}
-            <StepNext key={settled ? index : `hidden-${index}`} onNext={onNext} />
+            <StepNext
+              key={settled ? index : `hidden-${index}`}
+              label={index + 1 === count ? "Done" : "Next"}
+              onNext={onNext}
+            />
           </div>
         </div>
       </DialogPrimitive.Content>
@@ -503,10 +512,27 @@ function Spotlight({ hole }: { hole: Box }) {
 }
 
 /** Keyed by step, and by the card showing, so focus lands on Next each time, ready for Enter. */
-function StepNext({ onNext }: { onNext: () => void }) {
+function StepNext({ label, onNext }: { label: string; onNext: () => void }) {
   return (
     <Button type="button" onClick={onNext} autoFocus>
-      Next
+      {label}
     </Button>
+  );
+}
+
+/**
+ * The step's shortcut as the person has it bound, one key per chip so a sequence such as ⌃⇧P then →
+ * reads as two presses. Nothing when the command has no binding.
+ */
+function StepShortcut({ id }: { id: CommandId }) {
+  const { mac } = useShortcutPreferences();
+  const binding = useMainBinding(id);
+  if (!binding) return null;
+  return (
+    <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      {/* The chips speak for themselves on screen; a screen reader still hears what they are. */}
+      <span className="sr-only">Shortcut</span>
+      <KeyChips strokes={binding.keys} mac={mac} large />
+    </p>
   );
 }

@@ -4,7 +4,7 @@ import { MessageSquare } from "lucide-react";
 import { useStartingProvider } from "./default-provider";
 import { ProviderIcon } from "./provider-icon";
 import { useAgents } from "./context";
-import { chatAgentStatus, type AgentStatus } from "./agent-status";
+import { AGENT_DOT_COLOR, chatAgentStatus, type AgentStatus } from "./agent-status";
 
 export function AgentLoadingIcon({ className = "size-4" }: { className?: string }) {
   return (
@@ -61,7 +61,7 @@ export function AgentStatusIcon({
   surface = "bg-sidebar ring-sidebar",
   runningTestId,
 }: {
-  agent: Pick<AgentStatus, "provider" | "status" | "running" | "color" | "unread">;
+  agent: Pick<AgentStatus, "provider" | "status" | "running" | "dot">;
   label?: string;
   /** Background of whatever the icon sits on, so the badge cuts cleanly into the logo. */
   surface?: string;
@@ -77,14 +77,8 @@ export function AgentStatusIcon({
       <span aria-hidden="true" data-provider={agent.provider}>
         <ProviderIcon provider={agent.provider} />
       </span>
-      {agent.unread && (
-        <span
-          aria-label="Unread agent update"
-          className={`absolute -top-1 -left-1 size-1.5 rounded-full bg-primary ring-2 ${surface}`}
-        />
-      )}
       {/* No badge while it sits idle, so a mark always means something. */}
-      {(agent.running || agent.color) && (
+      {(agent.running || agent.dot) && (
         <span
           data-agent-status-badge
           data-testid={agent.running ? runningTestId : undefined}
@@ -93,7 +87,7 @@ export function AgentStatusIcon({
           {agent.running ? (
             <AgentLoadingIcon className="size-3" />
           ) : (
-            <span className={`size-2 rounded-full ${agent.color}`} />
+            <span className={`size-2 rounded-full ${agent.dot && AGENT_DOT_COLOR[agent.dot]}`} />
           )}
         </span>
       )}

@@ -196,7 +196,7 @@ test("the sent-message index reloads cleanly when a reconnect's workspace trails
       timeout: 15_000,
     });
     await page.waitForTimeout(3_000);
-    await expect(page.getByText("Could not load messages · Retry")).toHaveCount(0);
+    await expect(page.getByText("Could not load messages. Retry")).toHaveCount(0);
     await expect(marks).toHaveCount(2);
   } finally {
     off();

@@ -115,9 +115,9 @@ test("flat mobile tabs stay synced with desktop nested splits without flattening
     await picker.click();
     await expect(drawer.locator(".mobile-tab-card")).toHaveCount(0);
     await expect(drawer.locator("[data-pane-choice]")).toHaveText([
-      "Development · 1Agent",
-      "Development · 2Terminal",
-      "Development · 3Terminal",
+      "Development 1Agent",
+      "Development 2Terminal",
+      "Development 3Terminal",
       "NotesAgent",
     ]);
     await drawer.getByRole("button", { name: "Close", exact: true }).click();
@@ -147,7 +147,7 @@ test("flat mobile tabs stay synced with desktop nested splits without flattening
       name: "Renamed on desktop",
     });
     await expect(drawer.locator("[data-pane-choice]").first()).toContainText(
-      "Renamed on desktop · 1",
+      "Renamed on desktop 1",
     );
     const fourth = crypto.randomUUID();
     await execute({

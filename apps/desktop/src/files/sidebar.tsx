@@ -1,6 +1,7 @@
 import { useContext, useRef, useState, type CSSProperties } from "react";
 import { FolderOpen } from "lucide-react";
 import type { WorkspaceProject } from "@concors/protocol";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { useFiles, fileScope, knownWorkspace } from "./context";
 import { FileTree } from "./tree";
@@ -15,29 +16,34 @@ export function FilesToggle() {
     connection.state.daemon.capabilities?.includes("project-files");
   return (
     <div className="size-7 shrink-0">
-      <button
-        id="toggle-project-files"
-        type="button"
-        aria-label="Toggle project files"
-        title={available ? "Project files" : "Update or reconnect the machine to browse files"}
-        aria-expanded={sidebar.open}
-        aria-controls="project-file-tree"
+      <SidebarTooltip
+        place="title-bar"
         disabled={!available}
-        onPointerEnter={preloadCodeEditor}
-        onFocus={preloadCodeEditor}
-        onClick={() => {
-          preloadCodeEditor();
-          sidebar.setOpen(!sidebar.open);
-        }}
-        style={
-          !sidebar.docked
-            ? { transform: `translateX(-${sidebar.open ? sidebar.width : 0}px)` }
-            : undefined
-        }
-        className={`files-toggle flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40 ${sidebar.open ? "bg-sidebar text-foreground" : ""}`}
+        content={available ? "Files" : "Update or reconnect the machine to browse files"}
       >
-        <FolderOpen className="size-4" />
-      </button>
+        <button
+          id="toggle-project-files"
+          type="button"
+          aria-label="Toggle project files"
+          aria-expanded={sidebar.open}
+          aria-controls="project-file-tree"
+          disabled={!available}
+          onPointerEnter={preloadCodeEditor}
+          onFocus={preloadCodeEditor}
+          onClick={() => {
+            preloadCodeEditor();
+            sidebar.setOpen(!sidebar.open);
+          }}
+          style={
+            !sidebar.docked
+              ? { transform: `translateX(-${sidebar.open ? sidebar.width : 0}px)` }
+              : undefined
+          }
+          className={`files-toggle flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40 ${sidebar.open ? "bg-sidebar text-foreground" : ""}`}
+        >
+          <FolderOpen className="size-4" />
+        </button>
+      </SidebarTooltip>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import type { Machine } from "@concors/api-client";
 import { Pencil } from "lucide-react";
 import { useId, useRef, useState } from "react";
 
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -45,17 +46,18 @@ export function RenameMachineDialog({
         setOpen(next);
       }}
     >
-      <DialogTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="text-muted-foreground hover:text-foreground"
-          aria-label={`Rename ${machine.name}`}
-          title="Rename machine"
-        >
-          <Pencil className="size-3.5" aria-hidden="true" />
-        </Button>
-      </DialogTrigger>
+      <SidebarTooltip place="title-bar" content="Rename machine">
+        <DialogTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground hover:text-foreground"
+            aria-label={`Rename ${machine.name}`}
+          >
+            <Pencil className="size-3.5" aria-hidden="true" />
+          </Button>
+        </DialogTrigger>
+      </SidebarTooltip>
       <DialogContent
         className="max-w-md"
         showCloseButton={!pending}

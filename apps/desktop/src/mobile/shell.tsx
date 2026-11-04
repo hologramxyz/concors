@@ -176,6 +176,8 @@ function MobileWorkspaceContent({
   // As on desktop, a reconnect that settles within two seconds never flashes a notice.
   const [reconnectNotice, setReconnectNotice] = useState(false);
   const reconnecting = !!workspace && !ready;
+  const connectionFailed =
+    host.phase === "error" || host.phase === "paused" || (reconnecting && reconnectNotice);
   useEffect(() => {
     if (!reconnecting) return;
     const timer = setTimeout(() => setReconnectNotice(true), 2_000);
@@ -770,7 +772,6 @@ function MobileWorkspaceContent({
                         aria-label="Project files"
                         aria-controls="mobile-project-files"
                         aria-expanded={files.sidebar.open}
-                        title="Browse project files"
                         onPointerEnter={preloadCodeEditor}
                         onFocus={preloadCodeEditor}
                         onClick={() => {
@@ -818,6 +819,7 @@ function MobileWorkspaceContent({
                                 key={host.machineId}
                                 workspace={workspace}
                                 connected={!!ready}
+                                connectionFailed={connectionFailed}
                                 onOpenAgent={openAgent}
                               />
                             </div>
@@ -827,6 +829,9 @@ function MobileWorkspaceContent({
                                 key={host.machineId}
                                 workspace={workspace}
                                 connected={!!ready}
+                                connectionFailed={connectionFailed}
+                                canOpenFolder={canEdit}
+                                onOpenFolder={setAddingProject}
                                 view={page.view}
                                 onNavigate={(view) => setPage({ kind: "pull-requests", view })}
                               />
@@ -987,10 +992,6 @@ function MobileWorkspaceContent({
               />
               <WorkspaceSearch
                 key={`${host.machineId}:${workspace?.epoch}`}
-                machine={
-                  host.machines.find((machine) => machine.id === host.machineId)?.name ??
-                  "this machine"
-                }
                 activeProjectId={project?.id}
                 projects={workspace?.projects ?? []}
                 canSelectProject={!!workspace}

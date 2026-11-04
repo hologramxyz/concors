@@ -21,10 +21,7 @@ export function ColorThemeSettings() {
     }
   };
   return (
-    <Section
-      title="Color theme"
-      description="Choose a palette for the workspace, agent chats, and terminals. Each includes light and dark colors."
-    >
+    <Section title="Color theme">
       <fieldset>
         <legend className="sr-only">Color theme</legend>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
@@ -80,12 +77,9 @@ export function ColorThemeSettings() {
                     </span>
                   </span>
                 </span>
-                <span className="mt-2 flex items-center gap-2 px-1 text-sm font-medium">
+                <span className="mt-2 flex items-center gap-2 px-1 pb-1 text-sm font-medium">
                   <span className="truncate">{theme.name}</span>
                   {active && <Check className="ml-auto size-4 shrink-0" aria-hidden="true" />}
-                </span>
-                <span className="mt-0.5 block px-1 pb-1 text-xs text-muted-foreground">
-                  {theme.custom ? "Custom theme" : theme.description}
                 </span>
               </label>
             );
@@ -102,8 +96,7 @@ export function ColorThemeSettings() {
           )}
         </div>
         <p className="text-sm text-muted-foreground">
-          Ask an agent to create a theme, or edit a JSON file yourself. Saved changes appear
-          automatically.
+          Ask an agent to create a theme, or edit a JSON file yourself.
         </p>
         {catalog ? (
           <>
@@ -124,8 +117,7 @@ export function ColorThemeSettings() {
           </>
         ) : (
           <p className="text-xs text-muted-foreground">
-            Connect to a machine with custom-theme support to load its files. Built-in palettes are
-            always available.
+            Connect to a machine with custom-theme support to load its files.
           </p>
         )}
         {(error || copyError) && (

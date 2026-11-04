@@ -52,7 +52,7 @@ account menu even if its shortcut is changed or disabled.
 | Previous/next tab                      | Ctrl+Shift+T, then Left/Right              |
 | New tab profile picker                 | Ctrl+Shift+T, then Enter                   |
 | Close current tab                      | Ctrl+Shift+T, then Backspace               |
-| Search workspaces, agents and tabs     | Ctrl+Shift+K, type, then Enter             |
+| Search workspaces and tabs             | Ctrl+Shift+K, type, then Enter             |
 | Add project                            | Ctrl+Shift+N                               |
 | Settings                               | Ctrl+Shift+,                               |
 | Shortcut reference                     | Ctrl+Shift+/                               |

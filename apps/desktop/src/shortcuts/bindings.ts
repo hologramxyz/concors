@@ -1,8 +1,8 @@
 export const BINDINGS = [
-  { id: "search", label: "Search workspaces, agents and tabs", key: "k" },
+  { id: "search", label: "Search workspaces and tabs", key: "k" },
   { id: "new-project", label: "New workspace", key: "n" },
   { id: "new-tab", label: "New tab", key: "t", then: "Enter" },
-  { id: "resume-chat", label: "Resume a closed chat…", key: "t", then: "r" },
+  { id: "resume-chat", label: "Resume a chat…", key: "t", then: "r" },
   { id: "previous-tab", label: "Previous tab", key: "t", then: "ArrowLeft" },
   { id: "next-tab", label: "Next tab", key: "t", then: "ArrowRight" },
   { id: "new-pane", label: "New pane beside current", key: "p", then: "Enter" },
@@ -66,4 +66,17 @@ export function shortcutLabel(id: CommandId, mac = isMac()): string {
     .map((modifier) => (modifier === "Control" ? (mac ? "Control" : "Ctrl") : modifier))
     .join("+");
   return `${prefix ? `${prefix}+` : ""}${keyLabel(binding.key)}${"then" in binding ? ` → ${keyLabel(binding.then)}` : ""}`;
+}
+
+/**
+ * What a two-key shortcut's panel is called. It goes by the commands listed rather than the key that
+ * opened it, which can be rebound. A panel mixing commands from both has no shorter name.
+ */
+export function sequenceTitle(ids: readonly string[]): string {
+  const prefixes = new Set(
+    ids.map((id) => BINDINGS.find((binding) => binding.id === id)).map((binding) => binding?.key),
+  );
+  if (prefixes.size === 1 && prefixes.has("t")) return "Tab";
+  if (prefixes.size === 1 && prefixes.has("p")) return "Pane";
+  return "Shortcut actions";
 }

@@ -40,7 +40,12 @@ test.beforeEach(async ({ page, baseURL }) => {
   });
 });
 
-async function githubApi(page: Page, initiallyConnected = true, identityConnected = false) {
+async function githubApi(
+  page: Page,
+  initiallyConnected = true,
+  identityConnected = false,
+  login = "alice",
+) {
   let connected = initiallyConnected;
   let ready = false;
   let accounts = [
@@ -110,7 +115,7 @@ async function githubApi(page: Page, initiallyConnected = true, identityConnecte
               configured: true,
               identityConnected,
               connected,
-              login: connected ? "alice" : null,
+              login: connected ? login : null,
               updatedAt: connected ? "2026-09-12T00:00:00Z" : null,
               manageUrl: "https://github.com/apps/concors-test/installations/new",
             };
@@ -153,7 +158,8 @@ test("account settings connects and disconnects GitHub without exposing credenti
   expect(opened).toEqual(["https://github.com/login/oauth/authorize?state=test-only"]);
   await githubApi(page);
   await page.getByRole("button", { name: "Refresh GitHub" }).click();
-  await expect(page.getByText("Connected across your VPSs.")).toBeVisible();
+  await expect(page.getByRole("group", { name: "GitHub integration" })).toContainText("Connected");
+  await expect(page.getByText("Connected across your VPSs.")).toHaveCount(0);
   await page.getByRole("button", { name: "Disconnect", exact: true }).click();
   await expect(page.getByRole("button", { name: "Connect GitHub", exact: true })).toBeVisible();
 });
@@ -543,7 +549,8 @@ test("GitHub avatar is shared by the sidebar and settings without loading reposi
   await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
   const profile = page.locator("[data-account-avatar] img");
   await expect(profile).toHaveAttribute("src", "https://github.com/alice.png?size=96");
-  await expect(page.getByText("Connected across your VPSs.")).toBeVisible();
+  await expect(page.getByRole("group", { name: "GitHub integration" })).toContainText("Connected");
+  await expect(page.getByText("Connected across your VPSs.")).toHaveCount(0);
   expect(reads.filter((path) => path === "/api/v1/github/")).toHaveLength(1);
   await page.getByRole("button", { name: "Disconnect", exact: true }).click();
   await expect(page.locator("[data-account-avatar]")).toHaveText("E");
@@ -601,4 +608,28 @@ test("slow identity checks reserve avatar space and failed images fall back to i
   await expect(avatar).toHaveText("E");
   expect(await avatar.boundingBox()).toEqual(bounds);
   await expect(avatar.locator("img")).toHaveCount(0);
+});
+
+test("a long GitHub account name shows in full, with the actions on their own line", async ({
+  page,
+}) => {
+  await signedIn(page);
+  const login = "a-very-long-github-organization-name-that-used-to-be-cut-off";
+  await githubApi(page, true, false, login);
+  await page.goto("/");
+  await page.getByRole("button", { name: /^Account:/ }).click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
+  const group = page.getByRole("group", { name: "GitHub integration" });
+  const name = group.getByText(login, { exact: true });
+  for (const width of [1360, 900, 700, 390]) {
+    await page.setViewportSize({ width, height: 850 });
+    await expect(name).toBeVisible();
+    expect(await name.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+    const nameBox = await name.boundingBox();
+    const action = await group
+      .getByRole("button", { name: "Reconnect", exact: true })
+      .boundingBox();
+    if (!nameBox || !action) throw new Error("The GitHub row is not laid out");
+    expect(action.y).toBeGreaterThanOrEqual(nameBox.y + nameBox.height);
+  }
 });

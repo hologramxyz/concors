@@ -1,6 +1,6 @@
 import { test, expect, signedIn } from "./signed-in.ts";
 import { openFolder } from "./support/projects.ts";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 
@@ -8,7 +8,8 @@ test("browse and clone folders on the machine, derive names, and focus an existi
   page,
   browser,
 }) => {
-  const root = mkdtempSync(join(tmpdir(), "concors-browser-projects-"));
+  // The daemon reports real paths, and a Mac's temp folder is behind a symlink.
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "concors-browser-projects-")));
   const folder = join(root, "my-project");
   mkdirSync(folder);
   const context = await browser.newContext();

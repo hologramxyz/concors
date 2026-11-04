@@ -20,7 +20,7 @@ export interface NavItem {
 export const PRIMARY_NAV: readonly NavItem[] = [
   { view: "schedules", label: "Schedules", icon: Clock },
   { view: "pull-requests", label: "Pull requests", icon: GitPullRequest },
-  { view: "projects", label: "Projects", icon: FolderKanban },
+  { view: "projects", label: "Workspaces", icon: FolderKanban },
   { view: "resources", label: "Resources", icon: Activity },
 ];
 

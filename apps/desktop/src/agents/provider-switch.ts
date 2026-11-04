@@ -29,7 +29,16 @@ export function hasConversation(agent: AgentInfo): boolean {
   return !!agent.turnStartedAt || !!agent.nativeImport;
 }
 
-/** How the provider list describes choosing a provider for this pane. */
+/** What the model menu's provider list says about a provider, when there is anything to say. */
+export function providerState(provider: {
+  installed?: boolean | undefined;
+  version?: { updateAvailable?: boolean | undefined } | undefined;
+}): string | undefined {
+  if (provider.installed === false) return "Not installed";
+  return provider.version?.updateAvailable ? "Update available" : undefined;
+}
+
+/** How a phone's model menu describes choosing a provider for this pane. */
 export function switchDescription(
   agents: readonly AgentInfo[],
   agent: AgentInfo,

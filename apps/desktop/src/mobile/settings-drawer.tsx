@@ -108,7 +108,7 @@ export function SettingsDrawer({
           )}
           {host.demo && (
             <p className="px-4 text-xs text-muted-foreground">
-              Demo · Account actions are simulated.
+              Demo. Account actions are simulated.
             </p>
           )}
           {page === "machines" ? (

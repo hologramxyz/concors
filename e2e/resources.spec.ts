@@ -147,7 +147,7 @@ test("detected previews stop from the sidebar after a confirmation", async ({ pa
   await sidebar.getByRole("button", { name: "Open preview: Vite preview", exact: true }).hover();
   await sidebar.getByRole("button", { name: "Stop Vite preview", exact: true }).click();
   const stop = page.getByRole("dialog", { name: "Stop process?" });
-  await expect(stop).toContainText("Vite preview · PID 11");
+  await expect(stop).toContainText("Vite preview, PID 11");
   await stop.getByRole("button", { name: "Cancel" }).click();
   expect(operations.some((op) => op.kind === "stop")).toBe(false);
   await sidebar.getByRole("button", { name: "Stop Vite preview", exact: true }).click();
@@ -226,4 +226,63 @@ test("a preview left running for days, or holding a lot of memory, is flagged wi
   await expect(
     sidebar.getByRole("button", { name: "Stop next-server", exact: true }),
   ).toBeEnabled();
+});
+
+test("Resources uses the page header, and a machine without process inspection says so instead of listing", async ({
+  page,
+}) => {
+  const inspect = async (warnings: string[]) => {
+    await page.routeWebSocket("ws://127.0.0.1:7429/ws", (socket) => {
+      const server = socket.connectToServer();
+      socket.onMessage((raw) => {
+        const request = JSON.parse(String(raw));
+        if (request.type !== "resource.request") return server.send(raw);
+        socket.send(
+          JSON.stringify({
+            type: "resource.result",
+            requestId: request.requestId,
+            outcome: {
+              status: "processes",
+              snapshot: { sampledAt: Date.now(), processes: [], warnings },
+            },
+          }),
+        );
+      });
+      server.onMessage((raw) => socket.send(raw));
+    });
+    await page.goto("/");
+    await page.getByRole("button", { name: "Open resources" }).click();
+  };
+  await signedIn(page);
+  await inspect(["Process inspection is available on Linux machines."]);
+  const title = page.getByRole("heading", { name: "Resources", level: 2 });
+  await expect(title).toHaveCSS("font-size", "20px");
+  const description = page.getByText("See what’s using a machine’s CPU and memory.", {
+    exact: true,
+  });
+  const main = page.getByRole("main");
+  const empty = main.getByRole("heading", {
+    name: "Process details aren’t available on this computer",
+    level: 3,
+  });
+  await expect(empty).toBeVisible();
+  await expect(title).toBeVisible();
+  await expect(description).toBeVisible();
+  await expect(
+    main.getByText("They’re available on Linux machines, such as cloud machines."),
+  ).toBeVisible();
+  await expect(main.getByRole("group", { name: "Machine resource usage" })).toHaveCount(0);
+  await expect(main.getByRole("list", { name: "Running processes" })).toHaveCount(0);
+  await expect(main.getByRole("textbox", { name: "Filter resources" })).toHaveCount(0);
+  await expect(page.getByText("About resource usage")).toHaveCount(0);
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+  // That removed the sign-in mocks too.
+  await signedIn(page);
+  await inspect([]);
+  await expect(page.getByText("About resource usage")).toBeVisible();
+  await expect(empty).toHaveCount(0);
+  await expect(description).toBeVisible();
+  await expect(main.getByRole("textbox", { name: "Filter resources" })).toBeVisible();
+  await expect(main.getByRole("combobox", { name: "Sort processes" })).toBeVisible();
+  await expect(main.getByRole("list", { name: "Running processes" })).toBeVisible();
 });

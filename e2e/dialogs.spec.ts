@@ -5,7 +5,12 @@ import type { Locator, Page } from "@playwright/test";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
 
-async function expectModalLayout(page: Page, dialog: Locator, maxWidth = 36) {
+async function expectModalLayout(
+  page: Page,
+  dialog: Locator,
+  maxWidth = 36,
+  { search = false } = {},
+) {
   await expect(dialog).toBeVisible();
   const viewport = page.viewportSize();
   if (!viewport) throw new Error("Set a viewport to verify modal bounds");
@@ -18,7 +23,8 @@ async function expectModalLayout(page: Page, dialog: Locator, maxWidth = 36) {
       if (!rect) return false;
       return (
         Math.abs(rect.x + rect.width / 2 - viewport.width / 2) < 2 &&
-        Math.abs(rect.y + rect.height / 2 - viewport.height / 2) < 2 &&
+        // Search stays at the top, so it does not move as its results change.
+        (search || Math.abs(rect.y + rect.height / 2 - viewport.height / 2) < 2) &&
         Math.abs(rect.width - Math.min(maxWidth * rem, viewport.width - 2 * rem)) < 2 &&
         rect.y >= rem - 1 &&
         rect.y + rect.height <= viewport.height - rem + 1
@@ -26,7 +32,8 @@ async function expectModalLayout(page: Page, dialog: Locator, maxWidth = 36) {
     })
     .toBe(true);
   await expect(dialog.getByRole("heading")).toHaveCSS("font-size", "16px");
-  await expect(dialog.locator('[data-slot="dialog-description"]')).toHaveCSS("font-size", "15px");
+  if (!search)
+    await expect(dialog.locator('[data-slot="dialog-description"]')).toHaveCSS("font-size", "15px");
   await expect(dialog.getByRole("button", { name: "Close", exact: true })).toHaveCSS(
     "width",
     "28px",
@@ -46,9 +53,7 @@ test("pane, tab, search and form dialogs share layout and preserve pointer and k
     const originalInput = panes.first().locator("textarea");
     await expect(originalInput).toBeFocused();
     await page.keyboard.press("Control+Shift+p");
-    // Pane and tab sequences share one dialog, which names the combination that opened it.
-    const shortcutActions = page.getByRole("dialog", { name: "Shortcut actions", exact: true });
-    const paneDialog = shortcutActions.filter({ hasText: "Shift+P:" });
+    const paneDialog = page.getByRole("dialog", { name: "Pane", exact: true });
     await expectModalLayout(page, paneDialog);
     await expect(paneDialog).toBeFocused();
     await page.screenshot({ path: test.info().outputPath("pane-shortcuts-light.png") });
@@ -58,7 +63,7 @@ test("pane, tab, search and form dialogs share layout and preserve pointer and k
     await expect(panes.last().locator("textarea")).toBeFocused();
 
     await page.keyboard.press("Control+Shift+t");
-    const tabDialog = shortcutActions.filter({ hasText: "Shift+T:" });
+    const tabDialog = page.getByRole("dialog", { name: "Tab", exact: true });
     await expectModalLayout(page, tabDialog);
     await tabDialog.getByRole("button", { name: /New tab/ }).focus();
     await page.keyboard.press("Enter");
@@ -97,7 +102,7 @@ test("pane, tab, search and form dialogs share layout and preserve pointer and k
 
     await page.keyboard.press("Control+Shift+k");
     const search = page.getByRole("dialog", { name: "Search", exact: true });
-    await expectModalLayout(page, search);
+    await expectModalLayout(page, search, 36, { search: true });
     await expect(search.getByRole("combobox")).toBeFocused();
     await page.screenshot({ path: test.info().outputPath("command-search-light.png") });
     await page.keyboard.press("Escape");
@@ -126,7 +131,7 @@ test("pane, tab, search and form dialogs share layout and preserve pointer and k
     await page.keyboard.press("Escape");
     await expect(originalInput).toBeFocused();
     await page.keyboard.press("Control+Shift+k");
-    await expectModalLayout(page, search);
+    await expectModalLayout(page, search, 36, { search: true });
     await search.getByRole("combobox").fill("dark");
     await expect(search.getByRole("option", { name: "Dark theme", exact: true })).toBeVisible();
     await page.keyboard.press("Enter");

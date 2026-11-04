@@ -204,7 +204,6 @@ export function MobileFiles({
             className="mobile-files-directory mobile-glass"
             aria-label="Browse project directory"
             aria-current={browsing ? "page" : undefined}
-            title={project?.directory}
             onClick={() => setDirectoryFor(navigation)}
           >
             <span>Files</span>

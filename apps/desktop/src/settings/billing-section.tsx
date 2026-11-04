@@ -87,10 +87,7 @@ export function BillingSection({ organization }: BillingSectionProps) {
             onReturn={reload}
           />
           <SettingsCard className="divide-y">
-            <Row
-              label="Payment method"
-              hint="Saved with Stripe; Concors never sees the card number."
-            >
+            <Row label="Payment method">
               <span className="flex flex-wrap items-center justify-end gap-2">
                 {status.card ? (
                   <>
@@ -104,18 +101,23 @@ export function BillingSection({ organization }: BillingSectionProps) {
                 ) : status.hasPaymentMethod ? (
                   "Card on file"
                 ) : (
-                  <Badge variant="outline">No card yet</Badge>
+                  <Badge variant="secondary">No card yet</Badge>
                 )}
               </span>
             </Row>
-            <Row label="Prices" hint="Per machine, per month.">
-              <span className="flex flex-wrap justify-end gap-x-3 gap-y-1 text-xs">
-                {status.prices.map((price) => (
-                  <span key={price.size}>
-                    <span className="capitalize">{price.size}</span>{" "}
-                    {formatMonthly(price.monthlyPrice)}
-                  </span>
-                ))}
+            <Row label="Prices">
+              <span className="flex flex-wrap gap-x-3 gap-y-1 text-xs md:justify-end">
+                {[...status.prices]
+                  .sort(
+                    (a, b) =>
+                      (a.monthlyPrice?.amount ?? Infinity) - (b.monthlyPrice?.amount ?? Infinity),
+                  )
+                  .map((price) => (
+                    <span key={price.size} className="min-w-0 break-words">
+                      <span className="capitalize">{price.size}</span>{" "}
+                      {formatMonthly(price.monthlyPrice)}
+                    </span>
+                  ))}
               </span>
             </Row>
             <div className="p-4">
@@ -143,10 +145,6 @@ export function BillingSection({ organization }: BillingSectionProps) {
                   Refresh
                 </Button>
               </div>
-              <p className="mt-2 text-xs text-muted-foreground">
-                Cards are added on a Stripe page in your browser. Your card updates here after
-                setup.
-              </p>
             </div>
           </SettingsCard>
           {billing.checkout && (

@@ -28,6 +28,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { activeOrganization, type SignedInAuth } from "@/auth/auth-state";
 import { useBillingStatus } from "@/billing/use-billing";
 import { PaymentFailedWarning } from "@/billing/payment-failed-warning";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -174,16 +175,18 @@ export function MachinesView({
         }
         actions={
           <>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={state.reload}
-              disabled={state.loading}
-              aria-label="Refresh"
-            >
-              <RefreshCw className={cn(state.loading && "animate-spin")} aria-hidden="true" />
-            </Button>
-            {purchases && (
+            <SidebarTooltip place="title-bar" content="Refresh">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={state.reload}
+                disabled={state.loading}
+                aria-label="Refresh"
+              >
+                <RefreshCw className={cn(state.loading && "animate-spin")} aria-hidden="true" />
+              </Button>
+            </SidebarTooltip>
+            {purchases && !empty && (
               <NewMachineMenu
                 variant="outline"
                 size="sm"
@@ -228,9 +231,6 @@ export function MachinesView({
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2.5">
                   <h3 className="text-base font-semibold">This computer</h3>
-                  <Badge variant="outline" className={BADGE_TONE_CLASS.info}>
-                    Local
-                  </Badge>
                   {localSelected && <Badge variant="secondary">Current</Badge>}
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -555,14 +555,16 @@ function MachineCard({
               {resuming ? "Resuming…" : "Keep machine"}
             </Button>
           ) : (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={onCancel}
-              aria-label={`${external ? "Remove" : "Cancel"} ${machine.name}`}
-            >
-              {external ? <Trash2 aria-hidden="true" /> : <CalendarX aria-hidden="true" />}
-            </Button>
+            <SidebarTooltip place="title-bar" content={`${external ? "Remove" : "Cancel"} machine`}>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={onCancel}
+                aria-label={`${external ? "Remove" : "Cancel"} ${machine.name}`}
+              >
+                {external ? <Trash2 aria-hidden="true" /> : <CalendarX aria-hidden="true" />}
+              </Button>
+            </SidebarTooltip>
           )}
         </div>
       </div>
@@ -1020,33 +1022,37 @@ function CopyButton({ text }: { readonly text: string }) {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState(false);
   return (
-    <Button
-      variant="ghost"
-      size="icon-xs"
-      aria-label={error ? "Copy failed; try again" : "Copy SSH command"}
-      title={
+    <SidebarTooltip
+      place="above"
+      content={
         error
           ? "Could not copy. Select the SSH command and copy it manually."
           : copied
             ? "Copied"
             : "Copy SSH command"
       }
-      onClick={() => {
-        void copyText(text).then(
-          () => {
-            setCopied(true);
-            setError(false);
-            setTimeout(() => setCopied(false), 1500);
-          },
-          () => {
-            setCopied(false);
-            setError(true);
-          },
-        );
-      }}
     >
-      {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-    </Button>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        aria-label={error ? "Copy failed; try again" : "Copy SSH command"}
+        onClick={() => {
+          void copyText(text).then(
+            () => {
+              setCopied(true);
+              setError(false);
+              setTimeout(() => setCopied(false), 1500);
+            },
+            () => {
+              setCopied(false);
+              setError(true);
+            },
+          );
+        }}
+      >
+        {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+      </Button>
+    </SidebarTooltip>
   );
 }
 

@@ -20,6 +20,7 @@ import { MediaFileTab } from "./media-tab";
 import { previewKind } from "./preview-kind";
 import { VideoFileTab } from "./video-tab";
 import { useFileRequest } from "./use-file-request";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 const CodeEditor = lazy(loadCodeEditor);
 
 export function FileTabLabel({ file }: { file: OpenFile }) {
@@ -28,28 +29,32 @@ export function FileTabLabel({ file }: { file: OpenFile }) {
   const dirty = state.base !== null && state.content !== state.base.content;
   return (
     <div
+      data-active-tab={files.active[file.scope] === file.id ? "" : undefined}
       className={`group flex shrink-0 items-center rounded-md border ${files.active[file.scope] === file.id ? "border-border bg-background shadow-xs" : "border-transparent"}`}
     >
-      <button
-        type="button"
-        title={`${file.directory}/${file.path}`}
-        aria-pressed={files.active[file.scope] === file.id}
-        onClick={() => files.select(file.scope, file.id)}
-        className="flex max-w-52 items-center gap-1.5 px-2 py-1 text-ui"
-      >
-        <FileTypeIcon path={file.path} className="size-[18px]" />
-        <span className="truncate">{file.path.split("/").pop()}</span>
-        {dirty && <span aria-label="Unsaved changes">●</span>}
-      </button>
-      <button
-        type="button"
-        disabled={state.busy}
-        aria-label={`Close ${file.path} file`}
-        onClick={() => files.close(file)}
-        className="px-1.5 text-muted-foreground hover:text-foreground disabled:opacity-40"
-      >
-        ×
-      </button>
+      <SidebarTooltip place="title-bar" content={`${file.directory}/${file.path}`}>
+        <button
+          type="button"
+          aria-pressed={files.active[file.scope] === file.id}
+          onClick={() => files.select(file.scope, file.id)}
+          className="flex max-w-52 items-center gap-1.5 px-2 py-1 text-ui"
+        >
+          <FileTypeIcon path={file.path} className="size-[18px]" />
+          <span className="truncate">{file.path.split("/").pop()}</span>
+          {dirty && <span aria-label="Unsaved changes">●</span>}
+        </button>
+      </SidebarTooltip>
+      <SidebarTooltip place="title-bar" content="Close file">
+        <button
+          type="button"
+          disabled={state.busy}
+          aria-label={`Close ${file.path} file`}
+          onClick={() => files.close(file)}
+          className="px-1.5 text-muted-foreground hover:text-foreground disabled:opacity-40"
+        >
+          ×
+        </button>
+      </SidebarTooltip>
     </div>
   );
 }
@@ -343,8 +348,8 @@ function TextFileTab({ file }: { file: OpenFile }) {
         )}
       </div>
       <div className="shrink-0 border-t px-3 py-1 font-mono text-xs text-muted-foreground">
-        {dirty ? "Unsaved changes" : state.base ? "Saved on machine" : "File preview"} ·{" "}
-        {vimEnabled ? "Vim · :w to save" : "⌘/Ctrl+S to save"}
+        {dirty ? "Unsaved changes" : state.base ? "Saved on machine" : "File preview"}.{" "}
+        {vimEnabled ? "Vim: :w to save" : "⌘/Ctrl+S to save"}
       </div>
     </section>
   );

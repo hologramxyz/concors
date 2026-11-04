@@ -103,7 +103,7 @@ for (const native of [false, true]) {
       await ui.getByRole("button", { name: "New tab", exact: true }).click();
       await ui
         .getByRole("dialog", { name: "New tab", exact: true })
-        .getByRole("button", { name: "Resume a closed chat", exact: true })
+        .getByRole("button", { name: "Resume a chat…", exact: true })
         .click();
       const dialog = ui.getByRole("dialog", { name: "Resume a chat", exact: true });
       await expect(dialog).toHaveAttribute("data-mobile-drawer", "true");

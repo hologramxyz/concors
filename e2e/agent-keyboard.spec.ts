@@ -7,6 +7,7 @@ import { seedProject } from "./support/projects.ts";
 import { chooseProvider } from "./support/agents.ts";
 import { mockDictation } from "./support/dictation.ts";
 import { tab } from "./support/tabs.ts";
+import { reportNonMac } from "./support/platform.ts";
 
 async function workspace(page: Page) {
   const directory = await mkdtemp(join(tmpdir(), "concors-agent-keyboard-"));
@@ -21,6 +22,8 @@ async function workspace(page: Page) {
   await expect(composer).toBeFocused();
   return { composer, dispose: () => rm(directory, { recursive: true, force: true }) };
 }
+
+test.beforeEach(({ context }) => reportNonMac(context));
 
 test("reverse native tab switching preserves permission mode and focuses the destination input", async ({
   page,

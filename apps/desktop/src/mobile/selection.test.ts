@@ -56,9 +56,9 @@ describe("mobile pane navigation", () => {
         profileLabel,
       ]),
     ).toEqual([
-      ["t", "a", "Tab · 1", "Agent"],
-      ["t", "b", "Tab · 2", "Terminal"],
-      ["t", "c", "Tab · 3", "Terminal"],
+      ["t", "a", "Tab 1", "Agent"],
+      ["t", "b", "Tab 2", "Terminal"],
+      ["t", "c", "Tab 3", "Terminal"],
       ["other", "d", "Notes", "Agent"],
     ]);
     expect(snapshot).toEqual(before);

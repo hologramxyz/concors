@@ -24,7 +24,7 @@ import { BackgroundTerminalsContext } from "@/terminal/background-terminals";
 import { ClosedTerminalNotice, ManageTerminalsDialog } from "@/terminal/session-list";
 import { RetiredChatsNotice } from "@/agents/chat-limit";
 import { useBackgroundTerminals } from "@/terminal/use-background-terminals";
-import { DEFAULT_TERMINAL_PROFILES, PROJECT_RENAME_CAPABILITY } from "@concors/protocol";
+import { DEFAULT_TERMINAL_PROFILES } from "@concors/protocol";
 import type { DaemonEndpoint } from "@concors/daemon-client";
 import type { WorkspaceOperation } from "@concors/protocol";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
@@ -44,6 +44,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { resolveStartupEndpoint, resolveHostEndpoint } from "@/daemon/resolve-endpoint";
 import { env } from "@/config/env";
 import { useDaemonConnection } from "@/daemon/use-daemon-connection";
+import { cn } from "@/lib/utils";
 import { navItemFor, type View } from "@/navigation";
 import { settingsNavItemFor, type SettingsPage } from "@/settings/navigation";
 import { SettingsSidebar } from "@/settings/settings-sidebar";
@@ -66,6 +67,7 @@ import {
 import { ProjectWorkspace } from "@/workspace/project-workspace";
 import { Tour } from "@/tour/tour";
 import { machineListResource, SETTLING_POLL_MS } from "@/machines/use-machines";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 
 export function App() {
   const setup = new URLSearchParams(window.location.search).get("setup");
@@ -295,53 +297,7 @@ function AppContent() {
   }, [hostScope, organizationId, selectionHost]);
 
   const transport = connection.transport;
-  // The workspace the tour sets up gets a name, so it reads as a place to start, not the home folder.
-  const nameNextWorkspace = useRef(false);
-  const defaultWorkspaceId = useRef<string | null>(null);
-  const nameDefaultWorkspace = useCallback(() => {
-    const current = transport?.workspace;
-    const project = current?.projects.find((p) => p.id === defaultWorkspaceId.current);
-    // Not in the snapshot yet, or its terminal is still starting: renaming bumps the workspace's
-    // version, which would make the daemon refuse that start. The effect below tries again.
-    const starting = project?.tabs.some((tab) =>
-      tab.nodes.some((node) => node.kind === "pane" && !node.sessionId),
-    );
-    if (!transport || !current || !project || starting) return;
-    defaultWorkspaceId.current = null;
-    if (
-      project.renamed ||
-      transport.state.status !== "ready" ||
-      !transport.state.daemon.capabilities?.includes(PROJECT_RENAME_CAPABILITY)
-    )
-      return;
-    // Best-effort: if it fails, the workspace keeps its folder's name.
-    void transport
-      .executeWorkspace({
-        type: "workspace.command",
-        commandId: crypto.randomUUID(),
-        epoch: current.epoch,
-        operation: {
-          kind: "project.rename",
-          projectId: project.id,
-          expectedVersion: project.version,
-          name: "Default workspace",
-        },
-      })
-      .catch(() => undefined);
-  }, [transport]);
-  const onWorkspaceCreated = useCallback(
-    (projectId: string) => {
-      if (!nameNextWorkspace.current) return;
-      nameNextWorkspace.current = false;
-      defaultWorkspaceId.current = projectId;
-      nameDefaultWorkspace();
-    },
-    [nameDefaultWorkspace],
-  );
-  const newWorkspace = useNewWorkspace(transport, onWorkspaceCreated);
-  useEffect(() => {
-    if (defaultWorkspaceId.current) nameDefaultWorkspace();
-  }, [workspace, nameDefaultWorkspace]);
+  const newWorkspace = useNewWorkspace(transport);
   const startWorkspace = () => {
     setView("projects");
     newWorkspace.start();
@@ -506,13 +462,8 @@ function AppContent() {
   // Without a native title bar they simply lead that row.
   const collapsedToggle = view !== "settings" && sidebarCollapsed && (
     <div className="flex shrink-0 items-center gap-0.5">
-      <SidebarToggle
-        collapsed
-        onToggle={() => toggleSidebar(false)}
-        side="bottom"
-        className="p-1.5"
-      />
-      <SearchButton collapsed onOpenSearch={openSearch} />
+      <SidebarToggle collapsed onToggle={() => toggleSidebar(false)} className="p-1.5" />
+      <SearchButton onOpenSearch={openSearch} />
     </div>
   );
   const titleBarToggle = windowChrome.inset ? null : collapsedToggle || null;
@@ -584,6 +535,7 @@ function AppContent() {
                           onSelectMachine={selectMachine}
                           onViewCloud={manageMachines}
                           auth={account}
+                          canTour={connection.workspaceReady && !!workspace}
                           onSignOut={signOut}
                           onSignIn={signIn}
                         />
@@ -602,14 +554,24 @@ function AppContent() {
                             data-tauri-drag-region={
                               windowChrome.enabled || windowChrome.inset ? "deep" : undefined
                             }
-                            className="title-bar-row flex h-11 shrink-0 items-center gap-2 border-b pr-2 pl-4 select-none"
+                            className={cn(
+                              "title-bar-row flex shrink-0 items-center gap-2 border-b border-transparent pr-2 pl-4 select-none",
+                              windowChrome.inset ? "h-11" : "min-h-9 py-1",
+                            )}
                           >
                             {titleBarToggle}
-                            <h1 className="min-w-0 flex-1 truncate text-ui font-medium">
+                            {/* Each page titles itself. This strip only has to take the tab bar's
+                                height, which without a native title bar a tab decides, so that the
+                                content stays put moving between a chat and a page. */}
+                            <span aria-hidden="true" className="invisible border py-0.5 text-ui">
+                              &nbsp;
+                            </span>
+                            <h1 className="sr-only">
                               {view === "settings"
                                 ? settingsNavItemFor(settingsPage).label
                                 : navItemFor(view).label}
                             </h1>
+                            <span className="flex-1" aria-hidden="true" />
                             <WindowControls />
                           </header>
                         )}
@@ -715,6 +677,7 @@ function AppContent() {
                               connected={
                                 connection.workspaceReady && connection.state.status === "ready"
                               }
+                              connectionFailed={connection.failed}
                               onOpenAgent={openAgent}
                             />
                           ) : view === "pull-requests" ? (
@@ -724,6 +687,9 @@ function AppContent() {
                               connected={
                                 connection.workspaceReady && connection.state.status === "ready"
                               }
+                              connectionFailed={connection.failed}
+                              canOpenFolder={canEdit && !newWorkspace.busy}
+                              onOpenFolder={openProjectDialog}
                               view={pullRequestsView}
                               onNavigate={setPullRequestsView}
                             />
@@ -774,16 +740,18 @@ function AppContent() {
                         className="fixed top-14 left-1/2 z-50 flex max-w-[90vw] -translate-x-1/2 items-center gap-3 rounded-md border bg-popover p-3 text-ui shadow-md duration-200 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-2"
                       >
                         <span>{newWorkspace.error}</span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label="Dismiss"
-                          className="text-muted-foreground"
-                          onClick={newWorkspace.dismiss}
-                        >
-                          <X />
-                        </Button>
+                        <SidebarTooltip place="title-bar" content="Dismiss">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label="Dismiss"
+                            className="text-muted-foreground"
+                            onClick={newWorkspace.dismiss}
+                          >
+                            <X />
+                          </Button>
+                        </SidebarTooltip>
                       </div>
                     )}
                     {background.closed && (
@@ -818,10 +786,7 @@ function AppContent() {
                       firstName={account?.user.name.trim().split(/\s+/)[0] ?? ""}
                       hasWorkspace={!!workspace?.projects.length}
                       workspaceFailed={!!newWorkspace.error}
-                      onCreateWorkspace={() => {
-                        nameNextWorkspace.current = true;
-                        startWorkspace();
-                      }}
+                      onCreateWorkspace={startWorkspace}
                       onPrepare={(inWorkspace) => {
                         if (sidebarCollapsed) setSidebarCollapsed(false);
                         const first = workspace?.projects[0];
@@ -832,7 +797,6 @@ function AppContent() {
                     />
                     <WorkspaceSearch
                       key={`${hostScope}:${memoryKey}`}
-                      machine={selectedHost.label}
                       activeProjectId={selection?.projectId}
                       canSelectProject={canEdit}
                       projects={workspace?.projects ?? []}

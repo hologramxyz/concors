@@ -42,6 +42,61 @@ export function modelOptions(models: readonly Model[]): Model[] {
   );
 }
 
+/** A model's family and version, read from its ID. Names without a version have no family. */
+function modelVersion(model: Model): { family: string; version: number[] } | null {
+  const tokens = (model.resolvedModel ?? model.id)
+    .replace(/\[1m\]$/i, "")
+    .replace(/-(?:\d{8}|\d{4}-\d{2}-\d{2})$/, "")
+    .split("-");
+  const numeric = (token: string) => /^\d{1,3}(?:\.\d{1,3})*$/.test(token);
+  const version = tokens.filter(numeric).flatMap((token) => token.split(".").map(Number));
+  return version.length
+    ? { family: tokens.filter((token) => !numeric(token)).join("-"), version }
+    : null;
+}
+
+function compareVersions(a: readonly number[], b: readonly number[]): number {
+  for (let index = 0; index < Math.max(a.length, b.length); index++) {
+    const difference = (b[index] ?? 0) - (a[index] ?? 0);
+    if (difference) return difference;
+  }
+  return 0;
+}
+
+/**
+ * Orders a provider's models for its menu: each family's newest first, then the older ones, marked
+ * for a divider. Families stay in the order the provider lists them, and what comes first in each
+ * group is decided from the IDs, since no provider says which of its models are current. A model
+ * whose ID has no version can't be called older, so it stays with the current ones.
+ */
+export function modelMenu<T extends Model>(models: readonly T[]): (T & { older: boolean })[] {
+  const families = new Map<string, { model: T; version: number[] }[]>();
+  for (const model of models) {
+    const parsed = modelVersion(model);
+    const key = parsed?.family ?? `id:${model.id}`;
+    families.set(key, [...(families.get(key) ?? []), { model, version: parsed?.version ?? [] }]);
+  }
+  const sorted = [...families.values()].map((family) =>
+    family.toSorted((a, b) => compareVersions(a.version, b.version)),
+  );
+  const isCurrent = (
+    entry: { version: number[] },
+    family: readonly { version: number[] }[],
+  ): boolean => compareVersions(entry.version, family[0]?.version ?? []) === 0;
+  return [
+    ...sorted.flatMap((family) =>
+      family
+        .filter((entry) => isCurrent(entry, family))
+        .map(({ model }) => ({ ...model, older: false })),
+    ),
+    ...sorted.flatMap((family) =>
+      family
+        .filter((entry) => !isCurrent(entry, family))
+        .map(({ model }) => ({ ...model, older: true })),
+    ),
+  ];
+}
+
 export function modelSelection(
   agent: Pick<AgentInfo, "settings" | "model">,
   models: readonly Model[],

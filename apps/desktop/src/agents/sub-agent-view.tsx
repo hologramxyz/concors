@@ -1,6 +1,7 @@
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Bot, X } from "lucide-react";
 import { SUB_AGENT_STEPS, type AgentItem } from "@concors/protocol";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { Button } from "@/components/ui/button";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { Activity } from "./activity";
@@ -136,15 +137,16 @@ export function SubAgentPanel({
                 ? "Interrupted"
                 : "Done"}
         </span>
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Close sub-agent details"
-          title="Close (Esc)"
-          onClick={onClose}
-        >
-          <X className="size-4" />
-        </Button>
+        <SidebarTooltip place="title-bar" content="Close" keys="Esc">
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Close sub-agent details"
+            onClick={onClose}
+          >
+            <X className="size-4" />
+          </Button>
+        </SidebarTooltip>
       </header>
       {readable && (
         <div
@@ -198,7 +200,7 @@ export function SubAgentPanel({
               <p className="text-xs text-muted-foreground tabular-nums">
                 {[stepCount(steps), running && elapsed > 0 ? formatDuration(elapsed) : null]
                   .filter(Boolean)
-                  .join(" · ") || (running ? "Starting…" : "No steps reported.")}
+                  .join(", ") || (running ? "Starting…" : "No steps reported.")}
               </p>
               <Steps steps={steps} />
               {steps.length >= SUB_AGENT_STEPS && (

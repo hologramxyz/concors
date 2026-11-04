@@ -1,3 +1,4 @@
+import { UNNAMED_SUBSCRIPTION } from "@/agents/account-name";
 import type { ProviderSubscription } from "@concors/api-client";
 import {
   ProviderConfigSchema,
@@ -47,7 +48,7 @@ export function subscriptionConfig(
   random: string = crypto.randomUUID().slice(0, 8),
 ): ProviderConfig {
   const chosenName = nickname?.trim();
-  const internalName = chosenName || "Account";
+  const internalName = chosenName || UNNAMED_SUBSCRIPTION;
   return ProviderConfigSchema.parse({
     id: subscriptionId(engine, internalName, random),
     label: `${subscriptionEngineLabels[engine]} — ${internalName}`,

@@ -13,7 +13,7 @@ export function MachineUsage({ machine }: { readonly machine: Machine }) {
   if (freshness === "unavailable" || !usage)
     return (
       <p className="text-xs text-muted-foreground">
-        Usage unavailable · waiting for a resource report
+        Usage unavailable. Waiting for a resource report.
       </p>
     );
   return (
@@ -62,7 +62,7 @@ export function MachineUsage({ machine }: { readonly machine: Machine }) {
         })}
       </div>
       <p className="mt-auto pt-4 text-right text-[11px] text-muted-foreground/70">
-        {freshness === "stale" ? "Out of date · last updated " : "Updated "}
+        {freshness === "stale" ? "Out of date. Last updated " : "Updated "}
         <time dateTime={usage.sampledAt} title={new Date(usage.sampledAt).toLocaleString()}>
           {new Date(usage.sampledAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
         </time>

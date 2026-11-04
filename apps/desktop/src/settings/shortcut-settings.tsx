@@ -1,6 +1,6 @@
 import { useContext, useState } from "react";
 import { CompactLayoutContext } from "@/components/compact-layout";
-import { BINDINGS, isCompactCommand, isMac, type CommandId } from "@/shortcuts/bindings";
+import { BINDINGS, isCompactCommand, type CommandId } from "@/shortcuts/bindings";
 import { Row, Section, SettingsCard } from "@/views/settings-primitives";
 import { Check, ChevronDown } from "lucide-react";
 import {
@@ -20,28 +20,28 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ShortcutEditor } from "@/shortcuts/editor";
 import { useShortcutPreferences } from "@/shortcuts/preferences-context";
-import { bindingLabel } from "@/shortcuts/keymap";
+import { KeyChips, PlainKeys } from "@/shortcuts/key-chips";
+import { bindingLabel, mainBinding, usableBindings } from "@/shortcuts/keymap";
+import { isTauri } from "@/tauri";
 
 const GROUPS: readonly {
   title: string;
-  description: string;
+  description?: string;
   compactDescription?: string;
   commands: readonly CommandId[];
 }[] = [
   {
     title: "Workspace",
-    description: "Search, create workspaces, and open settings.",
     commands: ["search", "new-project", "settings", "shortcuts"],
   },
   {
     title: "Agent chat",
-    description: "Dictate in the focused agent pane. Escape stops its running agent.",
+    description: "Escape stops the running agent.",
     commands: ["start-dictation"],
   },
   {
     title: "Tabs",
-    description:
-      "Switch between tabs and organize your workspace. Desktop-only bindings leave browser tabs alone.",
+    description: "Switch between tabs and organize your workspace.",
     compactDescription:
       "Move through the flat Tabs list. Closing a tab closes only that view, not its desktop siblings.",
     commands: [
@@ -57,8 +57,7 @@ const GROUPS: readonly {
   },
   {
     title: "Panes",
-    description:
-      "Navigate between panes, including from terminal and Agent inputs. Other form fields retain normal editing keys. Arrow keys on a split divider resize panes.",
+    description: "Arrow keys on a split divider resize panes.",
     commands: [
       "new-pane",
       "split-left",
@@ -74,6 +73,11 @@ const GROUPS: readonly {
   },
 ];
 
+const CONTEXT_LABEL: Partial<Record<string, string>> = {
+  tab: "focused tab",
+  "outside-terminal": "outside terminals",
+};
+
 const FOLLOW_UP_LABEL: Record<FollowUpMode, string> = {
   steer: "Steer the current turn",
   queue: "Queue for after the turn",
@@ -86,7 +90,7 @@ function FollowUpSettings() {
   return (
     <Section
       title="Follow-ups"
-      description="Messages you send while an agent is working. Slash commands, and agents that cannot be steered, always queue, as do attachments for agents that cannot take them mid-turn."
+      description="Slash commands, and agents that cannot be steered, always queue."
     >
       <SettingsCard>
         <Row
@@ -121,6 +125,36 @@ function FollowUpSettings() {
   );
 }
 
+/** A row's shortcuts: the main one as chips, then on the same line in muted text any condition on
+ * it, and any others with theirs. */
+function ShortcutList({ id }: { id: CommandId }) {
+  const { keymap, mac } = useShortcutPreferences();
+  const main = mainBinding(keymap[id], isTauri());
+  if (!main) return <span className="text-muted-foreground">Unassigned</span>;
+  const others = usableBindings(keymap[id], isTauri()).filter((binding) => binding !== main);
+  return (
+    <span className="flex flex-wrap items-center justify-end gap-1.5 text-right">
+      <KeyChips strokes={main.keys} mac={mac} />
+      {main.context && CONTEXT_LABEL[main.context] && (
+        <span className="text-xs whitespace-nowrap text-muted-foreground">
+          {CONTEXT_LABEL[main.context]}
+        </span>
+      )}
+      {others.map((binding, index) => (
+        <span
+          key={index}
+          className="inline-flex items-center gap-1 text-xs whitespace-nowrap text-muted-foreground"
+        >
+          also <PlainKeys strokes={binding.keys} mac={mac} />
+          {binding.context &&
+            CONTEXT_LABEL[binding.context] &&
+            ` ${CONTEXT_LABEL[binding.context]}`}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 export function ShortcutSettings() {
   const compact = useContext(CompactLayoutContext);
   const preferences = useShortcutPreferences();
@@ -130,16 +164,15 @@ export function ShortcutSettings() {
   const [error, setError] = useState<string | null>(null);
   const matches = (id: CommandId) => {
     const label = BINDINGS.find((binding) => binding.id === id)?.label ?? id;
-    return `${label} ${preferences.keymap[id].map((binding) => bindingLabel(binding, preferences.mac)).join(" ")}`
+    return `${label} ${usableBindings(preferences.keymap[id], isTauri())
+      .map((binding) => bindingLabel(binding, preferences.mac))
+      .join(" ")}`
       .toLowerCase()
       .includes(query.trim().toLowerCase());
   };
   return (
     <>
-      <Section
-        title="Keyboard shortcuts"
-        description="Customize shortcuts for this device. Changes apply immediately after saving."
-      >
+      <Section title="Keyboard shortcuts">
         <SettingsCard className="p-4">
           <div className="flex flex-wrap items-center gap-3">
             <Input
@@ -170,10 +203,8 @@ export function ShortcutSettings() {
           </div>
           <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
             {compact && "An external keyboard can use these commands on mobile. "}
-            {isMac() && "Default Mac bindings use Control (⌃), not Command (⌘). "}
-            For sequences, release the first combination before pressing the next key. Escape
-            cancels a sequence. Closing a {compact ? "tab" : "pane or tab"} leaves its sessions
-            running.
+            Escape cancels a sequence. Closing a {compact ? "tab" : "pane or tab"} leaves its
+            sessions running.
           </p>
           {error && (
             <p role="alert" className="mt-3 text-sm text-destructive">
@@ -214,25 +245,7 @@ export function ShortcutSettings() {
                 >
                   <dt className="font-medium">{binding.label}</dt>
                   <dd className="flex max-w-full flex-wrap items-center justify-end gap-2">
-                    {preferences.keymap[binding.id].map((shortcut, index) => (
-                      <span key={index} className="flex flex-col gap-1 text-right">
-                        <kbd className="rounded border bg-muted px-2 py-1 font-mono text-xs text-muted-foreground">
-                          {bindingLabel(shortcut, preferences.mac)}
-                        </kbd>
-                        {shortcut.context !== "app" && (
-                          <span className="text-xs text-muted-foreground">
-                            {shortcut.context === "native"
-                              ? "Desktop app only"
-                              : shortcut.context === "tab"
-                                ? "Focused tab"
-                                : "Outside terminals"}
-                          </span>
-                        )}
-                      </span>
-                    ))}
-                    {!preferences.keymap[binding.id].length && (
-                      <span className="text-muted-foreground">Unassigned</span>
-                    )}
+                    <ShortcutList id={binding.id} />
                     <Button
                       variant="outline"
                       aria-label={`Edit ${binding.label} shortcuts`}

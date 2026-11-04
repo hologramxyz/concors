@@ -70,6 +70,44 @@ export function strokeLabel(stroke: ShortcutStroke, mac = false): string {
     stroke.key === " " ? "Space" : keyLabel(stroke.key),
   ].join("+");
 }
+const macModifiers = { Control: "⌃", Alt: "⌥", Shift: "⇧", Meta: "⌘" } as const;
+const macKeys: Record<string, string> = {
+  Enter: "↩",
+  Backspace: "⌫",
+  Delete: "⌦",
+  Escape: "⎋",
+  Tab: "⇥",
+  " ": "Space",
+};
+/** A stroke as macOS menus write it, e.g. ⌃⇧N. */
+export function strokeSymbols(stroke: ShortcutStroke): string {
+  return [
+    ...modifierOrder
+      .filter((modifier) => stroke.modifiers.includes(modifier))
+      .map((modifier) => macModifiers[modifier]),
+    macKeys[stroke.key] ?? keyLabel(stroke.key),
+  ].join("");
+}
+/** What this app can use: a desktop-only binding means nothing in a browser. */
+export function usableBindings(bindings: readonly Shortcut[], native: boolean): Shortcut[] {
+  return bindings.filter((binding) => native || binding.context !== "native");
+}
+/**
+ * The one shortcut to teach when a command has several: the simplest that works wherever focus is.
+ * So a binding limited to outside terminals or a focused tab loses to one that is not, then fewer
+ * presses win, then the order the person listed them in.
+ */
+export function mainBinding(bindings: readonly Shortcut[], native: boolean): Shortcut | undefined {
+  const limited = ({ context }: Shortcut) => context === "outside-terminal" || context === "tab";
+  return usableBindings(bindings, native)
+    .map((binding, index) => ({ binding, index }))
+    .sort(
+      (a, b) =>
+        Number(limited(a.binding)) - Number(limited(b.binding)) ||
+        a.binding.keys.length - b.binding.keys.length ||
+        a.index - b.index,
+    )[0]?.binding;
+}
 export function bindingLabel(binding: Shortcut, mac = false): string {
   return binding.keys.map((key) => strokeLabel(key, mac)).join(" → ");
 }
@@ -182,6 +220,11 @@ export function shortcutsConflict(left: Shortcut, right: Shortcut): boolean {
       a.modifiers.every((modifier) => firstRight.modifiers.includes(modifier)))
   );
 }
+/** A shortcut written for display, such as "Esc" or "Control+D → K", or null if it is not one. */
+export function parseShortcutText(text: string): ShortcutStroke[] | null {
+  const strokes = text.split(" → ").map((part) => parseStroke(part === "Esc" ? "Escape" : part));
+  return strokes.every((stroke) => stroke !== null) ? strokes : null;
+}
 export function parseStroke(text: string): ShortcutStroke | null {
   const parts = text.split("+").map((part) => part.trim());
   const rawKey = parts.pop();
@@ -198,6 +241,7 @@ export function parseStroke(text: string): ShortcutStroke | null {
     cmd: "Meta",
     win: "Meta",
     super: "Meta",
+    "⌘": "Meta",
   };
   for (const part of parts) {
     const modifier = aliases[part.toLowerCase()];

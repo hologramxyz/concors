@@ -44,7 +44,7 @@ export function ResourceProcessRow({
         </summary>
         <div className="space-y-2 pr-2 pb-3 pl-8 text-xs text-muted-foreground">
           <p>
-            PID {item.pid} · {item.state}
+            PID {item.pid}, {item.state}
           </p>
           {item.directory && <p className="break-all">{item.directory}</p>}
           {item.stopBlocked && <p>{item.stopBlocked}</p>}

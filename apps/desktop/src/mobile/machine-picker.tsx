@@ -36,7 +36,7 @@ export function MobileMachinePicker({
                     value: host.machineId,
                     label: "Desktop daemon",
                     icon: <Monitor />,
-                    description: host.phase === "ready" ? "Connected · real workspace" : host.phase,
+                    description: host.phase === "ready" ? "Connected, real workspace" : host.phase,
                   },
                 ]
               : []

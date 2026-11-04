@@ -100,12 +100,27 @@ test("a folder of repositories shows a child favicon, its pull request count and
     ).toBeVisible();
     const app = page.getByRole("article", { name: "hologram/app" });
     await expect(app).toContainText("Show pull requests in workspaces");
-    await expect(app).toContainText("#42 · e2e-user · change-42 · 2h");
+    await expect(app).toContainText(/#42\s*e2e-user\s*change-42\s*2h/);
     await expect(app).toContainText("Approved");
     await expect(app.getByRole("img", { name: "Checks passing" })).toBeVisible();
     await expect(app.getByRole("button", { name: /^Draft: redesign onboarding/ })).toContainText(
       "Draft",
     );
+    // A disabled Merge still says why, on hover and from the keyboard.
+    const draft = app.getByRole("listitem").filter({ hasText: "redesign onboarding" });
+    const merge = draft.getByRole("button", { name: /^Merge #/ });
+    await expect(merge).toBeDisabled();
+    await expect(merge).not.toHaveAttribute("title");
+    const reason = draft.getByRole("note", { name: "Drafts can't be merged" });
+    await reason.hover();
+    await expect(page.getByRole("tooltip")).toContainText("Drafts can't be merged");
+    await page.mouse.move(0, 0);
+    await expect(page.getByRole("tooltip")).toHaveCount(0);
+    await draft.getByRole("button", { name: /^Draft: redesign onboarding/ }).focus();
+    await page.keyboard.press("Tab");
+    await expect(reason).toBeFocused();
+    await expect(page.getByRole("tooltip")).toContainText("Drafts can't be merged");
+    await page.mouse.move(0, 0);
     await expect(page.getByRole("article", { name: "hologram/site" })).toContainText(
       "Changes requested",
     );

@@ -37,14 +37,13 @@ export function paneTitle(pane: Pane, agents: Agents, terminals: Terminals = [])
   return pane.name ?? defaultPaneTitle(pane, agents, terminals);
 }
 
-/** The pane a split tab is named after: the first one in its layout. */
+/**
+ * The pane a split tab is named after: its oldest. The layout's first pane would rename the tab
+ * whenever panes are rearranged, and a move leaves the order of the nodes alone. No daemon stores
+ * this, so every client and reload works it out the same way.
+ */
 export function mainPane(tab: WorkspaceTab): Pane | undefined {
-  let node = tab.nodes.find((item) => item.id === tab.root);
-  while (node?.kind === "split") {
-    const first = node.first;
-    node = tab.nodes.find((item) => item.id === first);
-  }
-  return node?.kind === "pane" ? node : undefined;
+  return tab.nodes.find((node): node is Pane => node.kind === "pane");
 }
 
 /** A tab the user has not named shows its main pane's title instead of "Tab N". */

@@ -6,6 +6,7 @@ import { formatDuration } from "./duration";
 import { AgentMarkdown, CopyButton } from "./markdown";
 import { stepCount } from "./running-sub-agents";
 import { LIVE_SUB_AGENT, SubAgentViewContext } from "./sub-agent-context";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { useElapsed } from "./use-elapsed";
 
 const LIVE = LIVE_SUB_AGENT;
@@ -33,9 +34,10 @@ export function SubAgentCard({
   const elapsed = useElapsed(item.createdAt, running);
   const current = running ? steps.findLast((step) => step.status === "running") : undefined;
   const label = data?.agentType?.trim() || "Sub-agent";
-  const summary = [stepCount(steps), running && elapsed > 0 ? formatDuration(elapsed) : null]
-    .filter(Boolean)
-    .join(" · ");
+  const summary = [
+    stepCount(steps),
+    running && elapsed > 0 ? formatDuration(elapsed) : null,
+  ].filter(Boolean);
   return (
     <article
       data-tool-status={item.status}
@@ -71,9 +73,11 @@ export function SubAgentCard({
               >
                 {item.text}
               </span>
-              {summary && (
-                <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                  {summary}
+              {summary.length > 0 && (
+                <span className="flex shrink-0 gap-2 text-xs text-muted-foreground tabular-nums">
+                  {summary.map((part) => (
+                    <span key={part}>{part}</span>
+                  ))}
                 </span>
               )}
               {(failed || item.status === "interrupted") && (
@@ -90,7 +94,7 @@ export function SubAgentCard({
                 title={`${current.title} ${current.text}`}
               >
                 {current.title}
-                {current.text ? ` · ${current.text}` : ""}
+                {current.text ? ` ${current.text}` : ""}
               </span>
             )}
           </span>
@@ -236,14 +240,15 @@ function OpenConversation({
   const open = useContext(SubAgentViewContext);
   if (!open) return null;
   return (
-    <button
-      type="button"
-      aria-label={index === undefined ? "Open agent details" : `Open agent ${index + 1} details`}
-      title="Open its progress and conversation beside this chat"
-      className={className}
-      onClick={() => open({ item, childId, index })}
-    >
-      {children}
-    </button>
+    <SidebarTooltip place="above" content="Open details">
+      <button
+        type="button"
+        aria-label={index === undefined ? "Open agent details" : `Open agent ${index + 1} details`}
+        className={className}
+        onClick={() => open({ item, childId, index })}
+      >
+        {children}
+      </button>
+    </SidebarTooltip>
   );
 }

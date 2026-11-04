@@ -35,7 +35,8 @@ test("mobile manages schedules through the native relay without horizontal overf
     await ui.getByRole("button", { name: "New schedule", exact: true }).click();
     const dialog = ui.getByRole("dialog");
     await dialog.getByLabel("Name", { exact: true }).fill("Mobile review");
-    await dialog.getByRole("combobox", { name: "Provider", exact: true }).selectOption("codex");
+    await dialog.getByRole("combobox", { name: "Provider", exact: true }).click();
+    await ui.getByRole("menuitemradio", { name: "Codex", exact: true }).click();
     await dialog.getByLabel("Model", { exact: true }).fill("fixture");
     await dialog.getByLabel("Prompt", { exact: true }).fill("Review the project");
     await expect(
@@ -49,7 +50,7 @@ test("mobile manages schedules through the native relay without horizontal overf
     await expect.poll(() => desktop.schedules?.[0]?.name).toBe("Mobile review");
     await ui.getByRole("button", { name: "Run Mobile review now", exact: true }).click();
     await expect(ui.getByRole("article").getByRole("status")).toHaveText("Done");
-    await ui.getByText("Recent runs · 1", { exact: true }).click();
+    await ui.getByText("Recent runs", { exact: true }).click();
     await page.screenshot({ path: test.info().outputPath("schedules-mobile.png") });
     await ui.getByRole("button", { name: "Open agent", exact: true }).click();
     await expect(ui.getByRole("log")).toContainText("Review the project");

@@ -4,12 +4,15 @@ import { usePullRequests } from "@/pull-requests/use-pull-requests";
 import { pullRequestKey } from "@/pull-requests/store";
 import { NewWorkspaceMenu } from "@/workspace/new-workspace-menu";
 import { recentlyClosed } from "@/workspace/closed-workspaces";
+import { setWorkspaceExpanded, useCollapsedWorkspaces } from "@/workspace/collapsed-workspaces";
 import { WorkspaceSidebarItem } from "@/workspace/sidebar-item";
 import { clashingWorkspaceParents } from "@/workspace/workspace-parents";
 import { useProjectIcons } from "@/workspace/use-project-icons";
 import { projectIconKey } from "@/workspace/project-icons";
-import { SidebarTabRow, UnavailableChats } from "@/workspace/sidebar-tabs";
+import { SidebarDot, SidebarTabRow, UnavailableChats } from "@/workspace/sidebar-tabs";
 import {
+  foldRows,
+  rowDot,
   sidebarRows,
   stableOrder,
   useMinuteClock,
@@ -18,6 +21,7 @@ import {
 } from "@/workspace/sidebar-rows";
 import { defaultPaneTitle, mainPane } from "@/workspace/tab-title";
 import { useAgents } from "@/agents/context";
+import { strongestDot } from "@/agents/agent-status";
 import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { BackgroundTerminalsContext } from "@/terminal/background-terminals";
@@ -73,6 +77,8 @@ interface AppSidebarProps {
   onSelectMachine: (host: Host) => void;
   onViewCloud: (machineId?: string) => void;
   auth: SignedInAuth | null;
+  /** The workspace is loaded, so Take the tour has something to point at. */
+  canTour: boolean;
   onSignIn: () => void;
   onSignOut: () => void;
   execute: (operation: WorkspaceOperation) => Promise<void>;
@@ -92,9 +98,6 @@ const rowChat = (row: SidebarRow) =>
   row.kind === "tab" ? row.chat : row.kind === "closed" ? row.chat.agent : undefined;
 const rowChatId = (row: SidebarRow) => rowChat(row)?.id;
 
-/** Each workspace lists this many rows before "Show more"; the selected tab is always among them. */
-const ROWS_SHOWN = 5;
-
 export function AppSidebar(props: AppSidebarProps) {
   const windowChrome = useWindowChrome();
   const trafficLights = windowChrome.inset && !windowChrome.fullscreen;
@@ -111,10 +114,8 @@ export function AppSidebar(props: AppSidebarProps) {
       onOpenResources={props.onOpenResources}
     />
   );
-  const search = <SearchButton collapsed={false} onOpenSearch={props.onOpenSearch} tour />;
-  const toggle = (
-    <SidebarToggle collapsed={false} onToggle={props.onCollapse} side="bottom" className="p-1.5" />
-  );
+  const search = <SearchButton onOpenSearch={props.onOpenSearch} tour />;
+  const toggle = <SidebarToggle collapsed={false} onToggle={props.onCollapse} className="p-1.5" />;
 
   return (
     // Collapsed, the sidebar keeps its layout and is clipped to nothing, so it slides away whole;
@@ -193,6 +194,7 @@ export function AppSidebar(props: AppSidebarProps) {
           <AccountMenu
             collapsed={false}
             auth={props.auth}
+            canTour={props.canTour}
             onSignOut={props.onSignOut}
             onSignIn={props.onSignIn}
             onOpenSettings={props.onOpenSettings}
@@ -244,16 +246,15 @@ function WorkspaceTree(props: AppSidebarProps) {
   const currentProjectId = props.workspace?.selection?.projectId ?? null;
   const selectedTabId =
     props.view === "projects" ? (props.workspace?.selection?.tabId ?? null) : null;
-  // Only the workspace you are in starts expanded; what you expand or collapse yourself sticks.
-  const [expandedByHand, setExpandedByHand] = useState<Record<string, boolean>>({});
-  const isExpanded = (id: string) => expandedByHand[id] ?? id === currentProjectId;
+  const collapsedWorkspaces = useCollapsedWorkspaces();
+  const isExpanded = (id: string) => !collapsedWorkspaces.has(id);
   const selectWorkspace = (id: string) => {
     if (props.view === "projects" && id === currentProjectId) {
-      setExpandedByHand((previous) => ({ ...previous, [id]: !isExpanded(id) }));
+      setWorkspaceExpanded(id, !isExpanded(id));
       return;
     }
-    // Switching to a workspace expands it, even one collapsed by hand earlier.
-    if (expandedByHand[id] === false) setExpandedByHand(({ [id]: _collapsed, ...rest }) => rest);
+    // Switching to a workspace expands it, even one collapsed earlier.
+    setWorkspaceExpanded(id, true);
     props.onSelectProject(id);
   };
   const [more, setMore] = useState<ReadonlySet<string>>(new Set());
@@ -265,17 +266,31 @@ function WorkspaceTree(props: AppSidebarProps) {
   const list = useRef<HTMLUListElement>(null);
   const [shownOrder, setShownOrder] = useState<ReadonlyMap<string, string[]>>(new Map());
   const order = JSON.stringify([...rows].map(([id, list]) => [id, list.map((row) => row.key)]));
+  // Closed rows whose dot keeps them out of the fold, held still with the order.
+  const [shownSurfaced, setShownSurfaced] = useState<ReadonlyMap<string, string[]>>(new Map());
+  const surfaced = JSON.stringify(
+    [...rows].map(([id, list]) => [
+      id,
+      list.filter((row) => row.kind !== "tab" && rowDot(row)).map((row) => row.key),
+    ]),
+  );
+  const followRows = () => {
+    setShownOrder((previous) => followOrder(previous, order));
+    setShownSurfaced((previous) => followOrder(previous, surfaced));
+  };
   useLayoutEffect(() => {
-    if (!list.current?.matches(":hover")) setShownOrder((previous) => followOrder(previous, order));
-  }, [order]);
+    if (!list.current?.matches(":hover")) followRows();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order, surfaced]);
   const canRenamePanes =
     connection?.state.status === "ready" &&
     !!connection.state.daemon.capabilities?.includes(PANE_RENAME_CAPABILITY);
   // Chats of a closed workspace come back with its folder, so they are not listed apart. Older
-  // daemons remove workspaces instead, and their chats can only be listed as unavailable.
-  const keepsClosed =
+  // daemons remove workspaces instead, and their chats can only be listed as unavailable. Only a
+  // daemon that has answered can be called older: one out of reach still has its closed workspaces.
+  const removesWorkspaces =
     connection?.state.status === "ready" &&
-    !!connection.state.daemon.capabilities?.includes(PROJECT_CLOSE_CAPABILITY);
+    !connection.state.daemon.capabilities?.includes(PROJECT_CLOSE_CAPABILITY);
   /**
    * A tab nobody named shows its main pane's title, so renaming its row names that pane, as the
    * pane's own menu does: the tab, the pane and the chat once closed all keep the name, and
@@ -348,23 +363,19 @@ function WorkspaceTree(props: AppSidebarProps) {
         }
       />
       {props.workspace?.projects.length ? (
-        <ul
-          ref={list}
-          className="mt-1 space-y-0.5"
-          onPointerLeave={() => setShownOrder((previous) => followOrder(previous, order))}
-        >
+        <ul ref={list} className="mt-1 space-y-0.5" onPointerLeave={followRows}>
           {props.workspace.projects.map((project) => {
             const expanded = !props.collapsed && isExpanded(project.id);
             const ordered = stableOrder(rows.get(project.id) ?? [], shownOrder.get(project.id));
             const selectedRow = ordered.find(
               (row) => row.kind === "tab" && row.tabId === selectedTabId,
             );
+            const fold = more.has(project.id)
+              ? { listed: ordered, folded: [] }
+              : foldRows(ordered, new Set(shownSurfaced.get(project.id)));
             // Rendered while collapsed too, so the list can ease open and shut.
-            const listed = props.collapsed
-              ? []
-              : more.has(project.id)
-                ? ordered
-                : ordered.filter((row, index) => index < ROWS_SHOWN || row === selectedRow);
+            const listed = props.collapsed ? [] : fold.listed;
+            const foldedDot = strongestDot(fold.folded.map(rowDot));
             const shown = expanded ? listed : [];
             const current = props.view === "projects" && currentProjectId === project.id;
             return (
@@ -375,6 +386,7 @@ function WorkspaceTree(props: AppSidebarProps) {
                   compact={props.collapsed}
                   selected={current && !(selectedRow && shown.includes(selectedRow))}
                   current={current}
+                  expanded={expanded}
                   canEdit={props.canEdit}
                   icon={
                     props.workspace
@@ -387,6 +399,7 @@ function WorkspaceTree(props: AppSidebarProps) {
                       : undefined
                   }
                   onSelect={selectWorkspace}
+                  onToggleExpanded={() => setWorkspaceExpanded(project.id, !expanded)}
                   onOpenPullRequests={props.onOpenPullRequests}
                   execute={props.execute}
                   onCommand={props.onCommand}
@@ -428,15 +441,21 @@ function WorkspaceTree(props: AppSidebarProps) {
                             onDelete={remove(rowChat(row))}
                           />
                         ))}
-                        {listed.length < ordered.length && (
+                        {fold.folded.length > 0 && (
                           <li>
                             <button
                               type="button"
                               onClick={() =>
                                 setMore((previous) => new Set(previous).add(project.id))
                               }
-                              className="flex h-8 w-full items-center rounded-md pr-2 pl-[calc(1rem+20px)] text-left text-ui text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                              className="flex h-8 w-full items-center gap-2 rounded-md pr-2 pl-2 text-left text-ui text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
                             >
+                              <span
+                                data-show-more-dot={foldedDot}
+                                className="flex size-[20px] shrink-0 items-center justify-center"
+                              >
+                                {foldedDot && <SidebarDot dot={foldedDot} />}
+                              </span>
                               Show more
                             </button>
                           </li>
@@ -448,7 +467,9 @@ function WorkspaceTree(props: AppSidebarProps) {
               </Fragment>
             );
           })}
-          {!props.collapsed && !keepsClosed && <UnavailableChats chats={unavailable} now={now} />}
+          {!props.collapsed && removesWorkspaces && (
+            <UnavailableChats chats={unavailable} now={now} />
+          )}
         </ul>
       ) : null}
     </>

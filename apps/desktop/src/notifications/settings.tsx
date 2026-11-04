@@ -56,16 +56,13 @@ export function NotificationSettings({
   return (
     <Section
       title="Agent notifications"
-      description="Concors alerts you when an agent finishes or needs your input while you aren’t looking at it: the window is in the background, or another agent is on screen. Preferences apply to this device; unread indicators sync across devices."
+      description="Alerts when an agent finishes or needs your input while you aren’t looking at it."
     >
       <SettingsCard className="divide-y">
         <div className="p-4">
           <label className="flex items-center justify-between gap-6">
             <span>
               <span className="text-sm font-medium">Sound</span>
-              <span className="mt-0.5 block text-xs text-muted-foreground">
-                Distinct sounds for completion and requests for input.
-              </span>
             </span>
             <input
               type="checkbox"
@@ -117,8 +114,7 @@ export function NotificationSettings({
               <span>
                 <span className="text-sm font-medium">Desktop notifications</span>
                 <span className="mt-0.5 block text-xs text-muted-foreground">
-                  A banner for agents in chat panes. Agents running in a terminal pane play a sound
-                  only.
+                  Agents in a terminal pane play a sound only.
                 </span>
               </span>
               <input

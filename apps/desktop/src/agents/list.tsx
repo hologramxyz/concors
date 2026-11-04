@@ -1,6 +1,6 @@
 import { Bot, Clock, Ellipsis, GitFork, Pencil } from "lucide-react";
 import { useSchedules } from "@/schedules/use-schedules";
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,7 +10,6 @@ import {
 import { SidebarEmpty } from "@/components/sidebar-section";
 import { useContext, useRef, useState } from "react";
 import { cn } from "cn";
-import { CompactLayoutContext } from "@/components/compact-layout";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { agentPane, paneNames, visibleAgentSessions } from "./visible-sessions";
 import { AgentStatusIcon } from "./activity";
@@ -201,8 +200,7 @@ function AgentRow({
   /** Absent for terminals, and for a chat that cannot be forked right now. */
   onFork: (() => void) | undefined;
 }) {
-  const mobile = useContext(CompactLayoutContext);
-  const { status, unread, background } = agent;
+  const { status, dot, background } = agent;
   const backgroundLabel = background
     ? `${background} sub-agent${background === 1 ? "" : "s"} running`
     : "";
@@ -254,72 +252,73 @@ function AgentRow({
           />
         </div>
       ) : (
-        <Tooltip delayDuration={250} {...(mobile ? { open: false } : {})}>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              className={`flex items-center rounded-md text-ui ${compact ? "sidebar-rail-control w-full hover:bg-sidebar-accent" : "h-8 min-w-0 flex-1 gap-2 px-2 text-left"}`}
-              aria-label={
-                compact
-                  ? `Agent status: ${status}${backgroundLabel ? ` · ${backgroundLabel}` : ""} · ${agent.name} · ${projectName}`
-                  : undefined
-              }
-              data-agent-id={agent.id}
-              data-agent-closed={closed || undefined}
-              onClick={() => onSelect(agent.id)}
-            >
-              <AgentStatusIcon agent={agent} />
-              {!compact && (
-                <span className={cn("min-w-0 flex-1 truncate", closed && "text-muted-foreground")}>
-                  {agent.name}
-                </span>
-              )}
-              {!compact && background > 0 && (
-                <span
-                  data-background-agents={background}
-                  aria-label={backgroundLabel}
-                  className="flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground tabular-nums"
-                >
-                  <Bot aria-hidden="true" className="size-3.5 motion-safe:animate-pulse" />
-                  {background > 1 && background}
-                </span>
-              )}
-              {!compact && scheduled && (
-                <Clock
-                  className="size-3.5 shrink-0 text-muted-foreground"
-                  aria-label="Scheduled agent"
-                />
-              )}
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="right" sideOffset={6}>
+        <SidebarTooltip
+          content={
             <div className="min-w-0">
               <p className="font-medium break-words">
-                {agent.name} · {agent.providerName}
+                {agent.name}, {agent.providerName}
               </p>
               <p className="font-medium break-words">{projectName}</p>
               <p className="opacity-75">
                 {status}
-                {backgroundLabel ? ` · ${backgroundLabel}` : ""}
-                {scheduled ? " · Scheduled" : ""}
-                {unread ? " · Unread update" : ""}
+                {backgroundLabel ? `, ${backgroundLabel}` : ""}
+                {scheduled ? ", Scheduled" : ""}
+                {dot === "done" ? ", Unread update" : ""}
               </p>
             </div>
-          </TooltipContent>
-        </Tooltip>
+          }
+        >
+          <button
+            type="button"
+            className={`flex items-center rounded-md text-ui ${compact ? "sidebar-rail-control w-full hover:bg-sidebar-accent" : "h-8 min-w-0 flex-1 gap-2 px-2 text-left"}`}
+            aria-label={
+              compact
+                ? `Agent status: ${status}${backgroundLabel ? `, ${backgroundLabel}` : ""}, ${agent.name}, ${projectName}`
+                : undefined
+            }
+            data-agent-id={agent.id}
+            data-agent-closed={closed || undefined}
+            onClick={() => onSelect(agent.id)}
+          >
+            <AgentStatusIcon agent={agent} />
+            {!compact && (
+              <span className={cn("min-w-0 flex-1 truncate", closed && "text-muted-foreground")}>
+                {agent.name}
+              </span>
+            )}
+            {!compact && background > 0 && (
+              <span
+                data-background-agents={background}
+                aria-label={backgroundLabel}
+                className="flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground tabular-nums"
+              >
+                <Bot aria-hidden="true" className="size-3.5 motion-safe:animate-pulse" />
+                {background > 1 && background}
+              </span>
+            )}
+            {!compact && scheduled && (
+              <Clock
+                className="size-3.5 shrink-0 text-muted-foreground"
+                aria-label="Scheduled agent"
+              />
+            )}
+          </button>
+        </SidebarTooltip>
       )}
       {!compact && actions && (
         <DropdownMenu>
-          <DropdownMenuTrigger
-            aria-label={`Actions for ${agent.name}`}
-            className={cn(
-              "mr-1 rounded p-1 text-muted-foreground opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 hover:text-sidebar-foreground data-[state=open]:opacity-100 [@media(hover:none)]:opacity-100",
-              // Kept mounted while renaming so closing the menu can hand focus to the input.
-              renaming !== null && "invisible",
-            )}
-          >
-            <Ellipsis className="size-4" />
-          </DropdownMenuTrigger>
+          <SidebarTooltip content="Chat options">
+            <DropdownMenuTrigger
+              aria-label={`Actions for ${agent.name}`}
+              className={cn(
+                "mr-1 rounded p-1 text-muted-foreground opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 hover:text-sidebar-foreground data-[state=open]:opacity-100 [@media(hover:none)]:opacity-100",
+                // Kept mounted while renaming so closing the menu can hand focus to the input.
+                renaming !== null && "invisible",
+              )}
+            >
+              <Ellipsis className="size-4" />
+            </DropdownMenuTrigger>
+          </SidebarTooltip>
           <DropdownMenuContent
             align="start"
             className="w-56"

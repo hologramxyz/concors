@@ -31,7 +31,7 @@ test("mobile Search is a sidebar-preserving drawer with real pane navigation and
     await expect(shell).toHaveAttribute("data-sidebar-open", "true");
     await expect(input).toBeFocused();
     await page.screenshot({ path: test.info().outputPath("mobile-search.png") });
-    await expect(dialog).toContainText("not messages or file contents");
+    await expect(dialog).not.toContainText("not messages or file contents");
     expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
       true,
     );

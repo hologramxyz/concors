@@ -1,4 +1,4 @@
-import { useContext, useId, useState, useRef, useEffect, type ReactNode } from "react";
+import { Fragment, useContext, useId, useState, useRef, useEffect, type ReactNode } from "react";
 import { ControlTooltip } from "./control-tooltip";
 import { ComposerSurfaceContext } from "./composer-expansion";
 import { Popover } from "radix-ui";
@@ -9,6 +9,8 @@ export interface ControlOption {
   label: string;
   description?: string | undefined;
   icon?: ReactNode;
+  /** Listed below a divider, as older models are. */
+  older?: boolean | undefined;
 }
 export interface ControlGroup extends ControlOption {
   options: ControlOption[];
@@ -34,6 +36,7 @@ export function ControlPicker({
   onGroupChange,
   status,
   notice,
+  searchable = true,
 }: {
   label: string;
   value: string;
@@ -54,6 +57,8 @@ export function ControlPicker({
   status?: string | undefined;
   /** Marks the trigger with a dot and adds this to its tooltip, e.g. an update for the agent. */
   notice?: string | undefined;
+  /** A menu of a few options has nothing worth searching. */
+  searchable?: boolean;
 }) {
   const [open, setOpen] = useState(false),
     [query, setQuery] = useState(""),
@@ -89,7 +94,7 @@ export function ControlPicker({
     setQuery("");
     setActive(0);
     if (list.current) list.current.scrollTop = 0;
-    search.current?.focus();
+    (search.current ?? list.current)?.focus();
   };
   const select = (next: string) => {
     if (choosingProvider) {
@@ -131,7 +136,7 @@ export function ControlPicker({
       }}
     >
       <ControlTooltip
-        text={`${label}: ${currentLabel}${notice ? ` · ${notice}` : ""}`}
+        text={`${label}: ${currentLabel}${notice ? `. ${notice}` : ""}`}
         shortcut={shortcut}
         hidden={open || quiet}
       >
@@ -146,7 +151,7 @@ export function ControlPicker({
           className="z-50 w-72 max-w-[calc(100vw-24px)] overflow-hidden rounded-[calc(var(--radius-lg)+(0.375rem+1px)*var(--concentric))] border bg-popover p-1.5 text-popover-foreground shadow-lg"
           onOpenAutoFocus={(event) => {
             event.preventDefault();
-            search.current?.focus();
+            (search.current ?? list.current)?.focus();
           }}
           onKeyDown={(e) => {
             if (e.key === "ArrowDown" || e.key === "ArrowUp") {
@@ -155,7 +160,7 @@ export function ControlPicker({
                 Math.max(0, Math.min(visible.length - 1, a + (e.key === "ArrowDown" ? 1 : -1))),
               );
             }
-            if (e.key === "Enter" && e.target instanceof HTMLInputElement) {
+            if (e.key === "Enter" && (e.target === search.current || e.target === list.current)) {
               e.preventDefault();
               const option = visible[active];
               if (option) select(option.id);
@@ -178,62 +183,74 @@ export function ControlPicker({
               <span className="truncate font-medium">{group?.label ?? "Providers"}</span>
             </div>
           )}
-          <div className="flex items-center gap-2 border-b px-2 pt-1 pb-2 text-muted-foreground">
-            <Search className="size-4" />
-            <input
-              ref={search}
-              role="combobox"
-              aria-label={`Search ${searchLabel.toLowerCase()}`}
-              aria-expanded="true"
-              aria-controls={id}
-              aria-activedescendant={visible[active] ? `${id}-${active}` : undefined}
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setActive(0);
-              }}
-              placeholder={group ? "Search models" : searchLabel}
-              className="min-w-0 flex-1 bg-transparent text-sm outline-none"
-            />
-          </div>
+          {searchable && (
+            <div className="flex items-center gap-2 border-b px-2 pt-1 pb-2 text-muted-foreground">
+              <Search className="size-4" />
+              <input
+                ref={search}
+                role="combobox"
+                aria-label={`Search ${searchLabel.toLowerCase()}`}
+                aria-expanded="true"
+                aria-controls={id}
+                aria-activedescendant={visible[active] ? `${id}-${active}` : undefined}
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setActive(0);
+                }}
+                placeholder={group ? "Search models" : searchLabel}
+                className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+              />
+            </div>
+          )}
           <div
             ref={list}
             id={id}
             role="listbox"
             aria-label={searchLabel}
-            className="chat-scroll max-h-72 overflow-auto py-1"
+            // Without a search box, the list itself takes focus so the arrow keys still work.
+            tabIndex={searchable ? undefined : -1}
+            aria-activedescendant={!searchable && visible[active] ? `${id}-${active}` : undefined}
+            className={`chat-scroll max-h-72 overflow-auto outline-none ${searchable ? "py-1" : ""}`}
           >
             {visible.map((option, index) => (
-              <button
-                type="button"
-                role="option"
-                id={`${id}-${index}`}
-                aria-selected={
-                  choosingProvider
-                    ? selectedGroupId === option.id
-                    : (!groups || selectedGroupId === groupId) && value === option.id
-                }
-                key={option.id}
-                onMouseMove={() => setActive(index)}
-                onClick={() => select(option.id)}
-                className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left text-sm ${active === index ? "bg-accent" : "hover:bg-accent"}`}
-              >
-                {option.icon}
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate">{option.label}</span>
-                  {option.description && (
-                    <span className="mt-0.5 block text-xs text-muted-foreground">
-                      {option.description}
-                    </span>
-                  )}
-                </span>
-                {choosingProvider ? (
-                  <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-                ) : (
-                  (!groups || selectedGroupId === groupId) &&
-                  value === option.id && <Check className="size-4 shrink-0" />
+              <Fragment key={option.id}>
+                {option.older && !visible[index - 1]?.older && index > 0 && (
+                  <div role="none" data-older-models className="mx-2 my-1 border-t" />
                 )}
-              </button>
+                <button
+                  type="button"
+                  role="option"
+                  id={`${id}-${index}`}
+                  aria-selected={
+                    choosingProvider
+                      ? selectedGroupId === option.id
+                      : (!groups || selectedGroupId === groupId) && value === option.id
+                  }
+                  onMouseMove={() => setActive(index)}
+                  onClick={() => select(option.id)}
+                  className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left text-sm ${active === index ? "bg-accent" : "hover:bg-accent"}`}
+                >
+                  {option.icon}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{option.label}</span>
+                    {option.description && (
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
+                        {option.description}
+                      </span>
+                    )}
+                  </span>
+                  {choosingProvider ? (
+                    <>
+                      {selectedGroupId === option.id && <Check className="size-4 shrink-0" />}
+                      <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                    </>
+                  ) : (
+                    (!groups || selectedGroupId === groupId) &&
+                    value === option.id && <Check className="size-4 shrink-0" />
+                  )}
+                </button>
+              </Fragment>
             ))}
             {!visible.length && (
               <p className="p-3 text-sm text-muted-foreground">

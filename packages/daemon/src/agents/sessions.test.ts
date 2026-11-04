@@ -2031,3 +2031,46 @@ it("follows a turn the agent starts by itself after the last one finished", asyn
     text: "All checks passed",
   });
 });
+
+it("opening a chat leaves its time alone, with or without messages", async () => {
+  const { a, id } = await setup();
+  const longAgo = "2020-01-02T03:04:05.000Z";
+  // Restarts the daemon with the chat's time long past, so anything that writes it stands out.
+  const restart = async (client: DaemonConnection) => {
+    client.disconnect();
+    await server?.close();
+    const database = new DatabaseSync(join(directory, "state.db"));
+    const row = database.prepare("SELECT info FROM agents WHERE id = ?").get(id);
+    database
+      .prepare("UPDATE agents SET info = ? WHERE id = ?")
+      .run(JSON.stringify({ ...JSON.parse(String(row?.["info"])), updatedAt: longAgo }), id);
+    database.close();
+    return open(await boot());
+  };
+  // The first read of a chat starts its CLI, which also reports its models and controls.
+  const openChat = async (client: DaemonConnection) => {
+    expect((await action(client, { kind: "read", sessionId: id })).outcome.status).toBe("ok");
+    const provider = providers.at(-1)!;
+    provider.emit("session/models/updated", { models: [] });
+    provider.emit("session/controls/updated", {
+      controls: { modes: [], features: [], commands: [] },
+    });
+    expect((await action(client, { kind: "read", sessionId: id })).outcome.status).toBe("ok");
+    expect(client.agents[0]?.updatedAt).toBe(longAgo);
+  };
+
+  // Empty, so it is given a new thread as it opens.
+  const empty = await restart(a);
+  await openChat(empty);
+
+  // With messages, so its saved history replays as it opens.
+  await action(empty, { kind: "send", sessionId: id, text: "hello" });
+  await expect.poll(() => empty.agents[0]?.status).toBe("done");
+  const filled = await restart(empty);
+  await openChat(filled);
+
+  // Sending is activity, and does move it.
+  await action(filled, { kind: "send", sessionId: id, text: "again" });
+  await expect.poll(() => filled.agents[0]?.status).toBe("done");
+  expect(filled.agents[0]?.updatedAt).not.toBe(longAgo);
+});
