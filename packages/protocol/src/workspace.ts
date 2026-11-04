@@ -7,6 +7,8 @@ import {
 
 /** The daemon moves chats between workspaces: `tab.transfer`, and the agent operation `move`. */
 export const CHAT_MOVE_CAPABILITY = "chat-move";
+/** The daemon accepts `pane.transfer`, which moves a pane into another tab of its workspace. */
+export const PANE_TRANSFER_CAPABILITY = "pane-transfer";
 /** The daemon accepts `pane.rename` and keeps pane names. */
 export const PANE_RENAME_CAPABILITY = "pane-rename";
 /** The daemon accepts `project.rename` and stops a renamed workspace following its shell's folder. */
@@ -151,6 +153,13 @@ export const WorkspaceOperationSchema = z.discriminatedUnion("kind", [
     targetPaneId: Id,
     scope: z.enum(["pane", "workspace"]).optional(),
     placement: z.enum(["center", "left", "right", "top", "bottom"]),
+    splitId: Id,
+  }),
+  z.object({
+    kind: z.literal("pane.transfer"),
+    ...TabTarget,
+    paneId: Id,
+    targetTabId: Id,
     splitId: Id,
   }),
   z.object({

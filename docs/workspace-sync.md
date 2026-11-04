@@ -60,5 +60,7 @@ workspace. A chat with a schedule stays, because a schedule belongs to its chat'
 `pane.move` commits the tree change atomically using the project version captured at drag start.
 Pane IDs, profiles, and session bindings stay unchanged; no terminal or agent is stopped or
 restarted. Layouts sync across clients and survive reload. Clients only enable dragging when
-the daemon advertises `workspace-pane-rearrangement`. Cross-tab dragging and touch dragging are not
+the daemon advertises `workspace-pane-rearrangement`. Dropping a pane on another tab in the tab bar,
+or choosing **Move to tab** in its menu, sends `pane.transfer` (`pane-transfer`): the pane joins that
+tab on the right, keeps its session, and a tab it leaves empty closes. Touch dragging is not
 implemented. The drag uses pointer events rather than HTML drag and drop, which ignores CSS cursors.

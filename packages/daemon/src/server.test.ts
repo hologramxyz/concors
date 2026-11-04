@@ -177,6 +177,7 @@ describe("WebSocket handshake", () => {
           "pane-rearrangement",
           "workspace-pane-rearrangement",
           "chat-move",
+          "pane-transfer",
           "directional-pane-split",
           "pane-rename",
           "project-rename",
