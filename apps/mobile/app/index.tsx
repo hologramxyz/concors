@@ -30,26 +30,15 @@ export default function SignInScreen() {
             Check in on your agents, answer a request, and pick up where you left off.
           </Copy>
         </View>
-        {config.demo && (
-          <Notice>
-            Demo preview · All sessions and responses are simulated. No real credentials are needed.
-          </Notice>
-        )}
+        {config.demo && <Notice>Demo preview. Sessions and responses are simulated.</Notice>}
         {auth.error && <Notice>{auth.error}</Notice>}
         {config.developmentDaemon ? (
           <>
-            <Notice>
-              Live desktop connection · This opens your real workspace. Commands run on the
-              connected computer. Keep Tailscale connected.
-            </Notice>
+            <Notice>Live desktop connection. Commands run on the connected computer.</Notice>
             <Copy muted>{new URL(config.developmentDaemon).host}</Copy>
             <Button disabled={auth.loading} onPress={auth.connectDirect}>
               Connect to desktop
             </Button>
-            <Copy muted size={13}>
-              No cloud login is needed for this private test. Disconnecting leaves your desktop
-              sessions running.
-            </Copy>
           </>
         ) : config.demo ? (
           <Button

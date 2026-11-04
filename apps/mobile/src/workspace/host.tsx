@@ -238,7 +238,7 @@ function SignedInWorkspace() {
             personalTeam: config.personalTeam,
           },
           endpointLabel: auth.direct
-            ? `Direct desktop daemon${config.developmentDaemon ? ` · ${new URL(config.developmentDaemon).host}` : ""}`
+            ? `This computer${config.developmentDaemon ? ` (${new URL(config.developmentDaemon).host})` : ""}`
             : config.demo
               ? "In-memory demo"
               : transport

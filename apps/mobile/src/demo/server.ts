@@ -502,7 +502,7 @@ export function createDemoServer() {
                       startedAt: new Date().toISOString(),
                     },
                     sequence: 0,
-                    output: "Concors demo · Commands are simulated.\r\n$ ",
+                    output: "Concors demo. Commands are simulated.\r\n$ ",
                     owner: null,
                   };
                   terminals.set(id, terminal);
@@ -739,7 +739,7 @@ export function createDemoServer() {
               monthlyPrice: null,
             },
           ],
-          image: "Ubuntu · simulated",
+          image: "Ubuntu (simulated)",
           sshUser: "ubuntu",
         });
       if (path === "/api/v1/machines") {

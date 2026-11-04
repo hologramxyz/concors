@@ -65,7 +65,7 @@ export class AttentionEngine {
       sessionId: agent.id,
       kind: attention.kind,
       title: place.workspace ? `${title} in ${place.workspace}` : title,
-      body: place.tab && place.tab !== agent.name ? `${place.tab} · ${agent.name}` : agent.name,
+      body: place.tab && place.tab !== agent.name ? `${agent.name} in ${place.tab}` : agent.name,
       place,
       agent: agent.name,
     };

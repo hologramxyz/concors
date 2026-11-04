@@ -124,7 +124,7 @@ it("names the workspace and tab, apart from the agent, so finished agents tell a
   expect(sink.show).toHaveBeenCalledExactlyOnceWith(
     expect.objectContaining({
       title: "Agent finished in Marketing",
-      body: "Landing · Codex",
+      body: "Codex in Landing",
       agent: "Codex",
       place: { projectId: "project", workspace: "Marketing", tab: "Landing" },
     }),

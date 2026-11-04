@@ -42,7 +42,7 @@ export function demoResources() {
         snapshot: {
           sampledAt: Date.now(),
           processes,
-          warnings: ["Demo · All resource readings and actions are simulated."],
+          warnings: ["Resource readings in this demo are simulated."],
         },
       };
     else {

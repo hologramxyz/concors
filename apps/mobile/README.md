@@ -38,7 +38,7 @@ phone-size mode. Select **Explore demo**; it opens straight into the agent chat.
    Enter inserts a newline; the send button submits.
    Allow the pending request, then send a message to see streaming.
 2. While the approval is pending or an agent is working, send a follow-up to queue it.
-   Attach a small file; switch to Terminal · Pane 2 with the top picker and back.
+   Attach a small file; switch to Mobile launch 2 with the top picker and back.
    Drafts, attachments and queued messages survive pane/tab navigation.
 3. Swipe right on the conversation or terminal to open Projects / Agents / Servers.
    The workspace moves right. Swipe left, press Close sidebar, or tap the workspace
@@ -71,14 +71,14 @@ Context usage and dictation sit on the right beside the primary button; the slid
 Plan and Speed. On iPhone, dictation records through the machine, as on desktop; where the webview
 offers no microphone (Android) it focuses the keyboard and explains how to use its microphone.
 There is one primary button: Stop while working with an empty draft, Queue for a follow-up,
-or Send when idle. 7. Select **Mobile launch · 2** (Terminal) for the shared xterm terminal: type, use extra keys,
+or Send when idle. 7. Select **Mobile launch 2** (Terminal) for the shared xterm terminal: type, use extra keys,
 reload the renderer or explicitly stop the process after confirmation.
 
 ### Mobile tabs and desktop sync
 
 Mobile calls each chat or terminal view a **tab**. The picker lists every pane in the
 project at one level, in desktop tab order and split-tree order, with no group headings.
-The initial demo shows **Mobile launch · 1** (Agent) and **Mobile launch · 2** (Terminal).
+The initial demo shows **Mobile launch 1** (Agent) and **Mobile launch 2** (Terminal).
 On desktop these are still two panes inside the original **Mobile launch** tab.
 
 - **New tab** creates a new desktop tab with a single pane. There is no mobile Add pane mode.
