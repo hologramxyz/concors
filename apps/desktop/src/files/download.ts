@@ -17,6 +17,15 @@ function decode(data: string): Uint8Array {
   return bytes;
 }
 
+/** The file is larger than the caller is prepared to hold in memory. */
+export class FileTooLargeError extends Error {
+  readonly size: number;
+  constructor(size: number) {
+    super("This file is too large.");
+    this.size = size;
+  }
+}
+
 /**
  * Reads a file from the machine for saving on this device. A machine that reads files in pieces
  * sends any size up to its limit, a few pieces at a time, reporting progress as they arrive; an
@@ -26,6 +35,7 @@ export async function downloadProjectFile(
   connection: DaemonConnection,
   target: FileLinkTarget,
   onProgress?: (fraction: number) => void,
+  { signal, maxBytes = Infinity }: { signal?: AbortSignal; maxBytes?: number } = {},
 ): Promise<Uint8Array> {
   const capabilities =
     connection.state.status === "ready" ? (connection.state.daemon.capabilities ?? []) : null;
@@ -58,6 +68,8 @@ export async function downloadProjectFile(
   };
   // The first piece says how large the file is; the rest are checked against it.
   const first = await piece(0);
+  // Refused before the buffer below claims the room.
+  if (first.size > maxBytes) throw new FileTooLargeError(first.size);
   const expected = { size: first.size, modified: first.modified };
   const file = new Uint8Array(first.size);
   let received = 0;
@@ -71,6 +83,7 @@ export async function downloadProjectFile(
   let next = DOWNLOAD_RANGE_BYTES;
   const worker = async () => {
     while (next < file.length) {
+      signal?.throwIfAborted();
       const offset = next;
       next += DOWNLOAD_RANGE_BYTES;
       write(await piece(offset, expected));

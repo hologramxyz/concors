@@ -18,6 +18,7 @@ import { useFilePrompts } from "./prompts";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import { MediaFileTab } from "./media-tab";
 import { previewKind } from "./preview-kind";
+import { VideoFileTab } from "./video-tab";
 import { useFileRequest } from "./use-file-request";
 const CodeEditor = lazy(loadCodeEditor);
 
@@ -54,6 +55,7 @@ export function FileTabLabel({ file }: { file: OpenFile }) {
 }
 export function FileTab({ file }: { file: OpenFile }) {
   const kind = previewKind(file.path);
+  if (kind === "video") return <VideoFileTab file={file} />;
   return kind ? <MediaFileTab file={file} kind={kind} /> : <TextFileTab file={file} />;
 }
 function TextFileTab({ file }: { file: OpenFile }) {
