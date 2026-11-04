@@ -292,7 +292,7 @@ describe("project files", () => {
     await rm(join(root, "hello.ts"));
     expect(await read()).toMatchObject({
       status: "error",
-      message: expect.stringContaining("no longer exists"),
+      message: expect.stringContaining("not found"),
     });
   });
 });

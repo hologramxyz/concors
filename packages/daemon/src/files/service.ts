@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import { lstat, mkdir, open, opendir, realpath, rename, unlink } from "node:fs/promises";
 import { basename, dirname, join, relative, sep } from "node:path";
+import { locateProjectFile } from "./locate.ts";
 import { projectPath, resolveProjectPath } from "./paths.ts";
 import { readProjectIcon } from "./project-icon.ts";
 import { readProjectDownload, readProjectPreview, readProjectRange } from "./preview.ts";
@@ -49,6 +50,12 @@ export class ProjectFiles {
           outcome: { status: "created", entry },
         };
       }
+      if (operation.kind === "locate")
+        return {
+          type: "file.result",
+          requestId: request.requestId,
+          outcome: { status: "located", paths: await locateProjectFile(root, operation.path) },
+        };
       const file = await resolveProjectPath(root, operation.path);
       let outcome: FileResult["outcome"];
       if (operation.kind === "list") {
@@ -231,7 +238,8 @@ function fileError(error: unknown): string {
   if (error && typeof error === "object" && "code" in error) {
     if (error.code === "EEXIST")
       return "A file or folder with that name already exists. Choose another name.";
-    if (error.code === "ENOENT") return "File or folder no longer exists. Refresh the file tree.";
+    if (error.code === "ENOENT")
+      return "File or folder not found. It may have moved or not been written yet: refresh the file tree or try again.";
     if (error.code === "EACCES" || error.code === "EPERM")
       return "The machine denied access to this file.";
     if (error.code === "ENOTDIR" || error.code === "EISDIR")

@@ -395,6 +395,15 @@ export class TestAgentProvider implements AgentProvider {
           },
         });
       }
+      if (text.includes("nested-link")) {
+        this.emit("item/completed", {
+          item: {
+            id: `nested-link-${this.turnId}`,
+            type: "agentMessage",
+            text: "Rendered [the clip](clips/render.txt).",
+          },
+        });
+      }
       if (text.includes("file-links")) {
         this.emit("item/completed", {
           item: {
