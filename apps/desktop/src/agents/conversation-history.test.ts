@@ -305,3 +305,66 @@ it("ignores a replayed history streamed before the first page, then opens at its
   history.receive(item(800));
   expect(history.getSnapshot().items.at(-1)?.position).toBe(800);
 });
+
+function subAgent(position: number, status: AgentItem["status"] = "running"): AgentItem {
+  return {
+    ...item(position),
+    id: `sub-${position}`,
+    kind: "tool",
+    status,
+    presentation: { type: "sub_agent" },
+  };
+}
+
+it("keeps a running sub-agent current though the window never held it", async () => {
+  const { page, history } = fixture();
+  const old = subAgent(5);
+  const read = vi.fn(async (cursor: HistoryCursor) => ({
+    ...page(cursor),
+    liveSubAgents: [old],
+  }));
+  const tracked = new ConversationHistory(read);
+  await tracked.load("latest");
+  expect(tracked.getSnapshot().items.some((entry) => entry.id === old.id)).toBe(false);
+  expect(tracked.getSnapshot().subAgents).toEqual([old]);
+
+  // Its updates are outside the window, so the timeline ignores them, but the pin follows them.
+  tracked.receive({ ...old, text: "Step two" });
+  expect(tracked.getSnapshot().subAgents[0]?.text).toBe("Step two");
+  expect(tracked.getSnapshot().items.some((entry) => entry.id === old.id)).toBe(false);
+
+  // It finishes: still known, so an open panel reads it as done rather than working forever.
+  tracked.receive({ ...old, status: "completed" });
+  expect(tracked.getSnapshot().subAgents[0]?.status).toBe("completed");
+  expect(history.getSnapshot().subAgents).toEqual([]);
+});
+
+it("starts tracking a sub-agent from its updates, and leaves finished history alone", async () => {
+  const { history } = fixture();
+  await history.load("latest");
+  history.receive(subAgent(5, "completed"));
+  expect(history.getSnapshot().subAgents).toEqual([]);
+  history.receive(subAgent(5));
+  expect(history.getSnapshot().subAgents.map((entry) => entry.id)).toEqual(["sub-5"]);
+});
+
+it("takes a read's word for what runs: one that ended while disconnected stops being tracked", async () => {
+  const { page } = fixture();
+  let live = [subAgent(5)];
+  const tracked = new ConversationHistory(async (cursor) => ({
+    ...page(cursor),
+    liveSubAgents: live,
+  }));
+  await tracked.load("latest");
+  live = [];
+  await tracked.resume();
+  expect(tracked.getSnapshot().subAgents).toEqual([]);
+});
+
+it("keeps what it tracked when an older daemon's read does not report sub-agents", async () => {
+  const { history } = fixture();
+  await history.load("latest");
+  history.receive(subAgent(5));
+  await history.resume();
+  expect(history.getSnapshot().subAgents.map((entry) => entry.id)).toEqual(["sub-5"]);
+});

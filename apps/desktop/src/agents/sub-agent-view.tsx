@@ -1,26 +1,32 @@
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Bot, X } from "lucide-react";
-import type { AgentItem } from "@concors/protocol";
+import { SUB_AGENT_STEPS, type AgentItem } from "@concors/protocol";
 import { Button } from "@/components/ui/button";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { Activity } from "./activity";
+import { formatDuration } from "./duration";
+import { PlanProgress } from "./plan-progress";
+import { stepCount } from "./running-sub-agents";
+import { Report, Steps } from "./sub-agent-card";
 import { LIVE_SUB_AGENT, SubAgentViewContext, type SubAgentTarget } from "./sub-agent-context";
 import { TimelineItem } from "./timeline-item";
+import { useElapsed } from "./use-elapsed";
 
 /** How often a working sub-agent's conversation is read again. */
 const REFRESH_MS = 2000;
 
 /**
- * A sub-agent's own conversation, read-only, beside the chat that started it: its prompt, the
- * commands and edits it made and what it said, drawn as the chat draws its own. It is read again
- * every few seconds while the sub-agent works. There is no composer: a sub-agent takes its
- * instructions from the agent that started it, not from the person.
+ * A sub-agent's details, read-only, beside the chat that started it. Progress answers "how far has
+ * it got": its plan, the steps it took and its latest word. The conversation is everything it said
+ * and did, drawn as the chat draws its own, and read again every few seconds while it works. There
+ * is no composer: a sub-agent takes its instructions from the agent that started it, not the person.
  */
 export function SubAgentPanel({
   sessionId,
   target,
   item = target.item,
   turnActive,
+  hasConversation,
   onClose,
 }: {
   sessionId: string;
@@ -32,29 +38,40 @@ export function SubAgentPanel({
    * background can still be working.
    */
   turnActive: boolean;
+  /** Whether this provider keeps a sub-agent's conversation to read. */
+  hasConversation: boolean;
   onClose: () => void;
 }) {
   const connection = useContext(TerminalConnectionContext);
+  const [view, setView] = useState<"progress" | "conversation">("progress");
   const [items, setItems] = useState<AgentItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const log = useRef<HTMLDivElement>(null);
-  const pinned = useRef(true);
-  const child = item.presentation?.children?.find((c) => c.id === target.childId);
+  const following = useRef(true);
+  const { childId } = target;
+  const readable = hasConversation && !!childId;
+  const children = item.presentation?.children ?? [];
+  const child = children.find((c) => c.id === childId);
   const running =
     (turnActive || (!!item.presentation?.background && item.status === "running")) &&
     LIVE_SUB_AGENT.includes(child?.status ?? item.status);
   const label =
     (item.presentation?.agentType?.trim() || "Sub-agent") +
     (target.index !== undefined ? ` ${target.index + 1}` : "");
+  const allSteps = item.presentation?.activity ?? [];
+  const steps = children.length > 1 ? allSteps.filter((s) => s.childId === childId) : allSteps;
+  const elapsed = useElapsed(item.createdAt, running);
+  const plan = items?.findLast((entry) => entry.kind === "plan");
+  const showing = readable ? view : "progress";
 
   useEffect(() => {
-    if (!connection) return;
+    if (!connection || !readable || !childId) return;
     let stopped = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const read = async () => {
       try {
         const result = await connection.requestAgent(
-          { kind: "child-history", sessionId, itemId: target.item.id, childId: target.childId },
+          { kind: "child-history", sessionId, itemId: target.item.id, childId },
           crypto.randomUUID(),
         );
         if (stopped) return;
@@ -73,17 +90,22 @@ export function SubAgentPanel({
       stopped = true;
       clearTimeout(timer);
     };
-  }, [connection, sessionId, target.item.id, target.childId, running]);
+  }, [connection, readable, sessionId, target.item.id, childId, running]);
 
-  // Follows new messages while the reader is at the bottom, as the chat does.
+  // Opened by a click on something else: Escape should close it straight away.
+  useEffect(() => {
+    log.current?.focus({ preventScroll: true });
+  }, []);
+
+  // Follows what is new while the reader is at the bottom, as the chat does.
   useLayoutEffect(() => {
     const element = log.current;
-    if (element && pinned.current) element.scrollTop = element.scrollHeight;
-  }, [items]);
+    if (element && following.current) element.scrollTop = element.scrollHeight;
+  }, [items, steps.length, showing]);
 
   return (
     <aside
-      aria-label="Sub-agent conversation"
+      aria-label="Sub-agent details"
       className="sub-agent-panel flex min-h-0 min-w-0 flex-col border-l bg-background"
       onKeyDown={(event) => {
         if (event.key === "Escape") {
@@ -110,55 +132,107 @@ export function SubAgentPanel({
             ? "Working"
             : child?.status === "failed" || item.status === "failed"
               ? "Failed"
-              : "Done"}
+              : item.status === "interrupted"
+                ? "Interrupted"
+                : "Done"}
         </span>
         <Button
           variant="ghost"
           size="icon"
-          aria-label="Close sub-agent conversation"
+          aria-label="Close sub-agent details"
           title="Close (Esc)"
           onClick={onClose}
         >
           <X className="size-4" />
         </Button>
       </header>
+      {readable && (
+        <div
+          role="tablist"
+          aria-label="Sub-agent view"
+          className="mx-3 mt-2 inline-flex shrink-0 self-start rounded-[calc(var(--radius-md)+(0.125rem+1px)*var(--concentric))] border bg-muted/40 p-0.5"
+        >
+          {(["progress", "conversation"] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              role="tab"
+              aria-selected={showing === option}
+              onClick={() => {
+                following.current = true;
+                setView(option);
+              }}
+              className={`flex h-6 items-center rounded-md px-2.5 text-xs capitalize ${
+                showing === option
+                  ? "bg-background text-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      )}
+      {/* Held above the steps, which follow the newest and would scroll it out of view. */}
+      {showing === "progress" && plan && (
+        <div className="max-h-[50%] shrink-0 overflow-y-auto px-3">
+          <PlanProgress item={plan} />
+        </div>
+      )}
       <div
         ref={log}
         role="log"
-        aria-label="Sub-agent timeline"
+        aria-label={showing === "progress" ? "Sub-agent progress" : "Sub-agent timeline"}
         // Focusable so it scrolls with the keyboard and Escape reaches the panel from it.
         tabIndex={0}
-        className="chat-scroll selectable min-h-0 flex-1 overflow-y-auto px-3 py-4"
+        className="chat-scroll selectable min-h-0 flex-1 overflow-y-auto px-3 py-4 outline-none"
         onScroll={(event) => {
           const element = event.currentTarget;
-          pinned.current = element.scrollHeight - element.scrollTop - element.clientHeight < 40;
+          following.current = element.scrollHeight - element.scrollTop - element.clientHeight < 40;
         }}
       >
         {/* Its own sub-agents belong to its conversation, which this chat cannot open. */}
         <SubAgentViewContext value={null}>
-          <div className="mx-auto max-w-3xl space-y-5">
-            {items === null && !error && (
-              <p role="status" className="text-sm text-muted-foreground">
-                Reading conversation…
+          {showing === "progress" ? (
+            <div className="mx-auto max-w-3xl space-y-3">
+              <p className="text-xs text-muted-foreground tabular-nums">
+                {[stepCount(steps), running && elapsed > 0 ? formatDuration(elapsed) : null]
+                  .filter(Boolean)
+                  .join(" · ") || (running ? "Starting…" : "No steps reported.")}
               </p>
-            )}
-            {items?.map((entry) => (
-              <TimelineItem
-                key={`${entry.turnId}:${entry.id}`}
-                item={entry}
-                live={running && entry.status === "running"}
-              />
-            ))}
-            {items?.length === 0 && !running && (
-              <p className="text-sm text-muted-foreground">No messages were recorded.</p>
-            )}
-            {error && (
-              <p role="alert" className="text-sm text-destructive">
-                {error}
-              </p>
-            )}
-            {running && <Activity startedAt={item.createdAt}>Working…</Activity>}
-          </div>
+              <Steps steps={steps} />
+              {steps.length >= SUB_AGENT_STEPS && (
+                <p className="text-xs text-muted-foreground">
+                  Only its latest {steps.length} steps are listed.
+                </p>
+              )}
+              <Report item={item} childId={undefined} message={child?.message} done={!running} />
+            </div>
+          ) : (
+            <div className="mx-auto max-w-3xl space-y-5">
+              {items === null && !error && (
+                <p role="status" className="text-sm text-muted-foreground">
+                  Reading conversation…
+                </p>
+              )}
+              {items?.map((entry) => (
+                <TimelineItem
+                  key={`${entry.turnId}:${entry.id}`}
+                  item={entry}
+                  live={running && entry.status === "running"}
+                />
+              ))}
+              {items?.length === 0 && !running && (
+                <p className="text-sm text-muted-foreground">No messages were recorded.</p>
+              )}
+              {error && (
+                <p role="alert" className="text-sm text-destructive">
+                  {error}
+                </p>
+              )}
+              {running && <Activity startedAt={item.createdAt}>Working…</Activity>}
+            </div>
+          )}
         </SubAgentViewContext>
       </div>
       <p className="shrink-0 border-t px-3 py-2 text-xs text-muted-foreground">

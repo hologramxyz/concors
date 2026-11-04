@@ -17,6 +17,7 @@ import {
   type AgentConversation,
   type RetiredAgent,
   AGENT_SESSION_LIMIT,
+  MAX_LIVE_SUB_AGENTS,
 } from "@concors/protocol";
 import { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
@@ -99,6 +100,7 @@ export class WorkspaceStore {
         CREATE TABLE IF NOT EXISTS agent_items (position INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, item_id TEXT NOT NULL, item TEXT NOT NULL, UNIQUE(session_id, item_id));
         CREATE INDEX IF NOT EXISTS agent_message_index ON agent_items (session_id, position) WHERE json_extract(item, '$.kind') = 'user';
         CREATE INDEX IF NOT EXISTS agent_background_index ON agent_items (session_id) WHERE json_extract(item, '$.presentation.background') = 1;
+        CREATE INDEX IF NOT EXISTS agent_sub_agent_index ON agent_items (session_id) WHERE json_extract(item, '$.presentation.type') = 'sub_agent';
         CREATE TABLE IF NOT EXISTS agent_native_turns (session_id TEXT NOT NULL, native_id TEXT NOT NULL, turn_id TEXT NOT NULL, PRIMARY KEY (session_id, native_id));
         CREATE TABLE IF NOT EXISTS agent_request_errors (id TEXT PRIMARY KEY, message TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS agent_queue (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, request TEXT NOT NULL);
@@ -1350,7 +1352,28 @@ export class WorkspaceStore {
       !!this.#db
         .prepare("SELECT 1 FROM agent_items WHERE session_id = ? AND position > ? LIMIT 1")
         .get(id, last);
-    return { agent: this.agent(id), items, hasMore, hasNewer };
+    return {
+      agent: this.agent(id),
+      items,
+      hasMore,
+      hasNewer,
+      liveSubAgents: this.liveSubAgents(id),
+    };
+  }
+  /** A chat's running sub-agents, oldest first, however far back in its history they started. */
+  private liveSubAgents(id: string): AgentItem[] {
+    return this.#db
+      .prepare(
+        `SELECT position, item FROM agent_items WHERE session_id = ? AND json_extract(item, '$.presentation.type') = 'sub_agent' AND json_extract(item, '$.status') = 'running' ORDER BY position DESC LIMIT ${MAX_LIVE_SUB_AGENTS}`,
+      )
+      .all(id)
+      .map((row) =>
+        AgentItemSchema.parse({
+          ...JSON.parse(String(row["item"])),
+          position: Number(row["position"]),
+        }),
+      )
+      .reverse();
   }
 
   private reject(

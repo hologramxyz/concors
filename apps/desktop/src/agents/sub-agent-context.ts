@@ -5,13 +5,14 @@ import type { AgentItem } from "@concors/protocol";
 export interface SubAgentTarget {
   /** The call as it was when opened; the chat's own copy, kept current, is preferred. */
   item: AgentItem;
-  childId: string;
+  /** Its own conversation, where the CLI has named one yet. */
+  childId?: string | undefined;
   /** Its position among the call's sub-agents, when there are several. */
   index?: number | undefined;
 }
 
 /**
- * Opens a sub-agent's conversation beside the chat that started it. Null where none can be opened:
+ * Opens a sub-agent's details beside the chat that started it. Null where none can be opened:
  * a provider that keeps no child history, or inside a sub-agent's own conversation, whose nested
  * sub-agents its parent chat cannot address.
  */

@@ -79,6 +79,14 @@ export class TestAgentProvider implements AgentProvider {
           status: "completed",
           aggregatedOutput: "tests/app.test.ts",
         },
+        {
+          id: "child-plan",
+          type: "plan",
+          steps: [
+            { step: "List the tests", status: "completed" },
+            { step: "Measure coverage", status: "in_progress" },
+          ],
+        },
       ];
       if (reads > 1)
         items.push({ id: "child-reply", type: "agentMessage", text: "Coverage is **82%**." });
