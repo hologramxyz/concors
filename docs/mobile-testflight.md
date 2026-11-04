@@ -17,15 +17,44 @@ its speech model, a 660 MB background download.
 
 ## Current state
 
-Updated from desktop main `a807962` (including PRs #111, #114 and #115). Shared desktop UI
-changes are bundled automatically; native startup uses the brand mark during session restoration.
-Settings → Diagnostics shows the phone's version/build and actual API instead of desktop's default URL.
+On 2026-10-23, this checkout was replaced with a fresh clone of
+`https://github.com/hologramxyz/concors.git`, at main
+`c127806a4eaa69a2c420945567a594cb8307484e` (desktop and daemon 0.8.1). The old checkout,
+Git objects, installed dependencies and generated assets were removed. Local environment files
+were backed up outside the repository; the mobile release settings were recreated from the
+known Hologram identifiers rather than copying the old source or Git metadata.
 
-On 2026-09-16, the owner confirmed active developer accounts, the Expo project `@opser/concors`
-(`cbfccc75-202c-461c-a19d-46419a248dcd`), and Apple app ID `6812901549`. These public identifiers
-are now linked in the app/build configuration. Build 0.1.0 (3) was signed, uploaded to TestFlight,
-and installed by the owner, but still targeted the previously approved Railway development API.
-The owner subsequently requested `https://api.concors.dev`; new candidate/production builds pin
+On 2026-11-04, the checkout was fast-forwarded to latest main
+`aa3a9fddbbbc08994a14868910446f0064f3ed3a` (desktop and daemon 0.12.0), preserving the
+Hologram mobile identity and signing configuration.
+
+The Expo project is [Hologram's `@guitong35/concors`](https://expo.dev/accounts/guitong35/projects/concors),
+ID `b928233e-14cd-4e58-95e5-b19d8101bcb6`. The Apple record is
+[Concors: Coding Workspace](https://appstoreconnect.apple.com/apps/6817622624), ID `6817622624`,
+on Rolling Inc. team `9WN4P724M2`, using bundle ID `xyz.hologram.concors`.
+The record includes iOS and macOS; this runbook builds and uploads the iPhone app.
+The macOS store build is a separate task; the existing desktop DMG uses `dev.concors.desktop`.
+
+Shared desktop UI changes are bundled automatically. Native startup uses the brand mark during
+session restoration. Settings → Diagnostics shows the phone's version/build and actual API.
+
+The [latest candidate](https://expo.dev/accounts/guitong35/projects/concors/builds/9d2ba696-a9e4-4f81-bbb9-63a31714639d)
+is **0.1.0 (7)**. Its signed IPA was inspected for the latest source revision
+`aa3a9fddbbbc08994a14868910446f0064f3ed3a`, bundle ID, build number, Apple team,
+production API, photo picker and microphone purpose configuration. The iOS workspace origin
+is embedded, and the camera purpose string remains absent. The workspace test suites passed
+with **1,602 passed and two skipped**. Seven targeted mobile browser checks passed across the
+initial run and a focused rerun, covering files, sub-agent rendering, tab controls, last-tab
+restoration, dictation and its keyboard fallback, and the native surface bridge. Six passed in
+the initial run; the tab-picker flow reached its final close-tab action before the 60-second
+test limit and passed the same assertions on a focused rerun with a 90-second limit. Formatting,
+lint, workspace type checks and the online beta preflight passed.
+The [TestFlight upload](https://expo.dev/accounts/guitong35/projects/concors/submissions/a975378e-4a5b-41b3-87ed-c00c4c5a34da)
+completed on 2026-11-04. Apple reports the build **VALID / IN_BETA_TESTING**, and its assignment
+to the existing **Internal beta** group was verified through Apple's API. The owner remains a
+tester in that group. Physical-device acceptance remains pending.
+
+The owner approved `https://api.concors.dev`; new candidate/production builds pin
 that API explicitly. Accounts on the old development server are not automatically migrated.
 The update requires a fresh sign-in: native sessions are now bound to their issuing API and
 unscoped legacy tokens are not reused when changing backends.
@@ -35,10 +64,10 @@ CSRF checks. Full account/workspace and physical-device acceptance remains pendi
 
 ## 1. Account setup
 
-- Use the registered identifier `dev.concors.mobile` and App Store Connect app `6812901549`.
+- Use the registered identifier `xyz.hologram.concors` and App Store Connect app `6817622624`.
   The App Store listing name may include a tagline; the installed app remains **Concors**.
-- Use the team's existing [Expo project `@opser/concors`](https://expo.dev/accounts/opser/projects/concors),
-  slug `concors`, project ID `cbfccc75-202c-461c-a19d-46419a248dcd`. Do not create a duplicate project.
+- Use the team's existing [Expo project `@guitong35/concors`](https://expo.dev/accounts/guitong35/projects/concors),
+  slug `concors`, project ID `b928233e-14cd-4e58-95e5-b19d8101bcb6`. Do not create a duplicate project.
   App config defaults to this project; explicit environment overrides remain supported, including
   the empty values used to keep Personal Team builds unlinked.
 - Create an internal TestFlight group and give the tester eligible App Store Connect access to
@@ -56,9 +85,9 @@ With Node 24 / pnpm 11.1.1, create gitignored `apps/mobile/.env.local` using rea
 APP_VARIANT=production
 EXPO_PUBLIC_DEMO=false
 EXPO_PUBLIC_API_URL=https://api.concors.dev
-EXPO_PUBLIC_EAS_PROJECT_ID=cbfccc75-202c-461c-a19d-46419a248dcd
-EXPO_OWNER=opser
-CONCORS_ASC_APP_ID=6812901549
+EXPO_PUBLIC_EAS_PROJECT_ID=b928233e-14cd-4e58-95e5-b19d8101bcb6
+EXPO_OWNER=guitong35
+CONCORS_ASC_APP_ID=6817622624
 ```
 
 Do not include `EXPO_PUBLIC_DEV_DAEMON_URL` or `CONCORS_MOBILE_WEB_BASE_PATH`. The checker reads
@@ -95,7 +124,7 @@ local API that differs from the candidate. Local `.env.local` is gitignored and 
 cloud variables. Never put credentials in `EXPO_PUBLIC_*`.
 
 `submit.candidate.ios.ascAppId` and `submit.production.ios.ascAppId` in `apps/mobile/eas.json`
-already target Apple app `6812901549`. This is a public identifier, not an Apple login.
+already target Apple app `6817622624`. This is a public identifier, not an Apple login.
 Preflight rejects disagreement with `CONCORS_ASC_APP_ID`.
 
 ```bash
@@ -106,7 +135,7 @@ pnpm dlx eas-cli@24.4.1 build --platform ios --profile candidate
 Follow Apple's signing prompts privately. EAS uses cloud macOS workers; this path does not need
 a local Mac. Do not auto-submit or mark pending gates verified to get a build through. `candidate`
 allows device evidence to be collected before public release approval. Its bundle ID is
-`dev.concors.mobile`, not `.preview`.
+`xyz.hologram.concors`, not `.preview`.
 
 Use EAS CLI 24.4.1 or newer: 24.4.0 can fail Apple authentication with
 `iTunes service key is empty` ([upstream fix](https://github.com/expo/eas-cli/issues/4392)).
