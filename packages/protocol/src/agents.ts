@@ -480,6 +480,8 @@ export const AgentOperationSchema = z.discriminatedUnion("kind", [
   }),
   z.object({ kind: z.literal("seen"), sessionId: Id, attentionId: Id }),
   z.object({ kind: z.literal("pin"), sessionId: Id, pinned: z.boolean() }),
+  /** Lists a chat that no pane shows under another workspace. It keeps running in its own folder. */
+  z.object({ kind: z.literal("move"), sessionId: Id, projectId: Id }),
   /** Deletes a chat that no pane shows, with its messages, images and attachments. */
   z.object({ kind: z.literal("delete"), sessionId: Id }),
   z.object({

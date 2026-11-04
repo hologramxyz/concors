@@ -32,6 +32,7 @@ export function WorkspaceSidebarItem({
   current,
   expanded,
   canEdit,
+  dropTarget = false,
   icon,
   pullRequests,
   onSelect,
@@ -41,6 +42,8 @@ export function WorkspaceSidebarItem({
   onCommand,
 }: {
   project: WorkspaceProject;
+  /** A chat being dragged would move here if dropped now. */
+  dropTarget?: boolean;
   /** Shown beside the name only when another workspace has the same name. */
   parent?: string | undefined;
   compact: boolean;
@@ -159,6 +162,8 @@ export function WorkspaceSidebarItem({
   );
   return (
     <li
+      data-drop-workspace={project.id}
+      data-drop-target={dropTarget || undefined}
       className={cn(
         // Keyboard focus shows, but a clicked row does not stay filled once selection moves on.
         "group relative flex items-center rounded-md hover:bg-sidebar-accent/50 has-[:focus-visible:not([data-pointer-focus])]:bg-sidebar-accent/50 has-[[data-state=open]]:bg-sidebar-accent/50",

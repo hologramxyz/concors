@@ -5,6 +5,8 @@ import {
   TerminalProfileIdSchema,
 } from "./terminal-profiles.ts";
 
+/** The daemon moves chats between workspaces: `tab.transfer`, and the agent operation `move`. */
+export const CHAT_MOVE_CAPABILITY = "chat-move";
 /** The daemon accepts `pane.transfer`, which moves a pane into another tab of its workspace. */
 export const PANE_TRANSFER_CAPABILITY = "pane-transfer";
 /** The daemon accepts `pane.rename` and keeps pane names. */
@@ -128,6 +130,7 @@ export const WorkspaceOperationSchema = z.discriminatedUnion("kind", [
   }),
   z.object({ kind: z.literal("tab.rename"), ...TabTarget, name: Name }),
   z.object({ kind: z.literal("tab.move"), ...TabTarget, index: z.number().int().min(0).max(31) }),
+  z.object({ kind: z.literal("tab.transfer"), ...TabTarget, targetProjectId: Id }),
   z.object({ kind: z.literal("tab.close"), ...TabTarget }),
   z.object({
     kind: z.literal("pane.split"),

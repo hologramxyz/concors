@@ -51,6 +51,12 @@ workspace or over the pane itself, cancels.
 
 A tab nobody named is called after its oldest pane, so rearranging panes never renames it.
 
+Dragging a chat's row in the sidebar onto another workspace, or choosing **Move to workspace** in its
+menu, moves it there (`chat-move`): an open chat with its tab through `tab.transfer`, a closed one
+through the agent operation `move`. The chat keeps running in its own folder, because a CLI ties a
+conversation to the folder it began in. Only chat tabs move: a terminal's session belongs to its
+workspace. A chat with a schedule stays, because a schedule belongs to its chat's workspace.
+
 `pane.move` commits the tree change atomically using the project version captured at drag start.
 Pane IDs, profiles, and session bindings stay unchanged; no terminal or agent is stopped or
 restarted. Layouts sync across clients and survive reload. Clients only enable dragging when

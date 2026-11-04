@@ -1061,6 +1061,10 @@ export class AgentManager {
           this.update(info.id, { pinned: op.pinned || undefined, updatedAt: info.updatedAt });
         return this.result(request, op.sessionId);
       }
+      if (op.kind === "move") {
+        this.#store.moveClosedChat(op.sessionId, op.projectId);
+        return this.result(request, op.sessionId);
+      }
       if (op.kind === "delete") {
         const info = this.#store.agent(op.sessionId);
         if (this.mutations.has(info.id)) throw new Error("This chat is being changed. Try again.");
