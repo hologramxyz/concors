@@ -36,15 +36,9 @@ it("finds the conversation a pane set aside for a provider, and nothing from oth
 
 it("labels a provider only by a state worth noting", () => {
   const update = { updateAvailable: true };
-  expect(providerState({ id: "claude" }, "claude")).toBe("Current");
-  expect(providerState({ id: "codex" }, "claude")).toBeUndefined();
-  expect(providerState({ id: "codex", version: update }, "claude")).toBe("Update available");
-  expect(providerState({ id: "claude", version: update }, "claude")).toBe(
-    "Current · Update available",
-  );
-  expect(providerState({ id: "pi", installed: false, version: update }, "claude")).toBe(
-    "Not installed",
-  );
+  expect(providerState({})).toBeUndefined();
+  expect(providerState({ version: update })).toBe("Update available");
+  expect(providerState({ installed: false, version: update })).toBe("Not installed");
 });
 
 it("only confirms switches that would set a conversation with content aside", () => {

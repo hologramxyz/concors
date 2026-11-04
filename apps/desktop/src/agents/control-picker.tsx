@@ -241,7 +241,10 @@ export function ControlPicker({
                     )}
                   </span>
                   {choosingProvider ? (
-                    <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                    <>
+                      {selectedGroupId === option.id && <Check className="size-4 shrink-0" />}
+                      <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                    </>
                   ) : (
                     (!groups || selectedGroupId === groupId) &&
                     value === option.id && <Check className="size-4 shrink-0" />

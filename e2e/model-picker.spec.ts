@@ -192,11 +192,17 @@ test("an outdated agent CLI is flagged in the picker and can be updated from it"
     await page.getByRole("button", { name: "Back to providers", exact: true }).click();
     await expect(
       page.getByRole("option", {
-        name: "Codex Current · Update available",
+        name: "Codex Update available",
         exact: true,
       }),
     ).toBeVisible();
-    await page.getByRole("option", { name: /^Codex Current/ }).click();
+    // The provider in use has the same check as the selected model, the others none.
+    const current = page.getByRole("option", { name: /^Codex/ });
+    await expect(current.locator("svg.lucide-check")).toBeVisible();
+    await expect(
+      page.getByRole("option", { name: /^Claude Code/ }).locator("svg.lucide-check"),
+    ).toHaveCount(0);
+    await current.click();
     await page.getByRole("button", { name: "Update", exact: true }).click();
     await expect(page.getByText("Updating Codex…", { exact: true })).toBeVisible();
     await expect(notice).toHaveCount(0);

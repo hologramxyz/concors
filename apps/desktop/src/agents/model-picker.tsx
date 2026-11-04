@@ -126,7 +126,7 @@ export function AgentModelPicker({
         groups={providers.map((p) => ({
           id: p.id,
           label: p.label ?? agentProviderName(p.id),
-          description: providerState(p, agent.provider),
+          description: providerState(p),
           icon: <ProviderIcon provider={p.id} />,
           emptyMessage:
             p.error ??
