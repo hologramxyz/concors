@@ -3,7 +3,7 @@ import type { AgentInfo, PaneProfile, WorkspaceTab } from "@concors/protocol";
 import { Terminal } from "lucide-react";
 import { AgentStatusIcon, StartingChatIcon } from "@/agents/activity";
 import { ProviderIcon } from "@/agents/provider-icon";
-import { tabAgentStatuses } from "@/agents/agent-status";
+import { paneAgentStatus, tabAgentStatuses } from "@/agents/agent-status";
 import { useAgents } from "@/agents/context";
 import type { CommandId } from "@/shortcuts/bindings";
 import { BoundKeyChips } from "@/shortcuts/key-chips";
@@ -11,13 +11,15 @@ import { mainBinding } from "@/shortcuts/keymap";
 import { useShortcutPreferences } from "@/shortcuts/preferences-context";
 import { isTauri } from "@/tauri";
 import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
+import { useFocusedPane } from "./focused-panes";
 import { mainPane, tabTitle } from "./tab-title";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
 
 /**
- * A tab's label: the provider and status of every agent in its panes, then its name. A tab with no
- * agent running is marked by its main pane: a chat by the provider it starts with, an agent CLI by
- * its brand, and a terminal by the terminal mark, so every tab carries one. It subscribes
+ * A tab's label: one icon, then its name, then how many panes it has if more than one. The icon is
+ * the focused pane's, or until a tab has been shown its main pane's: the agent's provider and
+ * status, a chat by the provider it starts with, an agent CLI by its brand, and a terminal by the
+ * terminal mark, so every tab carries one. The other panes' agents are in the tooltip. It subscribes
  * to agent and terminal updates itself so a status change repaints the label, not the workspace.
  */
 export function TabButton({
@@ -28,6 +30,14 @@ export function TabButton({
   const sessions = useAgents();
   const terminals = useTerminalSessions();
   const agents = tabAgentStatuses(tab, sessions, terminals);
+  const focusedPaneId = useFocusedPane(tab.id);
+  const pane =
+    tab.nodes.find(
+      (node): node is Extract<typeof node, { kind: "pane" }> =>
+        node.kind === "pane" && node.id === focusedPaneId,
+    ) ?? mainPane(tab);
+  const status = pane ? paneAgentStatus(pane, sessions, terminals) : null;
+  const paneCount = tab.nodes.filter((node) => node.kind === "pane").length;
   return (
     <button
       type="button"
@@ -41,25 +51,27 @@ export function TabButton({
       className="flex max-w-72 min-w-0 items-center gap-1.5 px-2 py-0.5 text-ui"
       {...props}
     >
-      {agents.length === 0 && (
-        <span aria-hidden="true" className="flex size-5 shrink-0 items-center justify-center">
-          <PaneMark profile={mainPane(tab)?.profile} />
-        </span>
-      )}
-      {agents.length > 0 && (
-        <span aria-hidden="true" className="flex shrink-0 items-center gap-1.5">
-          {agents.map((agent) => (
-            <span key={agent.id} title={`${agent.providerName}: ${agent.status}`} className="flex">
-              <AgentStatusIcon
-                agent={agent}
-                label={`${agent.providerName}: ${agent.status}`}
-                surface={selected ? "bg-background ring-background" : "bg-sidebar ring-sidebar"}
-              />
-            </span>
-          ))}
-        </span>
-      )}
+      <span
+        aria-hidden="true"
+        data-tab-icon-for={pane?.id}
+        className="flex size-5 shrink-0 items-center justify-center"
+      >
+        {status ? (
+          <AgentStatusIcon
+            agent={status}
+            label={`${status.providerName}: ${status.status}`}
+            surface={selected ? "bg-background ring-background" : "bg-sidebar ring-sidebar"}
+          />
+        ) : (
+          <PaneMark profile={pane?.profile} />
+        )}
+      </span>
       <span className="max-w-44 truncate">{tabTitle(tab, sessions, terminals)}</span>
+      {paneCount > 1 && (
+        <span aria-hidden="true" className="shrink-0 text-xs text-muted-foreground tabular-nums">
+          {paneCount}
+        </span>
+      )}
     </button>
   );
 }
@@ -78,10 +90,16 @@ const TAB_SHORTCUTS: readonly { id: CommandId; label: string }[] = [
 ];
 
 /** What a tab in the tab bar can do beyond a click. An unassigned shortcut gets no row. */
-export function TabTooltip() {
+export function TabTooltip({ tab }: { tab: WorkspaceTab }) {
   const { keymap } = useShortcutPreferences();
+  const agents = tabAgentStatuses(tab, useAgents(), useTerminalSessions());
+  const paneCount = tab.nodes.filter((node) => node.kind === "pane").length;
   return (
     <div className="flex flex-col gap-1 pr-1.5">
+      {paneCount > 1 && <p>{paneCount} panes</p>}
+      {agents.map((agent) => (
+        <p key={agent.id}>{`${agent.providerName}: ${agent.status}`}</p>
+      ))}
       <p>Drag to reorder. Double-click to rename.</p>
       {TAB_SHORTCUTS.filter(({ id }) => mainBinding(keymap[id], isTauri())).map(({ id, label }) => (
         <p key={id} className="flex items-center justify-between gap-3">

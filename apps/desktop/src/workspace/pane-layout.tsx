@@ -43,6 +43,14 @@ import {
   type WorkspaceProject,
   type WorkspaceTab,
 } from "@concors/protocol";
+import { forgetFocusedPane, publishFocusedPane } from "./focused-panes";
+import {
+  paneDropTargetAt,
+  paneLandingArea,
+  paneMoveOperation,
+  type PaneArea,
+  type PaneDropTarget,
+} from "./pane-drop";
 import { typingOutsidePanes } from "./typing-outside-panes";
 import { defaultPaneTitle, PROFILE_LABELS } from "./tab-title";
 
@@ -61,21 +69,13 @@ const OPEN_OVERLAY =
 // Queue editing and pending-input forms can also contain textareas; navigation targets the prompt.
 const PANE_INPUT =
   "textarea.agent-composer-input:not(:disabled), textarea.xterm-helper-textarea:not(:disabled)";
-type Placement = "left" | "right" | "top" | "bottom";
-/** Where a dropped pane lands: the reducer gives it half of the whole workspace on that side. */
-const DROP_AREA: Record<Placement, string> = {
-  top: "inset-x-1 top-1 h-[calc(50%-0.5rem)]",
-  bottom: "inset-x-1 bottom-1 h-[calc(50%-0.5rem)]",
-  left: "inset-y-1 left-1 w-[calc(50%-0.5rem)]",
-  right: "inset-y-1 right-1 w-[calc(50%-0.5rem)]",
-};
 /** How far a press on a pane header travels before it is a drag and no longer a click. */
 const DRAG_THRESHOLD = 4;
 
 export function PaneLayout(props: Props) {
   const visible = useTabVisible();
   const [draggedPaneId, setDraggedPaneId] = useState<string | null>(null);
-  const [drop, setDrop] = useState<Placement | null>(null);
+  const [drop, setDrop] = useState<{ target: PaneDropTarget; area: PaneArea } | null>(null);
   const stopDrag = useRef<(() => void) | null>(null);
   const container = useRef<HTMLDivElement>(null);
   const pendingFocus = useRef<string | null>(null);
@@ -95,6 +95,12 @@ export function PaneLayout(props: Props) {
   const activePane =
     props.tab.nodes.find((node) => node.kind === "pane" && node.id === activePaneId) ??
     props.tab.nodes.find((node) => node.kind === "pane");
+  const focusedPaneId = activePane?.id;
+  useEffect(() => {
+    if (!focusedPaneId) return;
+    publishFocusedPane(props.tab.id, focusedPaneId);
+    return () => forgetFocusedPane(props.tab.id);
+  }, [props.tab.id, focusedPaneId]);
   const split = (axis: "horizontal" | "vertical", before = false) => {
     if (!activePane || activePane.kind !== "pane") return;
     const newPaneId = crypto.randomUUID();
@@ -346,7 +352,11 @@ export function PaneLayout(props: Props) {
     const { pointerId, clientX: startX, clientY: startY } = event;
     const { project, tab, onCommand } = props;
     let started = false;
-    let placement: Placement | null = null;
+    let target: PaneDropTarget | null = null;
+    // Generated once, so measuring where a pane lands and moving it are the same operation.
+    const splitId = crypto.randomUUID();
+    const operationFor = (dropTarget: PaneDropTarget) =>
+      paneMoveOperation(project, tab, paneId, dropTarget, splitId);
     const move = (moved: PointerEvent) => {
       if (moved.pointerId !== pointerId) return;
       if (!started) {
@@ -356,28 +366,32 @@ export function PaneLayout(props: Props) {
         document.documentElement.dataset["paneDragging"] = "";
         setDraggedPaneId(paneId);
       }
-      placement = container.current
-        ? dropPlacement(moved.clientX, moved.clientY, container.current.getBoundingClientRect())
-        : null;
-      setDrop(placement);
+      const workspace = container.current;
+      if (!workspace) return;
+      const panes = tab.nodes.flatMap((node) => {
+        const element =
+          node.kind === "pane" && workspace.querySelector(`[data-pane-id="${node.id}"]`);
+        return element ? [{ id: node.id, rect: element.getBoundingClientRect() }] : [];
+      });
+      const next = paneDropTargetAt(
+        moved.clientX,
+        moved.clientY,
+        workspace.getBoundingClientRect(),
+        panes,
+        paneId,
+      );
+      // Pointer moves far outnumber changes of target, and each repaint lays out every pane.
+      if (JSON.stringify(next) === JSON.stringify(target)) return;
+      const operation = next && operationFor(next);
+      const area = operation && paneLandingArea(project, tab, operation);
+      target = area ? next : null;
+      setDrop(target && area ? { target, area } : null);
     };
     const release = (released: PointerEvent) => {
       if (released.pointerId !== pointerId) return;
-      const target = tab.nodes.find((node) => node.kind === "pane" && node.id !== paneId);
-      const finalPlacement = placement;
+      const operation = target && operationFor(target);
       stop();
-      if (!finalPlacement || !target) return;
-      onCommand({
-        kind: "pane.move",
-        projectId: project.id,
-        tabId: tab.id,
-        expectedVersion: project.version,
-        paneId,
-        targetPaneId: target.id,
-        scope: "workspace",
-        placement: finalPlacement,
-        splitId: crypto.randomUUID(),
-      });
+      if (operation) onCommand(operation);
     };
     const key = (pressed: KeyboardEvent) => {
       if (pressed.key !== "Escape" || !started) return;
@@ -418,20 +432,20 @@ export function PaneLayout(props: Props) {
         <div
           aria-hidden="true"
           data-testid="pane-drop-preview"
-          data-placement={drop}
-          className={`pointer-events-none absolute z-30 rounded-md border border-(--link) bg-(--link)/10 ${DROP_AREA[drop]}`}
+          data-scope={drop.target.scope}
+          data-placement={drop.target.placement}
+          data-target-pane={drop.target.scope === "pane" ? drop.target.paneId : undefined}
+          className="pointer-events-none absolute z-30 rounded-md border border-(--link) bg-(--link)/10"
+          style={{
+            left: `calc(${drop.area.left * 100}% + 0.25rem)`,
+            top: `calc(${drop.area.top * 100}% + 0.25rem)`,
+            width: `calc(${drop.area.width * 100}% - 0.5rem)`,
+            height: `calc(${drop.area.height * 100}% - 0.5rem)`,
+          }}
         />
       )}
     </div>
   );
-}
-
-/** Which side of the workspace a pointer means, or none once it has left the workspace. */
-function dropPlacement(clientX: number, clientY: number, rect: DOMRect): Placement | null {
-  const x = (clientX - rect.left) / rect.width;
-  const y = (clientY - rect.top) / rect.height;
-  if (x < 0 || x > 1 || y < 0 || y > 1) return null;
-  return y < 0.25 ? "top" : y > 0.75 ? "bottom" : x < 0.5 ? "left" : "right";
 }
 
 function Pane({

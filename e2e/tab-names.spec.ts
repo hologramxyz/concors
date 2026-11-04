@@ -16,7 +16,8 @@ test("unnamed tabs show their pane's title and keep custom names across pane cha
     await page.goto("/");
     await seedProject(page, "Named tabs", directory);
     const bar = page.getByLabel("Project tabs", { exact: true });
-    const labels = () => bar.locator("[data-tab-id] > button:first-child").allTextContents();
+    const labels = () =>
+      bar.locator("[data-tab-id] > button:first-child span.truncate").allTextContents();
     await expect.poll(labels).toEqual(["Terminal"]);
     for (const [index, profile] of [
       [1, "New chat"],
@@ -107,6 +108,52 @@ test("closing a tab still works when a new pane's session started a moment befor
     await expect(tabs(page)).toHaveCount(1);
     await expect(tabs(page).first()).toHaveAttribute("data-tab-id", kept ?? "");
     await expect(page.getByText("Project changed on another client")).toHaveCount(0);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("a tab with several panes shows the focused pane's one icon and how many panes it has", async ({
+  page,
+}) => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-tab-icon-"));
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Tab icon", directory);
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
+    const button = tab(page, 1);
+    await expect(button).toHaveAttribute("aria-pressed", "true");
+    await expect(button).toHaveText("Terminal");
+    const panes = page.locator("[data-pane-id]").filter({ visible: true });
+    await page.getByRole("button", { name: "Pane actions" }).click();
+    await page.getByRole("menuitem", { name: "Split horizontally" }).click();
+    await expect(panes).toHaveCount(2);
+    await expect(button).toHaveText("Terminal2");
+    // The count is for the eye; the tab's name stays its name.
+    await expect(page.getByRole("button", { name: "Terminal", exact: true })).toHaveCount(2);
+    await button.hover();
+    await expect(page.getByRole("tooltip")).toContainText("2 panes");
+    await page.mouse.move(0, 0);
+
+    const icon = button.locator("[data-tab-icon-for]");
+    await expect(icon).toHaveCount(1);
+    for (const index of [0, 1]) {
+      await panes.nth(index).locator("textarea").focus();
+      await expect(icon).toHaveAttribute(
+        "data-tab-icon-for",
+        (await panes.nth(index).getAttribute("data-pane-id")) ?? "",
+      );
+    }
+    // Closing the focused pane hands the icon on, and the count goes with the second pane.
+    await panes.nth(1).getByRole("button", { name: "Close pane" }).click();
+    await expect(panes).toHaveCount(1);
+    await expect(icon).toHaveAttribute(
+      "data-tab-icon-for",
+      (await panes.first().getAttribute("data-pane-id")) ?? "",
+    );
+    await expect(button).toHaveText("Terminal");
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

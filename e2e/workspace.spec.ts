@@ -104,7 +104,7 @@ test("two devices share workspace edits, reconnect, and switch isolated machines
       .poll(() =>
         second
           .getByLabel("Project tabs")
-          .locator("[data-tab-id] > button:first-child")
+          .locator("[data-tab-id] > button:first-child span.truncate")
           .allTextContents(),
       )
       // The new tab nobody named shows its terminal's title.

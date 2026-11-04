@@ -477,7 +477,7 @@ export function ProjectWorkspace({
                           className="max-w-44 rounded bg-background px-2 py-0.5 text-ui ring-1 ring-ring outline-none"
                         />
                       ) : (
-                        <SidebarTooltip place="title-bar" content={<TabTooltip />}>
+                        <SidebarTooltip place="title-bar" content={<TabTooltip tab={tab} />}>
                           <TabButton
                             tab={tab}
                             selected={!activeFile && selected?.id === tab.id}

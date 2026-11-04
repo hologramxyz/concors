@@ -1,4 +1,5 @@
 import { seedProject } from "./support/projects.ts";
+import type { Locator, Page } from "@playwright/test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -259,6 +260,225 @@ test("a pane menu opened while a new tab launches closes when that tab takes ove
     await page.getByRole("button", { name: "Pane actions" }).click();
     await split.click();
     await expect(page.locator(".xterm").filter({ visible: true })).toHaveCount(2);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+/** Opens a terminal tab split into `layout`, its panes in the order the layout reads. */
+async function splitTab(page: Page, layout: "three" | "grid") {
+  await page.getByRole("button", { name: "New tab options", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
+  await expect(tab(page, 1)).toHaveAttribute("aria-pressed", "true");
+  const panes = page.locator("[data-pane-id]").filter({ visible: true });
+  const splitPane = async (index: number, name: string, count: number) => {
+    await panes.nth(index).getByRole("button", { name: "Pane actions" }).click();
+    await page.getByRole("menuitem", { name }).click();
+    await expect(panes).toHaveCount(count);
+  };
+  await splitPane(0, "Split horizontally", 2);
+  // A | B over C, or A over C | B over D. Later panes first, as splitting renumbers those after.
+  await splitPane(1, "Split vertically", 3);
+  if (layout === "grid") await splitPane(0, "Split vertically", 4);
+  const ids = await panes.evaluateAll((all) =>
+    all.map((pane) => pane.getAttribute("data-pane-id")),
+  );
+  return ids.map((id) => page.locator(`[data-pane-id="${id}"]`));
+}
+
+const box = async (locator: Locator) => {
+  const bounds = await locator.boundingBox();
+  if (!bounds) throw new Error("Not visible");
+  return bounds;
+};
+
+function expectNear(
+  actual: { x: number; y: number; width: number; height: number },
+  expected: { x: number; y: number; width: number; height: number },
+  tolerance = 9,
+) {
+  for (const key of ["x", "y", "width", "height"] as const)
+    expect(Math.abs(actual[key] - expected[key]), key).toBeLessThanOrEqual(tolerance);
+}
+
+/** Holds a pane's header over a share of another element. Nothing is released yet. */
+async function dragOver(page: Page, source: Locator, over: Locator, sx: number, sy: number) {
+  const header = await box(source.locator("header"));
+  const target = await box(over);
+  await page.mouse.move(header.x + 60, header.y + header.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(target.x + target.width * sx, target.y + target.height * sy, { steps: 4 });
+}
+
+/** The process in a terminal, which a restarted session would change. */
+async function shellProcess(page: Page, pane: Locator, marker: string) {
+  await pane.locator("textarea").focus();
+  await page.keyboard.type(`echo ${marker}:$$:`);
+  await page.keyboard.press("Enter");
+  const output = pane.getByLabel("Terminal output").filter({ visible: true });
+  await expect(output).toContainText(new RegExp(`${marker}:\\d+:`));
+  return (await output.textContent())?.match(new RegExp(`${marker}:(\\d+):`))?.[1];
+}
+
+const preview = (page: Page) => page.getByTestId("pane-drop-preview");
+
+test("in a 2×2 layout a pane's edge splits only that pane and its centre swaps", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  const directory = await mkdtemp(join(tmpdir(), "concors-pane-grid-"));
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Grid", directory);
+    const [a, c, b, d] = (await splitTab(page, "grid")) as [Locator, Locator, Locator, Locator];
+    const dId = await d.getAttribute("data-pane-id");
+    const process = await shellProcess(page, a, "BEFORE");
+
+    // Each edge of D shows half of D, in that direction.
+    const start = await box(d);
+    for (const [placement, sx, sy, expected] of [
+      ["left", 0.1, 0.5, { ...start, width: start.width / 2 }],
+      ["right", 0.9, 0.5, { ...start, x: start.x + start.width / 2, width: start.width / 2 }],
+      ["top", 0.5, 0.1, { ...start, height: start.height / 2 }],
+      ["bottom", 0.5, 0.9, { ...start, y: start.y + start.height / 2, height: start.height / 2 }],
+    ] as const) {
+      await dragOver(page, a, d, sx, sy);
+      await expect(preview(page)).toHaveCount(1);
+      await expect(preview(page)).toHaveAttribute("data-scope", "pane");
+      await expect(preview(page)).toHaveAttribute("data-placement", placement);
+      await expect(preview(page)).toHaveAttribute("data-target-pane", dId ?? "");
+      expectNear(await box(preview(page)), expected);
+      await page.keyboard.press("Escape");
+      await page.mouse.up();
+    }
+    await expect(preview(page)).toHaveCount(0);
+    expectNear(await box(d), start, 1);
+
+    // A centre shows the whole pane, and swapping changes no other pane's place.
+    const [aBefore, bBefore, cBefore] = [await box(a), await box(b), await box(c)];
+    await dragOver(page, a, d, 0.5, 0.5);
+    await expect(preview(page)).toHaveAttribute("data-placement", "center");
+    expectNear(await box(preview(page)), start);
+    await page.mouse.up();
+    await expect
+      .poll(async () => (await a.boundingBox())?.x ?? Number.NaN)
+      .toBeGreaterThan(start.x - 2);
+    expectNear(await box(a), start, 2);
+    expectNear(await box(d), aBefore, 2);
+    expectNear(await box(b), bBefore, 2);
+    expectNear(await box(c), cBefore, 2);
+
+    // Dropping on an edge splits that pane alone. A now shares a column with B, which closes up.
+    const cStart = await box(c);
+    const dStill = await box(d);
+    await dragOver(page, a, c, 0.9, 0.5);
+    await expect(preview(page)).toHaveAttribute("data-placement", "right");
+    const area = await box(preview(page));
+    expectNear(area, { ...cStart, x: cStart.x + cStart.width / 2, width: cStart.width / 2 });
+    await page.mouse.up();
+    await expect.poll(async () => (await a.boundingBox())?.x ?? Number.NaN).toBeLessThan(start.x);
+    expectNear(await box(a), area);
+    expect((await box(c)).width).toBeLessThan(cStart.width * 0.6);
+    expectNear(await box(d), dStill, 2);
+    expect((await box(b)).height).toBeGreaterThan(bBefore.height * 1.5);
+    await expect(page.locator("[data-pane-id]").filter({ visible: true })).toHaveCount(4);
+
+    // The session in the moved pane never restarted.
+    expect(await shellProcess(page, a, "AFTER")).toBe(process);
+    await expect(page.getByRole("alert")).toHaveCount(0);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("in a 3-pane layout edge and centre drops land where the outline showed", async ({ page }) => {
+  test.setTimeout(60_000);
+  const directory = await mkdtemp(join(tmpdir(), "concors-pane-edges-"));
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Edges", directory);
+    const [a, b, c] = (await splitTab(page, "three")) as [Locator, Locator, Locator];
+    const process = await shellProcess(page, b, "BEFORE");
+
+    // B leaves its stack for A's right half; C takes B's old place too.
+    const aStart = await box(a);
+    await dragOver(page, b, a, 0.9, 0.5);
+    await expect(preview(page)).toHaveAttribute(
+      "data-target-pane",
+      (await a.getAttribute("data-pane-id")) ?? "",
+    );
+    const edge = await box(preview(page));
+    expectNear(edge, { ...aStart, x: aStart.x + aStart.width / 2, width: aStart.width / 2 });
+    await page.mouse.up();
+    await expect
+      .poll(async () => (await b.boundingBox())?.x ?? Number.NaN)
+      .toBeLessThan(aStart.x + aStart.width);
+    expectNear(await box(b), edge);
+    expect(await shellProcess(page, b, "AFTER")).toBe(process);
+
+    // C swaps with B, and they trade places exactly.
+    const [bBefore, cBefore] = [await box(b), await box(c)];
+    await dragOver(page, c, b, 0.5, 0.5);
+    await expect(preview(page)).toHaveAttribute("data-placement", "center");
+    expectNear(await box(preview(page)), bBefore);
+    await page.mouse.up();
+    await expect.poll(async () => (await c.boundingBox())?.x ?? Number.NaN).toBeLessThan(cBefore.x);
+    expectNear(await box(c), bBefore, 2);
+    expectNear(await box(b), cBefore, 2);
+    await expect(page.getByRole("alert")).toHaveCount(0);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("beside its former neighbour the outline shows the grown space, and bad drops cancel", async ({
+  page,
+}) => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-pane-neighbour-"));
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Neighbour", directory);
+    const [a, c, b] = (await splitTab(page, "grid")) as [Locator, Locator, Locator];
+    const workspace = page.getByTestId("pane-workspace").filter({ visible: true });
+    const before = await box(a);
+
+    // Over its own pane there is nothing to do, and letting go there moves nothing.
+    await dragOver(page, a, a, 0.5, 0.5);
+    await expect(preview(page)).toHaveCount(0);
+    await page.mouse.up();
+    expectNear(await box(a), before, 1);
+
+    // Outside the workspace too.
+    const area = await box(workspace);
+    const header = await box(a.locator("header"));
+    await page.mouse.move(header.x + 60, header.y + header.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(area.x - 30, area.y + 100, { steps: 4 });
+    await expect(preview(page)).toHaveCount(0);
+    await page.mouse.up();
+    expectNear(await box(a), before, 1);
+
+    // Escape cancels a centre as well as an edge.
+    await dragOver(page, a, b, 0.5, 0.5);
+    await expect(preview(page)).toHaveCount(1);
+    await page.keyboard.press("Escape");
+    await page.mouse.up();
+    expectNear(await box(a), before, 1);
+
+    // C grows into A's place when A leaves, so A takes half of the whole column, not half of C.
+    const column = { ...before, height: (await box(c)).y + (await box(c)).height - before.y };
+    await dragOver(page, a, c, 0.9, 0.5);
+    await expect(preview(page)).toHaveAttribute("data-placement", "right");
+    const shown = await box(preview(page));
+    expectNear(shown, { ...column, x: column.x + column.width / 2, width: column.width / 2 });
+    await page.mouse.up();
+    await expect
+      .poll(async () => (await a.boundingBox())?.x ?? Number.NaN)
+      .toBeGreaterThan(before.x + 10);
+    expectNear(await box(a), shown);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

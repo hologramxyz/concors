@@ -123,6 +123,12 @@ test("a pane shows its agent's status on its own icon, as its tab does", async (
       // The pane's icon carries the same badge as the tab's, from the same status.
       await expect(pane.getByRole("img", { name: `Agent status: ${status}` })).toBeVisible();
       await expect(tab).toHaveAttribute("aria-description", `Codex: ${status}`);
+      // The status is in the tab's one tooltip; a native title would open on top of it.
+      await expect(tab.locator("[title]")).toHaveCount(0);
+      await tab.hover();
+      await expect(page.getByRole("tooltip")).toContainText(`Codex: ${status}`);
+      await page.mouse.move(0, 0);
+      await expect(page.getByRole("tooltip")).toHaveCount(0);
     }
   } finally {
     control.disconnect();
