@@ -107,6 +107,12 @@ test("a pane shows its agent's status on its own icon, as its tab does", async (
 
     const pane = page.getByRole("region", { name: "Agent pane", exact: true }).locator("header");
     const tab = tabs(page).nth(1).locator("> button").first();
+    // An agent just sitting there earns no line in the tab's tooltip.
+    await tab.hover();
+    await expect(page.getByRole("tooltip")).toBeVisible();
+    await expect(page.getByRole("tooltip")).not.toContainText("Ready");
+    await page.mouse.move(0, 0);
+    await expect(page.getByRole("tooltip")).toHaveCount(0);
     for (const [text, status] of [
       ["hold", "Working"],
       ["question", "Needs input"],

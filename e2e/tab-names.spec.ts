@@ -158,3 +158,66 @@ test("a tab with several panes shows the focused pane's one icon and how many pa
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("rearranging panes keeps the tab's name, and the name is the oldest pane's", async ({
+  page,
+}) => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-tab-stable-name-"));
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Stable name", directory);
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
+    const button = tab(page, 1);
+    await expect(button).toHaveAttribute("aria-pressed", "true");
+    const panes = page.locator("[data-pane-id]").filter({ visible: true });
+    await page.getByRole("button", { name: "Pane actions" }).click();
+    await page.getByRole("menuitem", { name: "Split horizontally" }).click();
+    await expect(panes).toHaveCount(2);
+    const rename = async (index: number, name: string) => {
+      await panes.nth(index).getByRole("button", { name: "Pane actions" }).click();
+      await page.getByRole("menuitem", { name: "Rename pane" }).click();
+      await panes.nth(index).getByRole("textbox", { name: "Pane name" }).fill(name);
+      await page.keyboard.press("Enter");
+      await expect(panes.nth(index).locator("header")).toContainText(name);
+    };
+    await rename(0, "Oldest");
+    await rename(1, "Newest");
+    const name = button.locator("span.truncate");
+    await expect(name).toHaveText("Oldest");
+    const oldest = panes.first();
+    const oldestId = await oldest.getAttribute("data-pane-id");
+
+    const dragOnto = async (sx: number, sy: number) => {
+      const source = page.locator(`[data-pane-id="${oldestId}"]`);
+      const others = panes.filter({ hasNot: page.locator(`[data-pane-id="${oldestId}"]`) });
+      const ids = await panes.evaluateAll((all) => all.map((p) => p.getAttribute("data-pane-id")));
+      const otherId = ids.find((id) => id !== oldestId);
+      const header = await source.locator("header").boundingBox();
+      const other = await page.locator(`[data-pane-id="${otherId}"]`).boundingBox();
+      if (!header || !other || !(await others.count())) throw new Error("Panes missing");
+      await page.mouse.move(header.x + 60, header.y + header.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(other.x + other.width * sx, other.y + other.height * sy, { steps: 4 });
+      await expect(page.getByTestId("pane-drop-preview")).toHaveCount(1);
+      await page.mouse.up();
+    };
+    // A swap puts the other pane first in the layout; the name stays, here and after a reload.
+    await dragOnto(0.5, 0.5);
+    await expect(panes.first()).not.toHaveAttribute("data-pane-id", oldestId ?? "");
+    await expect(name).toHaveText("Oldest");
+    await page.reload();
+    await expect(tab(page, 1).locator("span.truncate")).toHaveText("Oldest");
+    // So does an edge drop.
+    await expect(panes).toHaveCount(2);
+    await dragOnto(0.1, 0.5);
+    await expect(panes.first()).toHaveAttribute("data-pane-id", oldestId ?? "");
+    await expect(tab(page, 1).locator("span.truncate")).toHaveText("Oldest");
+    await dragOnto(0.9, 0.5);
+    await expect(panes.last()).toHaveAttribute("data-pane-id", oldestId ?? "");
+    await expect(tab(page, 1).locator("span.truncate")).toHaveText("Oldest");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

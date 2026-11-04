@@ -2,6 +2,8 @@ import { expect, it } from "vitest";
 import type { AgentInfo, TerminalInfo, WorkspaceProject, WorkspaceTab } from "@concors/protocol";
 import {
   chatDot,
+  isActiveStatus,
+  mostUrgentPane,
   tabAgentStatuses,
   workspaceAttention,
   workspaceAttentionLabel,
@@ -196,4 +198,48 @@ it("sums a workspace's agents across its tabs, most urgent first, counting updat
   );
   // Working alone shows no dot, so there is nothing to say about one.
   expect(workspaceAttentionLabel({ ...none, kind: "working", working: 2 })).toBe("");
+});
+
+it("a tab's icon follows the most urgent pane, and the focused pane only breaks ties", () => {
+  const panes = [pane(11, "chat", id(21)), pane(12, "chat", id(22)), pane(13, "chat", id(23))];
+  const tab: WorkspaceTab = {
+    id: id(1),
+    name: "Build",
+    root: id(2),
+    nodes: [
+      { id: id(2), kind: "split", axis: "horizontal", ratio: 0.5, first: id(11), second: id(3) },
+      { id: id(3), kind: "split", axis: "vertical", ratio: 0.5, first: id(12), second: id(13) },
+      ...panes,
+    ],
+  };
+  const urgent = (
+    first: AgentInfo["status"],
+    second: AgentInfo["status"],
+    third: AgentInfo["status"],
+    focused: string | null = id(11),
+  ) =>
+    mostUrgentPane(tab, [chat(21, first), chat(22, second), chat(23, third)], [], focused)?.id ??
+    null;
+  expect(urgent("working", "needs_input", "failed")).toBe(id(12));
+  expect(urgent("working", "idle", "failed")).toBe(id(13));
+  expect(urgent("idle", "working", "idle")).toBe(id(12));
+  expect(urgent("idle", "idle", "idle")).toBeNull();
+  expect(urgent("working", "working", "working", id(13))).toBe(id(13));
+  expect(urgent("working", "working", "working", null)).toBe(id(11));
+});
+
+it("a tab's tooltip lists agents that are busy, waiting or failed, and no others", () => {
+  const tab: WorkspaceTab = {
+    id: id(1),
+    name: "Build",
+    root: id(11),
+    nodes: [pane(11, "chat", id(21))],
+  };
+  const lines = (status: AgentInfo["status"]) =>
+    tabAgentStatuses(tab, [chat(21, status)], []).filter(isActiveStatus).length;
+  expect(lines("working")).toBe(1);
+  expect(lines("needs_input")).toBe(1);
+  expect(lines("failed")).toBe(1);
+  expect(lines("idle")).toBe(0);
+  expect(lines("done")).toBe(0);
 });

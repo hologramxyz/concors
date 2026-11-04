@@ -46,9 +46,9 @@ import {
 import { forgetFocusedPane, publishFocusedPane } from "./focused-panes";
 import {
   paneDropTargetAt,
-  paneLandingArea,
-  paneMoveOperation,
+  planPaneDrop,
   type PaneArea,
+  type PaneDropPlan,
   type PaneDropTarget,
 } from "./pane-drop";
 import { typingOutsidePanes } from "./typing-outside-panes";
@@ -77,6 +77,15 @@ export function PaneLayout(props: Props) {
   const [draggedPaneId, setDraggedPaneId] = useState<string | null>(null);
   const [drop, setDrop] = useState<{ target: PaneDropTarget; area: PaneArea } | null>(null);
   const stopDrag = useRef<(() => void) | null>(null);
+  // The ratio a dropped pane's new split is about to get, shown from the moment the split arrives:
+  // the move and its resize are two commands, and between them the pane would jump to half.
+  const [arriving, setArriving] = useState<{ splitId: string; ratio: number } | null>(null);
+  useEffect(() => {
+    if (!arriving) return;
+    // A rejected resize never comes back; fall back to the workspace's own ratio.
+    const timer = setTimeout(() => setArriving(null), 3000);
+    return () => clearTimeout(timer);
+  }, [arriving]);
   const container = useRef<HTMLDivElement>(null);
   const pendingFocus = useRef<string | null>(null);
   const navigationFocus = useRef<MutationObserver | null>(null);
@@ -318,6 +327,7 @@ export function PaneLayout(props: Props) {
           key={id}
           node={node}
           canEdit={props.canEdit}
+          arrivingRatio={arriving?.splitId === id ? arriving.ratio : undefined}
           onResize={(ratio) =>
             props.onCommand({
               kind: "pane.resize",
@@ -353,10 +363,9 @@ export function PaneLayout(props: Props) {
     const { project, tab, onCommand } = props;
     let started = false;
     let target: PaneDropTarget | null = null;
-    // Generated once, so measuring where a pane lands and moving it are the same operation.
+    let plan: PaneDropPlan | null = null;
+    // Generated once, so the plan that is previewed and the commands that are sent are the same.
     const splitId = crypto.randomUUID();
-    const operationFor = (dropTarget: PaneDropTarget) =>
-      paneMoveOperation(project, tab, paneId, dropTarget, splitId);
     const move = (moved: PointerEvent) => {
       if (moved.pointerId !== pointerId) return;
       if (!started) {
@@ -382,16 +391,19 @@ export function PaneLayout(props: Props) {
       );
       // Pointer moves far outnumber changes of target, and each repaint lays out every pane.
       if (JSON.stringify(next) === JSON.stringify(target)) return;
-      const operation = next && operationFor(next);
-      const area = operation && paneLandingArea(project, tab, operation);
-      target = area ? next : null;
-      setDrop(target && area ? { target, area } : null);
+      plan = next && planPaneDrop(project, tab, paneId, next, splitId);
+      target = plan ? next : null;
+      setDrop(target && plan ? { target, area: plan.area } : null);
     };
     const release = (released: PointerEvent) => {
       if (released.pointerId !== pointerId) return;
-      const operation = target && operationFor(target);
+      const dropped = plan;
       stop();
-      if (operation) onCommand(operation);
+      if (!dropped) return;
+      onCommand(dropped.move);
+      if (!dropped.resize) return;
+      setArriving({ splitId, ratio: dropped.resize.ratio });
+      onCommand(dropped.resize);
     };
     const key = (pressed: KeyboardEvent) => {
       if (pressed.key !== "Escape" || !started) return;
@@ -731,12 +743,14 @@ function Split({
   first,
   second,
   canEdit,
+  arrivingRatio,
   onResize,
 }: {
   node: Extract<LayoutNode, { kind: "split" }>;
   first: React.ReactNode;
   second: React.ReactNode;
   canEdit: boolean;
+  arrivingRatio: number | undefined;
   onResize: (ratio: number) => void;
 }) {
   const container = useRef<HTMLDivElement>(null);
@@ -755,7 +769,9 @@ function Split({
   const horizontal = node.axis === "horizontal";
   // Once the workspace's ratio moves, it is the answer, whether it is ours or another client's.
   const pending = committed?.from === node.ratio ? committed.ratio : null;
-  const ratio = preview ?? pending ?? node.ratio;
+  // Every new split starts at half, so any other ratio means the resize has landed.
+  const ratio =
+    preview ?? pending ?? (node.ratio === 0.5 ? arrivingRatio : undefined) ?? node.ratio;
   const resize = (value: number) => {
     if (value === (pending ?? node.ratio)) return;
     setCommitted({ ratio: value, from: node.ratio });

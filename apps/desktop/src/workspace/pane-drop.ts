@@ -1,3 +1,4 @@
+import { clampRatio } from "./split-ratio";
 import {
   applyWorkspaceOperation,
   type WorkspaceOperation,
@@ -88,20 +89,68 @@ export function paneDropTargetAt(
   };
 }
 
-/** The command for a drop. The workspace scope ignores its target, but the protocol requires one. */
-export function paneMoveOperation(
+/** Every node's share of the workspace, from the layout's split ratios. */
+function nodeAreas(tab: WorkspaceTab): Map<string, PaneArea> {
+  const nodes = new Map(tab.nodes.map((node) => [node.id, node]));
+  const areas = new Map<string, PaneArea>();
+  const visit = (id: string, area: PaneArea) => {
+    const node = nodes.get(id);
+    if (!node) return;
+    areas.set(id, area);
+    if (node.kind === "pane") return;
+    const { left, top, width, height } = area;
+    if (node.axis === "horizontal") {
+      const firstWidth = width * node.ratio;
+      visit(node.first, { ...area, width: firstWidth });
+      visit(node.second, { ...area, left: left + firstWidth, width: width - firstWidth });
+    } else {
+      const firstHeight = height * node.ratio;
+      visit(node.first, { ...area, height: firstHeight });
+      visit(node.second, { ...area, top: top + firstHeight, height: height - firstHeight });
+    }
+  };
+  visit(tab.root, { left: 0, top: 0, width: 1, height: 1 });
+  return areas;
+}
+
+function half(area: PaneArea, side: Side): PaneArea {
+  const { left, top, width, height } = area;
+  if (side === "left") return { ...area, width: width / 2 };
+  if (side === "right") return { ...area, left: left + width / 2, width: width / 2 };
+  if (side === "top") return { ...area, height: height / 2 };
+  return { ...area, top: top + height / 2, height: height / 2 };
+}
+
+type PaneMove = Extract<WorkspaceOperation, { kind: "pane.move" }>;
+type SplitResize = Extract<WorkspaceOperation, { kind: "pane.resize" }>;
+export interface PaneDropPlan {
+  /** The outline: half of the hovered pane, the whole of it for a swap, or half of the tab. */
+  area: PaneArea;
+  move: PaneMove;
+  /** Puts the new divider on the hovered pane's midline, when the move alone would not. */
+  resize: SplitResize | null;
+}
+
+/**
+ * What a drop does, or null if the daemon would refuse it. It runs the daemon's own reducer over a
+ * copy because leaving collapses the split the pane came from, which can grow the hovered pane
+ * first. The resize then puts the divider back where the outline's inner edge is. It cannot always
+ * make the two match: the space the pane left has to go to someone, so when that space lies beyond
+ * the outline, or across the split's axis, the dragged pane or the hovered one grows to cover it.
+ */
+export function planPaneDrop(
   project: WorkspaceProject,
   tab: WorkspaceTab,
   paneId: string,
   target: PaneDropTarget,
   splitId: string,
-): Extract<WorkspaceOperation, { kind: "pane.move" }> | null {
+): PaneDropPlan | null {
   const targetPaneId =
     target.scope === "pane"
       ? target.paneId
       : tab.nodes.find((node) => node.kind === "pane" && node.id !== paneId)?.id;
   if (!targetPaneId) return null;
-  return {
+  const move: PaneMove = {
     kind: "pane.move",
     projectId: project.id,
     tabId: tab.id,
@@ -112,19 +161,6 @@ export function paneMoveOperation(
     placement: target.placement,
     splitId,
   };
-}
-
-/**
- * Where a pane would really end up. That is not always half of the hovered pane: leaving collapses
- * the split the pane came from, which can first grow its neighbours. So this runs the daemon's own
- * reducer over a copy and measures the result, which keeps the outline from promising otherwise.
- * Null if the daemon would refuse the move.
- */
-export function paneLandingArea(
-  project: WorkspaceProject,
-  tab: WorkspaceTab,
-  operation: Extract<WorkspaceOperation, { kind: "pane.move" }>,
-): PaneArea | null {
   let moved: WorkspaceTab | undefined;
   try {
     moved = applyWorkspaceOperation(
@@ -136,31 +172,43 @@ export function paneLandingArea(
         projects: [{ ...project, tabs: [tab] }],
         selection: null,
       },
-      operation,
+      move,
     ).projects[0]?.tabs[0];
   } catch {
     return null;
   }
   if (!moved) return null;
-  const nodes = new Map(moved.nodes.map((node) => [node.id, node]));
-  const find = (id: string, area: PaneArea): PaneArea | null => {
-    const node = nodes.get(id);
-    if (!node) return null;
-    if (node.kind === "pane") return node.id === operation.paneId ? area : null;
-    const firstShare = node.ratio;
-    return node.axis === "horizontal"
-      ? (find(node.first, { ...area, width: area.width * firstShare }) ??
-          find(node.second, {
-            ...area,
-            left: area.left + area.width * firstShare,
-            width: area.width * (1 - firstShare),
-          }))
-      : (find(node.first, { ...area, height: area.height * firstShare }) ??
-          find(node.second, {
-            ...area,
-            top: area.top + area.height * firstShare,
-            height: area.height * (1 - firstShare),
-          }));
+  const hovered = nodeAreas(tab).get(targetPaneId);
+  if (!hovered) return null;
+  if (target.scope === "workspace")
+    return {
+      move,
+      resize: null,
+      area: half({ left: 0, top: 0, width: 1, height: 1 }, target.placement),
+    };
+  if (target.placement === "center") return { move, resize: null, area: hovered };
+  const space = nodeAreas(moved).get(splitId);
+  if (!space) return null;
+  const horizontal = target.placement === "left" || target.placement === "right";
+  const ratio = clampRatio(
+    horizontal
+      ? (hovered.left + hovered.width / 2 - space.left) / space.width
+      : (hovered.top + hovered.height / 2 - space.top) / space.height,
+  );
+  return {
+    move,
+    area: half(hovered, target.placement),
+    // The reducer starts every new split at half, and the move has raised the project's version.
+    resize:
+      Math.abs(ratio - 0.5) < 0.001
+        ? null
+        : {
+            kind: "pane.resize",
+            projectId: project.id,
+            tabId: tab.id,
+            expectedVersion: project.version + 1,
+            splitId,
+            ratio,
+          },
   };
-  return find(moved.root, { left: 0, top: 0, width: 1, height: 1 });
 }

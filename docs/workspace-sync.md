@@ -41,10 +41,15 @@ Drag a pane header within its tab; a tab with one pane has nothing to drag. As i
   pane on that side of it (`scope: "pane"`).
 - Another pane's centre swaps the two (`placement: "center"`).
 
-One outline shows where the pane will land, measured by running the reducer over a copy. Leaving
-collapses the split the pane came from, so beside its former sibling it takes half of the grown
-space rather than half of what the sibling occupies now. Over the dragged pane itself there is no
-target. Escape, or letting go outside the workspace or over the pane itself, cancels.
+One outline shows the target: half of the hovered pane, the whole of it for a swap, or half of the
+tab. It never covers another pane, except for the outer band. After an edge drop a `pane.resize`
+puts the new divider on the hovered pane's midline, the outline's inner edge, so the pane lands on
+the outline. Panes are rectangles that fill the tab, though, so the space the pane left must go to
+someone: when it lies beyond the outline or across the split, the dragged or hovered pane also
+covers it. Over the dragged pane itself there is no target. Escape, or letting go outside the
+workspace or over the pane itself, cancels.
+
+A tab nobody named is called after its oldest pane, so rearranging panes never renames it.
 
 `pane.move` commits the tree change atomically using the project version captured at drag start.
 Pane IDs, profiles, and session bindings stay unchanged; no terminal or agent is stopped or

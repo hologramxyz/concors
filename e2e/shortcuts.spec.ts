@@ -384,7 +384,7 @@ test("menus, Search, the sequence panel and a tab's tooltip draw shortcuts as ke
 
   await tab(page, 0).hover();
   const tooltip = page.getByRole("tooltip");
-  await expect(tooltip).toContainText("Drag to reorder. Double-click to rename.");
+  await expect(tooltip).not.toContainText("Drag to reorder");
   await expect(tooltip.locator("kbd")).toHaveText(["F2", "Alt+Shift+←", "Alt+Shift+→"]);
   await expect(tab(page, 0)).not.toHaveAttribute("title");
 });

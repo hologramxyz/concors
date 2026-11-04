@@ -1,9 +1,14 @@
-import { useEffect, type ComponentProps, type RefObject } from "react";
+import { useEffect, type ComponentProps, type ReactElement, type RefObject } from "react";
 import type { AgentInfo, PaneProfile, WorkspaceTab } from "@concors/protocol";
 import { Terminal } from "lucide-react";
 import { AgentStatusIcon, StartingChatIcon } from "@/agents/activity";
 import { ProviderIcon } from "@/agents/provider-icon";
-import { paneAgentStatus, tabAgentStatuses } from "@/agents/agent-status";
+import {
+  isActiveStatus,
+  mostUrgentPane,
+  paneAgentStatus,
+  tabAgentStatuses,
+} from "@/agents/agent-status";
 import { useAgents } from "@/agents/context";
 import type { CommandId } from "@/shortcuts/bindings";
 import { BoundKeyChips } from "@/shortcuts/key-chips";
@@ -17,10 +22,10 @@ import { SidebarTooltip } from "@/components/sidebar-tooltip";
 
 /**
  * A tab's label: one icon, then its name, then how many panes it has if more than one. The icon is
- * the focused pane's, or until a tab has been shown its main pane's: the agent's provider and
- * status, a chat by the provider it starts with, an agent CLI by its brand, and a terminal by the
- * terminal mark, so every tab carries one. The other panes' agents are in the tooltip. It subscribes
- * to agent and terminal updates itself so a status change repaints the label, not the workspace.
+ * the status of the pane that most wants a look. With nothing pending it is the focused pane's, or
+ * until a tab has been shown its main pane's: a chat by the provider it starts with, an agent CLI by
+ * its brand, and a terminal by the terminal mark, so every tab carries one. It subscribes to agent
+ * and terminal updates itself so a status change repaints the label, not the workspace.
  */
 export function TabButton({
   tab,
@@ -32,10 +37,12 @@ export function TabButton({
   const agents = tabAgentStatuses(tab, sessions, terminals);
   const focusedPaneId = useFocusedPane(tab.id);
   const pane =
+    mostUrgentPane(tab, sessions, terminals, focusedPaneId) ??
     tab.nodes.find(
       (node): node is Extract<typeof node, { kind: "pane" }> =>
         node.kind === "pane" && node.id === focusedPaneId,
-    ) ?? mainPane(tab);
+    ) ??
+    mainPane(tab);
   const status = pane ? paneAgentStatus(pane, sessions, terminals) : null;
   const paneCount = tab.nodes.filter((node) => node.kind === "pane").length;
   return (
@@ -89,25 +96,34 @@ const TAB_SHORTCUTS: readonly { id: CommandId; label: string }[] = [
   { id: "move-tab-right", label: "Move right" },
 ];
 
-/** What a tab in the tab bar can do beyond a click. An unassigned shortcut gets no row. */
-export function TabTooltip({ tab }: { tab: WorkspaceTab }) {
+/**
+ * A tab's tooltip: how many panes it has, the agents in it that are busy, waiting or failed, and
+ * its shortcuts. An unassigned shortcut gets no row, and with no rows at all there is no tooltip.
+ */
+export function TabTooltip({ tab, children }: { tab: WorkspaceTab; children: ReactElement }) {
   const { keymap } = useShortcutPreferences();
-  const agents = tabAgentStatuses(tab, useAgents(), useTerminalSessions());
+  const agents = tabAgentStatuses(tab, useAgents(), useTerminalSessions()).filter(isActiveStatus);
   const paneCount = tab.nodes.filter((node) => node.kind === "pane").length;
+  const shortcuts = TAB_SHORTCUTS.filter(({ id }) => mainBinding(keymap[id], isTauri()));
+  const content =
+    paneCount > 1 || agents.length || shortcuts.length ? (
+      <div className="flex flex-col gap-1 pr-1.5">
+        {paneCount > 1 && <p>{paneCount} panes</p>}
+        {agents.map((agent) => (
+          <p key={agent.id}>{`${agent.providerName}: ${agent.status}`}</p>
+        ))}
+        {shortcuts.map(({ id, label }) => (
+          <p key={id} className="flex items-center justify-between gap-3">
+            {label}
+            <BoundKeyChips id={id} />
+          </p>
+        ))}
+      </div>
+    ) : null;
   return (
-    <div className="flex flex-col gap-1 pr-1.5">
-      {paneCount > 1 && <p>{paneCount} panes</p>}
-      {agents.map((agent) => (
-        <p key={agent.id}>{`${agent.providerName}: ${agent.status}`}</p>
-      ))}
-      <p>Drag to reorder. Double-click to rename.</p>
-      {TAB_SHORTCUTS.filter(({ id }) => mainBinding(keymap[id], isTauri())).map(({ id, label }) => (
-        <p key={id} className="flex items-center justify-between gap-3">
-          {label}
-          <BoundKeyChips id={id} />
-        </p>
-      ))}
-    </div>
+    <SidebarTooltip place="title-bar" content={content}>
+      {children}
+    </SidebarTooltip>
   );
 }
 

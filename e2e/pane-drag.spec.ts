@@ -433,7 +433,7 @@ test("in a 3-pane layout edge and centre drops land where the outline showed", a
   }
 });
 
-test("beside its former neighbour the outline shows the grown space, and bad drops cancel", async ({
+test("beside the pane it left, the outline stays in the hovered pane and bad drops cancel", async ({
   page,
 }) => {
   const directory = await mkdtemp(join(tmpdir(), "concors-pane-neighbour-"));
@@ -468,17 +468,80 @@ test("beside its former neighbour the outline shows the grown space, and bad dro
     await page.mouse.up();
     expectNear(await box(a), before, 1);
 
-    // C grows into A's place when A leaves, so A takes half of the whole column, not half of C.
-    const column = { ...before, height: (await box(c)).y + (await box(c)).height - before.y };
+    // The outline is half of C and touches no other pane. C then grows into A's old place, so the
+    // width lands as shown and the height is the whole column: nothing else could fill it.
+    const cBefore = await box(c);
     await dragOver(page, a, c, 0.9, 0.5);
     await expect(preview(page)).toHaveAttribute("data-placement", "right");
     const shown = await box(preview(page));
-    expectNear(shown, { ...column, x: column.x + column.width / 2, width: column.width / 2 });
+    expectNear(shown, { ...cBefore, x: cBefore.x + cBefore.width / 2, width: cBefore.width / 2 });
     await page.mouse.up();
     await expect
       .poll(async () => (await a.boundingBox())?.x ?? Number.NaN)
       .toBeGreaterThan(before.x + 10);
+    const landed = await box(a);
+    expect(Math.abs(landed.x - shown.x)).toBeLessThanOrEqual(9);
+    expect(Math.abs(landed.width - shown.width)).toBeLessThanOrEqual(9);
+    expect(landed.height).toBeGreaterThan(shown.height * 1.8);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("a resize after the drop puts the divider where the outline showed", async ({ page }) => {
+  test.setTimeout(60_000);
+  const directory = await mkdtemp(join(tmpdir(), "concors-pane-resize-after-"));
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "After drop", directory);
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
+    await expect(tab(page, 1)).toHaveAttribute("aria-pressed", "true");
+    const panes = page.locator("[data-pane-id]").filter({ visible: true });
+    await page.getByRole("button", { name: "Pane actions" }).click();
+    await page.getByRole("menuitem", { name: "Split horizontally" }).click();
+    await expect(panes).toHaveCount(2);
+    const ids = await panes.evaluateAll((all) =>
+      all.map((pane) => pane.getAttribute("data-pane-id")),
+    );
+    const a = page.locator(`[data-pane-id="${ids[0]}"]`);
+    const b = page.locator(`[data-pane-id="${ids[1]}"]`);
+    const handle = page.getByRole("separator", { name: "Resize split" });
+    const process = await shellProcess(page, a, "BEFORE");
+
+    // The side away from the gap: the pane lands exactly on the outline, and B takes the gap.
+    const bStart = await box(b);
+    await dragOver(page, a, b, 0.9, 0.5);
+    const shown = await box(preview(page));
+    expectNear(shown, { ...bStart, x: bStart.x + bStart.width / 2, width: bStart.width / 2 });
+    await page.mouse.up();
+    await expect(handle).toHaveAttribute("aria-valuenow", "75");
+    await expect
+      .poll(async () => (await a.boundingBox())?.x ?? Number.NaN)
+      .toBeGreaterThan(bStart.x);
     expectNear(await box(a), shown);
+    expect(await shellProcess(page, a, "AFTER")).toBe(process);
+
+    // Back to a half and half, A now on the right. Dropping it on B's side facing the gap: B keeps
+    // exactly the half the outline leaves it, and A takes the gap as well as the outline.
+    const space = await box(page.getByTestId("pane-workspace").filter({ visible: true }));
+    const divider = await box(handle);
+    await page.mouse.move(divider.x, divider.y + divider.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(space.x + space.width / 2, divider.y + divider.height / 2, { steps: 4 });
+    await page.mouse.up();
+    await expect(handle).toHaveAttribute("aria-valuenow", "50");
+    const bHalf = await box(b);
+    await dragOver(page, a, b, 0.9, 0.5);
+    await expect(preview(page)).toHaveAttribute("data-placement", "right");
+    const facing = await box(preview(page));
+    await page.mouse.up();
+    // A stays on the right of B here, with B's outer half kept.
+    await expect(handle).toHaveAttribute("aria-valuenow", "25");
+    expectNear(await box(a), { ...facing, x: facing.x, width: (await box(a)).width });
+    expect((await box(b)).width).toBeLessThan(bHalf.width);
+    await expect(page.getByRole("alert")).toHaveCount(0);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

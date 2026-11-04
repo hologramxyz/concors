@@ -574,7 +574,7 @@ export function Chat({
             data-chat-footer
             // In a short pane the timeline gives up its room first. Prompts and notices above the
             // composer scroll before the composer itself loses any of its height.
-            className={`${compact ? "px-3" : "flex max-h-[min(100%,max(55%,12rem))] flex-col px-[24px]"} shrink-0 pt-2 pb-3`}
+            className={`${compact ? "px-3" : "agent-composer-dock flex max-h-[min(100%,max(55%,12rem))] flex-col px-[24px]"} shrink-0 pt-2 pb-3`}
           >
             <div className="mx-auto flex min-h-0 w-full max-w-chat flex-col gap-3">
               <div className="min-h-0 space-y-3 overflow-y-auto empty:hidden">

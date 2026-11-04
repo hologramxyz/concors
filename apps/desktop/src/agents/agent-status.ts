@@ -120,6 +120,13 @@ export function tabAgentStatuses(
   chats: readonly AgentInfo[],
   terminals: readonly TerminalInfo[],
 ): AgentStatus[] {
+  return panesInReadingOrder(tab).flatMap((pane) => {
+    const status = paneAgentStatus(pane, chats, terminals);
+    return status ? [status] : [];
+  });
+}
+
+function panesInReadingOrder(tab: WorkspaceTab) {
   const nodes = new Map(tab.nodes.map((node) => [node.id, node]));
   const panes: Extract<LayoutNode, { kind: "pane" }>[] = [];
   const visit = (id: string) => {
@@ -131,10 +138,50 @@ export function tabAgentStatuses(
     }
   };
   visit(tab.root);
-  return panes.flatMap((pane) => {
+  return panes;
+}
+
+/** Whether a pane's agent earns a line in its tab's tooltip: it is busy, waiting or failed. */
+export function isActiveStatus(status: AgentStatus) {
+  return (
+    status.running ||
+    status.status === AGENT_STATUS.needs_input ||
+    status.status === AGENT_STATUS.failed
+  );
+}
+
+/** Needs input > failed > working > finished; 0 is nothing pending, as for a failure already seen. */
+function statusUrgency(status: AgentStatus) {
+  if (status.status === AGENT_STATUS.needs_input) return 4;
+  if (status.status === AGENT_STATUS.failed) return status.dot ? 3 : 0;
+  if (status.running) return 2;
+  return status.dot === "done" ? 1 : 0;
+}
+
+/**
+ * The pane whose status a tab's one icon shows, or null with nothing pending. On a tie the focused
+ * pane wins, then the first in reading order.
+ */
+export function mostUrgentPane(
+  tab: WorkspaceTab,
+  chats: readonly AgentInfo[],
+  terminals: readonly TerminalInfo[],
+  focusedPaneId: string | null | undefined,
+): Extract<LayoutNode, { kind: "pane" }> | null {
+  let best: Extract<LayoutNode, { kind: "pane" }> | null = null;
+  let bestUrgency = 0;
+  for (const pane of panesInReadingOrder(tab)) {
     const status = paneAgentStatus(pane, chats, terminals);
-    return status ? [status] : [];
-  });
+    const urgency = status ? statusUrgency(status) : 0;
+    if (
+      urgency > bestUrgency ||
+      (urgency > 0 && urgency === bestUrgency && pane.id === focusedPaneId)
+    ) {
+      best = pane;
+      bestUrgency = urgency;
+    }
+  }
+  return best;
 }
 
 export interface WorkspaceAttention {

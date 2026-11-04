@@ -6,7 +6,6 @@ import { useFiles, fileScope } from "@/files/context";
 import { ProjectFileLinks } from "@/files/provider";
 import { useCommand } from "@/shortcuts/context";
 import { MenuKeyChips } from "@/shortcuts/key-chips";
-import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import type { PaneFocusRequest } from "./session-pane";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { NewTabMenu } from "./new-tab-menu";
@@ -477,7 +476,7 @@ export function ProjectWorkspace({
                           className="max-w-44 rounded bg-background px-2 py-0.5 text-ui ring-1 ring-ring outline-none"
                         />
                       ) : (
-                        <SidebarTooltip place="title-bar" content={<TabTooltip tab={tab} />}>
+                        <TabTooltip tab={tab}>
                           <TabButton
                             tab={tab}
                             selected={!activeFile && selected?.id === tab.id}
@@ -494,7 +493,7 @@ export function ProjectWorkspace({
                               });
                             }}
                           />
-                        </SidebarTooltip>
+                        </TabTooltip>
                       )}
                       <CloseTabButton
                         tab={tab}
