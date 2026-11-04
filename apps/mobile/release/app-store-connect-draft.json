@@ -1,0 +1,52 @@
+{
+  "status": "draft-populated-not-submitted",
+  "checkedAt": "2026-11-04T23:13:23.298Z",
+  "appId": "6817622624",
+  "bundleIdentifier": "xyz.hologram.concors",
+  "platform": "IOS",
+  "versionString": "1.0",
+  "versionId": "2d5df58b-5d90-457e-85b9-61f93041ea07",
+  "locale": "en-US",
+  "name": "Concors: Coding Workspace",
+  "subtitle": "Code, agents and terminals",
+  "primaryCategory": "DEVELOPER_TOOLS",
+  "description": "Keep your coding workspace close with Concors. Follow coding agents, review their requests, and continue work on a compatible connected computer or server from your iPhone.\n\nFOLLOW YOUR AGENTS\nRead conversations, follow progress, review tool requests, and send messages to your coding agents.\n\nCONTINUE YOUR WORKSPACE\nSwitch between workspaces and tabs. Browse project files, read Markdown, inspect code, and save edits. Continue terminal sessions on your connected machine.\n\nSTAY IN SYNC\nYour agents and terminal sessions run on the connected machine and can keep working when you leave the app. Return to your workspace from your phone.\n\nAn account and a compatible connected machine are required. AI features may require separate provider accounts and are subject to those providers' availability and terms. Commands run on the connected machine; AI requests use its configured providers. Review generated output and tool requests before acting on them.",
+  "keywords": "coding,developer,terminal,workspace,agents,remote,files,chat",
+  "promotionalText": "Follow coding agents, review tool requests, browse files and continue terminal sessions on a connected machine from your iPhone.",
+  "marketingUrl": "https://concors.dev/",
+  "supportUrl": null,
+  "privacyPolicyUrl": null,
+  "reviewNotes": "Concors is a coding-workspace client for a compatible connected computer or server. The iPhone interface and workspace renderer are bundled in the app. It exchanges structured workspace data rather than mirroring a remote screen. Terminal commands and coding-agent tools run on the connected machine; AI requests use that machine's configured providers. The app does not download and execute new native software on the iPhone, and it does not contain an app marketplace.\n\nThe mobile app provides agent conversations, tool approvals, terminal sessions, project files, and workspace navigation. It does not sell or provision machines or offer subscription checkout. Sign-in is through an in-app authentication session.\n\nReview flow after signing in: select the assigned connected machine, open its review workspace, read an agent conversation, review a harmless tool request, open Files, and use the terminal for a harmless command. The connected machine needs to remain available throughout review.",
+  "reviewerCredentials": null,
+  "reviewContact": null,
+  "ageRatingCompleted": false,
+  "privacyLabelsVerified": false,
+  "screenshotsUploaded": false,
+  "buildAttached": false,
+  "currentTestFlightBuild": {
+    "version": "0.1.0",
+    "buildNumber": "7",
+    "sourceRevision": "aa3a9fddbbbc08994a14868910446f0064f3ed3a"
+  },
+  "releaseType": "AFTER_APPROVAL",
+  "confirmedLaunchModel": {
+    "price": "free",
+    "machineSetup": "Users add machines from the desktop app",
+    "storePricingVerified": false,
+    "launchCountries": null
+  },
+  "pendingDraftUpdates": {
+    "status": "prepared-locally-not-uploaded",
+    "descriptionAddition": "Concors is free at launch. Add your machine using the desktop app before connecting to it from your iPhone.",
+    "reviewNotesAddition": "The owner confirms Concors is free at launch. Users add machines from the desktop app; iPhone users connect to machines already on their account. Provide reviewers with an already connected, available machine so they can review the full iPhone experience without provisioning one."
+  },
+  "remainingOwnerFields": [
+    "Legal copyright holder",
+    "Support/privacy contact and retention facts",
+    "Launch storefronts and verification of free App Store pricing",
+    "Age-rating responses and minimum audience age",
+    "Review contact and durable reviewer access",
+    "Real iPhone screenshots and signed-device acceptance"
+  ],
+  "note": "App Store draft version 1.0 does not match current TestFlight binary version 0.1.0. Leave reviewer credentials and API keys out of source control."
+}
