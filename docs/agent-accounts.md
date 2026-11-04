@@ -2,8 +2,8 @@
 
 Desktop and mobile agent panes check the selected provider's account as soon as they open. A
 prompt above the composer offers sign-in when no account is configured. Dismissal
-is remembered for that machine and provider in browser session storage; a small
-**Connect account** button reopens it. Neither the check nor dismissal disables
+applies to every pane and tab of that provider on that machine, and this client remembers it across
+restarts; a small **Connect account** button in any of them reopens it for all. Neither the check nor dismissal disables
 sending prompts. Existing environment credentials and configurations remain usable.
 
 Sign-in uses the connected daemon's provider registry, including custom CLI commands and

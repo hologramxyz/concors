@@ -189,3 +189,93 @@ test("the agent chips show whole or not at all", async ({ page }) => {
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("the sign-in notice says one short thing, and loses it where it would pass two lines", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  const { directory, pane } = await chatOverAnotherPane(page, "Notice text");
+  try {
+    const notice = pane.getByRole("region", { name: "Codex account connection" });
+    const body = notice.locator(".account-prompt-body");
+    await expect(body).toHaveText("Use your account on this machine.");
+    await expect(notice).not.toContainText("You can dismiss");
+    await page.getByRole("button", { name: "Pane actions", exact: true }).first().click();
+    await page.getByRole("menuitem", { name: "Split horizontally", exact: true }).click();
+    const handle = page.getByRole("separator", { name: "Resize split" });
+    await handle.focus();
+    const seen = new Set<boolean>();
+    for (let step = 0; step < 9; step++) {
+      const shown = await body.isVisible();
+      seen.add(shown);
+      if (shown) {
+        const lines = await body.evaluate((text) => {
+          const range = document.createRange();
+          range.selectNodeContents(text);
+          return new Set([...range.getClientRects()].map((line) => Math.round(line.top))).size;
+        });
+        expect(lines).toBeLessThanOrEqual(2);
+      }
+      await expect(notice.getByText("Connect your ChatGPT account")).toBeVisible();
+      await expect(notice.getByRole("button", { name: "Sign in with ChatGPT" })).toBeVisible();
+      await expect(
+        notice.getByRole("button", { name: "Dismiss account connection" }),
+      ).toBeVisible();
+      await handle.focus();
+      await page.keyboard.press("ArrowLeft");
+      await page.waitForTimeout(150);
+    }
+    expect([...seen].sort()).toEqual([false, true]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("dismissing a sign-in notice hides it in every pane and tab, for that provider only", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  const { directory } = await chatOverAnotherPane(page, "Notice dismissal");
+  try {
+    await page.getByRole("button", { name: "Pane actions", exact: true }).first().click();
+    await page.getByRole("menuitem", { name: "Split horizontally", exact: true }).click();
+    const panes = page.locator("[data-pane-id]").filter({ visible: true });
+    await expect(panes).toHaveCount(2);
+    const notices = page.getByRole("region", { name: "Codex account connection" });
+    await expect(notices).toHaveCount(2);
+
+    await notices.first().getByRole("button", { name: "Dismiss account connection" }).click();
+    await expect(notices).toHaveCount(0);
+
+    // A tab opened afterwards, and a restart, remember it.
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
+    await expect(panes.first().getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
+    await expect(notices).toHaveCount(0);
+    await page.reload();
+    await expect(panes.first().getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
+    await expect(notices).toHaveCount(0);
+
+    // Claude's notice is its own question.
+    const composer = panes.first();
+    await composer.getByRole("button", { name: "Agent and model", exact: true }).click();
+    await page.getByRole("button", { name: "Back to providers", exact: true }).click();
+    await page
+      .getByRole("option", {
+        name: "Claude Code Starts a new conversation in this pane",
+        exact: true,
+      })
+      .click();
+    await page.getByRole("option", { name: "Fixture claude model", exact: true }).click();
+    const claude = page.getByRole("region", { name: "Claude Code account connection" });
+    await expect(claude).toBeVisible();
+    await claude.getByRole("button", { name: "Dismiss account connection" }).click();
+    await expect(claude).toHaveCount(0);
+
+    // Reopened from one pane, a notice is back for the rest as well.
+    await page.getByRole("button", { name: "Connect account", exact: true }).first().click();
+    await expect(claude).toBeVisible();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

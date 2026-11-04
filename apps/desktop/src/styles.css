@@ -739,6 +739,15 @@ html[data-pane-resizing="row"] * {
     padding: 2px;
   }
 }
+/* Past two lines the account prompt's sentence costs more than it says; its title stands alone. */
+.account-prompt {
+  container: account-prompt / inline-size;
+}
+@container account-prompt (max-width: 190px) {
+  .account-prompt-body {
+    display: none;
+  }
+}
 /*
  * A chat pane keeps its composer whole and at the bottom, whatever its height. As height runs out
  * the start screen gives up the other ways to start, then its icon, then its heading, in that order,
