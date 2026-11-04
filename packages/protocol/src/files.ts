@@ -18,6 +18,9 @@ export const MAX_DOWNLOAD_BYTES = MAX_PREVIEW_BYTES;
 export const FILE_RANGE_DOWNLOAD_CAPABILITY = "file-range-downloads";
 export const MAX_RANGE_DOWNLOAD_BYTES = 1024 * 1024 * 1024;
 export const DOWNLOAD_RANGE_BYTES = 512 * 1024;
+/** Where a path from an agent's message really is, when it is not where the path says. */
+export const FILE_LOCATE_CAPABILITY = "file-locate";
+export const MAX_LOCATED_FILES = 5;
 export const PREVIEW_MIME_TYPES = [
   "application/pdf",
   "image/png",
@@ -50,6 +53,7 @@ export const FileRequestSchema = z.object({
     z.object({ kind: z.literal("read"), ...Target }),
     z.object({ kind: z.literal("preview"), ...Target }),
     z.object({ kind: z.literal("download"), ...Target }),
+    z.object({ kind: z.literal("locate"), ...Target, path: Path.min(1) }),
     z.object({
       kind: z.literal("download-range"),
       ...Target,
@@ -134,6 +138,11 @@ export const FileResultSchema = z.object({
     z.object({ status: z.literal("preview"), preview: FilePreviewSchema }),
     z.object({ status: z.literal("downloaded"), download: FileDownloadSchema }),
     z.object({ status: z.literal("range"), range: FileRangeSchema }),
+    z.object({
+      status: z.literal("located"),
+      /** Best first; empty when nothing matches. */
+      paths: z.array(Path).max(MAX_LOCATED_FILES),
+    }),
     z.object({ status: z.literal("written"), file: ProjectFileSchema }),
     z.object({ status: z.literal("created"), entry: FileEntrySchema }),
     z.object({ status: z.literal("conflict"), message: z.string() }),

@@ -15,6 +15,7 @@ import remarkGfm from "remark-gfm";
 import { Check, Copy, ImageOff } from "lucide-react";
 import type { AgentItem } from "@concors/protocol";
 import { downloadProjectFile } from "@/files/download";
+import { locateFileTarget } from "@/files/locate";
 import { copyText } from "@/lib/clipboard";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { openExternal, openPreview } from "@/tauri/open-external";
@@ -183,7 +184,11 @@ function MarkdownLink({ children: content, href, node: _node, ...props }: LinkPr
           void (await saveFile({
             name: target.path.split("/").pop() || "download",
             mime: "application/octet-stream",
-            data: await downloadProjectFile(connection, target, onProgress),
+            data: await downloadProjectFile(
+              connection,
+              await locateFileTarget(connection, target),
+              onProgress,
+            ),
           }))
       : undefined;
   return (
