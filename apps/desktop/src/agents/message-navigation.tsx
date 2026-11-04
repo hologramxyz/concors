@@ -1,6 +1,16 @@
-import { useEffect, useId, useRef, useState, type RefObject } from "react";
+import { useContext, useEffect, useId, useRef, useState, type RefObject } from "react";
 import { List } from "lucide-react";
 import { Popover } from "radix-ui";
+import { CompactLayoutContext } from "@/components/compact-layout";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { ControlTooltip } from "./control-tooltip";
 import type { MessageEntry } from "./message-index";
 
@@ -24,6 +34,7 @@ export function MessageNavigation({
   hasNewer: boolean;
 }) {
   const titleId = useId();
+  const compact = useContext(CompactLayoutContext);
   const [hovered, setHovered] = useState<number | null>(null);
   const [focused, setFocused] = useState<number | null>(null);
   const [active, setActive] = useState<string | null>(null);
@@ -104,6 +115,49 @@ export function MessageNavigation({
   };
   if (!entries.length && !loading && !error && !hasEarlier) return null;
   const problem = jumpError ?? error;
+  const list = (
+    <>
+      {hasEarlier && (
+        <p className="px-2 py-2 text-xs text-muted-foreground">
+          Scroll up in the conversation to load earlier messages.
+        </p>
+      )}
+      {error && (
+        <button
+          className="w-full rounded-lg px-2 py-2 text-left text-sm hover:bg-accent"
+          onClick={onRetry}
+        >
+          Retry loading messages
+        </button>
+      )}
+      {entries.map((entry, index) => (
+        <button
+          key={entry.id}
+          disabled={jumping}
+          aria-current={entry.id === active ? "location" : undefined}
+          className="flex w-full gap-2.5 rounded-lg px-2 py-2 text-left text-sm hover:bg-accent disabled:opacity-50 aria-[current=location]:bg-accent/60"
+          onClick={() => void jump(entry)}
+        >
+          <span className="w-5 shrink-0 text-muted-foreground tabular-nums">{index + 1}</span>
+          <span className="line-clamp-2 min-w-0 break-words">{entry.preview}</span>
+        </button>
+      ))}
+    </>
+  );
+  const notes = (
+    <>
+      {(loading || jumping) && (
+        <p role="status" className="px-2 pt-2 pb-1 text-xs text-muted-foreground">
+          {jumping ? "Finding message…" : "Loading messages…"}
+        </p>
+      )}
+      {problem && (
+        <p role="alert" className="px-2 pt-2 pb-1 text-xs text-destructive">
+          {problem}
+        </p>
+      )}
+    </>
+  );
   return (
     <>
       <nav
@@ -184,75 +238,64 @@ export function MessageNavigation({
           );
         })}
       </nav>
-      <Popover.Root open={open} onOpenChange={setOpen}>
-        <ControlTooltip text="Your messages" hidden={open} side="bottom">
-          <Popover.Trigger
-            type="button"
-            aria-label="Browse your messages"
-            className="message-list-trigger"
-          >
-            <List className="size-4" />
-          </Popover.Trigger>
-        </ControlTooltip>
-        {/*
-          Holds the button's place: wide panes hide the button but can still open this on a retry.
-          It goes after the trigger, which registers itself as the anchor until it knows of this one.
-        */}
-        <Popover.Anchor className="message-list-anchor" />
-        <Popover.Portal>
-          <Popover.Content
-            aria-labelledby={titleId}
-            side="bottom"
-            align="end"
-            sideOffset={6}
-            collisionPadding={12}
-            className="z-50 w-72 max-w-[calc(100vw-24px)] overflow-hidden rounded-[calc(var(--radius-lg)+(0.375rem+1px)*var(--concentric))] border bg-popover p-1.5 text-popover-foreground shadow-lg"
-          >
-            <p id={titleId} className="px-2 pt-1 pb-1.5 text-sm font-medium">
-              Your messages
-            </p>
-            <div className="chat-scroll max-h-72 overflow-auto">
-              {hasEarlier && (
-                <p className="px-2 py-2 text-xs text-muted-foreground">
-                  Scroll up in the conversation to load earlier messages.
-                </p>
-              )}
-              {error && (
-                <button
-                  className="w-full rounded-lg px-2 py-2 text-left text-sm hover:bg-accent"
-                  onClick={onRetry}
-                >
-                  Retry loading messages
-                </button>
-              )}
-              {entries.map((entry, index) => (
-                <button
-                  key={entry.id}
-                  disabled={jumping}
-                  aria-current={entry.id === active ? "location" : undefined}
-                  className="flex w-full gap-2.5 rounded-lg px-2 py-2 text-left text-sm hover:bg-accent disabled:opacity-50 aria-[current=location]:bg-accent/60"
-                  onClick={() => void jump(entry)}
-                >
-                  <span className="w-5 shrink-0 text-muted-foreground tabular-nums">
-                    {index + 1}
-                  </span>
-                  <span className="line-clamp-2 min-w-0 break-words">{entry.preview}</span>
-                </button>
-              ))}
-            </div>
-            {(loading || jumping) && (
-              <p role="status" className="px-2 pt-2 pb-1 text-xs text-muted-foreground">
-                {jumping ? "Finding message…" : "Loading messages…"}
+      {compact ? (
+        // On a phone it is the drawer every other sheet is: a popover there is small to reach and
+        // has no way to close it but a tap elsewhere.
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <button
+              type="button"
+              aria-label="Browse your messages"
+              className="message-list-trigger"
+            >
+              <List className="size-4" />
+            </button>
+          </DialogTrigger>
+          <DialogContent closeLabel="Close messages" className="overflow-hidden">
+            <DialogHeader>
+              <DialogTitle>Your messages</DialogTitle>
+              <DialogDescription>Jump to a message in this conversation.</DialogDescription>
+            </DialogHeader>
+            <DialogBody>
+              {list}
+              {notes}
+            </DialogBody>
+          </DialogContent>
+        </Dialog>
+      ) : (
+        <Popover.Root open={open} onOpenChange={setOpen}>
+          <ControlTooltip text="Your messages" hidden={open} side="bottom">
+            <Popover.Trigger
+              type="button"
+              aria-label="Browse your messages"
+              className="message-list-trigger"
+            >
+              <List className="size-4" />
+            </Popover.Trigger>
+          </ControlTooltip>
+          {/*
+            Holds the button's place: wide panes hide the button but can still open this on a retry.
+            It goes after the trigger, which registers itself as the anchor until it knows of this one.
+          */}
+          <Popover.Anchor className="message-list-anchor" />
+          <Popover.Portal>
+            <Popover.Content
+              aria-labelledby={titleId}
+              side="bottom"
+              align="end"
+              sideOffset={6}
+              collisionPadding={12}
+              className="z-50 w-72 max-w-[calc(100vw-24px)] overflow-hidden rounded-[calc(var(--radius-lg)+(0.375rem+1px)*var(--concentric))] border bg-popover p-1.5 text-popover-foreground shadow-lg"
+            >
+              <p id={titleId} className="px-2 pt-1 pb-1.5 text-sm font-medium">
+                Your messages
               </p>
-            )}
-            {problem && (
-              <p role="alert" className="px-2 pt-2 pb-1 text-xs text-destructive">
-                {problem}
-              </p>
-            )}
-          </Popover.Content>
-        </Popover.Portal>
-      </Popover.Root>
+              <div className="chat-scroll max-h-72 overflow-auto">{list}</div>
+              {notes}
+            </Popover.Content>
+          </Popover.Portal>
+        </Popover.Root>
+      )}
       {problem && !open && (
         <button
           onClick={() => setOpen(true)}
