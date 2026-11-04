@@ -27,11 +27,20 @@ test("a sub-agent's conversation opens beside its chat, read-only, and follows i
 
     const row = page.getByLabel("Sub-agent activity");
     await expect(row).toContainText("Check the test coverage");
-    await row.getByRole("button", { name: "Open agent conversation", exact: true }).click();
+    await row.getByRole("button", { name: "Open agent details", exact: true }).click();
 
-    const panel = page.getByRole("complementary", { name: "Sub-agent conversation" });
+    const panel = page.getByRole("complementary", { name: "Sub-agent details" });
     await expect(panel).toBeVisible();
     await expect(panel.getByRole("status").filter({ hasText: "Working" }).first()).toBeVisible();
+    // Progress first: how far it has got, and the plan it set itself.
+    const progress = panel.getByRole("log", { name: "Sub-agent progress" });
+    await expect(progress.getByRole("list", { name: "Steps" })).toContainText(
+      "pnpm test --coverage",
+    );
+    await expect(panel.getByLabel("Agent plan")).toContainText("1 of 2 tasks");
+    await expect(panel.getByLabel("Agent plan")).toContainText("Measure coverage");
+    await page.screenshot({ path: test.info().outputPath("sub-agent-progress.png") });
+    await panel.getByRole("tab", { name: "conversation" }).click();
     const timeline = panel.getByRole("log", { name: "Sub-agent timeline" });
     // Drawn as the chat draws its own: the prompt, then the command it ran.
     await expect(timeline).toContainText("Check the test coverage");
@@ -67,6 +76,14 @@ test("a sub-agent's conversation opens beside its chat, read-only, and follows i
     await page.keyboard.press("Escape");
     await expect(panel).toHaveCount(0);
     await expect(row).toBeVisible();
+    // Closing the panel is all Escape did: the turn behind it is still running. Stopping one takes
+    // a moment to show, so give it the chance to.
+    await page.waitForTimeout(1000);
+    await expect(row).toHaveAttribute("aria-busy", "true");
+    await expect(page.getByRole("textbox", { name: "Message Codex" })).toHaveAttribute(
+      "placeholder",
+      /Steer/,
+    );
     expect(errors).toEqual([]);
   } finally {
     await rm(directory, { recursive: true, force: true });
@@ -105,15 +122,33 @@ test("a sub-agent sent to the background stays live after its turn ends, until i
     await expect(marker).toHaveAttribute("data-background-agents", "1");
     await expect(marker).toHaveAttribute("data-row-state", "working");
     await expect(agents.getByRole("img", { name: "Agent status: Ready" })).toBeVisible();
-    await row.getByRole("button", { name: "Open agent conversation", exact: true }).click();
-    const panel = page.getByRole("complementary", { name: "Sub-agent conversation" });
-    await expect(panel.getByRole("status").filter({ hasText: "Working" }).first()).toBeVisible();
 
-    // It finishes on its own and reports back.
+    // Pinned above the composer however far the timeline moves on, and it opens from there.
+    const pinned = page.getByRole("region", { name: "Running sub-agents" });
+    const pin = pinned.getByRole("button", { name: /Explore/ });
+    await expect(pin).toContainText("Check the test coverage");
+    await expect(pin).toContainText("pnpm test --coverage");
+    await expect(pin).toContainText(/1 step/);
+    await page.screenshot({ path: test.info().outputPath("sub-agent-pinned.png") });
+    await pin.click();
+    const panel = page.getByRole("complementary", { name: "Sub-agent details" });
+    await expect(panel.getByRole("status").filter({ hasText: "Working" }).first()).toBeVisible();
+    await expect(pin).toHaveAttribute("aria-pressed", "true");
+    // Pressing it again closes the panel, and once more brings it back.
+    await pin.click();
+    await expect(panel).toHaveCount(0);
+    await pin.click();
+    await expect(panel).toBeVisible();
+
+    // It finishes on its own and reports back, and leaves the pinned list.
     await expect(row).toHaveAttribute("data-tool-status", "completed", { timeout: 10_000 });
     await expect(row).toHaveAttribute("aria-busy", "false");
     await expect(marker).toHaveCount(0);
+    await expect(pinned).toHaveCount(0);
     await expect(panel.getByRole("status").filter({ hasText: "Working" })).toHaveCount(0);
+    await expect(panel.getByRole("log", { name: "Sub-agent progress" })).toContainText(
+      "Coverage is 82%.",
+    );
     await page.keyboard.press("Escape");
     await row.getByRole("button", { expanded: false }).click();
     await expect(row).toContainText("Coverage is 82%.");

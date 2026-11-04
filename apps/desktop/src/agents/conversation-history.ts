@@ -2,6 +2,8 @@ import type { AgentConversation, AgentInfo, AgentItem } from "@concors/protocol"
 import { mergeItems } from "@concors/client-core";
 
 export const HISTORY_WINDOW = 240;
+/** Sub-agent rows remembered outside the window, so one that just finished still reads as done. */
+const KEPT_SUB_AGENTS = 32;
 export type HistoryDirection = "latest" | "earlier" | "newer";
 export interface HistoryCursor {
   before?: number;
@@ -9,6 +11,11 @@ export interface HistoryCursor {
 }
 export interface HistorySnapshot {
   items: AgentItem[];
+  /**
+   * Sub-agent rows kept current whether or not they are in `items`: the window moves with the
+   * reader, and what is still running stays on show wherever that is.
+   */
+  subAgents: AgentItem[];
   hasEarlier: boolean;
   hasNewer: boolean;
   ready: boolean;
@@ -21,6 +28,7 @@ export interface HistorySnapshot {
 export class ConversationHistory {
   private snapshot: HistorySnapshot = {
     items: [],
+    subAgents: [],
     hasEarlier: false,
     hasNewer: false,
     ready: false,
@@ -64,6 +72,7 @@ export class ConversationHistory {
     this.newest = -1;
     this.update({
       items: [],
+      subAgents: [],
       ready: false,
       hasEarlier: false,
       hasNewer: false,
@@ -73,6 +82,7 @@ export class ConversationHistory {
   };
   receive = (item: AgentItem) => {
     this.newest = Math.max(this.newest, item.position);
+    this.trackSubAgent(item);
     const current = this.snapshot;
     // Until the latest page arrives it includes everything saved so far. Older daemons replay a
     // chat's whole history as items before answering its first read, which drew it from the top.
@@ -86,6 +96,12 @@ export class ConversationHistory {
       else this.update({ items: items.slice(0, HISTORY_WINDOW), hasNewer: true });
     } else this.update({ items });
   };
+  private trackSubAgent(item: AgentItem) {
+    if (item.presentation?.type !== "sub_agent") return;
+    const known = this.snapshot.subAgents;
+    if (item.status !== "running" && !known.some((entry) => entry.id === item.id)) return;
+    this.update({ subAgents: mergeItems(known, [item]).slice(-KEPT_SUB_AGENTS) });
+  }
   /** Jump through the message index without retaining every intervening tool result. */
   reveal = async (position: number): Promise<void> => {
     this.cancel();
@@ -221,6 +237,13 @@ export class ConversationHistory {
       }
       this.update({
         items,
+        // A read says what runs now; rows already seen to finish stay until they are replaced.
+        subAgents: page.liveSubAgents
+          ? mergeItems(
+              (reset ? [] : live.subAgents).filter((item) => item.status !== "running"),
+              page.liveSubAgents,
+            ).slice(-KEPT_SUB_AGENTS)
+          : live.subAgents,
         hasEarlier,
         hasNewer,
         ready: true,
