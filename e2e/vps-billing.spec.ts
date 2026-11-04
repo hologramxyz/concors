@@ -363,6 +363,8 @@ test("badges share one size, with room above and below their text", async ({ pag
       });
     }
     await page.emulateMedia({ colorScheme: "light" });
+    // Badges fade between schemes; the next one measured must not be caught mid-fade.
+    await page.waitForTimeout(400);
   };
   await openMachines(page);
   await measure("Current", true);

@@ -14,6 +14,7 @@ import { copyText } from "@/lib/clipboard";
 import { openExternal } from "@/tauri/open-external";
 import { accountName, UNNAMED_SUBSCRIPTION } from "./account-name";
 import { accountChanges, requestAccount } from "./account-requests";
+import { accountPromptKey, setAccountPromptDismissed } from "./dismissed-account-prompts";
 import { invalidateModelCatalogs } from "./model-catalog";
 
 /**
@@ -73,6 +74,13 @@ export function AccountConnectDialog({
         )
           next.message = "Sign-in expired or was cancelled. Try again.";
         if (next.status === "connected" && latest.current?.status !== "connected") {
+          setAccountPromptDismissed(
+            accountPromptKey(
+              connection.workspace?.machineId ?? connection.endpoint.url,
+              provider.id,
+            ),
+            false,
+          );
           invalidateModelCatalogs(connection);
           accountChanges.dispatchEvent(new Event("change"));
           changed.current?.();

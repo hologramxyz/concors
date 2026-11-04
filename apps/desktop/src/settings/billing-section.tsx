@@ -113,7 +113,7 @@ export function BillingSection({ organization }: BillingSectionProps) {
                       (a.monthlyPrice?.amount ?? Infinity) - (b.monthlyPrice?.amount ?? Infinity),
                   )
                   .map((price) => (
-                    <span key={price.size} className="whitespace-nowrap">
+                    <span key={price.size} className="min-w-0 break-words">
                       <span className="capitalize">{price.size}</span>{" "}
                       {formatMonthly(price.monthlyPrice)}
                     </span>

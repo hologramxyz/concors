@@ -349,7 +349,7 @@ test("mobile GitHub account settings and repository picker use the selected mana
   const ui = await enter(page);
   const profile = await account(ui);
   await profile.getByRole("button", { name: "Settings", exact: true }).click();
-  await expect(sheet(ui, "Settings").getByText("Connected across your VPSs.")).toBeVisible();
+  await expect(sheet(ui, "Settings").getByText("Connected", { exact: true })).toBeVisible();
   await sheet(ui, "Settings").getByRole("button", { name: "Disconnect", exact: true }).click();
   await expect(ui.locator("[data-account-avatar] img")).toHaveCount(0);
   const prompts: string[] = [];

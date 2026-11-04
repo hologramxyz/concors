@@ -276,6 +276,8 @@ test("Resources uses the page header, and a machine without process inspection s
   await expect(main.getByRole("textbox", { name: "Filter resources" })).toHaveCount(0);
   await expect(page.getByText("About resource usage")).toHaveCount(0);
   await page.unrouteAll({ behavior: "ignoreErrors" });
+  // That removed the sign-in mocks too.
+  await signedIn(page);
   await inspect([]);
   await expect(page.getByText("About resource usage")).toBeVisible();
   await expect(empty).toHaveCount(0);
