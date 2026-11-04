@@ -17,7 +17,12 @@ const localIdentifier = process.env.CONCORS_IOS_BUNDLE_IDENTIFIER ?? "dev.concor
 if (
   personalTeam &&
   (!/^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/.test(localIdentifier) ||
-    ["dev.concors.mobile", "dev.concors.mobile.preview"].includes(localIdentifier))
+    [
+      "xyz.hologram.concors",
+      "xyz.hologram.concors.preview",
+      "dev.concors.mobile",
+      "dev.concors.mobile.preview",
+    ].includes(localIdentifier))
 )
   throw new Error(
     "Use a unique reverse-domain CONCORS_IOS_BUNDLE_IDENTIFIER, separate from store/preview IDs.",
@@ -32,10 +37,10 @@ if (webBasePath && (production || !/^\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/.tes
   throw new Error(
     "CONCORS_MOBILE_WEB_BASE_PATH requires a preview build and an absolute URL path.",
   );
-const identifier = "dev.concors.mobile";
+const identifier = "xyz.hologram.concors";
 // Public project identifiers, not credentials. Explicit empty values keep local-only builds unlinked.
-const projectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID ?? "cbfccc75-202c-461c-a19d-46419a248dcd";
-const owner = process.env.EXPO_OWNER ?? "opser";
+const projectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID ?? "b928233e-14cd-4e58-95e5-b19d8101bcb6";
+const owner = process.env.EXPO_OWNER ?? "guitong35";
 
 const config: ExpoConfig = {
   name: personalTeam ? "Concors Dev" : production ? "Concors" : "Concors Preview",

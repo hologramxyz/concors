@@ -38,7 +38,7 @@ it("omits paid-only local entitlements without changing production capabilities"
     CONCORS_IOS_PERSONAL_TEAM: "false",
     APP_VARIANT: "production",
   });
-  expect(production.ios.bundleIdentifier).toBe("dev.concors.mobile");
+  expect(production.ios.bundleIdentifier).toBe("xyz.hologram.concors");
   expect(production._internal.modResults.ios.entitlements["aps-environment"]).toBeDefined();
   expect(
     production._internal.modResults.ios.entitlements["com.apple.developer.associated-domains"],

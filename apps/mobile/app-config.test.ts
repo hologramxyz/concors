@@ -14,10 +14,10 @@ it("links the registered Expo project by default without changing the app identi
   vi.stubEnv("EXPO_PUBLIC_EAS_PROJECT_ID", undefined);
   const { default: config } = await import("./app.config");
   expect(config.slug).toBe("concors");
-  expect(config.owner).toBe("opser");
-  expect(config.extra?.eas?.projectId).toBe("cbfccc75-202c-461c-a19d-46419a248dcd");
+  expect(config.owner).toBe("guitong35");
+  expect(config.extra?.eas?.projectId).toBe("b928233e-14cd-4e58-95e5-b19d8101bcb6");
   expect(config.name).toBe("Concors");
-  expect(config.ios?.bundleIdentifier).toBe("dev.concors.mobile");
+  expect(config.ios?.bundleIdentifier).toBe("xyz.hologram.concors");
 });
 
 it("explains the microphone on iOS and keeps recording blocked on Android", async () => {
@@ -76,6 +76,8 @@ it.each([
   { EAS_BUILD: "true" },
   { CONCORS_IOS_BUNDLE_IDENTIFIER: "dev.concors.mobile" },
   { CONCORS_IOS_BUNDLE_IDENTIFIER: "dev.concors.mobile.preview" },
+  { CONCORS_IOS_BUNDLE_IDENTIFIER: "xyz.hologram.concors" },
+  { CONCORS_IOS_BUNDLE_IDENTIFIER: "xyz.hologram.concors.preview" },
   { CONCORS_IOS_BUNDLE_IDENTIFIER: "not an identifier" },
   { CONCORS_IOS_TEAM_ID: "wrong" },
 ])("rejects invalid or non-local Personal Team configuration: %j", async (overrides) => {
@@ -104,7 +106,10 @@ it("keeps candidate builds production-configured and candidate uploads internal-
   });
   expect(eas.build.production).toEqual({ extends: "candidate" });
   expect(eas.submit.candidate.android).toEqual({ track: "internal", releaseStatus: "draft" });
-  expect(eas.submit.candidate.ios).toEqual({ ascAppId: "6812901549" });
+  expect(eas.submit.candidate.ios).toEqual({
+    appleTeamId: "9WN4P724M2",
+    ascAppId: "6817622624",
+  });
   expect(eas.submit.production.ios).toEqual(eas.submit.candidate.ios);
 });
 
@@ -124,8 +129,8 @@ it("uses the production identity for candidates without a development launcher s
   const { default: config } = await import("./app.config");
   expect(config.version).toBe(version);
   expect(config.name).toBe("Concors");
-  expect(config.ios?.bundleIdentifier).toBe("dev.concors.mobile");
-  expect(config.android?.package).toBe("dev.concors.mobile");
+  expect(config.ios?.bundleIdentifier).toBe("xyz.hologram.concors");
+  expect(config.android?.package).toBe("xyz.hologram.concors");
   expect(config.scheme).toBe("concors");
   expect(config.plugins).toContainEqual(["expo-dev-client", { addGeneratedScheme: false }]);
   expect(config.plugins).toContainEqual(["expo-secure-store", { faceIDPermission: false }]);
@@ -143,8 +148,8 @@ it("keeps preview identity separate and rejects misspelled variants", async () =
   vi.stubEnv("APP_VARIANT", "preview");
   const { default: preview } = await import("./app.config");
   expect(preview.name).toBe("Concors Preview");
-  expect(preview.ios?.bundleIdentifier).toBe("dev.concors.mobile.preview");
-  expect(preview.android?.package).toBe("dev.concors.mobile.preview");
+  expect(preview.ios?.bundleIdentifier).toBe("xyz.hologram.concors.preview");
+  expect(preview.android?.package).toBe("xyz.hologram.concors.preview");
   expect(preview.ios?.associatedDomains).toBeUndefined();
   vi.resetModules();
   vi.stubEnv("APP_VARIANT", "prodution");

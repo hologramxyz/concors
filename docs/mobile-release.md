@@ -61,7 +61,7 @@ policies, particularly remote execution and digital services.
 ## Accounts and builds
 
 1. Confirm team Apple/Google ownership, verification and agreements. Reserve
-   `dev.concors.mobile` or change `app.config.ts` before creating records. Previews use `.preview`.
+   `xyz.hologram.concors` or change `app.config.ts` before creating records. Previews use `.preview`.
 2. Link a team Expo project from `apps/mobile`. Dynamic config needs the returned UUID
    recorded as `EXPO_PUBLIC_EAS_PROJECT_ID` locally and in EAS environments; `eas init`
    cannot be assumed to rewrite `app.config.ts`. Candidate/production checks require
