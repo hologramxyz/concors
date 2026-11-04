@@ -14,6 +14,7 @@ import {
 } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { openExternal } from "@/tauri/open-external";
+import { accountChanges } from "./account-requests";
 import {
   accountPromptKey,
   setAccountPromptDismissed,
@@ -251,7 +252,11 @@ function AccountPrompt({
       if (!latest.current?.challenge) void request({ type: "read" }, true);
     };
     window.addEventListener("focus", check);
-    return () => window.removeEventListener("focus", check);
+    accountChanges.addEventListener("change", check);
+    return () => {
+      window.removeEventListener("focus", check);
+      accountChanges.removeEventListener("change", check);
+    };
   }, [hidden, canEdit, request, checkInstall]);
   useEffect(() => {
     if (hidden || account?.status !== "pending") return;
@@ -267,16 +272,7 @@ function AccountPrompt({
   }, [installPrompt, onInstallPrompt]);
   useEffect(() => () => onInstallPrompt?.(false), [onInstallPrompt]);
   if (!canEdit) return null;
-  if (hidden)
-    return (
-      <Button
-        variant="ghost"
-        className="text-muted-foreground"
-        onClick={() => setAccountPromptDismissed(dismissalKey, false)}
-      >
-        Connect account
-      </Button>
-    );
+  if (hidden) return null;
   // A failed check may only mean the CLI is missing; wait to know before showing it.
   if (cli === undefined && troubled) return null;
   const label = agent.providerLabel ?? agentProviderName(agent.provider);

@@ -195,33 +195,41 @@ for (const [provider, label] of [
       await page.reload();
       await expect(composer).toBeEnabled();
       await expect(prompt).toHaveCount(0);
-      await page.getByRole("button", { name: "Connect account", exact: true }).click();
-      await prompt
-        .getByRole("button", {
-          name:
-            provider === "codex"
-              ? "Sign in with ChatGPT"
-              : provider === "opencode"
-                ? "Add API key"
-                : "Connect account",
-          exact: true,
-        })
-        .click();
-      await expect(prompt.getByRole("button", { name: "Cancel", exact: true })).toBeVisible();
-      await prompt.screenshot({ path: test.info().outputPath("account-prompt.png") });
+      // The link that used to stay above the composer is gone; the model menu offers it instead.
+      await expect(page.getByRole("button", { name: "Connect account", exact: true })).toHaveCount(
+        0,
+      );
+      const openModelMenu = () =>
+        page.getByRole("button", { name: "Agent and model", exact: true }).click();
+      const footer = page.getByRole("button", { name: `Connect ${label} account`, exact: true });
+      await openModelMenu();
+      await footer.click();
+      const signIn = page.getByRole("dialog", { name: `${label} default account` });
+      await expect(signIn).toBeVisible();
+      // The menu gets out of the way, and with one way in the sign-in has already started.
+      await expect(page.getByRole("option")).toHaveCount(0);
+      await expect(signIn.getByRole("button", { name: "Cancel", exact: true })).toBeVisible();
+      await signIn.screenshot({ path: test.info().outputPath("account-dialog.png") });
       if (provider === "codex") {
-        await expect(prompt).toContainText("TEST-CODE");
-        await expect(prompt.getByRole("button", { name: "Open sign-in page" })).toBeVisible();
+        await expect(signIn).toContainText("TEST-CODE");
+        await expect(signIn.getByRole("button", { name: "Open sign-in page" })).toBeVisible();
       } else {
         // Password inputs have no implicit textbox role.
-        await prompt
+        await signIn
           .getByLabel(provider === "claude" ? "Authorization code" : "Provider API key", {
             exact: true,
           })
           .fill("test-private-credential");
-        await prompt.getByRole("button", { name: "Connect", exact: true }).click();
+        await signIn.getByRole("button", { name: "Connect", exact: true }).click();
       }
-      await expect(prompt).toHaveCount(0);
+      await expect(signIn).toContainText("Connected");
+      await signIn.getByRole("button", { name: "Done", exact: true }).click();
+      await expect(signIn).toHaveCount(0);
+      // Signed in, the footer is gone.
+      await openModelMenu();
+      await expect(page.getByRole("option").first()).toBeVisible();
+      await expect(footer).toHaveCount(0);
+      await page.keyboard.press("Escape");
       await expect(page.getByRole("status").filter({ hasText: `${label} connected` })).toHaveCount(
         0,
       );
@@ -362,6 +370,38 @@ test("Codex sign-in keeps its code across a tab switch and copies it for the sig
     await expect.poll(() => connected, { timeout: 10_000 }).toBe(true);
     await expect(prompt).toHaveCount(0);
     expect(cancels).toBe(0);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("another provider's page of the model menu connects it without switching the chat", async ({
+  page,
+}) => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-account-footer-"));
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Model menu footer", directory);
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
+    await chooseProvider(page);
+    const composer = page.getByRole("textbox", { name: "Message Codex" });
+    await expect(composer).toBeEnabled();
+    await page.getByRole("button", { name: "Agent and model", exact: true }).click();
+    await page.getByRole("button", { name: "Back to providers", exact: true }).click();
+    await page
+      .getByRole("option", {
+        name: "Claude Code Starts a new conversation in this pane",
+        exact: true,
+      })
+      .click();
+    await page.getByRole("button", { name: "Connect Claude Code account", exact: true }).click();
+    const signIn = page.getByRole("dialog", { name: "Claude Code default account" });
+    await expect(signIn.getByRole("button", { name: "Cancel", exact: true })).toBeVisible();
+    await signIn.getByRole("button", { name: "Close" }).click();
+    await expect(signIn).toHaveCount(0);
+    await expect(composer).toBeEnabled();
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

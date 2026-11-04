@@ -272,9 +272,9 @@ test("dismissing a sign-in notice hides it in every pane and tab, for that provi
     await claude.getByRole("button", { name: "Dismiss account connection" }).click();
     await expect(claude).toHaveCount(0);
 
-    // Reopened from one pane, a notice is back for the rest as well.
-    await page.getByRole("button", { name: "Connect account", exact: true }).first().click();
-    await expect(claude).toBeVisible();
+    // No link stays behind above the composer: the model menu is the way back.
+    await expect(page.getByRole("button", { name: "Connect account", exact: true })).toHaveCount(0);
+    await expect(composer.locator(".chat-prompts")).toBeHidden();
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
