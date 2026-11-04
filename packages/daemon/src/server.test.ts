@@ -150,6 +150,7 @@ describe("WebSocket handshake", () => {
           "file-previews",
           "file-downloads",
           "file-range-downloads",
+          "file-locate",
           "heartbeat",
           "machine-mcp-servers",
           "machine-plugins",
