@@ -4,7 +4,7 @@ import { chooseProvider } from "./support/agents.ts";
 import { tab } from "./support/tabs.ts";
 import { reportNonMac } from "./support/platform.ts";
 const KEY = "concors.shortcuts.v1";
-const search = "Search workspaces, agents and tabs";
+const search = "Search workspaces and tabs";
 // A collapsed sidebar stays mounted, inert, beside the title bar's copy of its search button.
 const searchButton = (page: Page) =>
   page.getByRole("button", { name: "Search", exact: true }).and(page.locator(":not([inert] *)"));

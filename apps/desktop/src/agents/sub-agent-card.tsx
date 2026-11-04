@@ -34,9 +34,10 @@ export function SubAgentCard({
   const elapsed = useElapsed(item.createdAt, running);
   const current = running ? steps.findLast((step) => step.status === "running") : undefined;
   const label = data?.agentType?.trim() || "Sub-agent";
-  const summary = [stepCount(steps), running && elapsed > 0 ? formatDuration(elapsed) : null]
-    .filter(Boolean)
-    .join(", ");
+  const summary = [
+    stepCount(steps),
+    running && elapsed > 0 ? formatDuration(elapsed) : null,
+  ].filter(Boolean);
   return (
     <article
       data-tool-status={item.status}
@@ -72,9 +73,11 @@ export function SubAgentCard({
               >
                 {item.text}
               </span>
-              {summary && (
-                <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                  {summary}
+              {summary.length > 0 && (
+                <span className="flex shrink-0 gap-2 text-xs text-muted-foreground tabular-nums">
+                  {summary.map((part) => (
+                    <span key={part}>{part}</span>
+                  ))}
                 </span>
               )}
               {(failed || item.status === "interrupted") && (

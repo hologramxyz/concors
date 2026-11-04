@@ -200,7 +200,7 @@ export function SubAgentPanel({
               <p className="text-xs text-muted-foreground tabular-nums">
                 {[stepCount(steps), running && elapsed > 0 ? formatDuration(elapsed) : null]
                   .filter(Boolean)
-                  .join(" · ") || (running ? "Starting…" : "No steps reported.")}
+                  .join(", ") || (running ? "Starting…" : "No steps reported.")}
               </p>
               <Steps steps={steps} />
               {steps.length >= SUB_AGENT_STEPS && (

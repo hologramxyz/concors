@@ -1255,10 +1255,10 @@ test("custom shortcuts persist through the mobile preference bridge and renderer
   await openSettings(ui);
   await choose(ui, "Settings section", "shortcuts");
   await ui
-    .getByRole("button", { name: "Edit Search workspaces, agents and tabs shortcuts", exact: true })
+    .getByRole("button", { name: "Edit Search workspaces and tabs shortcuts", exact: true })
     .click();
   const editor = ui.getByRole("dialog", {
-    name: "Edit shortcut: Search workspaces, agents and tabs",
+    name: "Edit shortcut: Search workspaces and tabs",
     exact: true,
   });
   await editor.getByRole("button", { name: "Type combinations instead" }).click();

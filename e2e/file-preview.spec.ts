@@ -69,7 +69,7 @@ test("videos play in a file tab, and one that cannot play says so", async ({ pag
       0,
     );
     await expect(video).toHaveAttribute("controls");
-    await expect(tab.getByText(/Read-only preview · \d+ (B|KB)/)).toBeVisible();
+    await expect(tab.getByText(/Read-only preview, \d+ (B|KB)/)).toBeVisible();
 
     await page.screenshot({ path: test.info().outputPath("video.png") });
 

@@ -407,9 +407,9 @@ test("each app teaches its own main shortcut, and Settings lists the rest beside
   await expect(row("New tab")).not.toContainText("also");
   await expect(row("New tab").getByRole("img", { name: "Command" })).toHaveCount(0);
   await expect(row("Next tab")).not.toContainText("also");
-  await expect(row("Search workspaces, agents and tabs").locator("kbd")).toHaveCount(1);
-  await expect(row("Search workspaces, agents and tabs")).toContainText("also");
-  await expect(row("Search workspaces, agents and tabs")).toContainText("outside terminals");
+  await expect(row("Search workspaces and tabs").locator("kbd")).toHaveCount(1);
+  await expect(row("Search workspaces and tabs")).toContainText("also");
+  await expect(row("Search workspaces and tabs")).toContainText("outside terminals");
   await expect(row("Rename tab")).toContainText("focused tab");
   await expect(page.getByRole("main")).not.toContainText("Desktop app only");
   await expect(page.getByRole("main")).not.toContainText("release the first combination");

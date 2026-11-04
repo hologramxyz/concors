@@ -2,6 +2,7 @@ import { useContext, useEffect, useState } from "react";
 import { Download, RefreshCw } from "lucide-react";
 import { FILE_RANGE_DOWNLOAD_CAPABILITY } from "@concors/protocol";
 import { CompactLayoutContext } from "@/components/compact-layout";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { Button } from "@/components/ui/button";
 import { canSaveFiles, saveFile } from "@/tauri";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
@@ -117,18 +118,19 @@ export function VideoFileTab({ file }: { file: OpenFile }) {
           {file.path}
         </span>
         {save && (
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            aria-label={
-              saving === null ? "Download video" : `Downloading ${Math.round(saving * 100)}%`
-            }
-            title="Download"
-            disabled={!ready || saving !== null}
-            onClick={() => void save()}
-          >
-            <Download />
-          </Button>
+          <SidebarTooltip place="title-bar" content="Download" disabled={!ready || saving !== null}>
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              aria-label={
+                saving === null ? "Download video" : `Downloading ${Math.round(saving * 100)}%`
+              }
+              disabled={!ready || saving !== null}
+              onClick={() => void save()}
+            >
+              <Download />
+            </Button>
+          </SidebarTooltip>
         )}
         <Button
           size="icon-xs"
@@ -190,8 +192,7 @@ export function VideoFileTab({ file }: { file: OpenFile }) {
         )}
       </div>
       <div className="shrink-0 border-t px-3 py-1 font-mono text-xs text-muted-foreground">
-        Read-only preview
-        {current && "size" in current ? ` · ${formatSize(current.size)}` : ""}
+        Read-only preview{current && "size" in current ? `, ${formatSize(current.size)}` : ""}
       </div>
     </section>
   );
