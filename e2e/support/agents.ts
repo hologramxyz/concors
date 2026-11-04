@@ -22,7 +22,7 @@ export async function chooseProvider(scope: Scope, provider = "Codex", root: Sco
   await composer.click();
   await scope.getByRole("button", { name: "Agent and model", exact: true }).first().click();
   await root.getByRole("button", { name: "Back to providers", exact: true }).click();
-  await root.getByRole("option", { name: new RegExp(`^${provider} `) }).click();
+  await root.getByRole("option", { name: new RegExp(`^${provider}( |$)`) }).click();
   await root.getByRole("option").first().click();
   await expect(
     scope.getByRole("textbox", { name: `Message ${provider}`, exact: true }).first(),

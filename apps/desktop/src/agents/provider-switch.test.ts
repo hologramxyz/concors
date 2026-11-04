@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import type { AgentInfo } from "@concors/protocol";
 import {
   hasConversation,
+  providerState,
   setAsideConversation,
   switchConfirmation,
   switchDescription,
@@ -30,6 +31,19 @@ it("finds the conversation a pane set aside for a provider, and nothing from oth
   expect(switchDescription(agents, claude, "codex")).toBe("Back to its conversation in this pane");
   expect(switchDescription(agents, claude, "opencode")).toBe(
     "Starts a new conversation in this pane",
+  );
+});
+
+it("labels a provider only by a state worth noting", () => {
+  const update = { updateAvailable: true };
+  expect(providerState({ id: "claude" }, "claude")).toBe("Current");
+  expect(providerState({ id: "codex" }, "claude")).toBeUndefined();
+  expect(providerState({ id: "codex", version: update }, "claude")).toBe("Update available");
+  expect(providerState({ id: "claude", version: update }, "claude")).toBe(
+    "Current · Update available",
+  );
+  expect(providerState({ id: "pi", installed: false, version: update }, "claude")).toBe(
+    "Not installed",
   );
 });
 

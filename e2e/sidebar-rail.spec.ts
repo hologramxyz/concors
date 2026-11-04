@@ -230,7 +230,7 @@ test("chats keep their drafts and live status while the sidebar is collapsed", a
     await page.getByRole("button", { name: "Back to providers", exact: true }).click();
     await page
       .getByRole("option", {
-        name: "Claude Code Starts a new conversation in this pane",
+        name: "Claude Code",
         exact: true,
       })
       .click();

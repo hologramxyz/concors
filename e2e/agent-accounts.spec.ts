@@ -173,7 +173,7 @@ for (const [provider, label] of [
         await page.getByRole("button", { name: "Back to providers", exact: true }).click();
         await page
           .getByRole("option", {
-            name: `${label} Starts a new conversation in this pane`,
+            name: label,
             exact: true,
           })
           .click();
@@ -400,7 +400,7 @@ test("another provider's page of the model menu connects it without switching th
     await page.getByRole("button", { name: "Back to providers", exact: true }).click();
     await page
       .getByRole("option", {
-        name: "Claude Code Starts a new conversation in this pane",
+        name: "Claude Code",
         exact: true,
       })
       .click();

@@ -145,6 +145,56 @@ test("a short pane with an existing chat scrolls its messages above a whole comp
   }
 });
 
+test("the wheel over a short pane's composer scrolls the pane, unless a long draft takes it", async ({
+  page,
+  browserName,
+}) => {
+  test.setTimeout(60_000);
+  const { directory, pane } = await chatOverAnotherPane(page, "Short wheel");
+  try {
+    const handle = await splitVertically(page);
+    const top = (await pane.boundingBox())?.y ?? 0;
+    await dragDividerTo(page, handle, top + 85);
+    const conversation = pane.locator(".agent-conversation");
+    const composer = pane.getByRole("textbox", { name: "Message Codex" });
+    const form = pane.locator("form");
+    await page.evaluate(() => {
+      window.addEventListener("wheel", (event) => {
+        document.documentElement.dataset["wheelHandled"] = String(event.defaultPrevented);
+      });
+    });
+    const paneScroll = () => conversation.evaluate((element) => element.scrollTop);
+    const box = await composer.boundingBox();
+    if (!box) throw new Error("No composer");
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+
+    // Part of the composer starts out of view, and scrolling over it brings its bottom edge in.
+    const bottomEdgeShows = async () => {
+      const [outer, inner] = await Promise.all([pane.boundingBox(), form.boundingBox()]);
+      return !!outer && !!inner && inner.y + inner.height <= outer.y + outer.height + 0.5;
+    };
+    expect(await bottomEdgeShows()).toBe(false);
+    await page.mouse.wheel(0, 200);
+    await expect.poll(bottomEdgeShows).toBe(true);
+    await expect(page.locator("html")).toHaveAttribute("data-wheel-handled", "true");
+    await page.mouse.wheel(0, -200);
+    await expect.poll(paneScroll).toBe(0);
+
+    // Playwright's WebKit passes a synthetic wheel over a long draft to the pane; the real one
+    // scrolls the draft, so this half is only meaningful in Chromium.
+    if (browserName !== "chromium") return;
+    await composer.fill("line\n".repeat(12));
+    await composer.evaluate((element) => {
+      element.scrollTop = 0;
+    });
+    await page.mouse.wheel(0, 40);
+    await expect.poll(() => composer.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+    expect(await paneScroll()).toBe(0);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("the agent chips show whole or not at all", async ({ page }) => {
   test.setTimeout(60_000);
   const { directory, pane } = await chatOverAnotherPane(page, "Chip row");
@@ -262,7 +312,7 @@ test("dismissing a sign-in notice hides it in every pane and tab, for that provi
     await page.getByRole("button", { name: "Back to providers", exact: true }).click();
     await page
       .getByRole("option", {
-        name: "Claude Code Starts a new conversation in this pane",
+        name: "Claude Code",
         exact: true,
       })
       .click();

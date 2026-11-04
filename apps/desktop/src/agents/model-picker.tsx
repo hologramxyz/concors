@@ -18,7 +18,7 @@ import { useAgentModelSelection } from "./use-model-selection";
 import { ProviderUpdateFooter, ProviderUpdateNotice } from "./provider-update";
 import { useProviderUpdate } from "./provider-update-state";
 import { useAgents } from "./context";
-import { hasConversation, switchConfirmation, switchDescription } from "./provider-switch";
+import { hasConversation, providerState, switchConfirmation } from "./provider-switch";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -126,10 +126,7 @@ export function AgentModelPicker({
         groups={providers.map((p) => ({
           id: p.id,
           label: p.label ?? agentProviderName(p.id),
-          description:
-            p.installed === false
-              ? "Not installed on this machine"
-              : `${switchDescription(agents, agent, p.id)}${p.version?.updateAvailable ? `. Update available (${p.version.latest})` : ""}`,
+          description: providerState(p, agent.provider),
           icon: <ProviderIcon provider={p.id} />,
           emptyMessage:
             p.error ??

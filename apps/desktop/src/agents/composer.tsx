@@ -43,6 +43,7 @@ import { usePlanUsage } from "./use-plan-usage";
 import { AgentModelPicker } from "./model-picker";
 import { ControlTooltip } from "./control-tooltip";
 import { useClippedControls } from "./use-clipped-controls";
+import { useComposerWheel } from "./composer-wheel";
 import { FastModeToggle } from "./fast-mode-toggle";
 import { useAgents } from "./context";
 import { switchDescription } from "./provider-switch";
@@ -158,6 +159,7 @@ export function AgentComposer({
   const form = useRef<HTMLFormElement>(null);
   const toolbar = useRef<HTMLDivElement>(null);
   useClippedControls(toolbar, !compact);
+  useComposerWheel(form, !compact);
   const shortcutLabel = useShortcutLabels();
   useLayoutEffect(() => {
     if (!native) return;
