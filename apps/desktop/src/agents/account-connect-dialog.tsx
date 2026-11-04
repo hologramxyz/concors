@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { copyText } from "@/lib/clipboard";
 import { openExternal } from "@/tauri/open-external";
+import { accountName, UNNAMED_SUBSCRIPTION } from "./account-name";
 import { accountChanges, requestAccount } from "./account-requests";
 import { invalidateModelCatalogs } from "./model-catalog";
 
@@ -27,7 +28,7 @@ export function AccountConnectDialog({
   onClose,
 }: {
   connection: DaemonConnection;
-  provider: Pick<ProviderStatus, "id" | "label" | "subscription">;
+  provider: Pick<ProviderStatus, "id" | "label" | "subscription"> & { engine?: string | undefined };
   /** For a control that already said "connect": skips the button when there is only one way in. */
   startRightAway?: boolean;
   onChanged?: () => void;
@@ -123,9 +124,13 @@ export function AccountConnectDialog({
   const methods = account?.methods ?? [];
   const selected = methods.find((m) => m.id === method) ?? methods[0];
   const challenge = account?.challenge;
-  const name = provider.subscription?.nickname
-    ? `${provider.label}`
-    : `${provider.label} default account`;
+  const signsInto = accountName(provider.engine, provider.label);
+  // Several subscriptions can share an account name, so a named one is told apart by its label.
+  const nickname = provider.subscription?.nickname;
+  const title =
+    nickname && nickname !== UNNAMED_SUBSCRIPTION
+      ? `Sign in to ${provider.label}`
+      : `Sign in to ${signsInto === "model provider" ? "your model provider" : signsInto}`;
   return (
     <Dialog
       open
@@ -135,8 +140,10 @@ export function AccountConnectDialog({
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{name}</DialogTitle>
-          <DialogDescription>Sign in on this machine.</DialogDescription>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription className="sr-only">
+            Signs this provider in on this machine.
+          </DialogDescription>
         </DialogHeader>
         {(error || account?.message) && (
           <p role="alert" className="text-sm text-destructive">

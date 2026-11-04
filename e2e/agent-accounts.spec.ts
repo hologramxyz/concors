@@ -201,11 +201,19 @@ for (const [provider, label] of [
       );
       const openModelMenu = () =>
         page.getByRole("button", { name: "Agent and model", exact: true }).click();
-      const footer = page.getByRole("button", { name: `Connect ${label} account`, exact: true });
+      const signsInto =
+        provider === "codex" ? "ChatGPT" : provider === "claude" ? "Claude" : "model provider";
+      const footer = page.getByRole("button", {
+        name: `Connect ${signsInto} account`,
+        exact: true,
+      });
       await openModelMenu();
       await footer.click();
-      const signIn = page.getByRole("dialog", { name: `${label} default account` });
+      const signIn = page.getByRole("dialog", {
+        name: `Sign in to ${provider === "opencode" ? "your model provider" : signsInto}`,
+      });
       await expect(signIn).toBeVisible();
+      await expect(signIn).not.toContainText("Sign in on this machine");
       // The menu gets out of the way, and with one way in the sign-in has already started.
       await expect(page.getByRole("option")).toHaveCount(0);
       await expect(signIn.getByRole("button", { name: "Cancel", exact: true })).toBeVisible();
@@ -396,8 +404,8 @@ test("another provider's page of the model menu connects it without switching th
         exact: true,
       })
       .click();
-    await page.getByRole("button", { name: "Connect Claude Code account", exact: true }).click();
-    const signIn = page.getByRole("dialog", { name: "Claude Code default account" });
+    await page.getByRole("button", { name: "Connect Claude account", exact: true }).click();
+    const signIn = page.getByRole("dialog", { name: "Sign in to Claude" });
     await expect(signIn.getByRole("button", { name: "Cancel", exact: true })).toBeVisible();
     await signIn.getByRole("button", { name: "Close" }).click();
     await expect(signIn).toHaveCount(0);

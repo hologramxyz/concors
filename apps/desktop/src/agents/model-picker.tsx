@@ -9,6 +9,7 @@ import {
 } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { AccountConnectDialog } from "./account-connect-dialog";
+import { accountName, presetEngine } from "./account-name";
 import { requestAccount } from "./account-requests";
 import { ProviderAccountFooter } from "./provider-account-footer";
 import { ControlPicker } from "./control-picker";
@@ -49,7 +50,13 @@ export function AgentModelPicker({
   // Whether a provider is signed in, asked when its page of the menu opens rather than up front:
   // each check runs its CLI. Without an answer there is no evidence either way, so no footer.
   const [accounts, setAccounts] = useState<Record<string, AgentAccount>>({});
-  const [connecting, setConnecting] = useState<{ id: string; label: string } | null>(null);
+  const [connecting, setConnecting] = useState<{
+    id: string;
+    label: string;
+    engine: string | undefined;
+  } | null>(null);
+  const engineOf = (id: string) =>
+    id === agent.provider ? (agent.engine ?? agent.provider) : presetEngine(id);
   const readAccount = (id: string) => {
     if (
       connection?.state.status !== "ready" ||
@@ -156,9 +163,13 @@ export function AgentModelPicker({
                 (accounts[p.id]?.status === "disconnected" ||
                   accounts[p.id]?.status === "pending") && (
                   <ProviderAccountFooter
-                    label={p.label ?? agentProviderName(p.id)}
+                    account={accountName(engineOf(p.id), p.label ?? agentProviderName(p.id))}
                     onConnect={() =>
-                      setConnecting({ id: p.id, label: p.label ?? agentProviderName(p.id) })
+                      setConnecting({
+                        id: p.id,
+                        label: p.label ?? agentProviderName(p.id),
+                        engine: engineOf(p.id),
+                      })
                     }
                   />
                 )}

@@ -100,7 +100,7 @@ test("adds accounts to a library and assigns one per provider to each machine", 
     let addDialog = page.getByRole("dialog", { name: "Add a subscription" });
     await addDialog.getByRole("button", { name: "Add subscription", exact: true }).click();
 
-    let connectDialog = page.getByRole("dialog", { name: "Claude — Account" });
+    let connectDialog = page.getByRole("dialog", { name: "Sign in to Claude", exact: true });
     await connectDialog.getByRole("button", { name: "Connect account", exact: true }).click();
     await connectDialog.getByLabel("Authorization code").fill("test-fixture-code");
     await connectDialog.getByRole("button", { name: "Connect", exact: true }).click();
@@ -155,7 +155,7 @@ test("adds accounts to a library and assigns one per provider to each machine", 
     await saveAssignments();
     await expect(second.getByText("Needs sign-in", { exact: true })).toBeVisible();
     await second.getByRole("button", { name: "Connect Claude on Second machine" }).click();
-    connectDialog = page.getByRole("dialog", { name: "Claude — Account" });
+    connectDialog = page.getByRole("dialog", { name: "Sign in to Claude", exact: true });
     await connectDialog.getByRole("button", { name: "Connect account", exact: true }).click();
     await connectDialog.getByLabel("Authorization code").fill("test-second-machine-code");
     await connectDialog.getByRole("button", { name: "Connect", exact: true }).click();
@@ -170,7 +170,7 @@ test("adds accounts to a library and assigns one per provider to each machine", 
     addDialog = page.getByRole("dialog", { name: "Add a subscription" });
     await addDialog.getByRole("radio", { name: /ChatGPT/ }).check();
     await addDialog.getByRole("button", { name: "Add subscription", exact: true }).click();
-    connectDialog = page.getByRole("dialog", { name: "ChatGPT — Account" });
+    connectDialog = page.getByRole("dialog", { name: "Sign in to ChatGPT", exact: true });
     await connectDialog.getByRole("button", { name: "Sign in with ChatGPT", exact: true }).click();
     await expect(connectDialog).toContainText("TEST-CODE");
     await expect(connectDialog).toContainText("Connected", {
@@ -316,7 +316,7 @@ test("another computer lists the same accounts, and what each machine uses", asy
 
     // Connecting here sets the account up on this computer, then signs in as usual.
     await work.getByRole("button", { name: "Connect", exact: true }).click();
-    const connect = page.getByRole("dialog", { name: "Claude — Work" });
+    const connect = page.getByRole("dialog", { name: "Sign in to Claude — Work" });
     await expect(connect.getByRole("button", { name: "Connect account" })).toBeVisible();
     await expect
       .poll(() =>

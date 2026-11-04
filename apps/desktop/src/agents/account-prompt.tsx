@@ -14,6 +14,7 @@ import {
 } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { openExternal } from "@/tauri/open-external";
+import { accountName } from "./account-name";
 import { accountChanges } from "./account-requests";
 import {
   accountPromptKey,
@@ -361,13 +362,7 @@ function AccountPrompt({
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="font-medium">
-            Connect your{" "}
-            {(agent.engine ?? agent.provider) === "codex"
-              ? "ChatGPT"
-              : (agent.engine ?? agent.provider) === "claude"
-                ? "Claude"
-                : "model provider"}{" "}
-            account
+            Connect your {accountName(agent.engine ?? agent.provider, "model provider")} account
           </p>
           <p className="account-prompt-body mt-0.5 text-xs text-muted-foreground">
             Use your account on this machine.
