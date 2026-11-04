@@ -150,6 +150,28 @@ test("the send button stays inside the composer in a pane of any width", async (
           seen: seen.length,
         };
       });
+    /** Tabs out of the text box, reporting any control that takes focus while out of sight. */
+    const tabbedOutOfSight = async () => {
+      await pane.getByRole("textbox", { name: "Message Codex" }).focus();
+      const hidden: string[] = [];
+      for (let press = 0; press < 12; press++) {
+        await page.keyboard.press("Tab");
+        const focused = await page.evaluate(() => {
+          const active = document.activeElement;
+          const row = active?.closest(".agent-composer-toolbar")?.getBoundingClientRect();
+          if (!active || !row) return null;
+          const area = active.getBoundingClientRect();
+          return {
+            label: active.getAttribute("aria-label") ?? "",
+            hidden: area.top >= row.bottom || area.right <= row.left,
+          };
+        });
+        if (!focused) break;
+        if (focused.hidden) hidden.push(focused.label);
+      }
+      return hidden;
+    };
+    await pane.getByRole("textbox", { name: "Message Codex" }).fill("A draft");
     const widths = new Set<number>();
     await handle.focus();
     // Down to a tenth of a wide workspace, then the same in a smaller window.
@@ -157,9 +179,13 @@ test("the send button stays inside the composer in a pane of any width", async (
       const measured = await measure();
       widths.add(Math.round(measured.form));
       expect(measured, `form ${measured.form}px wide`).toMatchObject({ sendInside: true, rows: 1 });
+      expect(await tabbedOutOfSight(), `form ${measured.form}px wide`).toEqual([]);
+      await handle.focus();
       await page.keyboard.press("ArrowLeft");
-      await page.waitForTimeout(50);
+      await page.waitForTimeout(150);
     }
+    // Widening the pane brings the controls back, and they can be reached again.
+    expect(await pane.locator(".agent-composer-toolbar button[inert]").count()).toBeGreaterThan(0);
     const narrowest = await measure();
     // The workspace stops shrinking at 320px, which makes a tenth of it the narrowest pane.
     let previous = narrowest.form;

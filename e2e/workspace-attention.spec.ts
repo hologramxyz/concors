@@ -107,12 +107,11 @@ test("a pane shows its agent's status on its own icon, as its tab does", async (
 
     const pane = page.getByRole("region", { name: "Agent pane", exact: true }).locator("header");
     const tab = tabs(page).nth(1).locator("> button").first();
-    // An agent just sitting there earns no line in the tab's tooltip.
+    // An agent just sitting there earns no line, and alone in its tab leaves nothing to say.
     await tab.hover();
-    await expect(page.getByRole("tooltip")).toBeVisible();
-    await expect(page.getByRole("tooltip")).not.toContainText("Ready");
-    await page.mouse.move(0, 0);
+    await page.waitForTimeout(800);
     await expect(page.getByRole("tooltip")).toHaveCount(0);
+    await page.mouse.move(0, 0);
     for (const [text, status] of [
       ["hold", "Working"],
       ["question", "Needs input"],
@@ -132,7 +131,7 @@ test("a pane shows its agent's status on its own icon, as its tab does", async (
       // The status is in the tab's one tooltip; a native title would open on top of it.
       await expect(tab.locator("[title]")).toHaveCount(0);
       await tab.hover();
-      await expect(page.getByRole("tooltip")).toContainText(`Codex: ${status}`);
+      await expect(page.getByRole("tooltip")).toHaveText(`Codex: ${status}`);
       await page.mouse.move(0, 0);
       await expect(page.getByRole("tooltip")).toHaveCount(0);
     }

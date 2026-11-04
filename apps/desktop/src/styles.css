@@ -725,16 +725,55 @@ html[data-pane-resizing="row"] * {
   }
 }
 @container (max-width: 200px) {
-  .agent-composer-dock {
+  .agent-composer-dock,
+  .chat-prompts {
     padding-inline: 4px;
   }
 }
 @container (max-width: 60px) {
-  .agent-composer-dock {
+  .agent-composer-dock,
+  .chat-prompts {
     padding-inline: 0;
   }
   .agent-composer-dock .agent-composer-form {
     padding: 2px;
+  }
+}
+/*
+ * A chat pane keeps its composer whole and at the bottom, whatever its height. As height runs out
+ * the start screen gives up the other ways to start, then its icon, then its heading, in that order,
+ * and in the shortest panes the composer's own padding and text box tighten. Anything that still
+ * does not fit scrolls behind the composer, which is why this scrolls and the composer is sticky.
+ */
+.agent-conversation {
+  container: agent-conversation / size;
+  overflow: hidden auto;
+}
+@container agent-conversation (max-height: 320px) {
+  .start-space {
+    display: none;
+  }
+}
+@container agent-conversation (max-height: 270px) {
+  .start-heading-icon {
+    display: none;
+  }
+  .start-heading {
+    padding-bottom: 16px;
+  }
+}
+@container agent-conversation (max-height: 190px) {
+  .start-heading {
+    display: none;
+  }
+}
+@container agent-conversation (max-height: 170px) {
+  .agent-composer-dock {
+    padding-block: 4px;
+  }
+  .agent-composer-dock .agent-composer-input {
+    min-height: 31px;
+    padding-block: 5px;
   }
 }
 .agent-control:hover,

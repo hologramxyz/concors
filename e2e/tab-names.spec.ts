@@ -134,7 +134,7 @@ test("a tab with several panes shows the focused pane's one icon and how many pa
     // The count is for the eye; the tab's name stays its name.
     await expect(page.getByRole("button", { name: "Terminal", exact: true })).toHaveCount(2);
     await button.hover();
-    await expect(page.getByRole("tooltip")).toContainText("2 panes");
+    await expect(page.getByRole("tooltip")).toHaveText("2 panes");
     await page.mouse.move(0, 0);
 
     const icon = button.locator("[data-tab-icon-for]");

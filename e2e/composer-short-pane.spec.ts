@@ -37,6 +37,7 @@ test("a short chat pane gives the composer its room, send button included", asyn
     // The account notice above the composer is there too, as on a fresh machine.
     await expect(pane.getByText("Connect your ChatGPT account")).toBeVisible();
     const footer = pane.locator("[data-chat-footer]");
+    const notice = pane.locator(".chat-prompts");
     const composerBox = pane.locator("[data-chat-footer] form");
     const toolbar = pane.locator(".agent-composer-toolbar");
     const inside = async () => {
@@ -53,6 +54,8 @@ test("a short chat pane gives the composer its room, send button included", asyn
       return input.height >= 60 ? "ok" : `text box ${input.height}px`;
     };
     await expect.poll(inside).toBe("ok");
+    // The notice is reachable however little room is left for it.
+    expect(await notice.evaluate((el) => el.clientHeight)).toBeGreaterThan(30);
     // The draft scrolls inside its box; the pane's footer has nothing hidden to scroll to.
     expect(await footer.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
     await page.screenshot({ path: test.info().outputPath("composer-short-pane.png") });

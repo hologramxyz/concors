@@ -326,9 +326,7 @@ test("Mac workspace shortcuts use physical Control and display matching hints", 
   }
 });
 
-test("menus, Search, the sequence panel and a tab's tooltip draw shortcuts as key chips", async ({
-  page,
-}) => {
+test("menus, Search and the sequence panel draw shortcuts as key chips", async ({ page }) => {
   await signedIn(page);
   await page.goto("/");
   const workspaceMenu = page.getByRole("button", { name: "Open workspace menu", exact: true });
@@ -382,10 +380,10 @@ test("menus, Search, the sequence panel and a tab's tooltip draw shortcuts as ke
   ]);
   await page.keyboard.press("Escape");
 
+  // A tab says nothing about shortcuts: a lone idle pane has no tooltip at all.
   await tab(page, 0).hover();
-  const tooltip = page.getByRole("tooltip");
-  await expect(tooltip).not.toContainText("Drag to reorder");
-  await expect(tooltip.locator("kbd")).toHaveText(["F2", "Alt+Shift+←", "Alt+Shift+→"]);
+  await page.waitForTimeout(800);
+  await expect(page.getByRole("tooltip")).toHaveCount(0);
   await expect(tab(page, 0)).not.toHaveAttribute("title");
 });
 

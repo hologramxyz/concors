@@ -10,11 +10,6 @@ import {
   tabAgentStatuses,
 } from "@/agents/agent-status";
 import { useAgents } from "@/agents/context";
-import type { CommandId } from "@/shortcuts/bindings";
-import { BoundKeyChips } from "@/shortcuts/key-chips";
-import { mainBinding } from "@/shortcuts/keymap";
-import { useShortcutPreferences } from "@/shortcuts/preferences-context";
-import { isTauri } from "@/tauri";
 import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
 import { useFocusedPane } from "./focused-panes";
 import { mainPane, tabTitle } from "./tab-title";
@@ -90,33 +85,19 @@ function PaneMark({ profile }: { profile: PaneProfile | undefined }) {
   return <Terminal className="size-4 text-muted-foreground" />;
 }
 
-const TAB_SHORTCUTS: readonly { id: CommandId; label: string }[] = [
-  { id: "rename-tab", label: "Rename" },
-  { id: "move-tab-left", label: "Move left" },
-  { id: "move-tab-right", label: "Move right" },
-];
-
 /**
- * A tab's tooltip: how many panes it has, the agents in it that are busy, waiting or failed, and
- * its shortcuts. An unassigned shortcut gets no row, and with no rows at all there is no tooltip.
+ * A tab's tooltip: how many panes it has and the agents in it that are busy, waiting or failed.
+ * With nothing to say, there is no tooltip.
  */
 export function TabTooltip({ tab, children }: { tab: WorkspaceTab; children: ReactElement }) {
-  const { keymap } = useShortcutPreferences();
   const agents = tabAgentStatuses(tab, useAgents(), useTerminalSessions()).filter(isActiveStatus);
   const paneCount = tab.nodes.filter((node) => node.kind === "pane").length;
-  const shortcuts = TAB_SHORTCUTS.filter(({ id }) => mainBinding(keymap[id], isTauri()));
   const content =
-    paneCount > 1 || agents.length || shortcuts.length ? (
+    paneCount > 1 || agents.length ? (
       <div className="flex flex-col gap-1 pr-1.5">
         {paneCount > 1 && <p>{paneCount} panes</p>}
         {agents.map((agent) => (
           <p key={agent.id}>{`${agent.providerName}: ${agent.status}`}</p>
-        ))}
-        {shortcuts.map(({ id, label }) => (
-          <p key={id} className="flex items-center justify-between gap-3">
-            {label}
-            <BoundKeyChips id={id} />
-          </p>
         ))}
       </div>
     ) : null;

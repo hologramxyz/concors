@@ -42,6 +42,7 @@ import { usageView } from "./context-window";
 import { usePlanUsage } from "./use-plan-usage";
 import { AgentModelPicker } from "./model-picker";
 import { ControlTooltip } from "./control-tooltip";
+import { useClippedControls } from "./use-clipped-controls";
 import { FastModeToggle } from "./fast-mode-toggle";
 import { useAgents } from "./context";
 import { switchDescription } from "./provider-switch";
@@ -155,6 +156,8 @@ export function AgentComposer({
   const textarea = useRef<HTMLTextAreaElement>(null),
     picker = useRef<HTMLInputElement>(null);
   const form = useRef<HTMLFormElement>(null);
+  const toolbar = useRef<HTMLDivElement>(null);
+  useClippedControls(toolbar, !compact);
   const shortcutLabel = useShortcutLabels();
   useLayoutEffect(() => {
     if (!native) return;
@@ -1390,6 +1393,7 @@ export function AgentComposer({
                 className={`agent-composer-input ${compact ? "max-h-48" : "max-h-[min(40cqh,26rem)]"} min-h-16 w-full resize-none bg-transparent px-3 py-3 outline-none read-only:opacity-50 disabled:opacity-50`}
               />
               <div
+                ref={toolbar}
                 className={`flex items-center gap-1 px-1 ${compact ? "mobile-composer-toolbar" : "agent-composer-toolbar"}`}
               >
                 <input
