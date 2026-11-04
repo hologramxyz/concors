@@ -233,6 +233,10 @@ for (const [provider, label] of [
       await expect(signIn).toContainText("Connected");
       await signIn.getByRole("button", { name: "Done", exact: true }).click();
       await expect(signIn).toHaveCount(0);
+      // Signing in ends the dismissal, so a login that expires later is offered again.
+      await expect
+        .poll(() => page.evaluate(() => localStorage.getItem("concors.dismissed-account-prompts")))
+        .not.toContain(`:${provider}"`);
       // Signed in, the footer is gone.
       await openModelMenu();
       await expect(page.getByRole("option").first()).toBeVisible();
@@ -323,6 +327,124 @@ test("a missing CLI is offered as a one-click install instead of an account chec
     // Once installed, the usual sign-in takes its place.
     await expect(install).toHaveCount(0, { timeout: 10_000 });
     await expect(account.getByRole("button", { name: "Sign in with ChatGPT" })).toBeEnabled();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("a dismissed sign-in prompt comes back once a login made elsewhere has expired", async ({
+  page,
+}) => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-account-expiry-"));
+  let loggedIn = false;
+  const accountReads = new Set<string>();
+  await page.routeWebSocket("ws://127.0.0.1:7429/ws", (socket) => {
+    const server = socket.connectToServer();
+    socket.onMessage((raw) => {
+      const event = JSON.parse(String(raw));
+      if (event.type === "agent.request" && event.operation.kind === "account")
+        accountReads.add(event.requestId);
+      server.send(raw);
+    });
+    server.onMessage((raw) => {
+      const event = JSON.parse(String(raw));
+      if (accountReads.delete(event.requestId) && loggedIn) {
+        event.outcome.account = { ...event.outcome.account, status: "connected" };
+        socket.send(JSON.stringify(event));
+        return;
+      }
+      socket.send(raw);
+    });
+  });
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Account expiry", directory);
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
+    await chooseProvider(page);
+    const prompt = page.getByRole("region", { name: "Codex account connection", exact: true });
+    const focus = () => page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    const dismissals = () =>
+      page.evaluate(() => localStorage.getItem("concors.dismissed-account-prompts") ?? "[]");
+    await prompt.getByRole("button", { name: "Dismiss account connection" }).click();
+    await expect(prompt).toHaveCount(0);
+    expect(await dismissals()).toContain(":codex");
+
+    // Still not signed in: a dismissal stays dismissed, however often the app checks.
+    await focus();
+    await page.reload();
+    await expect(page.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
+    await expect(prompt).toHaveCount(0);
+
+    // Signed in from a terminal: the app notices next time it checks, and there is nothing to ask.
+    loggedIn = true;
+    await focus();
+    await expect.poll(dismissals).not.toContain(":codex");
+    await expect(prompt).toHaveCount(0);
+
+    // That login expires: this is a new question, so the prompt is back.
+    loggedIn = false;
+    await focus();
+    await expect(prompt).toBeVisible();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("dismissing the install offer lasts until a restart, or until the CLI is installed", async ({
+  page,
+}) => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-account-install-dismiss-"));
+  let installed = false;
+  const accountReads = new Set<string>();
+  await page.routeWebSocket("ws://127.0.0.1:7429/ws", (socket) => {
+    const server = socket.connectToServer();
+    socket.onMessage((raw) => {
+      const event = JSON.parse(String(raw));
+      if (event.type === "agent.request" && event.operation.kind === "account")
+        accountReads.add(event.requestId);
+      server.send(raw);
+    });
+    server.onMessage((raw) => {
+      const event = JSON.parse(String(raw));
+      if (event.type === "provider.result" && event.outcome.status === "ok") {
+        event.outcome.providers = event.outcome.providers.map((p: { id: string }) =>
+          p.id === "codex" ? { ...p, installed, installStatus: "idle" } : p,
+        );
+        socket.send(JSON.stringify(event));
+        return;
+      }
+      if (accountReads.delete(event.requestId) && !installed) {
+        event.outcome = { status: "error", message: "Codex is not installed on this machine." };
+        socket.send(JSON.stringify(event));
+        return;
+      }
+      socket.send(raw);
+    });
+  });
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Install dismissal", directory);
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
+    await chooseProvider(page);
+    const install = page.getByRole("region", { name: "Codex installation", exact: true });
+    const account = page.getByRole("region", { name: "Codex account connection", exact: true });
+    const dismiss = install.getByRole("button", { name: "Dismiss installation", exact: true });
+    await dismiss.click();
+    await expect(install).toHaveCount(0);
+    await page.reload();
+    await expect(install).toBeVisible();
+
+    // Installed from elsewhere while dismissed: the watch notices, and sign-in is offered next.
+    await dismiss.click();
+    await expect(install).toHaveCount(0);
+    installed = true;
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(account.getByRole("button", { name: "Sign in with ChatGPT" })).toBeEnabled();
+    await expect(install).toHaveCount(0);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
